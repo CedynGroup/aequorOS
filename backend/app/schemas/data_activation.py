@@ -1,4 +1,8 @@
-"""API schemas for Data Engine activations (canonical → module facts + runs)."""
+"""Legacy Data Engine activation schemas (canonical → facts).
+
+Live calculation is triggered by ingestion. ``run_calculations`` remains a
+backwards-compatible, explicit request for immutable official snapshots.
+"""
 
 from __future__ import annotations
 
@@ -28,7 +32,13 @@ class ClosedModel(BaseModel):
 class DataActivationCreate(ClosedModel):
     as_of_date: date
     reason: str = Field(min_length=1)
-    run_calculations: bool = True
+    run_calculations: bool = Field(
+        default=False,
+        description=(
+            "Compatibility-only: mint immutable official calculation runs. "
+            "Never required for live Treasury/ALM refresh."
+        ),
+    )
 
 
 class ActivationGroupRead(ClosedModel):

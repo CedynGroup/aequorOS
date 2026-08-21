@@ -67,6 +67,8 @@ def test_seed_creates_bank_periods_facts_and_params(db_session: Session) -> None
     assert bank.currency == "GHS"
     assert bank.jurisdiction_code == "GH"
     assert bank.license_type == "universal"
+    # The typed discriminator (docs/sdi.md §1): the demo bank is a universal bank.
+    assert bank.institution_type == "universal_bank"
 
     periods = list(
         db_session.scalars(

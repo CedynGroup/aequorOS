@@ -36,6 +36,7 @@ def bank(db_session: Session) -> Bank:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     db_session.add(bank)
     db_session.commit()

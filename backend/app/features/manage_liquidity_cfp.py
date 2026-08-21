@@ -40,7 +40,7 @@ def get_ewi_dashboard(
     bank_id: str,
     db: DbSession,
     ctx: Tenant,
-    reporting_period_id: Annotated[UUID, Query()],
+    reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> EwiDashboardRead:
     return liquidity_cfp.ewi_dashboard(db, ctx, bank_id, reporting_period_id)
 

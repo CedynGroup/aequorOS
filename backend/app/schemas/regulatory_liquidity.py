@@ -273,6 +273,8 @@ class LiquidityDashboardRead(ClosedModel):
     hqla_composition: list[LiquidityDashboardLineRead]
     outflows: list[LiquidityDashboardLineRead]
     inflows: list[LiquidityDashboardLineRead]
+    asf: list[LiquidityDashboardLineRead]
+    rsf: list[LiquidityDashboardLineRead]
     trend: list[LiquidityTrendPointRead]
     validations: list[LiquidityValidationRead]
     live: LiveModuleView | None = None

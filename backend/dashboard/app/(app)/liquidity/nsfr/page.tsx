@@ -1,6 +1,6 @@
 'use client';
 
-import type { RegulatoryLineItemRead } from '@aequoros/risk-service-api';
+import type { LiquidityDashboardLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import RatioGauge from '@/components/ui/RatioGauge';
 import KpiStat from '@/components/ui/KpiStat';
@@ -9,7 +9,6 @@ import SectionCard from '@/components/ui/SectionCard';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
-import { runComputedAt, runThresholds } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useLiquidityDashboard,
@@ -26,7 +25,7 @@ type WeightedRow = {
   isTotal?: boolean;
 };
 
-function toRow(line: RegulatoryLineItemRead): WeightedRow {
+function toRow(line: LiquidityDashboardLineRead): WeightedRow {
   return {
     item: line.description,
     balanceGHS: num(line.exposureAmount),
@@ -64,30 +63,22 @@ function weightedColumns(
 }
 
 export default function NSFRDashboard() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const dashboard = useLiquidityDashboard(bankId, periodId);
-  const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
+  const dashboard = useLiquidityDashboard(bankId);
 
   const data = dashboard.data;
-  const run = latestRun.data;
-  const thresholds = runThresholds(run);
-  const nsfrMin = thresholds['nsfr_min'] ?? 100;
-  const nsfrRedFloor = thresholds['nsfr_amber_floor'] ?? nsfrMin;
+  const nsfrMin = 100;
+  const nsfrRedFloor = nsfrMin;
 
-  const asfRows = (run?.lineItems ?? [])
-    .filter((line) => line.section === 'asf')
-    .map(toRow);
-  const rsfRows = (run?.lineItems ?? [])
-    .filter((line) => line.section === 'rsf')
-    .map(toRow);
-  const asfTotal = num(run?.metrics?.['asf_total_ghs']);
-  const rsfTotal = num(run?.metrics?.['rsf_total_ghs']);
+  const asfRows = (data?.asf ?? []).map(toRow);
+  const rsfRows = (data?.rsf ?? []).map(toRow);
+  const asfTotal = num(data?.metrics.asfTotalGhs);
+  const rsfTotal = num(data?.metrics.rsfTotalGhs);
   const surplus = num(data?.metrics.asfTotalGhs) - num(data?.metrics.rsfTotalGhs);
 
-  const computedAt = runComputedAt(run);
+  const computedAt = data?.live?.computedAt;
 
 
   return (
@@ -103,11 +94,10 @@ export default function NSFRDashboard() {
       />
 
       <QueryBoundary
-        isLoading={dashboard.isLoading || latestRun.isLoading}
-        error={dashboard.error ?? latestRun.error}
+        isLoading={dashboard.isLoading}
+        error={dashboard.error}
         onRetry={() => {
           void dashboard.refetch();
-          void latestRun.refetch();
         }}
       >
         {data && (
@@ -153,10 +143,10 @@ export default function NSFRDashboard() {
               />
             </SectionCard>
 
-            {!run ? (
+            {asfRows.length === 0 && rsfRows.length === 0 ? (
               <EmptyState
-                title="Awaiting stored results for this period"
-                description="ASF and RSF line-item detail is produced with this period's stored results and appears here automatically once they are computed."
+                title="No live NSFR line detail"
+                description="Current canonical data does not yet produce ASF or RSF detail. Refresh after the relevant funding data lands."
               />
             ) : (
               <>

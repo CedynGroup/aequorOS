@@ -10,6 +10,8 @@ import StatusPill from '@/components/ui/StatusPill';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { useBankContext } from '@/components/shell/BankContext';
+import { useModuleScope } from '@/components/shell/BankContext';
+import SdiLiquidityMonitoringView from '@/components/liquidity/SdiLiquidityMonitoringView';
 import StressedLadderPanel from '@/components/liquidity/StressedLadderPanel';
 import CashflowWindowPanel from '@/components/liquidity/CashflowWindowPanel';
 import {
@@ -92,12 +94,11 @@ const haircutColumns: Column<LiquidityHaircutRead>[] = [
   { key: 'approved', header: 'Reviewed by', render: (r) => r.approvedBy },
 ];
 
-export default function MonitoringTools() {
-  const { bank, period } = useBankContext();
+function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const dashboard = useLiquidityDashboard(bankId, periodId);
+  const dashboard = useLiquidityDashboard(bankId);
   const thresholds = useLiquidityThresholdRegister(bankId);
   const haircuts = useLiquidityHaircutSchedule(bankId);
   const latestRunId = dashboard.data?.latestRunId;
@@ -111,15 +112,17 @@ export default function MonitoringTools() {
 
   return (
     <>
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Liquidity Risk', href: '/liquidity' },
-          { label: 'Monitoring Tools' },
-        ]}
-        title="Liquidity Monitoring Tools"
-        subtitle={`Board threshold register (LMTD ¶11) · liquidity-value schedule (LRMD ¶60–63) · per-currency funding mismatch`}
-      />
+      {!embedded && (
+        <PageHeader
+          breadcrumbs={[
+            { label: 'Modules', href: '/' },
+            { label: 'Liquidity Risk', href: '/liquidity' },
+            { label: 'Monitoring Tools' },
+          ]}
+          title="Liquidity Monitoring Tools"
+          subtitle={`Board threshold register (LMTD ¶11) · liquidity-value schedule (LRMD ¶60–63) · per-currency funding mismatch`}
+        />
+      )}
 
       <QueryBoundary
         isLoading={thresholds.isLoading}
@@ -233,6 +236,21 @@ export default function MonitoringTools() {
           </div>
         )}
       </QueryBoundary>
+    </>
+  );
+}
+
+export default function MonitoringTools() {
+  const { bank } = useBankContext();
+  const scope = useModuleScope();
+  if (!scope.isResolved) return null;
+  if (scope.institutionClass === 'sdi') {
+    return <SdiLiquidityMonitoringView bankId={bank?.id} institutionClass={scope.institutionClass} />;
+  }
+  return (
+    <>
+      <SdiLiquidityMonitoringView bankId={bank?.id} institutionClass={scope.institutionClass} />
+      <BankMonitoringTools embedded />
     </>
   );
 }

@@ -21,13 +21,23 @@ class LiveModuleView(ClosedModel):
     metrics: dict[str, Any]
     computed_at: datetime
     computed_from_input_hash: str | None
+    source_as_of_date: date
+    source_fact_period_id: UUID | None
+    engine_version: str
+    calculation_generation: int
+    pipeline_state: Literal["ready", "failed"]
+    pipeline_error: str | None
 
 
 class LiveSummaryRead(ClosedModel):
     bank_id: str
+    # Deprecated provenance for clients that have not yet moved to the explicit
+    # source fields below. It never selects or keys live state.
     reporting_period_id: UUID | None
     period_label: str | None
+    source_as_of_date: date | None
     modules: list[LiveModuleView]
+    # Always false: filing drift lives in the governance-only endpoint.
     is_stale: bool
     computed_at: datetime | None = Field(title="Live Summary Computed At")
 

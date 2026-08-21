@@ -5,6 +5,7 @@ const tabs = [
   { href: '/behavioral/nmd-duration', label: 'NMD Duration' },
   { href: '/behavioral/prepayment', label: 'Prepayment' },
   { href: '/behavioral/deposit-stability', label: 'Deposit Stability' },
+  { href: '/behavioral/liquidity', label: 'Liquidity Behavior' },
 ];
 
 export default function BehavioralLayout({

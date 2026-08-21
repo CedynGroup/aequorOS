@@ -41,11 +41,10 @@ export default function FxModuleFrame({
   subtitle?: string;
   children: (ctx: FxFrameContext) => ReactNode;
 }) {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const bankId = bank?.id;
-  const periodId = period?.id;
 
-  const dashboard = useFxDashboard(bankId, periodId);
+  const dashboard = useFxDashboard(bankId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
 
   const data = dashboard.data;
@@ -75,7 +74,7 @@ export default function FxModuleFrame({
               metrics: data.metrics,
               run: latestRun.data,
               bankId,
-              periodId,
+              periodId: data.period.id,
             })}
           </div>
         )}

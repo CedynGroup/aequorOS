@@ -39,6 +39,13 @@ import {
   CashflowForecastModelScopeToJSON,
   CashflowForecastModelScopeToJSONTyped,
 } from "./CashflowForecastModelScope";
+import type { CashflowForecastScenario } from "./CashflowForecastScenario";
+import {
+  CashflowForecastScenarioFromJSON,
+  CashflowForecastScenarioFromJSONTyped,
+  CashflowForecastScenarioToJSON,
+  CashflowForecastScenarioToJSONTyped,
+} from "./CashflowForecastScenario";
 
 /**
  *
@@ -88,6 +95,24 @@ export interface CashflowForecastRead {
    * @memberof CashflowForecastRead
    */
   points: Array<CashflowForecastPointRead>;
+  /**
+   *
+   * @type {CashflowForecastScenario}
+   * @memberof CashflowForecastRead
+   */
+  scenario: CashflowForecastScenario;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof CashflowForecastRead
+   */
+  scenarioAssumptions: Array<string>;
+  /**
+   *
+   * @type {number}
+   * @memberof CashflowForecastRead
+   */
+  simulationPaths: number;
 }
 
 /**
@@ -105,6 +130,14 @@ export function instanceOfCashflowForecastRead(
   if (!("modelVersion" in value) || value["modelVersion"] === undefined)
     return false;
   if (!("points" in value) || value["points"] === undefined) return false;
+  if (!("scenario" in value) || value["scenario"] === undefined) return false;
+  if (
+    !("scenarioAssumptions" in value) ||
+    value["scenarioAssumptions"] === undefined
+  )
+    return false;
+  if (!("simulationPaths" in value) || value["simulationPaths"] === undefined)
+    return false;
   return true;
 }
 
@@ -130,6 +163,9 @@ export function CashflowForecastReadFromJSONTyped(
     points: (json["points"] as Array<any>).map(
       CashflowForecastPointReadFromJSON,
     ),
+    scenario: CashflowForecastScenarioFromJSON(json["scenario"]),
+    scenarioAssumptions: json["scenarioAssumptions"],
+    simulationPaths: json["simulationPaths"],
   };
 }
 
@@ -155,5 +191,8 @@ export function CashflowForecastReadToJSONTyped(
     points: (value["points"] as Array<any>).map(
       CashflowForecastPointReadToJSON,
     ),
+    scenario: CashflowForecastScenarioToJSON(value["scenario"]),
+    scenarioAssumptions: value["scenarioAssumptions"],
+    simulationPaths: value["simulationPaths"],
   };
 }

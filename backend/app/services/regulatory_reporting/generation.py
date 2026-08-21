@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -45,6 +46,7 @@ from app.schemas.regulatory_reporting import RegulatoryPackageCreate, Regulatory
 from app.services import regulatory_capital, regulatory_liquidity
 from app.services.attestation import digests, register_state
 from app.services.audit import record_event
+from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
     get_effective_period_or_404,
@@ -53,6 +55,11 @@ from app.services.regulatory_reporting.common import (
     require_actor,
 )
 from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition
+
+#: Observability (docs/sdi.md §19) — the runtime-log counterpart to the persistent
+#: ``regulatory_package.generated`` audit event, tagged with the institution class so
+#: SDI (s.29 / NBFI) runs are distinguishable from bank (Basel) runs in the log stream.
+logger = logging.getLogger(__name__)
 
 SNAPSHOT_SCHEMA_VERSION = "regulatory-package-v1"
 BASELINE_SCENARIO = "baseline"
@@ -111,6 +118,19 @@ def generate_package(
             detail=(
                 f"Return code '{payload.return_code}' is not registered. "
                 "List the available templates via the return-template endpoint."
+            ),
+        )
+    # Server-side return-set scoping (docs/sdi.md §4.4/§14): a tenant may only
+    # generate returns its institution class is subject to — the calendar filter
+    # is not enough, since this is the single package-mint site an SDI could hit
+    # directly with a bank-only return code (e.g. a BSD form).
+    bank_class = _resolve_institution_class(db, bank)
+    if bank_class not in definition.institution_classes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Return '{payload.return_code}' does not apply to this institution's "
+                f"class ({bank_class}); it is not part of the institution's return set."
             ),
         )
     # Daily returns file on business days that seldom coincide with a monthly
@@ -220,6 +240,18 @@ def generate_package(
     db.flush()
     if resubmission_authorization is not None:
         resubmission_authorization.consumed_by_package_id = package.id
+    logger.info(
+        "regulatory_package.generated return_code=%s family=%s institution_class=%s "
+        "bank=%s org=%s reporting_date=%s basis=%s version=%s",
+        definition.code,
+        definition.family,
+        bank_class,
+        bank.id,
+        ctx.organization_id,
+        payload.reporting_date.isoformat(),
+        payload.basis,
+        package.version,
+    )
     record_event(
         db,
         ctx,
@@ -1073,6 +1105,453 @@ def _generate_icaap_stress(
     )
 
 
+# --- ICAAP Appendix II submission (docs/stress.md §1.8, §3.4, §3.8, Phase 5) ---
+# The directive's regulatory deliverable: a return whose snapshot IS the BoG
+# Stress Testing Guideline Appendix II Tables 1–6 (¶67, ¶68), sourced from a
+# Board-ATTESTED enterprise-stress RegulatoryRun. The enterprise-stress engine
+# already produced the tables (``metrics.appendix_ii``); this generator only
+# re-tabulates them into the regulatory-package-v1 envelope so the return
+# inherits maker-checker, package immutability, the content digest, the default
+# signing policy and PDF/xlsx export unchanged. It never recomputes a figure —
+# every value is carried verbatim from the immutable run (values already in the
+# directive's GHS'000 reporting unit, so the rendered columns do NOT re-scale).
+
+_APPENDIX2_LABELS: dict[str, str] = {
+    "current": "Current (as-of)",
+}
+
+
+def _appendix2_period_label(label: str) -> str:
+    """Human description for an Appendix II snapshot label (current / base / stress)."""
+    if label in _APPENDIX2_LABELS:
+        return _APPENDIX2_LABELS[label]
+    for prefix, wording in (
+        ("base_y", "Base Case — Year "),
+        ("stress_y", "Stress (Adverse) — Year "),
+        ("post_cap_y", "Post-capitalisation — Year "),
+    ):
+        if label.startswith(prefix):
+            return f"{wording}{label.removeprefix(prefix)}"
+    return label
+
+
+def _appendix2_variable_label(variable: str) -> str:
+    return variable.replace("_", " ").upper()
+
+
+def _appendix2_row(code: str, description: str, fields: dict[str, Any]) -> dict[str, Any]:
+    """A snapshot row that preserves ``None`` slots (a directive line with no
+    honest source stays blank, never a fabricated zero) — unlike ``_row``, which
+    stringifies its value. Values are carried verbatim from the serialized
+    Appendix II tables (already strings or ``None``)."""
+    return {"code": code, "description": description, **fields}
+
+
+def _appendix2_snapshot_row(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """One capital-position row (Table 1 summary / post-capitalisation)."""
+    return _appendix2_row(
+        snapshot["label"],
+        _appendix2_period_label(snapshot["label"]),
+        {
+            "value": snapshot.get("total_regulatory_capital"),
+            "cet1": snapshot.get("cet1"),
+            "tier1": snapshot.get("tier1"),
+            "tier2": snapshot.get("tier2"),
+            "total_rwa": snapshot.get("total_rwa"),
+            "cet1_ratio_pct": snapshot.get("cet1_ratio_pct"),
+            "tier1_ratio_pct": snapshot.get("tier1_ratio_pct"),
+            "car_pct": snapshot.get("car_pct"),
+            "paid_up": snapshot.get("paid_up"),
+        },
+    )
+
+
+def _appendix2_table1_sections(  # noqa: PLR0912, PLR0915 - one flat table mapping
+    table1: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Table 1 (Summary Results) → its snapshot sections + headline totals."""
+    positions = [_appendix2_snapshot_row(table1["current"])]
+    positions += [_appendix2_snapshot_row(row) for row in table1["pre_adverse"]]
+    positions += [_appendix2_snapshot_row(row) for row in table1["post_adverse"]]
+
+    impact_rows: list[dict[str, Any]] = []
+    for entry in table1["impact_of_adverse"]:
+        year = entry["year"]
+        for loss in entry["losses"]:
+            impact_rows.append(
+                _appendix2_row(
+                    f"y{year}:{loss['exposure_class']}",
+                    _appendix2_variable_label(loss["exposure_class"]),
+                    {"value": loss["loss"], "year": str(year)},
+                )
+            )
+
+    required_by_year: dict[int, dict[str, Any]] = {}
+    for entry in table1["capital_required_car_target"]:
+        required_by_year.setdefault(entry["year"], {})["car"] = entry["amount"]
+    for entry in table1["capital_required_paid_up"]:
+        required_by_year.setdefault(entry["year"], {})["paid_up"] = entry["amount"]
+    required_rows = [
+        _appendix2_row(
+            f"y{year}",
+            f"Stress (Adverse) — Year {year}",
+            {"value": amounts.get("car"), "paid_up_shortfall": amounts.get("paid_up")},
+        )
+        for year, amounts in sorted(required_by_year.items())
+    ]
+
+    sections = [
+        _section(
+            "t1_summary_positions",
+            "Appendix II Table 1 — Summary Results (Capital Positions)",
+            positions,
+        ),
+        _section(
+            "t1_impact_of_adverse",
+            "Appendix II Table 1 — Impact of Adverse (Loss by CRD Exposure Class)",
+            impact_rows,
+        ),
+        _section(
+            "t1_capital_required",
+            "Appendix II Table 1 — Capital Required to Meet Minima",
+            required_rows,
+        ),
+    ]
+
+    # With / without management actions (¶67(f)). Present only when the run
+    # modelled an approved management-actions plan; otherwise the pre-action
+    # projection stands alone and these optional sections are omitted.
+    management = table1.get("management_actions")
+    if management is not None:
+        action_rows = [
+            _appendix2_row(
+                f"y{row['year']}",
+                f"Stress (Adverse) — Year {row['year']}",
+                {
+                    "value": row.get("total_management_actions"),
+                    "capital_raised_total": row.get("capital_raised_total"),
+                    "revision_of_dividend_policy": row.get("revision_of_dividend_policy"),
+                    "change_in_business_strategy": row.get("change_in_business_strategy"),
+                    "sale_of_assets": row.get("sale_of_assets"),
+                    "risk_reduction": row.get("risk_reduction"),
+                    "other": row.get("other"),
+                    "rwa_relief_total": row.get("rwa_relief_total"),
+                },
+            )
+            for row in management["rows"]
+        ]
+        sections.append(
+            _section(
+                "t1_management_actions",
+                "Appendix II Table 1 — Management Actions (with-actions)",
+                action_rows,
+                optional=True,
+            )
+        )
+    post_cap = table1.get("post_capitalisation")
+    if post_cap is not None:
+        sections.append(
+            _section(
+                "t1_post_capitalisation",
+                "Appendix II Table 1 — Post-capitalisation (Stress Case with Actions)",
+                [_appendix2_snapshot_row(row) for row in post_cap],
+                optional=True,
+            )
+        )
+    residual = table1.get("residual_capital_required_after_actions")
+    if residual is not None:
+        residual_rows = [
+            _appendix2_row(
+                f"y{row['year']}",
+                f"Stress (Adverse) — Year {row['year']}",
+                {"value": row.get("residual_capital_required")},
+            )
+            for row in residual["rows"]
+        ]
+        sections.append(
+            _section(
+                "t1_residual",
+                "Appendix II Table 1 — Residual Capital Required After Actions",
+                residual_rows,
+                optional=True,
+            )
+        )
+
+    last_stress = table1["post_adverse"][-1] if table1["post_adverse"] else {}
+    totals = [
+        _row(
+            "capital_gap",
+            "Capital gap (worst year, pre-management-action)",
+            table1["capital_gap"],
+        ),
+        _row(
+            "stressed_car_end_pct",
+            "Stressed CAR at end of horizon",
+            last_stress.get("car_pct", "0"),
+        ),
+    ]
+    return sections, totals
+
+
+def _appendix2_table2_section(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    built = [
+        _appendix2_row(
+            row["label"],
+            _appendix2_period_label(row["label"]),
+            {
+                "value": row.get("total_regulatory_capital"),
+                "gross_cet1": row["cet1"].get("gross_cet1"),
+                "total_deductions": row["cet1"].get("total_deductions"),
+                "cet1_after_deductions": row["cet1"].get("cet1_after_deductions"),
+                "at1_eligible": row.get("at1_eligible"),
+                "tier2_eligible": row.get("tier2_eligible"),
+                "credit_risk_reserve": row.get("credit_risk_reserve"),
+                "total_rwa": row.get("total_rwa"),
+            },
+        )
+        for row in rows
+    ]
+    return _section(
+        "t2_capital_projection",
+        "Appendix II Table 2 — Regulatory Capital Projection",
+        built,
+    )
+
+
+def _appendix2_table3_section(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    built = [
+        _appendix2_row(
+            row["label"],
+            _appendix2_period_label(row["label"]),
+            {
+                "value": row.get("profit_after_tax"),
+                "net_interest_income": row.get("net_interest_income"),
+                "fees_and_commissions": row.get("fees_and_commissions"),
+                "operating_expenses": row.get("operating_expenses"),
+                "impairment_losses": row.get("impairment_losses"),
+                "profit_before_tax": row.get("profit_before_tax"),
+                "tax": row.get("tax"),
+                "distributions": row.get("distributions"),
+                "adjusted_retained_earnings_for_car": row.get(
+                    "adjusted_retained_earnings_for_car"
+                ),
+            },
+        )
+        for row in rows
+    ]
+    return _section(
+        "t3_profit_and_loss",
+        "Appendix II Table 3 — Movement in Profit & Loss",
+        built,
+    )
+
+
+def _appendix2_table4_section(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    def _sum_deposits(row: dict[str, Any]) -> str | None:
+        parts = [
+            row.get("demand_deposits"),
+            row.get("savings_deposits"),
+            row.get("time_deposits"),
+            row.get("other_deposits"),
+        ]
+        if all(part is None for part in parts):
+            return None
+        return str(sum((Decimal(str(part)) for part in parts if part is not None), Decimal("0")))
+
+    built = [
+        _appendix2_row(
+            row["label"],
+            _appendix2_period_label(row["label"]),
+            {
+                "value": row.get("total_assets"),
+                "loans": row.get("loans"),
+                "cash_and_balances": row.get("cash_and_balances"),
+                "short_term_investments": row.get("short_term_investments"),
+                "other_assets": row.get("other_assets"),
+                "total_liabilities": row.get("total_liabilities"),
+                "total_deposits": _sum_deposits(row),
+                "borrowings": row.get("borrowings"),
+                "capital": row.get("capital"),
+            },
+        )
+        for row in rows
+    ]
+    return _section(
+        "t4_financial_position",
+        "Appendix II Table 4 — Statement of Financial Position",
+        built,
+    )
+
+
+def _appendix2_table5_section(table5: dict[str, Any]) -> dict[str, Any]:
+    built = [
+        _appendix2_row(
+            row["label"],
+            _appendix2_period_label(row["label"]),
+            {
+                "value": row.get("total_pillar1_rwa"),
+                "credit_rwa": row.get("credit_rwa"),
+                "operational_rwa": row.get("operational_rwa"),
+                "market_rwa": row.get("market_rwa"),
+                "pillar1_requirement": row.get("pillar1_requirement"),
+                "pillar2_total": row["pillar2"].get("total"),
+                "total_capital_requirement": row.get("total_capital_requirement"),
+            },
+        )
+        for row in table5["rows"]
+    ]
+    return _section(
+        "t5_rwa",
+        "Appendix II Table 5 — Evolution of RWA & Capital Requirements",
+        built,
+    )
+
+
+def _appendix2_table6_section(table6: dict[str, Any]) -> dict[str, Any]:
+    built = [
+        _appendix2_row(
+            f"{row['variable']}:y{row['year_index']}",
+            _appendix2_variable_label(row["variable"]),
+            {
+                "value": row.get("stress_value"),
+                "year_index": str(row["year_index"]),
+                "base_value": row.get("base_value"),
+                "stress_value": row.get("stress_value"),
+            },
+        )
+        for row in table6["rows"]
+    ]
+    return _section(
+        "t6_risk_drivers",
+        "Appendix II Table 6 — Key Risk Drivers & Forecasting Assumptions",
+        built,
+    )
+
+
+def _generate_icaap_stress_appendix2(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    """ICAAP stress-test submission in the BoG Appendix II format (¶67, ¶68).
+
+    Sourced ONLY from a Board-ATTESTED enterprise-stress run: the sign-off gate
+    (docs/stress.md §3.8) is what designates which immutable run is the annual
+    submission, so a bank cannot file stress results the Board has not reviewed
+    and challenged (¶20). Refuses (409 ``no_attested_stress_run``) when no such
+    run exists.
+    """
+    from app.services import enterprise_stress_signoff  # noqa: PLC0415 - avoids import cycle
+
+    run = enterprise_stress_signoff.resolve_attested_run_for_period(db, ctx, bank.id, period.id)
+    signoff = enterprise_stress_signoff.latest_signoff_for_run(db, ctx, run.id)
+    appendix = (run.metrics or {}).get("appendix_ii")
+    if not isinstance(appendix, dict) or "table1_summary" not in appendix:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "appendix_ii_missing",
+                "message": (
+                    "The attested enterprise-stress run carries no Appendix II tables; "
+                    "re-run the enterprise stress test before submitting."
+                ),
+            },
+        )
+
+    table1 = appendix["table1_summary"]
+    t1_sections, t1_totals = _appendix2_table1_sections(table1)
+    sections = [
+        *t1_sections,
+        _appendix2_table2_section(appendix["table2_capital"]),
+        _appendix2_table3_section(appendix["table3_profit_and_loss"]),
+        _appendix2_table4_section(appendix["table4_financial_position"]),
+        _appendix2_table5_section(appendix["table5_rwa"]),
+        _appendix2_table6_section(appendix["table6_risk_drivers"]),
+        _appendix2_governance_section(run, signoff),
+    ]
+
+    metadata: dict[str, Any] = {
+        "unit": appendix.get("unit", "GHS'000"),
+        "scenario_code": run.scenario_code,
+        "horizon_years": appendix.get("horizon_years"),
+        "car_target_pct": table1.get("car_target_pct"),
+        "paid_up_min": table1.get("paid_up_min"),
+        "with_management_actions": table1.get("management_actions") is not None,
+        "enterprise_stress_run_id": str(run.id),
+        "enterprise_stress_input_hash": run.input_hash,
+    }
+    if signoff is not None:
+        metadata["governance"] = {
+            "signoff_id": str(signoff.id),
+            "status": signoff.status,
+            "scenario_narrative": signoff.scenario_narrative,
+            "assumptions_rationale": signoff.assumptions_rationale,
+            "methodology_summary": signoff.methodology_summary,
+            "board_challenge": signoff.board_challenge,
+            "credibility_rationale": signoff.credibility_rationale,
+            "attested_by": str(signoff.attested_by) if signoff.attested_by else None,
+            "attested_at": signoff.attested_at.isoformat() if signoff.attested_at else None,
+            "stays_above_all_minima": signoff.stays_above_all_minima,
+            "with_actions_stays_above_all_minima": (
+                signoff.with_actions_stays_above_all_minima
+            ),
+        }
+    return GeneratedReturn(
+        snapshot=_envelope(bank, period, definition, sections, t1_totals, metadata),
+        source_runs=[_source_run_entry(run)],
+    )
+
+
+def _appendix2_governance_section(
+    run: RegulatoryRun, signoff: Any | None
+) -> dict[str, Any]:
+    """The Phase-5 sign-off / Board-attestation facts, on the return itself (¶20)."""
+    rows = [
+        _appendix2_row(
+            "enterprise_stress_run_id",
+            "Enterprise-stress run (source)",
+            {"value": str(run.id)},
+        ),
+        _appendix2_row(
+            "input_hash", "Enterprise-stress input hash", {"value": run.input_hash}
+        ),
+    ]
+    if signoff is not None:
+        rows += [
+            _appendix2_row(
+                "signoff_status", "Board attestation status", {"value": signoff.status}
+            ),
+            _appendix2_row(
+                "attested_by",
+                "Attested by (Board/approver)",
+                {"value": str(signoff.attested_by) if signoff.attested_by else None},
+            ),
+            _appendix2_row(
+                "stays_above_all_minima",
+                "Stress case stays above all regulatory minima",
+                {"value": _appendix2_bool(signoff.stays_above_all_minima)},
+            ),
+            _appendix2_row(
+                "with_actions_stays_above_all_minima",
+                "With management actions, stays above all minima",
+                {"value": _appendix2_bool(signoff.with_actions_stays_above_all_minima)},
+            ),
+        ]
+    return _section(
+        "governance",
+        "Governance — Board Sign-off & Attestation (¶20, ¶57–63)",
+        rows,
+    )
+
+
+def _appendix2_bool(value: bool | None) -> str | None:
+    if value is None:
+        return None
+    return "Yes" if value else "No"
+
+
 def _stress_traffic_lights(
     db: Session, scenario_runs: list[tuple[str, str, RegulatoryRun]]
 ) -> list[dict[str, Any]]:
@@ -1461,6 +1940,7 @@ _GENERATORS = {
     "irrbb": _generate_irrbb,
     "fx": _generate_fx,
     "icaap_stress": _generate_icaap_stress,
+    "icaap_stress_appendix2": _generate_icaap_stress_appendix2,
     "stress_pack": _generate_stress_pack,
     "template_pending": _generate_template_pending,
     **LRT_GENERATORS,

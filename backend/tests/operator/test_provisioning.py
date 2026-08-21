@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -20,6 +21,7 @@ from app.models import (
 )
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.services.tenant_provisioning import ProvisioningClients
+from app.services import institution_types
 from tests.operator.conftest import (
     FakeKmsClient,
     FakeS3Client,
@@ -74,6 +76,8 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert bank.organization_id == organization_id
     assert bank.currency == "GHS"
     assert bank.jurisdiction_code == "GH"
+    # The typed institution discriminator (docs/sdi.md §1) is set at onboarding.
+    assert bank.institution_type == "universal_bank"
     assert bank.storage_slug == bank_id.lower()
 
     # Storage: four tier buckets on the fake backend AND recorded in the registry.
@@ -159,6 +163,67 @@ def test_unknown_jurisdiction_is_422(
     assert "jurisdictions registry" in response.json()["error"]["message"]
     # Nothing was created.
     assert operator_db.scalar(select(Organization)) is None
+
+
+def test_missing_institution_type_is_schema_level_422(operator_client: TestClient) -> None:
+    payload = provision_payload()
+    del payload["institution_type"]
+    response = operator_client.post(
+        "/operator/v1/tenants", json=payload, headers=operator_headers()
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_unknown_institution_type_is_422(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    response = operator_client.post(
+        "/operator/v1/tenants",
+        json=provision_payload(institution_type="not_a_real_licence_class"),
+        headers=operator_headers(),
+    )
+    assert response.status_code == 422
+    assert "institution_types registry" in response.json()["error"]["message"]
+    # Nothing was created — an unknown discriminator never stands up a tenant.
+    assert operator_db.scalar(select(Organization)) is None
+
+
+def test_provisioning_scopes_the_institution_type(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    """Selecting an SDI licence class at onboarding is what will scope the
+    tenant's modules/requirements/returns in later phases (docs/sdi.md §1.4).
+    Phase A pins that the discriminator is persisted and audited."""
+    response = operator_client.post(
+        "/operator/v1/tenants",
+        json=provision_payload(institution_type="savings_and_loans"),
+        headers=operator_headers(),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["succeeded"] is True
+
+    bank = operator_db.scalar(select(Bank).where(Bank.id == body["bank_id"]))
+    assert bank is not None
+    assert bank.institution_type == "savings_and_loans"
+
+    # The persisted discriminator resolves to the FULL SDI regime end-to-end —
+    # the single fact every downstream scoping keys off (docs/sdi.md §1.4): the
+    # s.29 capital regime, the SDI return family, binding LMTD liquidity, and the
+    # tighter 15% large-exposure limit — so onboarding an SDI here is sufficient
+    # to place the tenant on the SDI path without any per-module toggles.
+    assert institution_types.institution_class(operator_db, bank) == "sdi"
+    assert institution_types.return_family(operator_db, bank) == "sdi"
+    assert institution_types.capital_regime(operator_db, bank) == "s29"
+    assert institution_types.liquidity_binding(operator_db, bank) is True
+    assert institution_types.large_exposure_limit_pct(operator_db, bank) == Decimal("15")
+
+    audit = operator_db.scalar(
+        select(OperatorAuditLog).where(OperatorAuditLog.action == "tenants.provision")
+    )
+    assert audit is not None
+    assert audit.detail["institution_type"] == "savings_and_loans"
 
 
 def test_currency_jurisdiction_mismatch_warns_but_never_auto_couples(

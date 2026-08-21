@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ClosedModel(BaseModel):
@@ -149,6 +149,17 @@ class CfpCommunicationPlan(ClosedModel):
     message_outline: str | None = Field(default=None, max_length=2000)
 
 
+class CfpBehavioralLiquidityScenario(ClosedModel):
+    """A Board-owned deposit-behavior overlay linked to a CFP action."""
+
+    name: str = Field(min_length=1, max_length=160)
+    activation_horizon: CfpHorizon
+    linked_action: str = Field(min_length=1, max_length=500)
+    deposit_runoff_uplift_pct: Decimal = Field(ge=0, le=100)
+    funding_cost_uplift_bps: Decimal = Field(ge=0, le=10_000)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
 class CfpContent(ClosedModel):
     ewi_triggers: list[CfpEwiTrigger] = Field(default_factory=list)
     funding_options: list[CfpFundingOption] = Field(default_factory=list)
@@ -157,6 +168,24 @@ class CfpContent(ClosedModel):
     escalation_procedures: list[CfpEscalationStep] = Field(default_factory=list)
     key_relationships: list[CfpKeyRelationship] = Field(default_factory=list)
     communication_plans: list[CfpCommunicationPlan] = Field(default_factory=list)
+    behavioral_liquidity_scenarios: list[CfpBehavioralLiquidityScenario] = Field(
+        default_factory=list
+    )
+
+    @model_validator(mode="after")
+    def link_behavioral_scenarios_to_actions(self) -> CfpContent:
+        actions = {item.action for item in self.action_plans}
+        unlinked = [
+            item.linked_action
+            for item in self.behavioral_liquidity_scenarios
+            if item.linked_action not in actions
+        ]
+        if unlinked:
+            raise ValueError(
+                "Each behavioral liquidity scenario must link to an action in action_plans: "
+                + "; ".join(unlinked)
+            )
+        return self
 
 
 # --- CFP lifecycle -----------------------------------------------------------

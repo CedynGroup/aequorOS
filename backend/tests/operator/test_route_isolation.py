@@ -113,6 +113,12 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/operators/{email}/reset-password",
         # Console-home fleet rollup (counts only).
         "/operator/v1/overview",
+        # Regulatory-parameter control plane (SDI Phase C): GET list + POST propose
+        # on the collection, plus the four-eyes approve. Reads open to any operator;
+        # changes are maker-checker + audited.
+        "/operator/v1/regulatory-parameters",
+        "/operator/v1/regulatory-parameters",
+        "/operator/v1/regulatory-parameters/{param_id}/approve",
         # Cross-tenant health board (GET list) + provisioning (POST) + per-tenant
         # detail reads. The fleet-metadata pair (GET list, GET {org_id} header)
         # stays OPEN; every deeper per-tenant read is gated on an active Tenant

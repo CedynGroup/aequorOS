@@ -22,6 +22,7 @@ export const BankFactGroup = {
   LcrInflow: "lcr_inflow",
   MarketRisk: "market_risk",
   OperationalIncome: "operational_income",
+  Cashflow: "cashflow",
   CapitalComponent: "capital_component",
   DepositBehavior: "deposit_behavior",
 } as const;

@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { RunId } from "./RunId";
+import {
+  RunIdFromJSON,
+  RunIdFromJSONTyped,
+  RunIdToJSON,
+  RunIdToJSONTyped,
+} from "./RunId";
 import type { CapitalLineRead } from "./CapitalLineRead";
 import {
   CapitalLineReadFromJSON,
@@ -69,10 +76,16 @@ export interface CapitalStructureRead {
   reportingPeriodId: string;
   /**
    *
+   * @type {RunId}
+   * @memberof CapitalStructureRead
+   */
+  runId: RunId;
+  /**
+   *
    * @type {string}
    * @memberof CapitalStructureRead
    */
-  runId: string;
+  source: CapitalStructureReadSourceEnum;
   /**
    *
    * @type {string}
@@ -100,6 +113,16 @@ export interface CapitalStructureRead {
 }
 
 /**
+ * @export
+ */
+export const CapitalStructureReadSourceEnum = {
+  Live: "live",
+  Official: "official",
+} as const;
+export type CapitalStructureReadSourceEnum =
+  (typeof CapitalStructureReadSourceEnum)[keyof typeof CapitalStructureReadSourceEnum];
+
+/**
  * Check if a given object implements the CapitalStructureRead interface.
  */
 export function instanceOfCapitalStructureRead(
@@ -122,6 +145,7 @@ export function instanceOfCapitalStructureRead(
   )
     return false;
   if (!("runId" in value) || value["runId"] === undefined) return false;
+  if (!("source" in value) || value["source"] === undefined) return false;
   if (!("tier1CapitalGhs" in value) || value["tier1CapitalGhs"] === undefined)
     return false;
   if (!("tier2CapitalGhs" in value) || value["tier2CapitalGhs"] === undefined)
@@ -159,7 +183,8 @@ export function CapitalStructureReadFromJSONTyped(
       CapitalLineReadFromJSON,
     ),
     reportingPeriodId: json["reporting_period_id"],
-    runId: json["run_id"],
+    runId: RunIdFromJSON(json["run_id"]),
+    source: json["source"],
     tier1CapitalGhs: json["tier1_capital_ghs"],
     tier2CapitalGhs: json["tier2_capital_ghs"],
     tier2Components: (json["tier2_components"] as Array<any>).map(
@@ -195,7 +220,8 @@ export function CapitalStructureReadToJSONTyped(
       CapitalLineReadToJSON,
     ),
     reporting_period_id: value["reportingPeriodId"],
-    run_id: value["runId"],
+    run_id: RunIdToJSON(value["runId"]),
+    source: value["source"],
     tier1_capital_ghs: value["tier1CapitalGhs"],
     tier2_capital_ghs: value["tier2CapitalGhs"],
     tier2_components: (value["tier2Components"] as Array<any>).map(

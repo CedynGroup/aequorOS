@@ -290,6 +290,7 @@ def get_tenant_config(db: Session, organization_id: str) -> TenantConfigRead:
             jurisdiction_code=bank.jurisdiction_code,
             currency=bank.currency,
             license_type=bank.license_type,
+            institution_type=bank.institution_type,
         )
         for bank in banks
     ]

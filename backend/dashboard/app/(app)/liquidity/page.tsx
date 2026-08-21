@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { ArrowUpRight } from 'lucide-react';
 import type { LiquidityDashboardLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import RatioGauge from '@/components/ui/RatioGauge';
@@ -14,10 +16,13 @@ import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
 import NetOutflowChart from '@/components/liquidity/charts/NetOutflowChart';
+import SdiLiquidityView from '@/components/liquidity/SdiLiquidityView';
 import { runComputedAt, runThresholds } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
 import LiveEngineNote from '@/components/live/LiveEngineNote';
 import {
+  useCfpSummary,
+  useEwiDashboard,
   useLiquidityDashboard,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
@@ -66,13 +71,30 @@ function lineColumns(rateHeader: string, weightedHeader: string): Column<LineRow
   ];
 }
 
-export default function LiquidityCockpit() {
-  const { bank, period } = useBankContext();
-  const bankId = bank?.id;
-  const periodId = period?.id;
+function escalationTone(
+  escalation: string | undefined
+): 'success' | 'amber' | 'critical' | 'slate' {
+  if (escalation === 'cfp_active' || escalation === 'escalation') return 'critical';
+  if (escalation === 'heightened_monitoring') return 'amber';
+  return escalation ? 'success' : 'slate';
+}
 
-  const dashboard = useLiquidityDashboard(bankId, periodId);
+function escalationLabel(escalation: string | undefined): string {
+  if (escalation === 'cfp_active') return 'CFP active';
+  if (escalation === 'escalation') return 'Escalation';
+  if (escalation === 'heightened_monitoring') return 'Heightened monitoring';
+  return escalation === 'normal' ? 'Business as usual' : 'Awaiting EWI';
+}
+
+export default function LiquidityCockpit() {
+  const { bank, moduleScope } = useBankContext();
+  const bankId = bank?.id;
+  const isSdi = moduleScope.institutionClass === 'sdi';
+
+  const dashboard = useLiquidityDashboard(isSdi ? undefined : bankId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
+  const ewis = useEwiDashboard(isSdi ? undefined : bankId);
+  const cfp = useCfpSummary(isSdi ? undefined : bankId);
 
   const data = dashboard.data;
   const run = latestRun.data;
@@ -106,6 +128,23 @@ export default function LiquidityCockpit() {
       : undefined;
   const lcrDelta = periodDelta(lcrTrend);
   const nsfrDelta = periodDelta(nsfrTrend);
+  const hqlaRows = data?.hqlaComposition ?? [];
+  const largestHqla = hqlaRows.reduce<LiquidityDashboardLineRead | null>(
+    (largest, line) =>
+      largest === null || num(line.weightedAmount) > num(largest.weightedAmount) ? line : largest,
+    null
+  );
+  const largestHqlaShare =
+    largestHqla && hqlaTotal > 0 ? (num(largestHqla.weightedAmount) / hqlaTotal) * 100 : null;
+  const lcrHeadroomGhs =
+    hqlaTotal - num(data?.metrics.netOutflows30dGhs) * (lcrMin / 100);
+  const nsfrSurplus = num(data?.metrics.asfTotalGhs) - num(data?.metrics.rsfTotalGhs);
+  const ewi = ewis.data;
+  const actionIndicators = ewi?.indicators.filter((item) => item.status === 'action') ?? [];
+  const watchIndicators = ewi?.indicators.filter((item) => item.status === 'watch') ?? [];
+  const approvedCfp = cfp.data?.approved ?? null;
+  const fundingOptions = approvedCfp?.content.fundingOptions ?? [];
+  const actionPlans = approvedCfp?.content.actionPlans ?? [];
 
   const computedAt = runComputedAt(run);
   const provenance = data ? (
@@ -113,6 +152,10 @@ export default function LiquidityCockpit() {
       Computed from current positions and the active parameter set
     </span>
   ) : undefined;
+
+  if (isSdi) {
+    return <SdiLiquidityView bankId={bankId} />;
+  }
 
   return (
     <>
@@ -134,6 +177,92 @@ export default function LiquidityCockpit() {
       >
         {data && (
           <div className="px-8 py-6 space-y-6">
+
+            <SectionCard
+              title="Liquidity posture"
+              subtitle="Current compliance headroom, buffer concentration, early-warning state, and contingency readiness."
+              computedAt={computedAt}
+              footer={provenance}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+                <KpiStat
+                  label="LCR headroom"
+                  value={`${(num(data.metrics.lcrPct) - lcrMin).toFixed(1)} pp`}
+                  status={data.metrics.lcrStatus === 'red' ? 'crit' : data.metrics.lcrStatus === 'amber' ? 'warn' : 'ok'}
+                  hint={`${fmtCurrency(lcrHeadroomGhs)} above minimum requirement`}
+                />
+                <KpiStat
+                  label="NSFR funding surplus"
+                  value={fmtCurrency(nsfrSurplus)}
+                  status={nsfrSurplus < 0 ? 'crit' : 'ok'}
+                  hint={`${(num(data.metrics.nsfrPct) - nsfrMin).toFixed(1)} pp above minimum`}
+                />
+                <KpiStat
+                  label="Largest HQLA concentration"
+                  value={largestHqlaShare === null ? '—' : fmtPct(largestHqlaShare, 1)}
+                  status={largestHqlaShare !== null && largestHqlaShare >= 75 ? 'warn' : 'ok'}
+                  hint={largestHqla?.description ?? 'No HQLA instruments'}
+                />
+                <KpiStat
+                  label="Early-warning posture"
+                  value={actionIndicators.length > 0 ? `${actionIndicators.length} action` : watchIndicators.length > 0 ? `${watchIndicators.length} watch` : 'Normal'}
+                  status={actionIndicators.length > 0 ? 'crit' : watchIndicators.length > 0 ? 'warn' : 'ok'}
+                  hint={ewi ? escalationLabel(ewi.escalationState) : 'EWI view is not available yet'}
+                />
+                <KpiStat
+                  label="CFP readiness"
+                  value={approvedCfp ? `v${approvedCfp.version}` : 'No approved plan'}
+                  status={approvedCfp ? (approvedCfp.approvalOverdue ? 'warn' : 'ok') : 'warn'}
+                  hint={approvedCfp ? `${fundingOptions.length} funding options · ${actionPlans.length} actions` : 'Approval is required before activation'}
+                />
+              </div>
+            </SectionCard>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <SectionCard
+                className="xl:col-span-2"
+                title="Escalation and contingency readiness"
+                subtitle="EWI classifications are calculated server-side; the CFP remains a Board-owned activation control."
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="border-r-0 md:border-r md:border-border-light md:pr-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-body font-medium text-navy">Early-warning indicators</p>
+                      <StatusPill tone={escalationTone(ewi?.escalationState)}>{escalationLabel(ewi?.escalationState)}</StatusPill>
+                    </div>
+                    {ewi ? (
+                      <p className="mt-2 text-caption text-slate leading-relaxed">
+                        {actionIndicators.length} action trigger{actionIndicators.length === 1 ? '' : 's'} · {watchIndicators.length} watch trigger{watchIndicators.length === 1 ? '' : 's'}.
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-caption text-slate">The EWI evaluation is awaiting a compatible live liquidity context.</p>
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-body font-medium text-navy">Contingency Funding Plan</p>
+                      <StatusPill tone={approvedCfp ? approvedCfp.approvalOverdue ? 'amber' : 'success' : 'slate'}>{approvedCfp ? approvedCfp.approvalOverdue ? 'review overdue' : 'approved' : 'not approved'}</StatusPill>
+                    </div>
+                    <p className="mt-2 text-caption text-slate leading-relaxed">
+                      {approvedCfp ? `Plan v${approvedCfp.version} has ${fundingOptions.length} documented funding option${fundingOptions.length === 1 ? '' : 's'} and ${actionPlans.length} action${actionPlans.length === 1 ? '' : 's'}.` : 'No Board-approved plan is available for activation.'}
+                    </p>
+                  </div>
+                </div>
+              </SectionCard>
+              <SectionCard title="Control workspace" subtitle="Move from current posture to the relevant control without losing context.">
+                <div className="space-y-2">
+                  <Link href="/liquidity/buffer" className="flex items-center justify-between gap-3 border-b border-border-light pb-2 text-body text-navy hover:text-action">
+                    Buffer concentration and haircuts <ArrowUpRight size={14} aria-hidden />
+                  </Link>
+                  <Link href="/liquidity/monitoring" className="flex items-center justify-between gap-3 border-b border-border-light py-2 text-body text-navy hover:text-action">
+                    Thresholds and maturity monitoring <ArrowUpRight size={14} aria-hidden />
+                  </Link>
+                  <Link href="/liquidity/cfp" className="flex items-center justify-between gap-3 pt-2 text-body text-navy hover:text-action">
+                    CFP actions and activation log <ArrowUpRight size={14} aria-hidden />
+                  </Link>
+                </div>
+              </SectionCard>
+            </div>
 
             {/* Headline gauges + component KPIs */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">

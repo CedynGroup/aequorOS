@@ -21,27 +21,30 @@ from __future__ import annotations
 import datetime
 import math
 import threading
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import CashflowSettings, get_settings
 from app.ml.baseline import forecast_static
 from app.ml.cashflow_history import load_bank_daily_series
-from app.ml.config import TrainingConfig
+from app.ml.config import MODEL_VERSION, TrainingConfig
 from app.ml.real_series import load_real_daily_series
 from app.ml.synthetic import DailyFlow, generate_daily_series
-from app.models import Bank
+from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
 from app.schemas.cashflow_forecast import (
     CashflowForecastAccuracyRead,
     CashflowForecastMode,
     CashflowForecastModelScope,
     CashflowForecastPointRead,
     CashflowForecastRead,
+    CashflowForecastScenario,
     CashflowHistoryPointRead,
     CashflowHistoryRead,
 )
@@ -56,6 +59,13 @@ ML_UNAVAILABLE_DETAIL = "Cash flow forecasting service is unavailable."
 CONFIDENCE_Z = 1.96
 BAND_WIDENING_BASE_DAYS = 7.0
 BAND_WIDENING_CAP = 2.5
+SIMULATION_PATHS = 1_000
+_ASSET_TYPES = frozenset({"LOAN", "SECURITY_HOLDING", "CASH", "INTERBANK_PLACEMENT", "OTHER_ASSET"})
+_LIABILITY_TYPES = frozenset({"DEPOSIT", "INTERBANK_BORROWING", "OTHER_LIABILITY"})
+_INCLUDED = ("accepted", "warning")
+_REQUIRED_DIAGNOSTICS = frozenset(
+    {"bias_pct", "interval_coverage_pct", "residual_drift_pct", "residual_std"}
+)
 
 
 def _generic_series(config: TrainingConfig) -> list[DailyFlow]:
@@ -72,11 +82,19 @@ def _generic_series(config: TrainingConfig) -> list[DailyFlow]:
     return generate_daily_series(days=config.total_days)
 
 
-def get_forecast(
-    db: Session, ctx: TenantContext, bank_id: str, *, horizon: int, mode: CashflowForecastMode
+def get_forecast(  # noqa: PLR0913 - explicit tenant forecast inputs
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    *,
+    horizon: int,
+    mode: CashflowForecastMode,
+    scenario: CashflowForecastScenario,
 ) -> CashflowForecastRead:
-    _get_bank_or_404(db, ctx, bank_id)
-    return _get_service(db, ctx, bank_id).forecast(horizon=horizon, mode=mode)
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    return _get_service(db, ctx, bank_id).forecast(
+        db, ctx, bank, horizon=horizon, mode=mode, scenario=scenario
+    )
 
 
 def get_history(
@@ -140,7 +158,11 @@ class ForecastService:
             model, scaler, metrics = self._model, self._scaler, self._metrics
             if model is None or scaler is None or metrics is None:
                 loaded = ml.load_artifacts(self._artifacts_dir)
-                if loaded is None:
+                if (
+                    loaded is None
+                    or loaded[2].get("model_version") != MODEL_VERSION
+                    or not _REQUIRED_DIAGNOSTICS.issubset(loaded[2])
+                ):
                     ml.train_and_save(
                         config=self._config,
                         artifacts_dir=self._artifacts_dir,
@@ -153,7 +175,16 @@ class ForecastService:
                 self._model, self._scaler, self._metrics = loaded
             return model, scaler, metrics
 
-    def forecast(self, *, horizon: int, mode: Literal["lstm", "static"]) -> CashflowForecastRead:
+    def forecast(  # noqa: PLR0913 - model, tenant, and scenario context are explicit
+        self,
+        db: Session,
+        ctx: TenantContext,
+        bank: Bank,
+        *,
+        horizon: int,
+        mode: Literal["lstm", "static"],
+        scenario: CashflowForecastScenario,
+    ) -> CashflowForecastRead:
         model, scaler, metrics = self._require_trained()
         ml = _ml_model_or_503()
         as_of = self._series[-1].date
@@ -161,44 +192,55 @@ class ForecastService:
             lstm_mape=float(metrics["lstm_mape"]),
             static_mape=float(metrics["static_mape"]),
             improvement_pct=float(metrics["improvement_pct"]),
+            bias_pct=float(metrics.get("bias_pct", 0)),
+            interval_coverage_pct=float(metrics.get("interval_coverage_pct", 0)),
+            residual_drift_pct=float(metrics.get("residual_drift_pct", 0)),
         )
 
-        points: list[CashflowForecastPointRead] = []
+        behavioral: list[float]
         if mode == "lstm":
-            nets = ml.forecast_net_flows(model, scaler, self._series, horizon)
-            residual_std = float(metrics["residual_std"])
-            for day, net in enumerate(nets, start=1):
-                half_width = _band_half_width(day, residual_std)
-                points.append(
-                    CashflowForecastPointRead(
-                        day=day,
-                        date=as_of + datetime.timedelta(days=day),
-                        net_flow=round(net, 4),
-                        lower=round(net - half_width, 4),
-                        upper=round(net + half_width, 4),
-                    )
-                )
+            behavioral = ml.forecast_net_flows(model, scaler, self._series, horizon)
         else:
-            for day, net in enumerate(forecast_static(self._series, horizon), start=1):
-                rounded = round(net, 4)
-                points.append(
-                    CashflowForecastPointRead(
-                        day=day,
-                        date=as_of + datetime.timedelta(days=day),
-                        net_flow=rounded,
-                        lower=rounded,
-                        upper=rounded,
-                    )
-                )
+            behavioral = forecast_static(self._series, horizon)
+
+        dates = [as_of + datetime.timedelta(days=day) for day in range(1, horizon + 1)]
+        contractual = _contractual_daily_flows(db, ctx, bank, dates)
+        adjustments, assumptions = _scenario_adjustments(behavioral, scenario)
+        central = [
+            behavioral[index] + contractual[index] + adjustments[index]
+            for index in range(horizon)
+        ]
+        quantiles = _simulated_quantiles(
+            central, float(metrics["residual_std"]), mode=mode, scenario=scenario
+        )
+        points = [
+            CashflowForecastPointRead(
+                day=index + 1,
+                date=dates[index],
+                net_flow=round(central[index], 4),
+                lower=round(quantiles[index][0], 4),
+                upper=round(quantiles[index][2], 4),
+                behavioral_net_flow=round(behavioral[index], 4),
+                contractual_net_flow=round(contractual[index], 4),
+                scenario_adjustment=round(adjustments[index], 4),
+                p5=round(quantiles[index][0], 4),
+                p50=round(quantiles[index][1], 4),
+                p95=round(quantiles[index][2], 4),
+            )
+            for index in range(horizon)
+        ]
 
         return CashflowForecastRead(
             mode=mode,
+            scenario=scenario,
             horizon=horizon,
             as_of_date=as_of,
             model_version=str(metrics["model_version"]),
             model_scope=self._scope,
             accuracy=accuracy,
             points=points,
+            simulation_paths=SIMULATION_PATHS if mode == "lstm" else 1,
+            scenario_assumptions=assumptions,
         )
 
     def history(self, days: int) -> CashflowHistoryRead:
@@ -272,6 +314,98 @@ def _get_service(db: Session, ctx: TenantContext, bank_id: str) -> ForecastServi
         with _services_lock:
             _services[key] = service
         return service
+
+
+def _contractual_daily_flows(
+    db: Session, ctx: TenantContext, bank: Bank, dates: list[datetime.date]
+) -> list[float]:
+    """Accepted current book maturities, with assets positive and liabilities negative."""
+    by_date = {day: 0.0 for day in dates}
+    if not dates:
+        return []
+    as_of = dates[0] - datetime.timedelta(days=1)
+    snapshot_as_of = db.scalar(
+        select(func.max(CanonicalPositionSnapshot.as_of_date)).where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date <= as_of,
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED),
+        )
+    )
+    if snapshot_as_of is None:
+        return [0.0 for _ in dates]
+    rows = db.execute(
+        select(CanonicalPositionSnapshot, CanonicalPosition)
+        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+        .where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date == snapshot_as_of,
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED),
+            CanonicalPosition.position_type.in_((*_ASSET_TYPES, *_LIABILITY_TYPES)),
+        )
+    ).all()
+    # Forecast as-of and book dates can differ. A missing exact snapshot must not
+    # fabricate contractual flows; the behavioural component remains available.
+    for snapshot, position in rows:
+        maturity = snapshot.contractual_maturity
+        if maturity not in by_date:
+            continue
+        raw = (snapshot.attributes or {}).get("balance_ghs")
+        amount = float(raw) if raw not in (None, "") else float(snapshot.balance or 0)
+        by_date[maturity] += amount if position.position_type in _ASSET_TYPES else -amount
+    return [by_date[day] for day in dates]
+
+
+def _scenario_adjustments(
+    behavioral: list[float], scenario: CashflowForecastScenario
+) -> tuple[list[float], list[str]]:
+    if scenario == "baseline":
+        return [0.0] * len(behavioral), ["Baseline: no planning overlay applied."]
+    inflow_haircut, outflow_multiplier = (
+        (Decimal("0.15"), Decimal("1.15"))
+        if scenario == "adverse"
+        else (Decimal("0.30"), Decimal("1.30"))
+    )
+    adjustments = [
+        -float(Decimal(str(flow)) * inflow_haircut)
+        if flow >= 0
+        else float(Decimal(str(flow)) * (outflow_multiplier - Decimal("1")))
+        for flow in behavioral
+    ]
+    label = "Adverse" if scenario == "adverse" else "Severe"
+    return adjustments, [
+        f"{label}: behavioural inflows reduced by {inflow_haircut * 100}%.",
+        f"{label}: behavioural outflows increased by {(outflow_multiplier - Decimal('1')) * 100}%.",
+        (
+            "Contractual maturities remain unchanged; separate governed stress assumptions "
+            "are required for contractual defaults and facility drawdowns."
+        ),
+    ]
+
+
+def _simulated_quantiles(
+    central: list[float],
+    residual_std: float,
+    *,
+    mode: CashflowForecastMode,
+    scenario: CashflowForecastScenario,
+) -> list[tuple[float, float, float]]:
+    if mode == "static" or residual_std <= 0:
+        return [(value, value, value) for value in central]
+    scenario_scale = {"baseline": 1.0, "adverse": 1.25, "severe": 1.6}[scenario]
+    rng = np.random.default_rng(42)
+    simulations = rng.normal(
+        loc=np.array(central),
+        scale=residual_std * scenario_scale,
+        size=(SIMULATION_PATHS, len(central)),
+    )
+    return [
+        tuple(np.quantile(simulations[:, index], [0.05, 0.5, 0.95]).tolist())
+        for index in range(len(central))
+    ]
 
 
 def reset_forecast_service() -> None:

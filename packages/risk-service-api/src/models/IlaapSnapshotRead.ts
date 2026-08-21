@@ -32,13 +32,6 @@ import {
   NsfrPctToJSON,
   NsfrPctToJSONTyped,
 } from "./NsfrPct";
-import type { Notes1 } from "./Notes1";
-import {
-  Notes1FromJSON,
-  Notes1FromJSONTyped,
-  Notes1ToJSON,
-  Notes1ToJSONTyped,
-} from "./Notes1";
 import type { NsfrStatus } from "./NsfrStatus";
 import {
   NsfrStatusFromJSON,
@@ -53,6 +46,13 @@ import {
   LcrPctToJSON,
   LcrPctToJSONTyped,
 } from "./LcrPct";
+import type { Notes } from "./Notes";
+import {
+  NotesFromJSON,
+  NotesFromJSONTyped,
+  NotesToJSON,
+  NotesToJSONTyped,
+} from "./Notes";
 import type { EwiEscalationState } from "./EwiEscalationState";
 import {
   EwiEscalationStateFromJSON,
@@ -123,10 +123,10 @@ export interface IlaapSnapshotRead {
   lcrStatus?: LcrStatus;
   /**
    *
-   * @type {Notes1}
+   * @type {Notes}
    * @memberof IlaapSnapshotRead
    */
-  notes?: Notes1;
+  notes?: Notes;
   /**
    *
    * @type {NsfrPct}
@@ -201,7 +201,7 @@ export function IlaapSnapshotReadFromJSONTyped(
       json["lcr_status"] == null
         ? undefined
         : LcrStatusFromJSON(json["lcr_status"]),
-    notes: json["notes"] == null ? undefined : Notes1FromJSON(json["notes"]),
+    notes: json["notes"] == null ? undefined : NotesFromJSON(json["notes"]),
     nsfrPct:
       json["nsfr_pct"] == null ? undefined : NsfrPctFromJSON(json["nsfr_pct"]),
     nsfrStatus:
@@ -238,7 +238,7 @@ export function IlaapSnapshotReadToJSONTyped(
     id: value["id"],
     lcr_pct: LcrPctToJSON(value["lcrPct"]),
     lcr_status: LcrStatusToJSON(value["lcrStatus"]),
-    notes: Notes1ToJSON(value["notes"]),
+    notes: NotesToJSON(value["notes"]),
     nsfr_pct: NsfrPctToJSON(value["nsfrPct"]),
     nsfr_status: NsfrStatusToJSON(value["nsfrStatus"]),
     reporting_period_id: value["reportingPeriodId"],

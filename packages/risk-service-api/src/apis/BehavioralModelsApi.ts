@@ -14,6 +14,7 @@ import * as runtime from "../runtime";
 import type {
   BehavioralApplyRead,
   BehavioralApplyRequest,
+  BehavioralLiquidityRead,
   BehavioralModelRead,
   ErrorResponse,
 } from "../models/index";
@@ -22,6 +23,8 @@ import {
   BehavioralApplyReadToJSON,
   BehavioralApplyRequestFromJSON,
   BehavioralApplyRequestToJSON,
+  BehavioralLiquidityReadFromJSON,
+  BehavioralLiquidityReadToJSON,
   BehavioralModelReadFromJSON,
   BehavioralModelReadToJSON,
   ErrorResponseFromJSON,
@@ -32,6 +35,10 @@ export interface ApplyBehavioralModelRequest {
   bankId: any;
   model: ApplyBehavioralModelModelEnum;
   behavioralApplyRequest: BehavioralApplyRequest;
+}
+
+export interface GetBehavioralLiquidityRequest {
+  bankId: string;
 }
 
 export interface GetBehavioralModelRequest {
@@ -124,6 +131,64 @@ export class BehavioralModelsApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BehavioralApplyRead> {
     const response = await this.applyBehavioralModelRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Get Behavioral Liquidity
+   */
+  async getBehavioralLiquidityRaw(
+    requestParameters: GetBehavioralLiquidityRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BehavioralLiquidityRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getBehavioralLiquidity().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/behavioral/liquidity`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BehavioralLiquidityReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Behavioral Liquidity
+   */
+  async getBehavioralLiquidity(
+    requestParameters: GetBehavioralLiquidityRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BehavioralLiquidityRead> {
+    const response = await this.getBehavioralLiquidityRaw(
       requestParameters,
       initOverrides,
     );

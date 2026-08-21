@@ -17,19 +17,40 @@ import {
   type ReactNode,
 } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { Landmark } from 'lucide-react';
 import type {
   BankRead,
+  BankReadInstitutionTypeDetail,
   BankReportingPeriodRead,
 } from '@aequoros/risk-service-api';
 import { isApiError } from '@/lib/api/client';
 import { useBanks, useReportingPeriods } from '@/lib/api/hooks';
 import { setActiveJurisdiction } from '@/lib/format';
+import { moduleSetFrom, type ModuleScope } from '@/lib/modules';
 import Logo from './Logo';
+
+/**
+ * The active tenant's institution-type discriminator (docs/sdi.md §1), resolved
+ * from the bank payload. `code` is the typed licence class always carried on the
+ * bank; `institutionClass` is the coarse regime axis ('bank' | 'sdi') future SDI
+ * phases will gate modules on. Phase A only surfaces it — nothing is gated yet.
+ */
+export type InstitutionTypeInfo = {
+  code: string;
+  institutionClass: string | null;
+  detail: BankReadInstitutionTypeDetail | null;
+};
 
 type BankContextValue = {
   bank: BankRead | null;
+  institutionType: InstitutionTypeInfo | null;
+  /**
+   * The active tenant's module scope (docs/sdi.md §3, §6.3) — the set of
+   * top-level modules its institution class is entitled to, plus its class.
+   * `modules: null` means unscoped (a universal bank, or not yet loaded) so
+   * every module stays visible. The nav surfaces + route guard consult this.
+   */
+  moduleScope: ModuleScope;
   period: BankReportingPeriodRead | null;
   periods: BankReportingPeriodRead[];
   setPeriodId: (periodId: string) => void;
@@ -47,8 +68,25 @@ export function useBankContext(): BankContextValue {
   return value;
 }
 
+/**
+ * The active institution type, for later-phase module scoping. Returns null
+ * until a bank is loaded. Deliberately does NOT gate anything in Phase A.
+ */
+export function useInstitutionType(): InstitutionTypeInfo | null {
+  return useBankContext().institutionType;
+}
+
+/**
+ * The active tenant's module scope, for the nav surfaces + route guard. Until the
+ * bank payload settles (`isResolved` false) the nav + data hooks restrict to
+ * CORE_MODULES rather than show/fetch everything — so no out-of-scope module (FX,
+ * FTP, …) flashes or fires a request during the load (docs/sdi.md §3.2/§6.3).
+ */
+export function useModuleScope(): ModuleScope {
+  return useBankContext().moduleScope;
+}
+
 export default function BankProvider({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const banksQuery = useBanks();
   const bank = banksQuery.data?.banks[0] ?? null;
 
@@ -92,6 +130,34 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     [periodsQuery.data]
   );
 
+  // The active tenant's institution-type discriminator, resolved from the bank
+  // payload alongside jurisdiction. Surfaced for later-phase module scoping;
+  // Phase A gates nothing.
+  const institutionType = useMemo<InstitutionTypeInfo | null>(
+    () =>
+      bank
+        ? {
+            code: bank.institutionType,
+            institutionClass: bank.institutionTypeDetail?.institutionClass ?? null,
+            detail: bank.institutionTypeDetail ?? null,
+          }
+        : null,
+    [bank]
+  );
+
+  // The tenant's scoped module set (docs/sdi.md §3): built from the API's
+  // default_modules. `isResolved` is false until the bank payload settles, so the
+  // nav + data hooks restrict to CORE_MODULES rather than flash every module and
+  // fire out-of-scope requests during the load (the every-module-on-refresh race).
+  const moduleScope = useMemo<ModuleScope>(
+    () => ({
+      modules: moduleSetFrom(bank?.institutionTypeDetail?.defaultModules),
+      institutionClass: bank?.institutionTypeDetail?.institutionClass ?? null,
+      isResolved: !banksQuery.isLoading,
+    }),
+    [bank, banksQuery.isLoading]
+  );
+
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const period =
     periods.find((p) => p.id === selectedPeriodId) ?? periods[0] ?? null;
@@ -103,13 +169,15 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const value = useMemo<BankContextValue>(
     () => ({
       bank,
+      institutionType,
+      moduleScope,
       period,
       periods,
       setPeriodId: setSelectedPeriodId,
       isLoading,
       isEmpty,
     }),
-    [bank, period, periods, isLoading, isEmpty]
+    [bank, institutionType, moduleScope, period, periods, isLoading, isEmpty]
   );
 
   if (banksQuery.error) {
@@ -138,35 +206,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     return <NoBanksPanel />;
   }
 
-  // Bank exists but holds no reporting periods (fresh install or a full
-  // reset): module dashboards have nothing to render, so steer the user to
-  // the Data Engine. The Data Engine and Settings routes stay reachable —
-  // uploading is exactly how a period comes into existence.
-  const zeroPeriods = !isLoading && Boolean(bank) && periods.length === 0;
-  const allowWithoutPeriods =
-    pathname.startsWith('/data-engine') || pathname.startsWith('/settings');
-  if (zeroPeriods && !allowWithoutPeriods) {
-    return <NoPeriodsPanel />;
-  }
-
   return <BankContext.Provider value={value}>{children}</BankContext.Provider>;
-}
-
-function NoPeriodsPanel() {
-  return (
-    <FullScreenPanel
-      title="No data yet"
-      description="This bank has no reporting periods. Upload your data in the Data Engine and activate it — the dashboards will populate for the uploaded as-of period."
-      action={
-        <Link
-          href="/data-engine"
-          className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary"
-        >
-          Open the Data Engine
-        </Link>
-      }
-    />
-  );
 }
 
 function NoBanksPanel() {

@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { BankReadInstitutionTypeDetail } from "./BankReadInstitutionTypeDetail";
+import {
+  BankReadInstitutionTypeDetailFromJSON,
+  BankReadInstitutionTypeDetailFromJSONTyped,
+  BankReadInstitutionTypeDetailToJSON,
+  BankReadInstitutionTypeDetailToJSONTyped,
+} from "./BankReadInstitutionTypeDetail";
 import type { BankReadJurisdiction } from "./BankReadJurisdiction";
 import {
   BankReadJurisdictionFromJSON,
@@ -43,6 +50,18 @@ export interface BankRead {
    * @memberof BankRead
    */
   id: string;
+  /**
+   *
+   * @type {string}
+   * @memberof BankRead
+   */
+  institutionType: string;
+  /**
+   *
+   * @type {BankReadInstitutionTypeDetail}
+   * @memberof BankRead
+   */
+  institutionTypeDetail?: BankReadInstitutionTypeDetail;
   /**
    *
    * @type {BankReadJurisdiction}
@@ -94,6 +113,8 @@ export function instanceOfBankRead(value: object): value is BankRead {
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("currency" in value) || value["currency"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
+  if (!("institutionType" in value) || value["institutionType"] === undefined)
+    return false;
   if (!("jurisdictionCode" in value) || value["jurisdictionCode"] === undefined)
     return false;
   if (!("licenseType" in value) || value["licenseType"] === undefined)
@@ -122,6 +143,13 @@ export function BankReadFromJSONTyped(
     createdAt: new Date(json["created_at"]),
     currency: json["currency"],
     id: json["id"],
+    institutionType: json["institution_type"],
+    institutionTypeDetail:
+      json["institution_type_detail"] == null
+        ? undefined
+        : BankReadInstitutionTypeDetailFromJSON(
+            json["institution_type_detail"],
+          ),
     jurisdiction:
       json["jurisdiction"] == null
         ? undefined
@@ -151,6 +179,10 @@ export function BankReadToJSONTyped(
     created_at: value["createdAt"].toISOString(),
     currency: value["currency"],
     id: value["id"],
+    institution_type: value["institutionType"],
+    institution_type_detail: BankReadInstitutionTypeDetailToJSON(
+      value["institutionTypeDetail"],
+    ),
     jurisdiction: BankReadJurisdictionToJSON(value["jurisdiction"]),
     jurisdiction_code: value["jurisdictionCode"],
     license_type: value["licenseType"],

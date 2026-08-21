@@ -53,6 +53,8 @@ class DepositMonthAgg:
     n_accounts: int
     avg_rate: float | None
     counterparty_type: str | None
+    concentration_group: str
+    branch_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +94,7 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
     *,
     non_maturing_only: bool,
 ) -> list[DepositMonthAgg]:
-    """Deposit balances aggregated to (product, counterparty_type, month)."""
+    """Deposit balances aggregated to product, segment, group, branch, and month."""
     start = months_before(as_of, window_months)
     conds = [
         CanonicalPositionSnapshot.organization_id == ctx.organization_id,
@@ -105,10 +107,21 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
     ]
     if non_maturing_only:
         conds.append(CanonicalPositionSnapshot.contractual_maturity.is_(None))
+    concentration_group = func.coalesce(
+        CanonicalCounterparty.group_reference,
+        CanonicalCounterparty.name,
+        "<unattributed>",
+    ).label("concentration_group")
+    branch_id = func.coalesce(
+        CanonicalPositionSnapshot.attributes["branch_id"].as_string(),
+        "<unassigned>",
+    ).label("branch_id")
     rows = db.execute(
         select(
             CanonicalProduct.product_code,
             CanonicalCounterparty.counterparty_type,
+            concentration_group,
+            branch_id,
             CanonicalPositionSnapshot.as_of_date,
             func.sum(_balance_ghs()),
             func.count(),
@@ -124,6 +137,8 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
         .group_by(
             CanonicalProduct.product_code,
             CanonicalCounterparty.counterparty_type,
+            concentration_group,
+            branch_id,
             CanonicalPositionSnapshot.as_of_date,
         )
     ).all()
@@ -135,8 +150,10 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
             n_accounts=int(n or 0),
             avg_rate=float(rate) if rate is not None else None,
             counterparty_type=ct,
+            concentration_group=group or "<unattributed>",
+            branch_id=branch or "<unassigned>",
         )
-        for pc, ct, d, bal, n, rate in rows
+        for pc, ct, group, branch, d, bal, n, rate in rows
     ]
 
 

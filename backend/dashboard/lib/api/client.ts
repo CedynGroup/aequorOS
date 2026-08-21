@@ -10,6 +10,7 @@ import {
   CreditParamsApi,
   IntegrationKeysApi,
   LiquidityCfpApi,
+  LiquidityMonitoringApi,
   LiquidityThresholdsApi,
   AttestationApi,
   AuthApi,
@@ -123,6 +124,7 @@ export const organizationApi = new OrganizationApi(configuration);
 export const notificationsApi = new NotificationsApi(configuration);
 export const integrationKeysApi = new IntegrationKeysApi(configuration);
 export const liquidityCfpApi = new LiquidityCfpApi(configuration);
+export const liquidityMonitoringApi = new LiquidityMonitoringApi(configuration);
 export const liquidityThresholdsApi = new LiquidityThresholdsApi(configuration);
 export const creditParamsApi = new CreditParamsApi(configuration);
 export const reverseStressApi = new ReverseStressApi(configuration);
@@ -216,10 +218,47 @@ export async function normalizeApiError(error: unknown): Promise<ApiError> {
 }
 
 /** Run a generated-client call, rethrowing failures as normalized ApiError. */
+/**
+ * A module view has no computed data yet (the backend returns HTTP 200
+ * `{available: false, reason}` — a valid empty state, not an error). Thrown so
+ * the shared boundary renders a clean onboarding panel instead of a red error.
+ */
+export class ModuleUnavailableError extends Error {
+  readonly reason: string;
+  readonly errorCode: string | null;
+  constructor(reason: string, errorCode: string | null) {
+    super(reason);
+    this.name = 'ModuleUnavailableError';
+    this.reason = reason;
+    this.errorCode = errorCode;
+  }
+}
+
+export function isModuleUnavailable(error: unknown): error is ModuleUnavailableError {
+  return error instanceof ModuleUnavailableError;
+}
+
 export async function apiCall<T>(fn: () => Promise<T>): Promise<T> {
   try {
-    return await fn();
+    const result = await fn();
+    // The graceful "no computed data yet" envelope (200) — surface it as a
+    // typed empty state, not data the caller would try to render.
+    if (
+      result &&
+      typeof result === 'object' &&
+      'available' in result &&
+      (result as { available?: unknown }).available === false &&
+      'error_code' in result
+    ) {
+      const env = result as { reason?: string; error_code?: string };
+      throw new ModuleUnavailableError(
+        env.reason ?? 'This module has no computed data yet.',
+        env.error_code ?? null
+      );
+    }
+    return result;
   } catch (error) {
+    if (error instanceof ModuleUnavailableError) throw error;
     throw await normalizeApiError(error);
   }
 }

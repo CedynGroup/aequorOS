@@ -19,6 +19,18 @@ import { mapValues } from "../runtime";
 export interface CashflowForecastPointRead {
   /**
    *
+   * @type {number}
+   * @memberof CashflowForecastPointRead
+   */
+  behavioralNetFlow: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CashflowForecastPointRead
+   */
+  contractualNetFlow: number;
+  /**
+   *
    * @type {Date}
    * @memberof CashflowForecastPointRead
    */
@@ -46,6 +58,30 @@ export interface CashflowForecastPointRead {
    * @type {number}
    * @memberof CashflowForecastPointRead
    */
+  p5: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CashflowForecastPointRead
+   */
+  p50: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CashflowForecastPointRead
+   */
+  p95: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CashflowForecastPointRead
+   */
+  scenarioAdjustment: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CashflowForecastPointRead
+   */
   upper: number;
 }
 
@@ -55,10 +91,28 @@ export interface CashflowForecastPointRead {
 export function instanceOfCashflowForecastPointRead(
   value: object,
 ): value is CashflowForecastPointRead {
+  if (
+    !("behavioralNetFlow" in value) ||
+    value["behavioralNetFlow"] === undefined
+  )
+    return false;
+  if (
+    !("contractualNetFlow" in value) ||
+    value["contractualNetFlow"] === undefined
+  )
+    return false;
   if (!("date" in value) || value["date"] === undefined) return false;
   if (!("day" in value) || value["day"] === undefined) return false;
   if (!("lower" in value) || value["lower"] === undefined) return false;
   if (!("netFlow" in value) || value["netFlow"] === undefined) return false;
+  if (!("p5" in value) || value["p5"] === undefined) return false;
+  if (!("p50" in value) || value["p50"] === undefined) return false;
+  if (!("p95" in value) || value["p95"] === undefined) return false;
+  if (
+    !("scenarioAdjustment" in value) ||
+    value["scenarioAdjustment"] === undefined
+  )
+    return false;
   if (!("upper" in value) || value["upper"] === undefined) return false;
   return true;
 }
@@ -78,10 +132,16 @@ export function CashflowForecastPointReadFromJSONTyped(
   }
   return {
     ...json,
+    behavioralNetFlow: json["behavioralNetFlow"],
+    contractualNetFlow: json["contractualNetFlow"],
     date: new Date(json["date"]),
     day: json["day"],
     lower: json["lower"],
     netFlow: json["netFlow"],
+    p5: json["p5"],
+    p50: json["p50"],
+    p95: json["p95"],
+    scenarioAdjustment: json["scenarioAdjustment"],
     upper: json["upper"],
   };
 }
@@ -101,10 +161,16 @@ export function CashflowForecastPointReadToJSONTyped(
   }
 
   return {
+    behavioralNetFlow: value["behavioralNetFlow"],
+    contractualNetFlow: value["contractualNetFlow"],
     date: value["date"].toISOString().substring(0, 10),
     day: value["day"],
     lower: value["lower"],
     netFlow: value["netFlow"],
+    p5: value["p5"],
+    p50: value["p50"],
+    p95: value["p95"],
+    scenarioAdjustment: value["scenarioAdjustment"],
     upper: value["upper"],
   };
 }

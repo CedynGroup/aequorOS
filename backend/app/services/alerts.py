@@ -1,4 +1,4 @@
-"""Bank alerts: the open critical/high live findings for the current period.
+"""Bank alerts: the open critical/high current live findings.
 
 Aggregates the ``live_findings`` the pipeline reconciles into a compact,
 severity-ranked feed for the alerts bell. Read-only; the pipeline owns the
@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod, LiveFinding
+from app.models import Bank, LiveFinding
 from app.schemas.live import AlertItemRead, BankAlertsRead
 
 _ALERT_SEVERITIES = ("critical", "high")
@@ -24,16 +24,12 @@ def get_bank_alerts(
     db: Session, ctx: TenantContext, bank_id: str, *, limit: int = 50
 ) -> BankAlertsRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    period = _latest_period(db, ctx, bank)
-    if period is None:
-        return BankAlertsRead(bank_id=bank.id, total=0, by_severity={}, by_module={}, items=[])
 
     findings = list(
         db.scalars(
             select(LiveFinding).where(
                 LiveFinding.organization_id == ctx.organization_id,
                 LiveFinding.bank_id == bank.id,
-                LiveFinding.reporting_period_id == period.id,
                 LiveFinding.status.in_(_OPEN_STATUSES),
                 LiveFinding.severity.in_(_ALERT_SEVERITIES),
             )
@@ -70,18 +66,6 @@ def get_bank_alerts(
         by_severity=by_severity,
         by_module=by_module,
         items=items,
-    )
-
-
-def _latest_period(db: Session, ctx: TenantContext, bank: Bank) -> BankReportingPeriod | None:
-    return db.scalar(
-        select(BankReportingPeriod)
-        .where(
-            BankReportingPeriod.organization_id == ctx.organization_id,
-            BankReportingPeriod.bank_id == bank.id,
-        )
-        .order_by(BankReportingPeriod.period_end.desc())
-        .limit(1)
     )
 
 

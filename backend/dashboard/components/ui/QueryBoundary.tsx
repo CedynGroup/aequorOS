@@ -7,8 +7,8 @@
  */
 
 import type { ReactNode } from 'react';
-import { AlertCircle, RotateCw } from 'lucide-react';
-import { isApiError } from '@/lib/api/client';
+import { AlertCircle, Database, RotateCw } from 'lucide-react';
+import { isApiError, isModuleUnavailable } from '@/lib/api/client';
 import { SkeletonCard, SkeletonChart, SkeletonTable } from './Skeleton';
 
 export function ErrorPanel({
@@ -20,6 +20,19 @@ export function ErrorPanel({
   onRetry?: () => void;
   title?: string;
 }) {
+  // "No computed data yet" is a valid state, not a failure — render a neutral
+  // onboarding panel (not a red error), and don't offer a "Retry" as if it broke.
+  if (isModuleUnavailable(error)) {
+    return (
+      <div className="card border-l-4 border-l-border bg-surface/60 p-5 flex items-start gap-3">
+        <Database size={18} className="text-slate shrink-0 mt-0.5" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-body font-medium text-navy">Waiting for data</p>
+          <p className="mt-1 text-body text-navy/80 leading-relaxed">{error.reason}</p>
+        </div>
+      </div>
+    );
+  }
   const message = isApiError(error)
     ? error.message
     : error instanceof Error

@@ -25,13 +25,13 @@ import {
   SignatureFieldPlacementToJSON,
   SignatureFieldPlacementToJSONTyped,
 } from "./SignatureFieldPlacement";
-import type { BankId } from "./BankId";
+import type { BankId1 } from "./BankId1";
 import {
-  BankIdFromJSON,
-  BankIdFromJSONTyped,
-  BankIdToJSON,
-  BankIdToJSONTyped,
-} from "./BankId";
+  BankId1FromJSON,
+  BankId1FromJSONTyped,
+  BankId1ToJSON,
+  BankId1ToJSONTyped,
+} from "./BankId1";
 
 /**
  * The reusable placement set for one ``(bank?, return_code)`` scope.
@@ -41,10 +41,10 @@ import {
 export interface SignaturePlacementTemplateRead {
   /**
    *
-   * @type {BankId}
+   * @type {BankId1}
    * @memberof SignaturePlacementTemplateRead
    */
-  bankId: BankId;
+  bankId: BankId1;
   /**
    *
    * @type {Array<SignatureFieldPlacement>}
@@ -109,7 +109,7 @@ export function SignaturePlacementTemplateReadFromJSONTyped(
   }
   return {
     ...json,
-    bankId: BankIdFromJSON(json["bank_id"]),
+    bankId: BankId1FromJSON(json["bank_id"]),
     placements: (json["placements"] as Array<any>).map(
       SignatureFieldPlacementFromJSON,
     ),
@@ -135,7 +135,7 @@ export function SignaturePlacementTemplateReadToJSONTyped(
   }
 
   return {
-    bank_id: BankIdToJSON(value["bankId"]),
+    bank_id: BankId1ToJSON(value["bankId"]),
     placements: (value["placements"] as Array<any>).map(
       SignatureFieldPlacementToJSON,
     ),

@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { Notes1 } from "./Notes1";
+import {
+  Notes1FromJSON,
+  Notes1FromJSONTyped,
+  Notes1ToJSON,
+  Notes1ToJSONTyped,
+} from "./Notes1";
 import type { Conditions } from "./Conditions";
 import {
   ConditionsFromJSON,
@@ -18,13 +25,6 @@ import {
   ConditionsToJSON,
   ConditionsToJSONTyped,
 } from "./Conditions";
-import type { Notes } from "./Notes";
-import {
-  NotesFromJSON,
-  NotesFromJSONTyped,
-  NotesToJSON,
-  NotesToJSONTyped,
-} from "./Notes";
 
 /**
  * ¶72(d): alternative/contingent sources of funds.
@@ -40,10 +40,10 @@ export interface CfpAlternativeSource {
   conditions?: Conditions;
   /**
    *
-   * @type {Notes}
+   * @type {Notes1}
    * @memberof CfpAlternativeSource
    */
-  notes?: Notes;
+  notes?: Notes1;
   /**
    *
    * @type {string}
@@ -79,7 +79,7 @@ export function CfpAlternativeSourceFromJSONTyped(
       json["conditions"] == null
         ? undefined
         : ConditionsFromJSON(json["conditions"]),
-    notes: json["notes"] == null ? undefined : NotesFromJSON(json["notes"]),
+    notes: json["notes"] == null ? undefined : Notes1FromJSON(json["notes"]),
     source: json["source"],
   };
 }
@@ -98,7 +98,7 @@ export function CfpAlternativeSourceToJSONTyped(
 
   return {
     conditions: ConditionsToJSON(value["conditions"]),
-    notes: NotesToJSON(value["notes"]),
+    notes: Notes1ToJSON(value["notes"]),
     source: value["source"],
   };
 }

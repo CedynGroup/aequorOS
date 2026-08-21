@@ -96,7 +96,9 @@ def list_live_snapshots(
     bank_id: str,
     db: DbSession,
     ctx: Tenant,
-    module: Annotated[str, Query(pattern="^(liquidity|capital|irr|fx|ftp|forecast)$")],
+    # 'rating' (implied-rating / credit assessment) is a first-class live module the
+    # Command Center pulse requests a ladder for — omitting it 422'd every tenant.
+    module: Annotated[str, Query(pattern="^(liquidity|capital|irr|fx|ftp|rating|forecast)$")],
     days: Annotated[int, Query(ge=2, le=120)] = 45,
 ) -> LiveSnapshotListRead:
     """Plane-2 daily ladder: past days are EOD closes, today is the live edge."""

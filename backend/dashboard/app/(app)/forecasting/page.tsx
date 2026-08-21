@@ -39,7 +39,6 @@ import WaterfallChart, {
 import RatioPathChart from '@/components/forecasting/charts/RatioPathChart';
 import { useScenarioRunSet } from '@/components/forecasting/hooks';
 import {
-  latestSucceededId,
   liabilitiesOf,
   metricStatus,
   metricThreshold,
@@ -48,10 +47,12 @@ import {
   yoyPct,
 } from '@/components/forecasting/lib';
 import { useBankContext } from '@/components/shell/BankContext';
+import SdiModuleContext from '@/components/sdi/SdiModuleContext';
 import {
   useCreateForecastRun,
   useForecastRun,
   useForecastRuns,
+  useLiveSummary,
 } from '@/lib/api/hooks';
 import { isoDate, labelize, num, statusTone } from '@/lib/api/values';
 import { currencyCode, fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
@@ -115,8 +116,10 @@ function BalanceSheetWorkspace() {
 
   const runsQuery = useForecastRuns(bankId, { limit: 50 });
   const runs = runsQuery.data?.runs ?? [];
+  const liveSummary = useLiveSummary(bankId);
+  const liveForecast = liveSummary.data?.modules.find((module) => module.module === 'forecast');
   const activeRunId =
-    selectedRunId ?? requestedRunId ?? latestSucceededId(runs);
+    selectedRunId ?? requestedRunId ?? null;
 
   const runQuery = useForecastRun(bankId, activeRunId);
   const createRun = useCreateForecastRun(bankId);
@@ -177,6 +180,7 @@ function BalanceSheetWorkspace() {
             <button
               type="button"
               disabled={createRun.isPending || !periodId}
+              title={periodId ? undefined : 'A derived reporting period is required before a forecast can be run.'}
               onClick={() =>
                 periodId &&
                 createRun.mutate(
@@ -201,6 +205,25 @@ function BalanceSheetWorkspace() {
         }
       />
 
+      {!periodId && (
+        <div className="px-8 pt-6">
+          <div className="border-l-4 border-l-warning bg-warning-light/40 px-5 py-4 text-body text-navy">
+            <p className="font-medium">A reporting period is required to run a forecast</p>
+            <p className="mt-1 text-slate">
+              This institution has no derived reporting period yet. Activate the current canonical book in the{' '}
+              <Link href="/data-engine" className="text-action hover:underline">
+                Data Engine
+              </Link>{' '}
+              to create the immutable period snapshot used by forecast runs.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <SdiModuleContext title="SDI ALM context">
+        This projection supports deposit, loan, liquidity, and capital planning for a specialised deposit-taking institution. It does not imply a Basel ICAAP requirement.
+      </SdiModuleContext>
+
       <QueryBoundary
         isLoading={runsQuery.isLoading}
         error={runsQuery.error}
@@ -212,11 +235,15 @@ function BalanceSheetWorkspace() {
           )}
 
           {!activeRunId ? (
-            <EmptyState
-              Icon={PlayCircle}
-              title="No forecast runs yet"
-              description={`Run a forecast to project ${bank?.name ?? 'the bank'}'s balance sheet, P&L, and regulatory ratios ${horizonYears} years forward from ${period?.label ?? 'the selected period'}. Every run is kept as a saved projection you can revisit and compare.`}
-            />
+            liveForecast && liveForecast.status !== 'na' ? (
+              <LiveForecastBaseline forecast={liveForecast} />
+            ) : (
+              <EmptyState
+                Icon={PlayCircle}
+                title="Live forecast is not available yet"
+                description="Ingest current financial data and reviewed base assumptions. The live pipeline will calculate the baseline automatically; saved and official forecasts remain optional evidence snapshots."
+              />
+            )
           ) : runQuery.isLoading ? (
             <SkeletonChart height={320} />
           ) : runQuery.error ? (
@@ -236,6 +263,34 @@ function BalanceSheetWorkspace() {
           ) : null}
         </div>
       </QueryBoundary>
+    </>
+  );
+}
+
+function LiveForecastBaseline({
+  forecast,
+}: {
+  forecast: { metrics: Record<string, unknown>; computedAt: Date; status: string };
+}) {
+  const metrics = forecast.metrics;
+  const metric = (key: string) => metrics[key] as string | number | undefined;
+  return (
+    <>
+      <SectionCard
+        title="Current live forecast baseline"
+        subtitle="Five-year projection from current canonical financials and active base assumptions. This is not a saved or official run."
+        computedAt={forecast.computedAt}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <KpiStat label="Year-5 CAR" value={fmtPct(num(metric('year5_car_pct')), 2)} />
+          <KpiStat label="Year-5 LCR" value={fmtPct(num(metric('year5_lcr_pct')), 2)} />
+          <KpiStat label="Year-5 NSFR" value={fmtPct(num(metric('year5_nsfr_pct')), 2)} />
+          <KpiStat label="Average ROE" value={fmtPct(num(metric('avg_roe_pct')), 2)} />
+        </div>
+      </SectionCard>
+      <p className="text-caption text-slate">
+        Select a saved run through a direct run link, or create a scenario above to preserve an explicit projection snapshot.
+      </p>
     </>
   );
 }

@@ -76,6 +76,12 @@ import {
 export interface LiquidityDashboardRead {
   /**
    *
+   * @type {Array<LiquidityDashboardLineRead>}
+   * @memberof LiquidityDashboardRead
+   */
+  asf: Array<LiquidityDashboardLineRead>;
+  /**
+   *
    * @type {BankRead}
    * @memberof LiquidityDashboardRead
    */
@@ -124,6 +130,12 @@ export interface LiquidityDashboardRead {
   period: BankReportingPeriodRead;
   /**
    *
+   * @type {Array<LiquidityDashboardLineRead>}
+   * @memberof LiquidityDashboardRead
+   */
+  rsf: Array<LiquidityDashboardLineRead>;
+  /**
+   *
    * @type {boolean}
    * @memberof LiquidityDashboardRead
    */
@@ -148,6 +160,7 @@ export interface LiquidityDashboardRead {
 export function instanceOfLiquidityDashboardRead(
   value: object,
 ): value is LiquidityDashboardRead {
+  if (!("asf" in value) || value["asf"] === undefined) return false;
   if (!("bank" in value) || value["bank"] === undefined) return false;
   if (!("hqlaComposition" in value) || value["hqlaComposition"] === undefined)
     return false;
@@ -157,6 +170,7 @@ export function instanceOfLiquidityDashboardRead(
   if (!("metrics" in value) || value["metrics"] === undefined) return false;
   if (!("outflows" in value) || value["outflows"] === undefined) return false;
   if (!("period" in value) || value["period"] === undefined) return false;
+  if (!("rsf" in value) || value["rsf"] === undefined) return false;
   if (!("stored" in value) || value["stored"] === undefined) return false;
   if (!("trend" in value) || value["trend"] === undefined) return false;
   if (!("validations" in value) || value["validations"] === undefined)
@@ -179,6 +193,7 @@ export function LiquidityDashboardReadFromJSONTyped(
   }
   return {
     ...json,
+    asf: (json["asf"] as Array<any>).map(LiquidityDashboardLineReadFromJSON),
     bank: BankReadFromJSON(json["bank"]),
     hqlaComposition: (json["hqla_composition"] as Array<any>).map(
       LiquidityDashboardLineReadFromJSON,
@@ -196,6 +211,7 @@ export function LiquidityDashboardReadFromJSONTyped(
       LiquidityDashboardLineReadFromJSON,
     ),
     period: BankReportingPeriodReadFromJSON(json["period"]),
+    rsf: (json["rsf"] as Array<any>).map(LiquidityDashboardLineReadFromJSON),
     stored: json["stored"],
     trend: (json["trend"] as Array<any>).map(LiquidityTrendPointReadFromJSON),
     validations: (json["validations"] as Array<any>).map(
@@ -219,6 +235,7 @@ export function LiquidityDashboardReadToJSONTyped(
   }
 
   return {
+    asf: (value["asf"] as Array<any>).map(LiquidityDashboardLineReadToJSON),
     bank: BankReadToJSON(value["bank"]),
     hqla_composition: (value["hqlaComposition"] as Array<any>).map(
       LiquidityDashboardLineReadToJSON,
@@ -233,6 +250,7 @@ export function LiquidityDashboardReadToJSONTyped(
       LiquidityDashboardLineReadToJSON,
     ),
     period: BankReportingPeriodReadToJSON(value["period"]),
+    rsf: (value["rsf"] as Array<any>).map(LiquidityDashboardLineReadToJSON),
     stored: value["stored"],
     trend: (value["trend"] as Array<any>).map(LiquidityTrendPointReadToJSON),
     validations: (value["validations"] as Array<any>).map(

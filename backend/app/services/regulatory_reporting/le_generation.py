@@ -66,7 +66,8 @@ from app.models import (
     ParamLiquidityThreshold,
     RelatedParty,
 )
-from app.services import regulatory_capital, regulatory_liquidity
+from app.services import regulatory_capital, regulatory_liquidity, regulatory_parameters
+from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.liquidity_thresholds import BANK_MINIMUM_PCT as _TABLE1_BANK_MINIMUM_PCT
 from app.services.params import get_active_params
 from app.services.regulatory_reporting.generation import (
@@ -378,9 +379,7 @@ def _load_canonical_rows(
                 redeemable_within_two_days=snapshot.redeemable_within_two_days,
                 pledged_as_collateral=snapshot.pledged_as_collateral,
                 lien_reference=snapshot.lien_reference,
-                counterparty_resident=(
-                    counterparty.resident if counterparty is not None else None
-                ),
+                counterparty_resident=(counterparty.resident if counterparty is not None else None),
                 counterparty_rating=counterparty.rating if counterparty is not None else None,
                 funding_instrument=(
                     str(attributes["funding_instrument"]).strip().lower()
@@ -582,6 +581,140 @@ def _connected_member_rows(groups: list[_Entity]) -> list[dict[str, Any]]:
     return rows
 
 
+def _append_exposure_limit_findings(  # noqa: PLR0913 - findings accumulator + context
+    db: Session,
+    bank: Bank,
+    as_of: date,
+    entities: list[_Entity],
+    nof: Decimal,
+    findings: list[dict[str, str]],
+) -> None:
+    """Enforce the exposure limits (docs/sdi.md §4.3), resolved for the tenant's
+    institution class from the regulatory-parameter control plane — never
+    hardcoded. Two distinct limits apply at the connected-group level:
+
+    * single-obligor limit — 25% of NOF for both classes (Act 930 s.62(1));
+    * per-obligor large-exposure limit — 20% (bank) / 15% (SDI), Large Exposures
+      Directive.
+
+    A breach raises a WARNING naming the counterparty group, its percentage of
+    NOF, the limit, and the source citation (regulatory defensibility). A limit
+    whose value is still pending BoG confirmation says so in the finding. These
+    findings only fire on an ACTUAL breach, so a book within limits is unchanged.
+    """
+    # try_resolve (not resolve) so an unseeded jurisdiction skips the check
+    # gracefully instead of raising a 500 mid-generation (audit m6). The GH bank
+    # and SDI classes are seeded, so the limits apply as intended.
+    single_obligor = regulatory_parameters.try_resolve(
+        db, bank, "single_obligor_limit_pct", as_of=as_of
+    )
+    large_exposure = regulatory_parameters.try_resolve(
+        db, bank, "large_exposure_limit_pct", as_of=as_of
+    )
+    so_limit = single_obligor.value if single_obligor is not None else None
+    le_limit = large_exposure.value if large_exposure is not None else None
+    for entity in entities:
+        pct = _pct_of(entity.total, nof)
+        if so_limit is not None and pct > so_limit:
+            findings.append(
+                _finding(
+                    "le.single_obligor_limit_exceeded",
+                    "WARNING",
+                    f"{entity.name} at {pct}% of Net Own Funds exceeds the single-obligor "
+                    f"limit of {so_limit}% ({single_obligor.source_citation}).",  # type: ignore[union-attr]
+                )
+            )
+        if le_limit is not None and pct > le_limit:
+            pending = (
+                " (limit value pending BoG confirmation)"
+                if large_exposure is not None and large_exposure.is_pending
+                else ""
+            )
+            findings.append(
+                _finding(
+                    "le.large_exposure_limit_exceeded",
+                    "WARNING",
+                    f"{entity.name} at {pct}% of Net Own Funds exceeds the large-exposure "
+                    f"limit of {le_limit}%{pending} "
+                    f"({large_exposure.source_citation}).",  # type: ignore[union-attr]
+                )
+            )
+
+
+def _append_aggregate_exposure_finding(  # noqa: PLR0913 - findings accumulator + context
+    db: Session,
+    bank: Bank,
+    as_of: date,
+    large_exposures: list[_Entity],
+    nof: Decimal,
+    findings: list[dict[str, str]],
+) -> None:
+    """The aggregate large-exposure cap (docs/sdi.md §4.3): the sum of all large
+    exposures may not exceed a multiple of NOF. The cap is a ``multiplier``
+    parameter resolved from the control plane and is built DORMANT — it stays
+    inactive until an operator confirms its value (``try_resolve`` returns None
+    when unseeded, and a pending value emits an ADVISORY finding, not a breach)."""
+    cap = regulatory_parameters.try_resolve(db, bank, "aggregate_large_exposure_cap", as_of=as_of)
+    if cap is None or cap.value is None:
+        return
+    aggregate = sum((entity.total for entity in large_exposures), _ZERO)
+    cap_ghs = nof * cap.value
+    if aggregate > cap_ghs:
+        severity = "INFO" if cap.is_pending else "WARNING"
+        pending = " (cap value pending BoG confirmation — advisory)" if cap.is_pending else ""
+        findings.append(
+            _finding(
+                "le.aggregate_large_exposure_cap_exceeded",
+                severity,
+                f"Aggregate large exposures of {aggregate} GHS exceed the "
+                f"{cap.value}× Net Own Funds cap ({cap_ghs} GHS){pending} "
+                f"({cap.source_citation}).",
+            )
+        )
+
+
+def _append_related_party_finding(  # noqa: PLR0913 - findings accumulator + context
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    entities: list[_Entity],
+    nof: Decimal,
+    findings: list[dict[str, str]],
+) -> None:
+    """Aggregate related-party lending exposure vs the limit (docs/sdi.md §4.3).
+
+    Links the ``RelatedParty`` register (master data) to the exposure book by
+    connected-group / counterparty name, sums the exposure to related parties,
+    and compares it to ``related_party_limit_pct`` of NOF. Built DORMANT — the
+    limit value is pending BoG confirmation, so a breach emits an ADVISORY
+    finding; ``try_resolve`` returning None (unseeded) skips the check entirely."""
+    limit = regulatory_parameters.try_resolve(db, bank, "related_party_limit_pct", as_of=as_of)
+    if limit is None or limit.value is None:
+        return
+    related_names = _related_party_names(db, ctx, bank)
+    if not related_names:
+        return
+    related_exposure = sum(
+        (entity.total for entity in entities if _normalized_name(entity.name) in related_names),
+        _ZERO,
+    )
+    if related_exposure <= _ZERO:
+        return
+    pct = _pct_of(related_exposure, nof)
+    if pct > limit.value:
+        severity = "INFO" if limit.is_pending else "WARNING"
+        pending = " (limit value pending BoG confirmation — advisory)" if limit.is_pending else ""
+        findings.append(
+            _finding(
+                "le.related_party_limit_exceeded",
+                severity,
+                f"Aggregate related-party lending exposure is {pct}% of Net Own Funds, "
+                f"above the {limit.value}% limit{pending} ({limit.source_citation}).",
+            )
+        )
+
+
 def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
     db: Session,
     ctx: TenantContext,
@@ -662,6 +795,12 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
                 "pipeline; nothing is converted at a made-up rate).",
             )
         )
+
+    # Enforce the class-aware single-obligor + large-exposure limits (§4.3), and
+    # the aggregate large-exposure cap (dormant until its value is confirmed).
+    _append_exposure_limit_findings(db, bank, period.period_end, non_exempt, nof, findings)
+    _append_aggregate_exposure_finding(db, bank, period.period_end, template_1, nof, findings)
+    _append_related_party_finding(db, ctx, bank, period.period_end, non_exempt, nof, findings)
 
     sections = [
         _exposure_section(
@@ -961,15 +1100,15 @@ def _narrow_liquid_amount(  # noqa: PLR0911 - one return per directive leg
             return row.balance_ghs  # (g) claims on other domestic banks
         return _ZERO
     if kind == "INTERBANK_PLACEMENT" and is_bank_cp:
-        if row.counterparty_resident is False and (row.counterparty_rating or "").startswith(
-            "AAA"
-        ):
+        if row.counterparty_resident is False and (row.counterparty_rating or "").startswith("AAA"):
             return row.balance_ghs  # (c) AAA non-resident FI placements
         if row.counterparty_resident is True:
             return row.balance_ghs  # (g) claims on other domestic banks
         return _ZERO
-    if kind == "SECURITY_HOLDING" and _unencumbered(row) and _within_one_year(
-        row.contractual_maturity, as_of
+    if (
+        kind == "SECURITY_HOLDING"
+        and _unencumbered(row)
+        and _within_one_year(row.contractual_maturity, as_of)
     ):
         if _is_sovereign_security(row):
             return row.balance_ghs  # (e) GoG/BoG bills ≤ 1 yr
@@ -1033,17 +1172,43 @@ def _table1_inputs(rows: list[_CanonicalRow], as_of: date) -> dict[str, Decimal]
 def _table1_thresholds(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> dict[str, tuple[Decimal, str]]:
-    """Ratio floor per code: Board register row when one is active, else the
-    directive's published bank minimum (the regulatory floor)."""
-    resolved: dict[str, tuple[Decimal, str]] = {
-        code: (minimum, "regulatory_default")
-        for code, minimum in _TABLE1_BANK_MINIMUM_PCT.items()
-    }
+    """Ratio floor per code, resolved for the tenant's institution class
+    (docs/sdi.md §4.1): the Board register row active for that class, else the
+    class default from the regulatory-parameter control plane (bank 80/100/50/70/
+    30/50/60/80 vs SDI 90/100/50/60/30/40/60/70), else the directive's published
+    bank minimum as a defensive fallback. A savings-&-loans tenant therefore
+    binds against the SDI floors, not the bank ones."""
+    klass = _resolve_institution_class(db, bank)
+    resolved: dict[str, tuple[Decimal, str]] = {}
+    for code, bank_floor in _TABLE1_BANK_MINIMUM_PCT.items():
+        param = regulatory_parameters.try_resolve(db, bank, code, as_of=as_of)
+        # Normalise the control-plane value so its representation matches the
+        # published floor byte-for-byte: a Numeric(18,6) round-trips 80 as
+        # Decimal("80.000000") on Postgres, which would silently change the
+        # generated return content + its content_digest (audit M1).
+        normalized = param.normalized_value if param is not None else None
+        if normalized is not None:
+            default = normalized
+        elif klass == "bank":
+            # The directive's published bank floor is the robustness fallback —
+            # byte-identical to HEAD when the control plane is unseeded.
+            default = bank_floor
+        else:
+            # The binding SDI measure must NEVER silently fall back to the bank
+            # floors when its own floors are unconfigured (audit M4, fail-loud).
+            raise _conflict_409(
+                "sdi_liquidity_floor_unseeded",
+                f"The SDI liquidity floor '{code}' is not configured in the "
+                "regulatory-parameter control plane for this institution's "
+                "jurisdiction. Seed the SDI-class Table-1 floors before generating "
+                "the liquidity return.",
+            )
+        resolved[code] = (default, "regulatory_default")
     jurisdiction = (bank.jurisdiction_code or "GH").strip().upper()
     for row in get_active_params(
         db, ctx.organization_id, jurisdiction, ParamLiquidityThreshold, as_of
     ):
-        if row.institution_class == "bank" and row.threshold_code in resolved:
+        if row.institution_class == klass and row.threshold_code in resolved:
             resolved[row.threshold_code] = (Decimal(str(row.threshold_pct)), "board_register")
     return resolved
 
@@ -1201,9 +1366,7 @@ def _table6_section(rows: list[_CanonicalRow]) -> tuple[dict[str, Any] | None, i
         if number in ("2", "3", "4"):
             assets_by_ccy[row.currency] = assets_by_ccy.get(row.currency, _ZERO) + amount
         elif number in ("6", "7", "8", "9"):
-            liabilities_by_ccy[row.currency] = (
-                liabilities_by_ccy.get(row.currency, _ZERO) + amount
-            )
+            liabilities_by_ccy[row.currency] = liabilities_by_ccy.get(row.currency, _ZERO) + amount
 
     section_rows: list[dict[str, Any]] = []
     total_mismatch = _ZERO
@@ -1216,9 +1379,7 @@ def _table6_section(rows: list[_CanonicalRow]) -> tuple[dict[str, Any] | None, i
             "assets_ghs": str(assets),
             "liabilities_ghs": str(liabilities),
             "mismatch_pct_total_liabilities": (
-                str(_pct_of(mismatch, total_liabilities))
-                if total_liabilities > _ZERO
-                else "0"
+                str(_pct_of(mismatch, total_liabilities)) if total_liabilities > _ZERO else "0"
             ),
         }
         section_rows.append(snapshot_row(currency, currency, mismatch, **extras))
@@ -1300,9 +1461,7 @@ def _table11_section(  # noqa: PLR0914 - one linear grid assembly
             code, label, row_total, **{key: str(values[key]) for key in column_keys}
         )
 
-    capped_inflow = {
-        key: min(inflow[key], (outflow[key] * _LCR_INFLOW_CAP)) for key in column_keys
-    }
+    capped_inflow = {key: min(inflow[key], (outflow[key] * _LCR_INFLOW_CAP)) for key in column_keys}
     net = {key: outflow[key] - capped_inflow[key] for key in column_keys}
     ratio: dict[str, Decimal] = {}
     for key in column_keys:
@@ -1501,9 +1660,7 @@ def _funding_concentration_section(  # noqa: PLR0914 - one linear table assembly
         for index, entity in enumerate(significant, start=1)
     ]
     significant_total = sum((entity.funding for entity in significant), _ZERO)
-    rows.append(
-        snapshot_row("total", "Total", significant_total, related_party="", unit="ghs")
-    )
+    rows.append(snapshot_row("total", "Total", significant_total, related_party="", unit="ghs"))
     rows.append(
         snapshot_row(
             "top20_total",
@@ -1569,9 +1726,8 @@ def _bucket_for(
     maturity = row.contractual_maturity
     if maturity is None:
         account_type = (row.deposit_account_type or "").upper()
-        on_demand = (
-            row.position_type == "CASH"
-            or (row.position_type == "DEPOSIT" and account_type in _SHORT_TERM_BY_NATURE)
+        on_demand = row.position_type == "CASH" or (
+            row.position_type == "DEPOSIT" and account_type in _SHORT_TERM_BY_NATURE
         )
         return buckets[0][0] if on_demand else buckets[-1][0]
     days = (maturity - as_of).days
@@ -1604,9 +1760,7 @@ def _grid_bucket_row(
     buckets: tuple[tuple[str, str, int | None], ...],
 ) -> dict[str, Any]:
     total = sum(vector.values(), _ZERO)
-    return snapshot_row(
-        code, label, total, **{key: str(vector[key]) for key, _, _ in buckets}
-    )
+    return snapshot_row(code, label, total, **{key: str(vector[key]) for key, _, _ in buckets})
 
 
 def _table7_section(
@@ -1621,10 +1775,7 @@ def _table7_section(
     section_rows: list[dict[str, Any]] = []
 
     top20_deposit_rows = [
-        row
-        for entity in top20
-        for row in entity.rows
-        if row.position_type == "DEPOSIT"
+        row for entity in top20 for row in entity.rows if row.position_type == "DEPOSIT"
     ]
     section_rows.append(
         _grid_bucket_row(
@@ -1640,13 +1791,13 @@ def _table7_section(
         vector = _bucket_vector(entity.rows, as_of, _TABLE7_BUCKETS)
         for code, _, _unused in _TABLE7_BUCKETS:
             b_total[code] += vector[code]
-        section_rows.append(
-            _grid_bucket_row(f"B{index}", entity.name, vector, _TABLE7_BUCKETS)
-        )
+        section_rows.append(_grid_bucket_row(f"B{index}", entity.name, vector, _TABLE7_BUCKETS))
     section_rows.append(
         _grid_bucket_row(
-            "B_total", "B. Funding from Significant Counterparties — Total",
-            b_total, _TABLE7_BUCKETS,
+            "B_total",
+            "B. Funding from Significant Counterparties — Total",
+            b_total,
+            _TABLE7_BUCKETS,
         )
     )
 
@@ -1655,9 +1806,7 @@ def _table7_section(
     d_total = {code: _ZERO for code, _, _ in _TABLE7_BUCKETS}
     for currency in significant_ccys:
         ccy_assets = [r for r in rows if r.currency == currency and _is_t2_asset(r)]
-        ccy_liabilities = [
-            r for r in rows if r.currency == currency and _is_t2_liability(r)
-        ]
+        ccy_liabilities = [r for r in rows if r.currency == currency and _is_t2_liability(r)]
         asset_vector = _bucket_vector(ccy_assets, as_of, _TABLE7_BUCKETS)
         liability_vector = _bucket_vector(ccy_liabilities, as_of, _TABLE7_BUCKETS)
         for code, _, _unused in _TABLE7_BUCKETS:
@@ -1702,18 +1851,12 @@ def _table8_section(
     government = sorted(
         (e for e in entities.values() if e.is_government), key=lambda e: (-e.funding, e.name)
     )[:_TOP20]
-    associates_rows = [
-        row for entity in entities.values() if entity.related for row in entity.rows
-    ]
-    top20_dep_rows = [
-        row for e in top20_dep for row in e.rows if row.position_type == "DEPOSIT"
-    ]
+    associates_rows = [row for entity in entities.values() if entity.related for row in entity.rows]
+    top20_dep_rows = [row for e in top20_dep for row in e.rows if row.position_type == "DEPOSIT"]
     financial_rows = [row for e in financial for row in e.rows]
     government_rows = [row for e in government for row in e.rows]
     paper_rows = [
-        row
-        for row in rows
-        if _is_t2_liability(row) and row.funding_instrument == _NEGOTIABLE_PAPER
+        row for row in rows if _is_t2_liability(row) and row.funding_instrument == _NEGOTIABLE_PAPER
     ]
     paper_short = [
         row
@@ -1729,18 +1872,33 @@ def _table8_section(
     ]
 
     blocks: tuple[tuple[str, str, list[_CanonicalRow]], ...] = (
-        ("associates", "Funding from associates of the reporting financial institution",
-         associates_rows),
+        (
+            "associates",
+            "Funding from associates of the reporting financial institution",
+            associates_rows,
+        ),
         ("top20_depositors", "Twenty largest depositors", top20_dep_rows),
-        ("top20_financial", "Twenty largest financial institutions funding balances",
-         financial_rows),
-        ("top20_government", "Twenty largest government and parastatals funding balances",
-         government_rows),
+        (
+            "top20_financial",
+            "Twenty largest financial institutions funding balances",
+            financial_rows,
+        ),
+        (
+            "top20_government",
+            "Twenty largest government and parastatals funding balances",
+            government_rows,
+        ),
         ("negotiable_paper", "Negotiable paper funding instruments", paper_rows),
-        ("negotiable_paper_lte_12m",
-         "of which: issued for a period not exceeding twelve months", paper_short),
-        ("negotiable_paper_gt_5y", "of which: issued for a period exceeding five years",
-         paper_long),
+        (
+            "negotiable_paper_lte_12m",
+            "of which: issued for a period not exceeding twelve months",
+            paper_short,
+        ),
+        (
+            "negotiable_paper_gt_5y",
+            "of which: issued for a period exceeding five years",
+            paper_long,
+        ),
     )
     section_rows = [
         _grid_bucket_row(
@@ -1840,9 +1998,7 @@ def _table4_section(rows: list[_CanonicalRow]) -> dict[str, Any] | None:
         rehypothecable = str(collateral.get("collateral_rehypothecable", "")).strip().lower()
         if rehypothecable not in ("true", "yes", "y", "1"):
             continue
-        instrument = str(
-            collateral.get("collateral_instrument") or _instrument_label(row)
-        )
+        instrument = str(collateral.get("collateral_instrument") or _instrument_label(row))
         received = _dec_or_none(collateral.get("collateral_received_ghs")) or _ZERO
         hypothecated = _dec_or_none(collateral.get("collateral_rehypothecated_ghs")) or _ZERO
         prior = entries.get(instrument, (_ZERO, _ZERO))
@@ -1914,9 +2070,7 @@ def _table9_section(
     total available unencumbered collateral, not total liabilities.
     """
     unencumbered = [
-        row
-        for row in rows
-        if row.position_type == "SECURITY_HOLDING" and _unencumbered(row)
+        row for row in rows if row.position_type == "SECURITY_HOLDING" and _unencumbered(row)
     ]
     if not unencumbered:
         return None, _ZERO
@@ -1948,9 +2102,10 @@ def _table9_section(
     for row in unencumbered:
         haircut = _haircut_for(row.regulatory_category, schedule) or _ZERO
         by_currency[row.currency] = by_currency.get(row.currency, _ZERO) + row.balance_ghs
-        monetized_by_currency[row.currency] = monetized_by_currency.get(
-            row.currency, _ZERO
-        ) + row.balance_ghs * (_HUNDRED_PCT - haircut) / _HUNDRED_PCT
+        monetized_by_currency[row.currency] = (
+            monetized_by_currency.get(row.currency, _ZERO)
+            + row.balance_ghs * (_HUNDRED_PCT - haircut) / _HUNDRED_PCT
+        )
     for currency, amount in sorted(by_currency.items(), key=lambda kv: (-kv[1], kv[0])):
         if total > _ZERO and amount / total >= _SIGNIFICANT_CURRENCY_THRESHOLD:
             section_rows.append(
@@ -1997,11 +2152,17 @@ def _table10_section(rows: list[_CanonicalRow]) -> dict[str, Any] | None:
             bucket["total"] += amount
             bucket["unavailable"] += unavailable or _ZERO
             if str(collateral.get("collateral_group_issued", "")).strip().lower() in (
-                "true", "yes", "y", "1",
+                "true",
+                "yes",
+                "y",
+                "1",
             ):
                 bucket["group"] += amount
             if str(collateral.get("collateral_bog_eligible", "")).strip().lower() in (
-                "true", "yes", "y", "1",
+                "true",
+                "yes",
+                "y",
+                "1",
             ):
                 bucket["bog"] += amount
         own_available = _dec_or_none(collateral.get("own_debt_available_ghs"))
@@ -2023,18 +2184,16 @@ def _table10_section(rows: list[_CanonicalRow]) -> dict[str, Any] | None:
             unavailable_ghs=str(bucket["unavailable"]),
         )
 
-    section_rows = [
-        _class_row(code, label, classes[code]) for code, label in _TABLE10_CLASSES
-    ]
+    section_rows = [_class_row(code, label, classes[code]) for code, label in _TABLE10_CLASSES]
     section_rows.append(_class_row("own_debt", "Own debt securities issued", own_debt))
     grand = {
-        key: sum((classes[code][key] for code, _ in _TABLE10_CLASSES), _ZERO)
-        + own_debt[key]
+        key: sum((classes[code][key] for code, _ in _TABLE10_CLASSES), _ZERO) + own_debt[key]
         for key in ("total", "group", "bog", "unavailable")
     }
     section_rows.append(
         _class_row(
-            "grand_total", "Total Assets, Collateral Received and Own Debt Securities Issued",
+            "grand_total",
+            "Total Assets, Collateral Received and Own Debt Securities Issued",
             grand,
         )
     )
@@ -2126,6 +2285,105 @@ _LMT_TOOL_NOTES = [
 ]
 
 
+def _append_liquidity_reserve_check(  # noqa: PLR0913 - the LMT block's accumulators
+    db: Session,
+    bank: Bank,
+    as_of: date,
+    rows: list[_CanonicalRow],
+    total_deposits: Decimal,
+    sections: list[dict[str, Any]],
+    totals: list[dict[str, Any]],
+    findings: list[dict[str, str]],
+) -> None:
+    """The SDI primary/secondary liquidity-reserve check (NBFI Business Rules 2000
+    r.11; docs/sdi.md §2.2, §4.1). Distinct from the LMTD Table-1 ratios: the
+    PRIMARY reserve is cash + balances at the central bank, the SECONDARY reserve
+    is eligible government / central-bank securities. Floors come from the
+    regulatory-parameter control plane, keyed by institution class — they are
+    seeded only for the SDI class, so ``try_resolve`` returns None for a bank and
+    this check is skipped entirely (bank output byte-identical).
+
+    Reading (both floors editable in the console if BoG's is different): the
+    primary reserve must be ≥ ``primary_liquidity_reserve_pct`` of total deposits,
+    and the cumulative (primary + secondary) reserve ≥
+    ``secondary_liquidity_reserve_pct``. A shortfall raises a WARNING; a
+    non-computable denominator is shown as such, never a false green."""
+    primary_floor = regulatory_parameters.try_resolve(
+        db, bank, "primary_liquidity_reserve_pct", as_of=as_of
+    )
+    secondary_floor = regulatory_parameters.try_resolve(
+        db, bank, "secondary_liquidity_reserve_pct", as_of=as_of
+    )
+    if primary_floor is None or secondary_floor is None or primary_floor.value is None:
+        return  # not an SDI-class institution — the reserve regime does not apply
+    if secondary_floor.value is None:
+        return
+
+    primary = sum(
+        (
+            row.balance_ghs
+            for row in rows
+            if row.position_type == "CASH"
+            and (row.counterparty_type is None or row.counterparty_type == "CENTRAL_BANK")
+        ),
+        _ZERO,
+    )
+    secondary = sum(
+        (
+            row.balance_ghs
+            for row in rows
+            if row.position_type == "SECURITY_HOLDING"
+            and _is_sovereign_security(row)
+            and _unencumbered(row)
+        ),
+        _ZERO,
+    )
+    if total_deposits <= _ZERO:
+        findings.append(
+            _finding(
+                "lmt.liquidity_reserve_not_computable",
+                "INFO",
+                "The primary/secondary liquidity-reserve ratios are not computable: "
+                "total deposit liabilities are zero.",
+            )
+        )
+        return
+
+    primary_pct = _pct_of(primary, total_deposits)
+    cumulative_pct = _pct_of(primary + secondary, total_deposits)
+    totals.append(
+        snapshot_row(
+            "primary_liquidity_reserve_pct", "Primary liquidity reserve (% deposits)", primary_pct
+        )
+    )
+    totals.append(
+        snapshot_row(
+            "secondary_liquidity_reserve_pct",
+            "Cumulative primary+secondary reserve (% deposits)",
+            cumulative_pct,
+        )
+    )
+    if primary_pct < primary_floor.value:
+        findings.append(
+            _finding(
+                "lmt.primary_liquidity_reserve_below_minimum",
+                "WARNING",
+                f"Primary liquidity reserve is {primary_pct}% of total deposits, below the "
+                f"{primary_floor.value}% floor ({primary_floor.source_citation}).",
+            )
+        )
+    if cumulative_pct < secondary_floor.value:
+        findings.append(
+            _finding(
+                "lmt.secondary_liquidity_reserve_below_minimum",
+                "WARNING",
+                f"Cumulative primary+secondary liquidity reserve is {cumulative_pct}% of total "
+                f"deposits, below the {secondary_floor.value}% floor "
+                f"({secondary_floor.source_citation}).",
+            )
+        )
+
+
 def _build_lmt_tool_block(  # noqa: PLR0915 - the eleven tables assemble linearly
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> _LmtToolBlock:
@@ -2176,6 +2434,19 @@ def _build_lmt_tool_block(  # noqa: PLR0915 - the eleven tables assemble linearl
             )
         )
 
+        # SDI primary/secondary liquidity-reserve check (NBFI r.11) — SDI-class
+        # only; skipped for a bank, so bank output is unchanged.
+        _append_liquidity_reserve_check(
+            db,
+            bank,
+            period.period_end,
+            ladder_rows,
+            current_inputs["total_deposits"],
+            sections,
+            totals,
+            findings,
+        )
+
         ladder_section, mismatch_total = _ladder_section(ladder_rows, period.period_end)
         sections.append(ladder_section)
         totals.append(
@@ -2197,9 +2468,7 @@ def _build_lmt_tool_block(  # noqa: PLR0915 - the eleven tables assemble linearl
 
         # Tables 5, 7, 8 — funding concentration on the directive's rules.
         related_names = _related_party_names(db, ctx, bank)
-        entities, _unattributed, funding_findings = _funding_entities(
-            ladder_rows, related_names
-        )
+        entities, _unattributed, funding_findings = _funding_entities(ladder_rows, related_names)
         findings.extend(funding_findings)
         total_liabilities = sum(_liabilities_by_currency(ladder_rows).values(), _ZERO)
         concentration, metrics, significant = _funding_concentration_section(
@@ -2250,9 +2519,7 @@ def _build_lmt_tool_block(  # noqa: PLR0915 - the eleven tables assemble linearl
 
         # Tables 7 and 8 — maturity and deposit-funding concentration grids.
         if concentration is not None:
-            sections.append(
-                _table7_section(ladder_rows, entities, significant, period.period_end)
-            )
+            sections.append(_table7_section(ladder_rows, entities, significant, period.period_end))
             sections.append(_table8_section(ladder_rows, entities, period.period_end))
 
         # Tables 9 and 10 — unencumbered assets and collateral received.

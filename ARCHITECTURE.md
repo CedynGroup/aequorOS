@@ -184,6 +184,40 @@ on one canonical store — the live tier for intraday awareness, the official ti
 Deferred to a later phase (foundations are laid): true CDC/streaming ingestion (only `full`
 snapshot ships), WebSocket/SSE push (polling today), per-bank cron UI, email/webhook delivery.
 
+### Live/governance boundary (enforced)
+
+The platform is Treasury and ALM infrastructure first. The live plane is keyed
+by `(organization, bank, module)`, never by a reporting period or
+`RegulatoryRun`. Every accepted ingestion debounces into `pipeline_refresh`,
+which replaces the bank's `current_financial_facts` materialisation from
+accepted canonical state, then upserts each module's live state with source
+as-of date, input hash, engine version, generation, computation timestamp, and
+pipeline status. Partial failures are retained as explicit failed live state;
+they never silently present a previous result as current.
+
+`BankFinancialFact` remains the period-keyed **official/as-of** materialisation
+used only by explicit official runs and historical analysis. The nullable
+legacy `live_metrics.source_fact_period_id` is no longer written by the live
+pipeline; source-as-of date and current-fact generation are the live
+provenance. Primary Liquidity, Capital,
+IRRBB, FX, FTP, Forecasting, Command Center, Risk & Limits, EWI, and alerts
+read current live state. A reporting period or run ID is supplied only for
+explicit historical comparison or evidence inspection.
+
+`RegulatoryRun` is governance evidence. `official_run` creates immutable
+as-of snapshots; packages seal those snapshots through validation,
+maker-checker approval, attestation, export, and submission. Live refreshes
+never create or mutate a `RegulatoryRun`, package, or filing artifact.
+`GET /banks/{id}/freshness` is consequently governance-only **filing drift**:
+it compares current live input hashes with an explicitly selected official
+period. Live health is instead `computed_at` plus `pipeline_state`; an aged or
+failed refresh is not a filing-drift verdict.
+
+**Anti-pattern:** never use `RegulatoryRun` as the primary source for
+day-to-day live ALM/Treasury state. New modules implement a current
+`compute_live` path and return a typed live payload; their historical and
+official reads must be explicit.
+
 ---
 
 ## 3c. Market Data Adapter framework (docs/market_data_adapter.md)

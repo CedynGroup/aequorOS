@@ -2,6 +2,8 @@ import ModuleTabs from '@/components/shell/ModuleTabs';
 
 const tabs = [
   { href: '/basel', label: 'Overview' },
+  { href: '/basel/loan-book', label: 'Loan Book' },
+  { href: '/basel/exposures', label: 'Exposures' },
   { href: '/basel/rwa', label: 'RWA' },
   { href: '/basel/structure', label: 'Capital Structure' },
   { href: '/basel/stress', label: 'Stress' },

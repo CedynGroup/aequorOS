@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from app.core.config import CashflowSettings
 from app.ml.real_series import real_series_enabled
 
-MODEL_VERSION = "lstm-v1.0.0"
+MODEL_VERSION = "lstm-v1.1.0"
 
 
 @dataclass(frozen=True, slots=True)

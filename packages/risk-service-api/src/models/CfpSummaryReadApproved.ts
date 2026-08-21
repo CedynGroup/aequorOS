@@ -39,6 +39,13 @@ import {
   CfpReadToJSON,
   CfpReadToJSONTyped,
 } from "./CfpRead";
+import type { CfpContentOutput } from "./CfpContentOutput";
+import {
+  CfpContentOutputFromJSON,
+  CfpContentOutputFromJSONTyped,
+  CfpContentOutputToJSON,
+  CfpContentOutputToJSONTyped,
+} from "./CfpContentOutput";
 import type { ApprovalTimestamp } from "./ApprovalTimestamp";
 import {
   ApprovalTimestampFromJSON,
@@ -53,13 +60,6 @@ import {
   ApprovedByUserIdToJSON,
   ApprovedByUserIdToJSONTyped,
 } from "./ApprovedByUserId";
-import type { CfpContent } from "./CfpContent";
-import {
-  CfpContentFromJSON,
-  CfpContentFromJSONTyped,
-  CfpContentToJSON,
-  CfpContentToJSONTyped,
-} from "./CfpContent";
 import type { PreparedBy } from "./PreparedBy";
 import {
   PreparedByFromJSON,
@@ -118,10 +118,10 @@ export interface CfpSummaryReadApproved {
   bankId: string;
   /**
    *
-   * @type {CfpContent}
+   * @type {CfpContentOutput}
    * @memberof CfpSummaryReadApproved
    */
-  content: CfpContent;
+  content: CfpContentOutput;
   /**
    *
    * @type {Date}
@@ -210,7 +210,7 @@ export function CfpSummaryReadApprovedFromJSONTyped(
         ? undefined
         : ApprovedByUserIdFromJSON(json["approved_by_user_id"]),
     bankId: json["bank_id"],
-    content: CfpContentFromJSON(json["content"]),
+    content: CfpContentOutputFromJSON(json["content"]),
     createdAt: new Date(json["created_at"]),
     id: json["id"],
     preparedBy:
@@ -245,7 +245,7 @@ export function CfpSummaryReadApprovedToJSONTyped(
     approval_timestamp: ApprovalTimestampToJSON(value["approvalTimestamp"]),
     approved_by_user_id: ApprovedByUserIdToJSON(value["approvedByUserId"]),
     bank_id: value["bankId"],
-    content: CfpContentToJSON(value["content"]),
+    content: CfpContentOutputToJSON(value["content"]),
     created_at: value["createdAt"].toISOString(),
     id: value["id"],
     prepared_by: PreparedByToJSON(value["preparedBy"]),

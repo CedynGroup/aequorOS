@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Notes1 } from "./Notes1";
-import {
-  Notes1FromJSON,
-  Notes1FromJSONTyped,
-  Notes1ToJSON,
-  Notes1ToJSONTyped,
-} from "./Notes1";
 import type { EffectiveTo } from "./EffectiveTo";
 import {
   EffectiveToFromJSON,
@@ -25,6 +18,13 @@ import {
   EffectiveToToJSON,
   EffectiveToToJSONTyped,
 } from "./EffectiveTo";
+import type { Notes } from "./Notes";
+import {
+  NotesFromJSON,
+  NotesFromJSONTyped,
+  NotesToJSON,
+  NotesToJSONTyped,
+} from "./Notes";
 
 /**
  *
@@ -64,10 +64,10 @@ export interface EclAssumptionRead {
   lgdPct: string;
   /**
    *
-   * @type {Notes1}
+   * @type {Notes}
    * @memberof EclAssumptionRead
    */
-  notes?: Notes1;
+  notes?: Notes;
   /**
    *
    * @type {string}
@@ -131,7 +131,7 @@ export function EclAssumptionReadFromJSONTyped(
         ? undefined
         : EffectiveToFromJSON(json["effective_to"]),
     lgdPct: json["lgd_pct"],
-    notes: json["notes"] == null ? undefined : Notes1FromJSON(json["notes"]),
+    notes: json["notes"] == null ? undefined : NotesFromJSON(json["notes"]),
     pdPct: json["pd_pct"],
     segment: json["segment"],
     stage: json["stage"],
@@ -156,7 +156,7 @@ export function EclAssumptionReadToJSONTyped(
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),
     effective_to: EffectiveToToJSON(value["effectiveTo"]),
     lgd_pct: value["lgdPct"],
-    notes: Notes1ToJSON(value["notes"]),
+    notes: NotesToJSON(value["notes"]),
     pd_pct: value["pdPct"],
     segment: value["segment"],
     stage: value["stage"],

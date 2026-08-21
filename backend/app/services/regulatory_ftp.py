@@ -33,6 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.errors import ModuleDataUnavailable
 from app.domain.ftp.engine import (
     BranchResult,
     ContingentFacility,
@@ -85,6 +86,7 @@ from app.schemas.regulatory_liquidity import (
 )
 from app.services.audit import record_event
 from app.services.live_block import live_block
+from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
 from app.services.live_types import (
     LiveModuleResult,
     findings_from_validations,
@@ -191,17 +193,17 @@ def get_ftp_dashboard(
 ) -> FtpDashboardRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
-    if not periods:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Reporting period not found."
-        )
     period = (
-        periods[-1]
+        current_fact_period_or_409(db, ctx, bank, MODULE_FTP)
         if reporting_period_id is None
         else _get_period_or_404(db, ctx, bank, reporting_period_id)
     )
 
-    latest_run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    latest_run = (
+        _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+        if reporting_period_id is not None
+        else None
+    )
     if latest_run is not None:
         metrics = _metrics_from_run(latest_run)
         curve = _curve_from_run(latest_run)
@@ -248,7 +250,7 @@ def get_ftp_dashboard(
         nmd_segments=nmd_segments,
         trend=_build_trend(db, ctx, bank, periods),
         validations=validations,
-        live=live_block(db, ctx, bank.id, period.id, MODULE_FTP),
+        live=live_block(db, ctx, bank.id, MODULE_FTP),
     )
 
 
@@ -1006,20 +1008,11 @@ def _compute_inline_or_409(
     try:
         return _compute_inline(db, ctx, bank, period)
     except MissingParameterError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": "missing_parameter", "message": str(exc), "parameter": exc.name},
-        ) from exc
+        raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except FtpRunError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": exc.code, "message": exc.message},
-        ) from exc
+        raise ModuleDataUnavailable(exc.code, exc.message) from exc
     except FtpComputationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": "calculation_error", "message": str(exc)},
-        ) from exc
+        raise ModuleDataUnavailable("calculation_error", str(exc)) from exc
 
 
 def current_input_hash(
@@ -1038,9 +1031,20 @@ def current_input_hash(
 def compute_live(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> LiveModuleResult:
-    """Cheap baseline live view — reuses the dashboard's unstored-branch path
-    and creates no RegulatoryRun."""
-    analysis = _compute_inline(db, ctx, bank, period)
+    """Compute the baseline live view from current facts without a RegulatoryRun."""
+    current = load_current_facts(db, ctx, bank, _FTP_FACT_GROUPS)
+    facts = current.facts
+    active = _load_ftp_params_or_none(db, ctx, bank, current.source_as_of_date)
+    analysis = _run_analysis(
+        BASELINE_SCENARIO,
+        facts,
+        active,
+        _load_ltp_draws(db, ctx, bank, current.source_as_of_date),
+    )
+    snapshot = current_snapshot(
+        _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active),
+        current.source_as_of_date,
+    )
     metrics = _metrics_from_analysis(analysis)
     live_metrics = {
         "portfolio_nim_pct": str(metrics.portfolio_nim_pct),
@@ -1053,8 +1057,9 @@ def compute_live(
     return LiveModuleResult(
         metrics=live_metrics,
         status=status,
-        input_hash=current_input_hash(db, ctx, bank, period),
+        input_hash=_snapshot_hash(snapshot),
         findings=findings,
+        source_as_of_date=current.source_as_of_date,
     )
 
 

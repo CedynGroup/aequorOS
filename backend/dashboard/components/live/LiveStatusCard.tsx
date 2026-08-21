@@ -23,6 +23,7 @@ const MODULE_ORDER: LiveModuleView['module'][] = [
   'irr',
   'fx',
   'ftp',
+  'rating',
   'forecast',
 ];
 

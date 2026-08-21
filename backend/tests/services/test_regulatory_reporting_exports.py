@@ -394,6 +394,22 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
         # from the FX engine's baseline run (gap G5).
         "dbk": {"nop_by_currency", "nop_aggregate", "contingents"},
         "icaap_stress": {"forecast_summary", "forecast_path", "stress_summary"},
+        # Phase 5: the ICAAP submission IS the BoG Appendix II Tables 1–6, carried
+        # from a Board-attested enterprise-stress run (docs/stress.md §1.8, §3.8).
+        "icaap_stress_appendix2": {
+            "t1_summary_positions",
+            "t1_impact_of_adverse",
+            "t1_capital_required",
+            "t1_management_actions",
+            "t1_post_capitalisation",
+            "t1_residual",
+            "t2_capital_projection",
+            "t3_profit_and_loss",
+            "t4_financial_position",
+            "t5_rwa",
+            "t6_risk_drivers",
+            "governance",
+        },
         # Phase 2 items 12/14: real obligations, unpublished forms — zero
         # sections until the official layouts land.
         "template_pending": set(),

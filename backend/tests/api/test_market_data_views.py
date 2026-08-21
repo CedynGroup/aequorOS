@@ -35,6 +35,7 @@ def _seed_bank(session: Session) -> str:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     session.add(bank)
     session.flush()
@@ -362,6 +363,7 @@ def test_views_compose_active_overlays_read_time(db_client: TestClient) -> None:
             currency="GHS",
             jurisdiction_code="GH",
             license_type="universal",
+            institution_type="universal_bank",
         )
         session.add(rival)
         session.flush()

@@ -120,6 +120,7 @@ def test_base_currency_refuses_to_guess() -> None:
         currency="",
         jurisdiction_code="NG",
         license_type="universal",
+        institution_type="universal_bank",
     )
     with pytest.raises(ValueError, match="no reporting currency"):
         base_currency(bank)
@@ -171,5 +172,6 @@ def test_base_currency_normalises() -> None:
         currency=" ngn ",
         jurisdiction_code="NG",
         license_type="universal",
+        institution_type="universal_bank",
     )
     assert base_currency(bank) == "NGN"

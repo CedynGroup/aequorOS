@@ -17,14 +17,55 @@ type SnapshotSection = {
   optional?: boolean;
   rows?: SnapshotRow[];
   total?: SnapshotRow | null;
+  /** The sheet's official reporting unit — values are already scaled to it. */
+  unit?: string;
 };
+
+// The snapshot value is pre-scaled to the sheet's official reporting unit
+// (bog_forms scale_for_export), which varies by sheet — BSD balance-sheet cells
+// are in millions, others in thousands. Label it honestly so a preparer never
+// misreads the magnitude.
+const UNIT_LABELS: Record<string, string> = {
+  millions: 'GHS millions',
+  thousands: "GHS '000",
+  units: 'GHS',
+  percent: '%',
+  count: 'count',
+};
+
+function unitLabel(unit: unknown): string | null {
+  if (typeof unit !== 'string' || unit === 'text') return null;
+  return UNIT_LABELS[unit] ?? unit;
+}
 
 type Snapshot = Record<string, unknown> & {
   sections?: SnapshotSection[];
   totals?: SnapshotRow[];
 };
 
-const RESERVED_KEYS = new Set(['code', 'description', 'unit', 'equals_sum_of_rows']);
+// Row keys that are structure or template/provenance METADATA — never a data
+// column. `code`/`description`/`value`/`unit` are structural; the rest are the
+// per-line metadata the template-based BoG forms attach in
+// `bog_forms/generation.py::build_sections` (cell address, day column, mapping
+// status, source, notes, scaling flag). Without excluding them the generic
+// preview renders the Excel cell addresses as columns and buries the Value —
+// which is exactly the "preview shows Excel cells, not the return" bug.
+// Genuine data dimensions (e.g. `previous_month_ghs`) are NOT listed, so they
+// still render as columns.
+const NON_DATA_KEYS = new Set([
+  'code',
+  'description',
+  'value',
+  'unit',
+  'equals_sum_of_rows',
+  'cell',
+  'column',
+  'unscaled',
+  'status',
+  'source',
+  'notes',
+  '__isTotal',
+]);
 
 /** Format a snapshot cell: numbers with separators + parenthesised negatives
  * (BoG sign convention), booleans as Yes/No, everything else verbatim.
@@ -50,7 +91,7 @@ function extraKeys(rows: SnapshotRow[]): string[] {
   const keys: string[] = [];
   for (const row of rows) {
     for (const key of Object.keys(row)) {
-      if (RESERVED_KEYS.has(key) || key === 'value') continue;
+      if (NON_DATA_KEYS.has(key)) continue;
       if (!keys.includes(key)) keys.push(key);
     }
   }
@@ -100,8 +141,9 @@ export default function SnapshotPreview({ snapshot }: { snapshot: Snapshot }) {
   return (
     <div className="space-y-5">
       <p className="text-caption text-slate">
-        Values shown in GHS units; exported artifacts render amounts in
-        GHS&nbsp;&apos;000 with parenthesised negatives (BoG convention).
+        Values are in each sheet&apos;s official reporting unit (shown per section
+        below), with parenthesised negatives per the BoG convention — identical to
+        the exported artifacts.
       </p>
 
       {totals.length > 0 && (
@@ -134,9 +176,16 @@ export default function SnapshotPreview({ snapshot }: { snapshot: Snapshot }) {
             className="rounded border border-border-light overflow-hidden"
           >
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-surface border-b border-border-light">
-              <p className="text-body font-medium text-navy">
-                {String(section.title ?? section.code ?? `Section ${i + 1}`)}
-              </p>
+              <div className="flex items-baseline gap-2 min-w-0">
+                <p className="text-body font-medium text-navy truncate">
+                  {String(section.title ?? section.code ?? `Section ${i + 1}`)}
+                </p>
+                {unitLabel(section.unit) && (
+                  <span className="text-caption text-slate whitespace-nowrap">
+                    · in {unitLabel(section.unit)}
+                  </span>
+                )}
+              </div>
               <span className="font-mono text-micro text-slate uppercase tracking-wider">
                 {String(section.code ?? '')}
               </span>

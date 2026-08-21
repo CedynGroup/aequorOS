@@ -608,6 +608,7 @@ def materialize_canonical_test_book(session: Session) -> CanonicalTestBookSummar
             currency=CURRENCY,
             jurisdiction_code=JURISDICTION_CODE,
             license_type="universal",
+                institution_type="universal_bank",
         )
     )
     periods = _build_reporting_periods()

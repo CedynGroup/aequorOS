@@ -58,6 +58,7 @@ def _bank(db: Session) -> Bank:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     db.add(bank)
     db.flush()

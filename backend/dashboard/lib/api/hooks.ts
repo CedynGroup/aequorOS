@@ -37,6 +37,7 @@ import type {
   BankProductUpdate,
   BehavioralApplyProduct,
   CashflowForecastMode,
+  CashflowForecastScenario,
   CashflowHorizon,
   CertifyAndSendRequest,
   ChannelCode,
@@ -88,6 +89,7 @@ import {
   liveEngineApi,
   windowAnalyticsApi,
   marketDataApi,
+  ModuleUnavailableError,
   notificationsApi,
   organizationApi,
   regulatoryCapitalApi,
@@ -165,7 +167,7 @@ export function useBankPeriodFacts(
 
 export function useLiquidityDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['liq-dashboard', bankId, periodId],
@@ -176,14 +178,14 @@ export function useLiquidityDashboard(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
 
 export function useCapitalDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['cap-dashboard', bankId, periodId],
@@ -194,7 +196,7 @@ export function useCapitalDashboard(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
@@ -339,18 +341,33 @@ export function useRunAllCapitalScenarios(bankId: string | undefined) {
 
 export function useIrrDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['irr-dashboard', bankId, periodId],
     queryFn: () =>
-      apiCall(() =>
-        regulatoryIrrApi.getIrrDashboard({
+      apiCall(async () => {
+        // The live IRR service returns HTTP 200 with an availability envelope
+        // while current facts lack a compatible analysis context. Detect it
+        // before generated-client deserialization expects dashboard arrays.
+        const response = await regulatoryIrrApi.getIrrDashboardRaw({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
-      ),
-    enabled: Boolean(bankId && periodId),
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Interest-rate risk analysis is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
@@ -375,7 +392,7 @@ export function useRunAllIrrScenarios(bankId: string | undefined) {
 
 export function useFxDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['fx-dashboard', bankId, periodId],
@@ -386,7 +403,7 @@ export function useFxDashboard(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
@@ -411,7 +428,7 @@ export function useRunAllFxScenarios(bankId: string | undefined) {
 
 export function useFtpDashboard(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['ftp-dashboard', bankId, periodId],
@@ -422,7 +439,7 @@ export function useFtpDashboard(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
@@ -452,7 +469,7 @@ export function isNoBaselineRunError(error: unknown): boolean {
 
 export function useRwaBreakdown(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['cap-rwa', bankId, periodId],
@@ -463,7 +480,7 @@ export function useRwaBreakdown(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     retry: (failureCount, error) =>
       !isNoBaselineRunError(error) && failureCount < 1,
   });
@@ -471,7 +488,7 @@ export function useRwaBreakdown(
 
 export function useCapitalStructure(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId?: string | undefined
 ) {
   return useQuery({
     queryKey: ['cap-structure', bankId, periodId],
@@ -482,7 +499,7 @@ export function useCapitalStructure(
           reportingPeriodId: periodId,
         })
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: Boolean(bankId),
     retry: (failureCount, error) =>
       !isNoBaselineRunError(error) && failureCount < 1,
   });
@@ -642,16 +659,18 @@ export function isServiceUnavailableError(error: unknown): boolean {
 export function useCashflowForecast(
   bankId: string | undefined,
   horizon: CashflowHorizon,
-  mode: CashflowForecastMode
+  mode: CashflowForecastMode,
+  scenario: CashflowForecastScenario
 ) {
   return useQuery({
-    queryKey: ['cashflow-forecast', bankId, horizon, mode],
+    queryKey: ['cashflow-forecast', bankId, horizon, mode, scenario],
     queryFn: () =>
       apiCall(() =>
         cashflowForecastApi.getCashflowForecast({
           bankId: bankId!,
           horizon,
           mode,
+          scenario,
         })
       ),
     enabled: Boolean(bankId),
@@ -700,6 +719,17 @@ export function useBehavioralModel(
     enabled: Boolean(bankId),
     retry: false,
     // First call trains the model — keep the result warm.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Observed deposit behavior by product, segment, connected group, and branch. */
+export function useBehavioralLiquidity(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['behavioral-liquidity', bankId],
+    queryFn: () =>
+      apiCall(() => behavioralModelsApi.getBehavioralLiquidity({ bankId: bankId! })),
+    enabled: Boolean(bankId),
     staleTime: 5 * 60_000,
   });
 }
@@ -2984,17 +3014,32 @@ export function useUpsertSigningPolicy() {
 
 // --- Phase 2: EWI / CFP / threshold registers / reverse stress -------------
 
-export function useEwiDashboard(bankId: string | undefined, periodId: string | undefined) {
+export function useEwiDashboard(bankId: string | undefined, periodId?: string | undefined) {
   return useQuery({
     queryKey: ['ewi-dashboard', bankId, periodId],
     queryFn: () =>
-      apiCall(() =>
-        liquidityCfpApi.getLiquidityEwiDashboard({
+      apiCall(async () => {
+        // The EWI service uses a valid HTTP 200 availability envelope while
+        // current liquidity facts are unavailable. Inspect it before generated
+        // deserialization expects the dashboard's indicator array.
+        const response = await liquidityCfpApi.getLiquidityEwiDashboardRaw({
           bankId: bankId!,
-          reportingPeriodId: periodId!,
-        })
-      ),
-    enabled: Boolean(bankId && periodId),
+          reportingPeriodId: periodId,
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Early-warning indicators are not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }

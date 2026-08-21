@@ -121,6 +121,17 @@ export default function ReturnsWorkspacePage() {
 }
 
 const EXPORT_KINDS: ArtifactKind[] = ['xlsx', 'csv', 'pdf'];
+
+// Friendly artifact-kind labels. `xlsx_working` is the ALM/Finance working copy
+// carrying the template's LIVE formulas — a review aid, never a filing artifact —
+// and is produced ONLY for the official BoG BSD forms (generator 'bog_form').
+const KIND_LABELS: Record<string, string> = {
+  xlsx: 'XLSX',
+  csv: 'CSV',
+  pdf: 'PDF',
+  xlsx_working: 'XLSX with formulas',
+};
+const FORMULA_GENERATOR = 'bog_form';
 const CHANNEL_OPTIONS: ChannelCode[] = [
   'orass_api',
   'orass_sandbox',
@@ -186,8 +197,9 @@ function ReturnsWorkspace() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { bank, periods } = useBankContext();
+  const { bank, periods, moduleScope } = useBankContext();
   const bankId = bank?.id;
+  const isSdi = moduleScope.institutionClass === 'sdi';
 
   const templatesQuery = useReturnTemplates();
   const templates = useMemo(
@@ -249,7 +261,7 @@ function ReturnsWorkspace() {
           { label: 'Returns' },
         ]}
         title="Returns workspace"
-        subtitle="Generate → validate → approve → export → submit, one immutable package version at a time"
+        subtitle={isSdi ? 'SDI return family · generate → validate → approve → export → submit, one immutable package version at a time' : 'Generate → validate → approve → export → submit, one immutable package version at a time'}
         action={
           <div className="flex items-center gap-2 flex-wrap">
             <label className="flex items-center gap-2 text-caption text-slate">
@@ -288,6 +300,16 @@ function ReturnsWorkspace() {
       />
 
       <div className="px-8 py-6 space-y-6">
+        {isSdi && (
+          <SectionCard
+            title="SDI regulatory returns"
+            subtitle="This workspace is scoped to the return family configured for this specialised deposit-taking institution."
+          >
+            <p className="text-body text-slate leading-relaxed">
+              Only applicable templates are shown. Where the regulator has not issued a licensed return template, the workspace remains intentionally unavailable rather than inventing a form.
+            </p>
+          </SectionCard>
+        )}
         {template && (
           <FidelityBanner template={template} />
         )}
@@ -533,6 +555,13 @@ function PackageWorkspace({
   const submissionRevision =
     pkg?.submissionRevision ?? summary.submissionRevision;
   const regulatorComments = pkg?.regulatorComments ?? summary.regulatorComments;
+
+  // Offer the live-formulas working copy only for the official BoG BSD forms
+  // that actually carry template formulas; other returns have no such artifact.
+  const supportsWorkingCopy = template?.generator === FORMULA_GENERATOR;
+  const exportKinds: ArtifactKind[] = supportsWorkingCopy
+    ? [...EXPORT_KINDS, 'xlsx_working']
+    : EXPORT_KINDS;
 
   const runExport = (kind: ArtifactKind) => {
     setExportingKind(kind);
@@ -840,24 +869,31 @@ function PackageWorkspace({
       title="Export artifacts"
       subtitle={`Renders the snapshot through the declarative ${regShort()} templates`}
     >
-      <div className="flex items-center gap-2">
-        {EXPORT_KINDS.map((kind) => (
+      <div className="flex flex-wrap items-center gap-2">
+        {exportKinds.map((kind) => (
           <button
             key={kind}
             type="button"
             disabled={!canExport || exportPackage.isPending}
             onClick={() => runExport(kind)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface disabled:opacity-60"
+            className="flex-1 min-w-[5rem] inline-flex items-center justify-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface disabled:opacity-60"
           >
             {exportingKind === kind && exportPackage.isPending ? (
               <Loader2 size={13} className="animate-spin" aria-hidden />
             ) : (
               <FileOutput size={13} aria-hidden />
             )}
-            {kind.toUpperCase()}
+            {KIND_LABELS[kind] ?? kind.toUpperCase()}
           </button>
         ))}
       </div>
+      {supportsWorkingCopy && (
+        <p className="mt-2 text-caption text-slate">
+          <span className="font-medium text-navy">XLSX with formulas</span> is the
+          official layout with the template&apos;s live formulas — for internal
+          ALM/Finance review, never filed or signed.
+        </p>
+      )}
       {exportPackage.error && (
         <div className="mt-3">
           <ErrorPanel error={exportPackage.error} title="Export failed" />
@@ -886,7 +922,7 @@ function PackageWorkspace({
                 className="flex items-center gap-2 rounded border border-border-light bg-surface px-3 py-2"
               >
                 <span className="font-mono text-caption font-medium text-navy uppercase">
-                  {artifact.kind}
+                  {KIND_LABELS[artifact.kind] ?? artifact.kind}
                 </span>
                 <span className="font-mono text-micro text-slate tnum truncate">
                   sha256 {shortId(artifact.checksumSha256, 12)}

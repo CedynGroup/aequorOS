@@ -3,8 +3,8 @@
 The eight BoG-named starter indicators are code-defined; the tenant register
 (``liquidity_ewi_indicators``) overrides a starter's Board-set trigger levels
 / enabled state / recovery-plan alignment, or adds custom indicators. The
-evaluator computes each indicator from CANONICAL data and stored regulatory
-runs only — an indicator whose input is not ingested reports ``no_data``
+evaluator computes each indicator from canonical data and current live module
+state — an indicator whose input is not ingested reports ``no_data``
 honestly rather than a fabricated value, and an indicator without Board-set
 thresholds reports ``unconfigured`` (value shown, no RAG claim).
 
@@ -33,8 +33,7 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     LiquidityEwiIndicator,
-    RegulatoryMetricResult,
-    RegulatoryRun,
+    LiveMetric,
 )
 from app.schemas.liquidity_cfp import (
     EscalationState,
@@ -44,6 +43,7 @@ from app.schemas.liquidity_cfp import (
     EwiStatus,
     EwiUnit,
 )
+from app.services import institution_types, loan_classification
 from app.services.audit import record_event
 from app.services.jurisdictions import base_currency
 
@@ -117,7 +117,7 @@ STARTER_INDICATORS: tuple[StarterIndicator, ...] = (
             "Headline regulatory metrics currently classified amber or red "
             "across the latest baseline liquidity and capital runs."
         ),
-        metric_basis="amber/red headline metrics in latest baseline runs (count)",
+        metric_basis="amber/red current live Liquidity and Capital states (count)",
         unit="count",
         direction="above",
     ),
@@ -406,29 +406,42 @@ def _weighted_liability_maturity(rows: list[_Row]) -> tuple[Decimal | None, str 
 def _near_limit_count(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> tuple[Decimal | None, str | None]:
-    run_ids: list[UUID] = []
-    for module in ("liquidity", "capital"):
-        run_id = db.scalar(
-            select(RegulatoryRun.id)
-            .where(
-                RegulatoryRun.organization_id == ctx.organization_id,
-                RegulatoryRun.bank_id == bank.id,
-                RegulatoryRun.reporting_period_id == period.id,
-                RegulatoryRun.module == module,
-                RegulatoryRun.scenario_code == "baseline",
-                RegulatoryRun.status == "succeeded",
+    _ = period  # EWI configuration remains period-addressable; live metrics do not.
+    rows = list(
+        db.scalars(
+            select(LiveMetric).where(
+                LiveMetric.organization_id == ctx.organization_id,
+                LiveMetric.bank_id == bank.id,
+                LiveMetric.module.in_(("liquidity", "capital")),
             )
-            .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
-            .limit(1)
         )
-        if run_id is not None:
-            run_ids.append(run_id)
-    if not run_ids:
-        return None, "No succeeded baseline liquidity or capital run exists yet."
-    statuses = db.scalars(
-        select(RegulatoryMetricResult.status).where(RegulatoryMetricResult.run_id.in_(run_ids))
-    ).all()
-    return Decimal(sum(1 for value in statuses if value in ("amber", "red"))), None
+    )
+    if not rows:
+        return None, "Current live liquidity or capital state is not available yet."
+    return Decimal(sum(1 for row in rows if row.status in ("amber", "red"))), None
+
+
+def _asset_quality_signal(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    rows: list[_Row],
+) -> tuple[Decimal | None, str | None]:
+    """The asset-quality EWI, class-aware (docs/sdi.md §2.2, Phase G wiring). An
+    SDI's asset quality is the NBFI 4-grade NPL ratio (days-past-due driven), the
+    regime it actually files; a bank keeps the IFRS-9 stage-3 share (byte-identical)."""
+    if institution_types.institution_class(db, bank) == "sdi":
+        report = loan_classification.classify_loan_book(db, ctx, bank, period.period_end)
+        if report.result.total_exposure_ghs == 0:
+            return None, "No canonical loan positions are ingested."
+        ccy = base_currency(bank)
+        note = (
+            f"NBFI 4-grade NPL ratio; {report.result.npl_exposure_ghs} {ccy} non-performing "
+            f"of {report.result.total_exposure_ghs} {ccy}."
+        )
+        return _pct(report.result.npl_ratio * _HUNDRED), note
+    return _stage3_loan_share(rows)
 
 
 def _stage3_loan_share(rows: list[_Row]) -> tuple[Decimal | None, str | None]:
@@ -494,7 +507,7 @@ def evaluate_ewis(
         "currency_mismatch": lambda: _fx_liability_share(rows, base),
         "weighted_liability_maturity": lambda: _weighted_liability_maturity(rows),
         "near_limit_incidents": lambda: _near_limit_count(db, ctx, bank, period),
-        "earnings_asset_quality": lambda: _stage3_loan_share(rows),
+        "earnings_asset_quality": lambda: _asset_quality_signal(db, ctx, bank, period, rows),
         "debt_spreads": lambda: (
             None,
             "Requires vendor market data, which is not yet connected.",

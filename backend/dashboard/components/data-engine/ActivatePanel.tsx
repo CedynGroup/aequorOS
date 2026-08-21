@@ -59,7 +59,7 @@ export default function ActivatePanel() {
   const effectiveAsOf = asOfDate || latestBatchAsOf || periodAsOf || '';
 
   const computedAt = liveSummary.data?.computedAt ?? null;
-  const isStale = liveSummary.data?.isStale ?? false;
+  const refreshDelayed = !computedAt;
   const running = refresh.isPending || mint.isPending;
 
   return (
@@ -80,8 +80,8 @@ export default function ActivatePanel() {
             <Loader2 size={11} className="animate-spin" aria-hidden />
             Recomputing…
           </StatusPill>
-        ) : isStale ? (
-          <StatusPill tone="amber">Changed since last official run</StatusPill>
+        ) : refreshDelayed ? (
+          <StatusPill tone="amber">Live refresh pending</StatusPill>
         ) : (
           <StatusPill tone="compliant">Up to date</StatusPill>
         )}

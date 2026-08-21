@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from app.api.deps import require_module_access
 from app.api.health import router as health_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.database_connections import router as database_direct_connections_router
@@ -18,11 +19,17 @@ from app.features.manage_capital import router as capital_router
 from app.features.manage_capital_plan import router as capital_plan_router
 from app.features.manage_credit_params import router as credit_params_router
 from app.features.manage_documents import router as documents_router
+from app.features.manage_enterprise_stress import router as enterprise_stress_router
+from app.features.manage_enterprise_stress_signoff import (
+    router as enterprise_stress_signoff_router,
+)
 from app.features.manage_institution_profile import router as institution_profile_router
 from app.features.manage_integration_keys import router as integration_keys_router
 from app.features.manage_liquidity_cfp import router as liquidity_cfp_router
 from app.features.manage_liquidity_thresholds import router as liquidity_thresholds_router
 from app.features.manage_live_engine import router as live_engine_router
+from app.features.manage_macro_scenarios import router as macro_scenarios_router
+from app.features.manage_management_actions import router as management_actions_router
 from app.features.manage_market_data_connections import router as market_data_connections_router
 from app.features.manage_market_data_overlays import router as market_data_overlays_router
 from app.features.manage_market_data_uploads import router as market_data_uploads_router
@@ -37,7 +44,9 @@ from app.features.read_behavioral_models import router as behavioral_models_rout
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
 from app.features.read_cashflow_window import router as cashflow_window_router
 from app.features.read_financial_workspace import router as financial_workspace_router
+from app.features.read_liquidity_monitoring import router as liquidity_monitoring_router
 from app.features.read_market_data_views import router as market_data_views_router
+from app.features.read_sdi_diagnostics import router as sdi_diagnostics_router
 from app.features.read_window_analytics import router as window_analytics_router
 from app.features.record_case_decisions import router as case_decisions_router
 from app.features.review_cases import router as cases_router
@@ -73,18 +82,25 @@ v1_router.include_router(credit_params_router)
 v1_router.include_router(capital_plan_router)
 v1_router.include_router(examiner_router)
 v1_router.include_router(stress_scenarios_router)
+v1_router.include_router(macro_scenarios_router)
+v1_router.include_router(management_actions_router)
 v1_router.include_router(scenario_analysis_router)
 v1_router.include_router(reverse_stress_router)
+v1_router.include_router(enterprise_stress_router)
+v1_router.include_router(enterprise_stress_signoff_router)
 v1_router.include_router(regulatory_capital_router)
-v1_router.include_router(regulatory_irr_router)
-v1_router.include_router(regulatory_fx_router)
-v1_router.include_router(regulatory_ftp_router)
+# Server-side module scoping (docs/sdi.md §14): IRRBB, FX and FTP are scoped out
+# of the SDI module set, so an SDI tenant is rejected at the API, not merely in
+# the nav. A universal bank has all modules and is unaffected.
+v1_router.include_router(regulatory_irr_router, dependencies=[require_module_access("irrbb")])
+v1_router.include_router(regulatory_fx_router, dependencies=[require_module_access("fx")])
+v1_router.include_router(regulatory_ftp_router, dependencies=[require_module_access("ftp")])
 v1_router.include_router(regulatory_reporting_router)
 v1_router.include_router(organization_users_router)
 v1_router.include_router(institution_profile_router)
 v1_router.include_router(integration_keys_router)
 v1_router.include_router(notifications_router)
-v1_router.include_router(forecasting_router)
+v1_router.include_router(forecasting_router, dependencies=[require_module_access("forecasting")])
 v1_router.include_router(implied_rating_router)
 v1_router.include_router(live_engine_router)
 v1_router.include_router(market_data_uploads_router)
@@ -93,7 +109,9 @@ v1_router.include_router(market_data_overlays_router)
 v1_router.include_router(market_data_sources_router)
 v1_router.include_router(temenos_connections_router)
 v1_router.include_router(cashflow_forecast_router)
-v1_router.include_router(behavioral_models_router)
+v1_router.include_router(
+    behavioral_models_router, dependencies=[require_module_access("behavioral")]
+)
 v1_router.include_router(bulk_update_cases_router)
 v1_router.include_router(cases_router)
 v1_router.include_router(case_decisions_router)
@@ -112,4 +130,6 @@ v1_router.include_router(taxonomy_router)
 v1_router.include_router(market_data_views_router)
 v1_router.include_router(window_analytics_router)
 v1_router.include_router(cashflow_window_router)
+v1_router.include_router(liquidity_monitoring_router)
+v1_router.include_router(sdi_diagnostics_router)
 api_router.include_router(v1_router)

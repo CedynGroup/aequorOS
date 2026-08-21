@@ -143,6 +143,14 @@ class ReturnDefinition:
     # submission path has always auto-exported — it is the status quo as data,
     # not a new claim about any return.
     filing_format: FilingFormat | None = "xlsx"
+    # The institution classes (``institution_class`` axis: 'bank' | 'sdi',
+    # docs/sdi.md §1) this return applies to. The reporting calendar filters
+    # obligations by the tenant's resolved class (SDI § de-hardcoding row at
+    # docs/sdi.md §6.2 / calendar.py) so a savings-&-loans tenant sees only its
+    # own returns. Every return registered so far is a bank/BoG return, hence
+    # the default — the SDI/ORASS return pack (docs/sdi.md §Phase F, blocked on
+    # BoG) sets ('sdi',) or ('bank', 'sdi') explicitly when its layouts land.
+    institution_classes: tuple[str, ...] = ("bank",)
 
 
 def _bog_definitions() -> list[ReturnDefinition]:
@@ -351,6 +359,33 @@ REGISTRY: dict[str, ReturnDefinition] = {
             generator="icaap_stress",
             template_id="bog-icaap-stress-v1",
             fidelity="REPRESENTATIVE",
+            default_channel="manual",
+        ),
+        ReturnDefinition(
+            code="ICAAP-STRESS-APPENDIX2",
+            family="icaap_stress",
+            title="ICAAP Stress Test — Appendix II Tables 1–6",
+            directive_citation=(
+                "Stress Testing Guideline (Feb 2026) ¶67 — RFIs submit annual stress-test "
+                "results to BoG as part of the ICAAP in the Appendix II formats by end of "
+                "March of the ensuing year; ¶68 / Part IV — pre/post-stress regulatory "
+                "capital projected ≥3 years; Appendix II Tables 1–6 (Summary Results, "
+                "Regulatory Capital, P&L, Statement of Financial Position, Evolution of "
+                "RWA & Capital Requirements, Key Risk Drivers). Results reported with and "
+                "without management actions (¶67(f)), at the currency / business-line / "
+                "sector / borrower-group granularity of ¶67(g). Board-attested per ¶20. "
+                "Effective 1 Jan 2027."
+            ),
+            frequency="annual",
+            # CONFIRMED: end of March of the ensuing year (Stress Testing
+            # Guideline ¶67), submitted within the ICAAP.
+            deadline_rule=annual_month_day(3, 31),
+            generator="icaap_stress_appendix2",
+            template_id="bog-icaap-stress-appendix2-v1",
+            # The Appendix II structure is published in the directive (CONFIRMED);
+            # the snapshot IS those tables, sourced from a Board-attested enterprise-
+            # stress run (docs/stress.md §1.8, §3.4, §3.8).
+            fidelity="CONFIRMED",
             default_channel="manual",
         ),
         # --- Template-gated returns (product.md §Phase 2 items 12/14) ------

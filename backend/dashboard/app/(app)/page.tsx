@@ -31,11 +31,13 @@ import BalanceSheetStrip from '@/components/home/BalanceSheetStrip';
 import RatioTrendChart from '@/components/home/RatioTrendChart';
 import WindowAnalysis from '@/components/home/WindowAnalysis';
 import OperationalFeed from '@/components/home/OperationalFeed';
+import SdiLiquiditySummary from '@/components/home/SdiLiquiditySummary';
 import { centralBankName } from '@/lib/format';
 
 export default function CommandCenterPage() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
+  const isSdi = moduleScope.institutionClass === 'sdi';
   const [role, setRole] = useRoleLens();
   const lens = ROLE_CONFIG[role];
   const effective = useEffectivePeriod();
@@ -55,28 +57,32 @@ export default function CommandCenterPage() {
       {effective.isResolving ? (
         <CommandCenterSkeleton />
       ) : effective.isEmpty ? (
-        <div className="px-8 py-10 max-w-2xl mx-auto">
-          {effective.error ? (
-            <div className="mb-6">
-              <ErrorPanel
-                error={effective.error}
-                title="Could not resolve a computed reporting period"
-              />
-            </div>
-          ) : null}
-          <EmptyState
-            Icon={Database}
-            title="No computed data yet"
-            description="This bank has reporting periods but none holds activated data. Upload your source files in the Data Engine and activate them — the Command Center lights up for the activated as-of period."
-            action={
-              <Link
-                href="/data-engine"
-                className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary"
-              >
-                Open the Data Engine
-              </Link>
-            }
-          />
+        <div className="px-8 py-6 space-y-6">
+          <BreachBanner bankId={bankId} hasData={false} />
+          <PulseWall bankId={bankId} moduleOrder={lens.moduleOrder} hasData={false} />
+          <div className="py-4 max-w-2xl mx-auto">
+            {effective.error ? (
+              <div className="mb-6">
+                <ErrorPanel
+                  error={effective.error}
+                  title="Could not resolve a computed reporting period"
+                />
+              </div>
+            ) : null}
+            <EmptyState
+              Icon={Database}
+              title="No computed data yet"
+              description="Ingest current source data to populate the live Treasury view. Historical reporting periods are optional for daily ALM work."
+              action={
+                <Link
+                  href="/data-engine"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary"
+                >
+                  Open the Data Engine
+                </Link>
+              }
+            />
+          </div>
         </div>
       ) : effective.period ? (
         <div className="px-8 py-6 space-y-6">
@@ -98,7 +104,9 @@ export default function CommandCenterPage() {
             </div>
           )}
 
-          <BreachBanner bankId={bankId} period={effective.period} />
+          <BreachBanner bankId={bankId} />
+
+          {isSdi && <SdiLiquiditySummary bankId={bankId} />}
 
           {lens.panels.map((panel) => {
             switch (panel) {
@@ -107,7 +115,6 @@ export default function CommandCenterPage() {
                   <PulseWall
                     key="pulse"
                     bankId={bankId}
-                    period={effective.period!}
                     moduleOrder={lens.moduleOrder}
                   />
                 );

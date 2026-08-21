@@ -32,6 +32,7 @@ def make_bank(session: Session) -> Bank:
         currency="GHS",
         jurisdiction_code="GH",
         license_type="universal",
+        institution_type="universal_bank",
     )
     session.add(bank)
     session.flush()

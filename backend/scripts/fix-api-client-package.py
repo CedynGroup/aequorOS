@@ -335,6 +335,17 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
         for name, text in model_text.items()
         if re.search(rf"export interface {re.escape(name)} \{{\s*\}}", text)
     }
+
+    def component_key(model_name: str) -> str | None:
+        if model_name in components:
+            return model_name
+        for suffix in ("Input", "Output"):
+            if model_name.endswith(suffix):
+                candidate = f"{model_name.removesuffix(suffix)}-{suffix}"
+                if candidate in components:
+                    return candidate
+        return None
+
     for alias in sorted(empty_models):
         schemas: list[dict[str, Any]] = [components[alias]] if alias in components else []
         property_pattern = re.compile(
@@ -348,28 +359,33 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
             re.MULTILINE,
         )
         for consumer, text in model_text.items():
-            if consumer not in components:
+            consumer_component = component_key(consumer)
+            if consumer_component is None:
                 continue
             for match in property_pattern.finditer(text):
                 generated_name = match.group(1)
                 candidates = [
                     value
-                    for name, value in components[consumer].get("properties", {}).items()
+                    for name, value in components[consumer_component].get("properties", {}).items()
                     if property_name(name) == generated_name
                 ]
                 if len(candidates) != 1:
-                    raise ValueError(f"Could not resolve {consumer}.{generated_name} for {alias}")
+                    raise ValueError(
+                        f"Could not resolve {consumer_component}.{generated_name} for {alias}"
+                    )
                 schemas.append(candidates[0])
             for match in map_pattern.finditer(text):
                 generated_name = match.group(1)
                 candidates = [
                     value_schema
-                    for name, value in components[consumer].get("properties", {}).items()
+                    for name, value in components[consumer_component].get("properties", {}).items()
                     if property_name(name) == generated_name
                     and (value_schema := map_value_schema(value, components)) is not None
                 ]
                 if len(candidates) != 1:
-                    raise ValueError(f"Could not resolve {consumer}.{generated_name} for {alias}")
+                    raise ValueError(
+                        f"Could not resolve {consumer_component}.{generated_name} for {alias}"
+                    )
                 schemas.append(candidates[0])
         if not schemas:
             raise ValueError(f"Could not find a schema use for generated alias {alias}")

@@ -194,6 +194,7 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
+    CurrentFinancialFact,
     CanonicalCounterparty,
     CanonicalGlAccount,
     CanonicalPosition,
@@ -334,6 +335,22 @@ class DerivationResult:
 
 
 @dataclass(frozen=True)
+class CurrentDerivationResult:
+    """Current live materialisation outcome; deliberately has no period ID."""
+
+    bank_id: str
+    as_of_date: date
+    generation: int
+    facts_replaced: int
+    facts_created: int
+    groups: tuple[GroupResult, ...]
+
+    @property
+    def warnings(self) -> list[str]:
+        return [warning for group in self.groups for warning in group.warnings]
+
+
+@dataclass(frozen=True)
 class _PositionRow:
     """One current-generation snapshot flattened to the fields derivation uses."""
 
@@ -420,49 +437,8 @@ def derive_facts(
     period, period_created = _ensure_period(db, ctx, bank, as_of_date)
     facts_deleted = _delete_period_facts(db, ctx, bank, period)
 
-    groups: list[GroupResult] = []
-    facts: list[BankFinancialFact] = []
-
-    balance_sheet, loan_rows, cash_amounts, securities_split = _derive_balance_sheet_block(
-        canonical, groups
-    )
-    facts.extend(_fact(bank, period, spec) for spec in balance_sheet)
-    facts.extend(_fact(bank, period, spec) for spec in _derive_loan_exposure(loan_rows, groups))
-    facts.extend(_fact(bank, period, spec) for spec in _derive_ecl_exposure(loan_rows, groups))
-    facts.extend(_fact(bank, period, spec) for spec in _derive_crm_collateral(loan_rows, groups))
-    facts.extend(
-        _fact(bank, period, spec)
-        for spec in _derive_securities(securities_split, cash_amounts, groups)
-    )
-    facts.extend(_fact(bank, period, spec) for spec in _derive_off_balance(canonical, groups))
-    facts.extend(
-        _fact(bank, period, spec) for spec in _derive_lcr_inflows(canonical, loan_rows, groups)
-    )
-    fx_specs, fx_currencies = _derive_fx_positions(canonical, groups)
-    facts.extend(_fact(bank, period, spec) for spec in fx_specs)
-    facts.extend(
-        _fact(bank, period, spec) for spec in _derive_fx_returns(canonical, fx_currencies, groups)
-    )
-    facts.extend(_fact(bank, period, spec) for spec in _derive_fx_hedges(canonical, groups))
-    facts.extend(
-        _fact(bank, period, spec) for spec in _derive_operational_income(canonical, groups)
-    )
-    facts.extend(_fact(bank, period, spec) for spec in _derive_cashflow_summary(canonical, groups))
-    capital_specs = _derive_capital_components(canonical, groups)
-    facts.extend(_fact(bank, period, spec) for spec in capital_specs)
-    facts.extend(
-        _fact(bank, period, spec) for spec in _derive_irr_positions(canonical, loan_rows, groups)
-    )
-    facts.extend(_fact(bank, period, spec) for spec in _derive_irr_swaps(canonical, groups))
-    curve = _derive_ftp_curve(canonical, groups)
-    ftp_curve_specs = curve[0]
-    facts.extend(_fact(bank, period, spec) for spec in ftp_curve_specs)
-    facts.extend(
-        _fact(bank, period, spec)
-        for spec in _derive_ftp_products(canonical, loan_rows, curve[1], groups)
-    )
-    facts.extend(_fact(bank, period, spec) for spec in _derive_ftp_branches(canonical, groups))
-    facts.extend(_fact(bank, period, spec) for spec in _derive_ftp_nmd(canonical, groups))
+    specs, groups = _derive_specs(canonical)
+    facts = [_fact(bank, period, spec) for spec in specs]
 
     db.add_all(facts)
     db.flush()
@@ -476,6 +452,80 @@ def derive_facts(
         facts_created=len(facts),
         groups=tuple(groups),
     )
+
+
+def derive_current_facts(
+    db: Session, ctx: TenantContext, bank_id: str, as_of_date: date
+) -> CurrentDerivationResult:
+    """Replace the bank's current live facts from accepted canonical state.
+
+    This is the live-plane derivation entry point. It never creates or mutates
+    a reporting period, `BankFinancialFact`, `RegulatoryRun`, or package.
+    """
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    canonical = _load_canonical(db, ctx, bank, as_of_date)
+    if not canonical.positions:
+        raise DerivationError(
+            "no_canonical_data",
+            f"No accepted canonical position snapshots exist for {as_of_date.isoformat()}.",
+        )
+    specs, groups = _derive_specs(canonical)
+    previous = list(
+        db.scalars(
+            select(CurrentFinancialFact).where(
+                CurrentFinancialFact.organization_id == ctx.organization_id,
+                CurrentFinancialFact.bank_id == bank.id,
+            )
+        )
+    )
+    generation = max((row.source_generation for row in previous), default=0) + 1
+    db.execute(
+        delete(CurrentFinancialFact).where(
+            CurrentFinancialFact.organization_id == ctx.organization_id,
+            CurrentFinancialFact.bank_id == bank.id,
+        )
+    )
+    db.add_all(_current_fact(bank, as_of_date, generation, spec) for spec in specs)
+    db.flush()
+    return CurrentDerivationResult(
+        bank_id=bank.id,
+        as_of_date=as_of_date,
+        generation=generation,
+        facts_replaced=len(previous),
+        facts_created=len(specs),
+        groups=tuple(groups),
+    )
+
+
+def _derive_specs(canonical: _Canonical) -> tuple[list[_FactSpec], list[GroupResult]]:
+    """Build deterministic facts once for either live or official materialisation."""
+    groups: list[GroupResult] = []
+    specs: list[_FactSpec] = []
+    balance_sheet, loan_rows, cash_amounts, securities_split = _derive_balance_sheet_block(
+        canonical, groups
+    )
+    specs.extend(balance_sheet)
+    specs.extend(_derive_loan_exposure(loan_rows, groups))
+    specs.extend(_derive_ecl_exposure(loan_rows, groups))
+    specs.extend(_derive_crm_collateral(loan_rows, groups))
+    specs.extend(_derive_securities(securities_split, cash_amounts, groups))
+    specs.extend(_derive_off_balance(canonical, groups))
+    specs.extend(_derive_lcr_inflows(canonical, loan_rows, groups))
+    fx_specs, fx_currencies = _derive_fx_positions(canonical, groups)
+    specs.extend(fx_specs)
+    specs.extend(_derive_fx_returns(canonical, fx_currencies, groups))
+    specs.extend(_derive_fx_hedges(canonical, groups))
+    specs.extend(_derive_operational_income(canonical, groups))
+    specs.extend(_derive_cashflow_summary(canonical, groups))
+    specs.extend(_derive_capital_components(canonical, groups))
+    specs.extend(_derive_irr_positions(canonical, loan_rows, groups))
+    specs.extend(_derive_irr_swaps(canonical, groups))
+    curve_specs, curve = _derive_ftp_curve(canonical, groups)
+    specs.extend(curve_specs)
+    specs.extend(_derive_ftp_products(canonical, loan_rows, curve, groups))
+    specs.extend(_derive_ftp_branches(canonical, groups))
+    specs.extend(_derive_ftp_nmd(canonical, groups))
+    return specs, groups
 
 
 # ---------------------------------------------------------------------------
@@ -749,6 +799,34 @@ def _fact(bank: Bank, period: BankReportingPeriod, spec: _FactSpec) -> BankFinan
         organization_id=bank.organization_id,
         bank_id=bank.id,
         reporting_period_id=period.id,
+        fact_group=spec.fact_group,
+        category=spec.category,
+        amount=money(spec.amount),
+        currency=spec.currency or bank.currency,
+        risk_weight_code=spec.risk_weight_code,
+        hqla_level=spec.hqla_level,
+        ccf_pct=spec.ccf_pct,
+        rate_pct=spec.rate_pct,
+        income_year=spec.income_year,
+        capital_tier=spec.capital_tier,
+        is_deduction=spec.is_deduction,
+        attributes=attributes,
+    )
+
+
+def _current_fact(
+    bank: Bank, as_of_date: date, generation: int, spec: _FactSpec
+) -> CurrentFinancialFact:
+    attributes = dict(spec.attributes)
+    attributes["source"] = spec.source_tag
+    if spec.source_tag != SOURCE_TAG:
+        attributes["derived_by"] = SOURCE_TAG
+    attributes["derived_from"] = spec.derived_from
+    return CurrentFinancialFact(
+        organization_id=bank.organization_id,
+        bank_id=bank.id,
+        source_as_of_date=as_of_date,
+        source_generation=generation,
         fact_group=spec.fact_group,
         category=spec.category,
         amount=money(spec.amount),

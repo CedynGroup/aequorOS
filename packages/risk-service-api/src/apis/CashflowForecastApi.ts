@@ -14,6 +14,7 @@ import * as runtime from "../runtime";
 import type {
   CashflowForecastMode,
   CashflowForecastRead,
+  CashflowForecastScenario,
   CashflowHistoryRead,
   CashflowHorizon,
   ErrorResponse,
@@ -23,6 +24,8 @@ import {
   CashflowForecastModeToJSON,
   CashflowForecastReadFromJSON,
   CashflowForecastReadToJSON,
+  CashflowForecastScenarioFromJSON,
+  CashflowForecastScenarioToJSON,
   CashflowHistoryReadFromJSON,
   CashflowHistoryReadToJSON,
   CashflowHorizonFromJSON,
@@ -35,6 +38,7 @@ export interface GetCashflowForecastRequest {
   bankId: string;
   horizon?: CashflowHorizon;
   mode?: CashflowForecastMode;
+  scenario?: CashflowForecastScenario;
 }
 
 export interface GetCashflowHistoryRequest {
@@ -68,6 +72,10 @@ export class CashflowForecastApi extends runtime.BaseAPI {
 
     if (requestParameters["mode"] != null) {
       queryParameters["mode"] = requestParameters["mode"];
+    }
+
+    if (requestParameters["scenario"] != null) {
+      queryParameters["scenario"] = requestParameters["scenario"];
     }
 
     const headerParameters: runtime.HTTPHeaders = {};

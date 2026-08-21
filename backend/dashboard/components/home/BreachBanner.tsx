@@ -17,10 +17,7 @@
 
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, ShieldAlert } from 'lucide-react';
-import type {
-  BankReportingPeriodRead,
-  LiveModule,
-} from '@aequoros/risk-service-api';
+import type { LiveModule } from '@aequoros/risk-service-api';
 import StatusPill from '@/components/ui/StatusPill';
 import { SkeletonLine } from '@/components/ui/Skeleton';
 import { useBankAlerts, useLiveSummary } from '@/lib/api/hooks';
@@ -33,14 +30,16 @@ import { DEFAULT_MODULE_ORDER, usePulseCards } from './pulse';
 
 export default function BreachBanner({
   bankId,
-  period,
+  hasData = true,
 }: {
   bankId: string | undefined;
-  period: BankReportingPeriodRead;
+  /** False when no period has computed data yet — suppresses the module fetches
+   * behind the pulse model that would 409 on a fresh tenant. */
+  hasData?: boolean;
 }) {
   const alerts = useBankAlerts(bankId);
   const live = useLiveSummary(bankId);
-  const pulse = usePulseCards(bankId, period);
+  const pulse = usePulseCards(bankId, hasData);
 
   if (alerts.isLoading || pulse.isLoading) {
     return (

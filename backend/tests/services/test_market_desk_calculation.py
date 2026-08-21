@@ -481,6 +481,7 @@ class TestPublishConformance:
             currency="GHS",
             jurisdiction_code="GH",
             license_type="universal",
+            institution_type="universal_bank",
         )
         desk.add(bank)
         desk.commit()

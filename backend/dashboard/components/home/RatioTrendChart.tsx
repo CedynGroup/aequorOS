@@ -36,6 +36,7 @@ import {
   useRegulatoryRun,
 } from '@/lib/api/hooks';
 import { num } from '@/lib/api/values';
+import { useModuleScope } from '@/components/shell/BankContext';
 
 type TrendRow = {
   t: number;
@@ -53,6 +54,9 @@ export default function RatioTrendChart({
   period: BankReportingPeriodRead;
 }) {
   const [range, setRange] = useState<RangePreset>('1Y');
+  // An SDI does not file Basel LCR/NSFR (docs/sdi.md §4.6) — its capital headline
+  // is the s.29 CAR; liquidity is supervised via LMTD on the Liquidity page.
+  const isSdi = useModuleScope().institutionClass === 'sdi';
   const liq = useLiquidityDashboard(bankId, period.id);
   const cap = useCapitalDashboard(bankId, period.id);
   // Audit chip for the footer: the liquidity baseline run backing this period.
@@ -96,7 +100,11 @@ export default function RatioTrendChart({
   return (
     <ChartFrame
       title="Ratio trend"
-      subtitle="LCR & NSFR (left axis) · CAR (right axis) per reporting period"
+      subtitle={
+        isSdi
+          ? 'CAR (s.29) per reporting period'
+          : 'LCR & NSFR (left axis) · CAR (right axis) per reporting period'
+      }
       height={280}
       loading={isLoading}
       actions={<RangeTabs value={range} onChange={setRange} />}
@@ -104,7 +112,7 @@ export default function RatioTrendChart({
         <>
           <span>
             {rows.length} periods
-            {windowMove !== null &&
+            {!isSdi && windowMove !== null &&
               ` · LCR ${windowMove >= 0 ? '+' : ''}${windowMove.toFixed(1)}pp over the window`}
             {' · '}
             {storedCount} with stored results
@@ -137,12 +145,14 @@ export default function RatioTrendChart({
               interval="preserveStartEnd"
               minTickGap={24}
             />
-            <YAxis
-              yAxisId="liquidity"
-              {...axisProps}
-              width={44}
-              tickFormatter={(v: number) => `${Math.round(v)}%`}
-            />
+            {!isSdi && (
+              <YAxis
+                yAxisId="liquidity"
+                {...axisProps}
+                width={44}
+                tickFormatter={(v: number) => `${Math.round(v)}%`}
+              />
+            )}
             <YAxis
               yAxisId="capital"
               orientation="right"
@@ -158,29 +168,33 @@ export default function RatioTrendChart({
               ]}
             />
             <Legend {...chartLegendProps} />
-            <Line
-              yAxisId="liquidity"
-              type="monotone"
-              dataKey="lcr"
-              name="LCR"
-              stroke={seriesColor(0)}
-              strokeWidth={1.8}
-              dot={false}
-              connectNulls
-              // The dashboards poll — re-animating every refetch is noise.
-              isAnimationActive={false}
-            />
-            <Line
-              yAxisId="liquidity"
-              type="monotone"
-              dataKey="nsfr"
-              name="NSFR"
-              stroke={seriesColor(1)}
-              strokeWidth={1.8}
-              dot={false}
-              connectNulls
-              isAnimationActive={false}
-            />
+            {!isSdi && (
+              <Line
+                yAxisId="liquidity"
+                type="monotone"
+                dataKey="lcr"
+                name="LCR"
+                stroke={seriesColor(0)}
+                strokeWidth={1.8}
+                dot={false}
+                connectNulls
+                // The dashboards poll — re-animating every refetch is noise.
+                isAnimationActive={false}
+              />
+            )}
+            {!isSdi && (
+              <Line
+                yAxisId="liquidity"
+                type="monotone"
+                dataKey="nsfr"
+                name="NSFR"
+                stroke={seriesColor(1)}
+                strokeWidth={1.8}
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
             <Line
               yAxisId="capital"
               type="monotone"

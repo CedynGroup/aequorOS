@@ -16,6 +16,20 @@ from app.schemas.common import ErrorBody, ErrorResponse
 
 RequestHandler = Callable[[Request], Awaitable[Response]]
 
+
+class ModuleDataUnavailable(Exception):  # noqa: N818 - not an error condition, a state
+    """A module view has no computed data yet (or the tenant is not configured for
+    it). This is a VALID state, not a failure: the handler renders it as an HTTP
+    200 ``{available: false, ...}`` so the module page opens with a clean empty /
+    onboarding panel instead of a red error + a console 4xx. Raise it from the
+    live-view code paths that used to raise a 409 for "no current facts" / "no
+    analysis context" / "not configured". The ``reason`` is shown to the user."""
+
+    def __init__(self, error_code: str, reason: str) -> None:
+        super().__init__(reason)
+        self.error_code = error_code
+        self.reason = reason
+
 OPENAPI_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     status.HTTP_400_BAD_REQUEST: {
         "model": ErrorResponse,
@@ -84,6 +98,23 @@ def register_exception_handlers(app: FastAPI) -> None:
                 details=None if isinstance(exc.detail, str) else jsonable_encoder(exc.detail),
             ),
             headers=exc.headers,
+        )
+
+    @app.exception_handler(ModuleDataUnavailable)
+    async def module_unavailable_handler(
+        _request: Request,
+        exc: ModuleDataUnavailable,
+    ) -> JSONResponse:
+        # 200, not 4xx: "no data / not configured yet" is a valid state, so the
+        # module page opens with a clean empty panel and the console stays silent.
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "available": False,
+                "error_code": exc.error_code,
+                "reason": exc.reason,
+                "request_id": get_request_id(),
+            },
         )
 
     @app.exception_handler(RequestValidationError)

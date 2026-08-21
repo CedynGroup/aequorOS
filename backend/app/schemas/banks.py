@@ -48,6 +48,23 @@ class JurisdictionRead(ClosedModel):
     timezone: str | None
 
 
+class InstitutionTypeRead(ClosedModel):
+    """Institution-type classification resolved from the institution_types
+    registry — the typed discriminator every future SDI scoping keys off
+    (docs/sdi.md §1). ``institution_class`` is the coarse regime axis
+    ('bank'|'sdi') the threshold register and later capital register key on."""
+
+    type_code: str
+    display_name: str
+    institution_class: str
+    return_family: str
+    capital_regime: str
+    large_exposure_limit_pct: Decimal
+    single_obligor_limit_pct: Decimal
+    liquidity_binding: bool
+    default_modules: list[str]
+
+
 class BankRead(ClosedModel):
     # THE institution identifier (BK-XXXXXXXX) and tenant identifier
     # (OR-XXXXXXXX) — platform-generated primary keys, no UUID aliases.
@@ -58,9 +75,17 @@ class BankRead(ClosedModel):
     currency: str
     jurisdiction_code: str
     license_type: str
+    # THE typed institution discriminator (docs/sdi.md §1) — the raw licence
+    # code carried on the bank, always present (NOT NULL). Rides the payload
+    # exactly as ``jurisdiction_code`` does.
+    institution_type: str
     # Resolved from the registry; None only if the code has no registry row
     # (clients fall back to the raw code + bank currency).
     jurisdiction: JurisdictionRead | None = None
+    # The resolved institution-type registry row — carries the derived
+    # institution_class, return family, exposure limits and default module set
+    # later SDI phases branch on. None only if the code has no registry row.
+    institution_type_detail: InstitutionTypeRead | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -178,6 +178,11 @@ export interface ProvisionTenantRequest {
   organization_name: string;
   bank_name: string;
   license_type: string;
+  // The typed institution discriminator (docs/sdi.md §1) — REQUIRED with no
+  // default (a ClosedModel 422s without it), validated against the
+  // institution_types registry in the saga. `license_type` above is a SEPARATE
+  // free-text field; these are not interchangeable.
+  institution_type: string;
   jurisdiction_code: string;
   currency: string; // ISO-4217, ^[A-Z]{3}$ — schema-level 422 otherwise
   admin_email: string;
@@ -1640,6 +1645,115 @@ export function reactivateOperator(email: string): Promise<OperatorUser> {
   return request<OperatorUser>(`${OPERATORS}/${encodeURIComponent(email)}/reactivate`, {
     method: 'POST',
   });
+}
+
+// --------------------------------------------------------------------------
+// Regulatory-parameter control plane (backend/app/operator/features/
+// regulatory_parameters.py — docs/sdi.md §7 Phase C).
+//
+// The global, class/type-keyed, effective-dated source of truth for regulatory
+// numbers (CAR floors, exposure limits, paid-up floors, LMTD liquidity floors,
+// provisioning rates, risk-weight buckets …). Reads are open to any operator;
+// changes are four-eyes (propose → approve by a DIFFERENT operator). Decimal
+// values arrive as JSON STRINGS — keep them strings end to end (precision), the
+// same convention as DeskObservation.value. Verified against
+// backend/app/schemas/operator.py on 2026-08-20.
+// --------------------------------------------------------------------------
+
+const REGULATORY_PARAMETERS = '/operator/v1/regulatory-parameters';
+
+/** One effective-dated generation of a regulatory parameter, with provenance. */
+export interface RegulatoryParameter {
+  id: string;
+  /** Which key space this row lives in (coarse class vs specific licence code). */
+  scope_type: 'institution_class' | 'institution_type';
+  /** The class ("bank"/"sdi") or type code ("savings_and_loans" …) the value binds to. */
+  scope_key: string;
+  param_code: string;
+  jurisdiction_code: string;
+  /** Decimal on the backend — serialized as a JSON string; keep it a string. */
+  value_numeric: string | null;
+  /** Structured value for non-scalar parameters (null for scalar rows). */
+  value_json: Record<string, unknown> | null;
+  unit: string;
+  source_citation: string;
+  /** `pending` = a documented default awaiting BoG confirmation — surface it prominently. */
+  confirmation_status: 'confirmed' | 'pending';
+  effective_from: string; // date
+  effective_to: string | null; // date; set when a later generation supersedes this one
+  // draft -> approved. Only approved rows are visible to the calculation resolver.
+  status: 'draft' | 'approved';
+  proposed_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  change_rationale: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RegulatoryParametersResponse {
+  parameters: RegulatoryParameter[];
+  total: number;
+}
+
+/** Maker step body — propose a new effective-dated generation (lands as `draft`). */
+export interface RegulatoryParameterProposeRequest {
+  scope_type: 'institution_class' | 'institution_type';
+  scope_key: string;
+  param_code: string;
+  /** Defaults to "GH" server-side when omitted. */
+  jurisdiction_code?: string;
+  /** Sent as a string to preserve decimal precision (the backend coerces to Decimal). */
+  value_numeric: string;
+  unit: string;
+  source_citation: string;
+  confirmation_status: 'confirmed' | 'pending';
+  effective_from: string; // date
+  change_rationale: string;
+}
+
+/**
+ * GET /operator/v1/regulatory-parameters — every generation matching the
+ * filters, newest-effective first within each (param_code, scope) group.
+ */
+export function listRegulatoryParameters(params?: {
+  scopeType?: string;
+  scopeKey?: string;
+  paramCode?: string;
+  confirmationStatus?: string;
+  /** Default true server-side — pass false to hide unapproved drafts. */
+  includeDrafts?: boolean;
+}): Promise<RegulatoryParametersResponse> {
+  return request<RegulatoryParametersResponse>(
+    `${REGULATORY_PARAMETERS}${query({
+      scope_type: params?.scopeType,
+      scope_key: params?.scopeKey,
+      param_code: params?.paramCode,
+      confirmation_status: params?.confirmationStatus,
+      include_drafts: params?.includeDrafts,
+    })}`,
+  );
+}
+
+/** POST /operator/v1/regulatory-parameters — propose a new generation (maker). 201. */
+export function proposeRegulatoryParameter(
+  body: RegulatoryParameterProposeRequest,
+): Promise<RegulatoryParameter> {
+  return request<RegulatoryParameter>(REGULATORY_PARAMETERS, { method: 'POST', body });
+}
+
+/**
+ * POST /operator/v1/regulatory-parameters/{id}/approve — approve a draft
+ * (checker). Four-eyes: 422 when the approver is the proposer.
+ */
+export function approveRegulatoryParameter(
+  id: string,
+  body: { change_rationale?: string },
+): Promise<RegulatoryParameter> {
+  return request<RegulatoryParameter>(
+    `${REGULATORY_PARAMETERS}/${encodeURIComponent(id)}/approve`,
+    { method: 'POST', body },
+  );
 }
 
 // --------------------------------------------------------------------------

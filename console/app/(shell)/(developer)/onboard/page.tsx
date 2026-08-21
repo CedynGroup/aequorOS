@@ -53,12 +53,30 @@ const JURISDICTIONS = [
 // String(40)); these presets are suggestions, not an enum.
 const LICENSE_PRESETS = ['universal', 'commercial', 'savings_and_loans', 'rural'];
 
+// institution_type IS a closed enum: the seven codes in the global
+// institution_types registry (docs/sdi.md §1). The saga validates the value
+// against that registry, so this list must stay in lockstep with it. Distinct
+// from license_type above (free text) — the typed discriminator that scopes the
+// tenant's modules and prudential requirements in later phases.
+const INSTITUTION_TYPES = [
+  { value: 'universal_bank', label: 'Universal Bank' },
+  { value: 'savings_and_loans', label: 'Savings & Loans' },
+  { value: 'finance_house', label: 'Finance House' },
+  { value: 'rural_community_bank', label: 'Rural & Community Bank' },
+  { value: 'microfinance_bank', label: 'Microfinance Institution' },
+  { value: 'financial_holding_company', label: 'Financial Holding Company' },
+  { value: 'other_rfi', label: 'Other Regulated Financial Institution' },
+] as const;
+
 type Phase = 'form' | 'review' | 'submitting' | 'done';
 
 const EMPTY_FORM: ProvisionTenantRequest = {
   organization_name: '',
   bank_name: '',
   license_type: '',
+  // No default — the operator must choose deliberately, the same fail-loud
+  // discipline as currency (the backend has no default and 422s without it).
+  institution_type: '',
   jurisdiction_code: 'GH',
   currency: 'GHS',
   admin_email: '',
@@ -105,6 +123,7 @@ export default function OnboardPage() {
     form.organization_name.trim() !== '' &&
     form.bank_name.trim() !== '' &&
     form.license_type.trim() !== '' &&
+    form.institution_type !== '' &&
     form.jurisdiction_code !== '' &&
     currencyValid &&
     /.+@.+\..+/.test(form.admin_email) &&
@@ -221,6 +240,26 @@ export default function OnboardPage() {
                   ))}
                 </datalist>
               </Field>
+              <Field
+                label="Institution type"
+                required
+                hint="The typed BoG licence class — scopes the tenant's modules and requirements."
+              >
+                <Select
+                  value={form.institution_type}
+                  onChange={(e) => set('institution_type', e.target.value)}
+                  required
+                >
+                  <option value="" disabled>
+                    Select institution type…
+                  </option>
+                  {INSTITUTION_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
               <Field label="Jurisdiction" required>
                 <Select
                   value={form.jurisdiction_code}
@@ -290,6 +329,10 @@ export default function OnboardPage() {
             <FieldRow label="Organization">{form.organization_name}</FieldRow>
             <FieldRow label="Bank">{form.bank_name}</FieldRow>
             <FieldRow label="License type">{form.license_type}</FieldRow>
+            <FieldRow label="Institution type">
+              {INSTITUTION_TYPES.find((t) => t.value === form.institution_type)?.label ??
+                form.institution_type}
+            </FieldRow>
             <FieldRow label="Jurisdiction">
               {form.jurisdiction_code} —{' '}
               {JURISDICTIONS.find((j) => j.code === form.jurisdiction_code)?.label ?? ''}

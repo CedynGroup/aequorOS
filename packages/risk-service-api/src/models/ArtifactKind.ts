@@ -18,6 +18,7 @@ export const ArtifactKind = {
   Xlsx: "xlsx",
   Csv: "csv",
   Pdf: "pdf",
+  XlsxWorking: "xlsx_working",
 } as const;
 export type ArtifactKind = (typeof ArtifactKind)[keyof typeof ArtifactKind];
 

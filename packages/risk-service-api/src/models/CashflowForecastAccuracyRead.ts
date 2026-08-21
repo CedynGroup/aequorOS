@@ -22,13 +22,31 @@ export interface CashflowForecastAccuracyRead {
    * @type {number}
    * @memberof CashflowForecastAccuracyRead
    */
+  biasPct: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CashflowForecastAccuracyRead
+   */
   improvementPct: number;
   /**
    *
    * @type {number}
    * @memberof CashflowForecastAccuracyRead
    */
+  intervalCoveragePct: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CashflowForecastAccuracyRead
+   */
   lstmMape: number;
+  /**
+   *
+   * @type {number}
+   * @memberof CashflowForecastAccuracyRead
+   */
+  residualDriftPct: number;
   /**
    *
    * @type {number}
@@ -43,9 +61,17 @@ export interface CashflowForecastAccuracyRead {
 export function instanceOfCashflowForecastAccuracyRead(
   value: object,
 ): value is CashflowForecastAccuracyRead {
+  if (!("biasPct" in value) || value["biasPct"] === undefined) return false;
   if (!("improvementPct" in value) || value["improvementPct"] === undefined)
     return false;
+  if (
+    !("intervalCoveragePct" in value) ||
+    value["intervalCoveragePct"] === undefined
+  )
+    return false;
   if (!("lstmMape" in value) || value["lstmMape"] === undefined) return false;
+  if (!("residualDriftPct" in value) || value["residualDriftPct"] === undefined)
+    return false;
   if (!("staticMape" in value) || value["staticMape"] === undefined)
     return false;
   return true;
@@ -66,8 +92,11 @@ export function CashflowForecastAccuracyReadFromJSONTyped(
   }
   return {
     ...json,
+    biasPct: json["biasPct"],
     improvementPct: json["improvementPct"],
+    intervalCoveragePct: json["intervalCoveragePct"],
     lstmMape: json["lstmMape"],
+    residualDriftPct: json["residualDriftPct"],
     staticMape: json["staticMape"],
   };
 }
@@ -87,8 +116,11 @@ export function CashflowForecastAccuracyReadToJSONTyped(
   }
 
   return {
+    biasPct: value["biasPct"],
     improvementPct: value["improvementPct"],
+    intervalCoveragePct: value["intervalCoveragePct"],
     lstmMape: value["lstmMape"],
+    residualDriftPct: value["residualDriftPct"],
     staticMape: value["staticMape"],
   };
 }

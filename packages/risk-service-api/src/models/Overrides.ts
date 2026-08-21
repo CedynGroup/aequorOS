@@ -10,13 +10,13 @@
  * Do not edit the class manually.
  */
 
-import type { HaircutsValue } from "./HaircutsValue";
+import type { SeverityFactorsAnyOfValue } from "./SeverityFactorsAnyOfValue";
 import {
-  HaircutsValueFromJSON,
-  HaircutsValueFromJSONTyped,
-  HaircutsValueToJSON,
-  HaircutsValueToJSONTyped,
-} from "./HaircutsValue";
+  SeverityFactorsAnyOfValueFromJSON,
+  SeverityFactorsAnyOfValueFromJSONTyped,
+  SeverityFactorsAnyOfValueToJSON,
+  SeverityFactorsAnyOfValueToJSONTyped,
+} from "./SeverityFactorsAnyOfValue";
 
 /**
  *

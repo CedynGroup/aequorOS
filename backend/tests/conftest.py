@@ -29,7 +29,14 @@ from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
-from app.models import Jurisdiction, Organization, User
+from app.models import (
+    InstitutionType,
+    Jurisdiction,
+    Organization,
+    RegulatoryParameter,
+    User,
+)
+from app.services.regulatory_parameters import seed_rows as _regparam_seed_rows
 from tests.api.factories import ApiFactories
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.real_data import REAL_DATA_DATABASE_URL
@@ -260,8 +267,65 @@ def _drop_postgres_schema(database_url: str, schema_name: str | None) -> None:
         admin_engine.dispose()
 
 
+# The institution-type registry (docs/sdi.md §1). The hermetic suite builds the
+# schema with create_all (no seed migration runs), so the typed
+# ``banks.institution_type`` FK needs these reference rows present. Mirrors the
+# seed in migration 202608190018 as amended by 202608210026 (SDI module set); keep
+# the three in step. SDI keeps the ALM modules (behavioral/forecasting), Market Data
+# and IRRBB; only FX, FTP and trading Positions are bank-only.
+_BANK_MODULES = [
+    "command_center", "risk", "alerts", "liquidity", "capital", "regulatory_reporting",
+    "data_engine", "institution", "reports", "settings", "irrbb", "behavioral",
+    "forecasting", "ftp", "fx", "markets", "positions",
+]
+_SDI_MODULES = [
+    "command_center", "risk", "alerts", "liquidity", "capital", "regulatory_reporting",
+    "data_engine", "institution", "reports", "settings", "irrbb", "behavioral",
+    "forecasting", "markets",
+]
+_INSTITUTION_TYPE_SEED = [
+    ("universal_bank", "Universal Bank", "bank", "bsd", "crd", 20, 25, False, _BANK_MODULES),
+    ("savings_and_loans", "Savings & Loans", "sdi", "sdi", "s29", 15, 25, True, _SDI_MODULES),
+    ("finance_house", "Finance House", "sdi", "sdi", "s29", 15, 25, True, _SDI_MODULES),
+    ("rural_community_bank", "Rural & Community Bank", "sdi", "sdi", "s29", 15, 25, True,
+     _SDI_MODULES),
+    ("microfinance_bank", "Microfinance Institution", "sdi", "sdi", "s29", 15, 25, True,
+     _SDI_MODULES),
+    ("financial_holding_company", "Financial Holding Company", "bank", "bsd", "crd", 20, 25,
+     False, _BANK_MODULES),
+    ("other_rfi", "Other Regulated Financial Institution", "sdi", "sdi", "s29", 15, 25, True,
+     _SDI_MODULES),
+]
+
+
 def _seed_demo_tenants(engine: Engine) -> None:
     with Session(engine) as session:
+        session.add_all(
+            [
+                InstitutionType(
+                    type_code=code,
+                    display_name=display_name,
+                    institution_class=institution_class,
+                    return_family=return_family,
+                    capital_regime=capital_regime,
+                    large_exposure_limit_pct=large_exposure,
+                    single_obligor_limit_pct=single_obligor,
+                    liquidity_binding=liquidity_binding,
+                    default_modules=modules,
+                )
+                for (
+                    code,
+                    display_name,
+                    institution_class,
+                    return_family,
+                    capital_regime,
+                    large_exposure,
+                    single_obligor,
+                    liquidity_binding,
+                    modules,
+                ) in _INSTITUTION_TYPE_SEED
+            ]
+        )
         session.add_all(
             [
                 Jurisdiction(
@@ -292,6 +356,10 @@ def _seed_demo_tenants(engine: Engine) -> None:
                 ),
             ]
         )
+        # The regulatory-parameter control plane (SDI Phase C). Global, seeded
+        # from the SAME catalogue the migration uses (regulatory_parameters
+        # .seed_rows) so the hermetic seed and the production seed never drift.
+        session.add_all(RegulatoryParameter(**row) for row in _regparam_seed_rows())
         session.commit()
 
 
