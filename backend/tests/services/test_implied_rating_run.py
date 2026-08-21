@@ -9,6 +9,7 @@ from app.models import (
     BankReportingPeriod,
     CanonicalCounterpartyRating,
     CanonicalMarketIndex,
+    CurrentFinancialFact,
     DeskMethodology,
     ImpliedRatingRun,
     IngestionBatch,
@@ -188,6 +189,30 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_se
         ]
     )
     implied_rating.ensure_default_methodology(db_session)
+    db_session.flush()
+    db_session.add_all(
+        CurrentFinancialFact(
+            organization_id=fact.organization_id,
+            bank_id=fact.bank_id,
+            source_as_of_date=PERIOD_END,
+            source_generation=1,
+            fact_group=fact.fact_group,
+            category=fact.category,
+            amount=fact.amount,
+            currency=fact.currency,
+            risk_weight_code=fact.risk_weight_code,
+            hqla_level=fact.hqla_level,
+            ccf_pct=fact.ccf_pct,
+            rate_pct=fact.rate_pct,
+            income_year=fact.income_year,
+            capital_tier=fact.capital_tier,
+            is_deduction=fact.is_deduction,
+            attributes=dict(fact.attributes),
+        )
+        for fact in db_session.query(BankFinancialFact)
+        .filter(BankFinancialFact.reporting_period_id == period.id)
+        .all()
+    )
     db_session.commit()
 
     rating_run = implied_rating.run(db_session, CTX, BANK_ID, period.id)

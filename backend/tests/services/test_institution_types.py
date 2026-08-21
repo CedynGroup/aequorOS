@@ -79,8 +79,10 @@ def test_registry_is_fully_seeded_with_the_derivation_map(db_session: Session) -
 
 
 def test_bank_modules_are_a_superset_of_sdi_modules(db_session: Session) -> None:
-    """The SDI default config drops the bank-only Basel modules (docs/sdi.md §3):
-    the SDI set is a strict subset of the universal-bank set."""
+    """The SDI default config drops only the treasury/trading-book modules
+    (docs/sdi.md §3.2, migration 202608210026): FX, FTP and trading Positions.
+    An SDI keeps the ALM engines (behavioural, forecasting), IRRBB and Market Data,
+    so the SDI set is a strict subset of the universal-bank set."""
     universal = db_session.get(InstitutionType, "universal_bank")
     savings = db_session.get(InstitutionType, "savings_and_loans")
     assert universal is not None and savings is not None
@@ -88,15 +90,10 @@ def test_bank_modules_are_a_superset_of_sdi_modules(db_session: Session) -> None
     sdi_modules = set(savings.default_modules)
     assert sdi_modules < bank_modules
     # The bank-only modules are exactly the ones excluded by default for an SDI.
-    assert bank_modules - sdi_modules == {
-        "irrbb",
-        "behavioral",
-        "forecasting",
-        "ftp",
-        "fx",
-        "markets",
-        "positions",
-    }
+    assert bank_modules - sdi_modules == {"fx", "ftp", "positions"}
+    # The ALM + market-data modules an SDI keeps.
+    for kept in ("behavioral", "forecasting", "irrbb", "markets"):
+        assert kept in sdi_modules
 
 
 def test_resolver_returns_the_banks_own_type(db_session: Session) -> None:

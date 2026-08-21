@@ -144,6 +144,12 @@ class EnterpriseProjectionInputs:
     # the Phase-2 limitation). ``None`` (or a factor of 1.0) leaves the stress
     # leg byte-identical to Phase 2 — the base leg is never touched.
     credit_rwa_uplift: Mapping[int, Decimal] | None = None
+    # Whether Basel LCR/NSFR apply to the liquidity leg. True for a bank; False
+    # under the SDI regime (docs/sdi.md §4.6), where LCR/NSFR are excluded — the
+    # SDI liquidity stress is assessed via the standalone LMTD Table-1 + behavioural
+    # stressed ladder on the position book, not the aggregate solvency projection.
+    # Default True keeps the bank projection byte-identical.
+    basel_liquidity: bool = True
 
 
 PAID_UP_CATEGORIES: frozenset[str] = frozenset(
@@ -198,28 +204,31 @@ class MinimaCheck:
     paid_up: Decimal
     paid_up_min: Decimal
     paid_up_ok: bool
+    # Whether the Basel sub-tier / leverage minima apply. True for a bank (CRD);
+    # False under the SDI simplified s.29 regime, where CET1/Tier1/leverage are
+    # structurally excluded and must not count as breaches (docs/sdi.md §4.6).
+    # Default True keeps the bank projection byte-identical.
+    basel_applicable: bool = True
 
     @property
     def all_ok(self) -> bool:
-        return (
-            self.car_ok
-            and self.cet1_ok
-            and self.tier1_ok
-            and self.leverage_ok
-            and self.paid_up_ok
+        basel_ok = (not self.basel_applicable) or (
+            self.cet1_ok and self.tier1_ok and self.leverage_ok
         )
+        return self.car_ok and basel_ok and self.paid_up_ok
 
     @property
     def binding(self) -> tuple[str, ...]:
         breaches: list[str] = []
         if not self.car_ok:
             breaches.append("car")
-        if not self.cet1_ok:
-            breaches.append("cet1")
-        if not self.tier1_ok:
-            breaches.append("tier1")
-        if not self.leverage_ok:
-            breaches.append("leverage")
+        if self.basel_applicable:
+            if not self.cet1_ok:
+                breaches.append("cet1")
+            if not self.tier1_ok:
+                breaches.append("tier1")
+            if not self.leverage_ok:
+                breaches.append("leverage")
         if not self.paid_up_ok:
             breaches.append("paid_up")
         return tuple(breaches)
@@ -234,8 +243,9 @@ class ProjectedYear:
     rwa: RwaResult
     ratios: CapitalRatiosResult
     paid_up: Decimal
-    lcr_pct: Decimal
-    nsfr_pct: Decimal
+    #: Basel LCR/NSFR — None under the SDI regime (Basel liquidity excluded).
+    lcr_pct: Decimal | None
+    nsfr_pct: Decimal | None
     minima: MinimaCheck
     # The per-year macro PD/LGD multipliers that drove the stress cost of risk
     # (both 1.0 on the base leg). Perfect-foresight evidence for the audit trail.
@@ -564,8 +574,15 @@ def _snapshot_year(  # noqa: PLR0913 - the snapshot names its full scope
         compute_rwa(capital_facts, inputs.params.capital), credit_rwa_factor
     )
     ratios = compute_capital_ratios(capital_facts, rwa, inputs.params.capital)
-    lcr = compute_lcr(liquidity_facts, inputs.params.liquidity)
-    nsfr = compute_nsfr(liquidity_facts, inputs.params.liquidity)
+    # Basel LCR/NSFR apply to banks only; under the SDI regime they are excluded
+    # (docs/sdi.md §4.6) — the SDI liquidity stress is the LMTD Table-1 + stressed
+    # ladder on the position book, not this aggregate solvency projection.
+    if inputs.basel_liquidity:
+        lcr_pct: Decimal | None = compute_lcr(liquidity_facts, inputs.params.liquidity).lcr_pct
+        nsfr_pct: Decimal | None = compute_nsfr(liquidity_facts, inputs.params.liquidity).nsfr_pct
+    else:
+        lcr_pct = None
+        nsfr_pct = None
     paid_up = _paid_up_capital(ratios)
     minima = _minima(ratios, paid_up, inputs.params.capital, inputs.paid_up_min)
     return ProjectedYear(
@@ -576,8 +593,8 @@ def _snapshot_year(  # noqa: PLR0913 - the snapshot names its full scope
         rwa=rwa,
         ratios=ratios,
         paid_up=paid_up,
-        lcr_pct=lcr.lcr_pct,
-        nsfr_pct=nsfr.nsfr_pct,
+        lcr_pct=lcr_pct,
+        nsfr_pct=nsfr_pct,
         minima=minima,
         pd_multiplier=pd_mult,
         lgd_multiplier=lgd_mult,
@@ -619,6 +636,7 @@ def _minima(
         paid_up=paid_up,
         paid_up_min=paid_up_min,
         paid_up_ok=paid_up >= paid_up_min,
+        basel_applicable=params.basel_applicable,
     )
 
 

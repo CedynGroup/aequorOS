@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { CfpContent } from "./CfpContent";
+import type { CfpContentInput } from "./CfpContentInput";
 import {
-  CfpContentFromJSON,
-  CfpContentFromJSONTyped,
-  CfpContentToJSON,
-  CfpContentToJSONTyped,
-} from "./CfpContent";
+  CfpContentInputFromJSON,
+  CfpContentInputFromJSONTyped,
+  CfpContentInputToJSON,
+  CfpContentInputToJSONTyped,
+} from "./CfpContentInput";
 
 /**
  *
@@ -27,10 +27,10 @@ import {
 export interface CfpPut {
   /**
    *
-   * @type {CfpContent}
+   * @type {CfpContentInput}
    * @memberof CfpPut
    */
-  content: CfpContent;
+  content: CfpContentInput;
   /**
    *
    * @type {string}
@@ -61,7 +61,7 @@ export function CfpPutFromJSONTyped(
   }
   return {
     ...json,
-    content: CfpContentFromJSON(json["content"]),
+    content: CfpContentInputFromJSON(json["content"]),
     reason: json["reason"],
   };
 }
@@ -79,7 +79,7 @@ export function CfpPutToJSONTyped(
   }
 
   return {
-    content: CfpContentToJSON(value["content"]),
+    content: CfpContentInputToJSON(value["content"]),
     reason: value["reason"],
   };
 }

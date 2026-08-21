@@ -12,6 +12,7 @@ import QueryBoundary from '@/components/ui/QueryBoundary';
 import DonutChart from '@/components/charts/DonutChart';
 import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
 import CapitalWaterfallChart from '@/components/basel/charts/CapitalWaterfallChart';
+import SdiCapitalView from '@/components/basel/SdiCapitalView';
 import { runComputedAt, runMetricThreshold } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
 import LiveEngineNote from '@/components/live/LiveEngineNote';
@@ -28,10 +29,13 @@ function kpiStatus(status: 'green' | 'amber' | 'red' | string): KpiStatus {
 }
 
 export default function BaselOverview() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
+  const institutionClass = moduleScope.institutionClass;
+  const isScopeResolved = moduleScope.isResolved;
+  const shouldLoadBaselDashboard = isScopeResolved && institutionClass !== 'sdi';
 
-  const dashboard = useCapitalDashboard(bankId);
+  const dashboard = useCapitalDashboard(shouldLoadBaselDashboard ? bankId : undefined);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
 
   const data = dashboard.data;
@@ -94,6 +98,18 @@ export default function BaselOverview() {
       Computed from current positions and the active parameter set
     </span>
   ) : undefined;
+
+  // Avoid showing or fetching the bank Basel experience while the bank payload
+  // has not yet resolved its institution class.
+  if (!isScopeResolved) {
+    return <CapitalScopeLoading />;
+  }
+
+  // An SDI sees the simplified s.29 capital view, not the Basel 3-tier overview
+  // (docs/sdi.md §4.2). The hooks above are inert for this branch.
+  if (institutionClass === 'sdi') {
+    return <SdiCapitalView bankId={bankId} />;
+  }
 
   return (
     <>
@@ -381,6 +397,15 @@ export default function BaselOverview() {
         )}
       </QueryBoundary>
     </>
+  );
+}
+
+function CapitalScopeLoading() {
+  return (
+    <div className="px-8 py-6" aria-busy="true" aria-label="Loading regulatory capital scope">
+      <div className="h-7 w-56 animate-pulse rounded bg-surface-hover" />
+      <div className="mt-3 h-4 w-96 max-w-full animate-pulse rounded bg-surface-hover" />
+    </div>
   );
 }
 

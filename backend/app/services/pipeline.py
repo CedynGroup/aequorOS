@@ -37,6 +37,7 @@ from app.models import (
 from app.services import (
     data_activation,
     implied_rating,
+    institution_types,
     regulatory_capital,
     regulatory_forecasting,
     regulatory_ftp,
@@ -64,6 +65,38 @@ _CHEAP_MODULES: tuple[tuple[str, _ComputeLive], ...] = (
     ("rating", implied_rating.compute_live),
     ("forecast", regulatory_forecasting.compute_live),
 )
+
+#: Live-engine module key → the institution_types ``default_modules`` slug it is
+#: scoped by (docs/sdi.md §3.2). A module absent from the tenant's set is not
+#: computed — an SDI does not run FX/FTP, so no empty FX/FTP live-metric or finding
+#: reaches its Alerts / live-summary. A universal bank has every slug, so the filter
+#: is a no-op (byte-identical). ``rating`` (implied rating) rides the market-data set.
+_MODULE_SCOPE_KEY: dict[str, str] = {
+    "liquidity": "liquidity",
+    "capital": "capital",
+    "irr": "irrbb",
+    "fx": "fx",
+    "ftp": "ftp",
+    "rating": "markets",
+    "forecast": "forecasting",
+}
+
+
+def _scoped_modules(
+    db: Session, bank: Bank
+) -> tuple[tuple[str, _ComputeLive], ...]:
+    """The cheap-tier modules the tenant's institution type is entitled to run."""
+    institution_type = institution_types.get_type(db, bank)
+    allowed = set(institution_type.default_modules)
+    return tuple(
+        (module, compute)
+        for module, compute in _CHEAP_MODULES
+        if _MODULE_SCOPE_KEY.get(module, module) in allowed
+        # SDI liquidity is the canonical LMTD/Reserve view, not Basel LCR/NSFR.
+        # Its control signals are read directly from the position book until a
+        # BoG-approved SDI stress/live methodology is configured.
+        and not (module == "liquidity" and institution_type.institution_class == "sdi")
+    )
 
 
 class PipelineError(Exception):
@@ -95,7 +128,7 @@ def recompute_modules(
     """
     modules_ok: list[str] = []
     modules_failed: dict[str, str] = {}
-    for module, compute in _CHEAP_MODULES:
+    for module, compute in _scoped_modules(session, bank):
         try:
             result = compute(session, ctx, bank, period)
             _upsert_live_metric(
@@ -288,7 +321,7 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
     session.flush()
 
 
-def _upsert_live_failure(
+def _upsert_live_failure(  # noqa: PLR0913 - one upsert carries the full live row
     session: Session,
     ctx: TenantContext,
     bank: Bank,
@@ -328,7 +361,10 @@ def _upsert_live_failure(
             )
         )
     else:
-        existing.source_fact_period_id = period.id
+        # Live state is keyed by current canonical data. A queued refresh can
+        # retain a synthetic ladder period after that period was replaced, so
+        # failure provenance must stay period-independent just like success.
+        existing.source_fact_period_id = None
         existing.source_as_of_date = period.period_end
         existing.calculation_generation += 1
         existing.pipeline_state = "failed"

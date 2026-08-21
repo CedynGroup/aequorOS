@@ -109,6 +109,7 @@ from app.models.regulatory import (
     ParamRiskWeight,
     ParamStressShock,
 )
+from app.models.regulatory_parameter import RegulatoryParameter
 from app.models.regulatory_reporting import (
     RegulatoryChannelConfig,
     RegulatoryPackage,
@@ -198,6 +199,7 @@ __all__ = [
     "IngestionBatch",
     "InstitutionProfile",
     "InstitutionType",
+    "RegulatoryParameter",
     "Job",
     "Jurisdiction",
     "LineageRecord",

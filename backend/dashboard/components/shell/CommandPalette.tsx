@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { isHrefVisible } from '@/lib/modules';
+import { useModuleScope } from './BankContext';
 import {
   Search,
   LayoutDashboard,
@@ -32,6 +34,7 @@ type Item = {
   group: string;
   /** Extra search terms not present in the label. */
   keywords?: string;
+  institutionScope?: 'bank' | 'sdi';
 };
 
 const items: Item[] = [
@@ -45,7 +48,8 @@ const items: Item[] = [
   { id: 'irr', label: 'IRRBB — Interest Rate Risk Dashboard', hint: 'Module 01', href: '/irr', icon: Activity, group: 'Modules', keywords: 'eve nii repricing gap duration basis' },
   { id: 'irr-scenarios', label: 'IRRBB — Rate Scenario Workbench', href: '/irr/scenarios', icon: Activity, group: 'Modules', keywords: 'shock parallel steepener workbench scenario' },
 
-  { id: 'lcr', label: 'Liquidity — LCR Dashboard', hint: 'Module 02', href: '/liquidity', icon: Droplet, group: 'Modules', keywords: 'coverage ratio hqla outflows' },
+  { id: 'lcr', label: 'Liquidity — LCR Dashboard', hint: 'Module 02', href: '/liquidity', icon: Droplet, group: 'Modules', keywords: 'coverage ratio hqla outflows', institutionScope: 'bank' },
+  { id: 'sdi-liquidity', label: 'Liquidity — SDI Monitoring', href: '/liquidity', icon: Droplet, group: 'Modules', keywords: 'lmtd table 1 reserves maturity mismatch concentration', institutionScope: 'sdi' },
   { id: 'nsfr', label: 'Liquidity — NSFR Dashboard', href: '/liquidity/nsfr', icon: Droplet, group: 'Modules', keywords: 'stable funding asf rsf' },
   { id: 'forecast', label: 'Liquidity — Cash Flow Forecast (LSTM)', href: '/liquidity/forecast', icon: Droplet, group: 'Modules', keywords: 'ml prediction cashflow' },
   { id: 'stress', label: 'Liquidity — Stress Scenarios', href: '/liquidity/stress', icon: Droplet, group: 'Modules', keywords: 'runoff survival horizon' },
@@ -54,7 +58,9 @@ const items: Item[] = [
   { id: 'fx', label: 'FX Risk — Net Open Position', hint: 'Module 03', href: '/fx', icon: DollarSign, group: 'Modules', keywords: 'nop currency exposure usd gbp eur cedi' },
   { id: 'fx-scenarios', label: 'FX — Scenario Workbench', href: '/fx/scenarios', icon: DollarSign, group: 'Modules', keywords: 'depreciation shock workbench scenario' },
 
-  { id: 'basel', label: 'Basel Capital — Capital Dashboard', hint: 'Module 04', href: '/basel', icon: ShieldCheck, group: 'Modules', keywords: 'car cet1 tier capital adequacy' },
+  { id: 'basel', label: 'Basel Capital — Capital Dashboard', hint: 'Module 04', href: '/basel', icon: ShieldCheck, group: 'Modules', keywords: 'car cet1 tier capital adequacy', institutionScope: 'bank' },
+  { id: 'sdi-loan-book', label: 'Regulatory Capital — Loan Book', href: '/basel/loan-book', icon: ShieldCheck, group: 'Modules', keywords: 'sdi nbfi loans classification provisions', institutionScope: 'sdi' },
+  { id: 'sdi-exposures', label: 'Regulatory Capital — Large Exposures', href: '/basel/exposures', icon: ShieldCheck, group: 'Modules', keywords: 'sdi obligor connected group net own funds limits', institutionScope: 'sdi' },
   { id: 'rwa', label: 'Basel — RWA Breakdown', href: '/basel/rwa', icon: ShieldCheck, group: 'Modules', keywords: 'risk weighted assets credit operational market' },
   { id: 'capital-structure', label: 'Basel — Capital Structure', href: '/basel/structure', icon: ShieldCheck, group: 'Modules', keywords: 'tier 1 2 cet1 instruments' },
   { id: 'basel-stress', label: 'Basel — Stress Testing', href: '/basel/stress', icon: ShieldCheck, group: 'Modules', keywords: 'scenario shock adverse' },
@@ -93,19 +99,33 @@ export default function CommandPalette({
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const router = useRouter();
+  const moduleScope = useModuleScope();
+
+  // Scope the palette to the active institution type (docs/sdi.md §3.1/§6.3):
+  // an SDI tenant cannot jump to a module (or a bank-only BSD deep link) it is
+  // not entitled to. Unscoped tenants (banks) keep every command.
+  const scopedItems = useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          isHrefVisible(item.href, moduleScope) &&
+          (!item.institutionScope || item.institutionScope === moduleScope.institutionClass)
+      ),
+    [moduleScope]
+  );
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return items;
+    if (!query.trim()) return scopedItems;
     // Every whitespace-separated term must match somewhere in the item's
     // label / hint / group / keywords haystack (simple fuzzy AND-filter).
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-    return items.filter((it) => {
+    return scopedItems.filter((it) => {
       const haystack = `${it.label} ${it.hint ?? ''} ${it.group} ${
         it.keywords ?? ''
       }`.toLowerCase();
       return terms.every((t) => haystack.includes(t));
     });
-  }, [query]);
+  }, [query, scopedItems]);
 
   useEffect(() => {
     setActive(0);

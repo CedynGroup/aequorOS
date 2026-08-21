@@ -30,12 +30,16 @@ import { DEFAULT_MODULE_ORDER, usePulseCards } from './pulse';
 
 export default function BreachBanner({
   bankId,
+  hasData = true,
 }: {
   bankId: string | undefined;
+  /** False when no period has computed data yet — suppresses the module fetches
+   * behind the pulse model that would 409 on a fresh tenant. */
+  hasData?: boolean;
 }) {
   const alerts = useBankAlerts(bankId);
   const live = useLiveSummary(bankId);
-  const pulse = usePulseCards(bankId);
+  const pulse = usePulseCards(bankId, hasData);
 
   if (alerts.isLoading || pulse.isLoading) {
     return (

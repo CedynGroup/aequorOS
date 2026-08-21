@@ -47,6 +47,7 @@ import {
   yoyPct,
 } from '@/components/forecasting/lib';
 import { useBankContext } from '@/components/shell/BankContext';
+import SdiModuleContext from '@/components/sdi/SdiModuleContext';
 import {
   useCreateForecastRun,
   useForecastRun,
@@ -179,6 +180,7 @@ function BalanceSheetWorkspace() {
             <button
               type="button"
               disabled={createRun.isPending || !periodId}
+              title={periodId ? undefined : 'A derived reporting period is required before a forecast can be run.'}
               onClick={() =>
                 periodId &&
                 createRun.mutate(
@@ -202,6 +204,25 @@ function BalanceSheetWorkspace() {
           </div>
         }
       />
+
+      {!periodId && (
+        <div className="px-8 pt-6">
+          <div className="border-l-4 border-l-warning bg-warning-light/40 px-5 py-4 text-body text-navy">
+            <p className="font-medium">A reporting period is required to run a forecast</p>
+            <p className="mt-1 text-slate">
+              This institution has no derived reporting period yet. Activate the current canonical book in the{' '}
+              <Link href="/data-engine" className="text-action hover:underline">
+                Data Engine
+              </Link>{' '}
+              to create the immutable period snapshot used by forecast runs.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <SdiModuleContext title="SDI ALM context">
+        This projection supports deposit, loan, liquidity, and capital planning for a specialised deposit-taking institution. It does not imply a Basel ICAAP requirement.
+      </SdiModuleContext>
 
       <QueryBoundary
         isLoading={runsQuery.isLoading}

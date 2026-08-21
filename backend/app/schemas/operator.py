@@ -7,6 +7,7 @@ mounted on — or importable into — the tenant API surface.
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -678,3 +679,60 @@ class OperatorPasswordResetRead(ClosedModel):
     operator: OperatorUserRead
     #: Plaintext shown exactly once; replaces the previous credential.
     one_time_password: str
+
+
+# ---------------------------------------------------------------------------
+# Regulatory-parameter control plane (docs/sdi.md §7 Phase C)
+# ---------------------------------------------------------------------------
+
+
+class RegulatoryParameterRead(ClosedModel):
+    """One effective-dated generation of a regulatory parameter, with provenance."""
+
+    id: UUID
+    scope_type: Literal["institution_class", "institution_type"]
+    scope_key: str
+    param_code: str
+    jurisdiction_code: str
+    value_numeric: Decimal | None
+    value_json: JsonObject | None
+    unit: str
+    source_citation: str
+    confirmation_status: Literal["confirmed", "pending"]
+    effective_from: date
+    effective_to: date | None
+    status: Literal["draft", "approved"]
+    proposed_by: str
+    approved_by: str | None
+    approved_at: datetime | None
+    change_rationale: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RegulatoryParameterListRead(ClosedModel):
+    parameters: list[RegulatoryParameterRead]
+    total: int
+
+
+class RegulatoryParameterProposeRequest(ClosedModel):
+    """Maker step: propose a new effective-dated generation (lands as ``draft``)."""
+
+    scope_type: Literal["institution_class", "institution_type"]
+    scope_key: str = Field(min_length=1, max_length=40)
+    param_code: str = Field(min_length=1, max_length=64)
+    jurisdiction_code: str = Field(default="GH", min_length=1, max_length=8)
+    # Regulatory floors/limits/rates/amounts are non-negative; a negative value
+    # would silently disable a prudential floor for every tenant of the scope.
+    value_numeric: Decimal = Field(ge=0, description="The scalar value (e.g. a percentage).")
+    unit: str = Field(min_length=1, max_length=24)
+    source_citation: str = Field(min_length=1, max_length=240)
+    confirmation_status: Literal["confirmed", "pending"] = "pending"
+    effective_from: date
+    change_rationale: str = Field(min_length=1, max_length=500)
+
+
+class RegulatoryParameterApproveRequest(ClosedModel):
+    """Checker step: approve a draft (four-eyes — approver must differ from proposer)."""
+
+    change_rationale: str | None = Field(default=None, max_length=500)

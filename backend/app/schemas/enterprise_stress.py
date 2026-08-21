@@ -55,9 +55,12 @@ class EnterpriseStressSummary(BaseModel):
     stressed_car_end_pct: Decimal
     baseline_car_end_pct: Decimal
     car_erosion_pp: Decimal
-    stressed_lcr_pct: Decimal
-    baseline_lcr_pct: Decimal
-    both_breached: bool
+    # LCR/NSFR + the solvency–liquidity coupling are Basel measures — present for a
+    # bank, NULL for an SDI (docs/sdi.md §4.6; QA audit 2026-08-20 P0-1). The UI must
+    # treat null as "not assessed under the SDI regime", never as a passing result.
+    stressed_lcr_pct: Decimal | None = None
+    baseline_lcr_pct: Decimal | None = None
+    both_breached: bool | None = None
     stress_stays_above_all_minima: bool
     first_breach_year: int | None
     binding_minima: list[str]

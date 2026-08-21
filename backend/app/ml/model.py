@@ -217,13 +217,25 @@ def train_and_save(
 
     lstm_mape = _cumulative_mape(lstm_predictions, actuals)
     static_mape = _cumulative_mape(static_predictions, actuals)
+    residuals = actuals - lstm_predictions
+    residual_std = float(np.std(residuals))
+    half_width = 1.96 * residual_std
+    coverage = float(np.mean(np.abs(residuals) <= half_width) * 100)
+    bias_denom = max(float(np.mean(np.abs(actuals))), MAPE_DENOMINATOR_FLOOR)
+    bias_pct = float(np.mean(lstm_predictions - actuals) / bias_denom * 100)
+    split = max(1, len(residuals) // 2)
+    early_std = max(float(np.std(residuals[:split])), 1e-9)
+    late_std = float(np.std(residuals[split:]))
     metrics: dict[str, float | str] = {
         "lstm_mape": round(lstm_mape, 4),
         "lstm_rmse": round(_rmse(lstm_predictions, actuals), 4),
         "static_mape": round(static_mape, 4),
         "static_rmse": round(_rmse(static_predictions, actuals), 4),
         "improvement_pct": round((static_mape - lstm_mape) / static_mape * 100.0, 4),
-        "residual_std": round(float(np.std(actuals - lstm_predictions)), 4),
+        "residual_std": round(residual_std, 4),
+        "bias_pct": round(bias_pct, 4),
+        "interval_coverage_pct": round(coverage, 4),
+        "residual_drift_pct": round((late_std - early_std) / early_std * 100, 4),
         "trained_at": datetime.datetime.now(UTC).isoformat(timespec="seconds"),
         "model_version": MODEL_VERSION,
     }

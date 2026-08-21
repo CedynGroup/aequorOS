@@ -22,6 +22,8 @@ import {
   LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
 } from '@/components/live/moduleDisplay';
+import { useModuleScope } from '@/components/shell/BankContext';
+import { isHrefVisible } from '@/lib/modules';
 import type { ModuleOrder } from './RoleLens';
 import {
   DEFAULT_MODULE_ORDER,
@@ -47,19 +49,28 @@ const SPARK_COLOR: Record<Traffic | 'na', string> = {
 export default function PulseWall({
   bankId,
   moduleOrder,
+  hasData = true,
 }: {
   bankId: string | undefined;
   moduleOrder: ModuleOrder;
+  /** False when no reporting period has computed data yet — suppresses the
+   * per-module fetches that would 409 on a fresh, un-ingested tenant. */
+  hasData?: boolean;
 }) {
-  const { cards } = usePulseCards(bankId);
-  const order = resolveOrder(moduleOrder, cards);
+  const { cards } = usePulseCards(bankId, hasData);
+  const scope = useModuleScope();
+  // Scope the pulse wall to the tenant's module set (docs/sdi.md §3.2): an SDI
+  // drops the FX / FTP engines it does not run, so no irrelevant tile appears.
+  const order = resolveOrder(moduleOrder, cards).filter((module) =>
+    isHrefVisible(LIVE_MODULE_HREFS[module], scope)
+  );
 
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-h3 text-navy">Module pulse</h2>
         <p className="text-caption text-slate">
-          Six regulatory engines · live positions
+          {order.length} regulatory {order.length === 1 ? 'engine' : 'engines'} · live positions
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">

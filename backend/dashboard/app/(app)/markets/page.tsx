@@ -23,8 +23,9 @@ import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import SubTabs from '@/components/ui/SubTabs';
 import { useBankContext } from '@/components/shell/BankContext';
+import SdiModuleContext from '@/components/sdi/SdiModuleContext';
 import { useLiveSummary, useMarketDataSourcePreferences, useMarketDataViews } from '@/lib/api/hooks';
-import { fmtDateUTC, isoDate } from '@/lib/api/values';
+import { fmtDateUTC, fmtTimestamp, isoDate } from '@/lib/api/values';
 import CurveBoard from '@/components/markets/CurveBoard';
 import CurveThumbnails from '@/components/markets/CurveThumbnails';
 import CurvesExplorer from '@/components/markets/CurvesExplorer';
@@ -213,9 +214,24 @@ export default function MarketsPage() {
                   <ImpliedRatingCard rating={liveRating} />
                 ) : (
                   <div className="border border-border bg-surface-raised px-5 py-4 text-body text-slate rounded-lg">
-                    No live assessment is available yet. The next canonical-data refresh will
-                    calculate the rating after Capital, Liquidity, IRRBB, and FX live metrics are
-                    available.
+                    <p>
+                      No live assessment is available yet. The next canonical-data refresh will
+                      calculate the rating after Capital, Liquidity, IRRBB, and FX live metrics are
+                      available.
+                    </p>
+                    {liveRating && (
+                      <p className="mt-2 text-caption text-slate">
+                        {liveRating.pipelineState === 'failed'
+                          ? `Last calculation failed ${fmtTimestamp(liveRating.computedAt)}.`
+                          : `Last calculation ${fmtTimestamp(liveRating.computedAt)}.`}{' '}
+                        Source data as of {fmtDateUTC(liveRating.sourceAsOfDate)}.
+                      </p>
+                    )}
+                    {liveRating?.pipelineError && (
+                      <p className="mt-1 text-caption text-critical">
+                        {liveRating.pipelineError}
+                      </p>
+                    )}
                   </div>
                 )}
               </Section>
@@ -489,6 +505,10 @@ export default function MarketsPage() {
           </div>
         }
       />
+
+      <SdiModuleContext title="SDI ALM context">
+        Market curves and government-security reference data support valuation and proportionate balance-sheet management. FX views are relevant only where the institution has a material foreign-currency book.
+      </SdiModuleContext>
 
       <div className="px-8 py-6 space-y-6">
         <SubTabs items={TABS} active={tab} onChange={(key) => setTab(key as TabKey)} />

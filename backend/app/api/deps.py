@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,7 +15,7 @@ from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.integrations.storage.base import ObjectStorage
 from app.integrations.storage.s3 import get_object_storage
-from app.models import Organization, User
+from app.models import Bank, Organization, User
 
 # Declares a `bearerAuth` (HTTP bearer) security scheme in OpenAPI; auto_error=False so
 # we raise our own 401 (with WWW-Authenticate) instead of FastAPI's default 403.
@@ -247,3 +247,36 @@ Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
 MutationTenant = Annotated[TenantContext, Depends(get_mutation_tenant_context)]
 ApproverTenant = Annotated[TenantContext, Depends(get_approver_tenant_context)]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
+
+
+def require_module_access(module_key: str):  # noqa: ANN201 - returns a FastAPI dependency
+    """Server-side module scoping (docs/sdi.md §14, SDI Phase B).
+
+    Rejects a request to a module the tenant's institution type is not entitled
+    to. The frontend ``ModuleGuard`` hides bank-only modules for an SDI, but
+    hiding is not security — an SDI must not reach bank-only functionality by
+    calling the API directly. The entitled set is the institution-type registry's
+    ``default_modules`` (the same data the nav is scoped from). ``bank_id`` is
+    read from the path; a non-bank-scoped route in a gated router is not blocked.
+    """
+    from app.services import institution_types  # noqa: PLC0415 - avoid import cycle
+
+    def _dependency(request: Request, db: DbSession, ctx: Tenant) -> None:
+        bank_id = request.path_params.get("bank_id")
+        if not bank_id:
+            return
+        bank = db.scalar(
+            select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+        )
+        if bank is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+        if module_key not in institution_types.get_type(db, bank).default_modules:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"The '{module_key}' module is not available for this institution's "
+                    "type. This functionality is scoped out for the institution class."
+                ),
+            )
+
+    return Depends(_dependency)

@@ -36,7 +36,9 @@ from app.schemas.liquidity_thresholds import (
     LiquidityThresholdRegisterRead,
     LiquidityThresholdUpdate,
 )
+from app.services import regulatory_parameters
 from app.services.audit import record_event
+from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.params import get_active_params
 
 # LMTD Table 1 published minimums for BANKS (¶9 makes the SDI set binding
@@ -80,6 +82,10 @@ def get_register(
     bank = _get_bank_or_404(db, ctx, bank_id)
     jurisdiction = _jurisdiction(bank)
 
+    # Resolve the tenant's institution class (docs/sdi.md §4.1): the Monitoring
+    # register binds an SDI against the SDI Table-1 floors, a bank against the
+    # bank floors — never the bank floors for both.
+    klass = cast(InstitutionClass, _resolve_institution_class(db, bank))
     active_rows = {
         (row.institution_class, row.threshold_code): row
         for row in get_active_params(
@@ -88,13 +94,25 @@ def get_register(
     }
     thresholds: list[LiquidityThresholdRead] = []
     for code, minimum in BANK_MINIMUM_PCT.items():
-        board = active_rows.get(("bank", code))
+        board = active_rows.get((klass, code))
         if board is not None:
+            # Tighten-only guard (QA audit 2026-08-20 P1-5): a board LMTD floor may
+            # only be at least as strict as the control-plane regulatory floor. A
+            # weaker board value is clamped up to it — the register cannot weaken the
+            # regulatory minimum. A stricter board value (higher, for a floor) stands.
+            board_value = Decimal(str(board.threshold_pct))
+            param = regulatory_parameters.try_resolve(db, bank, code, as_of=as_of)
+            control_floor = param.normalized_value if param is not None else None
+            effective = (
+                regulatory_parameters.tighten(code, board_value, control_floor)
+                if control_floor is not None
+                else board_value
+            )
             thresholds.append(
                 LiquidityThresholdRead(
                     threshold_code=code,
-                    institution_class="bank",
-                    threshold_pct=Decimal(str(board.threshold_pct)),
+                    institution_class=klass,
+                    threshold_pct=effective,
                     source="board_register",
                     effective_from=board.effective_from,
                     effective_to=board.effective_to,
@@ -104,21 +122,27 @@ def get_register(
                 )
             )
         else:
+            # Class default from the control plane (normalised so 80.000000 shows
+            # as 80 — audit M1); the directive bank minimum is the defensive
+            # fallback (byte-identical for a bank tenant).
+            param = regulatory_parameters.try_resolve(db, bank, code, as_of=as_of)
+            normalized = param.normalized_value if param is not None else None
+            floor = normalized if normalized is not None else minimum
             thresholds.append(
                 LiquidityThresholdRead(
                     threshold_code=code,
-                    institution_class="bank",
-                    threshold_pct=minimum,
+                    institution_class=klass,
+                    threshold_pct=floor,
                     source="regulatory_default",
                 )
             )
 
-    for (klass, code), row in sorted(active_rows.items()):
-        if klass == "bank" and code in EXTRA_THRESHOLD_CODES:
+    for (row_klass, code), row in sorted(active_rows.items()):
+        if row_klass == klass and code in EXTRA_THRESHOLD_CODES:
             thresholds.append(
                 LiquidityThresholdRead(
                     threshold_code=code,
-                    institution_class="bank",
+                    institution_class=klass,
                     threshold_pct=Decimal(str(row.threshold_pct)),
                     source="board_register",
                     effective_from=row.effective_from,

@@ -1,6 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
@@ -11,6 +20,7 @@ import { useBankContext } from '@/components/shell/BankContext';
 import { useCfpEvents, useCfpSummary, useEwiDashboard } from '@/lib/api/hooks';
 import { fmtDateUTC } from '@/lib/api/values';
 import { regShort } from '@/lib/format';
+import { axisProps, CHART_GRID, chartTooltipProps, seriesColor } from '@/lib/chartTheme';
 import type { EwiEvaluationRead } from '@aequoros/risk-service-api';
 
 // Server-side EWI states (LRMD ¶28(e)–(f)): values, Board trigger levels and
@@ -37,6 +47,8 @@ const ESCALATION_COPY: Record<string, { label: string; status: 'ok' | 'warn' | '
   escalation: { label: 'Escalation — action trigger breached', status: 'crit' },
   cfp_active: { label: 'CFP ACTIVE', status: 'crit' },
 };
+
+const CFP_HORIZONS = ['intraday', 'up_to_1m', '1_to_3m', '3_to_12m', 'over_12m'];
 
 function fmtValue(indicator: EwiEvaluationRead): string {
   if (indicator.value === null || indicator.value === undefined) return '—';
@@ -120,6 +132,23 @@ export default function ContingencyFundingPlan() {
 
   const dashboard = ewis.data;
   const approved = cfp.data?.approved ?? null;
+  const fundingOptions = approved?.content.fundingOptions ?? [];
+  const actionPlans = approved?.content.actionPlans ?? [];
+  const behavioralScenarios = approved?.content.behavioralLiquidityScenarios ?? [];
+  const indicators = dashboard?.indicators ?? [];
+  const actionIndicators = indicators.filter((entry) => entry.status === 'action');
+  const watchIndicators = indicators.filter((entry) => entry.status === 'watch');
+  const unconfiguredIndicators = indicators.filter((entry) => entry.status === 'unconfigured');
+  const noDataIndicators = indicators.filter((entry) => entry.status === 'no_data');
+  const fundingHorizons = new Set(fundingOptions.map((option) => option.horizon));
+  const actionTimelineGaps = actionPlans.filter((plan) => !plan.timeline).length;
+  const ewiDistribution = [
+    { status: 'Normal', count: indicators.filter((entry) => entry.status === 'normal').length },
+    { status: 'Watch', count: watchIndicators.length },
+    { status: 'Action', count: actionIndicators.length },
+    { status: 'Unconfigured', count: unconfiguredIndicators.length },
+    { status: 'No data', count: noDataIndicators.length },
+  ];
   const escalation = dashboard
     ? ESCALATION_COPY[dashboard.escalationState] ?? ESCALATION_COPY.normal
     : ESCALATION_COPY.normal;
@@ -143,7 +172,7 @@ export default function ContingencyFundingPlan() {
       >
         {dashboard && (
           <div className="px-8 py-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
               <KpiStat
                 label="Escalation state"
                 value={escalation.label}
@@ -182,6 +211,56 @@ export default function ContingencyFundingPlan() {
                 status={dashboard.cfpActive ? 'crit' : 'ok'}
                 hint={`Activation notifies ${regShort()} (LRMD ¶74)`}
               />
+              <KpiStat
+                label="Funding horizons covered"
+                value={`${fundingHorizons.size} / ${CFP_HORIZONS.length}`}
+                status={fundingHorizons.size === CFP_HORIZONS.length ? 'ok' : 'warn'}
+                hint="Intraday through structural funding horizons"
+              />
+              <KpiStat
+                label="EWI evidence gaps"
+                value={String(unconfiguredIndicators.length + noDataIndicators.length)}
+                status={unconfiguredIndicators.length + noDataIndicators.length > 0 ? 'warn' : 'ok'}
+                hint={`${unconfiguredIndicators.length} unconfigured · ${noDataIndicators.length} without data`}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <SectionCard
+                className="xl:col-span-2"
+                title="Early-warning distribution"
+                subtitle="Server-calculated indicator states; unconfigured and no-data signals remain visible control gaps."
+              >
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={ewiDistribution} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+                    <CartesianGrid vertical={false} stroke={CHART_GRID} strokeDasharray="3 3" />
+                    <XAxis dataKey="status" {...axisProps} />
+                    <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={axisProps.tick} width={28} />
+                    <Tooltip {...chartTooltipProps} formatter={(value: number) => [value, 'Indicators']} />
+                    <Bar dataKey="count" name="Indicators" fill={seriesColor(0)} maxBarSize={42} radius={[2, 2, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </SectionCard>
+              <SectionCard title="Plan execution readiness" subtitle="Completeness is a decision-control issue, not a document cosmetic.">
+                <dl className="space-y-3 text-caption">
+                  <div className="flex items-center justify-between gap-3 border-b border-border-light pb-3">
+                    <dt className="text-slate">Funding options</dt>
+                    <dd className="font-mono text-navy">{fundingOptions.length}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-b border-border-light pb-3">
+                    <dt className="text-slate">Actions without timing</dt>
+                    <dd className={actionTimelineGaps > 0 ? 'font-mono text-warning' : 'font-mono text-success'}>{actionTimelineGaps}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-b border-border-light pb-3">
+                    <dt className="text-slate">Behavioral overlays</dt>
+                    <dd className="font-mono text-navy">{behavioralScenarios.length}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-slate">Action triggers now</dt>
+                    <dd className={actionIndicators.length > 0 ? 'font-mono text-critical' : 'font-mono text-success'}>{actionIndicators.length}</dd>
+                  </div>
+                </dl>
+              </SectionCard>
             </div>
 
             <SectionCard
@@ -244,6 +323,76 @@ export default function ContingencyFundingPlan() {
                   institution.
                 </p>
               )}
+            </SectionCard>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <SectionCard
+                title="Funding action inventory"
+                subtitle="Board-approved funding options by activation horizon, capacity, and lead time."
+                noPadding
+              >
+                {fundingOptions.length > 0 ? (
+                  <DataTable
+                    columns={[
+                      { key: 'horizon', header: 'Horizon', render: (row) => row.horizon.replaceAll('_', ' ') },
+                      { key: 'source', header: 'Funding source', render: (row) => row.source },
+                      { key: 'capacity', header: 'Estimated capacity', render: (row) => row.estimatedCapacity ?? 'Not evidenced' },
+                      { key: 'lead', header: 'Lead time', render: (row) => row.leadTime ?? 'Not evidenced' },
+                    ]}
+                    rows={fundingOptions}
+                    density="compact"
+                  />
+                ) : (
+                  <p className="px-5 py-6 text-body text-slate">No Board-approved funding inventory is available.</p>
+                )}
+              </SectionCard>
+
+              <SectionCard
+                title="Action ownership and readiness"
+                subtitle="Asset and liability actions, with the accountable owner and stated execution timeline."
+                noPadding
+              >
+                {actionPlans.length > 0 ? (
+                  <DataTable
+                    columns={[
+                      { key: 'side', header: 'Side', render: (row) => row.side === 'asset' ? 'Asset' : 'Liability' },
+                      { key: 'action', header: 'Action', render: (row) => row.action },
+                      { key: 'owner', header: 'Owner', render: (row) => row.owner },
+                      { key: 'timeline', header: 'Execution timing', render: (row) => row.timeline ?? 'Not evidenced' },
+                    ]}
+                    rows={actionPlans}
+                    density="compact"
+                  />
+                ) : (
+                  <p className="px-5 py-6 text-body text-slate">No Board-approved action plan is available.</p>
+                )}
+              </SectionCard>
+            </div>
+
+            <SectionCard
+              title="Behavioral liquidity scenarios"
+              subtitle="Board-owned deposit runoff and funding-cost overlays, each linked to a documented CFP action."
+              noPadding
+            >
+              {behavioralScenarios.length > 0 ? (
+                <DataTable
+                  columns={[
+                    { key: 'name', header: 'Scenario', render: (row) => row.name },
+                    { key: 'horizon', header: 'Activation horizon', render: (row) => row.activationHorizon.replaceAll('_', ' ') },
+                    { key: 'runoff', header: 'Runoff uplift', numeric: true, render: (row) => `${Number(row.depositRunoffUpliftPct).toFixed(1)}%` },
+                    { key: 'cost', header: 'Funding-cost uplift', numeric: true, render: (row) => `${Number(row.fundingCostUpliftBps).toFixed(0)} bps` },
+                    { key: 'action', header: 'Linked action', render: (row) => row.linkedAction },
+                  ]}
+                  rows={behavioralScenarios}
+                  density="compact"
+                />
+              ) : (
+                <p className="px-5 py-6 text-body text-slate">No approved behavioral liquidity scenarios are linked to this CFP. Add them through the audited CFP draft alongside their action-plan references.</p>
+              )}
+            </SectionCard>
+
+            <SectionCard title="Exercise evidence" subtitle="This release keeps exercise readiness honest: drills and test evidence require a recorded CFP exercise artifact before they can be represented as tested.">
+              <p className="text-caption text-slate">No CFP exercise-evidence register is implemented yet. The approved plan, action inventory, ownership, and activation/de-escalation log above are available now; drill frequency, test outcome, and evidence attachments need a dedicated immutable exercise record.</p>
             </SectionCard>
           </div>
         )}

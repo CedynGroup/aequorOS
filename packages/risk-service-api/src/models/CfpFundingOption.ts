@@ -25,6 +25,13 @@ import {
   LeadTimeToJSON,
   LeadTimeToJSONTyped,
 } from "./LeadTime";
+import type { Notes1 } from "./Notes1";
+import {
+  Notes1FromJSON,
+  Notes1FromJSONTyped,
+  Notes1ToJSON,
+  Notes1ToJSONTyped,
+} from "./Notes1";
 import type { CfpHorizon } from "./CfpHorizon";
 import {
   CfpHorizonFromJSON,
@@ -32,13 +39,6 @@ import {
   CfpHorizonToJSON,
   CfpHorizonToJSONTyped,
 } from "./CfpHorizon";
-import type { Notes } from "./Notes";
-import {
-  NotesFromJSON,
-  NotesFromJSONTyped,
-  NotesToJSON,
-  NotesToJSONTyped,
-} from "./Notes";
 
 /**
  * ¶72(b): available funding sources per horizon, intraday included.
@@ -66,10 +66,10 @@ export interface CfpFundingOption {
   leadTime?: LeadTime;
   /**
    *
-   * @type {Notes}
+   * @type {Notes1}
    * @memberof CfpFundingOption
    */
-  notes?: Notes;
+  notes?: Notes1;
   /**
    *
    * @type {string}
@@ -111,7 +111,7 @@ export function CfpFundingOptionFromJSONTyped(
       json["lead_time"] == null
         ? undefined
         : LeadTimeFromJSON(json["lead_time"]),
-    notes: json["notes"] == null ? undefined : NotesFromJSON(json["notes"]),
+    notes: json["notes"] == null ? undefined : Notes1FromJSON(json["notes"]),
     source: json["source"],
   };
 }
@@ -132,7 +132,7 @@ export function CfpFundingOptionToJSONTyped(
     estimated_capacity: EstimatedCapacityToJSON(value["estimatedCapacity"]),
     horizon: CfpHorizonToJSON(value["horizon"]),
     lead_time: LeadTimeToJSON(value["leadTime"]),
-    notes: NotesToJSON(value["notes"]),
+    notes: Notes1ToJSON(value["notes"]),
     source: value["source"],
   };
 }

@@ -32,13 +32,6 @@ import {
   EffectiveFromToJSON,
   EffectiveFromToJSONTyped,
 } from "./EffectiveFrom";
-import type { Notes1 } from "./Notes1";
-import {
-  Notes1FromJSON,
-  Notes1FromJSONTyped,
-  Notes1ToJSON,
-  Notes1ToJSONTyped,
-} from "./Notes1";
 import type { EffectiveTo } from "./EffectiveTo";
 import {
   EffectiveToFromJSON,
@@ -46,6 +39,13 @@ import {
   EffectiveToToJSON,
   EffectiveToToJSONTyped,
 } from "./EffectiveTo";
+import type { Notes } from "./Notes";
+import {
+  NotesFromJSON,
+  NotesFromJSONTyped,
+  NotesToJSON,
+  NotesToJSONTyped,
+} from "./Notes";
 
 /**
  *
@@ -97,10 +97,10 @@ export interface CrmHaircutRead {
   isDefault?: boolean;
   /**
    *
-   * @type {Notes1}
+   * @type {Notes}
    * @memberof CrmHaircutRead
    */
-  notes?: Notes1;
+  notes?: Notes;
 }
 
 /**
@@ -148,7 +148,7 @@ export function CrmHaircutReadFromJSONTyped(
         : EffectiveToFromJSON(json["effective_to"]),
     haircutPct: json["haircut_pct"],
     isDefault: json["is_default"] == null ? undefined : json["is_default"],
-    notes: json["notes"] == null ? undefined : Notes1FromJSON(json["notes"]),
+    notes: json["notes"] == null ? undefined : NotesFromJSON(json["notes"]),
   };
 }
 
@@ -172,6 +172,6 @@ export function CrmHaircutReadToJSONTyped(
     effective_to: EffectiveToToJSON(value["effectiveTo"]),
     haircut_pct: value["haircutPct"],
     is_default: value["isDefault"],
-    notes: Notes1ToJSON(value["notes"]),
+    notes: NotesToJSON(value["notes"]),
   };
 }

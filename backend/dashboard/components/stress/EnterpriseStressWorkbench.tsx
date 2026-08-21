@@ -14,7 +14,7 @@
  */
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Activity, FileBarChart, Play } from 'lucide-react';
 import SectionCard from '@/components/ui/SectionCard';
 import SubTabs from '@/components/ui/SubTabs';
@@ -25,6 +25,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { ApiError } from '@/lib/api/client';
 import { num } from '@/lib/api/values';
 import { useBankContext } from '@/components/shell/BankContext';
+import { type SdiLiquidityPosition, useSdiCapitalSummary, useSdiLiquidityPosition } from '@/components/basel/sdiHooks';
 import ScenarioLibrary from './ScenarioLibrary';
 import ScenarioBuilder from './ScenarioBuilder';
 import ProjectionPaths from './charts/ProjectionPaths';
@@ -66,9 +67,10 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?: StressModuleLens }) {
-  const { bank, period, periods } = useBankContext();
+  const { bank, period, periods, moduleScope, isLoading } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  const isSdiTenant = moduleScope.institutionClass === 'sdi';
 
   const [tab, setTab] = useState<Tab>('results');
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -103,6 +105,15 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
     approvedScenarios.map((s) => s.id)
   );
   const runMutation = useRunEnterpriseStress(bankId);
+  const sdiCapital = useSdiCapitalSummary(isSdiTenant ? bankId : undefined);
+  const sdiLiquidity = useSdiLiquidityPosition(isSdiTenant ? bankId : undefined);
+
+  useEffect(() => {
+    if (isSdiTenant) {
+      setCarTarget('10');
+      setIncludeFx(false);
+    }
+  }, [isSdiTenant]);
 
   // Default the focused run to the worst run in the registry when none picked.
   const effectiveRun = useMemo(() => {
@@ -148,13 +159,47 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
     }
   };
 
-  if (!bankId || !periodId) {
+  if (isLoading) {
     return (
       <div className="px-1 py-4">
         <EmptyState
           Icon={Activity}
-          title="Select an institution and reporting period"
-          description="The enterprise stress workbench runs a governed macro scenario against a bank's canonical book for a reporting period."
+          title="Loading institution context"
+          description="Loading the active institution and its reporting periods."
+        />
+      </div>
+    );
+  }
+
+  if (!bankId) {
+    return (
+      <div className="px-1 py-4">
+        <EmptyState
+          Icon={Activity}
+          title="Institution context unavailable"
+          description="The stress workbench needs an active institution before it can load its scenario library and run registry."
+          action={
+            <Link href="/data-engine" className="btn-primary px-4 py-2 text-body font-medium">
+              Open Data Engine
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!periodId) {
+    return (
+      <div className="px-1 py-4">
+        <EmptyState
+          Icon={Activity}
+          title="A reporting period is required"
+          description="No derived reporting period is available for this institution. Activate a canonical book in the Data Engine to create the period and enable governed stress runs."
+          action={
+            <Link href="/data-engine" className="btn-primary px-4 py-2 text-body font-medium">
+              Open Data Engine
+            </Link>
+          }
         />
       </div>
     );
@@ -167,7 +212,9 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
         <div className="flex items-center gap-2">
           {moduleLens && <StatusPill tone="action">{LENS_LABEL[moduleLens]}</StatusPill>}
           <span className="text-caption text-slate">
-            Enterprise-wide stress · one macro scenario → all engines → Appendix II (¶40, ¶50, ¶68)
+            {isSdiTenant
+              ? 'Enterprise solvency and proportionate risk stress for a specialised deposit-taking institution'
+              : 'Enterprise-wide stress · one macro scenario → all engines → Appendix II (¶40, ¶50, ¶68)'}
           </span>
         </div>
         <Link
@@ -208,7 +255,7 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
             ) : (
               <SectionCard
                 title="Run enterprise stress"
-                subtitle="Drive an approved scenario through every engine into the immutable 3-year projection"
+                subtitle={isSdiTenant ? 'Run an approved scenario against the simplified Section 29 capital regime and material SDI risks' : 'Drive an approved scenario through every engine into the immutable 3-year projection'}
               >
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -248,7 +295,7 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
                       />
                     </label>
                     <label className="block">
-                      <span className="text-caption text-slate">CAR target (%)</span>
+                      <span className="text-caption text-slate">Capital adequacy target (%)</span>
                       <input className={selectCls} value={carTarget} onChange={(e) => setCarTarget(e.target.value)} />
                     </label>
                   </div>
@@ -257,14 +304,16 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
                       <input type="checkbox" className="h-4 w-4 accent-action" checked={includeIrr} onChange={(e) => setIncludeIrr(e.target.checked)} />
                       Include IRRBB
                     </label>
-                    <label className="flex items-center gap-2 text-caption text-slate">
-                      <input type="checkbox" className="h-4 w-4 accent-action" checked={includeFx} onChange={(e) => setIncludeFx(e.target.checked)} />
-                      Include FX
-                    </label>
+                    {!isSdiTenant && (
+                      <label className="flex items-center gap-2 text-caption text-slate">
+                        <input type="checkbox" className="h-4 w-4 accent-action" checked={includeFx} onChange={(e) => setIncludeFx(e.target.checked)} />
+                        Include FX
+                      </label>
+                    )}
                   </div>
                   <label className="block">
                     <span className="text-caption text-slate">Run reason (required — governance)</span>
-                    <input className={selectCls} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Quarterly ICAAP stress" />
+                    <input className={selectCls} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isSdiTenant ? 'Quarterly proportionate stress' : 'Quarterly ICAAP stress'} />
                   </label>
                   {runError && <p className="text-caption text-critical">{runError}</p>}
                   <button
@@ -283,7 +332,12 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
       )}
 
       {tab === 'results' && (
-        <ResultsView run={effectiveRun} onConfigure={() => setTab('run')} />
+        <ResultsView
+          run={effectiveRun}
+          onConfigure={() => setTab('run')}
+          sdiCapitalFloor={sdiCapital.data?.car_min_pct}
+          sdiLiquidity={sdiLiquidity.data}
+        />
       )}
 
       {tab === 'compare' && (
@@ -330,12 +384,26 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
   );
 }
 
-function ResultsView({ run, onConfigure }: { run: EnterpriseStressRead | null; onConfigure: () => void }) {
+function ResultsView({
+  run,
+  onConfigure,
+  sdiCapitalFloor,
+  sdiLiquidity,
+}: {
+  run: EnterpriseStressRead | null;
+  onConfigure: () => void;
+  sdiCapitalFloor: string | undefined;
+  sdiLiquidity: SdiLiquidityPosition | undefined;
+}) {
   if (!run) return <NoRun onConfigure={onConfigure} />;
   const s = run.summary;
   const coupling = run.outcome.coupling;
-  const carFloor = num(coupling.car_min_pct);
-  const lcrFloor = num(coupling.lcr_min_pct);
+  // An SDI run omits the Basel liquidity leg (docs/sdi.md §4.6): no coupling block,
+  // null LCR in the summary. Present the s.29 solvency view without a Basel LCR
+  // verdict — never render LCR against a floor that does not apply to an SDI.
+  const isSdi = !coupling || s.stressed_lcr_pct === null;
+  const carFloor = num(coupling?.car_min_pct ?? sdiCapitalFloor ?? '0');
+  const lcrFloor = num(coupling?.lcr_min_pct ?? '0');
 
   return (
     <div className="space-y-6">
@@ -345,15 +413,24 @@ function ResultsView({ run, onConfigure }: { run: EnterpriseStressRead | null; o
           label="Stressed CAR"
           value={`${num(s.stressed_car_end_pct).toFixed(2)}%`}
           status={num(s.stressed_car_end_pct) < carFloor ? 'crit' : 'ok'}
-          hint={`Base ${num(s.baseline_car_end_pct).toFixed(2)}% · floor ${carFloor.toFixed(0)}%`}
+          hint={`Base ${num(s.baseline_car_end_pct).toFixed(2)}%${carFloor > 0 ? ` · floor ${carFloor.toFixed(0)}%` : ''}`}
         />
         <KpiStat label="CAR erosion" value={`${num(s.car_erosion_pp).toFixed(2)} pp`} status="warn" hint="Base → stress, final year" />
-        <KpiStat
-          label="Stressed LCR"
-          value={`${num(s.stressed_lcr_pct).toFixed(1)}%`}
-          status={num(s.stressed_lcr_pct) < lcrFloor ? 'crit' : 'ok'}
-          hint={`Base ${num(s.baseline_lcr_pct).toFixed(1)}% · floor ${lcrFloor.toFixed(0)}%`}
-        />
+        {isSdi ? (
+          <KpiStat
+            label="Liquidity regime"
+            value="LMTD"
+            status="ok"
+            hint="Basel LCR/NSFR not assessed for SDIs (§4.6)"
+          />
+        ) : (
+          <KpiStat
+            label="Stressed LCR"
+            value={`${num(s.stressed_lcr_pct).toFixed(1)}%`}
+            status={num(s.stressed_lcr_pct) < lcrFloor ? 'crit' : 'ok'}
+            hint={`Base ${num(s.baseline_lcr_pct).toFixed(1)}% · floor ${lcrFloor.toFixed(0)}%`}
+          />
+        )}
         <KpiStat
           label="Stays above minima"
           value={s.stress_stays_above_all_minima ? 'Yes' : `Breach Y${s.first_breach_year ?? '—'}`}
@@ -361,35 +438,73 @@ function ResultsView({ run, onConfigure }: { run: EnterpriseStressRead | null; o
           hint={s.binding_minima.length ? `Binding: ${s.binding_minima.join(', ')}` : 'All minima held'}
         />
         <KpiStat label="Capital gap" value={`GHS'000 ${num(s.capital_gap).toLocaleString()}`} status={num(s.capital_gap) > 0 ? 'warn' : 'ok'} hint="Worst-year, pre-action" />
-        <KpiStat
-          label="Solvency × liquidity"
-          value={coupling.both_breached ? 'Both breach' : coupling.car_breached || coupling.lcr_breached ? 'One breach' : 'Both hold'}
-          status={coupling.both_breached ? 'crit' : coupling.car_breached || coupling.lcr_breached ? 'warn' : 'ok'}
-          hint="¶59(f) interlinkage"
-        />
+        {isSdi ? (
+          <KpiStat label="Capital regime" value="s.29" status="ok" hint="Simplified SDI capital adequacy" />
+        ) : (
+          <KpiStat
+            label="Solvency × liquidity"
+            value={coupling!.both_breached ? 'Both breach' : coupling!.car_breached || coupling!.lcr_breached ? 'One breach' : 'Both hold'}
+            status={coupling!.both_breached ? 'crit' : coupling!.car_breached || coupling!.lcr_breached ? 'warn' : 'ok'}
+            hint="¶59(f) interlinkage"
+          />
+        )}
       </div>
 
       {/* Charts lead */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartFrame title="CAR — base vs stress" subtitle={`Capital adequacy path vs the ${carFloor.toFixed(0)}% floor`} height={240}>
-          <ProjectionPaths projection={run.projection} metricKey="car_pct" threshold={carFloor} thresholdLabel={`CAR floor ${carFloor.toFixed(0)}%`} />
+        <ChartFrame title="CAR — base vs stress" subtitle={isSdi ? 'Section 29 capital adequacy path' : `Capital adequacy path vs the ${carFloor.toFixed(0)}% floor`} height={240}>
+          <ProjectionPaths projection={run.projection} metricKey="car_pct" threshold={carFloor > 0 ? carFloor : undefined} thresholdLabel={carFloor > 0 ? `CAR floor ${carFloor.toFixed(0)}%` : undefined} />
         </ChartFrame>
-        <ChartFrame title="LCR — base vs stress" subtitle={`Liquidity coverage path vs the ${lcrFloor.toFixed(0)}% floor`} height={240}>
-          <ProjectionPaths projection={run.projection} metricKey="lcr_pct" threshold={lcrFloor} thresholdLabel={`LCR floor ${lcrFloor.toFixed(0)}%`} />
-        </ChartFrame>
-        <ChartFrame title="CET1 — base vs stress" subtitle="Common equity Tier 1 ratio path" height={240}>
-          <ProjectionPaths projection={run.projection} metricKey="cet1_ratio_pct" />
-        </ChartFrame>
-        <ChartFrame title="Tier 1 & leverage" subtitle="Tier 1 ratio path over the horizon" height={240}>
-          <ProjectionPaths projection={run.projection} metricKey="tier1_ratio_pct" />
-        </ChartFrame>
+        {isSdi ? (
+          <ChartFrame title="Liquidity — SDI (LMTD)" subtitle="Basel LCR/NSFR excluded for an SDI (§4.6)" height={240}>
+            <SdiLiquidityNotAssessed position={sdiLiquidity} />
+          </ChartFrame>
+        ) : (
+          <ChartFrame title="LCR — base vs stress" subtitle={`Liquidity coverage path vs the ${lcrFloor.toFixed(0)}% floor`} height={240}>
+            <ProjectionPaths projection={run.projection} metricKey="lcr_pct" threshold={lcrFloor} thresholdLabel={`LCR floor ${lcrFloor.toFixed(0)}%`} />
+          </ChartFrame>
+        )}
+        {!isSdi && (
+          <>
+            <ChartFrame title="CET1 — base vs stress" subtitle="Common equity Tier 1 ratio path" height={240}>
+              <ProjectionPaths projection={run.projection} metricKey="cet1_ratio_pct" />
+            </ChartFrame>
+            <ChartFrame title="Tier 1 & leverage" subtitle="Tier 1 ratio path over the horizon" height={240}>
+              <ProjectionPaths projection={run.projection} metricKey="tier1_ratio_pct" />
+            </ChartFrame>
+          </>
+        )}
       </div>
 
       <DriverWaterfall run={run} />
 
-      <SectionCard title="Solvency–liquidity narrative" subtitle="The directive's interlinkage read (¶59(f))">
-        <p className="text-body text-navy/85 leading-relaxed">{coupling.narrative}</p>
-      </SectionCard>
+      {isSdi ? (
+        <SectionCard title="Liquidity regime" subtitle="SDI liquidity stress (docs/sdi.md §4.6)">
+          <SdiLiquidityNotAssessed position={sdiLiquidity} />
+        </SectionCard>
+      ) : (
+        <SectionCard title="Solvency–liquidity narrative" subtitle="The directive's interlinkage read (¶59(f))">
+          <p className="text-body text-navy/85 leading-relaxed">{coupling!.narrative}</p>
+        </SectionCard>
+      )}
+    </div>
+  );
+}
+
+function SdiLiquidityNotAssessed({ position }: { position: SdiLiquidityPosition | undefined }) {
+  const breached = position?.ratios.filter((ratio) => ratio.status === 'below_minimum').length ?? 0;
+  const reserveBreaches = position?.reserves.filter((reserve) => reserve.status === 'below_minimum').length ?? 0;
+  return (
+    <div className="flex h-full flex-col justify-center px-6 text-center text-caption text-slate">
+      <p>
+        Liquidity stress is not assessed because no BoG SDI liquidity-stress methodology is configured.
+        Basel LCR/NSFR and a synthetic survival-horizon result are intentionally not substituted.
+      </p>
+      {position && (
+        <p className="mt-3 text-navy">
+          Baseline LMTD evidence as of {position.as_of}: {breached} Table 1 breach(es) and {reserveBreaches} reserve breach(es).
+        </p>
+      )}
     </div>
   );
 }

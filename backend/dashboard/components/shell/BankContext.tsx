@@ -26,6 +26,7 @@ import type {
 import { isApiError } from '@/lib/api/client';
 import { useBanks, useReportingPeriods } from '@/lib/api/hooks';
 import { setActiveJurisdiction } from '@/lib/format';
+import { moduleSetFrom, type ModuleScope } from '@/lib/modules';
 import Logo from './Logo';
 
 /**
@@ -43,6 +44,13 @@ export type InstitutionTypeInfo = {
 type BankContextValue = {
   bank: BankRead | null;
   institutionType: InstitutionTypeInfo | null;
+  /**
+   * The active tenant's module scope (docs/sdi.md §3, §6.3) — the set of
+   * top-level modules its institution class is entitled to, plus its class.
+   * `modules: null` means unscoped (a universal bank, or not yet loaded) so
+   * every module stays visible. The nav surfaces + route guard consult this.
+   */
+  moduleScope: ModuleScope;
   period: BankReportingPeriodRead | null;
   periods: BankReportingPeriodRead[];
   setPeriodId: (periodId: string) => void;
@@ -66,6 +74,16 @@ export function useBankContext(): BankContextValue {
  */
 export function useInstitutionType(): InstitutionTypeInfo | null {
   return useBankContext().institutionType;
+}
+
+/**
+ * The active tenant's module scope, for the nav surfaces + route guard. Until the
+ * bank payload settles (`isResolved` false) the nav + data hooks restrict to
+ * CORE_MODULES rather than show/fetch everything — so no out-of-scope module (FX,
+ * FTP, …) flashes or fires a request during the load (docs/sdi.md §3.2/§6.3).
+ */
+export function useModuleScope(): ModuleScope {
+  return useBankContext().moduleScope;
 }
 
 export default function BankProvider({ children }: { children: ReactNode }) {
@@ -127,6 +145,19 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     [bank]
   );
 
+  // The tenant's scoped module set (docs/sdi.md §3): built from the API's
+  // default_modules. `isResolved` is false until the bank payload settles, so the
+  // nav + data hooks restrict to CORE_MODULES rather than flash every module and
+  // fire out-of-scope requests during the load (the every-module-on-refresh race).
+  const moduleScope = useMemo<ModuleScope>(
+    () => ({
+      modules: moduleSetFrom(bank?.institutionTypeDetail?.defaultModules),
+      institutionClass: bank?.institutionTypeDetail?.institutionClass ?? null,
+      isResolved: !banksQuery.isLoading,
+    }),
+    [bank, banksQuery.isLoading]
+  );
+
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const period =
     periods.find((p) => p.id === selectedPeriodId) ?? periods[0] ?? null;
@@ -139,13 +170,14 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     () => ({
       bank,
       institutionType,
+      moduleScope,
       period,
       periods,
       setPeriodId: setSelectedPeriodId,
       isLoading,
       isEmpty,
     }),
-    [bank, institutionType, period, periods, isLoading, isEmpty]
+    [bank, institutionType, moduleScope, period, periods, isLoading, isEmpty]
   );
 
   if (banksQuery.error) {

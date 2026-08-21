@@ -18,7 +18,14 @@ import ValidationList from '@/components/ui/ValidationList';
 import SectionCard from '@/components/ui/SectionCard';
 import EmptyState from '@/components/ui/EmptyState';
 import { PageSkeleton } from '@/components/ui/QueryBoundary';
-import { useBankContext } from '@/components/shell/BankContext';
+import { useBankContext, useModuleScope } from '@/components/shell/BankContext';
+import {
+  useSdiCapitalChecks,
+  useSdiCapitalSummary,
+  useSdiLargeExposures,
+  useSdiLiquidityPosition,
+} from '@/components/basel/sdiHooks';
+import { isHrefVisible } from '@/lib/modules';
 import {
   useBankAlerts,
   useCapitalDashboard,
@@ -51,14 +58,28 @@ export default function RiskLimitMonitorPage() {
   const { bank } = useBankContext();
   const bankId = bank?.id;
 
-  const liquidity = useLiquidityDashboard(bankId);
-  const capital = useCapitalDashboard(bankId);
-  const irr = useIrrDashboard(bankId);
-  const fx = useFxDashboard(bankId);
-  const ftp = useFtpDashboard(bankId);
+  // Scope the limit wall to the tenant's modules (docs/sdi.md §3.2): only fetch a
+  // module's dashboard when it is in scope, so an SDI raises no 403s for FX/FTP and
+  // shows no limit bars for engines it does not run. Liquidity + capital are in
+  // every institution's set.
+  const scope = useModuleScope();
+  const isSdi = scope.institutionClass === 'sdi';
+  const irrScoped = isHrefVisible('/irr/limits', scope);
+  const fxScoped = isHrefVisible('/fx/limits', scope);
+  const ftpScoped = isHrefVisible('/ftp/products', scope);
+
+  const liquidity = useLiquidityDashboard(isSdi ? undefined : bankId);
+  const capital = useCapitalDashboard(isSdi ? undefined : bankId);
+  const irr = useIrrDashboard(irrScoped ? bankId : undefined);
+  const fx = useFxDashboard(fxScoped ? bankId : undefined);
+  const ftp = useFtpDashboard(ftpScoped ? bankId : undefined);
   const liveSummary = useLiveSummary(bankId);
   const alerts = useBankAlerts(bankId, 200);
   const liquidityRun = useRegulatoryRun(bankId, liquidity.data?.latestRunId ?? undefined);
+  const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bankId : undefined);
+  const sdiCapital = useSdiCapitalSummary(isSdi ? bankId : undefined);
+  const sdiChecks = useSdiCapitalChecks(isSdi ? bankId : undefined);
+  const sdiExposures = useSdiLargeExposures(isSdi ? bankId : undefined);
 
   const [filter, setFilter] = useState<Filter>('all');
   const [tab, setTab] = useState('wall');
@@ -71,20 +92,111 @@ export default function RiskLimitMonitorPage() {
     ['ftp', ftp],
   ] as const;
 
-  const rows = useMemo(
-    () =>
-      extractAllLimits({
-        liquidity: liquidity.data,
-        liquidityRun: liquidityRun.data,
-        capital: capital.data,
-        irr: irr.data,
-        fx: fx.data,
-        ftp: ftp.data,
-      }),
-    [liquidity.data, liquidityRun.data, capital.data, irr.data, fx.data, ftp.data]
-  );
+  const rows = useMemo<LimitRow[]>(() => {
+    if (isSdi) {
+      const status = (value: string): LimitRow['status'] =>
+        value === 'below_minimum' || value === 'above_limit' || value === 'red'
+          ? 'crit'
+          : value === 'not_computable' || value === 'na'
+          ? 'warn'
+          : 'ok';
+      const result: LimitRow[] = [];
+      for (const ratio of sdiLiquidity.data?.ratios ?? []) {
+        if (ratio.value_pct !== null) {
+          result.push({
+            module: 'liquidity',
+            limit: ratio.label,
+            value: Number(ratio.value_pct),
+            threshold: Number(ratio.threshold_pct),
+            direction: 'above',
+            status: status(ratio.status),
+            unit: '%',
+            detail: 'LMTD Table 1',
+          });
+        }
+      }
+      for (const reserve of sdiLiquidity.data?.reserves ?? []) {
+        if (reserve.value_pct !== null) {
+          result.push({
+            module: 'liquidity',
+            limit: reserve.label,
+            value: Number(reserve.value_pct),
+            threshold: Number(reserve.threshold_pct),
+            direction: 'above',
+            status: status(reserve.status),
+            unit: '%',
+            detail: 'NBFI liquidity reserve',
+          });
+        }
+      }
+      const car = sdiCapital.data;
+      if (car?.car_pct !== null && car) {
+        result.push({
+          module: 'capital',
+          limit: 'Capital adequacy ratio',
+          value: Number(car.car_pct),
+          threshold: Number(car.car_min_pct),
+          direction: 'above',
+          status: status(car.status),
+          unit: '%',
+          detail: 'Act 930, Section 29',
+        });
+      }
+      for (const check of sdiChecks.data?.checks ?? []) {
+        if (check.actual_ghs !== null && check.required_ghs !== null) {
+          result.push({
+            module: 'capital',
+            limit: check.check === 'paid_up_capital' ? 'Minimum paid-up capital' : 'Statutory reserve fund',
+            value: Number(check.actual_ghs),
+            threshold: Number(check.required_ghs),
+            direction: 'above',
+            status: check.compliant === true ? 'ok' : check.compliant === false ? 'crit' : 'warn',
+            unit: 'GHS',
+            detail: check.source_citation,
+          });
+        }
+      }
+      for (const exposure of sdiExposures.data?.exposures ?? []) {
+        if (!exposure.exempt && exposure.pct_net_own_funds !== null) {
+          result.push({
+            module: 'exposures',
+            limit: exposure.counterparty_name,
+            value: Number(exposure.pct_net_own_funds),
+            threshold: Number(exposure.large_exposure_limit_pct),
+            direction: 'below',
+            status: status(exposure.status),
+            unit: '%',
+            detail: exposure.connection === 'group' ? 'Connected group' : 'Single counterparty',
+          });
+        }
+      }
+      return result;
+    }
+    return extractAllLimits({
+      liquidity: liquidity.data,
+      liquidityRun: liquidityRun.data,
+      capital: capital.data,
+      irr: irr.data,
+      fx: fx.data,
+      ftp: ftp.data,
+    });
+  }, [
+    capital.data,
+    ftp.data,
+    fx.data,
+    irr.data,
+    isSdi,
+    liquidity.data,
+    liquidityRun.data,
+    sdiCapital.data,
+    sdiChecks.data,
+    sdiExposures.data,
+    sdiLiquidity.data,
+  ]);
 
-  const isLoading = moduleQueries.some(([, query]) => query.isLoading);
+  const isLoading = isSdi
+    ? sdiLiquidity.isLoading || sdiCapital.isLoading || sdiChecks.isLoading || sdiExposures.isLoading
+    : moduleQueries.some(([, query]) => query.isLoading);
   const unavailableModules = moduleQueries
     .filter(([, query]) => query.isError)
     .map(([module]) => module as LimitModule);
@@ -220,7 +332,17 @@ export default function RiskLimitMonitorPage() {
             </>
           )}
 
-          {tab === 'checks' && (
+          {tab === 'checks' && isSdi && (
+            <div className="space-y-6">
+              <SectionCard title="SDI control coverage" subtitle="The limit wall uses the binding SDI measures available from the current canonical book.">
+                <p className="text-body text-navy/85 leading-relaxed">
+                  Liquidity controls cover LMTD Table 1 and reserve ratios. Capital controls cover Section 29 CAR, paid-up capital, statutory reserve fund, and connected-group exposures. Open pipeline findings continue to appear in the Alert Center.
+                </p>
+              </SectionCard>
+            </div>
+          )}
+
+          {tab === 'checks' && !isSdi && (
             <div className="space-y-6">
               {moduleQueries.map(([module, query]) => {
                 const validations = query.data?.validations ?? [];

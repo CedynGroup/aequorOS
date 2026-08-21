@@ -18,7 +18,7 @@ import {
   axisProps,
   chartTooltipProps,
 } from '@/lib/chartTheme';
-import { currencyCode } from '@/lib/format';
+import { fmtCurrency } from '@/lib/format';
 
 export type HistoryPoint = {
   /** Day offset relative to the as-of date (≤ 0). */
@@ -30,6 +30,13 @@ export type ForecastPoint = {
   /** Day offset after the as-of date (≥ 1). */
   day: number;
   netFlow: number;
+  lower: number;
+  upper: number;
+};
+
+export type CumulativeForecastPoint = {
+  day: number;
+  central: number;
   lower: number;
   upper: number;
 };
@@ -83,14 +90,14 @@ export default function CashFlowForecastChart({
           axisLine={false}
           tickLine={false}
           tick={axisProps.tick}
-          tickFormatter={(v) => `${v}M`}
-          width={50}
+          tickFormatter={(value: number) => fmtCurrency(value, undefined, { decimals: 0 })}
+          width={72}
         />
         <Tooltip
           {...chartTooltipProps}
           labelFormatter={(v: number) => (v > 0 ? `Day +${v}` : `Day ${v}`)}
           formatter={(value: number, name: string) => [
-            `${currencyCode()} ${value.toFixed(2)}M`,
+            fmtCurrency(value),
             name,
           ]}
         />
@@ -149,6 +156,29 @@ export default function CashFlowForecastChart({
           dot={false}
           name={`${forecastLabel} (${horizon}d)`}
         />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function CumulativeCashFlowChart({
+  data,
+  showBand = true,
+}: {
+  data: CumulativeForecastPoint[];
+  showBand?: boolean;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <ComposedChart data={data} margin={{ top: 16, right: 24, left: 0, bottom: 8 }}>
+        <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="day" {...axisProps} tickFormatter={(value: number) => `D+${value}`} />
+        <YAxis axisLine={false} tickLine={false} tick={axisProps.tick} tickFormatter={(value: number) => fmtCurrency(value, undefined, { decimals: 0 })} width={72} />
+        <Tooltip {...chartTooltipProps} labelFormatter={(value: number) => `Day +${value}`} formatter={(value: number, name: string) => [fmtCurrency(value), name]} />
+        <ReferenceLine y={0} stroke={CHART_AXIS} strokeWidth={1} />
+        {showBand ? <Area type="monotone" dataKey="upper" stroke="none" fill={CHART_ACCENT} fillOpacity={0.08} name="95% upper" legendType="none" tooltipType="none" /> : null}
+        {showBand ? <Area type="monotone" dataKey="lower" stroke="none" fill="rgb(var(--surface-raised))" fillOpacity={1} name="95% lower" legendType="none" tooltipType="none" /> : null}
+        <Line type="monotone" dataKey="central" stroke={CHART_ACCENT} strokeWidth={2} dot={false} name="Cumulative central" />
       </ComposedChart>
     </ResponsiveContainer>
   );

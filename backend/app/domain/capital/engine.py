@@ -178,6 +178,12 @@ class CapitalParams:
     # absent from the mapping gets NO recognition — a haircut is never
     # invented for an unknown collateral type.
     crm_haircuts: Mapping[str, Decimal] = field(default_factory=dict)
+    # Whether the Basel sub-tier constructs (CET1/Tier1 minima, leverage floor)
+    # apply. True for a bank (Basel CRD); False under the SDI simplified s.29
+    # regime, where those minima are structurally excluded and must NOT be
+    # reported as compliance rules passing against a 0% sentinel (docs/sdi.md
+    # §4.2). Default True keeps the bank path byte-identical.
+    basel_applicable: bool = True
 
 
 @dataclass(frozen=True)

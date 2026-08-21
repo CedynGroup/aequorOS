@@ -10,12 +10,15 @@ from app.schemas.behavioral_models import (
     BehavioralAccuracyRead,
     BehavioralApplyRead,
     BehavioralApplyRequest,
+    BehavioralLiquidityRead,
+    BehavioralLiquidityScenarioRead,
+    BehavioralLiquiditySegmentRead,
     BehavioralModelRead,
     BehavioralModelSlug,
     BehavioralProductEstimate,
     IncentivePoint,
 )
-from app.services import behavioral_models
+from app.services import behavioral_liquidity, behavioral_models
 
 router = APIRouter(tags=["behavioral-models"])
 
@@ -53,6 +56,24 @@ def _to_read(result: ModelResult) -> BehavioralModelRead:
             )
             for p in result.products
         ],
+    )
+
+
+@router.get(
+    "/banks/{bank_id}/behavioral/liquidity",
+    response_model=BehavioralLiquidityRead,
+    operation_id="getBehavioralLiquidity",
+)
+def get_behavioral_liquidity(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+) -> BehavioralLiquidityRead:
+    report = behavioral_liquidity.get_behavioral_liquidity_report(db, ctx, bank_id)
+    return BehavioralLiquidityRead(
+        as_of_date=report.as_of_date.isoformat() if report.as_of_date else "unavailable",
+        segments=[BehavioralLiquiditySegmentRead(**item.__dict__) for item in report.segments],
+        scenarios=[BehavioralLiquidityScenarioRead(**item.__dict__) for item in report.scenarios],
     )
 
 

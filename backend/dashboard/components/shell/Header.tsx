@@ -4,11 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Search,
   ChevronDown,
-  Calendar,
-  Check,
   Menu,
   Sun,
   Moon,
+  Clock3,
   RadioTower,
   AlertTriangle,
   Loader2,
@@ -18,7 +17,7 @@ import {
 import { useSession, signOut } from 'next-auth/react';
 import { useBankContext } from './BankContext';
 import { useTheme } from './ThemeProvider';
-import { fmtDateUTC, fmtRelative, isoDate } from '@/lib/api/values';
+import { fmtRelative } from '@/lib/api/values';
 import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
 import { useUserProfile } from '@/components/profile/ProfileProvider';
 import { LOGIN_URL } from '@/lib/loginUrl';
@@ -35,6 +34,7 @@ export default function Header({
   onMobileMenu?: () => void;
 }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
   const { bank } = useBankContext();
   const { impersonating } = useImpersonation();
 
@@ -47,6 +47,12 @@ export default function Header({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    setNow(new Date());
+    const interval = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(interval);
   }, []);
 
   return (
@@ -73,7 +79,11 @@ export default function Header({
           </span>
           <span className="hidden md:inline mx-2 text-slate-light">|</span>
           <span className="hidden md:inline text-slate text-caption">
-            {bank ? `${regShort()} license · ${capitalize(bank.licenseType)}` : '—'}
+            {bank
+              ? `${regShort()} licensed · ${
+                  bank.institutionTypeDetail?.displayName ?? capitalize(bank.licenseType)
+                }`
+              : '—'}
           </span>
         </div>
       </div>
@@ -100,7 +110,7 @@ export default function Header({
           <Search size={16} aria-hidden />
         </button>
 
-        <PeriodSelector />
+          <BankClock now={now} timezone={bank?.jurisdiction?.timezone} locale={bank?.jurisdiction?.locale} />
 
         <LiveFreshnessPill />
 
@@ -113,6 +123,40 @@ export default function Header({
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </header>
+  );
+}
+
+function BankClock({
+  now,
+  timezone,
+  locale,
+}: {
+  now: Date | null;
+  timezone: string | null | undefined;
+  locale: string | undefined;
+}) {
+  if (!now || !timezone) return null;
+
+  const formatter = new Intl.DateTimeFormat(locale ?? undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+    timeZoneName: 'short',
+  });
+  const fullFormatter = new Intl.DateTimeFormat(locale ?? undefined, {
+    dateStyle: 'full',
+    timeStyle: 'short',
+    timeZone: timezone,
+  });
+
+  return (
+    <span
+      title={`Bank local time: ${fullFormatter.format(now)} (${timezone})`}
+      className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded text-caption font-medium text-slate whitespace-nowrap"
+    >
+      <Clock3 size={13} aria-hidden />
+      <time dateTime={now.toISOString()}>{formatter.format(now)}</time>
+    </span>
   );
 }
 
@@ -129,12 +173,13 @@ const LIVE_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
  * surfaces live-compute continuously. Amber here means only "the live tier
  * has not recomputed recently"; the click is a manual recompute. */
 function LiveFreshnessPill() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const { impersonating } = useImpersonation();
   const summary = useLiveSummary(bank?.id);
   const refresh = useRefreshBankData(bank?.id);
 
   const modules = summary.data?.modules ?? [];
+  const sourceAsOfDate = summary.data?.sourceAsOfDate;
   if (modules.length === 0) return null;
 
   // Read-only staff view: never surface the recompute action (a mutation the
@@ -162,11 +207,11 @@ function LiveFreshnessPill() {
     return (
       <button
         type="button"
-        disabled={refresh.isPending || !period}
+        disabled={refresh.isPending || !sourceAsOfDate}
         onClick={() =>
-          period &&
+          sourceAsOfDate &&
           refresh.mutate({
-            asOfDate: isoDate(period.periodEnd),
+            asOfDate: sourceAsOfDate,
             reason: 'Recompute live figures (header)',
           })
         }
@@ -347,88 +392,6 @@ function UserMenu() {
             )}
           </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-/** Real reporting-period selector backed by the risk service. */
-function PeriodSelector() {
-  const { period, periods, setPeriodId } = useBankContext();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  return (
-    <div className="relative hidden md:block" ref={ref}>
-      <button
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        title="Reporting period for analysis and governance — desk figures always track the live edge of the newest period."
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-caption font-medium text-slate hover:bg-surface"
-      >
-        <Calendar size={13} aria-hidden />
-        Period{' '}
-        <span className="font-mono text-navy tnum">
-          {period ? fmtDateUTC(period.periodEnd) : '—'}
-        </span>
-        <ChevronDown size={12} aria-hidden />
-      </button>
-      {open && (
-        <ul
-          role="listbox"
-          aria-label="Reporting period"
-          className="absolute right-0 mt-1 w-56 max-h-80 overflow-y-auto bg-surface-raised border border-border-light rounded-md shadow-pop py-1 z-40"
-        >
-          {periods.map((p) => {
-            const selected = p.id === period?.id;
-            return (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  onClick={() => {
-                    setPeriodId(p.id);
-                    setOpen(false);
-                  }}
-                  className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-caption text-left hover:bg-surface ${
-                    selected ? 'text-navy font-medium' : 'text-slate'
-                  }`}
-                >
-                  <span>
-                    {p.label}
-                    <span className="ml-2 font-mono text-[10px] text-slate tnum">
-                      {fmtDateUTC(p.periodEnd)}
-                    </span>
-                  </span>
-                  {selected && (
-                    <Check size={12} className="text-action shrink-0" aria-hidden />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
       )}
     </div>
   );

@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Notes } from "./Notes";
+import type { Notes1 } from "./Notes1";
 import {
-  NotesFromJSON,
-  NotesFromJSONTyped,
-  NotesToJSON,
-  NotesToJSONTyped,
-} from "./Notes";
+  Notes1FromJSON,
+  Notes1FromJSONTyped,
+  Notes1ToJSON,
+  Notes1ToJSONTyped,
+} from "./Notes1";
 
 /**
  * ¶72(a): which EWI states trigger CFP consideration.
@@ -33,10 +33,10 @@ export interface CfpEwiTrigger {
   indicatorCode: string;
   /**
    *
-   * @type {Notes}
+   * @type {Notes1}
    * @memberof CfpEwiTrigger
    */
-  notes?: Notes;
+  notes?: Notes1;
   /**
    *
    * @type {string}
@@ -70,7 +70,7 @@ export function CfpEwiTriggerFromJSONTyped(
   return {
     ...json,
     indicatorCode: json["indicator_code"],
-    notes: json["notes"] == null ? undefined : NotesFromJSON(json["notes"]),
+    notes: json["notes"] == null ? undefined : Notes1FromJSON(json["notes"]),
     triggerCondition: json["trigger_condition"],
   };
 }
@@ -89,7 +89,7 @@ export function CfpEwiTriggerToJSONTyped(
 
   return {
     indicator_code: value["indicatorCode"],
-    notes: NotesToJSON(value["notes"]),
+    notes: Notes1ToJSON(value["notes"]),
     trigger_condition: value["triggerCondition"],
   };
 }

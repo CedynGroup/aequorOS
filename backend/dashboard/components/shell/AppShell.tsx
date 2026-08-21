@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import HistoricalPeriodRibbon from './HistoricalPeriodRibbon';
+import ModuleGuard from './ModuleGuard';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -51,7 +52,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex-1 min-w-0 flex flex-col">
         <Header onMobileMenu={() => setMobileOpen(true)} />
         <HistoricalPeriodRibbon />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1">
+          <ModuleGuard>{children}</ModuleGuard>
+        </main>
       </div>
       </div>
     </div>

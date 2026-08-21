@@ -19,6 +19,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import ChartFrame from '@/components/ui/ChartFrame';
 import { useBankContext } from '@/components/shell/BankContext';
+import { useSdiLiquidityPosition } from '@/components/basel/sdiHooks';
 import { num, fmtDateUTC, shortId } from '@/lib/api/values';
 import { useEnterpriseStressRegistry, useMacroScenarios } from '@/components/stress/hooks';
 import ProjectionPaths from '@/components/stress/charts/ProjectionPaths';
@@ -28,9 +29,11 @@ import ManagementActionsPanel from '@/components/stress/ManagementActionsPanel';
 import AppendixIITables from '@/components/stress/AppendixIITables';
 
 export default function StressBoardPack() {
-  const { bank, period, periods } = useBankContext();
+  const { bank, period, periods, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  const isSdi = moduleScope.institutionClass === 'sdi';
+  const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bankId : undefined);
 
   const approved = useMacroScenarios({ status: 'approved' });
   const scenarioIds = useMemo(
@@ -64,7 +67,7 @@ export default function StressBoardPack() {
           { label: 'Stress board pack' },
         ]}
         title="Stress Board-Pack Composer"
-        subtitle="Compose a board-ready ICAAP stress pack from an immutable run — Appendix II tables, charts, commentary, management actions"
+        subtitle={isSdi ? 'Compose a proportionate SDI stress pack from an immutable run — simplified capital, baseline LMTD evidence, commentary, and management actions' : 'Compose a board-ready ICAAP stress pack from an immutable run — Appendix II tables, charts, commentary, management actions'}
         action={
           <button
             type="button"
@@ -145,14 +148,18 @@ export default function StressBoardPack() {
             <div className="space-y-6">
               {/* Cover */}
               <SectionCard
-                title={`ICAAP Stress Test — ${run.scenario_code}`}
+                title={`${isSdi ? 'SDI Stress Test' : 'ICAAP Stress Test'} — ${run.scenario_code}`}
                 subtitle={`${bank?.name ?? ''} · reporting period ${period ? fmtDateUTC(new Date(period.periodEnd)) : ''}`}
                 actions={<StatusPill tone={run.summary.stress_stays_above_all_minima ? 'success' : 'critical'}>{run.summary.stress_stays_above_all_minima ? 'Above all minima' : 'Breach'}</StatusPill>}
               >
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <KpiStat label="Stressed CAR" value={`${num(run.summary.stressed_car_end_pct).toFixed(2)}%`} status={num(run.summary.stressed_car_end_pct) < num(run.outcome.coupling.car_min_pct) ? 'crit' : 'ok'} hint={`Base ${num(run.summary.baseline_car_end_pct).toFixed(2)}%`} />
+                  <KpiStat label="Stressed CAR" value={`${num(run.summary.stressed_car_end_pct).toFixed(2)}%`} status={num(run.summary.stressed_car_end_pct) < num(run.outcome.coupling?.car_min_pct ?? '0') ? 'crit' : 'ok'} hint={`Base ${num(run.summary.baseline_car_end_pct).toFixed(2)}%`} />
                   <KpiStat label="CAR erosion" value={`${num(run.summary.car_erosion_pp).toFixed(2)} pp`} status="warn" />
-                  <KpiStat label="Stressed LCR" value={`${num(run.summary.stressed_lcr_pct).toFixed(1)}%`} status={num(run.summary.stressed_lcr_pct) < num(run.outcome.coupling.lcr_min_pct) ? 'crit' : 'ok'} />
+                  {run.summary.stressed_lcr_pct === null ? (
+                    <KpiStat label="Liquidity regime" value="LMTD" status="ok" hint="Basel LCR/NSFR n/a for SDIs (§4.6)" />
+                  ) : (
+                    <KpiStat label="Stressed LCR" value={`${num(run.summary.stressed_lcr_pct).toFixed(1)}%`} status={num(run.summary.stressed_lcr_pct) < num(run.outcome.coupling?.lcr_min_pct ?? '0') ? 'crit' : 'ok'} />
+                  )}
                   <KpiStat label="Capital gap" value={`GHS'000 ${num(run.summary.capital_gap).toLocaleString()}`} status={num(run.summary.capital_gap) > 0 ? 'warn' : 'ok'} />
                 </div>
                 <p className="mt-4 text-micro text-slate">
@@ -182,11 +189,21 @@ export default function StressBoardPack() {
               {sections.charts && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <ChartFrame title="CAR — base vs stress" subtitle="vs regulatory floor" height={240}>
-                    <ProjectionPaths projection={run.projection} metricKey="car_pct" threshold={num(run.outcome.coupling.car_min_pct)} thresholdLabel="CAR floor" />
+                    <ProjectionPaths projection={run.projection} metricKey="car_pct" threshold={num(run.outcome.coupling?.car_min_pct ?? '0')} thresholdLabel="CAR floor" />
                   </ChartFrame>
-                  <ChartFrame title="LCR — base vs stress" subtitle="vs regulatory floor" height={240}>
-                    <ProjectionPaths projection={run.projection} metricKey="lcr_pct" threshold={num(run.outcome.coupling.lcr_min_pct)} thresholdLabel="LCR floor" />
-                  </ChartFrame>
+                  {run.summary.stressed_lcr_pct === null ? (
+                    <ChartFrame title="Liquidity — SDI (LMTD)" subtitle="Basel LCR/NSFR excluded (§4.6)" height={240}>
+                      <SdiLiquidityBoardDisclosure
+                        asOf={sdiLiquidity.data?.as_of}
+                        table1Breaches={sdiLiquidity.data?.ratios.filter((ratio) => ratio.status === 'below_minimum').length}
+                        reserveBreaches={sdiLiquidity.data?.reserves.filter((reserve) => reserve.status === 'below_minimum').length}
+                      />
+                    </ChartFrame>
+                  ) : (
+                    <ChartFrame title="LCR — base vs stress" subtitle="vs regulatory floor" height={240}>
+                      <ProjectionPaths projection={run.projection} metricKey="lcr_pct" threshold={num(run.outcome.coupling?.lcr_min_pct ?? '0')} thresholdLabel="LCR floor" />
+                    </ChartFrame>
+                  )}
                 </div>
               )}
 
@@ -204,5 +221,29 @@ export default function StressBoardPack() {
         </div>
       </QueryBoundary>
     </>
+  );
+}
+
+function SdiLiquidityBoardDisclosure({
+  asOf,
+  table1Breaches,
+  reserveBreaches,
+}: {
+  asOf: string | undefined;
+  table1Breaches: number | undefined;
+  reserveBreaches: number | undefined;
+}) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center px-6 text-center text-caption text-slate">
+      <p>
+        SDI liquidity stress is not assessed because no BoG SDI liquidity-stress methodology is configured.
+        Basel LCR/NSFR are not substituted.
+      </p>
+      {asOf && (
+        <p className="mt-3 text-navy">
+          Baseline LMTD evidence as of {asOf}: {table1Breaches ?? 0} Table 1 breach(es), {reserveBreaches ?? 0} reserve breach(es).
+        </p>
+      )}
+    </div>
   );
 }

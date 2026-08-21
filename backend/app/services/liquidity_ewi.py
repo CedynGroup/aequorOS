@@ -43,6 +43,7 @@ from app.schemas.liquidity_cfp import (
     EwiStatus,
     EwiUnit,
 )
+from app.services import institution_types, loan_classification
 from app.services.audit import record_event
 from app.services.jurisdictions import base_currency
 
@@ -420,6 +421,29 @@ def _near_limit_count(
     return Decimal(sum(1 for row in rows if row.status in ("amber", "red"))), None
 
 
+def _asset_quality_signal(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    rows: list[_Row],
+) -> tuple[Decimal | None, str | None]:
+    """The asset-quality EWI, class-aware (docs/sdi.md §2.2, Phase G wiring). An
+    SDI's asset quality is the NBFI 4-grade NPL ratio (days-past-due driven), the
+    regime it actually files; a bank keeps the IFRS-9 stage-3 share (byte-identical)."""
+    if institution_types.institution_class(db, bank) == "sdi":
+        report = loan_classification.classify_loan_book(db, ctx, bank, period.period_end)
+        if report.result.total_exposure_ghs == 0:
+            return None, "No canonical loan positions are ingested."
+        ccy = base_currency(bank)
+        note = (
+            f"NBFI 4-grade NPL ratio; {report.result.npl_exposure_ghs} {ccy} non-performing "
+            f"of {report.result.total_exposure_ghs} {ccy}."
+        )
+        return _pct(report.result.npl_ratio * _HUNDRED), note
+    return _stage3_loan_share(rows)
+
+
 def _stage3_loan_share(rows: list[_Row]) -> tuple[Decimal | None, str | None]:
     loans = [row for row in rows if row.position_type == "LOAN"]
     total = sum((row.amount for row in loans), Decimal("0"))
@@ -483,7 +507,7 @@ def evaluate_ewis(
         "currency_mismatch": lambda: _fx_liability_share(rows, base),
         "weighted_liability_maturity": lambda: _weighted_liability_maturity(rows),
         "near_limit_incidents": lambda: _near_limit_count(db, ctx, bank, period),
-        "earnings_asset_quality": lambda: _stage3_loan_share(rows),
+        "earnings_asset_quality": lambda: _asset_quality_signal(db, ctx, bank, period, rows),
         "debt_spreads": lambda: (
             None,
             "Requires vendor market data, which is not yet connected.",

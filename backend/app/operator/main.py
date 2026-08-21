@@ -39,6 +39,7 @@ from app.operator.features.operating_environment import router as operating_envi
 from app.operator.features.operators import router as operators_router
 from app.operator.features.overview import router as overview_router
 from app.operator.features.provision import router as provision_router
+from app.operator.features.regulatory_parameters import router as regulatory_parameters_router
 from app.operator.features.tenants import router as tenants_router
 from app.schemas.health import HealthResponse
 
@@ -113,6 +114,7 @@ def create_operator_app() -> FastAPI:
     operator_router.include_router(fx_forward_router)
     operator_router.include_router(operating_environment_router)
     operator_router.include_router(operators_router)
+    operator_router.include_router(regulatory_parameters_router)
     app.include_router(operator_router)
     return app
 

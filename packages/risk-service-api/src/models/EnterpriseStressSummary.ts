@@ -28,7 +28,7 @@ export interface EnterpriseStressSummary {
    * @type {string}
    * @memberof EnterpriseStressSummary
    */
-  baselineLcrPct: string;
+  baselineLcrPct?: string | null;
   /**
    *
    * @type {Array<string>}
@@ -40,7 +40,7 @@ export interface EnterpriseStressSummary {
    * @type {boolean}
    * @memberof EnterpriseStressSummary
    */
-  bothBreached: boolean;
+  bothBreached?: boolean | null;
   /**
    *
    * @type {string}
@@ -94,7 +94,7 @@ export interface EnterpriseStressSummary {
    * @type {string}
    * @memberof EnterpriseStressSummary
    */
-  stressedLcrPct: string;
+  stressedLcrPct?: string | null;
   /**
    *
    * @type {number}
@@ -120,11 +120,7 @@ export function instanceOfEnterpriseStressSummary(
     value["baselineCarEndPct"] === undefined
   )
     return false;
-  if (!("baselineLcrPct" in value) || value["baselineLcrPct"] === undefined)
-    return false;
   if (!("bindingMinima" in value) || value["bindingMinima"] === undefined)
-    return false;
-  if (!("bothBreached" in value) || value["bothBreached"] === undefined)
     return false;
   if (!("capitalGap" in value) || value["capitalGap"] === undefined)
     return false;
@@ -144,8 +140,6 @@ export function instanceOfEnterpriseStressSummary(
     value["stressedCarEndPct"] === undefined
   )
     return false;
-  if (!("stressedLcrPct" in value) || value["stressedLcrPct"] === undefined)
-    return false;
   return true;
 }
 
@@ -164,9 +158,11 @@ export function EnterpriseStressSummaryFromJSONTyped(
   }
   return {
     baselineCarEndPct: json["baseline_car_end_pct"],
-    baselineLcrPct: json["baseline_lcr_pct"],
+    baselineLcrPct:
+      json["baseline_lcr_pct"] == null ? undefined : json["baseline_lcr_pct"],
     bindingMinima: json["binding_minima"],
-    bothBreached: json["both_breached"],
+    bothBreached:
+      json["both_breached"] == null ? undefined : json["both_breached"],
     capitalGap: json["capital_gap"],
     carErosionPp: json["car_erosion_pp"],
     firstBreachYear: json["first_breach_year"],
@@ -181,7 +177,8 @@ export function EnterpriseStressSummaryFromJSONTyped(
     scenarioCode: json["scenario_code"],
     stressStaysAboveAllMinima: json["stress_stays_above_all_minima"],
     stressedCarEndPct: json["stressed_car_end_pct"],
-    stressedLcrPct: json["stressed_lcr_pct"],
+    stressedLcrPct:
+      json["stressed_lcr_pct"] == null ? undefined : json["stressed_lcr_pct"],
     withActionsFirstBreachYear:
       json["with_actions_first_breach_year"] == null
         ? undefined

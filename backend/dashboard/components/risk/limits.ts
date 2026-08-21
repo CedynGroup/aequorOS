@@ -21,7 +21,7 @@ import { labelize, num } from '@/lib/api/values';
 import { runThresholds } from '@/components/liquidity/runData';
 import { fmtCurrencySigned } from '@/lib/format';
 
-export type LimitModule = 'liquidity' | 'capital' | 'irr' | 'fx' | 'ftp';
+export type LimitModule = 'liquidity' | 'capital' | 'exposures' | 'irr' | 'fx' | 'ftp';
 export type LimitStatus = 'ok' | 'warn' | 'crit';
 export type LimitDirection = 'above' | 'below';
 
@@ -52,6 +52,7 @@ export type ModuleValidation = {
 export const MODULE_LABELS: Record<LimitModule, string> = {
   liquidity: 'Liquidity',
   capital: 'Capital',
+  exposures: 'Large Exposures',
   irr: 'Interest Rate Risk',
   fx: 'FX Risk',
   ftp: 'FTP',
@@ -60,6 +61,7 @@ export const MODULE_LABELS: Record<LimitModule, string> = {
 export const MODULE_HREFS: Record<LimitModule, string> = {
   liquidity: '/liquidity',
   capital: '/basel',
+  exposures: '/basel/exposures',
   irr: '/irr',
   fx: '/fx',
   ftp: '/ftp',

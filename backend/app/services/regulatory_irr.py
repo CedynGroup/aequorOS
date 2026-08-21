@@ -41,6 +41,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.engine import CapitalFact, tier1_capital
 from app.domain.irr.engine import (
     BASE_CURVE_SCENARIO,
@@ -997,25 +998,13 @@ def _compute_inline_or_409(
     try:
         return _compute_inline(db, ctx, bank, period)
     except MissingParameterError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": "missing_parameter", "message": str(exc), "parameter": exc.name},
-        ) from exc
+        raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except IrrRunError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": exc.code, "message": exc.message},
-        ) from exc
+        raise ModuleDataUnavailable(exc.code, exc.message) from exc
     except UnsupportedShockError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": "unsupported_shock", "message": str(exc)},
-        ) from exc
+        raise ModuleDataUnavailable("unsupported_shock", str(exc)) from exc
     except IrrComputationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": "calculation_error", "message": str(exc)},
-        ) from exc
+        raise ModuleDataUnavailable("calculation_error", str(exc)) from exc
 
 
 def current_input_hash(

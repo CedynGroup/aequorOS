@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 import { centralBankName } from '@/lib/format';
+import { isHrefVisible } from '@/lib/modules';
+import { useModuleScope } from './BankContext';
 
 const COLLAPSE_STORAGE_KEY = 'aeq-sidebar-collapsed';
 
@@ -33,8 +35,11 @@ type NavItem = {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
-  code?: string;
+  /** SDI-tenant label override (an SDI is not a Basel institution). */
+  sdiLabel?: string;
 };
+
+const SDI_CLASS = 'sdi';
 
 const groups: { label: string; items: NavItem[] }[] = [
   {
@@ -55,19 +60,19 @@ const groups: { label: string; items: NavItem[] }[] = [
   {
     label: 'Modules',
     items: [
-      { href: '/irr', label: 'IRRBB', icon: Activity, code: '01' },
-      { href: '/liquidity', label: 'Liquidity', icon: Droplet, code: '02' },
-      { href: '/fx', label: 'FX', icon: DollarSign, code: '03' },
-      { href: '/basel', label: 'Basel Capital', icon: ShieldCheck, code: '04' },
-      { href: '/ftp', label: 'FTP', icon: GitBranch, code: '05' },
-      { href: '/forecasting', label: 'Forecasting', icon: TrendingUp, code: '06' },
-      { href: '/behavioral', label: 'Behavioral', icon: BrainCircuit, code: '07' },
+      { href: '/irr', label: 'IRRBB', icon: Activity },
+      { href: '/liquidity', label: 'Liquidity', icon: Droplet },
+      { href: '/fx', label: 'FX', icon: DollarSign },
+      { href: '/basel', label: 'Basel Capital', sdiLabel: 'Regulatory Capital', icon: ShieldCheck },
+      { href: '/ftp', label: 'FTP', icon: GitBranch },
+      { href: '/forecasting', label: 'Forecasting', icon: TrendingUp },
+      { href: '/behavioral', label: 'Behavioral', icon: BrainCircuit },
     ],
   },
   {
     label: 'Data',
     items: [
-      { href: '/data-engine', label: 'Data Engine', icon: Database, code: '00' },
+      { href: '/data-engine', label: 'Data Engine', icon: Database },
     ],
   },
   {
@@ -83,7 +88,18 @@ const groups: { label: string; items: NavItem[] }[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const moduleScope = useModuleScope();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Scope the nav to the active institution type (docs/sdi.md §3.1/§6.3): drop
+  // items whose module the tenant's class is not entitled to, then drop any
+  // group left empty. Unscoped tenants (banks) keep every item.
+  const visibleGroups = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => isHrefVisible(item.href, moduleScope)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   useEffect(() => {
     try {
@@ -125,7 +141,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-5">
-        {groups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label}>
             {collapsed ? (
               <div className="mx-2 mb-2 border-t border-white/10" aria-hidden />
@@ -138,11 +154,15 @@ export default function Sidebar() {
               {group.items.map((item) => {
                 const active = isActive(item.href);
                 const Icon = item.icon;
+                const label =
+                  item.sdiLabel && moduleScope.institutionClass === SDI_CLASS
+                    ? item.sdiLabel
+                    : item.label;
                 return (
                   <li key={item.href} className="relative group">
                     <Link
                       href={item.href}
-                      aria-label={item.label}
+                      aria-label={label}
                       className={`flex items-center gap-3 rounded text-body transition-colors ${
                         collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2'
                       } ${
@@ -152,32 +172,14 @@ export default function Sidebar() {
                       }`}
                     >
                       <Icon size={16} className="shrink-0" aria-hidden />
-                      {!collapsed && (
-                        <>
-                          <span className="flex-1 truncate">{item.label}</span>
-                          {item.code && (
-                            <span
-                              className={`font-mono text-[10px] tnum ${
-                                active ? 'text-action' : 'text-white/30'
-                              }`}
-                            >
-                              {item.code}
-                            </span>
-                          )}
-                        </>
-                      )}
+                      {!collapsed && <span className="flex-1 truncate">{label}</span>}
                     </Link>
                     {collapsed && (
                       <span
                         role="tooltip"
                         className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 whitespace-nowrap rounded bg-nav border border-white/15 px-2.5 py-1.5 text-caption text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shadow-pop"
                       >
-                        {item.label}
-                        {item.code && (
-                          <span className="ml-2 font-mono text-[10px] text-white/40">
-                            {item.code}
-                          </span>
-                        )}
+                        {label}
                       </span>
                     )}
                   </li>

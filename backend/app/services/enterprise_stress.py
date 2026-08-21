@@ -105,9 +105,15 @@ from app.schemas.enterprise_stress import (
     EnterpriseStressSummary,
     PlanAssumptionsIn,
 )
-from app.services import macro_scenarios, management_action_plans
+from app.services import (
+    institution_types,
+    macro_scenarios,
+    management_action_plans,
+    regulatory_parameters,
+)
 from app.services.audit import record_event
 from app.services.params import get_active_params
+from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 
 ENGINE_VERSION = "enterprise-stress-v1.0.0"
 INPUT_SCHEMA_VERSION = "enterprise-stress-input-v1"
@@ -160,6 +166,22 @@ _REQUIRED_CAPITAL_THRESHOLDS = (
     "car_critical",
 )
 _REQUIRED_LIQUIDITY_THRESHOLDS = ("lcr_min", "lcr_amber_floor", "nsfr_min", "lcr_inflow_cap_pct")
+
+#: Inert Basel liquidity params for an SDI run, where the LCR/NSFR leg is skipped
+#: (docs/sdi.md §4.6). The enterprise projection reads ``ForecastParams.liquidity``
+#: only when ``basel_liquidity`` is True, so this sentinel is never evaluated — it
+#: exists solely to satisfy the non-optional field without asserting a Basel value.
+_EMPTY_LIQUIDITY_PARAMS = LiquidityParams(
+    outflow_rates={},
+    inflow_rates={},
+    asf_weights={},
+    rsf_weights={},
+    inflow_cap_pct=_ZERO,
+    lcr_min_pct=_ZERO,
+    lcr_amber_floor_pct=_ZERO,
+    nsfr_min_pct=_ZERO,
+    nsfr_amber_floor_pct=_ZERO,
+)
 
 # Base-case plan defaults (used where the request omits a field). Documented,
 # conservative, jurisdiction-neutral business-as-usual assumptions.
@@ -289,6 +311,14 @@ def _capital_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, as_of
     )
     thresholds = {row.threshold_code: _dec(row.value_pct) for row in threshold_rows}
+    risk_weights = {row.risk_weight_code: _dec(row.weight_pct) for row in weight_rows}
+    crm_haircuts = {row.collateral_class: _dec(row.haircut_pct) for row in crm_rows}
+    # SDI simplified s.29 solvency (docs/sdi.md §4.6, Phase H): only the CAR floor
+    # is a required regulatory value; market/operational/tier/leverage take the
+    # s.29 structural settings and `basel_applicable=False` so the projection's
+    # minima check omits the Basel sub-tier / leverage floors. Banks: unchanged.
+    if institution_types.institution_class(db, bank) == "sdi":
+        return _sdi_capital_params(db, bank, as_of, thresholds, risk_weights, crm_haircuts)
     missing = [code for code in _REQUIRED_CAPITAL_THRESHOLDS if code not in thresholds]
     if missing:
         raise EnterpriseStressError(
@@ -297,7 +327,7 @@ def _capital_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
             {"threshold_codes": missing},
         )
     return CapitalParams(
-        risk_weights={row.risk_weight_code: _dec(row.weight_pct) for row in weight_rows},
+        risk_weights=risk_weights,
         bia_alpha_pct=thresholds["bia_alpha_pct"],
         fx_charge_pct=thresholds["fx_charge_pct"],
         rwa_multiplier_pct=thresholds["rwa_multiplier"],
@@ -308,7 +338,48 @@ def _capital_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         leverage_min_pct=thresholds["leverage_min"],
         car_early_warning_pct=thresholds["car_early_warning"],
         car_critical_pct=thresholds["car_critical"],
-        crm_haircuts={row.collateral_class: _dec(row.haircut_pct) for row in crm_rows},
+        crm_haircuts=crm_haircuts,
+    )
+
+
+def _sdi_capital_params(  # noqa: PLR0913 - the resolved capital inputs
+    db: Session,
+    bank: Bank,
+    as_of: date,
+    thresholds: dict[str, Decimal],
+    risk_weights: dict[str, Decimal],
+    crm_haircuts: dict[str, Decimal],
+) -> CapitalParams:
+    """SDI simplified s.29 capital params for the stress projection — the CAR floor
+    from the tenant board register, else the control-plane class default; the Basel
+    sub-tier constructs take the shared structural sentinels (mirror of
+    ``regulatory_capital._sdi_engine_params``)."""
+    car_min = thresholds.get("car_min")
+    if car_min is None:
+        param = regulatory_parameters.try_resolve(db, bank, "car_min", as_of=as_of)
+        car_min = param.value if param is not None else None
+    if car_min is None:
+        raise EnterpriseStressError(
+            "missing_parameter",
+            "The SDI CAR floor (car_min) is configured neither on the board register "
+            "nor in the regulatory-parameter control plane.",
+            {"threshold_codes": ["car_min"]},
+        )
+    s = _SDI_STRUCTURAL_CAPITAL
+    return CapitalParams(
+        risk_weights=risk_weights,
+        bia_alpha_pct=s["bia_alpha_pct"],
+        fx_charge_pct=s["fx_charge_pct"],
+        rwa_multiplier_pct=s["rwa_multiplier"],
+        tier2_gp_cap_pct_credit_rwa=s["tier2_gp_cap_pct_credit_rwa"],
+        cet1_min_pct=s["cet1_min"],
+        tier1_min_pct=s["tier1_min"],
+        car_min_pct=car_min,
+        leverage_min_pct=s["leverage_min"],
+        car_early_warning_pct=car_min,
+        car_critical_pct=car_min,
+        crm_haircuts=crm_haircuts,
+        basel_applicable=False,
     )
 
 
@@ -1051,8 +1122,8 @@ def _serialize_projection(projection: EnterpriseProjection) -> dict[str, Any]:
             "cet1_ratio_pct": str(row.ratios.cet1_ratio_pct),
             "tier1_ratio_pct": str(row.ratios.tier1_ratio_pct),
             "leverage_ratio_pct": str(row.ratios.leverage_ratio_pct),
-            "lcr_pct": str(row.lcr_pct),
-            "nsfr_pct": str(row.nsfr_pct),
+            "lcr_pct": None if row.lcr_pct is None else str(row.lcr_pct),
+            "nsfr_pct": None if row.nsfr_pct is None else str(row.nsfr_pct),
             "net_income": str(row.pnl.net_income),
             "credit_losses": str(row.pnl.credit_losses),
             "pd_multiplier": str(row.pd_multiplier),
@@ -1096,6 +1167,23 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         raise EnterpriseStressError(
             "scenario_without_paths", "The scenario carries no macro-variable paths."
         )
+    # Horizon coverage (QA audit 2026-08-20 P0-3): the run schema requires a ≥3-year
+    # projection (Stress Testing Guideline ¶75), but the approved scenario must
+    # actually stress every projected year. A scenario whose paths stop short of the
+    # requested horizon would leave the tail years driven by neutral shocks and mint
+    # an "official" 3-year stress that is unstressed at the horizon — reject it.
+    max_path_year = max(point.year_index for point in paths)
+    if max_path_year < payload.horizon_years:
+        raise EnterpriseStressError(
+            "scenario_horizon_too_short",
+            (
+                f"The approved scenario '{scenario.code}' has macro paths through year "
+                f"{max_path_year}, but this run projects {payload.horizon_years} years. "
+                "Every projected year must be stressed — extend the scenario's paths to "
+                "the full horizon before running it (Stress Testing Guideline ¶75)."
+            ),
+            {"scenario_max_year": max_path_year, "horizon_years": payload.horizon_years},
+        )
 
     capital_rows = _load_facts(db, ctx, bank, period, _CAPITAL_GROUPS)
     liquidity_rows = _load_facts(db, ctx, bank, period, _LIQUIDITY_GROUPS)
@@ -1106,10 +1194,15 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         )
 
     capital_facts = [_capital_fact(fact) for fact in capital_rows]
-    liquidity_facts = [_liquidity_fact(fact) for fact in liquidity_rows]
     forecast_facts = [_forecast_fact(fact) for fact in forecast_rows]
     capital_params = _capital_params(db, ctx, bank, as_of)
-    liquidity_params = _liquidity_params(db, ctx, bank, as_of)
+    # The Basel liquidity leg (LCR/NSFR + its params) is a bank-only regime. An SDI
+    # run omits it entirely (docs/sdi.md §4.6; QA audit 2026-08-20 P0-1) — do NOT
+    # resolve the Basel liquidity thresholds for an SDI, which would fail-loud on the
+    # LCR/NSFR params a savings-&-loans tenant has no reason to configure.
+    basel_liquidity = capital_params.basel_applicable
+    liquidity_facts = [_liquidity_fact(fact) for fact in liquidity_rows] if basel_liquidity else []
+    liquidity_params = _liquidity_params(db, ctx, bank, as_of) if basel_liquidity else None
     ecl_exposures, ecl_assumptions = _ecl_inputs(db, ctx, bank, as_of, capital_rows)
     tier1 = tier1_capital(capital_facts)
 
@@ -1141,7 +1234,12 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
     )
 
     plan = _resolve_plan(payload.plan, paths)
-    forecast_params = ForecastParams(liquidity=liquidity_params, capital=capital_params)
+    # ForecastParams.liquidity is non-optional, but the enterprise projection reads
+    # it ONLY when basel_liquidity is True (docs/sdi.md §4.6 gate in projection.py),
+    # so an SDI passes the inert empty sentinel — never evaluated, never a Basel claim.
+    forecast_params = ForecastParams(
+        liquidity=liquidity_params or _EMPTY_LIQUIDITY_PARAMS, capital=capital_params
+    )
     paid_up_min = _resolve_paid_up_min(db, ctx, bank, as_of, payload)
 
     # 3-year projection (base + stress) → Appendix II tables. The stress leg's
@@ -1159,6 +1257,9 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
                 horizon_years=payload.horizon_years,
                 paid_up_min=paid_up_min,
                 credit_rwa_uplift=credit_rwa_uplift,
+                # SDI: exclude Basel LCR/NSFR from the projection (docs/sdi.md §4.6);
+                # the SDI liquidity stress is the standalone LMTD Table-1 + ladder.
+                basel_liquidity=capital_params.basel_applicable,
             )
         )
     except ProjectionInputError as exc:
@@ -1190,6 +1291,7 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
             concentration=concentration_inputs,
             operational=OperationalConfig(annual_gross_income=max(baseline_income, _ZERO)),
             contingent_leverage=contingent_leverage_inputs,
+            basel_liquidity=basel_liquidity,
         )
     )
     # Phase 3: overlay an APPROVED management-actions plan onto the stress leg to
@@ -1216,6 +1318,8 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         exposure_class_losses=exposure_class_losses,
         pillar2_by_stress_year=_pillar2_overlay(outcome, tier1, payload.horizon_years),
         management_actions=management_result,
+        # SDI: omit the Basel Table-2 3-tier capital build (docs/sdi.md §4.6).
+        basel_applicable=capital_params.basel_applicable,
     )
 
     inputs = {
@@ -1477,6 +1581,12 @@ def _resolve_action_plan(
     return plan
 
 
+#: Control-plane ``paid_up_min`` is licence-specific and expressed in GHS millions
+#: (mirror of ``sdi_capital_checks._GHS_PER_MILLION``); the stress engine works in
+#: absolute GHS, so a resolved value is scaled up by this factor.
+_GHS_PER_MILLION = Decimal("1000000")
+
+
 def _resolve_paid_up_min(
     db: Session,
     ctx: TenantContext,
@@ -1484,6 +1594,16 @@ def _resolve_paid_up_min(
     as_of: date,
     payload: EnterpriseStressRunCreate,
 ) -> Decimal:
+    """Resolve the paid-up-capital minimum for the stress minima/gap and management-
+    action sizing. Precedence: explicit run override → tenant board register → (SDI)
+    the regulatory-parameter control plane → 0.
+
+    For an ``sdi`` the control-plane fallback is REQUIRED — otherwise a savings-&-loans
+    run with no board register row silently used ``0`` and dropped the GH¢15m s.29
+    paid-up floor from the Appendix II minima (QA audit 2026-08-20 P0-2). Banks keep
+    the historical payload→register→0 path byte-identical: a bank's paid-up minimum is
+    enforced through its BSD capital return, and the enterprise-stress goldens were
+    written against the 0 fallback — moving them is a separate, deliberate decision."""
     if payload.paid_up_min is not None:
         return payload.paid_up_min
     thresholds = {
@@ -1492,7 +1612,13 @@ def _resolve_paid_up_min(
             db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
         )
     }
-    return thresholds.get("paid_up_min", _ZERO)
+    register_value = thresholds.get("paid_up_min")
+    if register_value is not None:
+        return register_value
+    if institution_types.institution_class(db, bank) == "sdi":
+        param = regulatory_parameters.resolve(db, bank, "paid_up_min", as_of=as_of)
+        return param.decimal * _GHS_PER_MILLION
+    return _ZERO
 
 
 def _baseline_pnl(projection: EnterpriseProjection) -> tuple[Decimal, Decimal]:
@@ -1511,16 +1637,18 @@ def _read(run: RegulatoryRun, scenario: MacroScenario) -> EnterpriseStressRead:
     appendix = metrics["appendix_ii"]
     capital = outcome["capital"]
     liquidity = outcome["liquidity"]
-    coupling = outcome["coupling"]
+    # SDI runs carry a not-assessed liquidity marker and no coupling block (§4.6).
+    coupling = outcome.get("coupling")
+    liquidity_assessed = "stressed_lcr_pct" in liquidity
     management = metrics.get("management_actions")
     summary = EnterpriseStressSummary(
         scenario_code=scenario.code,
         stressed_car_end_pct=_dec(capital["stressed_car_end_pct"]),
         baseline_car_end_pct=_dec(capital["baseline_car_end_pct"]),
         car_erosion_pp=_dec(capital["car_erosion_pp"]),
-        stressed_lcr_pct=_dec(liquidity["stressed_lcr_pct"]),
-        baseline_lcr_pct=_dec(liquidity["baseline_lcr_pct"]),
-        both_breached=bool(coupling["both_breached"]),
+        stressed_lcr_pct=_dec(liquidity["stressed_lcr_pct"]) if liquidity_assessed else None,
+        baseline_lcr_pct=_dec(liquidity["baseline_lcr_pct"]) if liquidity_assessed else None,
+        both_breached=(bool(coupling["both_breached"]) if coupling is not None else None),
         stress_stays_above_all_minima=bool(projection["stress_stays_above_all_minima"]),
         first_breach_year=projection["first_breach_year"],
         binding_minima=list(projection["binding_minima"]),

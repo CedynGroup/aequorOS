@@ -48,13 +48,15 @@ export default function ScenarioComparison({
     .map((run) => {
       const car = num(run.summary.stressed_car_end_pct);
       const erosion = num(run.summary.car_erosion_pp);
+      // An SDI run has no Basel LCR (docs/sdi.md §4.6) — show n/a, never a false 0% breach.
+      const lcrAssessed = run.summary.stressed_lcr_pct !== null;
       const lcr = num(run.summary.stressed_lcr_pct);
       const gap = num(run.summary.capital_gap);
       const stressLast = run.projection.stress[run.projection.stress.length - 1];
       const cet1 = stressLast ? num(stressLast.cet1_ratio_pct) : NaN;
 
       const carCell = floorIntensity(car, CAR_FLOOR);
-      const lcrCell = floorIntensity(lcr, LCR_FLOOR);
+      const lcrCell = lcrAssessed ? floorIntensity(lcr, LCR_FLOOR) : { intensity: 0.1, breach: false };
       const erosionIntensity = Math.max(0, Math.min(1, erosion / 8));
 
       return {
@@ -74,7 +76,7 @@ export default function ScenarioComparison({
           car: { display: `${car.toFixed(2)}%`, intensity: carCell.intensity, breach: carCell.breach },
           erosion: { display: `${erosion.toFixed(2)}`, intensity: erosionIntensity },
           cet1: { display: Number.isFinite(cet1) ? `${cet1.toFixed(2)}%` : '—', intensity: 0.2 },
-          lcr: { display: `${lcr.toFixed(1)}%`, intensity: lcrCell.intensity, breach: lcrCell.breach },
+          lcr: { display: lcrAssessed ? `${lcr.toFixed(1)}%` : 'n/a', intensity: lcrCell.intensity, breach: lcrCell.breach },
           gap: {
             display: gap.toLocaleString(undefined, { maximumFractionDigits: 0 }),
             intensity: gap > 0 ? 0.6 : 0.1,

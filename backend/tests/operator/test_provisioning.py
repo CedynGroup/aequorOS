@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -20,6 +21,7 @@ from app.models import (
 )
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.services.tenant_provisioning import ProvisioningClients
+from app.services import institution_types
 from tests.operator.conftest import (
     FakeKmsClient,
     FakeS3Client,
@@ -205,6 +207,17 @@ def test_provisioning_scopes_the_institution_type(
     bank = operator_db.scalar(select(Bank).where(Bank.id == body["bank_id"]))
     assert bank is not None
     assert bank.institution_type == "savings_and_loans"
+
+    # The persisted discriminator resolves to the FULL SDI regime end-to-end —
+    # the single fact every downstream scoping keys off (docs/sdi.md §1.4): the
+    # s.29 capital regime, the SDI return family, binding LMTD liquidity, and the
+    # tighter 15% large-exposure limit — so onboarding an SDI here is sufficient
+    # to place the tenant on the SDI path without any per-module toggles.
+    assert institution_types.institution_class(operator_db, bank) == "sdi"
+    assert institution_types.return_family(operator_db, bank) == "sdi"
+    assert institution_types.capital_regime(operator_db, bank) == "s29"
+    assert institution_types.liquidity_binding(operator_db, bank) is True
+    assert institution_types.large_exposure_limit_pct(operator_db, bank) == Decimal("15")
 
     audit = operator_db.scalar(
         select(OperatorAuditLog).where(OperatorAuditLog.action == "tenants.provision")

@@ -46,13 +46,6 @@ import {
   SubmissionRevisionToJSON,
   SubmissionRevisionToJSONTyped,
 } from "./SubmissionRevision";
-import type { Notes1 } from "./Notes1";
-import {
-  Notes1FromJSON,
-  Notes1FromJSONTyped,
-  Notes1ToJSON,
-  Notes1ToJSONTyped,
-} from "./Notes1";
 import type { PackageStatus } from "./PackageStatus";
 import {
   PackageStatusFromJSON,
@@ -74,6 +67,13 @@ import {
   SupersedesIdToJSON,
   SupersedesIdToJSONTyped,
 } from "./SupersedesId";
+import type { Notes } from "./Notes";
+import {
+  NotesFromJSON,
+  NotesFromJSONTyped,
+  NotesToJSON,
+  NotesToJSONTyped,
+} from "./Notes";
 import type { ReturnFrequency } from "./ReturnFrequency";
 import {
   ReturnFrequencyFromJSON,
@@ -138,10 +138,10 @@ export interface RegulatoryPackageSummaryRead {
   id: string;
   /**
    *
-   * @type {Notes1}
+   * @type {Notes}
    * @memberof RegulatoryPackageSummaryRead
    */
-  notes: Notes1;
+  notes: Notes;
   /**
    *
    * @type {RegulatorComments}
@@ -278,7 +278,7 @@ export function RegulatoryPackageSummaryReadFromJSONTyped(
     generatedAt: new Date(json["generated_at"]),
     generatedBy: json["generated_by"],
     id: json["id"],
-    notes: Notes1FromJSON(json["notes"]),
+    notes: NotesFromJSON(json["notes"]),
     regulatorComments: RegulatorCommentsFromJSON(json["regulator_comments"]),
     reportingDate: new Date(json["reporting_date"]),
     returnCode: json["return_code"],
@@ -316,7 +316,7 @@ export function RegulatoryPackageSummaryReadToJSONTyped(
     generated_at: value["generatedAt"].toISOString(),
     generated_by: value["generatedBy"],
     id: value["id"],
-    notes: Notes1ToJSON(value["notes"]),
+    notes: NotesToJSON(value["notes"]),
     regulator_comments: RegulatorCommentsToJSON(value["regulatorComments"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
     return_code: value["returnCode"],

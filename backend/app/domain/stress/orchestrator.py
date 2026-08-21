@@ -371,7 +371,9 @@ class EnterpriseStressInputs:
     capital_facts: Sequence[CapitalFact]
     capital_params: CapitalParams
     liquidity_facts: Sequence[LiquidityFact]
-    liquidity_params: LiquidityParams
+    #: ``None`` only on a non-Basel (SDI) run, where the Basel liquidity leg is
+    #: skipped entirely (``basel_liquidity=False``); a bank always passes real params.
+    liquidity_params: LiquidityParams | None
     baseline_annual_preprovision_income: Decimal
     baseline_annual_credit_loss: Decimal = _ZERO
     baseline_credit_allowance: Decimal = _ZERO
@@ -389,6 +391,13 @@ class EnterpriseStressInputs:
     concentration: ConcentrationInputs | None = None
     operational: OperationalConfig | None = None
     contingent_leverage: ContingentLeverageInputs | None = None
+    #: Basel LCR/NSFR liquidity leg. True for banks (byte-identical). False for an
+    #: SDI (docs/sdi.md §4.6): the LCR/NSFR ratios + their floor-breach coupling are
+    #: NOT the SDI regime, so they are omitted from the outcome entirely rather than
+    #: presented as an SDI compliance verdict (QA audit 2026-08-20 P0-1). The SDI
+    #: LMTD Table-1 stress replacement is a documented deferral — no BoG SDI stress
+    #: methodology exists to implement without fabrication.
+    basel_liquidity: bool = True
 
 
 # --- Enterprise outcome ------------------------------------------------------
@@ -456,8 +465,9 @@ class EnterpriseStressOutcome:
     scenario_code: str
     engine_version: str
     capital: CapitalOutcome
-    liquidity: LiquidityOutcome
-    coupling: SolvencyLiquidityCoupling
+    #: ``None`` on an SDI run — the Basel liquidity leg is omitted (§4.6).
+    liquidity: LiquidityOutcome | None
+    coupling: SolvencyLiquidityCoupling | None
     irr: IrrOutcome | None
     fx: FxOutcome | None
     # Phase 4 per-risk methods (None when not supplied / no positions).
@@ -515,14 +525,21 @@ def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOut
         any_trigger_fired=any(trigger.fired for trigger in stressed_capital.triggers),
     )
 
-    liquidity = _run_liquidity(inputs)
+    # Basel liquidity leg + its solvency–liquidity coupling: banks only. An SDI run
+    # (basel_liquidity=False) omits LCR/NSFR entirely rather than present a Basel
+    # verdict the s.29/LMTD regime excludes (QA audit 2026-08-20 P0-1).
+    liquidity = _run_liquidity(inputs) if inputs.basel_liquidity else None
     irr = _run_irr(inputs) if inputs.irr is not None else None
     fx = _run_fx(inputs) if inputs.fx is not None else None
-    coupling = _couple(
-        capital,
-        liquidity,
-        inputs.capital_params.car_min_pct,
-        inputs.liquidity_params.lcr_min_pct,
+    coupling = (
+        _couple(
+            capital,
+            liquidity,
+            inputs.capital_params.car_min_pct,
+            inputs.liquidity_params.lcr_min_pct,
+        )
+        if liquidity is not None and inputs.liquidity_params is not None
+        else None
     )
 
     bottom_up_credit = (
@@ -565,20 +582,24 @@ def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOut
 def _run_operational(
     inputs: EnterpriseStressInputs,
     capital: CapitalOutcome,
-    liquidity: LiquidityOutcome,
+    liquidity: LiquidityOutcome | None,
 ) -> OperationalResult | None:
     """Simulate the seven operational scenarios, coupled to capital + liquidity.
 
     The op-loss is charged against the as-of capital position and the outflows
     against the current HQLA buffer, so the operational stress is expressed as a
-    CAR impact and a liquidity drain (¶13 capital + liquidity impact).
+    CAR impact and a liquidity drain (¶13 capital + liquidity impact). On an SDI
+    run (no Basel liquidity leg) the HQLA base is unavailable, so the operational
+    liquidity drain is not computed (``liquidity_base=0``) — the CAR-impact leg is
+    unchanged; the SDI liquidity stress is the LMTD deferral, not this buffer.
     """
     if inputs.operational is None:
         return None
+    liquidity_base = liquidity.baseline_lcr.hqla_total if liquidity is not None else _ZERO
     return compute_operational(
         OperationalInputs(
             annual_gross_income=inputs.operational.annual_gross_income,
-            liquidity_base=liquidity.baseline_lcr.hqla_total,
+            liquidity_base=liquidity_base,
             total_capital=capital.baseline.ratios.total_capital,
             total_rwa=capital.baseline.rwa.total_rwa,
             severities=inputs.operational.severities,
@@ -587,6 +608,7 @@ def _run_operational(
 
 
 def _run_liquidity(inputs: EnterpriseStressInputs) -> LiquidityOutcome:
+    assert inputs.liquidity_params is not None  # only called when basel_liquidity=True
     shocks = translate(inputs.scenario_paths, "liquidity", inputs.overrides)
     base_lcr = compute_lcr(inputs.liquidity_facts, inputs.liquidity_params)
     base_nsfr = compute_nsfr(inputs.liquidity_facts, inputs.liquidity_params)
@@ -754,8 +776,23 @@ def _serialize_outcome(outcome: EnterpriseStressOutcome) -> dict[str, object]:
         "scenario_code": outcome.scenario_code,
         "engine_version": outcome.engine_version,
         "capital": _serialize_capital(outcome.capital),
-        "liquidity": _serialize_liquidity(outcome.liquidity),
-        "coupling": {
+    }
+    # Liquidity + coupling: banks carry the Basel leg; an SDI run carries an honest
+    # "not assessed" marker naming the reason (LCR/NSFR excluded, §4.6) so no
+    # consumer mistakes the absence for a passing liquidity result.
+    if outcome.liquidity is not None:
+        result["liquidity"] = _serialize_liquidity(outcome.liquidity)
+    else:
+        result["liquidity"] = {
+            "assessed": False,
+            "regime": "sdi_lmtd",
+            "reason": (
+                "Basel LCR/NSFR are excluded for an SDI (docs/sdi.md §4.6); the LMTD "
+                "Table-1 stress replacement is pending a BoG SDI stress methodology."
+            ),
+        }
+    if outcome.coupling is not None:
+        result["coupling"] = {
             "stressed_car_end_pct": str(outcome.coupling.stressed_car_end_pct),
             "car_min_pct": str(outcome.coupling.car_min_pct),
             "car_breached": outcome.coupling.car_breached,
@@ -764,8 +801,7 @@ def _serialize_outcome(outcome: EnterpriseStressOutcome) -> dict[str, object]:
             "lcr_breached": outcome.coupling.lcr_breached,
             "both_breached": outcome.coupling.both_breached,
             "narrative": outcome.coupling.narrative,
-        },
-    }
+        }
     if outcome.irr is not None:
         result["irr"] = {
             "base_eve": str(outcome.irr.base_eve),

@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
     EclAssumption,
@@ -89,11 +90,14 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunCreate,
     RegulatoryRunRead,
 )
+from app.services import regulatory_parameters, sdi_capital_checks
 from app.services.audit import record_event
+from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.jurisdictions import base_currency, regulator_name
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
 from app.services.live_types import (
+    LiveFindingSpec,
     LiveModuleResult,
     findings_from_validations,
     worst_status,
@@ -186,6 +190,12 @@ class _ActiveCapitalParams:
     # (the engine then falls back to ingested provisions).
     crm_haircuts: dict[str, Decimal] = dataclass_field(default_factory=dict)
     ecl_assumptions: tuple[EclAssumption, ...] = ()
+    # SDI Phase E (docs/sdi.md §4.2): the institution class selects the capital
+    # regime (bank Basel CRD vs SDI simplified s.29), and the control-plane CAR
+    # floor is the fallback when the tenant has no board threshold row. Defaults
+    # keep every existing constructor on the byte-identical bank path.
+    institution_class: str = "bank"
+    car_min_fallback: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -868,17 +878,24 @@ def _validation_rows(
     stress: CapitalStressResult | None,
     currency: str,
 ) -> tuple[tuple[str, bool, str, str], ...]:
-    ratio_checks = (
+    # CAR always applies; the Basel sub-tier + leverage minima apply only under
+    # the bank (CRD) regime. Under SDI s.29 they are structurally excluded and
+    # are omitted entirely rather than reported as passing against a 0% sentinel
+    # (audit M3, docs/sdi.md §4.2).
+    ratio_checks = [
         ("car_above_minimum", "CAR", ratios.car_pct, params.car_min_pct),
-        ("cet1_above_minimum", "CET1 ratio", ratios.cet1_ratio_pct, params.cet1_min_pct),
-        ("tier1_above_minimum", "Tier 1 ratio", ratios.tier1_ratio_pct, params.tier1_min_pct),
-        (
-            "leverage_above_minimum",
-            "leverage ratio",
-            ratios.leverage_ratio_pct,
-            params.leverage_min_pct,
-        ),
-    )
+    ]
+    if params.basel_applicable:
+        ratio_checks += [
+            ("cet1_above_minimum", "CET1 ratio", ratios.cet1_ratio_pct, params.cet1_min_pct),
+            ("tier1_above_minimum", "Tier 1 ratio", ratios.tier1_ratio_pct, params.tier1_min_pct),
+            (
+                "leverage_above_minimum",
+                "leverage ratio",
+                ratios.leverage_ratio_pct,
+                params.leverage_min_pct,
+            ),
+        ]
     rows: list[tuple[str, bool, str, str]] = []
     for rule_code, label, value, minimum in ratio_checks:
         passed = value >= minimum
@@ -1161,24 +1178,11 @@ def _compute_inline_or_409(
     try:
         return _compute_inline(db, ctx, bank, period)
     except MissingParameterError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error_code": "missing_parameter",
-                "message": str(exc),
-                "parameter": exc.name,
-            },
-        ) from exc
+        raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except CapitalRunError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": exc.code, "message": exc.message},
-        ) from exc
+        raise ModuleDataUnavailable(exc.code, exc.message) from exc
     except CapitalComputationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": "calculation_error", "message": str(exc)},
-        ) from exc
+        raise ModuleDataUnavailable("calculation_error", str(exc)) from exc
 
 
 def current_input_hash(
@@ -1223,6 +1227,16 @@ def compute_live(
     findings = findings_from_validations(
         _validation_rows(ratios, params, None, base_currency(bank)), status
     )
+    # SDI simplified-capital checks reconciled into live findings + the module
+    # status (QA audit 2026-08-20 P1-6): a paid-up / statutory-reserve shortfall now
+    # surfaces in Alerts and governance signals, not only on the s.29 diagnostics
+    # page. Bank tenants are untouched (the branch is class-gated).
+    if active.institution_class == "sdi":
+        sdi_findings, sdi_status = _sdi_capital_live_findings(
+            db, ctx, bank, current.source_as_of_date
+        )
+        findings = findings + sdi_findings
+        status = worst_status(status, sdi_status)
     return LiveModuleResult(
         metrics=metrics,
         status=status,
@@ -1230,6 +1244,37 @@ def compute_live(
         findings=findings,
         source_as_of_date=current.source_as_of_date,
     )
+
+
+def _sdi_capital_live_findings(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> tuple[tuple[LiveFindingSpec, ...], str]:
+    """SDI simplified-capital checks (paid-up + statutory reserve) as live findings.
+
+    A hard licensing floor (paid-up capital below the statutory minimum) is a
+    ``critical`` finding and drives the capital module red; a reserve-fund shortfall
+    is a ``medium`` finding driving it amber. A not-computable check (missing data)
+    raises no alert — the s.29 diagnostics page surfaces it, but a missing input is
+    not a breach. Values come from ``sdi_capital_checks`` (control-plane thresholds
+    with provenance), so the alert and the s.29 page share one source of truth."""
+    checks = (
+        (sdi_capital_checks.check_paid_up_capital(db, ctx, bank, as_of), "critical", "red"),
+        (sdi_capital_checks.check_statutory_reserve_fund(db, ctx, bank, as_of), "medium", "amber"),
+    )
+    findings: list[LiveFindingSpec] = []
+    status = "green"
+    for result, severity, breach_status in checks:
+        if result.compliant is False:
+            findings.append(
+                LiveFindingSpec(
+                    rule_id=f"sdi_capital.{result.check}",
+                    severity=severity,
+                    message=result.detail,
+                    metric=result.check,
+                )
+            )
+            status = worst_status(status, breach_status)
+    return tuple(findings), status
 
 
 def _baseline_run_or_409(
@@ -1401,9 +1446,27 @@ def _load_active_params(
     crm_haircuts.update(
         {row.collateral_class: Decimal(str(row.haircut_pct)) for row in crm_rows}
     )
+    # The institution class selects the capital regime; the control-plane CAR
+    # floor is the fallback used only when the tenant has no board threshold row
+    # (docs/sdi.md §4.2, §7 Phase E). ``try_resolve`` is None for a jurisdiction
+    # with no seeded default — the bank path never depends on it.
+    car_min_param = regulatory_parameters.try_resolve(db, bank, "car_min", as_of=as_of)
+    thresholds = {row.threshold_code: Decimal(str(row.value_pct)) for row in threshold_rows}
+    # Tighten-only guard (QA audit 2026-08-20 P1-5): a tenant board CAR floor may
+    # only be AT LEAST as strict as the control-plane regulatory minimum (for Ghana
+    # 13% = 10% + 3% CCB). A board register that sets a weaker minimum is clamped up
+    # to the regulatory floor — it can never weaken it. Codes with no control-plane
+    # counterpart (car_early_warning/critical, cet1/tier1/leverage minima) are
+    # unconstrained here; add a control-plane row to bring them under the guard.
+    if car_min_param is not None and "car_min" in thresholds:
+        control_floor = car_min_param.normalized_value
+        if control_floor is not None:
+            thresholds["car_min"] = regulatory_parameters.tighten(
+                "car_min", thresholds["car_min"], control_floor
+            )
     return _ActiveCapitalParams(
         risk_weights={row.risk_weight_code: Decimal(str(row.weight_pct)) for row in weight_rows},
-        thresholds={row.threshold_code: Decimal(str(row.value_pct)) for row in threshold_rows},
+        thresholds=thresholds,
         crm_haircuts=crm_haircuts,
         ecl_assumptions=tuple(
             EclAssumption(
@@ -1414,10 +1477,37 @@ def _load_active_params(
             )
             for row in ecl_rows
         ),
+        institution_class=_resolve_institution_class(db, bank),
+        car_min_fallback=car_min_param.value if car_min_param is not None else None,
     )
 
 
+# SDI simplified s.29 capital (docs/sdi.md §4.2): market-risk and operational-risk
+# charges do not apply, there are no Basel sub-tier (CET1/Tier1) minimums or a
+# leverage floor, and the CAR RAG collapses to the single s.29 floor. These are
+# STRUCTURAL s.29 settings that configure the SHARED engine to compute CAR over
+# the credit-risk base against the s.29 floor — they are NOT tunable regulatory
+# values (the CAR floor and the risk weights are, and come from the control plane
+# / the tenant register). Market and operational charges are zeroed, so the RWA
+# multiplier is neutral; the general-provisions Tier-2 cap keeps the conventional
+# 1.25% of credit RWA.
+_SDI_STRUCTURAL_CAPITAL = {
+    "bia_alpha_pct": _ZERO,
+    "fx_charge_pct": _ZERO,
+    "rwa_multiplier": Decimal("1250"),
+    "tier2_gp_cap_pct_credit_rwa": Decimal("1.25"),
+    "cet1_min": _ZERO,
+    "tier1_min": _ZERO,
+    "leverage_min": _ZERO,
+}
+
+
 def _engine_params(active: _ActiveCapitalParams) -> CapitalParams:
+    """Build the engine params for the tenant's capital regime. A bank runs the
+    full Basel CRD set (unchanged — byte-identical); an SDI runs the simplified
+    s.29 set (only the CAR floor is a required regulatory value)."""
+    if active.institution_class == "sdi":
+        return _sdi_engine_params(active)
     missing = [code for code in _REQUIRED_THRESHOLDS if code not in active.thresholds]
     if missing:
         raise CapitalRunError(
@@ -1439,6 +1529,43 @@ def _engine_params(active: _ActiveCapitalParams) -> CapitalParams:
         car_early_warning_pct=thresholds["car_early_warning"],
         car_critical_pct=thresholds["car_critical"],
         crm_haircuts=active.crm_haircuts,
+    )
+
+
+def _sdi_engine_params(active: _ActiveCapitalParams) -> CapitalParams:
+    """Simplified s.29 capital params (docs/sdi.md §4.2). The ONLY required
+    regulatory value is the CAR floor — the tenant's board row if set, else the
+    control-plane class default (10%); the run fails loud if neither exists. The
+    RAG has a single floor (early-warning = critical = the floor, no CCB band).
+    Risk weights come from the tenant's ParamRiskWeight register exactly as for a
+    bank — an SDI configures them or the engine fails loud on a loan (never a
+    made-up weight). Market/operational/tier/leverage take the s.29 structural
+    settings above."""
+    car_min = active.thresholds.get("car_min", active.car_min_fallback)
+    if car_min is None:
+        raise CapitalRunError(
+            "missing_parameter",
+            "The SDI CAR floor (car_min) is configured neither on the institution's "
+            "board register nor in the regulatory-parameter control plane.",
+            {"threshold_codes": ["car_min"]},
+        )
+    s = _SDI_STRUCTURAL_CAPITAL
+    return CapitalParams(
+        risk_weights=active.risk_weights,
+        bia_alpha_pct=s["bia_alpha_pct"],
+        fx_charge_pct=s["fx_charge_pct"],
+        rwa_multiplier_pct=s["rwa_multiplier"],
+        tier2_gp_cap_pct_credit_rwa=s["tier2_gp_cap_pct_credit_rwa"],
+        cet1_min_pct=s["cet1_min"],
+        tier1_min_pct=s["tier1_min"],
+        car_min_pct=car_min,
+        leverage_min_pct=s["leverage_min"],
+        car_early_warning_pct=car_min,
+        car_critical_pct=car_min,
+        crm_haircuts=active.crm_haircuts,
+        # s.29: the Basel sub-tier / leverage minima do not apply and must not be
+        # surfaced as passing compliance rules against a 0% sentinel (audit M3).
+        basel_applicable=False,
     )
 
 

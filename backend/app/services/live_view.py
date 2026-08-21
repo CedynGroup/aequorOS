@@ -18,6 +18,7 @@ from app.db.base import utc_now
 from app.models import (
     Bank,
     BankReportingPeriod,
+    CurrentFinancialFact,
     IngestionBatch,
     LiveMetric,
     LiveMetricSnapshot,
@@ -139,7 +140,21 @@ def _refresh_needed(
     Compares the newest ingestion batch against the oldest cached module — a pure
     timestamp comparison, no engine work, so it is safe on every read.
     """
-    if not cached:
+    has_current_facts = db.scalar(
+        select(CurrentFinancialFact.id)
+        .where(
+            CurrentFinancialFact.organization_id == ctx.organization_id,
+            CurrentFinancialFact.bank_id == bank.id,
+        )
+        .limit(1)
+    )
+    if has_current_facts is None or not cached:
+        return True
+    if any(
+        row.pipeline_state == "failed"
+        or row.metrics.get("availability") == "unavailable"
+        for row in cached.values()
+    ):
         return True
     oldest_compute = min((row.computed_at for row in cached.values()), default=None)
     latest_ingest = db.scalar(

@@ -2,15 +2,22 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { isHrefVisible } from '@/lib/modules';
+import { useModuleScope } from './BankContext';
 
 export type Tab = { href: string; label: string };
 
 export default function ModuleTabs({ tabs }: { tabs: Tab[] }) {
   const pathname = usePathname();
+  const moduleScope = useModuleScope();
+  // Scope the sub-tabs to the institution type (docs/sdi.md §3.2/§6.3): an SDI
+  // tenant drops Basel-only liquidity tabs (Buffer/NSFR) and the full Basel
+  // stack, keeping only its in-scope sections. Banks keep every tab.
+  const visibleTabs = tabs.filter((t) => isHrefVisible(t.href, moduleScope));
   return (
     <div className="bg-surface-raised border-b border-border-light px-8">
       <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label="Module sections">
-        {tabs.map((t) => {
+        {visibleTabs.map((t) => {
           const active =
             t.href === pathname ||
             (t.href !== '/' && pathname.startsWith(t.href + '/')) ||

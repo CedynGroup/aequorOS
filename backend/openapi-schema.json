@@ -2559,6 +2559,210 @@
         "title": "BehavioralApplyRequest",
         "type": "object"
       },
+      "BehavioralLiquidityDataStatus": {
+        "enum": [
+          "ready",
+          "partial",
+          "not_computable"
+        ],
+        "type": "string"
+      },
+      "BehavioralLiquidityDimension": {
+        "enum": [
+          "product",
+          "customer_segment",
+          "concentration_group",
+          "branch"
+        ],
+        "type": "string"
+      },
+      "BehavioralLiquidityRead": {
+        "additionalProperties": false,
+        "properties": {
+          "asOfDate": {
+            "title": "Asofdate",
+            "type": "string"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/BehavioralLiquidityScenarioRead"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/BehavioralLiquiditySegmentRead"
+            },
+            "title": "Segments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "asOfDate",
+          "segments",
+          "scenarios"
+        ],
+        "title": "BehavioralLiquidityRead",
+        "type": "object"
+      },
+      "BehavioralLiquidityScenarioRead": {
+        "additionalProperties": false,
+        "properties": {
+          "activationHorizon": {
+            "title": "Activationhorizon",
+            "type": "string"
+          },
+          "depositRunoffUpliftPct": {
+            "title": "Depositrunoffupliftpct",
+            "type": "number"
+          },
+          "fundingCostUpliftBps": {
+            "title": "Fundingcostupliftbps",
+            "type": "number"
+          },
+          "linkedAction": {
+            "title": "Linkedaction",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "name",
+          "activationHorizon",
+          "linkedAction",
+          "depositRunoffUpliftPct",
+          "fundingCostUpliftBps"
+        ],
+        "title": "BehavioralLiquidityScenarioRead",
+        "type": "object"
+      },
+      "BehavioralLiquiditySegmentRead": {
+        "additionalProperties": false,
+        "properties": {
+          "currentBalanceGhs": {
+            "title": "Currentbalanceghs",
+            "type": "number"
+          },
+          "dataStatus": {
+            "$ref": "#/components/schemas/BehavioralLiquidityDataStatus"
+          },
+          "depositBeta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depositbeta"
+          },
+          "dimension": {
+            "$ref": "#/components/schemas/BehavioralLiquidityDimension"
+          },
+          "latestWithdrawalPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latestwithdrawalpct"
+          },
+          "observations": {
+            "title": "Observations",
+            "type": "integer"
+          },
+          "observedMonthlyRunoffPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observedmonthlyrunoffpct"
+          },
+          "positionAttritionPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positionattritionpct"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "repricingLagMonths": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repricinglagmonths"
+          },
+          "seasonalDeviationPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seasonaldeviationpct"
+          },
+          "segment": {
+            "title": "Segment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dimension",
+          "segment",
+          "currentBalanceGhs",
+          "observedMonthlyRunoffPct",
+          "latestWithdrawalPct",
+          "positionAttritionPct",
+          "seasonalDeviationPct",
+          "depositBeta",
+          "repricingLagMonths",
+          "observations",
+          "dataStatus",
+          "reasons"
+        ],
+        "title": "BehavioralLiquiditySegmentRead",
+        "type": "object"
+      },
       "BehavioralMethod": {
         "enum": [
           "ml",
@@ -4004,6 +4208,73 @@
           "headroom_pp"
         ],
         "title": "CapitalBuffersRead",
+        "type": "object"
+      },
+      "CapitalCheckRead": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Ghs"
+          },
+          "check": {
+            "title": "Check",
+            "type": "string"
+          },
+          "compliant": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliant"
+          },
+          "confirmation_status": {
+            "title": "Confirmation Status",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "required_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Ghs"
+          },
+          "source_citation": {
+            "title": "Source Citation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "check",
+          "compliant",
+          "actual_ghs",
+          "required_ghs",
+          "detail",
+          "source_citation",
+          "confirmation_status"
+        ],
+        "title": "CapitalCheckRead",
         "type": "object"
       },
       "CapitalComparisonBasisAttribute": {
@@ -6553,12 +6824,24 @@
       "CashflowForecastAccuracyRead": {
         "additionalProperties": false,
         "properties": {
+          "biasPct": {
+            "title": "Biaspct",
+            "type": "number"
+          },
           "improvementPct": {
             "title": "Improvementpct",
             "type": "number"
           },
+          "intervalCoveragePct": {
+            "title": "Intervalcoveragepct",
+            "type": "number"
+          },
           "lstmMape": {
             "title": "Lstmmape",
+            "type": "number"
+          },
+          "residualDriftPct": {
+            "title": "Residualdriftpct",
             "type": "number"
           },
           "staticMape": {
@@ -6569,7 +6852,10 @@
         "required": [
           "lstmMape",
           "staticMape",
-          "improvementPct"
+          "improvementPct",
+          "biasPct",
+          "intervalCoveragePct",
+          "residualDriftPct"
         ],
         "title": "CashflowForecastAccuracyRead",
         "type": "object"
@@ -6591,6 +6877,14 @@
       "CashflowForecastPointRead": {
         "additionalProperties": false,
         "properties": {
+          "behavioralNetFlow": {
+            "title": "Behavioralnetflow",
+            "type": "number"
+          },
+          "contractualNetFlow": {
+            "title": "Contractualnetflow",
+            "type": "number"
+          },
           "date": {
             "format": "date",
             "title": "Date",
@@ -6608,6 +6902,22 @@
             "title": "Netflow",
             "type": "number"
           },
+          "p5": {
+            "title": "P5",
+            "type": "number"
+          },
+          "p50": {
+            "title": "P50",
+            "type": "number"
+          },
+          "p95": {
+            "title": "P95",
+            "type": "number"
+          },
+          "scenarioAdjustment": {
+            "title": "Scenarioadjustment",
+            "type": "number"
+          },
           "upper": {
             "title": "Upper",
             "type": "number"
@@ -6618,7 +6928,13 @@
           "date",
           "netFlow",
           "lower",
-          "upper"
+          "upper",
+          "behavioralNetFlow",
+          "contractualNetFlow",
+          "scenarioAdjustment",
+          "p5",
+          "p50",
+          "p95"
         ],
         "title": "CashflowForecastPointRead",
         "type": "object"
@@ -6654,19 +6970,44 @@
             },
             "title": "Points",
             "type": "array"
+          },
+          "scenario": {
+            "$ref": "#/components/schemas/CashflowForecastScenario"
+          },
+          "scenarioAssumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scenarioassumptions",
+            "type": "array"
+          },
+          "simulationPaths": {
+            "title": "Simulationpaths",
+            "type": "integer"
           }
         },
         "required": [
           "mode",
+          "scenario",
           "horizon",
           "asOfDate",
           "modelVersion",
           "modelScope",
           "accuracy",
-          "points"
+          "points",
+          "simulationPaths",
+          "scenarioAssumptions"
         ],
         "title": "CashflowForecastRead",
         "type": "object"
+      },
+      "CashflowForecastScenario": {
+        "enum": [
+          "baseline",
+          "adverse",
+          "severe"
+        ],
+        "type": "string"
       },
       "CashflowHistoryPointRead": {
         "additionalProperties": false,
@@ -7262,6 +7603,128 @@
         ],
         "type": "string"
       },
+      "CfpBehavioralLiquidityScenario-Input": {
+        "additionalProperties": false,
+        "description": "A Board-owned deposit-behavior overlay linked to a CFP action.",
+        "properties": {
+          "activation_horizon": {
+            "$ref": "#/components/schemas/CfpHorizon"
+          },
+          "deposit_runoff_uplift_pct": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Deposit Runoff Uplift Pct"
+          },
+          "funding_cost_uplift_bps": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Funding Cost Uplift Bps"
+          },
+          "linked_action": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Linked Action",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "name",
+          "activation_horizon",
+          "linked_action",
+          "deposit_runoff_uplift_pct",
+          "funding_cost_uplift_bps"
+        ],
+        "title": "CfpBehavioralLiquidityScenario",
+        "type": "object"
+      },
+      "CfpBehavioralLiquidityScenario-Output": {
+        "additionalProperties": false,
+        "description": "A Board-owned deposit-behavior overlay linked to a CFP action.",
+        "properties": {
+          "activation_horizon": {
+            "$ref": "#/components/schemas/CfpHorizon"
+          },
+          "deposit_runoff_uplift_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Deposit Runoff Uplift Pct",
+            "type": "string"
+          },
+          "funding_cost_uplift_bps": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Funding Cost Uplift Bps",
+            "type": "string"
+          },
+          "linked_action": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Linked Action",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "name",
+          "activation_horizon",
+          "linked_action",
+          "deposit_runoff_uplift_pct",
+          "funding_cost_uplift_bps"
+        ],
+        "title": "CfpBehavioralLiquidityScenario",
+        "type": "object"
+      },
       "CfpCommunicationPlan": {
         "additionalProperties": false,
         "description": "\u00b672(g): communication plans, regulator and media included.",
@@ -7302,7 +7765,7 @@
         "title": "CfpCommunicationPlan",
         "type": "object"
       },
-      "CfpContent": {
+      "CfpContent-Input": {
         "additionalProperties": false,
         "properties": {
           "action_plans": {
@@ -7317,6 +7780,76 @@
               "$ref": "#/components/schemas/CfpAlternativeSource"
             },
             "title": "Alternative Sources",
+            "type": "array"
+          },
+          "behavioral_liquidity_scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/CfpBehavioralLiquidityScenario-Input"
+            },
+            "title": "Behavioral Liquidity Scenarios",
+            "type": "array"
+          },
+          "communication_plans": {
+            "items": {
+              "$ref": "#/components/schemas/CfpCommunicationPlan"
+            },
+            "title": "Communication Plans",
+            "type": "array"
+          },
+          "escalation_procedures": {
+            "items": {
+              "$ref": "#/components/schemas/CfpEscalationStep"
+            },
+            "title": "Escalation Procedures",
+            "type": "array"
+          },
+          "ewi_triggers": {
+            "items": {
+              "$ref": "#/components/schemas/CfpEwiTrigger"
+            },
+            "title": "Ewi Triggers",
+            "type": "array"
+          },
+          "funding_options": {
+            "items": {
+              "$ref": "#/components/schemas/CfpFundingOption"
+            },
+            "title": "Funding Options",
+            "type": "array"
+          },
+          "key_relationships": {
+            "items": {
+              "$ref": "#/components/schemas/CfpKeyRelationship"
+            },
+            "title": "Key Relationships",
+            "type": "array"
+          }
+        },
+        "title": "CfpContent",
+        "type": "object"
+      },
+      "CfpContent-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "action_plans": {
+            "items": {
+              "$ref": "#/components/schemas/CfpActionPlan"
+            },
+            "title": "Action Plans",
+            "type": "array"
+          },
+          "alternative_sources": {
+            "items": {
+              "$ref": "#/components/schemas/CfpAlternativeSource"
+            },
+            "title": "Alternative Sources",
+            "type": "array"
+          },
+          "behavioral_liquidity_scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/CfpBehavioralLiquidityScenario-Output"
+            },
+            "title": "Behavioral Liquidity Scenarios",
             "type": "array"
           },
           "communication_plans": {
@@ -7684,7 +8217,7 @@
         "additionalProperties": false,
         "properties": {
           "content": {
-            "$ref": "#/components/schemas/CfpContent"
+            "$ref": "#/components/schemas/CfpContent-Input"
           },
           "reason": {
             "maxLength": 2000,
@@ -7765,7 +8298,7 @@
             "type": "string"
           },
           "content": {
-            "$ref": "#/components/schemas/CfpContent"
+            "$ref": "#/components/schemas/CfpContent-Output"
           },
           "created_at": {
             "format": "date-time",
@@ -9272,6 +9805,36 @@
         "title": "DatabaseConnectionUpdate",
         "type": "object"
       },
+      "DelinquencyBucketRead": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "count",
+          "exposure_ghs"
+        ],
+        "title": "DelinquencyBucketRead",
+        "type": "object"
+      },
       "DiscoveredColumn": {
         "additionalProperties": false,
         "properties": {
@@ -10091,9 +10654,16 @@
             "type": "string"
           },
           "baseline_lcr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Baseline Lcr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Lcr Pct"
           },
           "binding_minima": {
             "items": {
@@ -10103,8 +10673,15 @@
             "type": "array"
           },
           "both_breached": {
-            "title": "Both Breached",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Both Breached"
           },
           "capital_gap": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -10164,9 +10741,16 @@
             "type": "string"
           },
           "stressed_lcr_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Stressed Lcr Pct",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stressed Lcr Pct"
           },
           "with_actions_first_breach_year": {
             "anyOf": [
@@ -10196,9 +10780,6 @@
           "stressed_car_end_pct",
           "baseline_car_end_pct",
           "car_erosion_pp",
-          "stressed_lcr_pct",
-          "baseline_lcr_pct",
-          "both_breached",
           "stress_stays_above_all_minima",
           "first_breach_year",
           "binding_minima",
@@ -19482,6 +20063,50 @@
         "title": "LiquidityMetricsRead",
         "type": "object"
       },
+      "LiquidityMonitoringRead": {
+        "additionalProperties": false,
+        "description": "Institution-neutral canonical liquidity-monitoring analytics.",
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "counterbalancing_capacity": {
+            "$ref": "#/components/schemas/SdiCounterbalancingCapacityRead"
+          },
+          "funding_concentration": {
+            "$ref": "#/components/schemas/SdiFundingConcentrationRead"
+          },
+          "institution_class": {
+            "title": "Institution Class",
+            "type": "string"
+          },
+          "maturity_ladder": {
+            "items": {
+              "$ref": "#/components/schemas/SdiMaturityBucketRead"
+            },
+            "title": "Maturity Ladder",
+            "type": "array"
+          },
+          "readiness": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleReadinessRead"
+            },
+            "title": "Readiness",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "institution_class",
+          "maturity_ladder",
+          "funding_concentration",
+          "counterbalancing_capacity",
+          "readiness"
+        ],
+        "title": "LiquidityMonitoringRead",
+        "type": "object"
+      },
       "LiquidityRatioStatus": {
         "enum": [
           "green",
@@ -20254,6 +20879,42 @@
           "computed_at"
         ],
         "title": "LiveSummaryRead",
+        "type": "object"
+      },
+      "LoanGradeBucketRead": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "grade": {
+            "title": "Grade",
+            "type": "string"
+          },
+          "non_performing": {
+            "title": "Non Performing",
+            "type": "boolean"
+          },
+          "provision_required_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Provision Required Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "grade",
+          "count",
+          "exposure_ghs",
+          "provision_required_ghs",
+          "non_performing"
+        ],
+        "title": "LoanGradeBucketRead",
         "type": "object"
       },
       "LoginRequest": {
@@ -22521,6 +23182,33 @@
           "paid_up"
         ],
         "type": "string"
+      },
+      "ModuleReadinessRead": {
+        "additionalProperties": false,
+        "properties": {
+          "module": {
+            "title": "Module",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "module",
+          "status",
+          "reasons"
+        ],
+        "title": "ModuleReadinessRead",
+        "type": "object"
       },
       "NotificationListRead": {
         "additionalProperties": false,
@@ -24875,6 +25563,37 @@
           "reason"
         ],
         "title": "PolicyUpsertRequest",
+        "type": "object"
+      },
+      "PortfolioAtRiskRead": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ratio",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "exposure_ghs",
+          "ratio"
+        ],
+        "title": "PortfolioAtRiskRead",
         "type": "object"
       },
       "PositionFacetValueRead": {
@@ -28525,6 +29244,43 @@
         "title": "RiskTypesRead",
         "type": "object"
       },
+      "RiskWeightBandRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "confirmation_status": {
+            "title": "Confirmation Status",
+            "type": "string"
+          },
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "rwa_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rwa Ghs",
+            "type": "string"
+          },
+          "weight_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Weight Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bucket",
+          "weight_pct",
+          "exposure_ghs",
+          "rwa_ghs",
+          "confirmation_status"
+        ],
+        "title": "RiskWeightBandRead",
+        "type": "object"
+      },
       "RunReproductionRead": {
         "additionalProperties": false,
         "properties": {
@@ -29888,6 +30644,819 @@
           "created_at"
         ],
         "title": "ScoreRead",
+        "type": "object"
+      },
+      "SdiCapitalAssuranceRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "capital_to_gl_difference_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital To Gl Difference Ghs"
+          },
+          "current": {
+            "$ref": "#/components/schemas/SdiCapitalHistoryPointRead"
+          },
+          "filing_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Filing Blockers",
+            "type": "array"
+          },
+          "filing_status": {
+            "title": "Filing Status",
+            "type": "string"
+          },
+          "gl_reconciliation_status": {
+            "title": "Gl Reconciliation Status",
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/SdiCapitalHistoryPointRead"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "mapped_gl_capital_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapped Gl Capital Ghs"
+          },
+          "reserve_change_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserve Change Ghs"
+          }
+        },
+        "required": [
+          "as_of",
+          "current",
+          "history",
+          "mapped_gl_capital_ghs",
+          "capital_to_gl_difference_ghs",
+          "gl_reconciliation_status",
+          "reserve_change_ghs",
+          "filing_status",
+          "filing_blockers"
+        ],
+        "title": "SdiCapitalAssuranceRead",
+        "type": "object"
+      },
+      "SdiCapitalChecksRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CapitalCheckRead"
+            },
+            "title": "Checks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "checks"
+        ],
+        "title": "SdiCapitalChecksRead",
+        "type": "object"
+      },
+      "SdiCapitalHistoryPointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_provision_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Provision Ghs"
+          },
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "assessment_status": {
+            "title": "Assessment Status",
+            "type": "string"
+          },
+          "capital_headroom_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Headroom Ghs"
+          },
+          "car_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Car Pct"
+          },
+          "net_own_funds_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Own Funds Ghs",
+            "type": "string"
+          },
+          "npl_exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Npl Exposure Ghs",
+            "type": "string"
+          },
+          "npl_ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Npl Ratio",
+            "type": "string"
+          },
+          "provision_coverage_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision Coverage Pct"
+          },
+          "required_provision_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Required Provision Ghs",
+            "type": "string"
+          },
+          "total_rwa_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Rwa Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of",
+          "net_own_funds_ghs",
+          "total_rwa_ghs",
+          "car_pct",
+          "capital_headroom_ghs",
+          "npl_exposure_ghs",
+          "npl_ratio",
+          "required_provision_ghs",
+          "actual_provision_ghs",
+          "provision_coverage_pct",
+          "assessment_status"
+        ],
+        "title": "SdiCapitalHistoryPointRead",
+        "type": "object"
+      },
+      "SdiCapitalSummaryRead": {
+        "additionalProperties": false,
+        "description": "The s.29 capital-adequacy summary: CAR = Net Own Funds \u00f7 RWA vs the floor.",
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "bands": {
+            "items": {
+              "$ref": "#/components/schemas/RiskWeightBandRead"
+            },
+            "title": "Bands",
+            "type": "array"
+          },
+          "car_min_confirmation": {
+            "title": "Car Min Confirmation",
+            "type": "string"
+          },
+          "car_min_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Car Min Pct",
+            "type": "string"
+          },
+          "car_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Car Pct"
+          },
+          "computable": {
+            "title": "Computable",
+            "type": "boolean"
+          },
+          "net_own_funds_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Own Funds Ghs",
+            "type": "string"
+          },
+          "pending_parameters": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Parameters",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_rwa_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Rwa Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of",
+          "net_own_funds_ghs",
+          "total_rwa_ghs",
+          "car_pct",
+          "car_min_pct",
+          "status",
+          "car_min_confirmation",
+          "computable",
+          "bands",
+          "pending_parameters"
+        ],
+        "title": "SdiCapitalSummaryRead",
+        "type": "object"
+      },
+      "SdiCounterbalancingCapacityRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bog_eligible_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Bog Eligible Ghs",
+            "type": "string"
+          },
+          "gross_unencumbered_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Gross Unencumbered Ghs",
+            "type": "string"
+          },
+          "monetized_value_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Monetized Value Ghs",
+            "type": "string"
+          },
+          "uncalibrated_asset_count": {
+            "title": "Uncalibrated Asset Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "gross_unencumbered_ghs",
+          "monetized_value_ghs",
+          "bog_eligible_ghs",
+          "uncalibrated_asset_count"
+        ],
+        "title": "SdiCounterbalancingCapacityRead",
+        "type": "object"
+      },
+      "SdiExposureRead": {
+        "additionalProperties": false,
+        "properties": {
+          "connection": {
+            "title": "Connection",
+            "type": "string"
+          },
+          "counterparty_name": {
+            "title": "Counterparty Name",
+            "type": "string"
+          },
+          "exempt": {
+            "title": "Exempt",
+            "type": "boolean"
+          },
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "large_exposure_limit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Large Exposure Limit Pct",
+            "type": "string"
+          },
+          "pct_net_own_funds": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Net Own Funds"
+          },
+          "single_obligor_limit_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Single Obligor Limit Pct",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "counterparty_name",
+          "connection",
+          "exposure_ghs",
+          "pct_net_own_funds",
+          "single_obligor_limit_pct",
+          "large_exposure_limit_pct",
+          "status",
+          "exempt"
+        ],
+        "title": "SdiExposureRead",
+        "type": "object"
+      },
+      "SdiFundingConcentrationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/SdiFundingProviderRead"
+            },
+            "title": "Providers",
+            "type": "array"
+          },
+          "top_five_deposits_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Top Five Deposits Ghs",
+            "type": "string"
+          },
+          "top_five_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Five Pct"
+          },
+          "total_deposits_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Deposits Ghs",
+            "type": "string"
+          },
+          "unattributed_deposits_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unattributed Deposits Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "total_deposits_ghs",
+          "top_five_deposits_ghs",
+          "top_five_pct",
+          "unattributed_deposits_ghs",
+          "providers"
+        ],
+        "title": "SdiFundingConcentrationRead",
+        "type": "object"
+      },
+      "SdiFundingProviderRead": {
+        "additionalProperties": false,
+        "properties": {
+          "deposit_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Deposit Ghs",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pct_total_deposits": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Total Deposits"
+          },
+          "related": {
+            "title": "Related",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "deposit_ghs",
+          "pct_total_deposits",
+          "related"
+        ],
+        "title": "SdiFundingProviderRead",
+        "type": "object"
+      },
+      "SdiLargeExposuresRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "exposures": {
+            "items": {
+              "$ref": "#/components/schemas/SdiExposureRead"
+            },
+            "title": "Exposures",
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "net_own_funds_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Own Funds Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of",
+          "net_own_funds_ghs",
+          "exposures",
+          "findings"
+        ],
+        "title": "SdiLargeExposuresRead",
+        "type": "object"
+      },
+      "SdiLiquidityPositionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "counterbalancing_capacity": {
+            "$ref": "#/components/schemas/SdiCounterbalancingCapacityRead"
+          },
+          "funding_concentration": {
+            "$ref": "#/components/schemas/SdiFundingConcentrationRead"
+          },
+          "maturity_ladder": {
+            "items": {
+              "$ref": "#/components/schemas/SdiMaturityBucketRead"
+            },
+            "title": "Maturity Ladder",
+            "type": "array"
+          },
+          "ratios": {
+            "items": {
+              "$ref": "#/components/schemas/SdiLiquidityRatioRead"
+            },
+            "title": "Ratios",
+            "type": "array"
+          },
+          "readiness": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleReadinessRead"
+            },
+            "title": "Readiness",
+            "type": "array"
+          },
+          "reserves": {
+            "items": {
+              "$ref": "#/components/schemas/SdiLiquidityReserveRead"
+            },
+            "title": "Reserves",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "ratios",
+          "reserves",
+          "maturity_ladder",
+          "funding_concentration",
+          "counterbalancing_capacity",
+          "readiness"
+        ],
+        "title": "SdiLiquidityPositionRead",
+        "type": "object"
+      },
+      "SdiLiquidityRatioRead": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "threshold_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Threshold Pct",
+            "type": "string"
+          },
+          "threshold_source": {
+            "title": "Threshold Source",
+            "type": "string"
+          },
+          "value_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Pct"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "value_pct",
+          "threshold_pct",
+          "status",
+          "threshold_source"
+        ],
+        "title": "SdiLiquidityRatioRead",
+        "type": "object"
+      },
+      "SdiLiquidityReserveRead": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "confirmation_status": {
+            "title": "Confirmation Status",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "source_citation": {
+            "title": "Source Citation",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "threshold_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Threshold Pct",
+            "type": "string"
+          },
+          "value_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Pct"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "value_pct",
+          "threshold_pct",
+          "status",
+          "source_citation",
+          "confirmation_status"
+        ],
+        "title": "SdiLiquidityReserveRead",
+        "type": "object"
+      },
+      "SdiLoanClassificationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/LoanGradeBucketRead"
+            },
+            "title": "Buckets",
+            "type": "array"
+          },
+          "delinquency_buckets": {
+            "items": {
+              "$ref": "#/components/schemas/DelinquencyBucketRead"
+            },
+            "title": "Delinquency Buckets",
+            "type": "array"
+          },
+          "dpd_covered_count": {
+            "title": "Dpd Covered Count",
+            "type": "integer"
+          },
+          "dpd_covered_exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Dpd Covered Exposure Ghs",
+            "type": "string"
+          },
+          "institution_class": {
+            "title": "Institution Class",
+            "type": "string"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "npl_exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Npl Exposure Ghs",
+            "type": "string"
+          },
+          "npl_ratio": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Npl Ratio",
+            "type": "string"
+          },
+          "pending_parameters": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Parameters",
+            "type": "array"
+          },
+          "portfolio_at_risk": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAtRiskRead"
+            },
+            "title": "Portfolio At Risk",
+            "type": "array"
+          },
+          "stage_proxy_count": {
+            "title": "Stage Proxy Count",
+            "type": "integer"
+          },
+          "total_exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Exposure Ghs",
+            "type": "string"
+          },
+          "total_provision_required_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Provision Required Ghs",
+            "type": "string"
+          },
+          "unclassified_count": {
+            "title": "Unclassified Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "as_of",
+          "institution_class",
+          "loan_count",
+          "total_exposure_ghs",
+          "npl_exposure_ghs",
+          "npl_ratio",
+          "total_provision_required_ghs",
+          "stage_proxy_count",
+          "dpd_covered_count",
+          "dpd_covered_exposure_ghs",
+          "unclassified_count",
+          "buckets",
+          "delinquency_buckets",
+          "portfolio_at_risk",
+          "pending_parameters"
+        ],
+        "title": "SdiLoanClassificationRead",
+        "type": "object"
+      },
+      "SdiMaturityBucketRead": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "cumulative_mismatch_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cumulative Mismatch Ghs"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "net_mismatch_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Mismatch Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "net_mismatch_ghs",
+          "cumulative_mismatch_ghs"
+        ],
+        "title": "SdiMaturityBucketRead",
+        "type": "object"
+      },
+      "SdiReadinessRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/ModuleReadinessRead"
+            },
+            "title": "Modules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "modules"
+        ],
+        "title": "SdiReadinessRead",
         "type": "object"
       },
       "SendBackForCorrectionsRequest": {
@@ -36887,6 +38456,103 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/behavioral/liquidity": {
+      "get": {
+        "operationId": "getBehavioralLiquidity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BehavioralLiquidityRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Behavioral Liquidity",
+        "tags": [
+          "behavioral-models"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/behavioral/{model}": {
       "get": {
         "operationId": "getBehavioralModel",
@@ -38523,6 +40189,15 @@
             "schema": {
               "$ref": "#/components/schemas/CashflowForecastMode",
               "default": "lstm"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scenario",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CashflowForecastScenario",
+              "default": "baseline"
             }
           }
         ],
@@ -45194,6 +46869,121 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/liquidity-monitoring": {
+      "get": {
+        "description": "Shared funding, collateral, maturity, and data-readiness analytics.",
+        "operationId": "getLiquidityMonitoring",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiquidityMonitoringRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Liquidity Monitoring",
+        "tags": [
+          "liquidity-monitoring"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/liquidity-thresholds": {
       "get": {
         "operationId": "getLiquidityThresholdRegister",
@@ -46485,7 +48275,7 @@
             "name": "module",
             "required": true,
             "schema": {
-              "pattern": "^(liquidity|capital|irr|fx|ftp|forecast)$",
+              "pattern": "^(liquidity|capital|irr|fx|ftp|rating|forecast)$",
               "title": "Module",
               "type": "string"
             }
@@ -46680,6 +48470,121 @@
         "summary": "Get Live Summary",
         "tags": [
           "live-engine"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/loan-classification": {
+      "get": {
+        "description": "Class-aware loan classification, raw DPD, and portfolio-at-risk analytics.",
+        "operationId": "getLoanClassification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdiLoanClassificationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Loan Classification",
+        "tags": [
+          "sdi-diagnostics"
         ]
       }
     },
@@ -57360,6 +59265,823 @@
         "summary": "Archive Stress Scenario",
         "tags": [
           "scenario-workbench"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/sdi/capital-assurance": {
+      "get": {
+        "description": "Evidence-aware SDI capital history, reconciliations, and filing blockers.",
+        "operationId": "getSdiCapitalAssurance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "history_limit",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "maximum": 60,
+              "minimum": 1,
+              "title": "History Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdiCapitalAssuranceRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Sdi Capital Assurance",
+        "tags": [
+          "sdi-diagnostics"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/sdi/capital-checks": {
+      "get": {
+        "description": "The simplified-capital checks: minimum paid-up capital + statutory-reserve-\nfund adequacy, with provenance + confirmation status (docs/sdi.md \u00a74.2).",
+        "operationId": "getSdiCapitalChecks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdiCapitalChecksRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Sdi Capital Checks",
+        "tags": [
+          "sdi-diagnostics"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/sdi/capital-summary": {
+      "get": {
+        "description": "The live s.29 capital-adequacy ratio: CAR = Net Own Funds \u00f7 Risk-Weighted\nAssets against the s.29 floor. Computed directly from canonical capital-structure\n+ position data (the Basel live engine cannot serve an SDI); risk weights come\nfrom the simplified control-plane buckets, unconfirmed ones flagged (docs/sdi.md\n\u00a74.2).",
+        "operationId": "getSdiCapitalSummary",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdiCapitalSummaryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Sdi Capital Summary",
+        "tags": [
+          "sdi-diagnostics"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/sdi/large-exposures": {
+      "get": {
+        "description": "Connected-group exposure view against the SDI control-plane limits.",
+        "operationId": "getSdiLargeExposures",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdiLargeExposuresRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Sdi Large Exposures",
+        "tags": [
+          "sdi-diagnostics"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/sdi/liquidity-position": {
+      "get": {
+        "description": "Binding SDI LMTD liquidity measures: Table 1, reserves, and maturity ladder.",
+        "operationId": "getSdiLiquidityPosition",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdiLiquidityPositionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Sdi Liquidity Position",
+        "tags": [
+          "sdi-diagnostics"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/sdi/loan-classification": {
+      "get": {
+        "description": "Compatibility route for the class-aware loan classification response.",
+        "operationId": "getSdiLoanClassification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdiLoanClassificationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Sdi Loan Classification",
+        "tags": [
+          "sdi-diagnostics"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/sdi/readiness": {
+      "get": {
+        "description": "Per-module readiness (READY/PARTIAL/BLOCKED) with the specific missing-data\nreasons \u2014 the onboarding data-quality view (docs/sdi.md \u00a711).",
+        "operationId": "getSdiReadiness",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdiReadinessRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Sdi Readiness",
+        "tags": [
+          "sdi-diagnostics"
         ]
       }
     },

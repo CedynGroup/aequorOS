@@ -18,7 +18,7 @@ run = "uv run pre-commit run --all-files --config ../../.pre-commit-config.yaml"
 description = "Run FastAPI dev server"
 run = '''
 #!/usr/bin/env bash
-uv run fastapi dev app/main.py --host "${HOST:-127.0.0.1}" --port "${PORT:-8000}"
+uv run fastapi dev app/main.py --host "${HOST:-127.0.0.1}" --port "${PORT:-8001}" --reload-dir app
 '''
 
 [tasks."risk-service:worker"]

@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 type CashflowForecastMode = Literal["lstm", "static"]
+type CashflowForecastScenario = Literal["baseline", "adverse", "severe"]
 # Whether the serving model was trained on this bank's own ingested cash-flow
 # history ("bank_specific") or is the shared generic bootstrap model served while
 # the bank lacks enough daily history ("generic"). Surfaced so a generic model is
@@ -44,6 +45,9 @@ class CashflowForecastAccuracyRead(CamelClosedModel):
     lstm_mape: float
     static_mape: float
     improvement_pct: float
+    bias_pct: float
+    interval_coverage_pct: float
+    residual_drift_pct: float
 
 
 class CashflowForecastPointRead(CamelClosedModel):
@@ -52,16 +56,25 @@ class CashflowForecastPointRead(CamelClosedModel):
     net_flow: float
     lower: float
     upper: float
+    behavioral_net_flow: float
+    contractual_net_flow: float
+    scenario_adjustment: float
+    p5: float
+    p50: float
+    p95: float
 
 
 class CashflowForecastRead(CamelClosedModel):
     mode: CashflowForecastMode
+    scenario: CashflowForecastScenario
     horizon: int
     as_of_date: date
     model_version: str
     model_scope: CashflowForecastModelScope
     accuracy: CashflowForecastAccuracyRead
     points: list[CashflowForecastPointRead]
+    simulation_paths: int
+    scenario_assumptions: list[str]
 
 
 class CashflowHistoryPointRead(CamelClosedModel):

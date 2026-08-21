@@ -37,6 +37,7 @@ import type {
   BankProductUpdate,
   BehavioralApplyProduct,
   CashflowForecastMode,
+  CashflowForecastScenario,
   CashflowHorizon,
   CertifyAndSendRequest,
   ChannelCode,
@@ -88,6 +89,7 @@ import {
   liveEngineApi,
   windowAnalyticsApi,
   marketDataApi,
+  ModuleUnavailableError,
   notificationsApi,
   organizationApi,
   regulatoryCapitalApi,
@@ -344,12 +346,27 @@ export function useIrrDashboard(
   return useQuery({
     queryKey: ['irr-dashboard', bankId, periodId],
     queryFn: () =>
-      apiCall(() =>
-        regulatoryIrrApi.getIrrDashboard({
+      apiCall(async () => {
+        // The live IRR service returns HTTP 200 with an availability envelope
+        // while current facts lack a compatible analysis context. Detect it
+        // before generated-client deserialization expects dashboard arrays.
+        const response = await regulatoryIrrApi.getIrrDashboardRaw({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
-      ),
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Interest-rate risk analysis is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
     enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
@@ -642,16 +659,18 @@ export function isServiceUnavailableError(error: unknown): boolean {
 export function useCashflowForecast(
   bankId: string | undefined,
   horizon: CashflowHorizon,
-  mode: CashflowForecastMode
+  mode: CashflowForecastMode,
+  scenario: CashflowForecastScenario
 ) {
   return useQuery({
-    queryKey: ['cashflow-forecast', bankId, horizon, mode],
+    queryKey: ['cashflow-forecast', bankId, horizon, mode, scenario],
     queryFn: () =>
       apiCall(() =>
         cashflowForecastApi.getCashflowForecast({
           bankId: bankId!,
           horizon,
           mode,
+          scenario,
         })
       ),
     enabled: Boolean(bankId),
@@ -700,6 +719,17 @@ export function useBehavioralModel(
     enabled: Boolean(bankId),
     retry: false,
     // First call trains the model — keep the result warm.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Observed deposit behavior by product, segment, connected group, and branch. */
+export function useBehavioralLiquidity(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['behavioral-liquidity', bankId],
+    queryFn: () =>
+      apiCall(() => behavioralModelsApi.getBehavioralLiquidity({ bankId: bankId! })),
+    enabled: Boolean(bankId),
     staleTime: 5 * 60_000,
   });
 }
@@ -2988,12 +3018,27 @@ export function useEwiDashboard(bankId: string | undefined, periodId?: string | 
   return useQuery({
     queryKey: ['ewi-dashboard', bankId, periodId],
     queryFn: () =>
-      apiCall(() =>
-        liquidityCfpApi.getLiquidityEwiDashboard({
+      apiCall(async () => {
+        // The EWI service uses a valid HTTP 200 availability envelope while
+        // current liquidity facts are unavailable. Inspect it before generated
+        // deserialization expects the dashboard's indicator array.
+        const response = await liquidityCfpApi.getLiquidityEwiDashboardRaw({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
-      ),
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Early-warning indicators are not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
     enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });

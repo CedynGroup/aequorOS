@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -24,6 +25,7 @@ from app.schemas.banks import (
     InstitutionTypeRead,
     JurisdictionRead,
 )
+from app.services import regulatory_parameters
 from app.services.public_ids import normalize_public_id
 
 _FACT_GROUP_FIELDS: dict[str, str] = {
@@ -58,10 +60,20 @@ def _institution_types_by_code(db: Session, codes: set[str]) -> dict[str, Instit
     if not codes:
         return {}
     rows = db.scalars(select(InstitutionType).where(InstitutionType.type_code.in_(codes)))
-    return {
-        row.type_code: InstitutionTypeRead.model_validate(row, from_attributes=True)
-        for row in rows
-    }
+    result: dict[str, InstitutionTypeRead] = {}
+    for row in rows:
+        detail = InstitutionTypeRead.model_validate(row, from_attributes=True)
+        # Surface the ENFORCED exposure limits from the regulatory-parameter
+        # control plane so the displayed value equals what the engine applies —
+        # one source of truth once an operator edits them (audit M2). Falls back
+        # to the registry column when the control-plane class row is unseeded.
+        overrides: dict[str, Decimal] = {}
+        for code in ("large_exposure_limit_pct", "single_obligor_limit_pct"):
+            enforced = regulatory_parameters.resolve_class_value(db, row.institution_class, code)
+            if enforced is not None:
+                overrides[code] = enforced
+        result[row.type_code] = detail.model_copy(update=overrides) if overrides else detail
+    return result
 
 
 def _bank_read(

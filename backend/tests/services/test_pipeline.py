@@ -8,23 +8,27 @@ immutable, reproducible runs.
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.models import (
+    Bank,
     BankFinancialFact,
+    BankReportingPeriod,
     CurrentFinancialFact,
     Job,
     LiveFinding,
     LiveMetric,
     LiveMetricSnapshot,
+    RegulatoryPackage,
     RegulatoryRun,
 )
-from app.models import RegulatoryPackage
+from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import (
     job_queue,
     live_view,
@@ -185,6 +189,38 @@ def test_run_refresh_is_idempotent(db_session: Session) -> None:
         .group_by(LiveMetric.module)
     ).all()
     assert all(count == 1 for _module, count in per_module)
+
+
+def test_failed_live_refresh_does_not_reference_a_vanished_ladder_period(
+    db_session: Session,
+) -> None:
+    _seed(db_session)
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    bank = db_session.scalar(select(Bank).where(Bank.id == SAMPLE_BANK_ID))
+    assert bank is not None
+    vanished_period = BankReportingPeriod(
+        id=uuid4(),
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        period_start=date(2026, 6, 1),
+        period_end=date(2026, 6, 30),
+        label="2026-06",
+        status="open",
+    )
+
+    pipeline._upsert_live_failure(  # pyright: ignore[reportPrivateUsage]
+        db_session,
+        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+        bank,
+        vanished_period,
+        "liquidity",
+        "required parameter is unavailable",
+    )
+    db_session.commit()
+
+    row = _live_rows(db_session)["liquidity"]
+    assert row.source_fact_period_id is None
+    assert row.pipeline_state == "failed"
 
 
 def test_run_refresh_missing_canonical_is_a_noop(db_session: Session) -> None:

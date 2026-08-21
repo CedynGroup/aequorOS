@@ -25,6 +25,13 @@ import {
   PhoneToJSON,
   PhoneToJSONTyped,
 } from "./Phone";
+import type { Notes1 } from "./Notes1";
+import {
+  Notes1FromJSON,
+  Notes1FromJSONTyped,
+  Notes1ToJSON,
+  Notes1ToJSONTyped,
+} from "./Notes1";
 import type { ContactName } from "./ContactName";
 import {
   ContactNameFromJSON,
@@ -32,13 +39,6 @@ import {
   ContactNameToJSON,
   ContactNameToJSONTyped,
 } from "./ContactName";
-import type { Notes } from "./Notes";
-import {
-  NotesFromJSON,
-  NotesFromJSONTyped,
-  NotesToJSON,
-  NotesToJSONTyped,
-} from "./Notes";
 
 /**
  * ¶72(f): the key-relationship register (counterparties, agents, FMIs).
@@ -66,10 +66,10 @@ export interface CfpKeyRelationship {
   institution: string;
   /**
    *
-   * @type {Notes}
+   * @type {Notes1}
    * @memberof CfpKeyRelationship
    */
-  notes?: Notes;
+  notes?: Notes1;
   /**
    *
    * @type {Phone}
@@ -115,7 +115,7 @@ export function CfpKeyRelationshipFromJSONTyped(
         : ContactNameFromJSON(json["contact_name"]),
     email: json["email"] == null ? undefined : EmailFromJSON(json["email"]),
     institution: json["institution"],
-    notes: json["notes"] == null ? undefined : NotesFromJSON(json["notes"]),
+    notes: json["notes"] == null ? undefined : Notes1FromJSON(json["notes"]),
     phone: json["phone"] == null ? undefined : PhoneFromJSON(json["phone"]),
     role: json["role"],
   };
@@ -137,7 +137,7 @@ export function CfpKeyRelationshipToJSONTyped(
     contact_name: ContactNameToJSON(value["contactName"]),
     email: EmailToJSON(value["email"]),
     institution: value["institution"],
-    notes: NotesToJSON(value["notes"]),
+    notes: Notes1ToJSON(value["notes"]),
     phone: PhoneToJSON(value["phone"]),
     role: value["role"],
   };

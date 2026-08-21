@@ -155,9 +155,11 @@ export type EnterpriseStressSummary = {
   stressed_car_end_pct: string;
   baseline_car_end_pct: string;
   car_erosion_pp: string;
-  stressed_lcr_pct: string;
-  baseline_lcr_pct: string;
-  both_breached: boolean;
+  // Basel LCR/NSFR + the solvency–liquidity coupling: null for an SDI run
+  // (docs/sdi.md §4.6). Treat null as "not assessed under the SDI regime".
+  stressed_lcr_pct: string | null;
+  baseline_lcr_pct: string | null;
+  both_breached: boolean | null;
   stress_stays_above_all_minima: boolean;
   first_breach_year: number | null;
   binding_minima: string[];
@@ -392,12 +394,17 @@ export type EnterpriseOutcome = {
     pd_multiplier?: string;
     lgd_multiplier?: string;
   };
-  liquidity: Record<string, unknown> & {
-    baseline_lcr_pct: string;
-    stressed_lcr_pct: string;
-    fx_depreciation_pct: string;
-  };
-  coupling: {
+  // A bank run carries the Basel LCR/NSFR block; an SDI run carries the
+  // not-assessed marker ({assessed:false, regime, reason}) — docs/sdi.md §4.6.
+  liquidity:
+    | (Record<string, unknown> & {
+        baseline_lcr_pct: string;
+        stressed_lcr_pct: string;
+        fx_depreciation_pct: string;
+      })
+    | { assessed: false; regime: string; reason: string };
+  // Absent on an SDI run (no Basel solvency–liquidity coupling).
+  coupling?: {
     stressed_car_end_pct: string;
     car_min_pct: string;
     car_breached: boolean;

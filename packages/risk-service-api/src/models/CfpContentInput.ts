@@ -18,6 +18,13 @@ import {
   CfpEscalationStepToJSON,
   CfpEscalationStepToJSONTyped,
 } from "./CfpEscalationStep";
+import type { CfpBehavioralLiquidityScenarioInput } from "./CfpBehavioralLiquidityScenarioInput";
+import {
+  CfpBehavioralLiquidityScenarioInputFromJSON,
+  CfpBehavioralLiquidityScenarioInputFromJSONTyped,
+  CfpBehavioralLiquidityScenarioInputToJSON,
+  CfpBehavioralLiquidityScenarioInputToJSONTyped,
+} from "./CfpBehavioralLiquidityScenarioInput";
 import type { CfpAlternativeSource } from "./CfpAlternativeSource";
 import {
   CfpAlternativeSourceFromJSON,
@@ -64,68 +71,77 @@ import {
 /**
  *
  * @export
- * @interface CfpContent
+ * @interface CfpContentInput
  */
-export interface CfpContent {
+export interface CfpContentInput {
+  [key: string]: any | any;
   /**
    *
    * @type {Array<CfpActionPlan>}
-   * @memberof CfpContent
+   * @memberof CfpContentInput
    */
   actionPlans?: Array<CfpActionPlan>;
   /**
    *
    * @type {Array<CfpAlternativeSource>}
-   * @memberof CfpContent
+   * @memberof CfpContentInput
    */
   alternativeSources?: Array<CfpAlternativeSource>;
   /**
    *
+   * @type {Array<CfpBehavioralLiquidityScenarioInput>}
+   * @memberof CfpContentInput
+   */
+  behavioralLiquidityScenarios?: Array<CfpBehavioralLiquidityScenarioInput>;
+  /**
+   *
    * @type {Array<CfpCommunicationPlan>}
-   * @memberof CfpContent
+   * @memberof CfpContentInput
    */
   communicationPlans?: Array<CfpCommunicationPlan>;
   /**
    *
    * @type {Array<CfpEscalationStep>}
-   * @memberof CfpContent
+   * @memberof CfpContentInput
    */
   escalationProcedures?: Array<CfpEscalationStep>;
   /**
    *
    * @type {Array<CfpEwiTrigger>}
-   * @memberof CfpContent
+   * @memberof CfpContentInput
    */
   ewiTriggers?: Array<CfpEwiTrigger>;
   /**
    *
    * @type {Array<CfpFundingOption>}
-   * @memberof CfpContent
+   * @memberof CfpContentInput
    */
   fundingOptions?: Array<CfpFundingOption>;
   /**
    *
    * @type {Array<CfpKeyRelationship>}
-   * @memberof CfpContent
+   * @memberof CfpContentInput
    */
   keyRelationships?: Array<CfpKeyRelationship>;
 }
 
 /**
- * Check if a given object implements the CfpContent interface.
+ * Check if a given object implements the CfpContentInput interface.
  */
-export function instanceOfCfpContent(value: object): value is CfpContent {
+export function instanceOfCfpContentInput(
+  value: object,
+): value is CfpContentInput {
   return true;
 }
 
-export function CfpContentFromJSON(json: any): CfpContent {
-  return CfpContentFromJSONTyped(json, false);
+export function CfpContentInputFromJSON(json: any): CfpContentInput {
+  return CfpContentInputFromJSONTyped(json, false);
 }
 
-export function CfpContentFromJSONTyped(
+export function CfpContentInputFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): CfpContent {
+): CfpContentInput {
   if (json == null) {
     return json;
   }
@@ -140,6 +156,12 @@ export function CfpContentFromJSONTyped(
         ? undefined
         : (json["alternative_sources"] as Array<any>).map(
             CfpAlternativeSourceFromJSON,
+          ),
+    behavioralLiquidityScenarios:
+      json["behavioral_liquidity_scenarios"] == null
+        ? undefined
+        : (json["behavioral_liquidity_scenarios"] as Array<any>).map(
+            CfpBehavioralLiquidityScenarioInputFromJSON,
           ),
     communicationPlans:
       json["communication_plans"] == null
@@ -170,12 +192,12 @@ export function CfpContentFromJSONTyped(
   };
 }
 
-export function CfpContentToJSON(json: any): CfpContent {
-  return CfpContentToJSONTyped(json, false);
+export function CfpContentInputToJSON(json: any): CfpContentInput {
+  return CfpContentInputToJSONTyped(json, false);
 }
 
-export function CfpContentToJSONTyped(
-  value?: CfpContent | null,
+export function CfpContentInputToJSONTyped(
+  value?: CfpContentInput | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {
@@ -183,6 +205,7 @@ export function CfpContentToJSONTyped(
   }
 
   return {
+    ...value,
     action_plans:
       value["actionPlans"] == null
         ? undefined
@@ -192,6 +215,12 @@ export function CfpContentToJSONTyped(
         ? undefined
         : (value["alternativeSources"] as Array<any>).map(
             CfpAlternativeSourceToJSON,
+          ),
+    behavioral_liquidity_scenarios:
+      value["behavioralLiquidityScenarios"] == null
+        ? undefined
+        : (value["behavioralLiquidityScenarios"] as Array<any>).map(
+            CfpBehavioralLiquidityScenarioInputToJSON,
           ),
     communication_plans:
       value["communicationPlans"] == null

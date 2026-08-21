@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CloudOff, Loader2, RotateCw, Sparkles, TrendingDown } from 'lucide-react';
 import type {
   CashflowForecastMode,
+  CashflowForecastScenario,
   CashflowHorizon,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
@@ -13,7 +14,7 @@ import SectionCard from '@/components/ui/SectionCard';
 import Sparkline from '@/components/ui/Sparkline';
 import { SkeletonChart } from '@/components/ui/Skeleton';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import CashFlowForecastChart from '@/components/charts/CashFlowForecastChart';
+import CashFlowForecastChart, { CumulativeCashFlowChart } from '@/components/charts/CashFlowForecastChart';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   isServiceUnavailableError,
@@ -21,7 +22,7 @@ import {
   useCashflowHistory,
 } from '@/lib/api/hooks';
 import { fmtDateUTC } from '@/lib/api/values';
-import { currencyCode } from '@/lib/format';
+import { currencyCode, fmtCurrency } from '@/lib/format';
 
 const HORIZONS: CashflowHorizon[] = [30, 60, 90];
 
@@ -30,14 +31,21 @@ const MODES: { value: CashflowForecastMode; label: string }[] = [
   { value: 'static', label: 'Static' },
 ];
 
+const SCENARIOS: { value: CashflowForecastScenario; label: string }[] = [
+  { value: 'baseline', label: 'Baseline' },
+  { value: 'adverse', label: 'Adverse' },
+  { value: 'severe', label: 'Severe' },
+];
+
 export default function CashFlowForecast() {
   const { bank, period } = useBankContext();
   const bankId = bank?.id;
 
   const [horizon, setHorizon] = useState<CashflowHorizon>(30);
   const [mode, setMode] = useState<CashflowForecastMode>('lstm');
+  const [scenario, setScenario] = useState<CashflowForecastScenario>('baseline');
 
-  const forecastQuery = useCashflowForecast(bankId, horizon, mode);
+  const forecastQuery = useCashflowForecast(bankId, horizon, mode, scenario);
   const historyQuery = useCashflowHistory(bankId, 90);
 
   const forecast = forecastQuery.data;
@@ -52,12 +60,36 @@ export default function CashFlowForecast() {
     netFlow: p.netFlow,
     lower: p.lower,
     upper: p.upper,
+    p5: p.p5,
+    p50: p.p50,
+    p95: p.p95,
+    behavioral: p.behavioralNetFlow,
+    contractual: p.contractualNetFlow,
+    scenarioAdjustment: p.scenarioAdjustment,
   }));
 
-  const cumulativeNet = chartForecast.reduce((s, p) => s + p.netFlow, 0);
+  const cumulativeNet = chartForecast.reduce((sum, point) => sum + point.p50, 0);
+  const cumulativeForecast = chartForecast.reduce<
+    { day: number; central: number; lower: number; upper: number }[]
+  >((points, point) => {
+    const prior = points.at(-1) ?? { central: 0, lower: 0, upper: 0 };
+    points.push({
+      day: point.day,
+      central: prior.central + point.p50,
+      lower: prior.lower + point.p5,
+      upper: prior.upper + point.p95,
+    });
+    return points;
+  }, []);
+  const worstCumulative = cumulativeForecast.reduce(
+    (worst, point) => (worst === null || point.central < worst.central ? point : worst),
+    null as { day: number; central: number; lower: number; upper: number } | null
+  );
+  const firstCumulativeDeficit = cumulativeForecast.find((point) => point.central < 0);
+  const lowerCumulativeNet = cumulativeForecast.at(-1)?.lower ?? 0;
   const worstDay = chartForecast.reduce(
-    (min, p) => (min === null || p.netFlow < min.netFlow ? p : min),
-    null as { day: number; netFlow: number } | null
+    (worst, point) => (worst === null || point.p50 < worst.p50 ? point : worst),
+    null as (typeof chartForecast)[number] | null
   );
 
   const offline =
@@ -95,6 +127,24 @@ export default function CashFlowForecast() {
                 }`}
               >
                 {h} days
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-caption font-medium text-slate uppercase tracking-wider mr-2">
+              Scenario
+            </span>
+            {SCENARIOS.map((entry) => (
+              <button
+                key={entry.value}
+                type="button"
+                onClick={() => setScenario(entry.value)}
+                className={`px-3 py-1.5 rounded text-caption font-medium transition-colors ${
+                  scenario === entry.value ? 'bg-nav text-white' : 'text-slate hover:bg-surface'
+                }`}
+              >
+                {entry.label}
               </button>
             ))}
           </div>
@@ -165,19 +215,12 @@ export default function CashFlowForecast() {
         ) : forecast ? (
           <>
             {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
               <KpiStat
                 label={`Cumulative net (${horizon}d) — ${mode === 'lstm' ? 'LSTM' : 'Static'}`}
-                value={`${currencyCode()} ${cumulativeNet.toFixed(1)}M`}
+                value={fmtCurrency(cumulativeNet)}
                 status={cumulativeNet >= 0 ? 'ok' : 'crit'}
-                sparkline={
-                  <Sparkline
-                    data={chartForecast.map((p) => p.netFlow)}
-                    color={
-                      cumulativeNet >= 0 ? 'rgb(var(--ok))' : 'rgb(var(--crit))'
-                    }
-                  />
-                }
+                hint="Sum of projected daily net cash flows"
               />
               <KpiStat
                 label="LSTM accuracy (MAPE)"
@@ -194,9 +237,21 @@ export default function CashFlowForecast() {
               />
               <KpiStat
                 label="Worst day projection"
-                value={`${currencyCode()} ${(worstDay?.netFlow ?? 0).toFixed(2)}M`}
-                status={(worstDay?.netFlow ?? 0) < 0 ? 'warn' : 'ok'}
+                value={fmtCurrency(worstDay?.p50 ?? 0)}
+                status={(worstDay?.p50 ?? 0) < 0 ? 'warn' : 'ok'}
                 hint={worstDay ? `Day +${worstDay.day}` : undefined}
+              />
+              <KpiStat
+                label="Worst cumulative position"
+                value={fmtCurrency(worstCumulative?.central ?? 0)}
+                status={(worstCumulative?.central ?? 0) < 0 ? 'crit' : 'ok'}
+                hint={worstCumulative ? `P50 path at day +${worstCumulative.day}` : undefined}
+              />
+              <KpiStat
+                label="First cumulative deficit"
+                value={firstCumulativeDeficit ? `Day +${firstCumulativeDeficit.day}` : 'None'}
+                status={firstCumulativeDeficit ? 'crit' : 'ok'}
+                hint={firstCumulativeDeficit ? `P50 path ${fmtCurrency(firstCumulativeDeficit.central)}` : 'P50 path stays non-negative'}
               />
             </div>
 
@@ -205,7 +260,7 @@ export default function CashFlowForecast() {
               title="Daily net cash flow"
               subtitle={
                 mode === 'lstm'
-                  ? '90-day actuals with LSTM forecast and 95% confidence band'
+                  ? 'Hybrid behavioural and contractual cash flow, with simulated P5/P50/P95 paths'
                   : '90-day actuals with static behavioral forecast'
               }
               height={340}
@@ -232,19 +287,33 @@ export default function CashFlowForecast() {
                   </span>
                   {mode === 'lstm' && (
                     <span className="inline-flex items-center gap-2">
-                      <span className="w-3 h-0.5 bg-action/15" /> 95% CI band
+                      <span className="w-3 h-0.5 bg-action/15" /> Simulated P5/P95 band
                     </span>
                   )}
-                  <span className="ml-auto">All values in {currencyCode()} millions</span>
+                  <span className="ml-auto">All values in {currencyCode()}</span>
                 </>
               }
             >
               <CashFlowForecastChart
                 history={chartHistory}
-                forecast={chartForecast}
+                forecast={chartForecast.map((point) => ({
+                  day: point.day,
+                  netFlow: point.p50,
+                  lower: point.p5,
+                  upper: point.p95,
+                }))}
                 showBand={mode === 'lstm'}
                 forecastLabel={mode === 'lstm' ? 'LSTM forecast' : 'Static forecast'}
               />
+            </ChartFrame>
+
+            <ChartFrame
+              title="Cumulative cash position"
+              subtitle="Running P5/P50/P95 net-cash position over the selected horizon from simulated residual paths."
+              height={280}
+              footer={<><span>P50 cumulative: {fmtCurrency(cumulativeNet)}</span><span className="ml-auto">P5 cumulative: {fmtCurrency(lowerCumulativeNet)}</span></>}
+            >
+              <CumulativeCashFlowChart data={cumulativeForecast} showBand={mode === 'lstm'} />
             </ChartFrame>
 
             {/* Model performance / comparison panel */}
@@ -287,7 +356,16 @@ export default function CashFlowForecast() {
                           {fmtDateUTC(forecast.asOfDate)}
                         </span>
                       </p>
+                      <p className="mt-1 text-caption text-slate">
+                        Model scope: <span className="font-medium text-navy">{forecast.modelScope === 'bank_specific' ? 'Bank-specific history' : 'Generic bootstrap'}</span>
+                      </p>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 border-t border-border-light pt-4">
+                    <div><p className="text-micro font-medium uppercase tracking-wider text-slate">Bias</p><p className="mt-1 font-mono text-body text-navy">{forecast.accuracy.biasPct.toFixed(2)}%</p></div>
+                    <div><p className="text-micro font-medium uppercase tracking-wider text-slate">P5–P95 coverage</p><p className="mt-1 font-mono text-body text-navy">{forecast.accuracy.intervalCoveragePct.toFixed(1)}%</p></div>
+                    <div><p className="text-micro font-medium uppercase tracking-wider text-slate">Residual drift</p><p className="mt-1 font-mono text-body text-navy">{forecast.accuracy.residualDriftPct.toFixed(1)}%</p></div>
                   </div>
 
                   <div className="border-t border-border-light pt-4 text-body text-slate leading-relaxed">
@@ -306,8 +384,8 @@ export default function CashFlowForecast() {
                   <p>
                     <span className="font-medium text-navy">LSTM behavioral model</span>{' '}
                     — recurrent network trained on the bank&apos;s daily
-                    transactional net flows, forecast with a 95% confidence
-                    band.
+                    transactional net flows, served with simulated P5/P50/P95
+                    paths.
                   </p>
                   <p>
                     <span className="font-medium text-navy">Static behavioral</span>{' '}
@@ -323,6 +401,17 @@ export default function CashFlowForecast() {
                 </div>
               </SectionCard>
             </div>
+
+            <SectionCard title="Hybrid forecast composition" subtitle="Every projected day separates contractual maturities, behavioural flow, and the active scenario overlay.">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-caption">
+                <div><p className="text-slate">Behavioural component</p><p className="mt-1 text-body font-medium text-navy">{fmtCurrency(chartForecast.reduce((sum, point) => sum + point.behavioral, 0))}</p></div>
+                <div><p className="text-slate">Contractual maturities</p><p className="mt-1 text-body font-medium text-navy">{fmtCurrency(chartForecast.reduce((sum, point) => sum + point.contractual, 0))}</p></div>
+                <div><p className="text-slate">Scenario overlay</p><p className="mt-1 text-body font-medium text-navy">{fmtCurrency(chartForecast.reduce((sum, point) => sum + point.scenarioAdjustment, 0))}</p></div>
+              </div>
+              <ul className="mt-5 list-disc space-y-1 pl-5 text-caption text-slate">
+                {forecast.scenarioAssumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}
+              </ul>
+            </SectionCard>
           </>
         ) : null}
       </div>

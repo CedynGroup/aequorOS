@@ -25,6 +25,9 @@ import {
   useLiveSummary,
 } from '@/lib/api/hooks';
 import { num } from '@/lib/api/values';
+import { useModuleScope } from '@/components/shell/BankContext';
+import { isHrefVisible } from '@/lib/modules';
+import { LIVE_MODULE_HREFS } from '@/components/live/moduleDisplay';
 
 export type Traffic = 'green' | 'amber' | 'red';
 export type CardStatus = Traffic | 'na';
@@ -132,27 +135,41 @@ export type PulseCards = {
 };
 
 export function usePulseCards(
-  bankId: string | undefined
+  bankId: string | undefined,
+  hasData: boolean
 ): PulseCards {
-  const liq = useLiquidityDashboard(bankId);
-  const cap = useCapitalDashboard(bankId);
-  const irr = useIrrDashboard(bankId);
-  const fx = useFxDashboard(bankId);
-  const ftp = useFtpDashboard(bankId);
+  // Two gates on every module request:
+  //  1. scope — an SDI raises no request for the FX/FTP engines it does not run
+  //     (docs/sdi.md §3.2); the wall filters those cards too.
+  //  2. hasData — a tenant with no current facts yet does NOT fetch the module
+  //     dashboards/ladders at all: they would 409 ("current_facts_missing") and
+  //     redden the console for an expected pre-ingestion state. The Command
+  //     Center's "No computed data yet" panel explains it instead.
+  const scope = useModuleScope();
+  const scoped = (module: LiveModule) => isHrefVisible(LIVE_MODULE_HREFS[module], scope);
+  const dataBankId = hasData ? bankId : undefined;
+  const liq = useLiquidityDashboard(dataBankId);
+  const cap = useCapitalDashboard(dataBankId);
+  const irr = useIrrDashboard(scoped('irr') ? dataBankId : undefined);
+  const fx = useFxDashboard(scoped('fx') ? dataBankId : undefined);
+  const ftp = useFtpDashboard(scoped('ftp') ? dataBankId : undefined);
   const liveSummary = useLiveSummary(bankId);
   const ratingLive = liveSummary.data?.modules.find((module) => module.module === 'rating');
   const forecastLive = liveSummary.data?.modules.find((module) => module.module === 'forecast');
 
   // Plane-2 EOD ladders — when at least two daily points exist, the card's
-  // delta and sparkline switch from month-over-month to prior-close.
+  // delta and sparkline switch from month-over-month to prior-close. Gated by
+  // scope AND data availability like the dashboards above.
+  const ladderId = (module: LiveModule) =>
+    hasData && scoped(module) ? bankId : undefined;
   const ladders = {
-    liquidity: useLiveSnapshots(bankId, 'liquidity'),
-    capital: useLiveSnapshots(bankId, 'capital'),
-    irr: useLiveSnapshots(bankId, 'irr'),
-    fx: useLiveSnapshots(bankId, 'fx'),
-    ftp: useLiveSnapshots(bankId, 'ftp'),
-    rating: useLiveSnapshots(bankId, 'rating'),
-    forecast: useLiveSnapshots(bankId, 'forecast'),
+    liquidity: useLiveSnapshots(ladderId('liquidity'), 'liquidity'),
+    capital: useLiveSnapshots(ladderId('capital'), 'capital'),
+    irr: useLiveSnapshots(ladderId('irr'), 'irr'),
+    fx: useLiveSnapshots(ladderId('fx'), 'fx'),
+    ftp: useLiveSnapshots(ladderId('ftp'), 'ftp'),
+    rating: useLiveSnapshots(ladderId('rating'), 'rating'),
+    forecast: useLiveSnapshots(ladderId('forecast'), 'forecast'),
   } as const;
 
   const baseCards: Record<LiveModule, PulseCardModel> = {

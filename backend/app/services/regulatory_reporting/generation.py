@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -45,6 +46,7 @@ from app.schemas.regulatory_reporting import RegulatoryPackageCreate, Regulatory
 from app.services import regulatory_capital, regulatory_liquidity
 from app.services.attestation import digests, register_state
 from app.services.audit import record_event
+from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
     get_effective_period_or_404,
@@ -53,6 +55,11 @@ from app.services.regulatory_reporting.common import (
     require_actor,
 )
 from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition
+
+#: Observability (docs/sdi.md §19) — the runtime-log counterpart to the persistent
+#: ``regulatory_package.generated`` audit event, tagged with the institution class so
+#: SDI (s.29 / NBFI) runs are distinguishable from bank (Basel) runs in the log stream.
+logger = logging.getLogger(__name__)
 
 SNAPSHOT_SCHEMA_VERSION = "regulatory-package-v1"
 BASELINE_SCENARIO = "baseline"
@@ -111,6 +118,19 @@ def generate_package(
             detail=(
                 f"Return code '{payload.return_code}' is not registered. "
                 "List the available templates via the return-template endpoint."
+            ),
+        )
+    # Server-side return-set scoping (docs/sdi.md §4.4/§14): a tenant may only
+    # generate returns its institution class is subject to — the calendar filter
+    # is not enough, since this is the single package-mint site an SDI could hit
+    # directly with a bank-only return code (e.g. a BSD form).
+    bank_class = _resolve_institution_class(db, bank)
+    if bank_class not in definition.institution_classes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Return '{payload.return_code}' does not apply to this institution's "
+                f"class ({bank_class}); it is not part of the institution's return set."
             ),
         )
     # Daily returns file on business days that seldom coincide with a monthly
@@ -220,6 +240,18 @@ def generate_package(
     db.flush()
     if resubmission_authorization is not None:
         resubmission_authorization.consumed_by_package_id = package.id
+    logger.info(
+        "regulatory_package.generated return_code=%s family=%s institution_class=%s "
+        "bank=%s org=%s reporting_date=%s basis=%s version=%s",
+        definition.code,
+        definition.family,
+        bank_class,
+        bank.id,
+        ctx.organization_id,
+        payload.reporting_date.isoformat(),
+        payload.basis,
+        package.version,
+    )
     record_event(
         db,
         ctx,

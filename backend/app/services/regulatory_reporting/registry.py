@@ -143,6 +143,14 @@ class ReturnDefinition:
     # submission path has always auto-exported — it is the status quo as data,
     # not a new claim about any return.
     filing_format: FilingFormat | None = "xlsx"
+    # The institution classes (``institution_class`` axis: 'bank' | 'sdi',
+    # docs/sdi.md §1) this return applies to. The reporting calendar filters
+    # obligations by the tenant's resolved class (SDI § de-hardcoding row at
+    # docs/sdi.md §6.2 / calendar.py) so a savings-&-loans tenant sees only its
+    # own returns. Every return registered so far is a bank/BoG return, hence
+    # the default — the SDI/ORASS return pack (docs/sdi.md §Phase F, blocked on
+    # BoG) sets ('sdi',) or ('bank', 'sdi') explicitly when its layouts land.
+    institution_classes: tuple[str, ...] = ("bank",)
 
 
 def _bog_definitions() -> list[ReturnDefinition]:

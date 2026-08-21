@@ -20,7 +20,8 @@ import KpiStat, { type KpiStatus } from '@/components/ui/KpiStat';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
+import { useBankContext, useModuleScope } from '@/components/shell/BankContext';
+import { isHrefVisible } from '@/lib/modules';
 import {
   LIVE_MODULE_LABELS,
   livePrimaryMetric,
@@ -63,11 +64,14 @@ export default function BoardPackPage() {
 
   const live = useLiveSummary(bankId);
   const alerts = useBankAlerts(bankId);
+  // Scope the module fetches (docs/sdi.md §3.2): an SDI does not run FX/FTP, so
+  // gating avoids a 403 for a module it is not entitled to.
+  const scope = useModuleScope();
   const liq = useLiquidityDashboard(bankId, periodId);
   const cap = useCapitalDashboard(bankId, periodId);
-  const irr = useIrrDashboard(bankId, periodId);
-  const fx = useFxDashboard(bankId, periodId);
-  const ftp = useFtpDashboard(bankId, periodId);
+  const irr = useIrrDashboard(isHrefVisible('/irr/limits', scope) ? bankId : undefined, periodId);
+  const fx = useFxDashboard(isHrefVisible('/fx/limits', scope) ? bankId : undefined, periodId);
+  const ftp = useFtpDashboard(isHrefVisible('/ftp/products', scope) ? bankId : undefined, periodId);
   const { byModule } = useLatestRunsByModule(bankId);
 
   // Client-only timestamp — avoids an SSR/hydration mismatch on the cover.

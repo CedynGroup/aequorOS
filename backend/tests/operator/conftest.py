@@ -23,11 +23,12 @@ from sqlalchemy.orm import Session
 from app.core.config import get_operator_settings, get_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
-from app.models import InstitutionType, Jurisdiction
+from app.models import InstitutionType, Jurisdiction, RegulatoryParameter
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.main import create_operator_app
 from app.operator.services import operator_auth
 from app.operator.services.tenant_provisioning import ProvisioningClients
+from app.services.regulatory_parameters import seed_rows as _regparam_seed_rows
 from app.storage.config import StorageEngineSettings
 
 DEV_TOKEN = "operator-dev-token-for-tests"
@@ -301,6 +302,9 @@ def _seed_jurisdictions(engine: Engine) -> None:
                 ),
             ]
         )
+        # The regulatory-parameter control plane, seeded from the same catalogue
+        # the migration uses (SDI Phase C) so operator tests see the real grid.
+        session.add_all(RegulatoryParameter(**row) for row in _regparam_seed_rows())
         session.commit()
 
 

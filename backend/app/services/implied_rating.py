@@ -35,6 +35,7 @@ from app.models import (
     BankReportingPeriod,
     CanonicalCounterpartyRating,
     CanonicalMarketIndex,
+    CurrentFinancialFact,
     DeskMethodology,
     ImpliedRatingRun,
     InstitutionProfile,
@@ -1096,7 +1097,7 @@ def _rating_inputs(
 
 
 def _live_dependency_metrics(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+    db: Session, ctx: TenantContext, bank: Bank
 ) -> dict[str, dict[str, Any]]:
     rows = {
         row.module: dict(row.metrics)
@@ -1104,7 +1105,6 @@ def _live_dependency_metrics(
             select(LiveMetric).where(
                 LiveMetric.organization_id == ctx.organization_id,
                 LiveMetric.bank_id == bank.id,
-                LiveMetric.reporting_period_id == period.id,
                 LiveMetric.module.in_(_LIVE_DEPENDENCIES),
             )
         )
@@ -1130,22 +1130,22 @@ def _live_calculation(
         raise _missing(f"a {METHODOLOGY_CODE} methodology parameter version")
     facts = list(
         db.scalars(
-            select(BankFinancialFact)
+            select(CurrentFinancialFact)
             .where(
-                BankFinancialFact.organization_id == ctx.organization_id,
-                BankFinancialFact.bank_id == bank.id,
-                BankFinancialFact.reporting_period_id == period.id,
+                CurrentFinancialFact.organization_id == ctx.organization_id,
+                CurrentFinancialFact.bank_id == bank.id,
             )
-            .order_by(BankFinancialFact.fact_group, BankFinancialFact.category)
+            .order_by(CurrentFinancialFact.fact_group, CurrentFinancialFact.category)
         )
     )
     if not facts:
         raise _missing("current canonical-derived financial facts")
-    dependencies = _live_dependency_metrics(db, ctx, bank, period)
-    sovereign = _current_sovereign(db, ctx.organization_id, bank.id, period.period_end)
+    source_as_of_date = facts[0].source_as_of_date
+    dependencies = _live_dependency_metrics(db, ctx, bank)
+    sovereign = _current_sovereign(db, ctx.organization_id, bank.id, source_as_of_date)
     ceiling = _normalize_grade(sovereign["rating"])
     environment, environment_source = _operating_environment(
-        db, ctx.organization_id, bank.id, period.period_end, methodology.parameters
+        db, ctx.organization_id, bank.id, source_as_of_date, methodology.parameters
     )
     history = _annual_ratio_history(db, ctx.organization_id, bank.id, period)
     uplift = _support_uplift(db, ctx, bank, ceiling, methodology.parameters)
@@ -1187,7 +1187,7 @@ def _live_calculation(
         total_rwa,
     )
     snapshot = {
-        "period_end": period.period_end.isoformat(),
+        "period_end": source_as_of_date.isoformat(),
         "financial_facts": [
             {
                 "fact_group": fact.fact_group,
@@ -1300,6 +1300,7 @@ def compute_live(
         status=live_status,
         input_hash=_digest(snapshot),
         findings=tuple(findings),
+        source_as_of_date=date.fromisoformat(str(snapshot["period_end"])),
     )
 
 

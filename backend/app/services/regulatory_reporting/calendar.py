@@ -26,6 +26,7 @@ from app.schemas.regulatory_reporting import (
     ReportingObligationListRead,
     ReportingObligationRead,
 )
+from app.services.institution_types import institution_class as resolve_institution_class
 from app.services.regulatory_reporting.common import get_bank_or_404
 from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition, monthly_day
 from app.services.regulatory_reporting.workflow import has_pending_orass_reupload
@@ -160,9 +161,17 @@ def list_obligations(
     total_months = today.year * 12 + (today.month - 1) + horizon_months
     horizon_end = _month_end(total_months // 12, total_months % 12 + 1)
     overrides = _deadline_overrides(db, ctx, bank.id)
+    # SDI scoping (docs/sdi.md §6.2): the calendar is class-filtered so a tenant
+    # sees only the returns its institution class is subject to. Every return
+    # registered so far is a bank/BoG return, so a savings-&-loans tenant
+    # resolves to an empty calendar until the SDI/ORASS return pack lands
+    # (docs/sdi.md §Phase F) — the honest state, not a bug.
+    bank_class = resolve_institution_class(db, bank)
 
     obligations: list[ReportingObligationRead] = []
     for definition in REGISTRY.values():
+        if bank_class not in definition.institution_classes:
+            continue
         # Event-driven returns (plan W5: the LRT corporate packs) have no
         # periodic reporting cycle — expanding their nominal frequency would
         # fabricate obligations that do not exist. Their packages still

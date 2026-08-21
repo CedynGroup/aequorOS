@@ -21,6 +21,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import ValidationList from '@/components/ui/ValidationList';
 import { num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from '@/lib/format';
+import SdiModuleContext from '@/components/sdi/SdiModuleContext';
 
 function kpiStatus(status: string): KpiStatus | undefined {
   return status === 'green'
@@ -82,6 +83,9 @@ export default function IrrOverviewPage() {
 
         return (
           <>
+            <SdiModuleContext title="SDI ALM context">
+              Banking-book repricing and deposit sensitivity are monitored proportionately for a deposit-taking institution. Results depend on complete next-repricing-date data.
+            </SdiModuleContext>
             {/* KPI row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               <KpiStat

@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.errors import ModuleDataUnavailable
 from app.domain.liquidity.engine import (
     SHOCK_FX_DEPRECIATION,
     SHOCK_NMD_RUNOFF_PREFIX,
@@ -81,6 +82,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryValidationRead,
 )
 from app.services.audit import record_event
+from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.jurisdictions import base_currency, regulator_name
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
@@ -1108,24 +1110,11 @@ def _compute_inline_or_409(
     try:
         return _compute_inline(db, ctx, bank, period)
     except MissingParameterError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error_code": "missing_parameter",
-                "message": str(exc),
-                "category": exc.category,
-            },
-        ) from exc
+        raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except LiquidityRunError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": exc.code, "message": exc.message},
-        ) from exc
+        raise ModuleDataUnavailable(exc.code, exc.message) from exc
     except LiquidityComputationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"error_code": "calculation_error", "message": str(exc)},
-        ) from exc
+        raise ModuleDataUnavailable("calculation_error", str(exc)) from exc
 
 
 def current_input_hash(
@@ -1393,12 +1382,15 @@ def _ladder_lists(ladder: dict[str, list[str] | str], key: str) -> list[Decimal]
 def _currency_mismatch_limit(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> Decimal | None:
-    """Board per-currency mismatch limit (LMTD para 11(d)), when adopted."""
+    """Board per-currency mismatch limit (LMTD para 11(d)), when adopted —
+    resolved for the tenant's institution class (docs/sdi.md §4.1), not pinned
+    to the bank class."""
+    klass = _resolve_institution_class(db, bank)
     rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamLiquidityThreshold, as_of
     )
     for row in rows:
-        if row.institution_class == "bank" and row.threshold_code == "currency_mismatch_limit_pct":
+        if row.institution_class == klass and row.threshold_code == "currency_mismatch_limit_pct":
             return Decimal(str(row.threshold_pct))
     return None
 

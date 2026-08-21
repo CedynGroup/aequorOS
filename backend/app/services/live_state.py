@@ -10,11 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.errors import ModuleDataUnavailable
 from app.models import Bank, BankReportingPeriod, CurrentFinancialFact
 
 
@@ -42,12 +42,10 @@ def load_current_facts(
         )
     )
     if not facts:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error_code": "current_facts_missing",
-                "message": "Current financial facts are not available yet.",
-            },
+        raise ModuleDataUnavailable(
+            "current_facts_missing",
+            "Current financial facts are not available yet — ingest data through the "
+            "Data Engine to populate this module.",
         )
     source_dates = {fact.source_as_of_date for fact in facts}
     if len(source_dates) != 1:
@@ -80,15 +78,10 @@ def current_fact_period_or_409(
         .limit(1)
     )
     if source_as_of_date is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error_code": "current_facts_missing",
-                "message": (
-                    "Current financial facts are not available yet. Wait for the ingestion "
-                    "pipeline refresh to complete."
-                ),
-            },
+        raise ModuleDataUnavailable(
+            "current_facts_missing",
+            "Current financial facts are not available yet — ingest data through the "
+            "Data Engine to populate this module.",
         )
     period = db.scalar(
         select(BankReportingPeriod).where(
@@ -98,11 +91,9 @@ def current_fact_period_or_409(
         )
     )
     if period is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error_code": "live_analysis_context_missing",
-                "message": "The current facts have no compatible analysis context.",
-            },
+        raise ModuleDataUnavailable(
+            "live_analysis_context_missing",
+            "The current facts have no compatible analysis context yet — the live "
+            "view is still being computed.",
         )
     return period

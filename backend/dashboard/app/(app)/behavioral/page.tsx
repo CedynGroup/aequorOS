@@ -8,16 +8,18 @@
  */
 
 import Link from 'next/link';
-import { ArrowUpRight, Brain, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Brain, Droplets, Loader2 } from 'lucide-react';
 import type { BehavioralModelRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import FeedsChip, { type Feed } from '@/components/behavioral/FeedsChip';
-import { useBankContext } from '@/components/shell/BankContext';
+import { useBankContext, useModuleScope } from '@/components/shell/BankContext';
+import SdiModuleContext from '@/components/sdi/SdiModuleContext';
 import {
   isServiceUnavailableError,
+  useBehavioralLiquidity,
   useBehavioralModel,
   type BehavioralModelSlug,
 } from '@/lib/api/hooks';
@@ -53,7 +55,7 @@ const REGISTRY: RegistryEntry[] = [
     valueLabel: 'Avg annual CPR',
     format: (v) => `${(v * 100).toFixed(1)}%`,
     feeds: [
-      { label: 'LCR', href: '/liquidity' },
+      { label: 'LCR', sdiLabel: 'Liquidity', href: '/liquidity' },
       { label: 'Cash-flow', href: '/liquidity/forecast' },
     ],
   },
@@ -64,7 +66,7 @@ const REGISTRY: RegistryEntry[] = [
       'Stable (sticky) fraction of each deposit product under stress, learned from balance retention.',
     valueLabel: 'Avg stable fraction',
     format: (v) => `${(v * 100).toFixed(0)}%`,
-    feeds: [{ label: 'LCR', href: '/liquidity' }],
+    feeds: [{ label: 'LCR', sdiLabel: 'Liquidity', href: '/liquidity' }],
   },
 ];
 
@@ -74,6 +76,7 @@ function confTone(c: number) {
 
 export default function BehavioralOverviewPage() {
   const { bank, period } = useBankContext();
+  const scope = useModuleScope();
   const bankId = bank?.id;
 
   return (
@@ -88,11 +91,16 @@ export default function BehavioralOverviewPage() {
         subtitle="Tenant-scoped ML estimators feeding the ALM engines through the reviewed-assumption workflow"
       />
 
+      <SdiModuleContext title="SDI ALM context">
+        Deposit stability and non-maturity-deposit assumptions support proportionate liquidity and balance-sheet management. Forecast quality improves as more history is ingested.
+      </SdiModuleContext>
+
       <div className="px-8 py-6 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
           {REGISTRY.map((entry) => (
             <ModelRegistryCard key={entry.slug} entry={entry} bankId={bankId} />
           ))}
+          <BehavioralLiquidityCard bankId={bankId} />
         </div>
 
         <SectionCard
@@ -104,12 +112,47 @@ export default function BehavioralOverviewPage() {
             proposes per-product estimates with a confidence score. Estimates
             take effect only when a reviewer applies them, which records a new
             accepted behavioral-assumptions batch with full model provenance
-            (SR 11-7) — the IRRBB, LCR, FTP and forecasting engines consume the
-            accepted batch on their next recompute.
+            (SR 11-7) — the {scope.institutionClass === 'sdi'
+              ? 'IRRBB, liquidity-management, and forecasting engines'
+              : 'IRRBB, LCR, FTP, and forecasting engines'} consume the accepted
+            batch on their next recompute.
           </p>
         </SectionCard>
       </div>
     </>
+  );
+}
+
+function BehavioralLiquidityCard({ bankId }: { bankId: string | undefined }) {
+  const query = useBehavioralLiquidity(bankId);
+  const segments = query.data?.segments ?? [];
+  const scenarios = query.data?.scenarios ?? [];
+  const ready = segments.filter((segment) => segment.dataStatus === 'ready').length;
+
+  return (
+    <div className="card p-5 h-full flex flex-col gap-4 hover:border-action/40 transition-colors">
+      <Link href="/behavioral/liquidity" className="group flex items-start justify-between gap-3">
+        <p className="inline-flex items-center gap-2 text-caption font-medium text-slate uppercase tracking-wider group-hover:text-navy transition-colors">
+          <Droplets size={14} className="text-action" aria-hidden />
+          Liquidity Behavior
+        </p>
+        <ArrowUpRight size={14} className="text-slate group-hover:text-action transition-colors shrink-0" aria-hidden />
+      </Link>
+      {query.isLoading ? (
+        <p className="text-body text-slate">Loading observed deposit behavior...</p>
+      ) : query.error ? (
+        <p className="text-body text-slate">Open the workspace to review data readiness.</p>
+      ) : (
+        <>
+          <div>
+            <p className="text-micro uppercase tracking-wider text-slate">Evidence-ready segments</p>
+            <p className="mt-1 font-mono text-kpi text-navy tnum">{ready} / {segments.length}</p>
+            <p className="mt-1 text-caption text-slate">Runoff, churn proxy, seasonality, beta, and lag</p>
+          </div>
+          <p className="text-caption text-slate leading-relaxed">{scenarios.length} approved CFP behavioral scenario{scenarios.length === 1 ? '' : 's'} linked to documented actions.</p>
+        </>
+      )}
+    </div>
   );
 }
 

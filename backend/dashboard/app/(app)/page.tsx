@@ -31,11 +31,13 @@ import BalanceSheetStrip from '@/components/home/BalanceSheetStrip';
 import RatioTrendChart from '@/components/home/RatioTrendChart';
 import WindowAnalysis from '@/components/home/WindowAnalysis';
 import OperationalFeed from '@/components/home/OperationalFeed';
+import SdiLiquiditySummary from '@/components/home/SdiLiquiditySummary';
 import { centralBankName } from '@/lib/format';
 
 export default function CommandCenterPage() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
+  const isSdi = moduleScope.institutionClass === 'sdi';
   const [role, setRole] = useRoleLens();
   const lens = ROLE_CONFIG[role];
   const effective = useEffectivePeriod();
@@ -56,8 +58,8 @@ export default function CommandCenterPage() {
         <CommandCenterSkeleton />
       ) : effective.isEmpty ? (
         <div className="px-8 py-6 space-y-6">
-          <BreachBanner bankId={bankId} />
-          <PulseWall bankId={bankId} moduleOrder={lens.moduleOrder} />
+          <BreachBanner bankId={bankId} hasData={false} />
+          <PulseWall bankId={bankId} moduleOrder={lens.moduleOrder} hasData={false} />
           <div className="py-4 max-w-2xl mx-auto">
             {effective.error ? (
               <div className="mb-6">
@@ -103,6 +105,8 @@ export default function CommandCenterPage() {
           )}
 
           <BreachBanner bankId={bankId} />
+
+          {isSdi && <SdiLiquiditySummary bankId={bankId} />}
 
           {lens.panels.map((panel) => {
             switch (panel) {

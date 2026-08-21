@@ -201,6 +201,49 @@ def test_enterprise_stress_requires_an_approved_scenario(db_client: TestClient) 
     assert response.json()["error"]["details"]["error_code"] == "scenario_not_approved"
 
 
+def test_enterprise_stress_rejects_a_scenario_short_of_the_run_horizon(
+    db_client: TestClient,
+) -> None:
+    """QA audit 2026-08-20 P0-3: a 3-year run must not consume a scenario whose macro
+    paths stop short of the horizon — that would mint an 'official' 3-year stress with
+    unstressed tail years. The run is refused before any immutable run is written."""
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    checker = _seed_checker(db_client)
+
+    # A horizon-3 scenario whose paths only reach year 2 (creatable — the create
+    # guard only rejects paths BEYOND the horizon, not short coverage).
+    short_paths = [
+        _path(variable, year, base, stress)
+        for variable, (base, stress) in {
+            "gdp_growth": ("0.05", "0.00"),
+            "inflation": ("0.15", "0.21"),
+        }.items()
+        for year in (1, 2)
+    ]
+    payload = _scenario_payload("short_2027")
+    payload["paths"] = short_paths
+    create = db_client.post(
+        SCENARIO_URL, headers=headers(user_id=USER_1, roles=("analyst",)), json=payload
+    )
+    assert create.status_code == 201, create.text
+    scenario_id = create.json()["id"]
+    _approve_scenario(db_client, scenario_id, checker)
+
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": scenario_id,
+            "reporting_period_id": period_id,
+            "horizon_years": 3,
+            "reason": "Attempt a 3-year run on a 2-year scenario.",
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["details"]["error_code"] == "scenario_horizon_too_short"
+
+
 def test_enterprise_stress_run_registry_lists_and_reopens(db_client: TestClient) -> None:
     """The run registry (docs/stress.md §4.5): full history + re-open-by-id."""
     bank_id = seed_bank(db_client)

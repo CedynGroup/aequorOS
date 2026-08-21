@@ -19,7 +19,7 @@ import {
   type LimitRow,
 } from './limits';
 
-const MODULE_ORDER: LimitModule[] = ['capital', 'liquidity', 'irr', 'fx', 'ftp'];
+const MODULE_ORDER: LimitModule[] = ['capital', 'liquidity', 'exposures', 'irr', 'fx', 'ftp'];
 
 function moduleTone(rows: LimitRow[]) {
   if (rows.some((row) => row.status === 'crit')) return 'breach' as const;

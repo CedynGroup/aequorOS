@@ -7,6 +7,7 @@ import {
   History,
   LayoutDashboard,
   LineChart,
+  Scale,
   ScrollText,
   SearchCheck,
   Send,
@@ -75,6 +76,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Admin',
     items: [
       { href: '/admin/operators', label: 'Operators', icon: Users, keywords: 'staff users roles password reset' },
+      { href: '/admin/regulatory-parameters', label: 'Regulatory Parameters', icon: Scale, keywords: 'control plane thresholds car floors limits sdi bank confirmation four-eyes' },
       { href: '/admin/audit', label: 'Audit Log', icon: History, keywords: 'operator_audit_log actions history' },
       { href: '/admin/inspector', label: 'Tenant Inspector', icon: SearchCheck, keywords: 'impersonate read-only cross-tenant session' },
     ],

@@ -749,6 +749,7 @@ def build_appendix_ii(  # noqa: PLR0913 - the builder names its full optional-ov
     exposure_class_losses: Mapping[int, Mapping[str, Decimal]] | None = None,
     pillar2_by_stress_year: Mapping[int, Pillar2Requirement] | None = None,
     management_actions: ManagementActionsResult | None = None,
+    basel_applicable: bool = True,
 ) -> AppendixIITables:
     """Assemble Tables 1–6 from a base+stress enterprise projection.
 
@@ -771,9 +772,15 @@ def build_appendix_ii(  # noqa: PLR0913 - the builder names its full optional-ov
         projection, car_target_pct, paid_up_min, exposure_class_losses, management_actions
     )
 
-    table2_rows = [_table2_row(projection.current, "current")]
-    table2_rows += [_table2_row(year, f"base_y{year.year}") for year in projection.base]
-    table2_rows += [_table2_row(year, f"stress_y{year.year}") for year in projection.stress]
+    # Table 2 is the Basel CET1/AT1/Tier2 3-tier capital build — banks-only. Under
+    # the SDI simplified s.29 regime it is structurally excluded (docs/sdi.md §4.6,
+    # Phase H) and rendered empty; Tables 1/3/4/5/6 remain (Table 5 collapses to
+    # the credit-RWA base automatically because s.29 zeroes market/operational RWA).
+    table2_rows: list[Table2Row] = []
+    if basel_applicable:
+        table2_rows.append(_table2_row(projection.current, "current"))
+        table2_rows += [_table2_row(year, f"base_y{year.year}") for year in projection.base]
+        table2_rows += [_table2_row(year, f"stress_y{year.year}") for year in projection.stress]
 
     opening = _opening_retained(projection)
     base_openings = _retained_trajectory(projection.base, opening)
