@@ -104,9 +104,7 @@ def _dev_context(token: str, operator_settings: OperatorSettings) -> OperatorCon
         return None
     if not secrets.compare_digest(token, operator_settings.dev_token):
         return None
-    return OperatorContext(
-        email=operator_settings.dev_email, auth_mode="dev", role="super_admin"
-    )
+    return OperatorContext(email=operator_settings.dev_email, auth_mode="dev", role="super_admin")
 
 
 def _load_operator_user(email: str) -> OperatorUser | None:
@@ -169,9 +167,7 @@ def _oidc_context(token: str, operator_settings: OperatorSettings) -> OperatorCo
     user = _load_operator_user(normalized)
     if user is None or not user.is_active:
         raise _UNAUTHORIZED
-    return OperatorContext(
-        email=normalized, auth_mode="oidc", role=cast("OperatorRole", user.role)
-    )
+    return OperatorContext(email=normalized, auth_mode="oidc", role=cast("OperatorRole", user.role))
 
 
 def get_operator_context(
