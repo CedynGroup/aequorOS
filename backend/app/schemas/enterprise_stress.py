@@ -13,23 +13,44 @@ from pydantic import BaseModel, ConfigDict, Field
 class PlanAssumptionsIn(BaseModel):
     """The bank's base-case business plan (the base-leg forecast assumptions).
 
-    Every field is optional; unset fields fall back to the service defaults
-    (documented in ``app/services/enterprise_stress.py``). All values are Decimal
-    percentages (pp for the securities shift).
+    Every field is optional; an unset field falls back to a macro-derived value
+    where the scenario supports one, otherwise to a documented PLATFORM DEFAULT
+    (``app/services/enterprise_stress.py``). Which of the three supplied each
+    number is reported on the run as ``plan_provenance`` — a Board-attested ICAAP
+    must be able to show which assumptions were the institution's own
+    (enterprise audit P0-13).
+
+    All values are Decimal percentages (pp for the securities shift). **Every
+    field is bounded.** Before 2026-08-21 all ten were unbounded ``Decimal |
+    None``, so ``tax_rate_pct = -9999`` was accepted and projected. The bounds
+    below are structural domain limits — a payout ratio is a share of profit, a
+    tax rate is a share of income — not regulatory numbers, so they belong in the
+    contract rather than the control plane.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    loan_growth_pct: Decimal | None = None
-    deposit_growth_pct: Decimal | None = None
-    nim_pct: Decimal | None = None
-    cost_to_income_pct: Decimal | None = None
-    credit_loss_rate_pct: Decimal | None = None
-    fx_depreciation_pct: Decimal | None = None
-    dividend_payout_pct: Decimal | None = None
-    fee_income_pct_assets: Decimal | None = None
-    tax_rate_pct: Decimal | None = None
-    securities_shift_pp: Decimal | None = None
+    #: Nominal annual growth. Below -100% a book would have negative volume.
+    loan_growth_pct: Decimal | None = Field(default=None, ge=-100, le=200)
+    deposit_growth_pct: Decimal | None = Field(default=None, ge=-100, le=200)
+    #: Net interest margin on earning assets. Negative is possible (an inverted
+    #: book funding above its asset yield) but not unbounded.
+    nim_pct: Decimal | None = Field(default=None, ge=-50, le=100)
+    #: Operating cost as a share of total income. Above 100% is a loss-making
+    #: bank, which is a legitimate plan; 500% is a typo.
+    cost_to_income_pct: Decimal | None = Field(default=None, ge=0, le=500)
+    #: Credit losses as a share of gross loans. A share cannot be negative.
+    credit_loss_rate_pct: Decimal | None = Field(default=None, ge=0, le=100)
+    #: Cedi depreciation applied once in year 1. -100% would zero the currency.
+    fx_depreciation_pct: Decimal | None = Field(default=None, ge=-100, le=1000)
+    #: Dividends as a share of net income — a share, so 0..100.
+    dividend_payout_pct: Decimal | None = Field(default=None, ge=0, le=100)
+    #: Fee income as a share of average assets — a share, so non-negative.
+    fee_income_pct_assets: Decimal | None = Field(default=None, ge=0, le=100)
+    #: Effective tax rate — a share of pre-tax profit, so 0..100.
+    tax_rate_pct: Decimal | None = Field(default=None, ge=0, le=100)
+    #: Securities growth relative to deposit growth, in percentage points.
+    securities_shift_pp: Decimal | None = Field(default=None, ge=-100, le=100)
 
 
 class EnterpriseStressRunCreate(BaseModel):
@@ -44,7 +65,21 @@ class EnterpriseStressRunCreate(BaseModel):
     management_action_plan_id: UUID | None = None
     horizon_years: int = Field(default=3, ge=3, le=10)
     paid_up_min: Decimal | None = Field(default=None, ge=0)
-    car_target_pct: Decimal = Field(default=Decimal("13"), gt=0, le=100)
+    #: The CAR the Appendix II "capital required" and Pillar-1-requirement lines
+    #: are measured against. NULL (the default) ⇒ the institution's OWN governed
+    #: minimum CAR resolves from the regulatory-parameter control plane.
+    #:
+    #: This defaulted to the literal ``13`` until 2026-08-22 (audit D-15), which
+    #: made one run carry two capital floors: the governed, effective-dated
+    #: ``car_min`` the engines check the ratios against, and this request default
+    #: the capital-requirement lines were computed from. They are the same
+    #: regulatory quantity, and a literal cannot track it — BoG has moved the
+    #: minimum (CRD ¶71 10% + the ¶75 conservation buffer) more than once, and an
+    #: SDI's Act 930 s.29 floor is 10%, not 13%.
+    #:
+    #: Supplying a value models an INTERNAL target above the regulatory floor; a
+    #: value below the governed floor is refused rather than filed.
+    car_target_pct: Decimal | None = Field(default=None, gt=0, le=100)
     include_irr: bool = True
     include_fx: bool = True
     reason: str = Field(min_length=1, max_length=1000)
@@ -65,6 +100,11 @@ class EnterpriseStressSummary(BaseModel):
     first_breach_year: int | None
     binding_minima: list[str]
     capital_gap: Decimal
+    #: False when ANY base-case plan assumption fell back to a platform default
+    #: rather than being supplied by the institution (enterprise audit P0-13).
+    #: A Board-attested ICAAP resting on platform constants must say so on its
+    #: face; ``EnterpriseStressRead.plan_provenance`` names the exact fields.
+    plan_fully_supplied_by_institution: bool = False
     # Phase 3 management-actions overlay (present only when a plan was modelled):
     # the directive's "results with and without management actions" headline.
     management_action_plan_code: str | None = None
@@ -85,6 +125,12 @@ class EnterpriseStressRead(BaseModel):
     outcome: dict[str, Any]
     projection: dict[str, Any]
     appendix_ii: dict[str, Any]
+    #: Per-field origin of every base-case plan assumption: ``bank_plan`` (the
+    #: institution supplied it), ``macro_scenario`` (derived from the approved
+    #: scenario's own base path) or ``platform_default`` (a documented platform
+    #: constant). The audit record for P0-13 — no assumption is invented
+    #: invisibly.
+    plan_provenance: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
 

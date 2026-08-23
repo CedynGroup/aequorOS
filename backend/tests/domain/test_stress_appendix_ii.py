@@ -31,6 +31,13 @@ from tests.domain.stress_fixtures import (
     severe_paths,
 )
 
+#: The CAR floor these hand-verified tables are measured against. It used to be
+#: an implicit ``DEFAULT_CAR_TARGET_PCT`` inside ``appendix_ii``; that literal is
+#: gone (audit 2026-08-22 D-15) and the caller now states the governed floor it
+#: is filing against. The value is unchanged, so every hand-computed figure below
+#: is byte-identical to the pre-fix expectation.
+_CAR_TARGET = Decimal("13")
+
 
 def _projection(paths, **overrides):
     defaults = {
@@ -47,7 +54,13 @@ def _projection(paths, **overrides):
 
 def test_tables_have_the_prescribed_shape() -> None:
     projection = _projection(severe_paths())
-    tables = build_appendix_ii(projection, severe_paths(), paid_up_min=Decimal("400000000"))
+    tables = build_appendix_ii(
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        paid_up_min=Decimal("400000000"),
+    )
     # current + base Y1-3 + stress Y1-3.
     assert [row.label for row in tables.table2_capital.rows] == [
         "current",
@@ -68,7 +81,9 @@ def test_tables_have_the_prescribed_shape() -> None:
 
 def test_table2_cet1_build_ties_to_the_engine_components() -> None:
     projection = _projection(severe_paths())
-    tables = build_appendix_ii(projection, severe_paths())
+    tables = build_appendix_ii(
+        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
+    )
     current = tables.table2_capital.rows[0]  # as-of
     cet1 = current.cet1
     # Sample bank CET1 components (GHS'000): 150,000 paid-up, 95,000 retained,
@@ -87,7 +102,9 @@ def test_table2_cet1_build_ties_to_the_engine_components() -> None:
 def test_table5_pillar1_rwa_ties_to_table1_stressed_rwa() -> None:
     """The one hard directive invariant: T5 stressed Pillar-1 RWA == T1 stressed RWA."""
     projection = _projection(severe_paths())
-    tables = build_appendix_ii(projection, severe_paths())
+    tables = build_appendix_ii(
+        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
+    )
     t5 = {row.label: row.total_pillar1_rwa for row in tables.table5_rwa.rows}
     for snapshot in tables.table1_summary.post_adverse:
         assert t5[snapshot.label] == snapshot.total_rwa
@@ -102,7 +119,9 @@ def test_table5_pillar1_rwa_ties_to_table1_stressed_rwa() -> None:
 
 def test_table1_impact_allocates_the_full_adverse_loss() -> None:
     projection = _projection(severe_paths())
-    tables = build_appendix_ii(projection, severe_paths())
+    tables = build_appendix_ii(
+        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
+    )
     for (year, losses), base_year, stress_year in zip(
         tables.table1_summary.impact_of_adverse,
         projection.base,
@@ -121,7 +140,13 @@ def test_table1_impact_allocates_the_full_adverse_loss() -> None:
 
 def test_table1_capital_gap_reflects_the_paid_up_shortfall() -> None:
     projection = _projection(severe_paths(), paid_up_min=Decimal("400000000"))
-    tables = build_appendix_ii(projection, severe_paths(), paid_up_min=Decimal("400000000"))
+    tables = build_appendix_ii(
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        paid_up_min=Decimal("400000000"),
+    )
     # 400,000 floor − 150,000 paid-up = 250,000 (GHS'000) shortfall, and the CAR
     # stays above 13% so the paid-up gap dominates.
     assert tables.table1_summary.capital_gap == Decimal("250000.000")
@@ -131,7 +156,9 @@ def test_table1_capital_gap_reflects_the_paid_up_shortfall() -> None:
 
 def test_management_action_blocks_are_explicit_placeholders() -> None:
     projection = _projection(severe_paths())
-    tables = build_appendix_ii(projection, severe_paths())
+    tables = build_appendix_ii(
+        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
+    )
     # A run that models NO plan leaves the Phase 3 blocks explicitly None (not a
     # fabricated zero) — the pre-management-action projection stands alone.
     assert tables.table1_summary.management_actions is None
@@ -148,7 +175,7 @@ def _management_result(
         severity=severity,
         capital_params=bog_capital_params(),
         paid_up_min=paid_up_min,
-        car_target_pct=Decimal("13"),
+        car_target_pct=_CAR_TARGET,
     )
 
 
@@ -169,12 +196,19 @@ def test_table1_management_actions_block_reports_a_capital_raise() -> None:
             ),
         ),
     )
+    # ``severity="severe"`` where this used to pass ``None``: the default
+    # register prices severe at 1.0, so every hand-computed figure below is
+    # unchanged, but the band is now DECLARED. An undeclared band used to
+    # resolve to the same 1.0 silently — the full-magnitude assumption — and
+    # now refuses (audit 2026-08-22 D-8, WS-A3 open item 2).
     result = _management_result(
-        projection, plan, severity=None, paid_up_min=Decimal("400000000")
+        projection, plan, severity="severe", paid_up_min=Decimal("400000000")
     )
     tables = build_appendix_ii(
         projection,
         severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
         paid_up_min=Decimal("400000000"),
         management_actions=result,
     )
@@ -217,8 +251,14 @@ def test_table1_rwa_relief_is_reported_as_a_capital_equivalent() -> None:
             ),
         ),
     )
-    result = _management_result(projection, plan, severity=None)
-    tables = build_appendix_ii(projection, severe_paths(), management_actions=result)
+    result = _management_result(projection, plan, severity="severe")  # factor 1.0
+    tables = build_appendix_ii(
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        management_actions=result,
+    )
     row1 = tables.table1_summary.management_actions.rows[0]  # type: ignore[union-attr]
     # 200M relief × 13% CAR target = 26M freed capital ⇒ 26,000.000 (GHS'000).
     assert row1.risk_reduction == Decimal("26000.000")
@@ -245,12 +285,12 @@ def test_table1_residual_after_actions_is_zero_when_restored() -> None:
             ),
         ),
     )
-    result = _management_result(
-        projection, plan, paid_up_min=Decimal("400000000")
-    )
+    result = _management_result(projection, plan, paid_up_min=Decimal("400000000"))
     tables = build_appendix_ii(
         projection,
         severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
         paid_up_min=Decimal("400000000"),
         management_actions=result,
     )
@@ -285,6 +325,8 @@ def test_serialized_management_blocks_are_json_safe() -> None:
     tables = build_appendix_ii(
         projection,
         severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
         paid_up_min=Decimal("400000000"),
         management_actions=result,
     )
@@ -309,10 +351,10 @@ def test_table6_carries_base_and_stress_driver_paths() -> None:
 
 def test_table3_opening_retained_starts_from_as_of() -> None:
     projection = _projection(severe_paths())
-    tables = build_appendix_ii(projection, severe_paths())
-    base_y1 = next(
-        row for row in tables.table3_profit_and_loss.rows if row.label == "base_y1"
+    tables = build_appendix_ii(
+        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
     )
+    base_y1 = next(row for row in tables.table3_profit_and_loss.rows if row.label == "base_y1")
     # As-of retained earnings 95,000 (GHS'000).
     assert base_y1.opening_retained_earnings == Decimal("95000.000")
 
@@ -325,10 +367,14 @@ def test_bottom_up_decomposition_overlay_drives_table1_impact() -> None:
         2: {"corporates": Decimal("6000000"), "banks": Decimal("1000000")},
         3: {"corporates": Decimal("7000000")},
     }
-    tables = build_appendix_ii(projection, severe_paths(), exposure_class_losses=losses)
-    year1 = next(
-        item for item in tables.table1_summary.impact_of_adverse if item[0] == 1
+    tables = build_appendix_ii(
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        exposure_class_losses=losses,
     )
+    year1 = next(item for item in tables.table1_summary.impact_of_adverse if item[0] == 1)
     by_class = {loss.exposure_class: loss.loss for loss in year1[1]}
     # Reported in GHS'000 (5,000,000 → 5,000.000); every CRD class present.
     assert by_class["corporates"] == Decimal("5000.000")
@@ -345,7 +391,13 @@ def test_pillar2_overlay_populates_table5_stress_rows_and_keeps_the_tie() -> Non
         )
         for year in (1, 2, 3)
     }
-    tables = build_appendix_ii(projection, severe_paths(), pillar2_by_stress_year=overlay)
+    tables = build_appendix_ii(
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        pillar2_by_stress_year=overlay,
+    )
     stress_row = next(row for row in tables.table5_rwa.rows if row.label == "stress_y1")
     assert stress_row.pillar2.credit_concentration == Decimal("1000.000")
     assert stress_row.pillar2.irrbb == Decimal("2000.000")
@@ -364,7 +416,7 @@ def test_pillar2_overlay_populates_table5_stress_rows_and_keeps_the_tie() -> Non
 
 def test_serialized_tables_are_json_safe_and_unit_tagged() -> None:
     projection = _projection(base_paths())
-    tables = build_appendix_ii(projection, base_paths())
+    tables = build_appendix_ii(projection, base_paths(), currency="GHS", car_target_pct=_CAR_TARGET)
     serialized = tables.serialize()
     assert serialized["unit"] == "GHS'000"
     # Round-trips through JSON without error.

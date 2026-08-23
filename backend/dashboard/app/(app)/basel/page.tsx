@@ -13,20 +13,63 @@ import DonutChart from '@/components/charts/DonutChart';
 import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
 import CapitalWaterfallChart from '@/components/basel/charts/CapitalWaterfallChart';
 import SdiCapitalView from '@/components/basel/SdiCapitalView';
-import { runComputedAt, runMetricThreshold } from '@/components/liquidity/runData';
+import FloorNotAssessed from '@/components/basel/FloorNotAssessed';
+import { runComputedAt } from '@/components/liquidity/runData';
 import { useBankContext } from '@/components/shell/BankContext';
 import LiveEngineNote from '@/components/live/LiveEngineNote';
 import {
   useCapitalDashboard,
   useRegulatoryRun,
 } from '@/lib/api/hooks';
-import { num, statusTone } from '@/lib/api/values';
+import {
+  assessAgainstFloor,
+  floorStatus,
+  fmtFloorPct,
+  num,
+  numOrNull,
+  statusTone,
+  type FloorAssessment,
+} from '@/lib/api/values';
 import { seriesColor } from '@/lib/chartTheme';
 import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
 function kpiStatus(status: 'green' | 'amber' | 'red' | string): KpiStatus {
   return status === 'red' ? 'crit' : status === 'amber' ? 'warn' : 'ok';
 }
+
+/**
+ * The engine's traffic light, but only where the comparison it encodes can
+ * actually be made. When the governed floor (or the ratio) did not resolve the
+ * KPI takes `floorStatus`, which is never `ok` — a green edge is a compliance
+ * affirmation and must not be drawn on an assessment nobody made.
+ */
+function gatedKpiStatus(
+  assessment: FloorAssessment,
+  engineStatus: string
+): KpiStatus {
+  return assessment.assessed ? kpiStatus(engineStatus) : floorStatus(assessment);
+}
+
+/** The KPI caption under a ratio: the resolved floor, or its stated absence. */
+function floorHint(floor: number | null, absence: string): string {
+  return floor === null ? absence : `Regulatory minimum ${fmtFloorPct(floor)}`;
+}
+
+/**
+ * The rule codes whose verdict is a comparison against a governed capital
+ * floor, mapped to the floor each one uses. The Validations card re-reads this
+ * so a stored run's PASS cannot outlive the requirement it was measured
+ * against: a run records what was applied WHEN IT RAN, and if that floor no
+ * longer resolves from the institution's parameter set the row is restated as
+ * "not assessed" rather than presented as today's verdict — the same authority,
+ * and therefore the same answer, as the KPI edge and the floors panel.
+ */
+const FLOOR_RULE_CODES = {
+  car_above_minimum: 'capital adequacy',
+  cet1_above_minimum: 'CET1',
+  tier1_above_minimum: 'Tier 1',
+  leverage_above_minimum: 'leverage-ratio',
+} as const;
 
 export default function BaselOverview() {
   const { bank, moduleScope } = useBankContext();
@@ -40,12 +83,63 @@ export default function BaselOverview() {
 
   const data = dashboard.data;
   const run = latestRun.data;
-  const carMin = num(data?.buffers.carMinPct ?? '10');
-  const carEarlyWarning = num(data?.buffers.carEarlyWarningPct ?? '10.5');
-  const carCritical = num(data?.buffers.carCriticalPct ?? '9');
-  const tier1Min = runMetricThreshold(run, 'tier1_ratio_pct');
-  const cet1Min = runMetricThreshold(run, 'cet1_ratio_pct');
-  const leverageMin = runMetricThreshold(run, 'leverage_ratio_pct');
+  // NEW-51. The CAR buffer ladder is tenant data: the capital service resolves
+  // `car_min`, `car_early_warning` and `car_critical` from the institution's
+  // regulatory parameter set and this endpoint refuses with 409
+  // `missing_parameter` rather than guessing when any of them is unset. A
+  // literal here is therefore never a "sensible default" — it is a fabricated
+  // regulatory floor that every ratio on this page is then judged against. The
+  // Bank of Ghana minimum is CRD ¶71's 10% *plus* the ¶75 capital-conservation
+  // buffer (13% today) and has moved four times since 2020, so a written-down
+  // `10` silently understates the bar; `10.5` and `9` matched no published
+  // instrument at all. Absence stays absence and every consumer below renders
+  // it as "not assessed" — never green, never a breach against an invented bar.
+  const carMin = numOrNull(data?.buffers.carMinPct);
+  const carEarlyWarning = numOrNull(data?.buffers.carEarlyWarningPct);
+  const carCritical = numOrNull(data?.buffers.carCriticalPct);
+  // NEW-53. A FLOOR HAS ONE AUTHORITY, AND EVERY PANEL READS IT.
+  //
+  // These four minima all come from `buffers` — the institution's active
+  // regulatory parameter set, resolved server-side by
+  // `regulatory_capital._buffers_or_409` from the same dict the engine is
+  // handed. That is what makes the three panels below agree: the KPI edge (the
+  // engine's traffic light, classified against these floors), this floors
+  // panel, and the validation rules (evaluated against these floors) are three
+  // views of one comparison.
+  //
+  // Tier 1 / CET1 / leverage USED to read `runMetricThreshold(run, …)` — the
+  // threshold snapshotted into the latest stored RegulatoryRun. That is a
+  // historical record of what was applied when that run executed, not the
+  // current requirement, and `latestRunId` is null for every bank before its
+  // first official capital run. So the page showed a green Tier 1 KPI, "This
+  // run carries no Tier 1 minimum · NOT ASSESSED", and a passing Tier 1
+  // validation citing 8%, simultaneously. The absence of a run is not evidence
+  // of compliance and it is not evidence of a missing floor.
+  const tier1Min = numOrNull(data?.buffers.tier1MinPct);
+  const cet1Min = numOrNull(data?.buffers.cet1MinPct);
+  const leverageMin = numOrNull(data?.buffers.leverageMinPct);
+  const carAssessment = assessAgainstFloor(
+    numOrNull(data?.metrics.carPct),
+    carMin
+  );
+  const tier1Assessment = assessAgainstFloor(
+    numOrNull(data?.metrics.tier1RatioPct),
+    tier1Min
+  );
+  const cet1Assessment = assessAgainstFloor(
+    numOrNull(data?.metrics.cet1RatioPct),
+    cet1Min
+  );
+  const leverageAssessment = assessAgainstFloor(
+    numOrNull(data?.metrics.leverageRatioPct),
+    leverageMin
+  );
+  const floorByRuleCode: Record<string, number | null> = {
+    car_above_minimum: carMin,
+    cet1_above_minimum: cet1Min,
+    tier1_above_minimum: tier1Min,
+    leverage_above_minimum: leverageMin,
+  };
 
   const totalRwa = num(data?.metrics.totalRwaGhs);
   const rwaSlices = data
@@ -79,7 +173,20 @@ export default function BaselOverview() {
   const tier1Delta = periodDelta(tier1Trend);
   const cet1Delta = periodDelta(cet1Trend);
   const hasInlineTrendPoints = (data?.trend ?? []).some((p) => !p.stored);
-  const compliantCount = carTrend.filter((v) => v >= carMin).length;
+  // "Compliant n of m" is a compliance claim, so it exists only when there is a
+  // floor to have complied with.
+  const compliantCount =
+    carMin === null ? null : carTrend.filter((v) => v >= carMin).length;
+  // The trend chart's y-floor anchors on the critical buffer when there is one;
+  // an unresolved buffer just means the axis is driven by the data alone.
+  const carTrendAnchors = [
+    ...carTrend,
+    ...(carCritical === null ? [] : [carCritical]),
+  ];
+  const carTrendYMin =
+    carTrendAnchors.length > 0
+      ? Math.floor(Math.min(...carTrendAnchors) - 2)
+      : undefined;
 
   const structure = data?.capitalStructure;
   const cet1Gross = structure
@@ -91,6 +198,25 @@ export default function BaselOverview() {
         0
       )
     : 0;
+
+  // The third panel of the three. A validation is a rule evaluated against a
+  // floor; when that floor no longer resolves from the institution's parameter
+  // set the rule is not evaluable now, whatever a stored run once recorded. The
+  // row is restated as "not assessed" so the Validations card cannot claim a
+  // pass the KPI edge and the floors panel are refusing to claim.
+  const validations = (data?.validations ?? []).map((item) => {
+    const what = FLOOR_RULE_CODES[item.ruleCode as keyof typeof FLOOR_RULE_CODES];
+    if (what === undefined || floorByRuleCode[item.ruleCode] !== null) {
+      return item;
+    }
+    return {
+      ...item,
+      assessed: false,
+      message:
+        `No ${what} minimum resolves from this institution's active parameter ` +
+        'set, so this rule cannot be evaluated for the current period.',
+    };
+  });
 
   const computedAt = runComputedAt(run);
   const provenance = data ? (
@@ -138,107 +264,154 @@ export default function BaselOverview() {
                 label="Capital Adequacy Ratio"
                 value={num(data.metrics.carPct).toFixed(2)}
                 unit="%"
-                status={kpiStatus(data.metrics.carStatus)}
+                status={gatedKpiStatus(carAssessment, data.metrics.carStatus)}
                 delta={carDelta}
                 sparkline={<Sparkline data={carTrend} />}
-                hint={`${regShort()} minimum ${carMin.toFixed(1)}%`}
+                hint={
+                  carMin === null
+                    ? 'No capital adequacy minimum on file — compliance not assessed'
+                    : `${regShort()} minimum ${fmtFloorPct(carMin)}`
+                }
               />
               <KpiStat
                 label="Tier 1 ratio"
                 value={num(data.metrics.tier1RatioPct).toFixed(2)}
                 unit="%"
-                status={kpiStatus(data.metrics.tier1Status)}
+                status={gatedKpiStatus(tier1Assessment, data.metrics.tier1Status)}
                 delta={tier1Delta}
                 sparkline={<Sparkline data={tier1Trend} />}
-                hint={
-                  tier1Min !== null
-                    ? `Regulatory minimum ${tier1Min.toFixed(1)}%`
-                    : 'CET1 + AT1 / RWA'
-                }
+                hint={floorHint(
+                  tier1Min,
+                  'No Tier 1 minimum on file — compliance not assessed'
+                )}
               />
               <KpiStat
                 label="CET1 ratio"
                 value={num(data.metrics.cet1RatioPct).toFixed(2)}
                 unit="%"
-                status={kpiStatus(data.metrics.cet1Status)}
+                status={gatedKpiStatus(cet1Assessment, data.metrics.cet1Status)}
                 delta={cet1Delta}
                 sparkline={<Sparkline data={cet1Trend} />}
-                hint={
-                  cet1Min !== null
-                    ? `Regulatory minimum ${cet1Min.toFixed(1)}%`
-                    : 'Common equity Tier 1 / RWA'
-                }
+                hint={floorHint(
+                  cet1Min,
+                  'No CET1 minimum on file — compliance not assessed'
+                )}
               />
               <KpiStat
                 label="Leverage ratio"
                 value={num(data.metrics.leverageRatioPct).toFixed(2)}
                 unit="%"
-                status={kpiStatus(data.metrics.leverageStatus)}
-                hint={
-                  leverageMin !== null
-                    ? `Regulatory minimum ${leverageMin.toFixed(1)}%`
-                    : 'Tier 1 / total exposures'
-                }
+                status={gatedKpiStatus(
+                  leverageAssessment,
+                  data.metrics.leverageStatus
+                )}
+                hint={floorHint(
+                  leverageMin,
+                  'No leverage-ratio minimum on file — compliance not assessed'
+                )}
               />
             </div>
 
             {/* Regulatory floors — CAR & companions are floor limits */}
             <SectionCard
               title="Regulatory floors"
-              subtitle={`${regShort()} CRD minimums — compliant while each ratio stays above its floor`}
+              // Deliberately NOT "`regShort()` CRD minimums". Only `car_min` is
+              // clamped against a governed control-plane row, so only the CAR
+              // row below may carry a regulator's name. CET1 / Tier 1 /
+              // leverage arrive from the institution's own board register
+              // unclamped (the control plane seeds no row for them —
+              // `15_known_limitations.md` §3.5.1), and the fixture's leverage
+              // 3% is Basel III's figure against BoG CRD ¶90's 6%. Naming the
+              // regulator over a number it did not set is the attribution
+              // defect this programme already corrected on the liquidity
+              // screens.
+              subtitle="Each ratio against the minimum resolved from this institution's parameter set — compliant while it stays above its floor"
               computedAt={computedAt}
               footer={provenance}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5">
-                <LimitBar
-                  label="CAR"
-                  value={num(data.metrics.carPct)}
-                  limit={carMin}
-                  warnAt={carEarlyWarning}
-                  direction="above"
-                  unit="%"
-                  limitLabel={`${regShort()} minimum`}
-                  warnLabel={data.buffers.carEarlyWarningLabel || 'Early warning'}
-                  format={(v) => v.toFixed(1)}
-                />
-                <LimitBar
-                  label="Tier 1 ratio"
-                  value={num(data.metrics.tier1RatioPct)}
-                  limit={tier1Min ?? 8}
-                  warnAt={tier1Min ?? 8}
-                  direction="above"
-                  unit="%"
-                  limitLabel={
-                    tier1Min !== null ? 'Regulatory minimum' : 'Assumed minimum'
-                  }
-                  format={(v) => v.toFixed(1)}
-                />
-                <LimitBar
-                  label="CET1 ratio"
-                  value={num(data.metrics.cet1RatioPct)}
-                  limit={cet1Min ?? 6.5}
-                  warnAt={cet1Min ?? 6.5}
-                  direction="above"
-                  unit="%"
-                  limitLabel={
-                    cet1Min !== null ? 'Regulatory minimum' : 'Assumed minimum'
-                  }
-                  format={(v) => v.toFixed(1)}
-                />
-                <LimitBar
-                  label="Leverage ratio"
-                  value={num(data.metrics.leverageRatioPct)}
-                  limit={leverageMin ?? 6}
-                  warnAt={leverageMin ?? 6}
-                  direction="above"
-                  unit="%"
-                  limitLabel={
-                    leverageMin !== null
-                      ? 'Regulatory minimum'
-                      : 'Assumed minimum'
-                  }
-                  format={(v) => v.toFixed(1)}
-                />
+                {carMin === null ? (
+                  <FloorNotAssessed
+                    label="CAR"
+                    value={numOrNull(data.metrics.carPct)}
+                    reason="No capital adequacy minimum on file for this institution"
+                  />
+                ) : (
+                  <LimitBar
+                    label="CAR"
+                    value={num(data.metrics.carPct)}
+                    limit={carMin}
+                    warnAt={carEarlyWarning ?? undefined}
+                    direction="above"
+                    unit="%"
+                    limitLabel={`${regShort()} minimum`}
+                    warnLabel={
+                      data.buffers.carEarlyWarningLabel || 'Early warning'
+                    }
+                    format={(v) => v.toFixed(1)}
+                  />
+                )}
+                {/* An "assumed minimum" is still an invented one: it places the
+                    breach zone, colours the bar and prints a headroom figure
+                    against a number no regulator set and no tenant configured.
+                    A ratio whose governed floor does not resolve gets the
+                    measurement and an explicit non-assessment instead — and,
+                    per NEW-53, the KPI edge above and the validation row below
+                    reach the same verdict from the same authority. */}
+                {tier1Min === null ? (
+                  <FloorNotAssessed
+                    label="Tier 1 ratio"
+                    value={numOrNull(data.metrics.tier1RatioPct)}
+                    reason="No Tier 1 minimum on file for this institution"
+                  />
+                ) : (
+                  <LimitBar
+                    label="Tier 1 ratio"
+                    value={num(data.metrics.tier1RatioPct)}
+                    limit={tier1Min}
+                    warnAt={tier1Min}
+                    direction="above"
+                    unit="%"
+                    limitLabel="Regulatory minimum"
+                    format={(v) => v.toFixed(1)}
+                  />
+                )}
+                {cet1Min === null ? (
+                  <FloorNotAssessed
+                    label="CET1 ratio"
+                    value={numOrNull(data.metrics.cet1RatioPct)}
+                    reason="No CET1 minimum on file for this institution"
+                  />
+                ) : (
+                  <LimitBar
+                    label="CET1 ratio"
+                    value={num(data.metrics.cet1RatioPct)}
+                    limit={cet1Min}
+                    warnAt={cet1Min}
+                    direction="above"
+                    unit="%"
+                    limitLabel="Regulatory minimum"
+                    format={(v) => v.toFixed(1)}
+                  />
+                )}
+                {leverageMin === null ? (
+                  <FloorNotAssessed
+                    label="Leverage ratio"
+                    value={numOrNull(data.metrics.leverageRatioPct)}
+                    reason="No leverage-ratio minimum on file for this institution"
+                  />
+                ) : (
+                  <LimitBar
+                    label="Leverage ratio"
+                    value={num(data.metrics.leverageRatioPct)}
+                    limit={leverageMin}
+                    warnAt={leverageMin}
+                    direction="above"
+                    unit="%"
+                    limitLabel="Regulatory minimum"
+                    format={(v) => v.toFixed(1)}
+                  />
+                )}
               </div>
             </SectionCard>
 
@@ -250,19 +423,34 @@ export default function BaselOverview() {
                 subtitle={`CAR and Tier 1 across ${carTrend.length} reporting periods`}
                 height={260}
                 actions={
-                  <StatusPill tone="success">
-                    Compliant {compliantCount} of {carTrend.length}
-                  </StatusPill>
+                  compliantCount === null ? (
+                    <StatusPill tone="pending">
+                      No CAR minimum on file — compliance not assessed
+                    </StatusPill>
+                  ) : (
+                    <StatusPill tone="success">
+                      Compliant {compliantCount} of {carTrend.length}
+                    </StatusPill>
+                  )
                 }
                 footer={
-                  hasInlineTrendPoints ? (
-                    <span>
-                      Hollow points are live computations — they solidify once
-                      those periods’ results are stored.
-                    </span>
-                  ) : (
-                    <span>All trend points come from stored results.</span>
-                  )
+                  <>
+                    {hasInlineTrendPoints ? (
+                      <span>
+                        Hollow points are live computations — they solidify once
+                        those periods’ results are stored.
+                      </span>
+                    ) : (
+                      <span>All trend points come from stored results.</span>
+                    )}
+                    {carMin === null && (
+                      <span>
+                        {' '}
+                        No capital adequacy minimum resolved for this
+                        institution, so no floor line is drawn.
+                      </span>
+                    )}
+                  </>
                 }
               >
                 <RatioTrendChart
@@ -278,7 +466,7 @@ export default function BaselOverview() {
                   redFloorLabel="Early warning"
                   primaryLabel="CAR"
                   secondaryLabel="Tier 1"
-                  yMin={Math.floor(Math.min(carCritical, ...carTrend) - 2)}
+                  yMin={carTrendYMin}
                   height={260}
                 />
               </ChartFrame>
@@ -369,16 +557,30 @@ export default function BaselOverview() {
                 />
                 <BufferCell
                   label="Current CAR"
-                  value={num(data.buffers.currentCarPct)}
+                  value={numOrNull(data.buffers.currentCarPct)}
                   note="As of this reporting period"
-                  emphasis={statusTone(data.metrics.carStatus)}
+                  emphasis={
+                    carMin === null
+                      ? undefined
+                      : statusTone(data.metrics.carStatus)
+                  }
                 />
                 <BufferCell
                   label="Headroom"
-                  value={num(data.buffers.headroomPp)}
+                  // Headroom is distance to the minimum. With no minimum there
+                  // is no distance to state — not a zero one.
+                  value={carMin === null ? null : numOrNull(data.buffers.headroomPp)}
                   suffix=" pp"
-                  note={`Above the ${regShort()} minimum`}
-                  emphasis={statusTone(data.metrics.carStatus)}
+                  note={
+                    carMin === null
+                      ? 'No minimum resolved to measure headroom against'
+                      : `Above the ${regShort()} minimum`
+                  }
+                  emphasis={
+                    carMin === null
+                      ? undefined
+                      : statusTone(data.metrics.carStatus)
+                  }
                 />
               </div>
             </SectionCard>
@@ -391,7 +593,7 @@ export default function BaselOverview() {
               computedAt={computedAt}
               footer={provenance}
             >
-              <ValidationList validations={data.validations} />
+              <ValidationList validations={validations} />
             </SectionCard>
           </div>
         )}
@@ -417,7 +619,12 @@ function BufferCell({
   emphasis,
 }: {
   label: string;
-  value: number;
+  /**
+   * The threshold or measurement. `null` is a first-class state: the ladder
+   * prints "Not resolved" rather than a stand-in, because a plausible number in
+   * this cell is read as the bar the institution is held to.
+   */
+  value: number | null;
   suffix?: string;
   note?: string;
   emphasis?: string;
@@ -435,9 +642,12 @@ function BufferCell({
       <p className="text-micro font-medium uppercase tracking-wider text-slate">
         {label}
       </p>
-      <p className={`font-mono text-h1 tnum ${valueColor}`}>
-        {value.toFixed(2)}
-        {suffix}
+      <p
+        className={`font-mono tnum ${
+          value === null ? 'text-body text-slate' : `text-h1 ${valueColor}`
+        }`}
+      >
+        {value === null ? 'Not resolved' : `${value.toFixed(2)}${suffix}`}
       </p>
       {note && <p className="text-caption text-slate leading-snug">{note}</p>}
     </div>

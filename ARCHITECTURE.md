@@ -306,8 +306,9 @@ How `app/services/liquidity.py` publishes findings (the template for new engines
 3. Workflow findings are protected from the generic `PATCH /api/v1/findings/{finding_id}`
    endpoint (`allow_liquidity_workflow` flag); reviews go through the dedicated
    `/liquidity/findings/{finding_id}/review` route.
-4. The web renders any of these through the shared `FindingReviewCard`
-   (`apps/aequoros-web/src/features/findings/finding-review-card.tsx`).
+4. The case-based SPA rendered any of these through a shared `FindingReviewCard`.
+   That package (`apps/aequoros-web`) has been **removed** — the pattern is
+   recorded here for the bank-scoped vertical; see git history for the source.
 
 ---
 
@@ -392,11 +393,26 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 | risk-service (all) | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check` |
 | risk-service vs Postgres | `docker compose up -d risk-postgres` then `mise run risk-service:test-postgres` (sets `TEST_DATABASE_URL`) |
 | risk-service migrations | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"` |
-| web | `pnpm --filter @aequoros/aequoros-web typecheck` · `lint` · `test` · `build` (e2e: `e2e`, deterministic journeys in `apps/aequoros-web/e2e/*.spec.ts`) |
+| dashboard | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` (e2e: `e2e`, needs object storage from `backend/.env`) |
+| marketing | `pnpm --filter @aequoros/frontend lint` · `build` |
+| operator console | `pnpm --filter @aequoros/console typecheck` · `test` · `build` (no ESLint: the workspace has no ESLint dependency or config) |
 | generated client | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`) |
 | client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean) |
 
 All `mise run risk-service:*` tasks work from the repo root or from `backend`.
+
+**Every row above is enforced in CI** (2026-08-22 — before that, `frontend/` and `console/`
+appeared in no workflow at all, and the dashboard workflow ran neither `lint` nor `test`, so
+the regulatory fail-open guard and the browser-runtime SSRF guard were unenforced):
+
+| Workflow | Jobs |
+| --- | --- |
+| `.github/workflows/risk-service.yml` | `static` · `architecture` · `unit` · `postgres` · `postgres-suite` · `api-fresh` · `real-data` (conditional) |
+| `.github/workflows/dashboard.yml` | `dashboard` — client typecheck, dashboard typecheck, lint, test, build |
+| `.github/workflows/web.yml` | `frontend` — lint, build · `console` — typecheck, test, build |
+
+Each workflow carries its own gate inventory in a header comment; keep it accurate when you
+add a step.
 
 ---
 
@@ -412,10 +428,14 @@ suite. The monorepo was kept intact; nothing was moved or deleted.
 
 **`dashboard` is the primary product surface** — the Bank Treasurer console, wired
 end-to-end to the risk-service via the generated `@aequoros/risk-service-api` client, with
-zero hardcoded financial data. `apps/aequoros-web` (case-based risk console) and
-`frontend` (marketing) remain independent, working deliverables.
+zero hardcoded financial data. `frontend` (marketing) is the other independent
+deliverable; `apps/aequoros-web` (the case-based SPA) was **removed** — see git history.
 
-### Six regulatory modules (all live, DB-driven, tenant-scoped)
+### Six regulatory modules (all built, DB-driven, tenant-scoped)
+
+Seven rows below: the cash-flow LSTM is a sub-module of liquidity, not a seventh
+regulatory module. "Built" means computed server-side from ingested data with an
+immutable run — it does not mean any figure has been filed with a regulator.
 
 Each follows the same pattern: pure Decimal engine in `app/domain/<module>/engine.py`,
 immutable `RegulatoryRun` persistence (snapshot + SHA-256 hash + versioned metrics/line-items/

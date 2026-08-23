@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -24,6 +25,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
 from app.domain.liquidity.engine import (
+    FACT_GROUP_SECURITIES,
+    HQLA_LEVEL_1,
+    HQLA_LEVELS,
     SHOCK_FX_DEPRECIATION,
     SHOCK_NMD_RUNOFF_PREFIX,
     CurrencyGapResult,
@@ -47,6 +51,7 @@ from app.models import (
     BankReportingPeriod,
     CanonicalPosition,
     CanonicalPositionSnapshot,
+    FinancialFactRow,
     ParamCapitalThreshold,
     ParamLcrRunoffRate,
     ParamLiquidityThreshold,
@@ -80,7 +85,9 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunRead,
     RegulatoryRunSummaryRead,
     RegulatoryValidationRead,
+    RunEvidenceRead,
 )
+from app.services import filing_reconciliation, regulatory_parameters, withdrawal_impact
 from app.services.audit import record_event
 from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.jurisdictions import base_currency, regulator_name
@@ -93,7 +100,17 @@ from app.services.live_types import (
 )
 from app.services.params import get_active_params
 
-ENGINE_VERSION = "regulatory-liquidity-v1.0.0"
+#: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR under the
+#: rule stated on ``regulatory_capital.ENGINE_VERSION``: the Basel HQLA control
+#: (P0-8) added per-level haircuts and the 40% Level-2 / 15% Level-2B caps, and
+#: fact derivation now establishes the level instead of stamping ``L1`` on
+#: everything (D-6), so a book carrying a non-Level-1 or unclassifiable holding
+#: reports a different LCR from the same canonical data. A Level-1-only book is
+#: arithmetically unchanged — but the version names the ENGINE GENERATION, not
+#: the subset of books whose number happened to move, and a reader cannot tell
+#: which subset a sealed run belonged to without it. Historical rows are NOT
+#: rewritten.
+ENGINE_VERSION = "regulatory-liquidity-v2.0.0"
 # v3 (2026-08-07): the snapshot gains the per-currency contractual ladders
 # block (Phase 2 item 2 — FRM 16-17 currency gaps / USD funding stress).
 INPUT_SCHEMA_VERSION = "bank-facts-v3"
@@ -152,6 +169,10 @@ class _ActiveLiquidityParams:
     asf_weights: dict[str, Decimal]
     rsf_weights: dict[str, Decimal]
     thresholds: dict[str, Decimal]
+    #: Basel HQLA haircuts + Level-2 caps from the regulatory-parameter control
+    #: plane (enterprise audit P0-8). Partial by design — see
+    #: ``regulatory_parameters.HqlaParameters``.
+    hqla: regulatory_parameters.HqlaParameters
 
 
 def create_liquidity_run(
@@ -160,6 +181,12 @@ def create_liquidity_run(
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
+    # Audit 2026-08-22 D-3(b): this endpoint mints the same immutable runs as an
+    # activation but never went through ``derive_facts``, so the balance-sheet
+    # control had no say over LCR or NSFR reached this way.
+    filing_reconciliation.assert_filing_reconciled(
+        db, ctx, bank, as_of=period.period_end, period_id=period.id, purpose="official_run"
+    )
     return _create_and_execute(db, ctx, bank, period, payload.scenario_code)
 
 
@@ -169,6 +196,10 @@ def run_all_liquidity_scenarios(
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
+    # See ``create_liquidity_run``: the 22-scenario batch is the same mint.
+    filing_reconciliation.assert_filing_reconciled(
+        db, ctx, bank, as_of=period.period_end, period_id=period.id, purpose="official_run"
+    )
     runs = [
         _create_and_execute(db, ctx, bank, period, scenario_code)
         for scenario_code in LIQUIDITY_SCENARIO_CODES
@@ -218,7 +249,7 @@ def list_regulatory_runs(  # noqa: PLR0913
     )
     return RegulatoryRunListRead(
         bank_id=bank.id,
-        runs=[_read_summary(run, label) for run, label in rows],
+        runs=[_read_summary(db, run, label) for run, label in rows],
         total=total,
         limit=limit,
         offset=offset,
@@ -459,7 +490,7 @@ def _execute_scenario_compute(  # noqa: PLR0913 - the official path hands over i
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
-    facts: list[BankFinancialFact],
+    facts: Sequence[FinancialFactRow],
     active: _ActiveLiquidityParams,
     currency_ladders: dict[str, dict[str, list[str] | str]],
     shocks: dict[str, Decimal],
@@ -573,6 +604,11 @@ def _create_and_execute(
         input_hash=_snapshot_hash(snapshot),
         inputs=snapshot,
         metrics={},
+        # Audit D-18: WHICH governed control-plane rows produced the values in
+        # ``inputs["parameters"]``. Beside the snapshot, never inside it — row
+        # ids and timestamps are identity, not values, and the ``input_hash`` is
+        # value-based by contract.
+        parameter_provenance=regulatory_parameters.consume_parameter_provenance(db),
         created_by=ctx.actor_user_id,
     )
     db.add(run)
@@ -860,6 +896,34 @@ def _validation_rows(
             f"of {lcr.gross_inflows_total} {currency} are below the cap of "
             f"{lcr.inflow_cap_amount} {currency}."
         )
+    # The HQLA composition after the Basel haircuts and Level-2 caps (enterprise
+    # audit P0-8). Previously this row could only say "all Level 1" or "includes
+    # assets below Level 1" — it named neither the haircut charged nor whether a
+    # cap had bound, because neither existed.
+    composition = lcr.hqla_composition
+    if lcr.all_hqla_level1:
+        hqla_message = (
+            f"All high quality liquid assets are Level 1: {composition.level1} {currency}, "
+            "no haircut and no Level-2 cap applicable."
+        )
+    else:
+        bound: list[str] = []
+        if composition.level2_cap_applied:
+            bound.append(
+                f"the {_pct_text(params.hqla_level2_cap_pct or _ZERO)}% Level-2 cap deducted "
+                f"{composition.level2_cap_adjustment} {currency}"
+            )
+        if composition.level2b_cap_applied:
+            bound.append(
+                f"the {_pct_text(params.hqla_level2b_cap_pct or _ZERO)}% Level-2B cap deducted "
+                f"{composition.level2b_cap_adjustment} {currency}"
+            )
+        hqla_message = (
+            f"HQLA after haircuts: Level 1 {composition.level1}, Level 2A "
+            f"{composition.level2a}, Level 2B {composition.level2b} {currency}. "
+            + ("; ".join(bound) + "." if bound else "Neither Level-2 cap bound.")
+        )
+
     return (
         (
             "lcr_above_minimum",
@@ -886,14 +950,7 @@ def _validation_rows(
             + f" the {nsfr_min}% regulatory minimum.",
         ),
         ("inflow_cap_applied", True, "info", cap_message),
-        (
-            "hqla_all_level1",
-            lcr.all_hqla_level1,
-            "info",
-            "All high quality liquid assets are Level 1."
-            if lcr.all_hqla_level1
-            else "The HQLA stock includes assets below Level 1.",
-        ),
+        ("hqla_all_level1", lcr.all_hqla_level1, "info", hqla_message),
     )
 
 
@@ -1210,7 +1267,7 @@ def _load_facts(
     )
 
 
-def _to_engine_fact(fact: BankFinancialFact) -> LiquidityFact:
+def _to_engine_fact(fact: FinancialFactRow) -> LiquidityFact:
     return LiquidityFact(
         fact_group=fact.fact_group,
         category=fact.category,
@@ -1250,6 +1307,7 @@ def _load_active_params(
         asf_weights=asf_weights,
         rsf_weights=rsf_weights,
         thresholds=thresholds,
+        hqla=regulatory_parameters.resolve_hqla_parameters(db, bank, as_of=as_of),
     )
 
 
@@ -1275,6 +1333,13 @@ def _engine_params(active: _ActiveLiquidityParams) -> LiquidityParams:
         lcr_amber_floor_pct=amber_floor,
         nsfr_min_pct=active.thresholds["nsfr_min"],
         nsfr_amber_floor_pct=amber_floor,
+        # HQLA haircuts + Level-2 caps come from the control plane, never from a
+        # literal in the engine (enterprise audit P0-8). They are passed through
+        # as resolved: an absent rate stays absent, and ``compute_lcr`` refuses
+        # to weight an asset it cannot rate rather than counting it at face value.
+        hqla_haircut_pct=active.hqla.haircut_pct,
+        hqla_level2_cap_pct=active.hqla.level2_cap_pct,
+        hqla_level2b_cap_pct=active.hqla.level2b_cap_pct,
     )
 
 
@@ -1317,6 +1382,7 @@ def _currency_ladders(
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == as_of_date,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_CCY_STATUSES),
             CanonicalPosition.position_type.in_(
                 (*_CCY_ASSET_TYPES, *_CCY_LIABILITY_TYPES, *_CCY_DERIVATIVES)
@@ -1412,7 +1478,7 @@ def _build_snapshot(  # noqa: PLR0913
     bank: Bank,
     period: BankReportingPeriod,
     scenario_code: str,
-    facts: list[BankFinancialFact],
+    facts: Sequence[FinancialFactRow],
     active: _ActiveLiquidityParams,
     shocks: dict[str, Decimal],
     currency_ladders: dict[str, dict[str, list[str] | str]],
@@ -1445,18 +1511,86 @@ def _build_snapshot(  # noqa: PLR0913
             ),
             key=lambda entry: json.dumps(entry, sort_keys=True),
         ),
-        "parameters": {
-            "outflow_runoff_rates_pct": _stringified(active.outflow_rates),
-            "inflow_rates_pct": _stringified(active.inflow_rates),
-            "asf_weights_pct": _stringified(active.asf_weights),
-            "rsf_weights_pct": _stringified(active.rsf_weights),
-            "thresholds_pct": _stringified(active.thresholds),
-        },
+        "parameters": _snapshot_parameters(active, facts),
         "shocks": _stringified(shocks),
         # v3: per-currency contractual ladders (five LMTD horizons, cedi
         # equivalents) — canonical keys sorted, values stringified.
         "currency_ladders": currency_ladders,
     }
+
+
+def _snapshot_parameters(
+    active: _ActiveLiquidityParams, facts: Sequence[FinancialFactRow]
+) -> dict[str, Any]:
+    """Governed inputs recorded in the hashed snapshot.
+
+    The rule is the repo's value-based discipline: a parameter block joins the
+    hash when the arithmetic CONSUMES it, not when the loader happens to query
+    it (the CRM/ECL precedent in ``regulatory_forecasting._snapshot_parameters``).
+
+    Forensic re-audit 2026-08-22 **D-7** corrected which side of that rule the
+    HQLA haircuts fall on. The block used to join only when the book held a
+    non-Level-1 asset, on the stated reasoning that *"a Level-1-only book takes a
+    0% haircut"*. That reasoning read a governed control-plane row —
+    ``hqla_l1_haircut_pct``, seeded ``0`` and ``confirmed`` to BCBS 238 ¶50 — as if
+    it were a code constant. It is not: ``compute_lcr`` calls
+    ``_hqla_haircut(params, "L1")`` for every Level-1 asset and REFUSES the run
+    when it is unresolved, so the L1 rate is consumed by every book holding any
+    HQLA at all. Governed to a non-zero value — by a supervisor, or by a board
+    register override — every Level-1-only bank's filed LCR would have moved
+    while its ``input_hash`` stood still, which is precisely what the hash exists
+    to make impossible.
+
+    So the haircut block now carries exactly the levels the engine will charge
+    (:func:`_consumed_hqla_levels`, which mirrors the engine's own HQLA filter).
+    The Level-2 **caps** stay conditional, because ``_compute_hqla`` resolves
+    them only when a Level-2 asset is present: a Level-1-only book cannot bind
+    either cap, is never blocked on an unseeded Level-2 rate, and is not hashed
+    against one either.
+    """
+    parameters: dict[str, Any] = {
+        "outflow_runoff_rates_pct": _stringified(active.outflow_rates),
+        "inflow_rates_pct": _stringified(active.inflow_rates),
+        "asf_weights_pct": _stringified(active.asf_weights),
+        "rsf_weights_pct": _stringified(active.rsf_weights),
+        "thresholds_pct": _stringified(active.thresholds),
+    }
+    consumed = _consumed_hqla_levels(facts)
+    if consumed:
+        parameters["hqla_haircuts_pct"] = _stringified(
+            {level: rate for level, rate in active.hqla.haircut_pct.items() if level in consumed}
+        )
+    if consumed - {HQLA_LEVEL_1}:
+        parameters["hqla_caps_pct"] = _stringified(
+            {
+                code: value
+                for code, value in (
+                    (regulatory_parameters.HQLA_LEVEL2_CAP_CODE, active.hqla.level2_cap_pct),
+                    (regulatory_parameters.HQLA_LEVEL2B_CAP_CODE, active.hqla.level2b_cap_pct),
+                )
+                if value is not None
+            }
+        )
+    return parameters
+
+
+def _consumed_hqla_levels(facts: Sequence[FinancialFactRow]) -> set[str]:
+    """The Basel levels ``compute_lcr`` will actually charge a haircut for.
+
+    Mirrors the engine's own HQLA filter — the ``securities`` fact group with a
+    stated level — and its normalisation, so the rates recorded in the hash are
+    neither wider nor narrower than the ones the arithmetic reads. A holding
+    whose level could not be established carries ``hqla_level=None``, is filtered
+    out of the stock by ``compute_lcr``, and consumes no rate. A level outside
+    the Basel taxonomy consumes none either: the engine raises
+    ``UnclassifiedHqlaError`` on it, so no run — and no hash — exists.
+    """
+    levels = {
+        (fact.hqla_level or "").strip().upper()
+        for fact in facts
+        if fact.fact_group == FACT_GROUP_SECURITIES and fact.hqla_level is not None
+    }
+    return levels & set(HQLA_LEVELS)
 
 
 def _stringified(values: dict[str, Decimal]) -> dict[str, str]:
@@ -1482,7 +1616,18 @@ def _error_read(run: RegulatoryRun) -> RegulatoryRunErrorRead | None:
     )
 
 
-def _read_summary(run: RegulatoryRun, period_label: str) -> RegulatoryRunSummaryRead:
+def _evidence_read(db: Session, run: RegulatoryRun) -> RunEvidenceRead:
+    """The run's derived evidence standing (D-12), for any run read.
+
+    Derived here rather than stored on ``regulatory_runs``: the run is
+    append-only evidence, and a withdrawal is reversible, so a stored flag
+    would mean two writes to sealed evidence and a permanently wrong answer if
+    either were missed. See ``app/domain/authority/evidence.py``.
+    """
+    return RunEvidenceRead.model_validate(withdrawal_impact.run_evidence(db, run).to_dict())
+
+
+def _read_summary(db: Session, run: RegulatoryRun, period_label: str) -> RegulatoryRunSummaryRead:
     return RegulatoryRunSummaryRead(
         id=run.id,
         module=run.module,  # type: ignore[arg-type]
@@ -1494,6 +1639,7 @@ def _read_summary(run: RegulatoryRun, period_label: str) -> RegulatoryRunSummary
         input_hash=run.input_hash,
         metrics=run.metrics,
         error=_error_read(run),
+        evidence=_evidence_read(db, run),
         created_at=run.created_at,
     )
 
@@ -1542,6 +1688,7 @@ def _read_run(db: Session, run: RegulatoryRun) -> RegulatoryRunRead:
         metric_results=[RegulatoryMetricResultRead.model_validate(item) for item in metric_results],
         line_items=[RegulatoryLineItemRead.model_validate(item) for item in line_items],
         validations=[RegulatoryValidationRead.model_validate(item) for item in validations],
+        evidence=_evidence_read(db, run),
         created_by=run.created_by,
         created_at=run.created_at,
         updated_at=run.updated_at,

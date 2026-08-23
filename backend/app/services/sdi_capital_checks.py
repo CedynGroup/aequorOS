@@ -17,13 +17,13 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.stress.appendix_ii import _PAID_UP, _STATUTORY
-from app.models import Bank, CanonicalReferenceRow
+from app.models import Bank
 from app.services import regulatory_parameters
+from app.services.sdi_capital import latest_capital_structure_rows, signed_component_amount
 
 _ZERO = Decimal("0")
 _GHS_PER_MILLION = Decimal("1000000")
@@ -53,39 +53,23 @@ def capital_components(
     """Sum ``capital_structure`` amounts by lower-cased component name, from the
     latest ingested generation on/before ``as_of`` (latest as_of_date, then latest
     batch — the reference-dataset supersession convention). Empty when the dataset
-    was never ingested."""
-    scope = (
-        CanonicalReferenceRow.organization_id == ctx.organization_id,
-        CanonicalReferenceRow.bank_id == bank.id,
-        CanonicalReferenceRow.dataset_kind == "capital_structure",
-    )
-    latest = db.scalar(
-        select(func.max(CanonicalReferenceRow.as_of_date)).where(
-            *scope, CanonicalReferenceRow.as_of_date <= as_of
-        )
-    )
+    was never ingested.
+
+    Amounts are SIGNED, through the one rule the dataset has
+    (``sdi_capital.signed_component_amount``): a deduction tier subtracts. This
+    function used ``abs()``, so a deduction row INCREASED whatever component name
+    it carried — a ``cet1_deduction`` row named ``paid_up_capital`` raised the
+    paid-up total the licensing floor is checked against, and the same rows were
+    summed signed one module away in ``sdi_capital._net_own_funds`` (forensic
+    audit 2026-08-21). Deductions never add to own funds.
+    """
     totals: dict[str, Decimal] = {}
-    if latest is None:
-        return totals
-    latest_batch = db.scalar(
-        select(CanonicalReferenceRow.ingestion_batch_id)
-        .where(*scope, CanonicalReferenceRow.as_of_date == latest)
-        .order_by(CanonicalReferenceRow.created_at.desc(), CanonicalReferenceRow.id.desc())
-        .limit(1)
-    )
-    for row in db.scalars(
-        select(CanonicalReferenceRow).where(
-            *scope,
-            CanonicalReferenceRow.as_of_date == latest,
-            CanonicalReferenceRow.ingestion_batch_id == latest_batch,
-        )
-    ):
+    for row in latest_capital_structure_rows(db, ctx, bank, as_of):
         payload = row.payload or {}
         component = str(payload.get("capital_component", "")).strip().lower()
-        amount = payload.get("amount_ghs")
-        if not component or amount is None:
+        if not component or payload.get("amount_ghs") is None:
             continue
-        totals[component] = totals.get(component, _ZERO) + abs(Decimal(str(amount)))
+        totals[component] = totals.get(component, _ZERO) + signed_component_amount(payload)
     return totals
 
 

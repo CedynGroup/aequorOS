@@ -38,6 +38,12 @@ import {
  *
  * Exactly one proof is required. Password re-entry serves password accounts;
  * an OIDC id_token (obtained with prompt=login) serves SSO accounts.
+ *
+ * Both proofs are length-bounded at the contract boundary. Verifying a
+ * password costs an Argon2id hash (~64 MiB, ~100 ms) and verifying an
+ * id_token costs a JWKS-backed signature check, so an unbounded field is a
+ * cheap way to make the signing endpoint expensive. The ceilings are far above
+ * anything a real credential or a real IdP token reaches.
  * @export
  * @interface StepUpRequest
  */

@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.domain.authority.outcomes import OutcomeState, outcome
 from app.models import Bank, ParamLiquidityHaircut, ParamLiquidityThreshold
 from app.schemas.liquidity_thresholds import (
     InstitutionClass,
@@ -36,13 +37,20 @@ from app.schemas.liquidity_thresholds import (
     LiquidityThresholdRegisterRead,
     LiquidityThresholdUpdate,
 )
-from app.services import regulatory_parameters
+from app.services import jurisdictions, regulatory_parameters
 from app.services.audit import record_event
 from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.params import get_active_params
 
-# LMTD Table 1 published minimums for BANKS (¶9 makes the SDI set binding
-# compliance ratios; SDI calibrations join when an SDI tenant exists).
+# LMTD Table 1 published minimums for BANKS.
+#
+# The LMTD is an EXPOSURE DRAFT — posted 19 February 2026, effective 1 January
+# 2027 — so nothing here is an in-force regulatory floor today. ¶9 would make the
+# SDI set binding compliance ratios ON COMMENCEMENT; until then these are the
+# directive's published figures, used as the default when a Board has adopted no
+# threshold of its own. ``app/domain/authority/registry.py`` carries the same
+# status as data (``instrument_in_force=False``); this comment must not drift
+# from it. SDI calibrations join when an SDI tenant exists.
 BANK_MINIMUM_PCT: dict[str, Decimal] = {
     "narrow_to_volatile": Decimal("80"),
     "broad_to_volatile": Decimal("100"),
@@ -72,7 +80,37 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
 
 
 def _jurisdiction(bank: Bank) -> str:
-    return (bank.jurisdiction_code or "GH").strip().upper()
+    # Fail-closed (enterprise audit 2026-08-20 §6): ``or "GH"`` here would file a
+    # Nigerian tenant's board register under Ghana's jurisdiction key.
+    return jurisdictions.jurisdiction_code(bank)
+
+
+def _sdi_floor_unseeded(bank: Bank, jurisdiction: str, code: str) -> HTTPException:
+    """The SDI Table-1 floor is not configured — refuse, never substitute.
+
+    Carries WS-A's ``POLICY_UNRESOLVED`` outcome detail so the reason has the
+    same shape as every other fail-closed state, and 409 (this codebase's
+    configured-state conflict code) so the operator is told what to seed.
+    """
+    detail = outcome(
+        OutcomeState.POLICY_UNRESOLVED,
+        metric_id=code,
+        reason=(
+            f"The liquidity floor '{code}' is not configured for this institution's "
+            "licence class. These ratios are binding compliance measures for a "
+            "specialised deposit-taking institution and its floors differ from a "
+            "bank's, so a bank floor is never shown in their place. Seed the class "
+            "floors in the regulatory-parameter control plane."
+        ),
+        items=(f"param:{code}",),
+        context={
+            "bank_id": bank.id,
+            "organization_id": bank.organization_id,
+            "institution_class": "sdi",
+            "jurisdiction_code": jurisdiction,
+        },
+    )
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail.message)
 
 
 def get_register(
@@ -123,11 +161,25 @@ def get_register(
             )
         else:
             # Class default from the control plane (normalised so 80.000000 shows
-            # as 80 — audit M1); the directive bank minimum is the defensive
-            # fallback (byte-identical for a bank tenant).
+            # as 80 — audit M1).
             param = regulatory_parameters.try_resolve(db, bank, code, as_of=as_of)
             normalized = param.normalized_value if param is not None else None
-            floor = normalized if normalized is not None else minimum
+            if normalized is not None:
+                floor = normalized
+            elif klass == "bank":
+                # The directive's published BANK minimum, for a BANK — the
+                # defensive fallback, byte-identical when the control plane is
+                # unseeded.
+                floor = minimum
+            else:
+                # An SDI must never inherit the bank floor. Table 1 BINDS for an
+                # SDI (LMTD 2026 para 9) at different values, so returning the
+                # bank number under an ``institution_class='sdi'`` label was the
+                # wrong floor wearing the right label — 80% shown where the SDI
+                # floor is 90% (forensic audit 2026-08-21). Same fail-closed rule
+                # the LMT return generator already applies
+                # (le_generation._table1_thresholds).
+                raise _sdi_floor_unseeded(bank, jurisdiction, code)
             thresholds.append(
                 LiquidityThresholdRead(
                     threshold_code=code,
@@ -203,6 +255,22 @@ def update_register(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"institution_class must be one of {_INSTITUTION_CLASSES}.",
+        )
+    # The register is read back for the TENANT's own licence class, so a
+    # generation recorded under the other class is dead data that silently does
+    # nothing. The payload's field defaults to "bank", which meant a specialised
+    # deposit-taking institution's Board could adopt floors that were then never
+    # applied to it (forensic audit 2026-08-21, parameter isolation). Refuse the
+    # mismatch instead of writing a row that will not be read.
+    klass = _resolve_institution_class(db, bank)
+    if payload.institution_class != klass:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"This institution is supervised as '{klass}'. A threshold generation "
+                f"recorded as '{payload.institution_class}' would never be applied to "
+                "it. Record the generation for this institution's own class."
+            ),
         )
     unknown = sorted(
         set(payload.thresholds) - set(BANK_MINIMUM_PCT) - set(EXTRA_THRESHOLD_CODES)

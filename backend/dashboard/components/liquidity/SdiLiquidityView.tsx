@@ -106,7 +106,7 @@ export default function SdiLiquidityView({ bankId }: { bankId: string | undefine
     <div className="space-y-6 p-6">
       <PageHeader
         title="Liquidity"
-        subtitle="Binding LMTD liquidity monitoring for a specialised deposit-taking institution."
+        subtitle="Liquidity monitoring for a specialised deposit-taking institution, against the Liquidity Monitoring Tools Directive (exposure draft, Feb 2026 — stated effective 1 Jan 2027)."
       />
 
       <QueryBoundary
@@ -118,7 +118,7 @@ export default function SdiLiquidityView({ bankId }: { bankId: string | undefine
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiStat
-                label="Binding ratio breaches"
+                label="Ratio breaches"
                 value={String(breached)}
                 status={breached > 0 ? 'crit' : 'ok'}
                 hint="LMTD Table 1 and liquidity-reserve checks"
@@ -145,7 +145,7 @@ export default function SdiLiquidityView({ bankId }: { bankId: string | undefine
 
             <SectionCard
               title="LMTD Table 1 prudential ratios"
-              subtitle="Binding liquidity ratios for this SDI, measured against the active floor for each ratio."
+              subtitle="Draft-directive liquidity ratios for this SDI, measured against the active threshold for each ratio. The directive is not yet in force; Board-adopted levels govern until it is."
               noPadding
             >
               <DataTable columns={ratioColumns} rows={ratios} density="compact" />

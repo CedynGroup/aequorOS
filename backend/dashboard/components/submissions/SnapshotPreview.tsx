@@ -8,6 +8,7 @@
 
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { labelize } from '@/lib/api/values';
+import { regShort } from '@/lib/format';
 
 type SnapshotRow = Record<string, unknown>;
 
@@ -25,17 +26,35 @@ type SnapshotSection = {
 // (bog_forms scale_for_export), which varies by sheet — BSD balance-sheet cells
 // are in millions, others in thousands. Label it honestly so a preparer never
 // misreads the magnitude.
+//
+// TWO VOCABULARIES reach this component. Template-driven BSD sections carry the
+// backend's `UnitConvention` on the SECTION (millions / thousands / units /
+// percent / count / text). The generic generators carry no section unit at all,
+// but their ROWS may carry `unit: "pct"` (`generation.py::_row(..., unit="pct")`).
+// Both are mapped here; a unit this map does not know is shown verbatim rather
+// than dropped.
 const UNIT_LABELS: Record<string, string> = {
   millions: 'GHS millions',
   thousands: "GHS '000",
   units: 'GHS',
+  // The generic generators' own spelling for whole currency units
+  // (`snapshot_row(..., unit="ghs")` in dbk/le/lrt_generation). Unmapped it fell
+  // through to the verbatim branch and a preparer read "in ghs" under a
+  // regulatory figure — a lower-cased raw payload value, not a currency code.
+  ghs: 'GHS',
   percent: '%',
+  pct: '%',
   count: 'count',
 };
 
 function unitLabel(unit: unknown): string | null {
-  if (typeof unit !== 'string' || unit === 'text') return null;
+  if (typeof unit !== 'string' || unit === '' || unit === 'text') return null;
   return UNIT_LABELS[unit] ?? unit;
+}
+
+/** True for the percent flavours — the only unit rendered as a value suffix. */
+function isPercentUnit(unit: unknown): boolean {
+  return unit === 'pct' || unit === 'percent';
 }
 
 type Snapshot = Record<string, unknown> & {
@@ -128,10 +147,36 @@ function sectionColumns(rows: SnapshotRow[]): Column<SnapshotRow>[] {
       key: 'value',
       header: 'Value',
       numeric: true,
-      render: (row) => fmtSnapshotCell(row.value),
+      // A row that declares itself a percentage says so on the figure. Without
+      // this a ratio row rendered as a bare "14.2" beside currency rows.
+      render: (row) =>
+        `${fmtSnapshotCell(row.value)}${isPercentUnit(row.unit) && row.value !== null && row.value !== undefined && row.value !== '' ? '%' : ''}`,
     },
   ];
   return columns;
+}
+
+/**
+ * The unit preamble, scoped to what this snapshot ACTUALLY labels.
+ *
+ * Only the template-driven BSD family emits a per-section unit
+ * (`bog_forms/generation.py` sets `"unit": sheet.unit`); the generic
+ * `_section()` emits no unit key at all. Asserting "shown per section below"
+ * for every family put a preparer in front of unlabelled figures under a
+ * sentence promising the units were labelled. The promise is now derived from
+ * the payload instead of assumed.
+ */
+function unitPreamble(sections: SnapshotSection[]): string {
+  const negatives = `Negative values are parenthesised per the ${regShort()} convention — identical to the exported artifacts.`;
+  if (sections.length === 0) return negatives;
+  const labelled = sections.filter((s) => unitLabel(s.unit) !== null).length;
+  if (labelled === sections.length) {
+    return `Values are in each sheet's official reporting unit, shown per section below. ${negatives}`;
+  }
+  if (labelled > 0) {
+    return `Values are in each section's official reporting unit. ${labelled} of ${sections.length} sections declare that unit and show it below; the rest carry the return's own unit, which this generator does not declare — confirm it against the exported artifact before certifying. ${negatives}`;
+  }
+  return `Values are in the return's own reporting unit. This generator does not declare a per-section unit, so none is shown here — confirm the unit against the exported artifact before certifying. ${negatives}`;
 }
 
 export default function SnapshotPreview({ snapshot }: { snapshot: Snapshot }) {
@@ -140,26 +185,39 @@ export default function SnapshotPreview({ snapshot }: { snapshot: Snapshot }) {
 
   return (
     <div className="space-y-5">
-      <p className="text-caption text-slate">
-        Values are in each sheet&apos;s official reporting unit (shown per section
-        below), with parenthesised negatives per the BoG convention — identical to
-        the exported artifacts.
-      </p>
+      <p className="text-caption text-slate">{unitPreamble(sections)}</p>
 
+      {/* Three across, not four. A package total is a full GHS amount —
+          1,961,000,000 is thirteen mono glyphs — and in a quarter of this card
+          it was rendered as "1,961,000,…". A regulatory figure that is silently
+          cut is worse than one that takes a second line, so the tiles are wider
+          and the value wraps instead of truncating; the label still truncates
+          but now carries its full text as a tooltip. */}
       {totals.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {totals.map((total, i) => (
             <div
               key={String(total.code ?? i)}
               className="rounded border border-border-light bg-surface px-3 py-2.5 min-w-0"
             >
-              <p className="text-micro font-medium text-slate uppercase tracking-wider truncate">
+              <p
+                className="text-micro font-medium text-slate uppercase tracking-wider truncate"
+                title={String(total.description ?? total.code ?? 'Total')}
+              >
                 {String(total.description ?? total.code ?? 'Total')}
               </p>
-              <p className="mt-1 font-mono text-h3 text-navy tnum truncate">
+              <p className="mt-1 font-mono text-h3 text-navy tnum break-words">
                 {fmtSnapshotCell(total.value)}
-                {total.unit === 'pct' ? '%' : ''}
+                {/* Accepts BOTH unit vocabularies: the check used to test only
+                    'pct' while the section map keyed on 'percent', so a headline
+                    ratio lost its % under either spelling. */}
+                {isPercentUnit(total.unit) ? '%' : ''}
               </p>
+              {unitLabel(total.unit) && !isPercentUnit(total.unit) && (
+                <p className="mt-0.5 text-micro text-slate">
+                  in {unitLabel(total.unit)}
+                </p>
+              )}
             </div>
           ))}
         </div>

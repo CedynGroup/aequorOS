@@ -66,9 +66,13 @@ class RegulatoryParameter(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     #: The parameter identifier, e.g. 'car_min', 'large_exposure_limit_pct',
     #: 'lmtd_narrow_to_volatile', 'prov_loss'.
     param_code: Mapped[str] = mapped_column(String(64), nullable=False)
-    #: Jurisdiction, mirroring every other param table (Ghana-first, multi-country
-    #: ready). Defaults to GH.
-    jurisdiction_code: Mapped[str] = mapped_column(String(8), nullable=False, default="GH")
+    #: Jurisdiction — part of the parameter's IDENTITY, since it is in the
+    #: resolution key (``app/domain/policy/resolver.py``). No default: a governed
+    #: regulatory value proposed without naming its jurisdiction used to be filed
+    #: as Ghanaian, which is how a Nigerian scope silently inherited Ghana's floors
+    #: (enterprise audit 2026-08-20 §6). Still missing a FK to ``jurisdictions.code``
+    #: — that needs a migration; see the WS-E report.
+    jurisdiction_code: Mapped[str] = mapped_column(String(8), nullable=False)
 
     # --- the value + provenance --------------------------------------------
     #: Scalar value (the common case — a percentage, ratio, amount, or count).

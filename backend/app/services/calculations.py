@@ -1,3 +1,26 @@
+"""Case balance-sheet forecast (advisory, never filed).
+
+Rolls the case's own `FinancialBalance` / `FinancialCashFlow` /
+`FinancialObligation` records forward using the reviewed `RiskScenario`
+assumptions, and persists an immutable `CalculationRun` with one
+`CalculationForecastPeriod` per projected period.
+
+This is the CASE plane and is not the regulatory forecast. The bank's official
+5-year projection is `app.services.regulatory_forecasting`, which runs the
+Basel capital and liquidity engines over projected `BankFinancialFact` sets
+and seals a `RegulatoryRun(module="forecast")`. The two share no input, no
+formula and no output table.
+
+Boundary rule (FORENSIC_CALCULATION_ARCHITECTURE_AUDIT_2026-08-21.md §10):
+case output must NOT be migrated into `BankFinancialFact` without a reviewed
+canonical adapter and a reconciliation. These records are hand-entered and
+carry no ingestion batch, so writing one as a bank fact would put an
+untraceable figure inside a sealed run's `input_hash` and breach the
+no-seeded-data order in `CLAUDE.md`. `app.services.case_plane` states the rule;
+`tests/architecture/test_case_plane_boundary.py` enforces it, and amending
+that test is the review gate for any future adapter.
+"""
+
 from __future__ import annotations
 
 import calendar

@@ -62,6 +62,8 @@ PACKAGE_STATUSES = (
 # frequency (BSD1/1A/1B/14/15A/15B) were admitted in migration 202608150013,
 # which also recoded the legacy mis-labelled 'BSD2'/'BSD3' packages to
 # 'CAR-RWA'/'LCR-NSFR' (docs/bog_returns/00_full_return_registry.md §3).
+# "sdi" is the separate Specialised Deposit-Taking Institution return family;
+# it is admitted in migration 202608230040 and never aliases a BSD form.
 RETURN_FAMILIES = (
     "liquidity",
     "capital",
@@ -73,6 +75,7 @@ RETURN_FAMILIES = (
     "dbk",
     "stress",
     "bsd",
+    "sdi",
 )
 RETURN_FREQUENCIES = ("weekly", "monthly", "quarterly", "semiannual", "annual", "daily")
 RETURN_BASES = ("solo", "consolidated")

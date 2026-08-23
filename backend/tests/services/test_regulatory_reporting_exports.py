@@ -34,6 +34,7 @@ from app.services.regulatory_reporting.templates import (
     CURRENCY_UNIT_NOTE,
     get_template,
 )
+from tests.factories.canonical import seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -86,6 +87,46 @@ def _generate(db: Session, return_code: str = "LCR-NSFR") -> RegulatoryPackage:
     row = db.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == read.id))
     assert row is not None
     return row
+
+
+def _generate_sdi_lmt(db: Session) -> tuple[RegulatoryPackage, Bank]:
+    bank = Bank(
+        organization_id=DEMO_ORG_ID,
+        name="Formula Working Copy SDI",
+        short_name="Formula SDI",
+        currency="GHS",
+        jurisdiction_code="GH",
+        license_type="savings_and_loans",
+        institution_type="savings_and_loans",
+    )
+    db.add(bank)
+    db.flush()
+    seed_canonical_fixture(
+        db,
+        organization_id=DEMO_ORG_ID,
+        bank_id=bank.id,
+        as_of=REPORTING_DATE,
+    )
+    db.add(
+        BankReportingPeriod(
+            organization_id=DEMO_ORG_ID,
+            bank_id=bank.id,
+            period_start=date(REPORTING_DATE.year, REPORTING_DATE.month, 1),
+            period_end=REPORTING_DATE,
+            label=REPORTING_DATE.strftime("%Y-%m"),
+            status="closed",
+        )
+    )
+    db.flush()
+    read = generation.generate_package(
+        db,
+        MAKER,
+        bank.id,
+        RegulatoryPackageCreate(return_code="SDI-LMT-MONTHLY", reporting_date=REPORTING_DATE),
+    )
+    package = db.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == read.id))
+    assert package is not None
+    return package, bank
 
 
 def _artifact_count(db: Session, package_id: UUID) -> int:
@@ -202,6 +243,31 @@ def test_xlsx_export_bytes_are_deterministic(
     first = export_package(db_session, MAKER, package, "xlsx").checksum_sha256
     second = export_package(db_session, MAKER, package, "xlsx").checksum_sha256
     assert first == second
+
+
+def test_sdi_working_xlsx_contains_live_formula_calculations(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    package, bank = _generate_sdi_lmt(db_session)
+
+    artifact = export_package(db_session, MAKER, package, "xlsx_working")
+    assert bank.storage_slug is not None
+    stored = next(
+        obj
+        for obj in storage.list(bank.storage_slug, "outputs")
+        if obj.location.object_path == artifact.object_path
+    )
+    _, stream = storage.read(stored.location)
+    payload = stream.read()
+    workbook = load_workbook(io.BytesIO(payload), data_only=False)
+
+    assert artifact.kind == "xlsx_working"
+    assert artifact.object_path.endswith("SDI-LMT-MONTHLY.working.xlsx")
+    calculations = workbook["Working Calculations"]
+    assert "WORKING COPY" in str(calculations["A1"].value)
+    assert calculations["C13"].data_type == "f"
+    assert str(calculations["C13"].value).startswith("=IFERROR(")
+    assert calculations["E13"].data_type == "f"
 
 
 def test_pdf_export_is_valid_and_nonempty(
@@ -449,6 +515,46 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "template_3",
             "template_4",
         },
+            "sdi_lmt": {
+                "prudential_ratio_inputs",
+                "prudential_ratio_percentages",
+                "liquidity_reserves",
+                "maturity_ladder",
+                "items_no_contractual_maturity",
+                "collateral_rehypothecation",
+                "funding_concentration",
+                "assets_liabilities_by_currency",
+                "maturity_of_exposures",
+                "deposit_funding_concentration",
+                "unencumbered_assets",
+                "collateral_received",
+            },
+            "sdi_large_exposures": {
+                "template_1",
+                "template_1a",
+                "template_2",
+                "template_3",
+                "template_4",
+            },
+            "sdi_stress_annual": {
+                "t1_summary_positions",
+                "t1_impact_of_adverse",
+                "t1_capital_required",
+                "t1_management_actions",
+                "t1_post_capitalisation",
+                "t1_residual",
+                "t3_profit_and_loss",
+                "t4_financial_position",
+                "t5_rwa",
+                "t6_risk_drivers",
+                "governance",
+            },
+            "sdi_irrbb": {
+                "repricing_gap",
+                "eve_scenarios",
+                "earnings_at_risk",
+                "summary",
+            },
         # LRT corporate packs (plan W5) — event-driven master-data packs.
         "lrt_profile": {
             "general_details",

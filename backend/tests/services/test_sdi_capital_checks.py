@@ -13,8 +13,14 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, CanonicalReferenceRow, IngestionBatch, LineageRecord
-from app.services import regulatory_capital
+from app.models import (
+    Bank,
+    CanonicalReferenceRow,
+    IngestionBatch,
+    LineageRecord,
+    RegulatoryParameter,
+)
+from app.services import regulatory_capital, sdi_capital
 from app.services import sdi_capital_checks as checks
 from tests.api.helpers import ORG_1, USER_1
 
@@ -37,9 +43,7 @@ def _bank(db: Session, *, institution_type: str = "savings_and_loans") -> Bank:
     return bank
 
 
-def _seed_capital_structure(
-    db: Session, bank: Bank, rows: list[tuple[str, str]]
-) -> None:
+def _seed_capital_structure(db: Session, bank: Bank, rows: list[tuple[str, str]]) -> None:
     batch = IngestionBatch(
         organization_id=ORG_1,
         bank_id=bank.id,
@@ -139,9 +143,7 @@ def test_statutory_reserve_fund_fully_built(db_session: Session) -> None:
 def test_paid_up_shortfall_becomes_a_critical_live_finding(db_session: Session) -> None:
     sdi = _bank(db_session)  # 15m floor
     _seed_capital_structure(db_session, sdi, [("paid_up_capital", "10000000")])  # below floor
-    findings, status = regulatory_capital._sdi_capital_live_findings(
-        db_session, _CTX, sdi, _AS_OF
-    )
+    findings, status = regulatory_capital._sdi_capital_live_findings(db_session, _CTX, sdi, _AS_OF)
     rules = {f.rule_id: f for f in findings}
     assert "sdi_capital.paid_up_capital" in rules
     assert rules["sdi_capital.paid_up_capital"].severity == "critical"
@@ -149,23 +151,93 @@ def test_paid_up_shortfall_becomes_a_critical_live_finding(db_session: Session) 
     assert status == "red"
 
 
+def _govern_rwa_scope(db: Session, *, confirmation_status: str = "confirmed") -> None:
+    """Approve the s.29 risk-weighted-asset SCOPE for the ``sdi`` class.
+
+    Audit 2026-08-22 D-19. Which risk classes an SDI's capital adequacy ratio
+    charges for is a regulatory determination — Act 930 s.29(5) delegates the
+    "categories of risk assets" to a Bank of Ghana directive, and none has been
+    issued for this class — so until a governed row exists the live view labels the
+    ratio provisional. These tests are about the paid-up and statutory-reserve
+    CHECKS, so they establish the scope first and then assert on the checks alone.
+    """
+    db.add(
+        RegulatoryParameter(
+            scope_type="institution_class",
+            scope_key="sdi",
+            param_code=sdi_capital.COMPOSITION_PARAM,
+            jurisdiction_code="GH",
+            value_json={"credit": sdi_capital.MEASURE_BUCKET_WEIGHTED_EXPOSURE},
+            unit="count",
+            source_citation="test fixture - governed scope, not a regulatory claim",
+            confirmation_status=confirmation_status,
+            effective_from=date(2025, 1, 1),
+            status="approved",
+            proposed_by="test",
+            approved_by="test-checker",
+        )
+    )
+    db.flush()
+
+
 def test_compliant_sdi_capital_emits_no_findings(db_session: Session) -> None:
     sdi = _bank(db_session)
+    _govern_rwa_scope(db_session)
     _seed_capital_structure(
         db_session, sdi, [("paid_up_capital", "20000000"), ("statutory_reserves", "25000000")]
     )
-    findings, status = regulatory_capital._sdi_capital_live_findings(
-        db_session, _CTX, sdi, _AS_OF
-    )
+    findings, status = regulatory_capital._sdi_capital_live_findings(db_session, _CTX, sdi, _AS_OF)
     assert findings == ()
     assert status == "green"
 
 
 def test_not_computable_check_raises_no_alert(db_session: Session) -> None:
     sdi = _bank(db_session)  # no capital_structure dataset seeded
-    findings, status = regulatory_capital._sdi_capital_live_findings(
-        db_session, _CTX, sdi, _AS_OF
-    )
+    _govern_rwa_scope(db_session)
+    findings, status = regulatory_capital._sdi_capital_live_findings(db_session, _CTX, sdi, _AS_OF)
     # Missing data is not a breach — the s.29 page surfaces it, but no alert fires.
     assert findings == ()
     assert status == "green"
+
+
+def test_an_undetermined_rwa_scope_labels_the_live_ratio_provisional(
+    db_session: Session,
+) -> None:
+    """The live half of `D-19`, and the reason the two tests above seed a scope.
+
+    The official mint REFUSES an undetermined scope
+    (``sdi_capital.assert_official_rwa_scope_governed``). The live view may
+    compute — a management view of a provisional ratio is legitimate — but it must
+    say so where the ratio is read, not only on the s.29 diagnostics page. A
+    perfectly compliant SDI therefore still carries this disclosure, and the module
+    goes amber, until the scope is approved and confirmed.
+    """
+    sdi = _bank(db_session)
+    _seed_capital_structure(
+        db_session, sdi, [("paid_up_capital", "20000000"), ("statutory_reserves", "25000000")]
+    )
+
+    findings, status = regulatory_capital._sdi_capital_live_findings(db_session, _CTX, sdi, _AS_OF)
+
+    assert [f.rule_id for f in findings] == ["sdi_capital.rwa_scope_provisional"]
+    assert findings[0].severity == "medium"
+    assert findings[0].metric == "rwa_scope"
+    assert "No market-risk or operational-risk charge is assumed" in findings[0].message
+    assert status == "amber"
+
+
+def test_a_pending_rwa_scope_is_still_provisional(db_session: Session) -> None:
+    """Approved is not the same as confirmed: a governed row awaiting confirmation
+    against a published instrument is not yet a filing conclusion, so the live
+    disclosure stands — with the reason that actually applies."""
+    sdi = _bank(db_session)
+    _govern_rwa_scope(db_session, confirmation_status="pending")
+    _seed_capital_structure(
+        db_session, sdi, [("paid_up_capital", "20000000"), ("statutory_reserves", "25000000")]
+    )
+
+    findings, status = regulatory_capital._sdi_capital_live_findings(db_session, _CTX, sdi, _AS_OF)
+
+    assert [f.rule_id for f in findings] == ["sdi_capital.rwa_scope_provisional"]
+    assert "still pending confirmation" in findings[0].message
+    assert status == "amber"

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -61,6 +62,7 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
+    FinancialFactRow,
     ParamCapitalThreshold,
     ParamStressShock,
     RegulatoryLineItem,
@@ -84,6 +86,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,
 )
+from app.services import filing_reconciliation, regulatory_parameters
 from app.services.audit import record_event
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
@@ -181,6 +184,13 @@ def run_all_ftp_scenarios(
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
+    # Every immutable ``RegulatoryRun`` is filing evidence, so the balance-sheet
+    # control gates this mint exactly as it gates capital and liquidity
+    # (audit 2026-08-22 D-3b named those two; the reasoning is the module's
+    # output being filed, which is equally true here).
+    filing_reconciliation.assert_filing_reconciled(
+        db, ctx, bank, as_of=period.period_end, period_id=period.id, purpose="official_run"
+    )
     runs = [
         _create_and_execute(db, ctx, bank, period, scenario_code)
         for scenario_code in FTP_RUN_SCENARIO_CODES
@@ -279,6 +289,11 @@ def _create_and_execute(
         input_hash=_snapshot_hash(snapshot),
         inputs=snapshot,
         metrics={},
+        # Audit D-18: WHICH governed control-plane rows produced the values in
+        # ``inputs["parameters"]``. Beside the snapshot, never inside it — row
+        # ids and timestamps are identity, not values, and the ``input_hash`` is
+        # value-based by contract.
+        parameter_provenance=regulatory_parameters.consume_parameter_provenance(db),
         created_by=ctx.actor_user_id,
     )
     db.add(run)
@@ -362,7 +377,7 @@ def _load_ltp_draws(
 
 def _run_analysis(
     scenario_code: str,
-    facts: list[BankFinancialFact],
+    facts: Sequence[FinancialFactRow],
     active: _FtpParams | None,
     ltp_draws: dict[str, Decimal] | None = None,
     *,
@@ -1063,7 +1078,7 @@ def compute_live(
     )
 
 
-def _curve_points_from_facts(facts: list[BankFinancialFact]) -> list[CurvePoint]:
+def _curve_points_from_facts(facts: Sequence[FinancialFactRow]) -> list[CurvePoint]:
     points: list[CurvePoint] = []
     for fact in facts:
         if fact.fact_group != "ftp_curve_point":
@@ -1082,7 +1097,7 @@ def _curve_points_from_facts(facts: list[BankFinancialFact]) -> list[CurvePoint]
     return points
 
 
-def _products_from_facts(facts: list[BankFinancialFact]) -> list[FtpProduct]:
+def _products_from_facts(facts: Sequence[FinancialFactRow]) -> list[FtpProduct]:
     products: list[FtpProduct] = []
     for fact in facts:
         if fact.fact_group != "ftp_product":
@@ -1104,7 +1119,7 @@ def _products_from_facts(facts: list[BankFinancialFact]) -> list[FtpProduct]:
     return products
 
 
-def _branches_from_facts(facts: list[BankFinancialFact]) -> list[FtpBranch]:
+def _branches_from_facts(facts: Sequence[FinancialFactRow]) -> list[FtpBranch]:
     branches: list[FtpBranch] = []
     for fact in facts:
         if fact.fact_group != "ftp_branch":
@@ -1120,7 +1135,7 @@ def _branches_from_facts(facts: list[BankFinancialFact]) -> list[FtpBranch]:
     return branches
 
 
-def _nmds_from_facts(facts: list[BankFinancialFact]) -> list[FtpNmd]:
+def _nmds_from_facts(facts: Sequence[FinancialFactRow]) -> list[FtpNmd]:
     nmds: list[FtpNmd] = []
     for fact in facts:
         if fact.fact_group != "ftp_nmd":
@@ -1198,7 +1213,7 @@ def _build_snapshot(
     bank: Bank,
     period: BankReportingPeriod,
     scenario_code: str,
-    facts: list[BankFinancialFact],
+    facts: Sequence[FinancialFactRow],
     active: _FtpParams | None,
 ) -> dict[str, Any]:
     return {

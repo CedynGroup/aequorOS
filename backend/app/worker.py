@@ -19,13 +19,14 @@ import time
 from collections.abc import Callable
 from datetime import timedelta
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.base import utc_now
-from app.db.session import get_worker_sessionmaker
-from app.models import Job
+from app.db.session import assert_worker_database_access, get_worker_sessionmaker
+from app.models import Job, WorkerHeartbeat
 from app.services import (
     database_direct_jobs,
     etl_dedup_jobs,
@@ -74,6 +75,46 @@ def _runtime_identity() -> str:
     if configured is not None:
         return configured
     return f"{socket.gethostname()}:{os.getpid()}"
+
+
+def _record_heartbeat(
+    session: Session,
+    worker_id: str,
+    *,
+    worked: bool | None = None,
+    error: Exception | None = None,
+) -> None:
+    """Upsert durable liveness evidence without coupling it to a tenant job."""
+    now = utc_now()
+    heartbeat = session.get(WorkerHeartbeat, worker_id)
+    if heartbeat is None:
+        heartbeat = WorkerHeartbeat(
+            worker_id=worker_id,
+            started_at=now,
+            last_seen_at=now,
+        )
+        session.add(heartbeat)
+    else:
+        heartbeat.last_seen_at = now
+    if worked:
+        heartbeat.last_job_at = now
+    if error is not None:
+        heartbeat.last_error_at = now
+        heartbeat.last_error = str(error) or type(error).__name__
+    session.commit()
+
+
+def _heartbeat_safely(
+    worker_id: str,
+    *,
+    worked: bool | None = None,
+    error: Exception | None = None,
+) -> None:
+    try:
+        with _new_session() as session:
+            _record_heartbeat(session, worker_id, worked=worked, error=error)
+    except Exception:  # noqa: BLE001 - liveness must not terminate the worker
+        logger.exception("Worker heartbeat write failed")
 
 
 def run_once(
@@ -129,6 +170,7 @@ def run_worker(
     worker (this process's own prior instance, or any peer) so a mid-handler death
     doesn't strand a job forever.
     """
+    assert_worker_database_access()
     settings = get_settings()
     poll_interval = (
         poll_interval if poll_interval is not None else settings.worker.worker_poll_seconds
@@ -137,6 +179,7 @@ def run_worker(
     reap_interval = max(stale_after.total_seconds() / 2, poll_interval)
     job_types = job_types or tuple(HANDLERS)
     worker_id = _runtime_identity()
+    _heartbeat_safely(worker_id)
     # Seed when ANY scheduled feature is on — gating this on official runs
     # alone stranded every other scheduled feature (live refresh, connection
     # probes, vendor pulls) with no tick chain to run them.
@@ -156,9 +199,12 @@ def run_worker(
     while stop_event is None or not stop_event.is_set():
         try:
             worked = run_once(job_types, worker_id=worker_id)
-        except Exception:  # noqa: BLE001 - a claim failure must not kill the loop
+        except Exception as exc:  # noqa: BLE001 - a claim failure must not kill the loop
             logger.exception("Worker poll iteration failed")
+            _heartbeat_safely(worker_id, error=exc)
             worked = False
+        else:
+            _heartbeat_safely(worker_id, worked=worked)
         if time.monotonic() >= next_reap:
             _reap_stale(stale_after)
             next_reap = time.monotonic() + reap_interval
@@ -167,14 +213,49 @@ def run_worker(
 
 
 def start_inprocess_worker() -> threading.Thread | None:
-    """Start the poll loop on a daemon thread when RUN_INPROCESS_WORKER is set."""
+    """Start the poll loop on a daemon thread when RUN_INPROCESS_WORKER is set.
+
+    The claim-visibility check runs HERE, on the calling thread, rather than
+    only inside ``run_worker``: an exception raised on a daemon thread is
+    printed by the interpreter's thread hook and the API carries on serving, so
+    a misconfigured in-process worker would be exactly as silent as the bug this
+    guards against (audit finding P0-16).
+    """
     settings = get_settings()
     if not settings.worker.run_inprocess_worker:
         return None
+    assert_worker_database_access()
     thread = threading.Thread(target=run_worker, name="live-engine-worker", daemon=True)
     thread.start()
     logger.info("In-process live-engine worker thread started")
     return thread
+
+
+def healthcheck() -> None:
+    """Container health probe: can this worker claim, and is it still polling?
+
+    Two questions, because they have different answers and only one of them was
+    ever askable. ``assert_worker_database_access`` catches the configuration
+    that makes ``claim_next`` match zero rows forever (audit finding P0-16);
+    the heartbeat catches a loop that is wedged or dead while the process is
+    still alive. Raises on failure — the compose healthcheck reads the exit
+    code.
+    """
+    assert_worker_database_access()
+    settings = get_settings()
+    stale_after = timedelta(seconds=settings.worker.worker_stale_job_seconds)
+    with _new_session() as session:
+        latest = session.query(func.max(WorkerHeartbeat.last_seen_at)).scalar()
+    if latest is None:
+        msg = "No worker heartbeat has ever been recorded."
+        raise RuntimeError(msg)
+    age = utc_now() - latest
+    if age > stale_after:
+        msg = (
+            f"Worker heartbeat is {age.total_seconds():.0f}s old "
+            f"(limit {stale_after.total_seconds():.0f}s)."
+        )
+        raise RuntimeError(msg)
 
 
 def main() -> None:  # pragma: no cover - process entrypoint

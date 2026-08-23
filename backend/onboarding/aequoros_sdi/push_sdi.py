@@ -6,36 +6,52 @@ the Data Engine API (three-call flow per date, docs/API_INTEGRATION.md §2).
         python push_sdi.py --cadence monthly   # start light; then weekly, then daily, then all
 """
 from __future__ import annotations
-import argparse, csv, os, sys, time, urllib.request, json
+
+import argparse
+import csv
+import json
+import os
+import time
+import urllib.request
 from collections import defaultdict
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 
 HERE = Path(__file__).resolve().parent
-BASE = os.environ["BASE_URL"].rstrip("/"); TOKEN = os.environ["TOKEN"]; BANK = os.environ["BANK"]
+BASE = os.environ["BASE_URL"].rstrip("/")
+TOKEN = os.environ["TOKEN"]
+BANK = os.environ["BANK"]
 HDR = {"authorization": f"Bearer {TOKEN}", "content-type": "application/json"}
 
 def _coerce(v):
-    if v == "": return None
-    try: return int(v) if v.lstrip("-").isdigit() else float(v)
+    if v == "":
+        return None
+    try:
+        return int(v) if v.lstrip("-").isdigit() else float(v)
     except ValueError:
         return {"true": True, "false": False}.get(v.lower(), v)
 
 def _rows(fname):
     p = HERE / fname
-    if not p.exists(): return []
+    if not p.exists():
+        return []
     with p.open() as fh:
-        return list(csv.DictReader(l for l in fh if not l.startswith("#")))
+        return list(csv.DictReader(line for line in fh if not line.startswith("#")))
 
 def _record(row, drop):
     rec, attrs = {}, {}
     for k, v in row.items():
-        if k in drop: continue
+        if k in drop:
+            continue
         cv = _coerce(v)
-        if cv is None: continue
-        if k.startswith("attributes."): attrs[k.split(".", 1)[1]] = cv
-        else: rec[k] = cv
-    if attrs: rec["attributes"] = attrs
+        if cv is None:
+            continue
+        if k.startswith("attributes."):
+            attrs[k.split(".", 1)[1]] = cv
+        else:
+            rec[k] = cv
+    if attrs:
+        rec["attributes"] = attrs
     return rec
 
 def _call(method, path, body=None, attempts=6):
@@ -50,11 +66,13 @@ def _call(method, path, body=None, attempts=6):
                 return json.load(r) if r.read else {}
         except HTTPError as e:
             if e.code in (500, 502, 503, 504) and attempt < attempts:
-                time.sleep(min(2 ** attempt, 30)); continue
+                time.sleep(min(2**attempt, 30))
+                continue
             raise
         except (URLError, OSError):
             if attempt < attempts:
-                time.sleep(min(2 ** attempt, 30)); continue
+                time.sleep(min(2**attempt, 30))
+                continue
             raise
     return {}
 
@@ -73,10 +91,15 @@ def _push_date(as_of, entities, reference, key=None):
     buf_e, n = defaultdict(list), 0
     for kind, rows in entities.items():
         for r in rows:
-            buf_e[kind].append(r); n += 1
-            if n >= 4000: page(dict(buf_e), {}); buf_e, n = defaultdict(list), 0
-    if n: page(dict(buf_e), {})
-    if reference: page({}, reference)
+            buf_e[kind].append(r)
+            n += 1
+            if n >= 4000:
+                page(dict(buf_e), {})
+                buf_e, n = defaultdict(list), 0
+    if n:
+        page(dict(buf_e), {})
+    if reference:
+        page({}, reference)
     _call("POST", f"/api/v1/banks/{BANK}/push-batches/{pid}/commit")
 
 def main():
@@ -108,8 +131,10 @@ def main():
                 "positions_securities.csv"]), []),
                "gl_account": by["gl_accounts.csv"].get(as_of, [])}
         ref = {}
-        if cs.get(as_of): ref["capital_structure"] = cs[as_of]
-        if as_of == latest: ref["historical_cashflows"] = cf_all
+        if cs.get(as_of):
+            ref["capital_structure"] = cs[as_of]
+        if as_of == latest:
+            ref["historical_cashflows"] = cf_all
         skipped = _push_date(as_of, ent, ref)
         print(f"[{i}/{len(dates)}] {'skip' if skipped else 'pushed'} {as_of}", flush=True)
     print(f"Done — {len(dates)} dates ({a.cadence}) for {BANK}.")

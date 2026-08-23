@@ -204,6 +204,64 @@ class OperatorJobsRead(ClosedModel):
     jobs: list[OperatorJobRead]
 
 
+class StuckDedupBatchRead(ClosedModel):
+    """One ingestion batch whose out-of-band dedup pass can no longer run itself.
+
+    ``dedup_status`` is the batch's own marker (``deferred`` = queued/never ran,
+    ``failed`` = ran and could not complete). ``job_status`` / ``job_error`` come
+    from the most recent ``etl_dedup`` job for the batch: when it has exhausted
+    ``max_attempts`` the queue will never touch the batch again, and the pass
+    exists only if an operator re-drives it.
+    """
+
+    batch_id: UUID
+    organization_id: str
+    bank_id: str
+    source_system: str
+    as_of_date: date
+    records_extracted: int
+    dedup_status: str
+    job_id: UUID | None
+    job_status: str | None
+    job_attempts: int | None
+    job_max_attempts: int | None
+    job_error: str | None
+    job_completed_at: datetime | None
+
+
+class StuckDedupBatchesRead(ClosedModel):
+    """The fleet board of exhausted dedup passes, newest batch first.
+
+    Deliberately a BOARD, not a timer: the four batches that stranded on the
+    primary failed for three different reasons (a severed connection, a live job
+    reclaimed as dead, a code/schema skew since healed), and an automatic retry
+    loop would have masked all three. An operator reads the reason, then
+    re-drives.
+    """
+
+    batches: list[StuckDedupBatchRead]
+
+
+# -- worker health --------------------------------------------------------------
+class WorkerHeartbeatRead(ClosedModel):
+    worker_id: str
+    status: Literal["healthy", "stale"]
+    started_at: datetime
+    last_seen_at: datetime
+    last_job_at: datetime | None
+    last_error_at: datetime | None
+    last_error: str | None
+
+
+class WorkerHealthRead(ClosedModel):
+    """Authenticated operator evidence for the cross-tenant worker fleet."""
+
+    ready: bool
+    stale_after_seconds: float
+    observed_at: datetime
+    workers: list[WorkerHeartbeatRead]
+
+
 # -- audit -----------------------------------------------------------------------
 class OperatorAuditLogRead(ClosedModel):
     id: str
@@ -583,6 +641,26 @@ class FixRerunIngestionRequest(ClosedModel):
     note: str = Field(min_length=1, max_length=2000)
 
 
+class FixRedriveDedupRequest(ClosedModel):
+    """Re-drive the out-of-band ML-ETL dedup pass for one ingestion batch."""
+
+    batch_id: UUID
+    note: str = Field(min_length=1, max_length=2000)
+
+
+class FixRedriveDedupRead(ClosedModel):
+    job_id: UUID
+    job_type: str
+    status: str
+    batch_id: UUID
+    #: The batch's ``dedup_status`` at the moment of re-drive, so the audit
+    #: detail and the console both record what was being recovered from.
+    previous_dedup_status: str
+    #: The exhausted job this re-drive replaces, when one exists.
+    previous_job_id: UUID | None
+    previous_job_error: str | None
+
+
 class FixConfigRequest(ClosedModel):
     """A scoped, reversible configuration change.
 
@@ -721,7 +799,10 @@ class RegulatoryParameterProposeRequest(ClosedModel):
     scope_type: Literal["institution_class", "institution_type"]
     scope_key: str = Field(min_length=1, max_length=40)
     param_code: str = Field(min_length=1, max_length=64)
-    jurisdiction_code: str = Field(default="GH", min_length=1, max_length=8)
+    # REQUIRED, no default (enterprise audit 2026-08-20 §6): a governed value is
+    # scoped BY jurisdiction, so proposing one without naming it filed it as
+    # Ghanaian. Both console call sites already send it explicitly.
+    jurisdiction_code: str = Field(min_length=1, max_length=8)
     # Regulatory floors/limits/rates/amounts are non-negative; a negative value
     # would silently disable a prudential floor for every tenant of the scope.
     value_numeric: Decimal = Field(ge=0, description="The scalar value (e.g. a percentage).")

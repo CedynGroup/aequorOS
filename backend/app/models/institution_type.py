@@ -57,7 +57,7 @@ class InstitutionType(TimestampMixin, Base):
     # Which BoG return family the institution files ('bsd' universal-bank set,
     # 'sdi' the SDI family — obtained from BoG, not fabricated: docs/sdi.md §2.3).
     return_family: Mapped[str] = mapped_column(String(8), nullable=False)
-    # Capital regime: 'crd' (Basel CRD, banks) vs 's29' (Act 930 s.29 floor, SDIs).
+    # Capital regime: 'crd' (BoG CRD, banks) vs 's29' (Act 930 s.29 floor, SDIs).
     capital_regime: Mapped[str] = mapped_column(String(8), nullable=False)
     # Per-obligor large-exposure limit as a % of Net Own Funds (bank 20, SDI 15
     # — Large Exposures Directive Sept 2025). Numeric, not int, so a future

@@ -38,6 +38,7 @@ from app.schemas.sdi import (
     SdiLoanClassificationRead,
     SdiMaturityBucketRead,
     SdiReadinessRead,
+    SdiRwaRiskClassRead,
 )
 from app.services import banks as banks_service
 from app.services import (
@@ -255,6 +256,18 @@ def get_sdi_capital_summary(
             for b in summary.bands
         ],
         pending_parameters=list(summary.pending_parameters),
+        composition_source=summary.composition_source,
+        risk_classes=[
+            SdiRwaRiskClassRead(
+                risk_class=row.risk_class,
+                in_scope=row.in_scope,
+                measurement=row.measurement,
+                rwa_ghs=row.rwa_ghs,
+                note=row.note,
+            )
+            for row in summary.risk_classes
+        ],
+        rwa_scope_note=summary.rwa_scope_note,
     )
 
 

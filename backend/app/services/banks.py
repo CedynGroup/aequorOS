@@ -50,18 +50,35 @@ def _jurisdictions_by_code(db: Session, codes: set[str]) -> dict[str, Jurisdicti
     return {row.code: JurisdictionRead.model_validate(row, from_attributes=True) for row in rows}
 
 
-def _institution_types_by_code(db: Session, codes: set[str]) -> dict[str, InstitutionTypeRead]:
-    """Resolve institution-type registry rows for the given codes.
+def _institution_types_by_code(
+    db: Session, keys: set[tuple[str, str]]
+) -> dict[tuple[str, str], InstitutionTypeRead]:
+    """Resolve institution-type registry rows, keyed by ``(type_code, jurisdiction)``.
 
     Display-side resolution (like ``_jurisdictions_by_code``): a code with no
     registry row simply resolves to None on the payload — never a fabricated
     default. Calculation code that must not silently default goes through
-    ``app/services/institution_types.py`` instead (fail-loud)."""
-    if not codes:
+    ``app/services/institution_types.py`` instead (fail-closed).
+
+    Keyed by jurisdiction as well as licence code because the ENFORCED exposure
+    limits it overlays are jurisdiction-scoped: resolving them without the bank's
+    own jurisdiction showed Ghana's limits for every institution (enterprise audit
+    2026-08-20 §6)."""
+    if not keys:
         return {}
-    rows = db.scalars(select(InstitutionType).where(InstitutionType.type_code.in_(codes)))
-    result: dict[str, InstitutionTypeRead] = {}
-    for row in rows:
+    rows = {
+        row.type_code: row
+        for row in db.scalars(
+            select(InstitutionType).where(
+                InstitutionType.type_code.in_({type_code for type_code, _ in keys})
+            )
+        )
+    }
+    result: dict[tuple[str, str], InstitutionTypeRead] = {}
+    for type_code, jurisdiction in keys:
+        row = rows.get(type_code)
+        if row is None:
+            continue
         detail = InstitutionTypeRead.model_validate(row, from_attributes=True)
         # Surface the ENFORCED exposure limits from the regulatory-parameter
         # control plane so the displayed value equals what the engine applies —
@@ -69,23 +86,29 @@ def _institution_types_by_code(db: Session, codes: set[str]) -> dict[str, Instit
         # to the registry column when the control-plane class row is unseeded.
         overrides: dict[str, Decimal] = {}
         for code in ("large_exposure_limit_pct", "single_obligor_limit_pct"):
-            enforced = regulatory_parameters.resolve_class_value(db, row.institution_class, code)
+            enforced = regulatory_parameters.resolve_class_value(
+                db, row.institution_class, code, jurisdiction=jurisdiction
+            )
             if enforced is not None:
                 overrides[code] = enforced
-        result[row.type_code] = detail.model_copy(update=overrides) if overrides else detail
+        result[(type_code, jurisdiction)] = (
+            detail.model_copy(update=overrides) if overrides else detail
+        )
     return result
 
 
 def _bank_read(
     bank: Bank,
     jurisdictions: dict[str, JurisdictionRead],
-    institution_types: dict[str, InstitutionTypeRead],
+    institution_types: dict[tuple[str, str], InstitutionTypeRead],
 ) -> BankRead:
     read = BankRead.model_validate(bank, from_attributes=True)
     return read.model_copy(
         update={
             "jurisdiction": jurisdictions.get(bank.jurisdiction_code),
-            "institution_type_detail": institution_types.get(bank.institution_type),
+            "institution_type_detail": institution_types.get(
+                (bank.institution_type, bank.jurisdiction_code)
+            ),
         }
     )
 
@@ -99,7 +122,9 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
         )
     )
     jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code for bank in banks})
-    institution_types = _institution_types_by_code(db, {bank.institution_type for bank in banks})
+    institution_types = _institution_types_by_code(
+        db, {(bank.institution_type, bank.jurisdiction_code) for bank in banks}
+    )
     return BankListRead(
         banks=[_bank_read(bank, jurisdictions, institution_types) for bank in banks]
     )
@@ -108,7 +133,9 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
 def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
     bank = resolve_bank_reference(db, ctx, bank_reference)
     jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code})
-    institution_types = _institution_types_by_code(db, {bank.institution_type})
+    institution_types = _institution_types_by_code(
+        db, {(bank.institution_type, bank.jurisdiction_code)}
+    )
     return _bank_read(bank, jurisdictions, institution_types)
 
 

@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { CoverageNote } from "./CoverageNote";
+import {
+  CoverageNoteFromJSON,
+  CoverageNoteFromJSONTyped,
+  CoverageNoteToJSON,
+  CoverageNoteToJSONTyped,
+} from "./CoverageNote";
 import type { ReportingObligationRead } from "./ReportingObligationRead";
 import {
   ReportingObligationReadFromJSON,
@@ -37,6 +44,12 @@ export interface ReportingObligationListRead {
    * @memberof ReportingObligationListRead
    */
   bankId: string;
+  /**
+   *
+   * @type {CoverageNote}
+   * @memberof ReportingObligationListRead
+   */
+  coverageNote?: CoverageNote;
   /**
    *
    * @type {number}
@@ -83,6 +96,10 @@ export function ReportingObligationListReadFromJSONTyped(
     ...json,
     asOf: new Date(json["as_of"]),
     bankId: json["bank_id"],
+    coverageNote:
+      json["coverage_note"] == null
+        ? undefined
+        : CoverageNoteFromJSON(json["coverage_note"]),
     horizonMonths: json["horizon_months"],
     obligations: (json["obligations"] as Array<any>).map(
       ReportingObligationReadFromJSON,
@@ -107,6 +124,7 @@ export function ReportingObligationListReadToJSONTyped(
   return {
     as_of: value["asOf"].toISOString().substring(0, 10),
     bank_id: value["bankId"],
+    coverage_note: CoverageNoteToJSON(value["coverageNote"]),
     horizon_months: value["horizonMonths"],
     obligations: (value["obligations"] as Array<any>).map(
       ReportingObligationReadToJSON,

@@ -18,11 +18,14 @@ template-faithfully by ``bog_forms`` (docs/bog_returns/00_full_return_registry.m
   official codes are free for the real templates. Idempotent (a re-run finds
   nothing to rename); the downgrade restores the legacy codes.
 
-  RLS HAZARD (learned 2026-08-16 on the primary): these tables are FORCE-RLS,
-  so when alembic runs as the tenant-scoped app role the UPDATEs see ZERO rows
-  and silently no-op. The recode must run under a BYPASSRLS role (the worker
-  URL) — it was re-run that way on the primary after this migration; a
-  deployment applying it fresh must do the same (idempotent, safe to repeat).
+  RLS HAZARD (learned 2026-08-16 on the primary; CLOSED 2026-08-21): these
+  tables are FORCE-RLS, so when alembic runs as the tenant-scoped app role the
+  UPDATEs saw ZERO rows and silently no-opped. The original remediation was a
+  human remembering to re-run under a BYPASSRLS role, which audit finding P0-18
+  correctly called a defect rather than a fix. ``_recode_visible`` now lifts
+  FORCE for the duration of the rewrite (``app.db.session.force_rls_suspended``)
+  and raises when it cannot, so the recode either happens or fails loudly under
+  every role. Still idempotent and safe to repeat.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db.session import force_rls_suspended
 
 revision = "202608150013"
 down_revision = "202608150012"
@@ -71,6 +75,19 @@ def _recode(pairs: tuple[tuple[str, str], ...]) -> None:
             )
 
 
+def _recode_visible(pairs: tuple[tuple[str, str], ...]) -> None:
+    """Recode with the tables' FORCE-RLS lifted for this transaction only.
+
+    Without this the ``UPDATE``s below match zero rows whenever alembic runs as
+    the tenant-scoped app role — the hazard this migration's docstring records,
+    left to a human to remember. ``force_rls_suspended`` performs the rewrite
+    correctly under any role that owns the tables and raises loudly when it
+    cannot, so "silently did nothing" is no longer a reachable outcome.
+    """
+    with force_rls_suspended(op.get_bind(), *RETURN_CODE_TABLES):
+        _recode(pairs)
+
+
 def upgrade() -> None:
     _swap_check(
         "ck_regulatory_packages_frequency",
@@ -82,11 +99,11 @@ def upgrade() -> None:
         "regulatory_packages",
         f"return_family IN ({FAMILIES_AFTER})",
     )
-    _recode(RECODE)
+    _recode_visible(RECODE)
 
 
 def downgrade() -> None:
-    _recode(tuple((new, old) for old, new in RECODE))
+    _recode_visible(tuple((new, old) for old, new in RECODE))
     _swap_check(
         "ck_regulatory_packages_return_family",
         "regulatory_packages",

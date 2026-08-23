@@ -14,19 +14,22 @@ silently return.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 from uuid import UUID
 
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
 
-from app.core.config import AuthSettings, get_settings
+from app.core.config import UNDEPLOYED_ENVS, AuthSettings, get_settings
 from app.db.base import utc_now
 
 if TYPE_CHECKING:
     from jwt import PyJWKClient
+
+logger = logging.getLogger(__name__)
 
 # Roles, most- to least-privileged. `admin` manages users/config; `approver` is the
 # maker-checker second signer; `analyst` runs calculations + mutations; `examiner`
@@ -100,10 +103,18 @@ def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
     token_type: TokenType,
     email: str | None = None,
     name: str | None = None,
+    jti: str | None = None,
     now: dt.datetime | None = None,
     settings: AuthSettings | None = None,
 ) -> str:
-    """Sign an app access/refresh token for (org, user, roles)."""
+    """Sign an app access/refresh token for (org, user, roles).
+
+    ``jti`` is REQUIRED for a refresh token and forbidden-by-omission for an
+    access token: refresh-token state (rotation, reuse detection, revocation)
+    lives in ``refresh_tokens`` keyed by that identifier, so a refresh token
+    minted without one would be unrevokable by construction. Access tokens stay
+    stateless — they are short-lived and verified by signature alone.
+    """
     settings = settings or get_settings().auth
     moment = now or utc_now()
     ttl = (
@@ -111,6 +122,12 @@ def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
         if token_type == "access"
         else settings.refresh_token_ttl_seconds
     )
+    if token_type == "refresh" and not jti:
+        msg = (
+            "a refresh token must carry a jti — its rotation/revocation state is "
+            "keyed by it (app.services.authentication.issue_tokens)."
+        )
+        raise ValueError(msg)
     payload: dict[str, Any] = {
         "sub": str(subject),
         "org": str(organization_id),
@@ -125,6 +142,8 @@ def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
         payload["email"] = email
     if name is not None:
         payload["name"] = name
+    if jti is not None:
+        payload["jti"] = jti
     return jwt.encode(payload, _secret(settings), algorithm=settings.jwt_algorithm)
 
 
@@ -134,8 +153,18 @@ def decode_token(
     expected_type: TokenType | None = None,
     settings: AuthSettings | None = None,
 ) -> dict[str, Any]:
-    """Verify signature, expiry, issuer, audience, and required claims; return them."""
+    """Verify signature, expiry, issuer, audience, and required claims; return them.
+
+    A refresh token additionally MUST carry ``jti``. That is the fail-closed half
+    of refresh-token revocation: a token with no ``jti`` has no server-side state,
+    so it can be neither rotated nor revoked — and tokens minted before migration
+    ``202608220028`` carry none. They are refused here rather than silently
+    trusted, which means sessions that predate the migration re-authenticate.
+    """
     settings = settings or get_settings().auth
+    required = ["exp", "iat", "sub", "org", "type"]
+    if expected_type == "refresh":
+        required.append("jti")
     try:
         claims: dict[str, Any] = jwt.decode(
             token,
@@ -143,7 +172,7 @@ def decode_token(
             algorithms=[settings.jwt_algorithm],
             audience=settings.jwt_audience,
             issuer=settings.jwt_issuer,
-            options={"require": ["exp", "iat", "sub", "org", "type"]},
+            options={"require": required},
         )
     except jwt.PyJWTError as exc:
         raise TokenInvalidError(str(exc)) from exc
@@ -164,7 +193,7 @@ def decode_token(
 IMPERSONATION_TOKEN_TYP = "impersonation"
 
 
-def mint_impersonation_token(
+def mint_impersonation_token(  # noqa: PLR0913 - one keyword per signed claim
     *,
     organization_id: str,
     act_operator: str,
@@ -228,11 +257,111 @@ def decode_impersonation_token(token: str, *, secret: str) -> dict[str, Any] | N
     return claims
 
 
+# -- OIDC discovery + JWKS ---------------------------------------------------
+# Every fetch below aims the backend's socket at a destination somebody else
+# chose. The ``issuer`` is TENANT-SETTABLE (an org admin's
+# ``SsoConnectionUpdateRequest.issuer``); the ``jwks_uri`` is named by whatever
+# answered the discovery request — a SECOND, separately attacker-controlled URL;
+# and either fetch can be redirected onward by the remote side. An
+# ``https://`` prefix test alone therefore made
+# ``https://169.254.169.254/.well-known/openid-configuration`` a tenant-reachable
+# read of cloud instance-metadata credentials, so each of those URLs now goes
+# through the RESOLVING egress guard (:mod:`app.core.outbound`) immediately
+# before it becomes a socket — the same primitive the Database-Direct, Temenos
+# and ORASS connectors use. The loopback carve-out below is honoured first so a
+# local stub IdP still works; it is False on every DEPLOYED environment
+# (``staging`` included, not only ``production``), so there is no path around
+# the guard on a reachable host.
+
+_OIDC_FETCH_TIMEOUT_SECONDS: Final = 10
+
+
+def _guard_oidc_target(url: str, *, field: str) -> None:
+    """Refuse an OIDC endpoint that is not a routable public destination.
+
+    Raises :class:`TokenInvalidError` rather than letting
+    ``OutboundTargetBlocked`` (a ``ValueError``) escape: every caller of the SSO
+    path catches :class:`AuthError` and turns it into a clean 401, so a blocked
+    issuer is an authentication failure, never a 500. The resolved address and
+    the block reason go to the log line only — the raised message names the
+    field and nothing else, so this can never become an internal-topology
+    oracle for whoever set the issuer.
+    """
+    if _is_loopback_issuer_allowed(url):
+        return
+    from app.core.outbound import (  # noqa: PLC0415 - lazy; only the SSO path needs it
+        OutboundTargetBlocked,
+        check_url,
+    )
+
+    try:
+        check_url(url, field=field)
+    except OutboundTargetBlocked as exc:
+        logger.warning(
+            "OIDC %s blocked by the egress guard (%s): %s",
+            field,
+            exc.reason,
+            exc.internal_detail,
+        )
+        msg = f"The OIDC {field} is not a permitted destination for an outbound connection."
+        raise TokenInvalidError(msg) from exc
+
+
+@lru_cache(maxsize=1)
+def _oidc_opener() -> Any:
+    """A ``urllib`` opener that re-validates every redirect hop.
+
+    ``urllib``'s default opener follows 3xx silently, so a permitted issuer
+    answering ``302 Location: http://169.254.169.254/`` would walk straight past
+    the check on the original URL. Used for the discovery fetch AND — via
+    :func:`_jwks_client` — for the JWKS fetch, because ``PyJWKClient`` reaches
+    for that same unguarded default opener.
+    """
+    import urllib.request  # noqa: PLC0415 - lazy; only the SSO path needs it
+
+    class _GuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN202, PLR0913 - urllib's fixed signature
+            _guard_oidc_target(newurl, field="redirect target")
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    return urllib.request.build_opener(_GuardedRedirectHandler)
+
+
 @lru_cache(maxsize=8)
 def _jwks_client(jwks_url: str) -> PyJWKClient:
     from jwt import PyJWKClient  # noqa: PLC0415 - lazy; only the SSO path needs it
+    from jwt.exceptions import PyJWKClientConnectionError  # noqa: PLC0415
 
-    return PyJWKClient(jwks_url)  # caches fetched signing keys internally
+    class _GuardedJWKClient(PyJWKClient):
+        """``PyJWKClient`` whose JWKS fetch goes through :func:`_oidc_opener`.
+
+        Upstream ``fetch_data`` calls ``urllib.request.urlopen`` — the process
+        default opener, which follows redirects with nothing checking where they
+        lead. Overriding that one method is the narrowest way to put the JWKS
+        hop under the same guard as discovery; the two caching tiers above it
+        are untouched. Kept deliberately byte-thin against upstream so a pyjwt
+        bump is easy to re-check.
+        """
+
+        def fetch_data(self) -> Any:
+            import json  # noqa: PLC0415
+            import urllib.request  # noqa: PLC0415
+            from urllib.error import HTTPError, URLError  # noqa: PLC0415
+
+            try:
+                request = urllib.request.Request(url=self.uri, headers=self.headers)  # noqa: S310 - destination guarded above; redirects guarded by the opener
+                with _oidc_opener().open(request, timeout=self.timeout) as response:
+                    jwk_set = json.load(response)
+            except (URLError, TimeoutError) as exc:
+                if isinstance(exc, HTTPError):
+                    exc.close()
+                msg = f'Fail to fetch data from the url, err: "{exc}"'
+                raise PyJWKClientConnectionError(msg) from exc
+            if self.jwk_set_cache is not None:
+                self.jwk_set_cache.put(jwk_set)
+            return jwk_set
+
+    return _GuardedJWKClient(jwks_url)  # caches fetched signing keys internally
 
 
 @lru_cache(maxsize=8)
@@ -243,6 +372,12 @@ def _discover_jwks_uri(issuer: str) -> str:
     for any compliant IdP (Google, Entra, Okta, Keycloak, …) without vendor
     branches. Cached per issuer — the jwks_uri itself effectively never changes;
     key *rotation* is handled inside PyJWKClient.
+
+    Two destinations are screened here, and they are screened separately: the
+    discovery URL derived from the tenant-supplied ``issuer``, and the
+    ``jwks_uri`` the discovery document names. The second is NOT covered by the
+    first — a public issuer can hand back ``http://169.254.169.254/`` — so it is
+    re-checked before it reaches ``PyJWKClient``.
     """
     import json  # noqa: PLC0415 - lazy; only the SSO path needs these
     import urllib.request  # noqa: PLC0415
@@ -250,9 +385,13 @@ def _discover_jwks_uri(issuer: str) -> str:
     url = issuer.rstrip("/") + "/.well-known/openid-configuration"
     if not url.startswith("https://") and not _is_loopback_issuer_allowed(issuer):
         raise TokenInvalidError(f"OIDC issuer must be https, got {issuer!r}.")
+    _guard_oidc_target(url, field="issuer")
     try:
-        with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310 - https (or non-production loopback) enforced above
+        request = urllib.request.Request(url)  # noqa: S310 - scheme + egress guard enforced above
+        with _oidc_opener().open(request, timeout=_OIDC_FETCH_TIMEOUT_SECONDS) as response:
             document = json.load(response)
+    except TokenInvalidError:
+        raise  # a blocked redirect hop is an auth failure, not "discovery failed"
     except Exception as exc:
         raise TokenInvalidError(f"OIDC discovery failed for {issuer!r}: {exc}") from exc
     jwks_uri = document.get("jwks_uri")
@@ -260,20 +399,39 @@ def _discover_jwks_uri(issuer: str) -> str:
         jwks_uri.startswith("https://") or _is_loopback_issuer_allowed(jwks_uri)
     ):
         raise TokenInvalidError(f"OIDC discovery for {issuer!r} returned no usable jwks_uri.")
+    _guard_oidc_target(jwks_uri, field="jwks_uri")
     return jwks_uri
 
 
+#: Environments where a developer's own machine IS the deployment. Everything
+#: else — ``staging`` included — runs the same containers on a reachable host.
+#: Defined once in ``app.core.config`` so the operator plane's never-in-
+#: production guards and this one cannot drift apart (they did: those asked
+#: ``app_env == "production"`` until 2026-08-23).
+_UNDEPLOYED_ENVS: Final[frozenset[str]] = UNDEPLOYED_ENVS
+
+
 def _is_loopback_issuer_allowed(url: str) -> bool:
-    """Plain-http OIDC endpoints are tolerated ONLY on loopback and ONLY
-    outside production — the same never-in-production rule as operator dev
-    auth. This exists so the full workforce-OIDC path (discovery → JWKS →
-    verification) can be exercised locally against a stub IdP; every deployed
-    environment still hard-requires https."""
+    """Plain-http OIDC endpoints are tolerated ONLY on loopback and ONLY on an
+    UNDEPLOYED environment (``local``/``test``).
+
+    This exists so the full workforce-OIDC path (discovery → JWKS →
+    verification) can be exercised locally against a stub IdP. It used to read
+    "not production", which quietly left it open on ``staging`` — and unlike the
+    other never-in-production switches (operator dev auth, ``outbound``'s
+    private-target hatch) this one has no second flag to fail to set, while the
+    value it screens is TENANT-settable. An org admin on a staging host could
+    therefore point an SSO connection's ``issuer`` at ``http://127.0.0.1:8100``
+    (the operator control plane) or ``http://127.0.0.1:8200`` (OpenBao) and have
+    the backend fetch discovery from it. Staging now gets production's
+    guarantee; ``local`` and ``test`` serve the carve-out's stated purpose in
+    full.
+    """
     from urllib.parse import urlparse  # noqa: PLC0415 - lazy; only the SSO path needs it
 
     from app.core.config import get_settings  # noqa: PLC0415 - avoid import cycle
 
-    if get_settings().app.app_env == "production":
+    if get_settings().app.app_env not in _UNDEPLOYED_ENVS:
         return False
     parsed = urlparse(url)
     return parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}

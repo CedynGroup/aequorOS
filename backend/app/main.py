@@ -112,8 +112,8 @@ def create_app() -> FastAPI:
             CORSMiddleware,
             allow_origins=settings.cors.origins,
             allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_methods=settings.cors.methods,
+            allow_headers=settings.cors.headers,
         )
 
     register_exception_handlers(app)

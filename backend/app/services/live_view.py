@@ -26,13 +26,14 @@ from app.models import (
 from app.schemas.live import (
     JobEnqueuedRead,
     LiveModuleView,
+    LiveReconciliationRead,
     LiveSnapshotListRead,
     LiveSnapshotRead,
     LiveSummaryRead,
     OfficialRunRequest,
     RefreshRequest,
 )
-from app.services import job_queue
+from app.services import fact_derivation, job_queue
 from app.services.audit import record_event
 
 _MODULE_ORDER = {
@@ -46,18 +47,32 @@ _MODULE_ORDER = {
 def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSummaryRead:
     """The always-live treasury cockpit.
 
-    The live view is compute-from-latest: on read it recomputes any module
-    whose inputs have changed (new data ingested, or a methodology/parameter
-    version drift) via the shared cheap-tier ``pipeline.recompute_live``, then
-    serves the fresh rows. It never depends on a background job having run, and
-    it is never labelled "stale" — drift versus the last *official filing* is a
-    governance concept (``freshness.get_bank_freshness``), not a liveness one,
-    and lives on the reporting surface, not here.
+    The live view is compute-from-latest: on read it enqueues a recompute for
+    any module whose inputs have changed (new data ingested, or a methodology/
+    parameter version drift) via the shared cheap-tier ``pipeline.recompute_live``,
+    then serves the rows it holds. It never depends on a background job having
+    run.
+
+    Two honesty flags ride the payload, and neither is a constant:
+
+    ``is_stale`` says the cache is behind the book — data was ingested after
+    these figures were computed and a refresh is queued. It used to be a
+    hardcoded ``False`` (audit 2026-08-22 D-1), which presented a value computed
+    before the book changed as current. It is still NOT drift versus the last
+    official filing: that is a governance concept and lives in
+    ``freshness.get_bank_freshness``.
+
+    ``reconciliation`` is the balance-sheet identity control's verdict on the
+    book these figures rest on. The live plane deliberately keeps materialising
+    an unreconciled book — an operator has to see the broken book to fix it —
+    so the block is REPORTED here and on every module's ``pipeline_state``
+    rather than withheld.
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
+    is_stale = False
     if period is not None:
-        _ensure_live_current(db, ctx, bank, period)
+        is_stale = _ensure_live_current(db, ctx, bank, period)
 
     rows = list(
         db.scalars(
@@ -85,20 +100,58 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         for row in rows
     ]
     computed_at = max((row.computed_at for row in rows), default=None)
+    blocked = next((row for row in rows if row.pipeline_state == "blocked"), None)
     return LiveSummaryRead(
         bank_id=bank.id,
         reporting_period_id=period.id if period is not None else None,
         period_label=period.label if period is not None else None,
         source_as_of_date=max((row.source_as_of_date for row in rows), default=None),
         modules=modules,
-        is_stale=False,
+        is_stale=is_stale,
         computed_at=computed_at,
+        reconciliation=_reconciliation_view(
+            fact_derivation.current_reconciliation_record(db, ctx, bank.id),
+            message=blocked.pipeline_error if blocked is not None else None,
+        ),
+    )
+
+
+def _reconciliation_view(
+    record: dict[str, object] | None, *, message: str | None
+) -> LiveReconciliationRead | None:
+    """Map the control's stamped provenance onto the read model.
+
+    The record is written by the derivation onto the plugged balance-sheet line
+    (``BalanceIdentityOutcome.provenance``), so this reads the control's own
+    words rather than recomputing a second opinion about them.
+    """
+    if record is None:
+        return None
+    tolerance = record.get("tolerance")
+    tolerance = tolerance if isinstance(tolerance, dict) else {}
+    exception = record.get("exception")
+    exception = exception if isinstance(exception, dict) else {}
+    status_value = str(record.get("status", "blocked"))
+    if status_value not in ("within_tolerance", "exception_applied", "blocked"):
+        status_value = "blocked"
+    return LiveReconciliationRead(
+        control=str(record.get("control", "balance_sheet_identity")),
+        status=status_value,  # type: ignore[arg-type]
+        blocks_filing=status_value == "blocked",
+        assets=str(record.get("assets", "")),
+        funding=str(record.get("funding", "")),
+        gap=str(record.get("gap", "")),
+        gap_fraction=str(record.get("gap_fraction", "")),
+        tolerance_pct=str(tolerance.get("tolerance_pct", "")),
+        tolerance_source=str(tolerance.get("source", "")),
+        exception_id=str(exception["exception_id"]) if "exception_id" in exception else None,
+        message=message,
     )
 
 
 def _ensure_live_current(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
-) -> None:
+) -> bool:
     """Keep the live cache current WITHOUT blocking the read.
 
     A read never recomputes inline — the module engines are seconds each, far too
@@ -108,6 +161,10 @@ def _ensure_live_current(
     and updates the cache within seconds, so the next poll reflects it. Fact
     re-derivation and the engines stay entirely off the request path, and no
     manual activation is ever required — a data change auto-refreshes.
+
+    Returns whether a refresh was needed, which IS the answer to "are the
+    figures the caller is about to read behind the book?" — the summary reports
+    it as ``is_stale`` rather than asserting freshness it has not established.
     """
     cached = {
         row.module: row
@@ -118,8 +175,9 @@ def _ensure_live_current(
             )
         )
     }
-    if not _refresh_needed(db, ctx, bank, cached):
-        return
+    behind = _cache_is_behind_the_book(db, ctx, bank, cached)
+    if not _refresh_needed(db, ctx, bank, cached, behind=behind):
+        return behind
     job_queue.enqueue(
         db,
         ctx.organization_id,
@@ -130,15 +188,26 @@ def _ensure_live_current(
         coalesce_key=f"refresh:{bank.id}:{period.period_end.isoformat()}",
     )
     db.commit()
+    return behind
 
 
 def _refresh_needed(
-    db: Session, ctx: TenantContext, bank: Bank, cached: dict[str, LiveMetric]
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    cached: dict[str, LiveMetric],
+    *,
+    behind: bool,
 ) -> bool:
-    """Cheap staleness check: is the cache behind the latest ingested data?
+    """Should a background recompute be enqueued for this bank?
 
-    Compares the newest ingestion batch against the oldest cached module — a pure
-    timestamp comparison, no engine work, so it is safe on every read.
+    Broader than staleness on purpose: a module that FAILED, or that reported
+    itself unavailable, is worth retrying even when no new data has arrived,
+    because the cause may have been a transient or a since-corrected parameter.
+
+    A ``blocked`` module is deliberately NOT a trigger: it computed fine, and
+    re-running the pipeline cannot make a general ledger balance. It clears when
+    the corrected book is ingested, which ``behind`` already catches.
     """
     has_current_facts = db.scalar(
         select(CurrentFinancialFact.id)
@@ -156,6 +225,22 @@ def _refresh_needed(
         for row in cached.values()
     ):
         return True
+    return behind
+
+
+def _cache_is_behind_the_book(
+    db: Session, ctx: TenantContext, bank: Bank, cached: dict[str, LiveMetric]
+) -> bool:
+    """Has data been ingested since these figures were computed?
+
+    Compares the newest ingestion batch against the oldest cached module — a pure
+    timestamp comparison, no engine work, so it is safe on every read. This is
+    the ONLY question ``is_stale`` answers, which is why it is separate from
+    :func:`_refresh_needed`: a permanently unavailable module (an SDI with no
+    market-data feed, say) must not make every live figure read as out of date.
+    """
+    if not cached:
+        return False
     oldest_compute = min((row.computed_at for row in cached.values()), default=None)
     latest_ingest = db.scalar(
         select(func.max(IngestionBatch.created_at)).where(
@@ -164,9 +249,7 @@ def _refresh_needed(
         )
     )
     return (
-        latest_ingest is not None
-        and oldest_compute is not None
-        and latest_ingest > oldest_compute
+        latest_ingest is not None and oldest_compute is not None and latest_ingest > oldest_compute
     )
 
 

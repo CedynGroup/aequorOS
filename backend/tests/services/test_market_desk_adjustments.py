@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models import DeskDetermination, DeskMethodology, DeskObservation
+from app.models import DeskMethodology, DeskObservation
 from app.services.market_desk import calculation, determinations, register
 
 COB = date(2026, 8, 7)

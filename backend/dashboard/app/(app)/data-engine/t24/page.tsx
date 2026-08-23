@@ -2,11 +2,10 @@
 
 /**
  * Temenos T24 tab of the Data Engine console. The native core-banking
- * integration: connect one or more T24 cores (OFS / IRIS / Open API), manage
- * the credential lifecycle, trigger pulls and backfills, review domain
- * coverage, and understand the transport modes. Wired to the live backend
- * through the generated risk-service client — connections, domains, and pull
- * jobs are real.
+ * configuration: store the details for one or more T24 cores (OFS / IRIS /
+ * Open API), manage credentials and mappings, review domain coverage, and
+ * understand transport modes. Live T24 transport is not installed in this
+ * deployment, so pull jobs are safely blocked.
  */
 
 import { useState } from 'react';
@@ -36,8 +35,6 @@ export default function T24Page() {
   const [adding, setAdding] = useState(false);
 
   const rows = connections.data?.connections ?? [];
-  const activeCount = rows.filter((row) => row.status === 'ACTIVE').length;
-
   return (
     <>
       <PageHeader
@@ -48,12 +45,12 @@ export default function T24Page() {
         title={
           <span className="flex items-center gap-3">
             Temenos T24
-            <span className="inline-flex items-center gap-1.5 text-caption font-medium text-success border border-success/20 bg-success-light rounded-full px-2.5 py-0.5 uppercase tracking-wider">
-              <Database size={12} aria-hidden /> Native integration
+            <span className="inline-flex items-center gap-1.5 text-caption font-medium text-warning border border-warning/30 bg-warning-light rounded-full px-2.5 py-0.5 uppercase tracking-wider">
+              <Database size={12} aria-hidden /> Configuration only
             </span>
           </span>
         }
-        subtitle="Connect your T24 core over OFS, IRIS, or the Transact Open APIs — positions, GL, deals, counterparties and products flow into the canonical model that every module runs on."
+        subtitle="Save T24 endpoint, credentials, and domain mappings for onboarding. Live OFS, IRIS, and Transact Open API requests are unavailable in this deployment; use file upload or the Push API for ingestion."
       />
 
       {/* Secondary sub-navigation */}
@@ -89,10 +86,10 @@ export default function T24Page() {
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-h3 text-navy">Connected cores</h2>
+                <h2 className="text-h3 text-navy">Configured cores</h2>
                 {rows.length > 0 && (
                   <p className="text-caption text-slate mt-0.5">
-                    {activeCount} active · {rows.length} total
+                    {rows.length} saved configuration{rows.length === 1 ? '' : 's'}
                   </p>
                 )}
               </div>
@@ -103,7 +100,7 @@ export default function T24Page() {
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
                 >
                   <Plus size={13} aria-hidden />
-                  Connect a core
+                  Configure a core
                 </button>
               )}
             </div>
@@ -116,8 +113,8 @@ export default function T24Page() {
             ) : rows.length === 0 && !adding ? (
               <EmptyState
                 Icon={Database}
-                title="No Temenos core connected yet"
-                description="Connect your T24 core over OFS, IRIS, or the Transact Open APIs. The canonical model and every calculation module behave identically to a file upload — the native adapter only removes the export step."
+                title="No Temenos core configured yet"
+                description="Save T24 connection details and mappings for onboarding. Live transport is not available in this deployment, so ingest through file upload or the Push API."
                 action={
                   <button
                     type="button"
@@ -125,7 +122,7 @@ export default function T24Page() {
                     className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
                   >
                     <Plus size={13} aria-hidden />
-                    Connect a core
+                    Configure a core
                   </button>
                 }
               />
@@ -150,9 +147,9 @@ export default function T24Page() {
             )}
 
             <div className="card p-5 border-l-4 border-l-action">
-              <h3 className="text-h3 text-navy">Not ready for a live connection?</h3>
+              <h3 className="text-h3 text-navy">Use an available ingestion path</h3>
               <p className="mt-2 text-body text-slate leading-relaxed">
-                T24 sites are never blocked: export the close-of-business files and ingest via{' '}
+                Export the close-of-business files and ingest via{' '}
                 <Link
                   href="/data-engine/excel-csv"
                   className="font-medium text-action hover:text-action-hover"
@@ -166,8 +163,8 @@ export default function T24Page() {
                 >
                   Push API
                 </Link>
-                . The canonical model is identical; the native adapter only removes the export
-                step.
+                . Both paths write the same canonical model while live T24 transport remains
+                unavailable.
               </p>
               <Link
                 href="/data-engine/excel-csv"

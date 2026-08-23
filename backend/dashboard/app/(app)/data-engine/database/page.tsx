@@ -2,11 +2,10 @@
 
 /**
  * Database (Direct) tab of the Data Engine console. The read-only core-database
- * adapter: connect one or more bank-hosted reporting replicas (Oracle, SQL
- * Server, generic JDBC/ODBC), manage the credential lifecycle, test
- * reachability, discover the source schema for mapping, and run on-demand syncs
- * that mint immutable ingestion batches. Wired to the live backend through the
- * generated risk-service DatabaseDirectApi.
+ * adapter configuration: retain one or more bank-hosted reporting replicas
+ * (Oracle, SQL Server, generic JDBC/ODBC), manage credentials, and prepare
+ * mappings. A live check requires the matching driver and network path on the
+ * deployed service.
  */
 
 import { useState } from 'react';
@@ -38,19 +37,19 @@ export default function DatabaseDirectPage() {
         title={
           <span className="flex items-center gap-3">
             Database (Direct)
-            <span className="inline-flex items-center gap-1.5 text-caption font-medium text-success border border-success/20 bg-success-light rounded-full px-2.5 py-0.5 uppercase tracking-wider">
-              <Database size={12} aria-hidden /> Native adapter
+            <span className="inline-flex items-center gap-1.5 text-caption font-medium text-warning border border-warning/30 bg-warning-light rounded-full px-2.5 py-0.5 uppercase tracking-wider">
+              <Database size={12} aria-hidden /> Deployment-gated
             </span>
           </span>
         }
-        subtitle="Read-only extraction against a bank-hosted reporting replica for cores without a workable API. Positions, GL, deals, and reference data flow into the canonical model every module runs on."
+        subtitle="Configure read-only extraction against a bank-hosted reporting replica. A live connection requires the matching driver, bank credentials, and network path installed on this service; use file upload or the Push API until onboarding is complete."
       />
 
       <div className="px-8 py-6 max-w-6xl space-y-8">
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-h3 text-navy">Connections</h2>
+              <h2 className="text-h3 text-navy">Configured connections</h2>
               {rows.length > 0 && (
                 <p className="text-caption text-slate mt-0.5">
                   {activeCount} active · {rows.length} total
@@ -83,8 +82,8 @@ export default function DatabaseDirectPage() {
           ) : rows.length === 0 && !adding ? (
             <EmptyState
               Icon={Database}
-              title="No database connected yet"
-              description="Connect a read-only reporting replica. Test reachability, discover the source schema for mapping, then sync — the canonical model and every module behave identically to a file upload."
+              title="No database connection configured yet"
+              description="Save a read-only reporting replica for onboarding. Live checks and syncs require the matching driver and network path on this deployment."
               action={
                 <button
                   type="button"
@@ -117,7 +116,7 @@ export default function DatabaseDirectPage() {
           )}
 
           <div className="card p-5 border-l-4 border-l-action">
-            <h3 className="text-h3 text-navy">Not ready for a live connection?</h3>
+            <h3 className="text-h3 text-navy">Use an available ingestion path</h3>
             <p className="mt-2 text-body text-slate leading-relaxed">
               Cores are never blocked: export the close-of-business files and ingest via{' '}
               <Link

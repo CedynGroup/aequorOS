@@ -23,7 +23,16 @@ import ChartFrame from '@/components/ui/ChartFrame';
 import StatusPill from '@/components/ui/StatusPill';
 import EmptyState from '@/components/ui/EmptyState';
 import { ApiError } from '@/lib/api/client';
-import { num } from '@/lib/api/values';
+import {
+  assessAgainstFloor,
+  floorNotAssessedReason,
+  floorStatus,
+  fmtFloorPct,
+  fmtPctOrNull,
+  num,
+  numOrNull,
+} from '@/lib/api/values';
+import { currencyCode, fmtInt } from '@/lib/format';
 import { useBankContext } from '@/components/shell/BankContext';
 import { type SdiLiquidityPosition, useSdiCapitalSummary, useSdiLiquidityPosition } from '@/components/basel/sdiHooks';
 import ScenarioLibrary from './ScenarioLibrary';
@@ -335,6 +344,7 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
         <ResultsView
           run={effectiveRun}
           onConfigure={() => setTab('run')}
+          isSdiTenant={isSdiTenant}
           sdiCapitalFloor={sdiCapital.data?.car_min_pct}
           sdiLiquidity={sdiLiquidity.data}
         />
@@ -344,6 +354,8 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
         <ScenarioComparison
           runs={registry.data ?? []}
           focusedRunId={effectiveRun?.run_id}
+          isSdiTenant={isSdiTenant}
+          sdiCapitalFloor={sdiCapital.data?.car_min_pct}
           onFocus={(run) => {
             setFocusedRun(run);
             setTab('results');
@@ -387,23 +399,45 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
 function ResultsView({
   run,
   onConfigure,
+  isSdiTenant,
   sdiCapitalFloor,
   sdiLiquidity,
 }: {
   run: EnterpriseStressRead | null;
   onConfigure: () => void;
+  /** The tenant's institution class — the authority on which regime applies. */
+  isSdiTenant: boolean;
   sdiCapitalFloor: string | undefined;
   sdiLiquidity: SdiLiquidityPosition | undefined;
 }) {
   if (!run) return <NoRun onConfigure={onConfigure} />;
   const s = run.summary;
   const coupling = run.outcome.coupling;
-  // An SDI run omits the Basel liquidity leg (docs/sdi.md §4.6): no coupling block,
-  // null LCR in the summary. Present the s.29 solvency view without a Basel LCR
-  // verdict — never render LCR against a floor that does not apply to an SDI.
-  const isSdi = !coupling || s.stressed_lcr_pct === null;
-  const carFloor = num(coupling?.car_min_pct ?? sdiCapitalFloor ?? '0');
-  const lcrFloor = num(coupling?.lcr_min_pct ?? '0');
+  // Regime comes from the TENANT CLASS, not the run's shape. An SDI run omits
+  // the Basel liquidity leg (docs/sdi.md §4.6) — but so does a universal-bank
+  // run whose liquidity engine produced nothing, and inferring "SDI" from the
+  // missing block told the board that Basel LCR "does not apply" to a bank it
+  // very much applies to. Shape now decides only whether the leg is PRESENT;
+  // class decides what its absence MEANS.
+  const liquidityAssessed = Boolean(coupling) && s.stressed_lcr_pct !== null;
+
+  const stressedCar = numOrNull(s.stressed_car_end_pct);
+  const baselineCar = numOrNull(s.baseline_car_end_pct);
+  const stressedLcr = numOrNull(s.stressed_lcr_pct);
+  const baselineLcr = numOrNull(s.baseline_lcr_pct);
+  const carErosion = numOrNull(s.car_erosion_pp);
+  // Floors are taken from the payload ONLY — the run's own coupling block for a
+  // bank, the SDI capital summary for an SDI. There is deliberately no `?? '0'`
+  // fallback: a zeroed floor is cleared by every ratio, so an unconfigured
+  // floor used to render every breach as a green "ok".
+  const carFloor = numOrNull(coupling?.car_min_pct ?? sdiCapitalFloor);
+  const lcrFloor = numOrNull(coupling?.lcr_min_pct);
+  const carAssessment = assessAgainstFloor(stressedCar, carFloor);
+  const lcrAssessment = assessAgainstFloor(stressedLcr, lcrFloor);
+  const capitalGap = num(s.capital_gap);
+  const carPathLabel = isSdiTenant
+    ? 'Section 29 capital adequacy path'
+    : 'Capital adequacy path';
 
   return (
     <div className="space-y-6">
@@ -411,24 +445,43 @@ function ResultsView({
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <KpiStat
           label="Stressed CAR"
-          value={`${num(s.stressed_car_end_pct).toFixed(2)}%`}
-          status={num(s.stressed_car_end_pct) < carFloor ? 'crit' : 'ok'}
-          hint={`Base ${num(s.baseline_car_end_pct).toFixed(2)}%${carFloor > 0 ? ` · floor ${carFloor.toFixed(0)}%` : ''}`}
+          value={fmtPctOrNull(stressedCar, 2, 'Not computed')}
+          status={floorStatus(carAssessment)}
+          hint={
+            carAssessment.assessed
+              ? `Base ${fmtPctOrNull(baselineCar, 2)} · floor ${fmtFloorPct(carAssessment.floor)}`
+              : floorNotAssessedReason(carAssessment, 'capital adequacy')
+          }
         />
-        <KpiStat label="CAR erosion" value={`${num(s.car_erosion_pp).toFixed(2)} pp`} status="warn" hint="Base → stress, final year" />
-        {isSdi ? (
+        <KpiStat
+          label="CAR erosion"
+          value={carErosion === null ? '—' : `${carErosion.toFixed(2)} pp`}
+          status="warn"
+          hint="Base → stress, final year"
+        />
+        {isSdiTenant ? (
           <KpiStat
             label="Liquidity regime"
             value="LMTD"
-            status="ok"
             hint="Basel LCR/NSFR not assessed for SDIs (§4.6)"
+          />
+        ) : liquidityAssessed ? (
+          <KpiStat
+            label="Stressed LCR"
+            value={fmtPctOrNull(stressedLcr, 1, 'Not computed')}
+            status={floorStatus(lcrAssessment)}
+            hint={
+              lcrAssessment.assessed
+                ? `Base ${fmtPctOrNull(baselineLcr, 1)} · floor ${fmtFloorPct(lcrAssessment.floor)}`
+                : floorNotAssessedReason(lcrAssessment, 'liquidity coverage')
+            }
           />
         ) : (
           <KpiStat
             label="Stressed LCR"
-            value={`${num(s.stressed_lcr_pct).toFixed(1)}%`}
-            status={num(s.stressed_lcr_pct) < lcrFloor ? 'crit' : 'ok'}
-            hint={`Base ${num(s.baseline_lcr_pct).toFixed(1)}% · floor ${lcrFloor.toFixed(0)}%`}
+            value="Not assessed"
+            status="warn"
+            hint="This run carries no liquidity leg — no coverage verdict"
           />
         )}
         <KpiStat
@@ -437,34 +490,81 @@ function ResultsView({
           status={s.stress_stays_above_all_minima ? 'ok' : 'crit'}
           hint={s.binding_minima.length ? `Binding: ${s.binding_minima.join(', ')}` : 'All minima held'}
         />
-        <KpiStat label="Capital gap" value={`GHS'000 ${num(s.capital_gap).toLocaleString()}`} status={num(s.capital_gap) > 0 ? 'warn' : 'ok'} hint="Worst-year, pre-action" />
-        {isSdi ? (
-          <KpiStat label="Capital regime" value="s.29" status="ok" hint="Simplified SDI capital adequacy" />
+        <KpiStat
+          label="Capital gap"
+          value={`${currencyCode()}'000 ${fmtInt(capitalGap)}`}
+          status={capitalGap > 0 ? 'warn' : 'ok'}
+          hint="Worst-year, pre-action"
+        />
+        {isSdiTenant ? (
+          <KpiStat label="Capital regime" value="s.29" hint="Simplified SDI capital adequacy" />
+        ) : coupling ? (
+          <KpiStat
+            label="Solvency × liquidity"
+            value={coupling.both_breached ? 'Both breach' : coupling.car_breached || coupling.lcr_breached ? 'One breach' : 'Both hold'}
+            status={coupling.both_breached ? 'crit' : coupling.car_breached || coupling.lcr_breached ? 'warn' : 'ok'}
+            hint="¶59(f) interlinkage"
+          />
         ) : (
           <KpiStat
             label="Solvency × liquidity"
-            value={coupling!.both_breached ? 'Both breach' : coupling!.car_breached || coupling!.lcr_breached ? 'One breach' : 'Both hold'}
-            status={coupling!.both_breached ? 'crit' : coupling!.car_breached || coupling!.lcr_breached ? 'warn' : 'ok'}
-            hint="¶59(f) interlinkage"
+            value="Not assessed"
+            status="warn"
+            hint="This run carries no ¶59(f) coupling block"
           />
         )}
       </div>
 
       {/* Charts lead */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartFrame title="CAR — base vs stress" subtitle={isSdi ? 'Section 29 capital adequacy path' : `Capital adequacy path vs the ${carFloor.toFixed(0)}% floor`} height={240}>
-          <ProjectionPaths projection={run.projection} metricKey="car_pct" threshold={carFloor > 0 ? carFloor : undefined} thresholdLabel={carFloor > 0 ? `CAR floor ${carFloor.toFixed(0)}%` : undefined} />
+        <ChartFrame
+          title="CAR — base vs stress"
+          subtitle={
+            carAssessment.assessed
+              ? `${carPathLabel} vs the ${fmtFloorPct(carAssessment.floor)} floor`
+              : `${carPathLabel} — no capital floor configured, path shown without a compliance verdict`
+          }
+          height={240}
+        >
+          <ProjectionPaths
+            projection={run.projection}
+            metricKey="car_pct"
+            threshold={carAssessment.assessed ? carAssessment.floor : undefined}
+            thresholdLabel={carAssessment.assessed ? `CAR floor ${fmtFloorPct(carAssessment.floor)}` : undefined}
+          />
         </ChartFrame>
-        {isSdi ? (
+        {isSdiTenant ? (
           <ChartFrame title="Liquidity — SDI (LMTD)" subtitle="Basel LCR/NSFR excluded for an SDI (§4.6)" height={240}>
             <SdiLiquidityNotAssessed position={sdiLiquidity} />
           </ChartFrame>
+        ) : liquidityAssessed ? (
+          <ChartFrame
+            title="LCR — base vs stress"
+            subtitle={
+              lcrAssessment.assessed
+                ? `Liquidity coverage path vs the ${fmtFloorPct(lcrAssessment.floor)} floor`
+                : 'Liquidity coverage path — no LCR floor configured, path shown without a compliance verdict'
+            }
+            height={240}
+          >
+            <ProjectionPaths
+              projection={run.projection}
+              metricKey="lcr_pct"
+              threshold={lcrAssessment.assessed ? lcrAssessment.floor : undefined}
+              thresholdLabel={lcrAssessment.assessed ? `LCR floor ${fmtFloorPct(lcrAssessment.floor)}` : undefined}
+            />
+          </ChartFrame>
         ) : (
-          <ChartFrame title="LCR — base vs stress" subtitle={`Liquidity coverage path vs the ${lcrFloor.toFixed(0)}% floor`} height={240}>
-            <ProjectionPaths projection={run.projection} metricKey="lcr_pct" threshold={lcrFloor} thresholdLabel={`LCR floor ${lcrFloor.toFixed(0)}%`} />
+          <ChartFrame title="LCR — not assessed" subtitle="This run carries no Basel liquidity leg" height={240}>
+            <NotAssessed
+              lines={[
+                'This stress run produced no Basel liquidity result, so no coverage path and no floor comparison can be shown.',
+                'Basel LCR/NSFR do apply to this institution — the absence is a missing measurement, not an exemption.',
+              ]}
+            />
           </ChartFrame>
         )}
-        {!isSdi && (
+        {!isSdiTenant && (
           <>
             <ChartFrame title="CET1 — base vs stress" subtitle="Common equity Tier 1 ratio path" height={240}>
               <ProjectionPaths projection={run.projection} metricKey="cet1_ratio_pct" />
@@ -478,15 +578,35 @@ function ResultsView({
 
       <DriverWaterfall run={run} />
 
-      {isSdi ? (
+      {isSdiTenant ? (
         <SectionCard title="Liquidity regime" subtitle="SDI liquidity stress (docs/sdi.md §4.6)">
           <SdiLiquidityNotAssessed position={sdiLiquidity} />
         </SectionCard>
+      ) : coupling ? (
+        <SectionCard title="Solvency–liquidity narrative" subtitle="The directive's interlinkage read (¶59(f))">
+          <p className="text-body text-navy/85 leading-relaxed">{coupling.narrative}</p>
+        </SectionCard>
       ) : (
         <SectionCard title="Solvency–liquidity narrative" subtitle="The directive's interlinkage read (¶59(f))">
-          <p className="text-body text-navy/85 leading-relaxed">{coupling!.narrative}</p>
+          <NotAssessed
+            lines={[
+              'This run carries no solvency–liquidity coupling block, so the ¶59(f) interlinkage was not evaluated.',
+              'No narrative is substituted.',
+            ]}
+          />
         </SectionCard>
       )}
+    </div>
+  );
+}
+
+/** Neutral "we did not measure this" panel — never styled as a pass. */
+function NotAssessed({ lines }: { lines: string[] }) {
+  return (
+    <div className="flex h-full flex-col justify-center gap-2 px-6 text-center text-caption text-slate">
+      {lines.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
     </div>
   );
 }

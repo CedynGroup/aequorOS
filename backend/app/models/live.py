@@ -6,8 +6,8 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
-    Boolean,
     JSON,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -20,7 +20,9 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
 )
-from sqlalchemy import text as sql_text
+from sqlalchemy import (
+    text as sql_text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, synonym
 
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
@@ -102,6 +104,19 @@ class CurrentFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     and ingestion generation that produced it. It deliberately has no foreign
     key to a reporting period: historical/official facts remain in
     ``BankFinancialFact`` and are only selected by explicit governance paths.
+
+    Tenant isolation is enforced in the database, not only in application SQL:
+    on Postgres the table is ENABLE + FORCE ROW LEVEL SECURITY under policy
+    ``current_financial_facts_tenant_isolation``, which admits only rows whose
+    ``organization_id`` equals the transaction-local ``app.organization_id``
+    GUC (migration ``202608220027``; the GUC is set by the ``after_begin`` hook
+    in ``app/db/session.py`` from ``session.info['organization_id']``). FORCE is
+    load-bearing because the application role owns the table and would otherwise
+    be exempt from its own policy. A session with no GUC sees zero rows — every
+    reader and writer here (the live Treasury modules, ``fact_derivation``,
+    ``live_state``, ``live_view``, ``implied_rating``) must run on a
+    tenant-bound session, exactly as the sibling ``live_metrics`` /
+    ``bank_financial_facts`` tables already require.
     """
 
     __tablename__ = "current_financial_facts"
@@ -124,7 +139,12 @@ class CurrentFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "category",
             name="uq_current_financial_facts_bank_group_category",
         ),
-        Index("ix_current_financial_facts_org_bank_group", "organization_id", "bank_id", "fact_group"),
+        Index(
+            "ix_current_financial_facts_org_bank_group",
+            "organization_id",
+            "bank_id",
+            "fact_group",
+        ),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -147,6 +167,24 @@ class CurrentFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     attributes: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
+
+
+class WorkerHeartbeat(Base):
+    """Cross-tenant worker liveness evidence, written by the worker itself.
+
+    This table intentionally has no tenant key or RLS policy: it contains no
+    tenant financial data and records service health across all tenants. It is
+    written only through the worker's verified BYPASSRLS connection.
+    """
+
+    __tablename__ = "worker_heartbeats"
+
+    worker_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_job_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class LiveMetricSnapshot(UuidV4PrimaryKeyMixin, TimestampMixin, Base):

@@ -27,12 +27,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core import observability
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -43,16 +45,33 @@ from app.models import (
 )
 from app.schemas.regulatory_liquidity import Bsd3SummaryRowRead
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate, RegulatoryPackageRead
-from app.services import regulatory_capital, regulatory_liquidity
+from app.services import (
+    filing_reconciliation,
+    regulatory_capital,
+    regulatory_liquidity,
+    withdrawal_impact,
+)
 from app.services.attestation import digests, register_state
 from app.services.audit import record_event
-from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
     get_effective_period_or_404,
     get_period_for_reporting_date_or_404,
     read_package,
     require_actor,
+)
+from app.services.regulatory_reporting.eligibility import resolve_eligibility
+from app.services.regulatory_reporting.provenance import (
+    UNCLASSIFIED_STATUS,
+    ReportAuthority,
+    build_engine_provenance,
+    compliance_verdict_authority,
+)
+from app.services.regulatory_reporting.provenance import (
+    calculation_provenance as _calculation_provenance,
+)
+from app.services.regulatory_reporting.provenance import (
+    source_run_entry as _calculation_source_run_entry,
 )
 from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition
 
@@ -100,13 +119,94 @@ _FORECAST_SUMMARY_FIELDS = (
 
 @dataclass(frozen=True)
 class GeneratedReturn:
-    """One generator output: the export-ready snapshot + its source runs."""
+    """One generator output: the export-ready snapshot + its source runs.
+
+    ``source_runs`` stays exactly what it has always been — the sealed
+    ``RegulatoryRun`` lineage, empty for returns no engine produced. What the
+    forensic audit (§8, §10 item 3) required is that an EMPTY list stop being a
+    silent hole: ``generate_package`` stamps
+    :func:`~app.services.regulatory_reporting.provenance` onto every snapshot,
+    and the template-authoritative case says so in words.
+    """
 
     snapshot: dict[str, Any]
     source_runs: list[dict[str, Any]]
 
 
+#: Refusals whose ``detail`` carries no ``error_code`` of its own, keyed by the
+#: HTTP status the mint site raises. Keeps the observability reason code stable
+#: and greppable even where the refusal only carries prose.
+_REFUSAL_REASON_BY_STATUS: dict[int, str] = {
+    status.HTTP_403_FORBIDDEN: "forbidden",
+    status.HTTP_404_NOT_FOUND: "not_found",
+    status.HTTP_409_CONFLICT: "conflict",
+    status.HTTP_422_UNPROCESSABLE_CONTENT: "unprocessable",
+}
+
+
+def _refusal_reason(exc: HTTPException) -> str:
+    """The refusal's own ``error_code`` where it has one, else a status-derived code."""
+    detail = exc.detail
+    if isinstance(detail, dict):
+        code = detail.get("error_code")
+        if isinstance(code, str) and code:
+            return code
+    # A typed refusal (``FilingBlockedError``) carries prose in ``detail`` and
+    # its code as an attribute, so the reason stays precise instead of "conflict".
+    typed = getattr(exc, "error_code", None)
+    if isinstance(typed, str) and typed:
+        return typed
+    return _REFUSAL_REASON_BY_STATUS.get(exc.status_code, f"http_{exc.status_code}")
+
+
 def generate_package(
+    db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryPackageCreate
+) -> RegulatoryPackageRead:
+    """Mint the immutable package row, reporting every refusal (audit: observability).
+
+    Thin wrapper over :func:`_generate_package` for ONE reason: a generation
+    failure used to leave no trace anywhere. Every refusal below — an unregistered
+    return code, an ineligible institution class, a pending BoG template, a
+    missing baseline run, an acknowledged return without a resubmission grant —
+    raised a bare ``HTTPException`` and returned a 4xx to one client. No audit
+    event is written on refusal by design (no package row exists to attach one
+    to), which is precisely why the structured log line is the only record there
+    can be, and why it is emitted HERE, at the single mint site, rather than at
+    each of the raise sites.
+
+    The emit never changes the outcome: ``observability.emit`` swallows its own
+    failures and the original exception is always re-raised unchanged.
+    """
+    try:
+        return _generate_package(db, ctx, bank_id, payload)
+    except HTTPException as exc:
+        observability.package_failed(
+            reason=_refusal_reason(exc),
+            status_code=exc.status_code,
+            return_code=payload.return_code,
+            reporting_date=payload.reporting_date.isoformat(),
+            basis=payload.basis,
+            bank_id=bank_id,
+            organization_id=ctx.organization_id,
+        )
+        raise
+    except Exception as exc:
+        # An unexpected failure is a 500 to the client and must be at least as
+        # visible as a refusal — the same condition code, raised severity.
+        observability.package_failed(
+            reason="unhandled_exception",
+            severity="error",
+            exception_type=type(exc).__name__,
+            return_code=payload.return_code,
+            reporting_date=payload.reporting_date.isoformat(),
+            basis=payload.basis,
+            bank_id=bank_id,
+            organization_id=ctx.organization_id,
+        )
+        raise
+
+
+def _generate_package(
     db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryPackageCreate
 ) -> RegulatoryPackageRead:
     actor_user_id = require_actor(ctx)
@@ -120,19 +220,16 @@ def generate_package(
                 "List the available templates via the return-template endpoint."
             ),
         )
-    # Server-side return-set scoping (docs/sdi.md §4.4/§14): a tenant may only
-    # generate returns its institution class is subject to — the calendar filter
-    # is not enough, since this is the single package-mint site an SDI could hit
-    # directly with a bank-only return code (e.g. a BSD form).
-    bank_class = _resolve_institution_class(db, bank)
-    if bank_class not in definition.institution_classes:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                f"Return '{payload.return_code}' does not apply to this institution's "
-                f"class ({bank_class}); it is not part of the institution's return set."
-            ),
-        )
+    # Server-side eligibility (audit ARCH-8) through the SINGLE authority the
+    # reporting calendar also consumes, so the two surfaces cannot disagree. It
+    # is evaluated HERE, at the only package-mint site, which is what makes an
+    # ineligible return structurally impossible to generate: an SDI POSTing a
+    # bank-only BSD code directly never reaches a generator. Every dimension —
+    # institution class, jurisdiction, regulator, cadence anchor, effective date
+    # — is named on the 403 rather than a single opaque refusal.
+    eligibility = resolve_eligibility(db, ctx, bank, as_of=payload.reporting_date)
+    bank_class = eligibility.institution_class
+    eligibility.require(definition, reporting_date=payload.reporting_date)
     # Daily returns file on business days that seldom coincide with a monthly
     # reporting-period end, so they draw on the latest effective period.
     if definition.frequency == "daily":
@@ -140,9 +237,39 @@ def generate_package(
     else:
         period = get_period_for_reporting_date_or_404(db, ctx, bank, payload.reporting_date)
 
+    # The data-integrity gate (audit P0-10 / 2026-08-22 D-2), evaluated HERE for
+    # the same reason eligibility is: this is the only package-mint site, so a
+    # return built on a book that does not balance is structurally impossible
+    # rather than merely discouraged. It runs before any generator so a refusal
+    # leaves nothing behind, and it raises ``FilingBlockedError`` — a 409 whose
+    # detail names the gap, the governed tolerance and its source.
+    filing_reconciliation.assert_filing_reconciled(
+        db,
+        ctx,
+        bank,
+        as_of=period.period_end,
+        period_id=period.id,
+        purpose="package_generation",
+    )
+
     generated = _GENERATORS[definition.generator](db, ctx, bank, period, definition)
+
+    # The withdrawn-evidence gate (audit 2026-08-22 D-12), on the same line and
+    # for the same reason as the two gates above: this is the only package-mint
+    # site, so a return bound to a run that was sealed on canonical rows since
+    # retired under two-officer withdrawal is structurally impossible rather
+    # than merely unlikely. The sealed runs themselves are never touched — they
+    # remain the faithful record of the book as it stood; it is the FILING that
+    # is refused, with a 409 naming every withdrawal behind the refusal.
+    withdrawal_impact.assert_source_runs_current(
+        db,
+        _load_source_runs(db, ctx, generated.source_runs),
+        purpose="package_generation",
+    )
+
     _enrich_institution_block(db, ctx, bank, generated.snapshot)
     _stamp_basis(generated.snapshot, payload.basis)
+    _stamp_provenance(db, ctx, bank, definition, payload, generated)
     _apply_prior_period_comparative(db, ctx, bank, definition, payload, generated.snapshot)
 
     # Supersession and versioning are per-basis: solo and consolidated are
@@ -276,33 +403,152 @@ def generate_package(
 
 
 def _row(code: str, description: str, value: Any, **extra: Any) -> dict[str, Any]:
-    return {"code": code, "description": description, "value": str(value), **extra}
+    """One snapshot row.
+
+    When the caller states a ``unit``, the normalised ``unit_kind`` rides along
+    (P0-24 / NEW-8). Rows that state no unit get neither key, so the resolution
+    rule stays simple and the snapshot stays lean:
+    ``row.unit_kind ?? section.unit_kind``.
+    """
+    row = {"code": code, "description": description, "value": str(value), **extra}
+    if "unit" in extra:
+        row["unit_kind"] = unit_kind(extra["unit"])
+    return row
+
+
+#: Normalised measure kind. The snapshot carries TWO unit vocabularies for good
+#: reason — they describe different axes:
+#:
+#: * generic rows say WHAT is measured (``"ghs"``, ``"pct"``, ``"years"`` …);
+#: * ``bog_forms`` sheets say at WHAT SCALE the official sheet reports
+#:   (``"millions"``, ``"thousands"``, ``"units"``, ``"percent"``, ``"count"``,
+#:   ``"text"``) — the Guide's own unit convention, which must survive verbatim
+#:   because it is printed on the official form.
+#:
+#: Collapsing one into the other would lose information a filed artifact needs.
+#: So ``unit`` keeps each family's own vocabulary and ``unit_kind`` normalises
+#: both onto one closed set a renderer can switch on. Every section and every
+#: total carries both.
+UNIT_KIND_CURRENCY = "currency"
+UNIT_KIND_PERCENT = "percent"
+UNIT_KIND_COUNT = "count"
+UNIT_KIND_TEXT = "text"
+UNIT_KIND_RATIO = "ratio"
+UNIT_KIND_YEARS = "years"
+UNIT_KIND_MIXED = "mixed"
+UNIT_KIND_UNKNOWN = ""
+
+_UNIT_KINDS: dict[str, str] = {
+    # generic row vocabulary (measure)
+    "ghs": UNIT_KIND_CURRENCY,
+    "amount": UNIT_KIND_CURRENCY,
+    "pct": UNIT_KIND_PERCENT,
+    "ratio": UNIT_KIND_RATIO,
+    "years": UNIT_KIND_YEARS,
+    "count": UNIT_KIND_COUNT,
+    "text": UNIT_KIND_TEXT,
+    "mixed": UNIT_KIND_MIXED,
+    # bog_forms sheet vocabulary (scale) — the first three are currency at a
+    # stated scale, which ``unit`` still reports.
+    "millions": UNIT_KIND_CURRENCY,
+    "thousands": UNIT_KIND_CURRENCY,
+    "units": UNIT_KIND_CURRENCY,
+    "percent": UNIT_KIND_PERCENT,
+}
+
+
+def unit_kind(unit: str | None) -> str:
+    """Normalise either unit vocabulary onto the closed ``unit_kind`` set.
+
+    An unrecognised unit resolves to ``""`` — unknown, not "currency". Guessing
+    currency for an unlabelled figure is how a percentage ends up rendered with
+    a money symbol on a filed return.
+    """
+    return _UNIT_KINDS.get((unit or "").strip().lower(), UNIT_KIND_UNKNOWN)
+
+
+def _infer_unit(rows: list[dict[str, Any]]) -> str:
+    """The unit every row agrees on, ``"mixed"`` when they disagree, else ``""``.
+
+    P0-24: the generic snapshot builders emitted no ``unit`` at all, so the UI's
+    "units are shown per section" was true only for BSD forms (whose sheets each
+    declare an official unit). Rows here already carry their own ``unit`` where
+    the generator knows it, so the section's unit is a fact about the rows, not
+    a new claim — and where the rows genuinely mix units (a table of amounts and
+    ratios) the section says ``"mixed"`` rather than picking one and misleading
+    the reader.
+    """
+    units = {str(row.get("unit", "")) for row in rows}
+    units.discard("")
+    if not units:
+        return ""
+    if len(units) == 1:
+        return next(iter(units))
+    return "mixed"
 
 
 def _total(
-    code: str, description: str, value: Any, *, equals_sum_of_rows: bool = False
+    code: str,
+    description: str,
+    value: Any,
+    *,
+    equals_sum_of_rows: bool = False,
+    unit: str = "",
 ) -> dict[str, Any]:
+    """A section or headline total.
+
+    ``unit`` (P0-24): a headline ratio previously lost its ``%`` on the way into
+    the snapshot, because totals carried no unit for any renderer to read. The
+    prior-period comparative section already looked for ``total["unit"]`` and
+    always found nothing.
+    """
     return {
         "code": code,
         "description": description,
         "value": str(value),
         "equals_sum_of_rows": equals_sum_of_rows,
+        "unit": unit,
+        "unit_kind": unit_kind(unit),
     }
 
 
-def _section(
+def _section(  # noqa: PLR0913 — one keyword per snapshot-contract dimension
     code: str,
     title: str,
     rows: list[dict[str, Any]],
     total: dict[str, Any] | None = None,
     *,
     optional: bool = False,
+    unit: str | None = None,
+    authority: str | None = None,
 ) -> dict[str, Any]:
-    return {"code": code, "title": title, "optional": optional, "rows": rows, "total": total}
+    """One snapshot section.
+
+    ``unit`` (P0-24) is the section's unit of account. Passed explicitly where
+    the generator knows it; otherwise inferred from the rows (see
+    :func:`_infer_unit`). The ``bog_form`` builder passes the official sheet
+    unit, so every section in every family now carries the key.
+
+    ``authority`` (audit §10 item 3) is the :class:`ReportAuthority` that owns
+    the section's figures. ``None`` here means "inherit the package authority";
+    ``generate_package`` stamps it before the snapshot is sealed, so a stored
+    snapshot never has a section without one.
+    """
+    resolved_unit = _infer_unit(rows) if unit is None else unit
+    return {
+        "code": code,
+        "title": title,
+        "optional": optional,
+        "rows": rows,
+        "total": total,
+        "unit": resolved_unit,
+        "unit_kind": unit_kind(resolved_unit),
+        "authority": authority,
+    }
 
 
 def _summary_total(row: Bsd3SummaryRowRead, code: str, *, equals_sum: bool) -> dict[str, Any]:
-    return _total(code, row.description, row.value, equals_sum_of_rows=equals_sum)
+    return _total(code, row.description, row.value, equals_sum_of_rows=equals_sum, unit=row.unit)
 
 
 def _headline_comparative_section(totals: list[dict[str, Any]]) -> dict[str, Any]:
@@ -319,6 +565,7 @@ def _headline_comparative_section(totals: list[dict[str, Any]]) -> dict[str, Any
             "description": total["description"],
             "value": total["value"],
             "unit": total.get("unit", ""),
+            "unit_kind": total.get("unit_kind", unit_kind(total.get("unit"))),
             "prior_value": None,
         }
         for total in totals
@@ -334,6 +581,92 @@ def _stamp_basis(snapshot: dict[str, Any], basis: str) -> None:
     """Record the solo/consolidated reporting basis on the snapshot in place."""
     snapshot.setdefault("institution", {})["basis"] = basis
     snapshot.setdefault("metadata", {})["basis"] = basis
+
+
+def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the input
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    definition: ReturnDefinition,
+    payload: RegulatoryPackageCreate,
+    generated: GeneratedReturn,
+) -> None:
+    """Write the authority record onto the snapshot, in place, before sealing.
+
+    Forensic audit §10 item 3: "Make report packages include explicit provenance
+    for direct fact/template calculations: source period/fact generation,
+    parameter versions, mapping version, template hash, formula evaluator
+    version." This is that, for EVERY family, in one place — so a new generator
+    cannot ship without a stated authority.
+
+    Two cases:
+
+    * The generator already declared one (``bog_form`` does, because only it
+      knows its template digest, line-map digest and formula-cell count). Left
+      untouched — that is the template-authoritative record.
+    * Otherwise the authority is read off the source runs: a non-empty lineage
+      means a sealed engine run owns the figures; an empty one on a generator
+      that binds no run by design (the LRT corporate packs) means master data
+      owns them, sealed by ``register_state_digest`` instead. This is the same
+      branch the register-digest decision below already takes, now stated.
+
+    Every section is then stamped with an authority, so no field in a stored
+    snapshot is left without one. Resolution order for a consumer is
+    ``row.authority ?? section.authority``.
+    """
+    snapshot = generated.snapshot
+    declared = snapshot.get("provenance")
+    if isinstance(declared, dict) and declared.get("authority"):
+        authority = str(declared["authority"])
+    else:
+        runs = _load_source_runs(db, ctx, generated.source_runs)
+        report_authority = (
+            ReportAuthority.ENGINE_RUN if runs else ReportAuthority.MASTER_DATA_REGISTER
+        )
+        snapshot["provenance"] = build_engine_provenance(
+            definition=definition,
+            bank=bank,
+            effective_date=payload.reporting_date,
+            runs=runs,
+            authority=report_authority,
+        ).to_dict()
+        authority = report_authority.value
+    for section in snapshot.get("sections") or []:
+        if isinstance(section, dict) and not section.get("authority"):
+            section["authority"] = authority
+
+
+def _load_source_runs(
+    db: Session, ctx: TenantContext, source_runs: list[dict[str, Any]]
+) -> list[RegulatoryRun]:
+    """Re-read the runs named in ``source_runs``, tenant-scoped, in that order.
+
+    The generators hand back the wire-shaped entries; the full provenance view
+    needs the rows. Reading them back rather than threading run objects through
+    every generator keeps the change to the generators at zero, and a package is
+    minted rarely enough that the extra reads are immaterial.
+    """
+    rows: list[RegulatoryRun] = []
+    for entry in source_runs:
+        raw = entry.get("run_id")
+        if not raw:
+            continue
+        # ``source_runs`` carries the id as a STRING (it is JSON on the package
+        # column); ``RegulatoryRun.id`` is a UUID column, and comparing the two
+        # raises rather than silently missing.
+        try:
+            run_id = raw if isinstance(raw, UUID) else UUID(str(raw))
+        except ValueError:  # pragma: no cover - a malformed lineage entry
+            continue
+        run = db.scalar(
+            select(RegulatoryRun).where(
+                RegulatoryRun.id == run_id,
+                RegulatoryRun.organization_id == ctx.organization_id,
+            )
+        )
+        if run is not None:
+            rows.append(run)
+    return rows
 
 
 def _apply_prior_period_comparative(  # noqa: PLR0913
@@ -444,12 +777,26 @@ def _enrich_institution_block(
 
 
 def _source_run_entry(run: RegulatoryRun) -> dict[str, Any]:
-    return {
-        "module": run.module,
-        "run_id": str(run.id),
-        "input_hash": run.input_hash,
-        "engine_version": run.engine_version,
-    }
+    """The package's ``source_runs`` entry, built through WS-A's primitive.
+
+    ``CalculationProvenance.source_run_entry()`` is byte-identical to the shape
+    this function has always written ({module, run_id, input_hash,
+    engine_version}), so adopting the formal provenance interface moves no
+    snapshot hash and needs no migration. The RICH provenance — parameter
+    digest, input/output schema versions, scenario, actor, computed_at — rides
+    in the snapshot's ``provenance`` block instead of being duplicated here.
+
+    Audit 2026-08-22 D-20: ``CalculationProvenance.require_complete()`` — WS-A's
+    "may this run be filed from?" primitive — had zero production callers, so
+    the package RECORDED ``provenance_complete``/``filable`` in its own
+    authority block and bound the run regardless. Half the property was already
+    enforced (only ``succeeded`` runs are selected); the other half is enforced
+    here. Nothing is substituted for a missing element: a run that cannot say
+    which period, which parameters or which engine produced it is not evidence,
+    and a package built on it would carry a provenance chain with a hole in it.
+    """
+    _calculation_provenance(run).require_complete()
+    return _calculation_source_run_entry(run)
 
 
 def _latest_succeeded_runs_by_scenario(
@@ -913,6 +1260,92 @@ def _generate_irrbb(
     )
 
 
+def _generate_sdi_irrbb(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    """SDI IRRBB pilot packet without a bank Tier 1 outlier assertion."""
+    run = _baseline_run_or_409(db, ctx, bank, period, MODULE_IRR, artifact="the SDI IRRBB return")
+    metrics = run.metrics
+    gap_rows = [
+        _row(
+            str(bucket["bucket"]),
+            f"Repricing gap {bucket['bucket']}",
+            bucket["gap_ghs"],
+            rsa_ghs=str(bucket["rsa_ghs"]),
+            rsl_ghs=str(bucket["rsl_ghs"]),
+            cumulative_gap_ghs=str(bucket["cumulative_gap_ghs"]),
+            within_12m=bool(bucket["within_12m"]),
+        )
+        for bucket in metrics.get("gap_buckets", [])
+    ]
+    eve_rows = [
+        _row(
+            str(scenario["scenario_code"]),
+            f"Delta EVE under {scenario['scenario_code']}",
+            scenario["delta_eve_ghs"],
+            eve_ghs=str(scenario["eve_ghs"]),
+        )
+        for scenario in metrics.get("eve_by_scenario", [])
+    ]
+    ear_rows = [
+        _row("ear_up_200_ghs", "Earnings at risk, +200 bp parallel", metrics["ear_up_200_ghs"]),
+        _row("ear_down_200_ghs", "Earnings at risk, -200 bp parallel", metrics["ear_down_200_ghs"]),
+        *(
+            _row(code, description, metrics[code])
+            for code, description in _BOG_GHS_450_EAR_ROWS
+            if code in metrics
+        ),
+        _row("nii_base_ghs", "Base net interest income", metrics["nii_base_ghs"]),
+    ]
+    summary_rows = [
+        _row("eve_base_ghs", "Economic value of equity (base)", metrics["eve_base_ghs"]),
+        _row(
+            "worst_eve_change_ghs",
+            f"Worst-case EVE change ({metrics['worst_scenario']})",
+            metrics["worst_eve_change_ghs"],
+        ),
+        _row("duration_gap", "Duration gap (years)", metrics["duration_gap"]),
+    ]
+    sections = [
+        _section("repricing_gap", "Repricing Gap by Bucket", gap_rows),
+        _section("eve_scenarios", "Appendix IV — Delta EVE by Actual Shock", eve_rows),
+        _section("earnings_at_risk", "Delta NII / Earnings at Risk", ear_rows),
+        _section("summary", "SDI IRRBB Summary", summary_rows),
+    ]
+    totals = [
+        _row("eve_base_ghs", "Economic value of equity (base)", metrics["eve_base_ghs"]),
+        _row("worst_eve_change_ghs", "Worst-case EVE change", metrics["worst_eve_change_ghs"]),
+        _row(
+            "cumulative_12m_gap_ghs",
+            "Cumulative 12-month repricing gap",
+            metrics["cumulative_12m_gap_ghs"],
+        ),
+    ]
+    bog_450_keys = {code for code, _ in (*_BOG_GHS_450_EVE_ROWS, *_BOG_GHS_450_EAR_ROWS)}
+    runs = _latest_succeeded_runs_by_scenario(db, ctx, bank, period, MODULE_IRR)
+    return GeneratedReturn(
+        snapshot=_envelope(
+            bank,
+            period,
+            definition,
+            sections,
+            totals,
+            {
+                "worst_scenario": metrics.get("worst_scenario"),
+                "baseline_run_id": str(run.id),
+                "capital_denominator": "Net Own Funds (Act 930 s.29)",
+                "tier1_outlier_verdict": "not_assessed_for_sdi",
+                "bog_ghs_450_rows_present": any(code in metrics for code in bog_450_keys),
+            },
+        ),
+        source_runs=[_source_run_entry(item) for _, item in sorted(runs.items())],
+    )
+
+
 def _generate_fx(
     db: Session,
     ctx: TenantContext,
@@ -1168,6 +1601,8 @@ def _appendix2_snapshot_row(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 def _appendix2_table1_sections(  # noqa: PLR0912, PLR0915 - one flat table mapping
     table1: dict[str, Any],
+    *,
+    basel_applicable: bool = True,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Table 1 (Summary Results) → its snapshot sections + headline totals."""
     positions = [_appendix2_snapshot_row(table1["current"])]
@@ -1208,7 +1643,8 @@ def _appendix2_table1_sections(  # noqa: PLR0912, PLR0915 - one flat table mappi
         ),
         _section(
             "t1_impact_of_adverse",
-            "Appendix II Table 1 — Impact of Adverse (Loss by CRD Exposure Class)",
+            "Appendix II Table 1 — Impact of Adverse "
+            f"(Loss by {'CRD ' if basel_applicable else ''}Exposure Class)",
             impact_rows,
         ),
         _section(
@@ -1332,9 +1768,7 @@ def _appendix2_table3_section(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "profit_before_tax": row.get("profit_before_tax"),
                 "tax": row.get("tax"),
                 "distributions": row.get("distributions"),
-                "adjusted_retained_earnings_for_car": row.get(
-                    "adjusted_retained_earnings_for_car"
-                ),
+                "adjusted_retained_earnings_for_car": row.get("adjusted_retained_earnings_for_car"),
             },
         )
         for row in rows
@@ -1428,14 +1862,18 @@ def _appendix2_table6_section(table6: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _generate_icaap_stress_appendix2(
+def _generate_attested_appendix2(  # noqa: PLR0913 — five are the standard
+    # generator signature (db, ctx, bank, period, definition); the sixth is the
+    # keyword-only flag that separates the SDI packet from the bank one.
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
     definition: ReturnDefinition,
+    *,
+    include_basel_table2: bool,
 ) -> GeneratedReturn:
-    """ICAAP stress-test submission in the BoG Appendix II format (¶67, ¶68).
+    """Build an Appendix II-derived stress submission from attested evidence.
 
     Sourced ONLY from a Board-ATTESTED enterprise-stress run: the sign-off gate
     (docs/stress.md §3.8) is what designates which immutable run is the annual
@@ -1461,19 +1899,29 @@ def _generate_icaap_stress_appendix2(
         )
 
     table1 = appendix["table1_summary"]
-    t1_sections, t1_totals = _appendix2_table1_sections(table1)
+    t1_sections, t1_totals = _appendix2_table1_sections(
+        table1, basel_applicable=include_basel_table2
+    )
     sections = [
         *t1_sections,
-        _appendix2_table2_section(appendix["table2_capital"]),
         _appendix2_table3_section(appendix["table3_profit_and_loss"]),
         _appendix2_table4_section(appendix["table4_financial_position"]),
         _appendix2_table5_section(appendix["table5_rwa"]),
         _appendix2_table6_section(appendix["table6_risk_drivers"]),
         _appendix2_governance_section(run, signoff),
     ]
+    if include_basel_table2:
+        sections.insert(len(t1_sections), _appendix2_table2_section(appendix["table2_capital"]))
 
     metadata: dict[str, Any] = {
-        "unit": appendix.get("unit", "GHS'000"),
+        # The reporting unit comes from the stress run that produced these
+        # tables. It used to default to ``GHS'000`` — a currency literal on a
+        # filed artifact, which is the exact leak the jurisdiction-neutrality
+        # rule exists to prevent (CLAUDE.md: jurisdiction is data; a Nigerian
+        # bank must never be labelled in cedis). When the run does not state a
+        # unit the metadata says so, and the renderer falls back to the
+        # template's declared currency unit rather than to Ghana.
+        "unit": appendix.get("unit") or "",
         "scenario_code": run.scenario_code,
         "horizon_years": appendix.get("horizon_years"),
         "car_target_pct": table1.get("car_target_pct"),
@@ -1481,6 +1929,7 @@ def _generate_icaap_stress_appendix2(
         "with_management_actions": table1.get("management_actions") is not None,
         "enterprise_stress_run_id": str(run.id),
         "enterprise_stress_input_hash": run.input_hash,
+        "basel_table2_included": include_basel_table2,
     }
     if signoff is not None:
         metadata["governance"] = {
@@ -1494,9 +1943,7 @@ def _generate_icaap_stress_appendix2(
             "attested_by": str(signoff.attested_by) if signoff.attested_by else None,
             "attested_at": signoff.attested_at.isoformat() if signoff.attested_at else None,
             "stays_above_all_minima": signoff.stays_above_all_minima,
-            "with_actions_stays_above_all_minima": (
-                signoff.with_actions_stays_above_all_minima
-            ),
+            "with_actions_stays_above_all_minima": (signoff.with_actions_stays_above_all_minima),
         }
     return GeneratedReturn(
         snapshot=_envelope(bank, period, definition, sections, t1_totals, metadata),
@@ -1504,9 +1951,37 @@ def _generate_icaap_stress_appendix2(
     )
 
 
-def _appendix2_governance_section(
-    run: RegulatoryRun, signoff: Any | None
-) -> dict[str, Any]:
+def _generate_icaap_stress_appendix2(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    """Universal-bank ICAAP submission in the BoG Appendix II format (¶67, ¶68)."""
+    return _generate_attested_appendix2(
+        db, ctx, bank, period, definition, include_basel_table2=True
+    )
+
+
+def _generate_sdi_stress_annual(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    """Proportionate SDI annual stress evidence, without a Basel tier build."""
+    generated = _generate_attested_appendix2(
+        db, ctx, bank, period, definition, include_basel_table2=False
+    )
+    generated.snapshot.setdefault("metadata", {})["report_scope"] = (
+        "SDI proportionate annual stress packet; Basel Appendix II Table 2 excluded."
+    )
+    return generated
+
+
+def _appendix2_governance_section(run: RegulatoryRun, signoff: Any | None) -> dict[str, Any]:
     """The Phase-5 sign-off / Board-attestation facts, on the return itself (¶20)."""
     rows = [
         _appendix2_row(
@@ -1514,15 +1989,11 @@ def _appendix2_governance_section(
             "Enterprise-stress run (source)",
             {"value": str(run.id)},
         ),
-        _appendix2_row(
-            "input_hash", "Enterprise-stress input hash", {"value": run.input_hash}
-        ),
+        _appendix2_row("input_hash", "Enterprise-stress input hash", {"value": run.input_hash}),
     ]
     if signoff is not None:
         rows += [
-            _appendix2_row(
-                "signoff_status", "Board attestation status", {"value": signoff.status}
-            ),
+            _appendix2_row("signoff_status", "Board attestation status", {"value": signoff.status}),
             _appendix2_row(
                 "attested_by",
                 "Attested by (Board/approver)",
@@ -1552,12 +2023,44 @@ def _appendix2_bool(value: bool | None) -> str | None:
     return "Yes" if value else "No"
 
 
+def _carries_a_verdict(threshold_min: Any, status: str | None) -> bool:
+    """True when a stored metric row asserts a compliance verdict.
+
+    A row that states neither a floor nor a classification (``hqla_total_ghs``
+    and the other amounts, stored with ``status="na"``) claims nothing about
+    compliance, so there is nothing for the authority check to authorise and
+    nothing to withhold.
+    """
+    return threshold_min is not None or (status or UNCLASSIFIED_STATUS) != UNCLASSIFIED_STATUS
+
+
+def _classified(light: dict[str, Any]) -> bool:
+    """True when a traffic-light row PRINTS a classification the pack may act on."""
+    return light.get("status") not in (None, "", UNCLASSIFIED_STATUS)
+
+
 def _stress_traffic_lights(
     db: Session, scenario_runs: list[tuple[str, str, RegulatoryRun]]
 ) -> list[dict[str, Any]]:
-    """One row per stored headline metric of every consumed run — value,
-    threshold and green/amber/red status exactly as the engine persisted them
-    (``RegulatoryMetricResult``); the pack classifies nothing itself."""
+    """One row per stored headline metric of every consumed run — the value
+    exactly as the engine persisted it (``RegulatoryMetricResult``); the pack
+    classifies nothing itself.
+
+    The threshold and the green/amber/red status are not a value, they are a
+    **compliance verdict**, and this pack prints one only where WS-A's metric
+    authority register holds a filed regulatory authority for that figure under
+    the engine that sealed the row
+    (:func:`~app.services.regulatory_reporting.provenance.compliance_verdict_authority`).
+    Where it does not, the value still prints and the row states that the
+    classification was withheld and why.
+
+    The check lives here, on the READ path, because a sealed run is append-only
+    evidence and must not be rewritten. Runs sealed before
+    ``regulatory_capital`` stopped persisting a post-stress ``car_pct_end``
+    still carry that row with its 10% floor and a green/red status — and they
+    keep carrying it, because that is what those runs did. What changes is that
+    a filed artifact no longer repeats a verdict no instrument authorises.
+    """
     rows: list[dict[str, Any]] = []
     for module, scenario_code, run in scenario_runs:
         results = db.scalars(
@@ -1565,20 +2068,34 @@ def _stress_traffic_lights(
             .where(RegulatoryMetricResult.run_id == run.id)
             .order_by(RegulatoryMetricResult.position)
         ).all()
-        rows.extend(
-            _row(
-                f"{module}:{scenario_code}:{result.metric_code}",
-                f"{result.metric_code} under '{scenario_code}' ({module})",
-                result.metric_value,
-                unit=result.unit,
-                threshold=str(result.threshold_min) if result.threshold_min is not None else None,
-                status=result.status,
-                module=module,
-                scenario_code=scenario_code,
-            )
-            for result in results
-        )
+        rows.extend(_stress_traffic_light(module, scenario_code, result) for result in results)
     return rows
+
+
+def _stress_traffic_light(
+    module: str, scenario_code: str, result: RegulatoryMetricResult
+) -> dict[str, Any]:
+    """One traffic-light row, with its verdict resolved against the register."""
+    threshold = str(result.threshold_min) if result.threshold_min is not None else None
+    status = result.status
+    basis: str | None = None
+    if _carries_a_verdict(result.threshold_min, status):
+        verdict = compliance_verdict_authority(result.metric_code, sealed_by=module)
+        basis = verdict.basis
+        if not verdict.permitted:
+            threshold = None
+            status = None
+    return _row(
+        f"{module}:{scenario_code}:{result.metric_code}",
+        f"{result.metric_code} under '{scenario_code}' ({module})",
+        result.metric_value,
+        unit=result.unit,
+        threshold=threshold,
+        status=status,
+        compliance_basis=basis,
+        module=module,
+        scenario_code=scenario_code,
+    )
 
 
 def _stress_ratio_evolution(capital_runs: dict[str, RegulatoryRun]) -> list[dict[str, Any]]:
@@ -1708,7 +2225,9 @@ def _stress_recommended_actions(
 ) -> list[dict[str, Any]]:
     """Deterministic remedial actions: the capital engine's own fired triggers
     (which carry prescribed action text) plus a funding-remediation line for
-    every liquidity ratio the stored classification marked amber/red."""
+    every liquidity ratio whose PRINTED classification is amber/red. A row whose
+    verdict the pack withheld carries no classification and produces no action —
+    see :func:`_stress_traffic_lights`."""
     rows: list[dict[str, Any]] = []
     for scenario_code, run in sorted(capital_runs.items()):
         if scenario_code == BASELINE_SCENARIO:
@@ -1729,6 +2248,13 @@ def _stress_recommended_actions(
             )
     for light in traffic_rows:
         if light["module"] != MODULE_LIQUIDITY or light["status"] == "green":
+            continue
+        # A remedial action is a consequence of a classification, so it may only
+        # follow one the pack was authorised to print. A row whose verdict was
+        # withheld carries no status, and must not acquire one here by the back
+        # door — "restore X above the regulatory minimum" asserts the same
+        # unauthorised minimum in prose.
+        if not _classified(light):
             continue
         if light["scenario_code"] == BASELINE_SCENARIO:
             continue
@@ -1837,25 +2363,29 @@ def _generate_stress_pack(
     traffic_rows = _stress_traffic_lights(db, scenario_runs)
     evolution_rows = _stress_ratio_evolution(capital_runs)
     pro_forma_rows = _stress_pro_forma(capital_runs)
-    attribution_rows = _stress_attribution(
-        liquidity_runs, capital_runs, liq_baseline, cap_baseline
-    )
+    attribution_rows = _stress_attribution(liquidity_runs, capital_runs, liq_baseline, cap_baseline)
     frontier_rows = _stress_frontier_rows(reverse_run) if reverse_run is not None else []
     action_rows = _stress_recommended_actions(capital_runs, traffic_rows)
 
     sections = [
         _section("traffic_lights", "Stress Outcome Traffic Lights", traffic_rows),
         _section(
-            "ratio_evolution", "Capital Ratio Evolution Under Stress", evolution_rows,
+            "ratio_evolution",
+            "Capital Ratio Evolution Under Stress",
+            evolution_rows,
             optional=True,
         ),
         _section(
-            "pro_forma_capital", "Pro-Forma Capital Position (Stress End-State)",
-            pro_forma_rows, optional=True,
+            "pro_forma_capital",
+            "Pro-Forma Capital Position (Stress End-State)",
+            pro_forma_rows,
+            optional=True,
         ),
         _section("attribution", "Scenario Attribution vs Baseline", attribution_rows),
         _section(
-            "reverse_stress_frontier", "Reverse-Stress Frontier", frontier_rows,
+            "reverse_stress_frontier",
+            "Reverse-Stress Frontier",
+            frontier_rows,
             optional=True,
         ),
         _section("recommended_actions", "Recommended Actions", action_rows, optional=True),
@@ -1938,9 +2468,11 @@ _GENERATORS = {
     "liquidity": _generate_liquidity,
     "capital": _generate_capital,
     "irrbb": _generate_irrbb,
+    "sdi_irrbb": _generate_sdi_irrbb,
     "fx": _generate_fx,
     "icaap_stress": _generate_icaap_stress,
     "icaap_stress_appendix2": _generate_icaap_stress_appendix2,
+    "sdi_stress_annual": _generate_sdi_stress_annual,
     "stress_pack": _generate_stress_pack,
     "template_pending": _generate_template_pending,
     **LRT_GENERATORS,

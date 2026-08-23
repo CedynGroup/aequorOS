@@ -1,0 +1,22 @@
+{
+  "//": "Node-runnable build of the pure fail-closed suites (lib/api/*.test.ts). The app itself is type-checked by tsconfig.json (noEmit); this config only emits the handful of dependency-free modules the tests exercise. Output goes to .test-out/ and is deleted by the `test` script.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+    "rootDir": ".",
+    "outDir": ".test-out",
+    "types": ["node"]
+  },
+  "include": [
+    "lib/api/values.ts",
+    "lib/api/values.test.ts",
+    "lib/api/fail-open-guard.test.ts",
+    "lib/outbound.ts",
+    "lib/outbound.test.ts",
+    "lib/ip-version.test.ts"
+  ]
+}

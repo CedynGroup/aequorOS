@@ -20,10 +20,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin, utc_now
+from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin
 
 # Catalog of desk-published datasets (machine ids).
 DESK_DATASET_CODES: tuple[str, ...] = (
@@ -65,9 +64,14 @@ def _values(values: tuple[str, ...]) -> str:
 class MarketDataEntitlement(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     """One effective-dated grant of one dataset (or expanded tier row) to an org.
 
-    Global table (not RLS-forced): operators manage grants across tenants;
-    tenant sessions never write here. Reads for publish/view filter by
-    organization_id.
+    TENANT data, and FORCE row-level secured since migration ``202608230036``:
+    a grant is a commercial fact about one bank, and the read path
+    (``market_desk.entitlements.active_datasets``) grandfathers an org with no
+    VISIBLE rows to the standard tier, so a leak in either direction changes
+    what a tenant can see. Operators manage grants across tenants on the
+    cross-tenant BYPASSRLS session (gated on a Tenant Inspector session and
+    audited — ``app/operator/features/desk.py``); tenant sessions never write
+    here. Every read filters by ``organization_id`` explicitly, RLS or not.
     """
 
     __tablename__ = "market_data_entitlements"

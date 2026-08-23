@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import (
+    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     CanonicalFxRate,
+    CanonicalGlAccount,
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
     IngestionBatch,
@@ -22,7 +24,16 @@ from app.models import (
 )
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
-from app.services.fact_derivation import DerivationError, DerivationResult, derive_facts
+from app.services.fact_derivation import (
+    DerivationError,
+    DerivationResult,
+    _Canonical,
+    _central_bank_names,
+    _CentralBankNames,
+    _classify_gl_assets,
+    _GlCoverage,
+    derive_facts,
+)
 from app.services.regulatory_capital import run_all_capital_scenarios
 from app.services.regulatory_liquidity import run_all_liquidity_scenarios
 from tests.api.helpers import ORG_1, USER_1
@@ -116,8 +127,14 @@ def test_derivation_creates_every_group_with_plausible_aggregates(  # noqa: PLR0
     #               overlay);
     #   cashflow  — the trailing-90-day actual cash-flow summary reads canonical
     #               ``historical_cashflows`` reference rows (ETL-only), which
-    #               the fixture never ingests.
-    assert set(skipped) == {"fx_hedge", "irr_swap", "cashflow"}
+    #               the fixture never ingests;
+    #   crm_collateral — no LOAN carries the crm_collateral_*/crm_guarantee_*
+    #               attributes, so no credit-risk mitigation is recognised. This
+    #               entry is NEW (enterprise audit 2026-08-20): the empty case
+    #               used to append no group at all, so "no CRM was recognised"
+    #               and "CRM was not applicable" were indistinguishable. No fact
+    #               value changes — only the visibility of the absence.
+    assert set(skipped) == {"fx_hedge", "irr_swap", "cashflow", "crm_collateral"}
     assert all(group.note for group in skipped.values())
 
     facts = _facts(db_session, result)
@@ -586,3 +603,133 @@ def test_legacy_reference_path_without_canonical_market_data(db_session: Session
     history = grouped["fx_return_history"]["USD"]
     assert "fx_rates_historical" in history.attributes["derived_from"]
     assert len(history.attributes["returns"]) == 149
+
+
+# ---------------------------------------------------------------------------
+# NEW-40: central-bank balances are identified from the jurisdiction registry
+# ---------------------------------------------------------------------------
+#
+# The classifier used to test for the literal token ``"bog"`` in the account
+# name. The SDI's chart spells its central bank out — ``GL-1020 "Balances with
+# Bank of Ghana"`` — so 44.7m of settlement money fell through to
+# ``other_assets`` and never reached high-quality liquid assets. A literal is
+# also the wrong shape: it can never match a Nigerian or Kenyan tenant naming
+# its own central bank.
+
+
+def _gl(code: str, name: str, balance: str, account_class: str = "ASSET") -> CanonicalGlAccount:
+    return CanonicalGlAccount(
+        account_code=code, name=name, account_class=account_class, balance=Decimal(balance)
+    )
+
+
+def _gl_canonical(
+    accounts: list[CanonicalGlAccount], names: _CentralBankNames
+) -> _Canonical:
+    return _Canonical(
+        as_of=FIXTURE_AS_OF,
+        base_currency="GHS",
+        positions=[],
+        gl_accounts=accounts,
+        refs={},
+        central_bank_names=names,
+    )
+
+
+def _classify(
+    accounts: list[CanonicalGlAccount],
+    names: _CentralBankNames,
+    coverage: _GlCoverage | None = None,
+) -> tuple[dict[str, Decimal], Decimal]:
+    return _classify_gl_assets(
+        _gl_canonical(accounts, names),
+        coverage or _GlCoverage(False, False, False, False, False),
+        [],
+    )
+
+
+def test_central_bank_balance_named_in_full_is_not_other_assets(db_session: Session) -> None:
+    """The exact primary-database defect: ``GL-1020 Balances with Bank of Ghana``."""
+    names = _CentralBankNames.from_registry("Bank of Ghana", "BoG")
+    cash, other = _classify(
+        [
+            _gl("GL-1010", "Cash on hand (vault)", "20187020.89"),
+            _gl("GL-1020", "Balances with Bank of Ghana", "44696174.83"),
+            _gl("GL-1900", "Other assets", "51485014.07"),
+        ],
+        names,
+    )
+    assert cash["bog_excess_reserves"] == Decimal("44696174.83")
+    assert other == Decimal("51485014.07")
+
+
+def test_the_central_bank_test_is_the_bank_s_own_registry_row_not_a_country(
+    db_session: Session,
+) -> None:
+    """A Nigerian tenant's chart names the Central Bank of Nigeria; a Kenyan
+    tenant's names the Central Bank of Kenya. Neither contains ``bog``."""
+    nigeria = _CentralBankNames.from_registry("Central Bank of Nigeria", "CBN")
+    cash, other = _classify(
+        [_gl("A/1", "Balances with Central Bank of Nigeria", "1000")], nigeria
+    )
+    assert cash["bog_excess_reserves"] == Decimal("1000")
+    assert other == Decimal("0")
+
+    # A registry row with no generic "central bank" phrase at all still resolves.
+    south_africa = _CentralBankNames.from_registry("South African Reserve Bank", "SARB")
+    cash, _ = _classify([_gl("A/1", "Deposits at South African Reserve Bank", "500")], south_africa)
+    assert cash["bog_excess_reserves"] == Decimal("500")
+
+
+def test_sovereign_paper_is_never_swept_into_the_central_bank_line(
+    db_session: Session,
+) -> None:
+    """The country name is deliberately NOT a central-bank token: government
+    paper is an issuer, not a settlement balance. Central-bank BILLS are
+    securities too — the ``bill`` guard survives."""
+    names = _CentralBankNames.from_registry("Bank of Ghana", "BoG")
+    coverage = _GlCoverage(
+        securities=True,
+        loans=False,
+        interbank_placements=False,
+        deposits=False,
+        interbank_borrowings=False,
+    )
+    cash, other = _classify(
+        [
+            _gl("1204", "Government of Ghana Bonds (2y)", "6000000"),
+            _gl("1210", "Bank of Ghana bills (56d)", "3000000"),
+        ],
+        names,
+        coverage,
+    )
+    assert cash["bog_excess_reserves"] == Decimal("0")
+    # Both are covered by the SECURITY_HOLDING sub-ledger, so neither is a residual.
+    assert other == Decimal("0")
+
+
+def test_the_short_regulator_form_matches_a_word_not_a_substring(
+    db_session: Session,
+) -> None:
+    """``BoG`` is three letters. Matching it as a substring would classify any
+    account whose name happens to contain those letters."""
+    names = _CentralBankNames.from_registry("Bank of Ghana", "BoG")
+    assert names.matches("balances with bog") is True
+    assert names.matches("bog - settlement account") is True
+    assert names.matches("bogota branch receivable") is False
+
+
+def test_registry_supplies_the_names_and_the_country_is_not_among_them(
+    db_session: Session,
+) -> None:
+    """Resolution is from the bank's own jurisdiction row — no country literal."""
+    materialize_canonical_test_book(db_session)
+    db_session.flush()
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    names = _central_bank_names(db_session, bank)
+    assert names.full == ("bank of ghana",)
+    assert names.short == ("bog",)
+    # The country name would match "Government of Ghana ..." and must not be used.
+    assert "ghana" not in names.short
+    assert names.matches("government of ghana bonds (2y)") is False

@@ -28,6 +28,7 @@ from app.models import (
     DeskSourceCapture,
 )
 from app.operator.deps import Operator, OperatorDb, record_operator_action
+from app.operator.inspection import require_active_inspection
 from app.schemas.market_desk import (
     DeskCaptureContentView,
     DeskCaptureListRead,
@@ -40,6 +41,7 @@ from app.schemas.market_desk import (
     DeskEntitlementGrantTier,
     DeskEntitlementListRead,
     DeskEntitlementRead,
+    DeskEntitlementRevoke,
     DeskMethodologyApprove,
     DeskMethodologyCreate,
     DeskMethodologyListRead,
@@ -64,6 +66,7 @@ from app.services.market_desk import (
     register,
     snippets,
 )
+from app.services.public_ids import normalize_public_id
 
 router = APIRouter(prefix="/desk", tags=["operator-desk"])
 
@@ -268,7 +271,7 @@ def approve_methodology_version(
 
 
 @router.get("/observations", response_model=DeskObservationListRead)
-def list_observations(
+def list_observations(  # noqa: PLR0913 - FastAPI query parameters, one per filter
     db: OperatorDb,
     _operator: Operator,
     series_code: str | None = None,
@@ -371,6 +374,24 @@ def get_capture_snippet(
 
 
 # -- entitlements (spec §10) ------------------------------------------------------------
+#
+# An entitlement is TENANT state — which desk datasets one bank receives — so
+# every route below passes the Tenant Inspector gate for the named organization
+# and writes an ``operator_audit_log`` row carrying ``target_org``, exactly like
+# ``GET /operator/v1/tenants/{org}/entitlements`` and every ``inspector.fix.*``
+# write. Until 2026-08-23 they did neither (audit finding D-26): the org came
+# from the client, the gate was the base ``Operator`` dependency (which admits
+# the lowest ``developer`` tier), the read left NO audit row at all, and
+# omitting ``organization_id`` dumped every tenant's grants in one response.
+#
+# Two facts make an ungated mutation here worse than it looks. Migration
+# ``202608230036`` put ``market_data_entitlements`` under FORCE row-level
+# security — it is now a tenant-isolated table, so writing one from an
+# unaudited path crosses an isolation boundary. And the read path
+# (``market_desk.entitlements.active_datasets``) GRANDFATHERS an org with no
+# visible rows to the standard tier, so a leak in either direction changes what
+# a tenant can see: revoking the wrong org's rows silently upgrades it to
+# standard rather than cutting it off.
 
 
 def _entitlement_read(row: Any) -> DeskEntitlementRead:
@@ -393,13 +414,27 @@ def _entitlement_read(row: Any) -> DeskEntitlementRead:
 @router.get("/entitlements", response_model=DeskEntitlementListRead)
 def list_entitlements(
     db: OperatorDb,
-    _operator: Operator,
-    organization_id: str | None = None,
+    operator: Operator,
+    organization_id: str,
     include_revoked: bool = False,
 ) -> DeskEntitlementListRead:
+    """One tenant's desk dataset grants plus the catalog. ``organization_id``
+    is REQUIRED — the unfiltered form dumped every tenant's commercial terms in
+    a single unaudited response. Requires an active Tenant Inspector session
+    (403 otherwise); the read is audited."""
+    org_id = normalize_public_id(organization_id)
+    session = require_active_inspection(db, operator, org_id)
     rows = entitlements.list_entitlements(
-        db, organization_id=organization_id, include_revoked=include_revoked
+        db, organization_id=org_id, include_revoked=include_revoked
     )
+    record_operator_action(
+        db,
+        operator,
+        action="inspector.read.entitlements",
+        target_org=org_id,
+        detail={"session_id": str(session.id), "include_revoked": include_revoked},
+    )
+    db.commit()
     return DeskEntitlementListRead(
         entitlements=[_entitlement_read(r) for r in rows],
         total=len(rows),
@@ -411,9 +446,13 @@ def list_entitlements(
 def grant_entitlement_tier(
     payload: DeskEntitlementGrantTier, db: OperatorDb, operator: Operator
 ) -> DeskEntitlementListRead:
+    """Grant a whole tier (core / standard / premium) to one tenant.
+    Session-gated + audited as ``inspector.entitlement.grant_tier``."""
+    org_id = normalize_public_id(payload.organization_id)
+    session = require_active_inspection(db, operator, org_id)
     rows = entitlements.grant_tier(
         db,
-        organization_id=payload.organization_id,
+        organization_id=org_id,
         tier=payload.tier,
         effective_from=payload.effective_from,
         granted_by=operator.email,
@@ -422,15 +461,17 @@ def grant_entitlement_tier(
     record_operator_action(
         db,
         operator,
-        action="desk.entitlement.grant_tier",
+        action="inspector.entitlement.grant_tier",
+        target_org=org_id,
         detail={
-            "organization_id": payload.organization_id,
+            "session_id": str(session.id),
             "tier": payload.tier,
+            "effective_from": payload.effective_from.isoformat(),
             "datasets": [r.dataset_code for r in rows],
         },
     )
     db.commit()
-    all_rows = entitlements.list_entitlements(db, organization_id=payload.organization_id)
+    all_rows = entitlements.list_entitlements(db, organization_id=org_id)
     return DeskEntitlementListRead(
         entitlements=[_entitlement_read(r) for r in all_rows],
         total=len(all_rows),
@@ -442,9 +483,13 @@ def grant_entitlement_tier(
 def grant_entitlement_dataset(
     payload: DeskEntitlementGrantDataset, db: OperatorDb, operator: Operator
 ) -> DeskEntitlementRead:
+    """Grant a single dataset override to one tenant.
+    Session-gated + audited as ``inspector.entitlement.grant_dataset``."""
+    org_id = normalize_public_id(payload.organization_id)
+    session = require_active_inspection(db, operator, org_id)
     row = entitlements.grant_dataset(
         db,
-        organization_id=payload.organization_id,
+        organization_id=org_id,
         dataset_code=payload.dataset_code,
         effective_from=payload.effective_from,
         granted_by=operator.email,
@@ -453,10 +498,12 @@ def grant_entitlement_dataset(
     record_operator_action(
         db,
         operator,
-        action="desk.entitlement.grant_dataset",
+        action="inspector.entitlement.grant_dataset",
+        target_org=org_id,
         detail={
-            "organization_id": payload.organization_id,
+            "session_id": str(session.id),
             "dataset_code": payload.dataset_code,
+            "effective_from": payload.effective_from.isoformat(),
         },
     )
     db.commit()
@@ -465,14 +512,30 @@ def grant_entitlement_dataset(
 
 @router.post("/entitlements/{entitlement_id}/revoke", response_model=DeskEntitlementRead)
 def revoke_entitlement(
-    entitlement_id: UUID, db: OperatorDb, operator: Operator
+    entitlement_id: UUID,
+    payload: DeskEntitlementRevoke,
+    db: OperatorDb,
+    operator: Operator,
 ) -> DeskEntitlementRead:
-    row = entitlements.revoke(db, entitlement_id, revoked_by=operator.email)
+    """End-date one tenant's grant. The body names the organization so the call
+    can be gated and audited against it; a grant belonging to another tenant is
+    a 404, never a silent cross-tenant revoke. Session-gated + audited as
+    ``inspector.entitlement.revoke``."""
+    org_id = normalize_public_id(payload.organization_id)
+    session = require_active_inspection(db, operator, org_id)
+    row = entitlements.revoke(
+        db, entitlement_id, organization_id=org_id, revoked_by=operator.email
+    )
     record_operator_action(
         db,
         operator,
-        action="desk.entitlement.revoke",
-        detail={"entitlement_id": str(row.id), "dataset_code": row.dataset_code},
+        action="inspector.entitlement.revoke",
+        target_org=org_id,
+        detail={
+            "session_id": str(session.id),
+            "entitlement_id": str(row.id),
+            "dataset_code": row.dataset_code,
+        },
     )
     db.commit()
     return _entitlement_read(row)

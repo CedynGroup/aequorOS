@@ -1,3 +1,14 @@
+"""Case solvency-pressure endpoints (advisory, never filed).
+
+Case-scoped routes over `app.services.capital`, which classifies unweighted
+equity-to-assets pressure from a case forecast. These are not regulatory
+capital ratios — Basel CAR/CET1/Tier 1 live under `/banks/{bank_id}/capital`
+and an SDI's s.29 CAR under `/banks/{bank_id}/sdi/capital-summary`. The route
+paths keep the historical `capital-projections` spelling because they are a
+wire contract; the figures they return are labelled solvency pressure. See
+`app.services.case_plane`.
+"""
+
 from __future__ import annotations
 
 from typing import Annotated

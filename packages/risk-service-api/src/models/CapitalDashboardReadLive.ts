@@ -133,6 +133,7 @@ export interface CapitalDashboardReadLive {
  */
 export const CapitalDashboardReadLivePipelineStateEnum = {
   Ready: "ready",
+  Blocked: "blocked",
   Failed: "failed",
 } as const;
 export type CapitalDashboardReadLivePipelineStateEnum =

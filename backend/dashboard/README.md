@@ -1,268 +1,292 @@
-# AequorOS Demo Prototype
+# AequorOS Dashboard
 
-An interactive click-through prototype of the AequorOS Treasury and ALM platform,
-built per the AequorOS Figma Design Brief. Used for investor presentations and
-bank treasurer validation interviews.
+The authenticated bank product UI (Next.js App Router). Every figure on every
+screen comes from the risk-service API through the generated
+`@aequoros/risk-service-api` client — there is no hardcoded financial data in
+this package, and no demo fixture module.
 
-**Target deployment:** `bank.aequoros.com` (authenticated product). Public product
-UI for marketing/compliance is shown on `aequoros.com/product` — there is no
-separate `demo.aequoros.com` marketing domain.
+**Target deployment:** `bank.aequoros.com`. Public, unauthenticated product
+proof lives on the marketing site at `aequoros.com/product#product-ui` as static
+UI captures. Do not reintroduce a `demo.aequoros.com` subdomain — it redirected
+to login and failed external compliance filters.
 
 ---
 
-## Scope — what's built
+## Scope
 
-All four phases of the original plan are now in. The current App Router tree
-contains **61 page entries**, including authenticated, login, and dynamic-detail
-routes.
+79 App Router page entries across the authenticated shell, login, the inspector,
+and dynamic detail routes. The route groups under `app/(app)/`:
 
-### Login + Overview
-- `/login` — branded sign-in screen with Equilibrium Mark, "Treasury Reimagined"
-- `/` — Overview Dashboard: bank profile bar, 4 cross-module KPIs (CAR, LCR,
-  NSFR, FX NOP), AI insights, BoG filing deadlines, activity feed
+| Area | Routes | What it reads |
+|---|---|---|
+| Overview | `/` | cross-module KPIs, live-engine freshness, filing calendar |
+| Liquidity | `/liquidity/*` | LCR, NSFR, monitoring tools, stress, EWI, CFP, submission preview |
+| Basel capital | `/basel/*` | RWA, capital structure, CAR, capital stress |
+| Interest-rate risk | `/irr/*` | repricing gap, EVE/EaR sensitivity, limits, positions |
+| FX | `/fx/*` | net open position, VaR, hedges |
+| FTP | `/ftp/*` | transfer curve, product and branch profitability, rates |
+| Forecasting | `/forecasting/*` | multi-year projection, scenario, optimizer, what-if |
+| Behavioral | `/behavioral` | per-tenant NMD duration, prepayment, deposit stability |
+| Markets | `/markets/*` | published curves, indices, desk determinations |
+| Positions | `/positions/*` | canonical book and record-level lineage |
+| Data Engine | `/data-engine/*` | Excel/CSV, API push, database-direct, T24, market data |
+| Submissions | `/submissions/*` | return generation, validation, certification, approvals, artifacts |
+| Institution | `/institution/*` | profile, board registers, governance |
+| Risk / Alerts | `/risk`, `/alerts` | limit wall, findings, pipeline alerts |
+| Reports | `/reports/*` | ALCO, board pack, ICAAP stress pack, comparisons |
+| Settings | `/settings/*` | profile, authentication (SSO), signing policy, integration keys |
 
-### Module 01 — Interest Rate Risk (4 screens)
-- `/irr` — Dashboard: NII at risk, EVE sensitivity, asset duration, gap analysis chart
-- `/irr/scenarios` — 5 Basel/BoG IRRBB shocks with NII + EVE impact tables and bar charts
-- `/irr/positions` — IRS portfolio with MTM, hedge effectiveness, all 5 contracts
-- `/irr/hedging` — 3 Deep RL hedge recommendations with rationale, expected impact, confidence
+`app/inspect` is the tenant inspector; `app/api/*` holds the server-only route
+handlers for attestation step-up, auth, and impersonation cookies.
 
-### Module 02 — Liquidity Risk (5 screens, priority module)
-- `/liquidity` — LCR ratio gauge with threshold + buffer, 12-month trend, HQLA stack,
-  full outflow/inflow tables with Basel runoff weights, watch-item callout
-- `/liquidity/nsfr` — NSFR gauge, ASF/RSF tables with Basel III §50/§52 factors
-- `/liquidity/forecast` — interactive 30/60/90-day toggle, LSTM forecast with 95% CI,
-  static behavioral overlay toggle, MAPE/RMSE comparison, AI recommendation
-- `/liquidity/stress` — 3 Basel III/BoG ILAAP scenarios with breach analysis at Day +22
-- `/liquidity/submission` — BoG BSD/2/2024 LCR Return formatted as a real regulatory
-  document, validation banner, certification line, audit trail
+### What is deliberately NOT here
 
-### Module 03 — FX Risk (4 screens)
-- `/fx` — exposure gauge (4.78% of capital vs 5% BoG limit), VaR/ES, 5 currency
-  position cards (USD, EUR, GBP, NGN, XOF), full breakdown table
-- `/fx/scenarios` — 3 cedi depreciation scenarios (5%, 10%, 20%) with P&L impact
-- `/fx/prediction` — ML ensemble (XGBoost+LSTM) 90d forecast vs forward implied,
-  with confidence band; model accuracy comparison; AI restructure recommendation
-- `/fx/hedging` — full hedge book table, expiring-in-30-days view, hedge ratio metrics
+- **No mock data layer.** There is no `lib/data/` module. If a screen has
+  nothing to show, it renders an empty or "not computable" state rather than a
+  placeholder number — see `lib/api/values.ts` (`numOrNull`) and
+  `lib/api/fail-open-guard.test.ts`, which fails the build if a hardcoded
+  regulatory floor or a zero-on-absence ratio is reintroduced.
+- **No second authority for a backend figure.** The browser may format, sum and
+  divide what the API returns; it may not decide a number the engines own. See
+  "Client-side arithmetic" below for the line between the two.
+- **No ML the backend does not have.** The only machine-learning surfaces are
+  the cash-flow LSTM (`backend/app/ml`) and the per-tenant behavioral GBMs.
+  There is no reinforcement-learning optimizer and no gradient-boosting FX
+  ensemble; the forecasting optimizer is a deterministic grid search and the
+  balance-sheet forecast is deterministic arithmetic.
+- **No filing.** The product generates, validates, certifies and exports
+  returns. Transmission to the Bank of Ghana (ORASS) is not implemented — see
+  `docs/audit/15_known_limitations.md`.
 
-### Module 04 — Basel Capital (5 screens)
-- `/basel` — CAR ratio gauge (14.20%), Tier 1/Tier 2 cards, 12-month trend, RWA donut,
-  buffer status grid (BoG min, conservation, countercyclical, D-SIB)
-- `/basel/rwa` — RWA donut + detailed breakdown by sub-category with capital requirements
-- `/basel/structure` — CET1 / AT1 / Tier 2 build-ups with regulatory deductions
-- `/basel/stress` — 3 ICAAP scenarios with 12-month CAR projections, capital action plan
-- `/basel/submissions` — BoG, CBN, SARB, CBK templates with multi-jurisdiction reference
+### Regulatory attribution rules for copy in this package
 
-### Module 05 — Funds Transfer Pricing (4 screens)
-- `/ftp` — yield curve chart (4 curves: BoG/market, deposit, lending, FTP), full curve table
-- `/ftp/branches` — 18-branch P&L ranking with FTP-adjusted NIM, regional breakdown
-- `/ftp/products` — asset and liability product profitability with match-funded spreads
-- `/ftp/rates` — active FTP rate table with bps changes vs prior, 12-month rate history
+These are correctness rules, not style preferences. The evidence is
+`backend/docs/bog_parameter_sources.md`.
 
-### Module 06 — Balance Sheet Forecasting (4 screens)
-- `/forecasting` — 12/24/36-month asset projection chart, strategic assumption variance,
-  capital adequacy projection
-- `/forecasting/scenario` — **interactive scenario builder** with horizon toggle and live
-  asset growth + NIM multiplier sliders that update the projection chart
-- `/forecasting/optimizer` — 4 Reinforcement Learning recommendations with rationale,
-  expected impact, confidence; SR 11-7 model governance footer
-- `/forecasting/whatif` — 6 macro shock scenarios (rate shock, cedi -20%, NPL spike,
-  MPR cut, BoG severe combined) with full balance sheet impact
+- **CAR** floors are Bank of Ghana (CRD ¶71 minimum plus the ¶75 capital-
+  conservation buffer; 13% today). Labelling them `${regShort()} minimum` is
+  correct — but only ever as a label on a resolved number. The figure has moved
+  four times since 2020 and the ¶71 minimum alone (10%) is **not** the bar a
+  bank is measured against, so a `10` written into display code understates it
+  while looking authoritative. It is tenant data, never a literal: see rule 1
+  under "Client-side arithmetic".
+- **LCR and NSFR** are **Basel** standards. The Bank of Ghana has published no
+  LCR requirement and nothing at all on NSFR, so any 100% threshold, run-off
+  rate, inflow rate or inflow cap in use is a BCBS 238 default. Label these
+  "Basel minimum" — never `${regShort()} minimum`, and never "CRD" (the CRD is
+  the *Capital* Requirements Directive and contains none of them).
+- **CET1, Tier 1 and the leverage ratio** are Bank of Ghana CRD requirements —
+  6.5% (¶73(a)), 8.0% (¶73(b)) and 6% (¶90), all VERIFIED with locators. The
+  Tier 1 8% coincides numerically with Basel's *total capital* minimum; that is
+  a coincidence, and the 8% a bank is shown is BoG's Tier 1 figure, not the
+  Basel one. **But do not label these `${regShort()} minimum` on screen.** The
+  control plane seeds no governed row for any of the three (only `car_min`), so
+  the number on the payload is the institution's own board register value,
+  unclamped — the fixture ships `leverage_min = 3`, which is Basel III's figure
+  and *below* BoG's ¶90 6%. "Regulatory minimum" is the honest label until a
+  governed row exists to clamp against; see `15_known_limitations.md`.
+- **IRRBB** shocks are Basel (BCBS d368/d578). Ghana's IRRBB guideline is a
+  February 2026 exposure draft stated effective 1 January 2027.
+- **LMTD, LRMD, the stress-testing directive and the ICAAP guideline** are all
+  February 2026 **exposure drafts**. Copy must say "draft" / "not yet in force";
+  it must not call their minimums binding.
+- Jurisdiction is data: use `lib/format.ts` (`fmtCurrency`, `regShort()`,
+  `centralBankName()`), never a `'GHS'` / `'BoG'` literal in display code.
 
-### Cross-module
-- `/reports` — 8 cross-module reports (ALCO, ICAAP, board pack, capital plan, RRP)
-- `/submissions` — BoG filing calendar with multi-regulator support
-- `/settings` — bank profile, integrations status, governance, users & roles
-- `/settings/profile` — signed-in user's display name, job title, locale, IANA
-  timezone, generated initials avatar, and light/dark/system preference
+### Client-side arithmetic
 
-### Polish (Phase 4)
-- **Command palette (⌘K / Ctrl+K)** — opens from anywhere; arrow-key navigable;
-  searches all 28 module pages; Enter to navigate; Esc to close
-- **Notifications drawer** — 5 contextual alerts (filing review, LCR run, AI rec,
-  expiring FX hedge, BoG ack); slide-in from right; click to dismiss
-- **Mobile responsive** — sidebar collapses to drawer below 1024px; mobile menu
-  button + search button in header
-- **Loading skeletons** — `SkeletonLine`, `SkeletonCard`, `SkeletonTable`,
-  `SkeletonChart` ready for any async loading states
-- **Empty states** — reusable `EmptyState` component for zero-data views
-- **Fresh personal identity** — the header and profile page share the cached
-  `/auth/me` record, so edits appear immediately without waiting for JWT rotation
-- **Cross-browser appearance** — theme changes persist through `PATCH /auth/me`,
-  with local storage used for pre-paint boot and system preference as the fallback
+The master directive is that a metric has ONE authority. This package may do
+presentation arithmetic over API figures — format them, sum them, take a delta,
+divide two sums for a chart. It may not become a second authority for a figure an
+engine owns, and it may not invent a threshold.
+
+Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
+
+1. **A regulatory threshold is resolved, never written down.** Read the floor
+   from the payload — the run's §59(f) coupling, `buffers.car_min_pct`, or the
+   SDI s.29 summary — and compare with `assessAgainstFloor`. A floor that does
+   not resolve is `assessed: false`: render "not assessed", draw no reference
+   line, claim neither a breach nor a pass. `numOrNull` + `assessAgainstFloor` +
+   `floorStatus` + `fmtFloorPct` in `lib/api/values.ts` are the only mechanism;
+   do not add a parallel one. The one sanctioned literal is the Basel 100%
+   LCR/NSFR reference, which must be labelled "Basel minimum" (see the
+   attribution rules above) — never a CAR floor, which is tenant data.
+
+   **The guard has two spellings to police, and so do you (NEW-51).** The wire
+   is snake_case (`car_min_pct`) but almost everything in this package consumes
+   the *generated* client, which maps every field to camelCase
+   (`json["car_min_pct"] → carMinPct`). The P0-19 rule originally matched only
+   the snake_case half, so `num(data?.buffers.carMinPct ?? '10')` sat on the
+   Basel overview and the capital planner through the whole remediation
+   programme while the suite reported the regulatory UI clean. The rule now
+   covers both, plus the no-suffix shape an "assumed minimum" takes
+   (`tier1Min ?? 8`) — because an assumed floor still places the breach zone,
+   colours the bar and prints a headroom figure against a number nobody set.
+   When you touch a threshold, check the field name you actually wrote against
+   the rule, not the field name in the OpenAPI schema.
+
+   There is also no "harmless" version of this: the negative control that
+   proves the rule uses `?? '13'`, the *correct* Ghanaian figure today, and it
+   must still fail. What is wrong is the writing-down — a literal cannot track
+   a floor that changes, and it cannot know which tenant it is rendering.
+
+   A floor that legitimately has no source is stated as absent. Never
+   substitute a plausible ladder: `10 / 10.5 / 9` looked like a supervisory
+   ladder and only the first corresponded to anything published at all.
+
+   `components/basel/FloorNotAssessed.tsx` is the display half of
+   `assessed: false` for a limit row. `LimitBar` cannot express "no floor" — it
+   needs a number to place the zones and the headroom readout — so branch to
+   `FloorNotAssessed` rather than feeding it a stand-in. Charts take
+   `number | null` for their floor props and omit the reference line.
+
+   **A floor has ONE authority, and every panel on the page reads it (NEW-53).**
+   Resolving the floor correctly in one place is not enough: a page typically
+   states the same comparison three times — a KPI status edge, a limit row, and
+   a validation rule — and each must derive from the same resolved number, so
+   they cannot disagree. The authority is the **governed parameter set on the
+   module payload** (`buffers.*MinPct`, the SDI s.29 summary, the run's §59(f)
+   coupling), which the backend resolves from the institution's register,
+   clamped tighten-only against the control plane, and refuses with 409
+   `missing_parameter` rather than guessing.
+
+   **A stored run's `threshold_min` is NOT that authority.** It records what
+   was applied when that run executed — evidence about a filing, not the
+   requirement in force. Critically, it is absent for every bank before its
+   first official run, and "no run" is not "no floor". `/basel` read
+   `runMetricThreshold(run, …)` for Tier 1, CET1 and leverage and so rendered,
+   on one screen: a green Tier 1 KPI, "This run carries no Tier 1 minimum ·
+   NOT ASSESSED", and "PASS — at or above the 8% regulatory minimum". The
+   `NEW-53` rule in `fail-open-guard.test.ts` now fails any call to that helper
+   inside the regulatory UI; a genuine "what did this run apply" surface adds
+   itself to that rule's `allow` map with its reason.
+
+   The corollary is that **`assessed: false` must propagate to every panel, not
+   just the limit row.** The KPI takes `floorStatus` (never `ok`); the limit row
+   takes `FloorNotAssessed`; and a validation whose floor no longer resolves is
+   re-rendered as `assessed: false` on `ValidationItem` — a "Not assessed" pill,
+   never a stale pass. Do not resolve a disagreement by hiding a panel: the
+   point is that all three agree because all three read one number.
+2. **A ratio with no denominator is not zero.** Type it `number | null`, return
+   `null`, and render the absence. A guarded division falling back to `0`
+   produces a measurement nobody measured: it is indistinguishable on screen
+   from a real figure, it plots as a real point, and it compares below every
+   floor and above every zeroed floor.
+3. **A grouping the backend does not publish is presentational, and must say
+   so on screen.** `components/ftp/businessLines.ts` is the worked example: the
+   FTP engine prices products and reports branches but has no business-line
+   dimension, so the line-level margin has no engine figure behind it. It is
+   allowed because it is only summing and dividing engine outputs — and it is
+   labelled on the page (grouping rule, margin provenance, and a "view
+   aggregate" marker on every surface that carries it) so it cannot be read as
+   a priced or reportable FTP margin. If a client aggregate cannot be labelled
+   that way, it does not belong in this package.
 
 ---
 
 ## Stack
 
 - Next.js 14 (App Router) · TypeScript · Tailwind CSS
-- Recharts — all visualizations (LSTM forecast, gap analysis, donut, yield curve, FX rate, etc.)
+- TanStack Query over the generated OpenAPI client
+- Recharts for visualization
+- NextAuth for password and OIDC SSO sign-in
 - Inter (UI) + IBM Plex Mono (numerical data) via `next/font/google`
-- 61 App Router page entries
 
 ## Run locally
 
 ```bash
-npm install
-npm run dev
-# http://localhost:3001
+pnpm install
+pnpm --filter @aequoros/dashboard dev
+# http://localhost:3001  (marketing site runs on 3000)
 ```
 
-(Marketing site runs on 3000; dashboard runs on 3001 to allow side-by-side.)
+The backend API must be running (`cd backend && fastapi dev app/main.py --port 8003`).
+
+## Validate
+
+```bash
+pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
+pnpm --filter @aequoros/dashboard lint        # next lint
+pnpm --filter @aequoros/dashboard test        # pure-function suites
+pnpm --filter @aequoros/dashboard build       # next build
+pnpm --filter @aequoros/dashboard e2e         # Playwright (needs object storage)
+```
+
+Regenerate the API client after any backend contract change:
+`mise run risk-service:openapi-client`.
+
+## End-to-end (Playwright)
+
+`playwright.config.ts` boots a **disposable** stack: the FastAPI backend on a
+throwaway sqlite file (deleted and rebuilt every run) plus `next dev` on 3021,
+then `e2e/global-setup.ts` seeds through the API and mints per-role session
+cookies. It never touches the primary database.
+
+Three prerequisites are not obvious, and each one has already cost a long
+diagnosis:
+
+1. **Object storage.** `StorageBackend` is `Literal["s3"]` — there is no
+   filesystem mode — so validated packages need a reachable S3/MinIO endpoint.
+   Locally it arrives from the untracked `backend/.env` (`S3_ENDPOINT`,
+   `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`); a fresh clone, a git worktree
+   or CI has none. `global-setup.ts` refuses to start without it rather than
+   letting seven journeys time out one at a time.
+2. **Global reference registries.** `scripts/e2e_bootstrap.py` builds the schema
+   with `Base.metadata.create_all`, so **no migration runs** — jurisdictions,
+   the institution-type registry and the regulatory-parameter control plane are
+   all seeded by the bootstrap, from `tests/fixtures/reference_data.py` (the
+   same catalogues the migrations read, shared with the hermetic pytest suite).
+   Miss one and the stack boots and then fails on the first request that
+   resolves a regulatory regime: institution-type resolution is fail-closed by
+   design, so an empty registry yields a 409 naming a seed migration that a
+   `create_all` database never runs. Adding a new global registry means adding
+   it to `reference_data.py`, and nothing else.
+3. **The live fact plane.** Every Treasury/ALM cockpit reads
+   `current_financial_facts`, which in the product only the background worker
+   writes (`pipeline_refresh`), and the e2e stack runs no worker
+   (`RUN_INPROCESS_WORKER=0`; `POST /banks/{id}/refresh` merely enqueues a job).
+   The bootstrap therefore stands in for the refresh via
+   `tests/fixtures/live_plane.py`, mirroring the latest period's facts into the
+   live plane and running the product's own `pipeline.recompute_modules`.
+   Without it `/basel`, `/liquidity`, `/ftp/*`, `/irr/*` and `/fx/*` all open on
+   the "no computed data yet" envelope.
+
+```bash
+pnpm --filter @aequoros/dashboard e2e            # the journeys
+VISUAL_TOUR=1 npx playwright test visual-tour    # full-page screenshot of every
+                                                 # route -> e2e/.tmp/visual-tour/
+```
+
+The visual tour is not part of the gate: it exists so a design change can be
+reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
 
 ## Deploy to bank.aequoros.com
 
-Treat as a separate Vercel/Coolify project from the marketing site.
+Separate Vercel/Coolify project from the marketing site.
 
-1. Import the monorepo and set the root directory to `backend/dashboard`
-   (or the path your pack expects).
-2. Framework: Next.js. Build: `npm run build` (or the monorepo script you use).
-3. After deploy: bind **`bank.aequoros.com`** (not a separate demo subdomain).
-4. Authenticated clients use Client Login on the marketing site → this origin.
+1. Import the monorepo, root directory `backend/dashboard`.
+2. Framework: Next.js. Build: `next build`.
+3. Bind `bank.aequoros.com`.
+4. `NEXT_PUBLIC_LOGIN_URL` is a **build arg** inlined at compile time — changing
+   it needs a rebuild, not a restart.
 
-Do not reintroduce `demo.aequoros.com` as a public product proof path — it
-redirected to login and failed external compliance filters. Product proof for
-public reviewers lives on the marketing site with static UI captures.
+## Design system
 
-## Project structure
+Palette, typography scale, density rules and the traffic-light semantics are in
+`docs/DASHBOARD_DESIGN_SYSTEM.md` and `tailwind.config.ts`. Color is functional:
+green/amber/red map to regulatory thresholds, never to branding. Numerical cells
+are right-aligned with tabular numerals.
 
-```
-dashboard/
-├── app/
-│   ├── layout.tsx                  # Root: fonts, metadata
-│   ├── globals.css                 # Brief-aligned base styles
-│   ├── icon.svg                    # Equilibrium Mark favicon
-│   ├── login/page.tsx
-│   └── (app)/                      # Authenticated shell route group
-│       ├── layout.tsx              # AppShell (sidebar + header)
-│       ├── page.tsx                # Overview Dashboard
-│       ├── liquidity/              # Module 02 (5 screens)
-│       ├── irr/                    # Module 01 (4 screens)
-│       ├── fx/                     # Module 03 (4 screens)
-│       ├── basel/                  # Module 04 (5 screens)
-│       ├── ftp/                    # Module 05 (4 screens)
-│       ├── forecasting/            # Module 06 (4 screens)
-│       ├── reports/page.tsx
-│       ├── submissions/page.tsx
-│       └── settings/
-│           ├── page.tsx
-│           └── profile/page.tsx   # Personal profile & appearance preferences
-├── components/
-│   ├── profile/
-│   │   └── ProfileProvider.tsx    # Cached /auth/me reads and serialized updates
-│   ├── shell/
-│   │   ├── AppShell.tsx            # Mobile-aware shell wrapper
-│   │   ├── Sidebar.tsx             # Persistent left navigation
-│   │   ├── Header.tsx              # Top bar (search, ⌘K, as-of, user)
-│   │   ├── Logo.tsx                # Equilibrium Mark
-│   │   ├── ModuleTabs.tsx          # Per-module sub-navigation
-│   │   ├── CommandPalette.tsx      # ⌘K omni-search
-│   │   └── NotificationDrawer.tsx  # Right-side alerts panel
-│   ├── ui/
-│   │   ├── KPICard.tsx
-│   │   ├── RatioGauge.tsx
-│   │   ├── StatusPill.tsx
-│   │   ├── DataTable.tsx
-│   │   ├── Card.tsx
-│   │   ├── PageHeader.tsx
-│   │   ├── RecommendationCard.tsx
-│   │   ├── Sparkline.tsx
-│   │   ├── Skeleton.tsx
-│   │   ├── EmptyState.tsx
-│   │   └── ModulePlaceholder.tsx
-│   └── charts/
-│       ├── RatioHistoryChart.tsx
-│       ├── HQLAStackChart.tsx
-│       ├── CashFlowForecastChart.tsx
-│       ├── GapAnalysisChart.tsx
-│       ├── DonutChart.tsx
-│       ├── ScenarioImpactChart.tsx
-│       ├── FxRateChart.tsx
-│       ├── CapitalProjectionChart.tsx
-│       ├── YieldCurveChart.tsx
-│       ├── BalanceSheetProjectionChart.tsx
-│       └── StackedBar.tsx
-├── lib/
-│   ├── format.ts                   # GHS / pct / signed formatters
-│   └── data/
-│       ├── bank.ts                 # Sample Bank Limited profile
-│       ├── overview.ts             # Cross-module dashboard data
-│       ├── liquidity.ts            # LCR, NSFR, LSTM, stress, submission
-│       ├── irr.ts                  # Gap, scenarios, IRS portfolio, hedging recs
-│       ├── fx.ts                   # Positions, scenarios, ML forecast, hedges
-│       ├── basel.ts                # Capital, RWA, structure, stress, submissions
-│       ├── ftp.ts                  # Yield curve, branches, products, rates
-│       └── forecasting.ts          # Projection, RL recs, what-if scenarios
-├── tailwind.config.ts              # Brief palette + typography scale
-├── package.json
-└── tsconfig.json
-```
-
-## Design adherence
-
-This prototype follows the AequorOS Figma Design Brief exactly:
-
-- **Palette**: `#0A2540` Primary Navy, `#1A4D5C` Deep Teal, `#2D7FF9` Action
-  Blue, `#0E8A4F` / `#C97C00` / `#B3261E` regulatory traffic lights, `#5A6776`
-  Neutral Slate, `#F5F7FA` Light Surface, `#D0D7DE` Border Gray
-- **Typography**: Inter for UI, IBM Plex Mono for all numerical data; tabular
-  numerals enabled globally
-- **Information density**: tables hold 20+ rows comfortably; numerical cells
-  right-aligned and tabular-aligned
-- **Quiet aesthetics**: no gradients; only subtle elevation; minimal animation
-- **Color is functional**: green/amber/red mapped to regulatory thresholds, not
-  branding
-- **Equilibrium Mark logo**: triangle resting on a horizontal line — the brief's
-  spec — used in sidebar, login, and favicon
-
-## Synthetic data — Sample Bank Limited
-
-Mid-tier Ghanaian universal bank, BoG-licensed. All figures anchored to the brief:
-
-- GHS 2.4B total assets · GHS 1.9B deposits · GHS 1.4B loans
-- LCR 142.0% · NSFR 118.0% · CAR 14.20%
-- 18 branches · 85,000 customers · founded 2005
-- HQLA: Level 1 65% / Level 2A 25% / Level 2B 10%
-- 30-day net cash outflow: GHS 180M
-- IRS portfolio: 5 contracts (4 GHS + 1 USD), GHS 211M total notional
-- FX exposure: 5 currencies, USD long 8M, EUR/GBP short, NOP 4.78% of capital
-
-## Demo flow (suggested for investor / bank exec)
-
-The full demo script is below. Each step takes 30-60 seconds.
-
-1. **`/login`** — sets the visual tone. "Treasury Reimagined" tagline, BoG
-   licensee context.
-2. **`/`** — Overview Dashboard. Cross-module CRO/CFO view. AI insights show
-   the platform isn't just dashboards.
-3. **Press ⌘K** — show the command palette. Search for "stress" — instantly find
-   3 stress test screens across modules.
-4. **`/liquidity`** — the headline screen. LCR 142% gauge, full BoG outflow
-   table, watch-item callout shows institutional thinking.
-5. **`/liquidity/forecast`** — toggle 30 → 60 → 90 days. Toggle static overlay
-   off and on to show the LSTM advantage. AI recommendation card.
-6. **`/liquidity/stress`** — show the combined-stress breach at Day +22. Real
-   risk management.
-7. **`/liquidity/submission`** — show the BoG BSD/2/2024 LCR Return ready to
-   file. This is what banks actually need.
-8. **`/irr`** — gap analysis with positive/negative bars. Cumulative gap line.
-9. **`/irr/hedging`** — 3 Deep RL recommendations. Show that AI integrates with
-   workflow (accept / modify / reject).
-10. **`/fx`** — 4.78% NOP gauge approaching 5% BoG limit. Currency position
-    cards.
-11. **`/fx/prediction`** — 180 days of GHS/USD with 90-day forecast and forward
-    implied overlay.
-12. **`/basel`** — CAR gauge, RWA donut, buffer status grid.
-13. **`/basel/stress`** — three ICAAP projections. Severe scenario shows breach
-    pathway and capital action plan.
-14. **`/ftp`** — interactive yield curve. Show how FTP rates derive from
-    market rates.
-15. **`/ftp/branches`** — 18-branch ranking. Tier-3 branches in red.
-16. **`/forecasting`** — 36-month projection with composition over time.
-17. **`/forecasting/scenario`** — drag the asset growth slider. The chart
-    updates. This is interactive scenario planning.
-18. **`/forecasting/optimizer`** — 4 Reinforcement Learning recommendations.
-    SR 11-7 governance footer.
-19. **Bell icon (top right)** — show notifications drawer.
-
-Total time: 12-15 minutes for a comprehensive walkthrough.
+**No table may overflow silently (NEW-54).** `DataTable` has always been
+`overflow-x-auto`, which scrolls but says nothing, so at 1280px the FTP Line
+P&L lost three columns off the right edge of a half-width card and Product
+Profitability cut "CONTRIBUTION" mid-word — a column a reader cannot see and
+cannot discover is not published. Overflow is now measured (`ResizeObserver` +
+scroll position) and, only where it exists, the table gains an edge fade, a
+focusable scroll region and a caption naming the gesture; tables that fit are
+unchanged. The affordance is the floor, not the goal: when a table overflows
+because it was put in a half-width grid cell, move it to a full row — signpost
+the overflow you cannot remove, remove the one you can. **Design changes are
+reviewed as pixels**: run `VISUAL_TOUR=1 npx playwright test visual-tour` and
+compare `e2e/.tmp/visual-tour/` before and after. Type-checking cannot see a
+clipped column.

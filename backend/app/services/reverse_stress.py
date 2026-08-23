@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import Bank, BankReportingPeriod, RegulatoryRun
 from app.schemas.reverse_stress import ReverseStressRead, ReverseStressRunCreate
-from app.services import regulatory_capital, regulatory_liquidity
+from app.services import regulatory_capital, regulatory_liquidity, regulatory_parameters
 from app.services.audit import record_event
 
 ENGINE_VERSION = "reverse-stress-v1.0.0"
@@ -144,6 +144,11 @@ def run_reverse_stress(
             "capital_axis": capital_axis,
             "narrative": narrative,
         },
+        # Audit D-18: WHICH governed control-plane rows produced the values in
+        # ``inputs["parameters"]``. Beside the snapshot, never inside it — row
+        # ids and timestamps are identity, not values, and the ``input_hash`` is
+        # value-based by contract.
+        parameter_provenance=regulatory_parameters.consume_parameter_provenance(db),
         created_by=ctx.actor_user_id,
         started_at=datetime.now(UTC),
         completed_at=datetime.now(UTC),

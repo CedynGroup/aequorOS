@@ -28,6 +28,7 @@ import {
   chartTooltipProps,
   seriesColor,
 } from '@/lib/chartTheme';
+import { fmtFloorPct } from '@/lib/api/values';
 import { regShort } from '@/lib/format';
 
 export type PlanPoint = {
@@ -45,14 +46,26 @@ export default function CapitalPlanChart({
   height = 300,
 }: {
   data: PlanPoint[];
-  carMin: number;
-  earlyWarning?: number;
+  /**
+   * The institution's CAR minimum. `null` when it did not resolve: no floor
+   * line is drawn and the projection is shown unjudged, because a stand-in
+   * would draw a labelled regulatory floor across a five-year plan.
+   */
+  carMin: number | null;
+  earlyWarning?: number | null;
   earlyWarningLabel?: string;
   height?: number;
 }) {
   const values = data.flatMap((d) => [d.car, d.tier1, d.cet1]);
-  const min = Math.floor(Math.min(...values, carMin) - 1.5);
-  const max = Math.ceil(Math.max(...values, earlyWarning ?? carMin) + 1.5);
+  const floors = [
+    ...(carMin === null ? [] : [carMin]),
+    ...(earlyWarning === null || earlyWarning === undefined
+      ? []
+      : [earlyWarning]),
+  ];
+  const scale = [...values, ...floors];
+  const min = scale.length > 0 ? Math.floor(Math.min(...scale) - 1.5) : 0;
+  const max = scale.length > 0 ? Math.ceil(Math.max(...scale) + 1.5) : 100;
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -72,24 +85,26 @@ export default function CapitalPlanChart({
           formatter={(v: number, name) => [`${v.toFixed(2)}%`, name]}
         />
         <Legend {...chartLegendProps} verticalAlign="top" align="right" height={24} iconType="line" />
-        <ReferenceLine
-          y={carMin}
-          stroke={CHART_CRIT}
-          strokeDasharray="4 4"
-          label={{
-            value: `${regShort()} min ${carMin}%`,
-            position: 'insideBottomRight',
-            fill: CHART_CRIT,
-            fontSize: 11,
-          }}
-        />
-        {earlyWarning !== undefined && (
+        {carMin !== null && (
+          <ReferenceLine
+            y={carMin}
+            stroke={CHART_CRIT}
+            strokeDasharray="4 4"
+            label={{
+              value: `${regShort()} min ${fmtFloorPct(carMin)}`,
+              position: 'insideBottomRight',
+              fill: CHART_CRIT,
+              fontSize: 11,
+            }}
+          />
+        )}
+        {earlyWarning !== undefined && earlyWarning !== null && (
           <ReferenceLine
             y={earlyWarning}
             stroke={CHART_WARN}
             strokeDasharray="2 4"
             label={{
-              value: `${earlyWarningLabel} ${earlyWarning}%`,
+              value: `${earlyWarningLabel} ${fmtFloorPct(earlyWarning)}`,
               position: 'insideTopRight',
               fill: CHART_WARN,
               fontSize: 11,

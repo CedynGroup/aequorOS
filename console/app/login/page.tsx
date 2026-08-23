@@ -327,8 +327,11 @@ function LoginForm() {
                 </button>
                 <p className="text-micro leading-relaxed text-slate-light">
                   Development builds only. The token lives in sessionStorage for this
-                  tab and the backend refuses it when{' '}
-                  <span className="font-mono">APP_ENV=production</span>.
+                  tab, and the operator API accepts it only when{' '}
+                  <span className="font-mono">APP_ENV</span> is{' '}
+                  <span className="font-mono">local</span> or{' '}
+                  <span className="font-mono">test</span> — every deployed
+                  environment refuses it, staging included.
                 </p>
               </form>
             </details>

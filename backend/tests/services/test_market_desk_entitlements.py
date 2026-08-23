@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import DeskCurveDefinition, Organization
@@ -136,7 +138,39 @@ def test_revoke_ends_grant(db_session: Session) -> None:
         granted_by="ops@aequoros.com",
     )
     target = next(r for r in rows if r.dataset_code == "DESK_CURVES_DISCOUNT")
-    entitlements.revoke(db_session, target.id, revoked_by="ops@aequoros.com")
+    entitlements.revoke(
+        db_session, target.id, organization_id=org.id, revoked_by="ops@aequoros.com"
+    )
     db_session.commit()
     granted = entitlements.active_datasets(db_session, org.id)
     assert "DESK_CURVES_DISCOUNT" not in granted
+
+
+def test_revoke_refuses_another_tenants_entitlement(db_session: Session) -> None:
+    """The org is part of the LOOKUP key, not a check applied afterwards.
+
+    ``revoke`` used to resolve the row with a bare ``db.get`` by id, so any
+    operator could end any tenant's grant by naming its uuid (audit finding
+    D-26). A foreign row is a 404 — indistinguishable from one that does not
+    exist, so the id space stays unprobeable.
+    """
+    owner = _org(db_session, "Entitlement Owner")
+    bystander = _org(db_session, "Entitlement Bystander")
+    rows = entitlements.grant_tier(
+        db_session,
+        organization_id=owner.id,
+        tier="standard",
+        effective_from=date(2026, 1, 1),
+        granted_by="ops@aequoros.com",
+    )
+    target = next(r for r in rows if r.dataset_code == "DESK_CURVES_DISCOUNT")
+    with pytest.raises(HTTPException) as excinfo:
+        entitlements.revoke(
+            db_session,
+            target.id,
+            organization_id=bystander.id,
+            revoked_by="ops@aequoros.com",
+        )
+    assert excinfo.value.status_code == 404
+    db_session.rollback()
+    assert "DESK_CURVES_DISCOUNT" in entitlements.active_datasets(db_session, owner.id)

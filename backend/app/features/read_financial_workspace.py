@@ -1,3 +1,13 @@
+"""Case financial workspace endpoints (advisory, never filed).
+
+The `Financial*` records behind these routes are case-local: an analyst enters
+or corrects them by hand against one borrower, and every mutation carries a
+reason and returns refreshed validation. They are NOT the bank's canonical
+data. Bank figures enter only through the Data Engine as `BankFinancialFact`
+(`CLAUDE.md`: no seeded bank data), and nothing here may be written into that
+plane without a reviewed canonical adapter — see `app.services.case_plane`.
+"""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -80,7 +90,7 @@ def map_case_financial_workspace(
     case_id: UUID,
     payload: FinancialWorkspaceMapRequest,
     db: DbSession,
-    ctx: Tenant,
+    ctx: MutationTenant,
 ) -> FinancialWorkspaceMapResponse:
     return map_financial_workspace(db, ctx, case_id, payload)
 
@@ -92,7 +102,7 @@ def map_case_financial_workspace(
 def validate_case_financial_data(
     case_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: MutationTenant,
 ) -> FinancialValidationRunResponse:
     return financial_validation_service.validate_financial_data(db, ctx, case_id)
 

@@ -581,7 +581,7 @@ def test_liquidity_review_rejects_terminal_findings(db_client: TestClient) -> No
     )
 
     assert response.status_code == 409
-    assert response.json()["error"]["message"] == "Liquidity finding is read-only."
+    assert response.json()["error"]["message"] == "Cash-flow adequacy finding is read-only."
     with get_sessionmaker()() as session:
         finding = session.get(RiskFinding, finding_id)
         assert finding is not None
@@ -696,14 +696,14 @@ def test_liquidity_review_cannot_overwrite_concurrent_supersession(
             finding = publication_session.get(RiskFinding, UUID(finding_id))
             assert finding is not None
             finding.status = "superseded"
-            finding.disposition_reason = "Superseded by a newer liquidity forecast run."
+            finding.disposition_reason = "Superseded by a newer cash-flow adequacy run."
             publication_session.commit()
             with pytest.raises(FutureTimeoutError):
                 future.result(timeout=0.2)
         response = future.result(timeout=5)
 
     assert response.status_code == 409
-    assert response.json()["error"]["message"] == "Liquidity finding is read-only."
+    assert response.json()["error"]["message"] == "Cash-flow adequacy finding is read-only."
     with session_factory() as verification_session:
         finding = verification_session.get(RiskFinding, UUID(finding_id))
         assert finding is not None

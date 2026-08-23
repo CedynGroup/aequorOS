@@ -58,7 +58,9 @@ def _seed_period(db: Session, organization_id: str, bank_id: str) -> UUID:
     return period.id
 
 
-def _seed_mapping(db: Session, organization_id: str, bank_id: str, *, status: str = "active") -> UUID:
+def _seed_mapping(
+    db: Session, organization_id: str, bank_id: str, *, status: str = "active"
+) -> UUID:
     mapping = MappingConfigRecord(
         organization_id=organization_id,
         bank_id=bank_id,
@@ -121,6 +123,7 @@ _FIXES: list[tuple[str, dict[str, object]]] = [
     ("/fix/recompute", {"note": "recompute please"}),
     ("/fix/official-run", {"note": "mint filing"}),
     ("/fix/rerun-ingestion", {"batch_id": str(uuid4()), "note": "reprocess"}),
+    ("/fix/redrive-dedup", {"batch_id": str(uuid4()), "note": "re-drive dedup"}),
     (
         "/fix/config",
         {"kind": "mapping_active", "target_id": str(uuid4()), "value": False, "note": "toggle"},
@@ -146,7 +149,7 @@ def test_fix_note_is_required(operator_client: TestClient, suffix: str) -> None:
     start_inspection(operator_client, organization_id)
     # Empty note is rejected at the schema (min_length=1) → 422, before any work.
     body: dict[str, object] = {"note": ""}
-    if suffix == "/fix/rerun-ingestion":
+    if suffix in {"/fix/rerun-ingestion", "/fix/redrive-dedup"}:
         body["batch_id"] = str(uuid4())
     if suffix == "/fix/config":
         body.update({"kind": "mapping_active", "target_id": str(uuid4()), "value": False})
@@ -293,6 +296,153 @@ def test_rerun_ingestion_enqueues_refresh_and_audits(
     rows = _audit_rows(operator_db, "inspector.fix.rerun_ingestion")
     assert len(rows) == 1
     assert rows[0].detail["batch_id"] == str(batch.id)
+
+
+# -- re-drive the stranded dedup pass --------------------------------------------
+def _stuck_batch(
+    db: Session,
+    tenant: tuple[str, str],
+    *,
+    dedup_status: str = "deferred",
+    attempts: int = 3,
+    job_status: str = "failed",
+) -> tuple[IngestionBatch, Job]:
+    """An accepted batch whose out-of-band dedup job exhausted every attempt.
+
+    ``tenant`` is ``(organization_id, bank_id)`` — the batch's owner."""
+    organization_id, bank_id = tenant
+    batch = IngestionBatch(
+        organization_id=organization_id,
+        bank_id=bank_id,
+        source_system="DB_DIRECT",
+        adapter_version="db_direct_v1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=date(2026, 4, 30),
+        records_extracted=167443,
+        records_accepted=167443,
+        etl_report={"dedup_status": dedup_status},
+    )
+    db.add(batch)
+    db.commit()
+    db.refresh(batch)
+    job = Job(
+        organization_id=organization_id,
+        bank_id=bank_id,
+        job_type="etl_dedup",
+        status=job_status,
+        entity_type="ingestion_batch",
+        entity_id=str(batch.id),
+        payload={"batch_id": str(batch.id)},
+        attempts=attempts,
+        max_attempts=3,
+        error="reclaimed: running since ... (worker presumed dead)",
+        completed_at=utc_now(),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return batch, job
+
+
+def test_redrive_dedup_reenqueues_and_audits_the_failure_it_recovers_from(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    """The only way back for a batch the queue will never retry."""
+    organization_id, bank_id = _provision(operator_client)
+    batch, stranded = _stuck_batch(operator_db, (organization_id, bank_id))
+    session_id = start_inspection(operator_client, organization_id)
+
+    response = operator_client.post(
+        f"{BASE}/{organization_id}/fix/redrive-dedup",
+        json={"batch_id": str(batch.id), "note": "connection was severed; retrying"},
+        headers=operator_headers(),
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["job_type"] == "etl_dedup"
+    assert body["status"] == "queued"
+    assert body["batch_id"] == str(batch.id)
+    assert body["previous_dedup_status"] == "deferred"
+    assert body["previous_job_id"] == str(stranded.id)
+    assert "worker presumed dead" in body["previous_job_error"]
+
+    fresh = operator_db.scalar(
+        select(Job).where(
+            Job.organization_id == organization_id,
+            Job.job_type == "etl_dedup",
+            Job.status == "queued",
+        )
+    )
+    assert fresh is not None
+    assert str(fresh.id) == body["job_id"]
+    assert fresh.payload["batch_id"] == str(batch.id)
+    assert fresh.payload["redrive_of_job_id"] == str(stranded.id)
+    assert fresh.bank_id == bank_id
+
+    rows = _audit_rows(operator_db, "inspector.fix.redrive_dedup")
+    assert len(rows) == 1
+    assert rows[0].detail["session_id"] == session_id
+    assert rows[0].detail["batch_id"] == str(batch.id)
+    assert rows[0].detail["previous_dedup_status"] == "deferred"
+    assert rows[0].detail["previous_job_id"] == str(stranded.id)
+
+
+def test_redrive_dedup_refuses_a_completed_pass(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    organization_id, bank_id = _provision(operator_client)
+    batch, _job = _stuck_batch(operator_db, (organization_id, bank_id), dedup_status="completed")
+    start_inspection(operator_client, organization_id)
+
+    response = operator_client.post(
+        f"{BASE}/{organization_id}/fix/redrive-dedup",
+        json={"batch_id": str(batch.id), "note": "already done"},
+        headers=operator_headers(),
+    )
+    assert response.status_code == 409, response.text
+    assert _audit_rows(operator_db, "inspector.fix.redrive_dedup") == []
+
+
+def test_redrive_dedup_refuses_while_a_job_is_still_live(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    """A running pass is not stranded; re-driving it would run two copies."""
+    organization_id, bank_id = _provision(operator_client)
+    batch, _job = _stuck_batch(
+        operator_db, (organization_id, bank_id), job_status="running", attempts=1
+    )
+    start_inspection(operator_client, organization_id)
+
+    response = operator_client.post(
+        f"{BASE}/{organization_id}/fix/redrive-dedup",
+        json={"batch_id": str(batch.id), "note": "impatient"},
+        headers=operator_headers(),
+    )
+    assert response.status_code == 409, response.text
+    assert _audit_rows(operator_db, "inspector.fix.redrive_dedup") == []
+
+
+def test_redrive_dedup_foreign_batch_is_404(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    org_a, bank_a = _provision(operator_client)
+    org_b, _bank_b = _provision(
+        operator_client,
+        organization_name="Redrive Holdings",
+        bank_name="Redrive Bank",
+        admin_email="admin@redrive.example",
+    )
+    batch, _job = _stuck_batch(operator_db, (org_a, bank_a))
+    start_inspection(operator_client, org_b)
+
+    response = operator_client.post(
+        f"{BASE}/{org_b}/fix/redrive-dedup",
+        json={"batch_id": str(batch.id), "note": "wrong org"},
+        headers=operator_headers(),
+    )
+    assert response.status_code == 404, response.text
+    assert _audit_rows(operator_db, "inspector.fix.redrive_dedup") == []
 
 
 def test_rerun_ingestion_foreign_batch_is_404(

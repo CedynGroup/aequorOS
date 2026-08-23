@@ -10,9 +10,7 @@
 
 import { useState } from 'react';
 import {
-  CalendarClock,
   CheckCircle2,
-  DownloadCloud,
   KeyRound,
   Loader2,
   PauseCircle,
@@ -31,8 +29,6 @@ import {
   useEnableTemenosConnection,
   useRevokeTemenosConnection,
   useTestTemenosConnection,
-  useTriggerTemenosBackfill,
-  useTriggerTemenosPull,
   useUpdateTemenosConnection,
   useValidateTemenosConnection,
 } from '@/lib/api/hooks';
@@ -93,16 +89,10 @@ export default function ConnectionCard({
   const disable = useDisableTemenosConnection(bankId);
   const enable = useEnableTemenosConnection(bankId);
   const revoke = useRevokeTemenosConnection(bankId);
-  const pull = useTriggerTemenosPull(bankId);
-  const backfill = useTriggerTemenosBackfill(bankId);
 
   const [testResult, setTestResult] = useState<TemenosTestPullRead | null>(null);
   const [rotating, setRotating] = useState(false);
   const [rotateValues, setRotateValues] = useState<Record<string, string>>({});
-  const [showPull, setShowPull] = useState(false);
-  const [pullDate, setPullDate] = useState('');
-  const [backfillStart, setBackfillStart] = useState('');
-  const [backfillEnd, setBackfillEnd] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -114,9 +104,7 @@ export default function ConnectionCard({
     update.isPending ||
     disable.isPending ||
     enable.isPending ||
-    revoke.isPending ||
-    pull.isPending ||
-    backfill.isPending;
+    revoke.isPending;
 
   const run = async (action: () => Promise<unknown>, doneNotice?: string) => {
     setActionError(null);
@@ -138,29 +126,6 @@ export default function ConnectionCard({
       setRotating(false);
       setRotateValues({});
     }, 'Credentials rotated. The stored set was swapped atomically after validation.');
-
-  const triggerPull = () =>
-    run(async () => {
-      const result = await pull.mutateAsync({
-        connectionId: connection.id,
-        asOfDate: pullDate || undefined,
-      });
-      setShowPull(false);
-      return result;
-    }, `Pull enqueued for ${pullDate || 'today'}. The worker stages the bundle and ingests it.`);
-
-  const triggerBackfill = () =>
-    run(async () => {
-      const result = await backfill.mutateAsync({
-        connectionId: connection.id,
-        payload: {
-          startDate: new Date(`${backfillStart}T00:00:00Z`),
-          endDate: new Date(`${backfillEnd}T00:00:00Z`),
-        },
-      });
-      setShowPull(false);
-      setNotice(`Backfill enqueued: ${result.count} pull job${result.count === 1 ? '' : 's'}.`);
-    });
 
   return (
     <section className="card p-5 space-y-4">
@@ -227,19 +192,17 @@ export default function ConnectionCard({
         </div>
       )}
 
+      <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+        <p className="text-body font-medium text-navy">Live transport unavailable</p>
+        <p className="mt-1 text-caption text-slate">
+          This deployment stores the T24 configuration but does not dispatch OFS, IRIS, or
+          Open API requests. Pulls and backfills are blocked until a bank-approved transport
+          is installed.
+        </p>
+      </div>
+
       {!isRevoked && (
         <div className="flex flex-wrap gap-2">
-          <ActionButton
-            onClick={() => {
-              setShowPull((current) => !current);
-              setActionError(null);
-              setNotice(null);
-            }}
-            disabled={busy || isDisabled}
-            icon={<DownloadCloud size={13} aria-hidden />}
-          >
-            {showPull ? 'Cancel pull' : 'Pull now'}
-          </ActionButton>
           <ActionButton
             onClick={() =>
               run(async () => {
@@ -255,7 +218,7 @@ export default function ConnectionCard({
               )
             }
           >
-            Test
+            Check availability
           </ActionButton>
           <ActionButton
             onClick={() =>
@@ -322,95 +285,6 @@ export default function ConnectionCard({
         </div>
       )}
 
-      {showPull && !isRevoked && (
-        <div className="rounded border border-border p-4 space-y-4 bg-surface-alt">
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label
-                htmlFor={`pull-date-${connection.id}`}
-                className="block text-caption font-medium text-slate mb-1"
-              >
-                Pull one date
-              </label>
-              <input
-                id={`pull-date-${connection.id}`}
-                type="date"
-                value={pullDate}
-                onChange={(event) => setPullDate(event.target.value)}
-                className="px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => void triggerPull()}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40"
-            >
-              {pull.isPending ? (
-                <Loader2 size={13} className="animate-spin" aria-hidden />
-              ) : (
-                <DownloadCloud size={13} aria-hidden />
-              )}
-              Pull {pullDate || 'today'}
-            </button>
-          </div>
-          <div className="border-t border-border pt-4">
-            <p className="flex items-center gap-1.5 text-caption font-medium text-slate mb-2">
-              <CalendarClock size={13} aria-hidden /> Historical backfill
-            </p>
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label
-                  htmlFor={`bf-start-${connection.id}`}
-                  className="block text-caption text-slate mb-1"
-                >
-                  From
-                </label>
-                <input
-                  id={`bf-start-${connection.id}`}
-                  type="date"
-                  value={backfillStart}
-                  onChange={(event) => setBackfillStart(event.target.value)}
-                  className="px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor={`bf-end-${connection.id}`}
-                  className="block text-caption text-slate mb-1"
-                >
-                  To
-                </label>
-                <input
-                  id={`bf-end-${connection.id}`}
-                  type="date"
-                  value={backfillEnd}
-                  onChange={(event) => setBackfillEnd(event.target.value)}
-                  className="px-3 py-1.5 rounded border border-border text-body text-navy font-mono"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void triggerBackfill()}
-                disabled={busy || !backfillStart || !backfillEnd}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-border text-caption font-medium text-navy hover:bg-surface disabled:opacity-40"
-              >
-                {backfill.isPending ? (
-                  <Loader2 size={13} className="animate-spin" aria-hidden />
-                ) : (
-                  <CalendarClock size={13} aria-hidden />
-                )}
-                Enqueue backfill
-              </button>
-            </div>
-            <p className="mt-2 text-caption text-slate">
-              One pull job per day in the range; re-ingesting a date supersedes rather than
-              duplicates.
-            </p>
-          </div>
-        </div>
-      )}
-
       {rotating && !isRevoked && (
         <div className="rounded border border-border p-4 space-y-4 bg-surface-alt">
           <p className="text-body text-slate">
@@ -443,20 +317,12 @@ export default function ConnectionCard({
 
       {testResult && (
         <div
-          className={`rounded border px-4 py-3 space-y-2 ${
-            testResult.success
-              ? 'border-success/30 bg-success-light/50'
-              : 'border-critical/30 bg-critical-light/40'
-          }`}
+          className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3 space-y-2"
         >
           <div className="flex items-center gap-2">
-            {testResult.success ? (
-              <CheckCircle2 size={15} className="text-success" aria-hidden />
-            ) : (
-              <XCircle size={15} className="text-critical" aria-hidden />
-            )}
+            <ShieldAlert size={15} className="text-warning" aria-hidden />
             <p className="text-body font-medium text-navy">
-              {testResult.success ? 'Connection verified — pull plan' : 'Verification failed'}
+              {testResult.success ? 'Configuration check complete' : 'Live transport unavailable'}
             </p>
             <button
               type="button"

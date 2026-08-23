@@ -10,11 +10,16 @@ against itself.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from decimal import Decimal
 
+import pytest
+
+from app.domain.authority.outcomes import OutcomeState
 from app.domain.stress.management_actions import (
     ActionTrigger,
     ManagementAction,
+    ManagementActionNotComputable,
     ManagementActionPlan,
     apply_management_actions,
     default_action_plan,
@@ -32,6 +37,7 @@ from tests.domain.stress_fixtures import (
 )
 
 _CAR_TARGET = Decimal("13")
+_ONE = Decimal("1")
 
 
 def _projection(paths, *, paid_up_min=Decimal("0"), horizon=3):
@@ -69,7 +75,11 @@ def _one(action: ManagementAction, plan_id: str = "p") -> ManagementActionPlan:
 def test_base_scenario_triggers_no_actions_and_with_equals_without() -> None:
     """Base scenario clears every minimum ⇒ nothing fires ⇒ WITH == WITHOUT."""
     projection = _projection(base_paths())
-    result = _apply(projection, default_action_plan(), severity=None)
+    # ``severity="severe"`` where this used to pass ``None``. The default register
+    # prices severe at 1.0, so every figure below is byte-identical; what changed
+    # is that the band is now DECLARED rather than left absent and silently read
+    # as the full-magnitude factor (audit 2026-08-22 D-8, WS-A3 open item 2).
+    result = _apply(projection, default_action_plan(), severity="severe")
     assert all(not action.fired for action in result.actions)
     assert result.stays_above_all_minima is True
     assert result.residual_capital_required == Decimal("0")
@@ -97,12 +107,8 @@ def test_on_breach_watch_minima_targets_a_specific_floor() -> None:
         trigger=ActionTrigger(kind="on_breach", watch_minima=("paid_up",)),
         capital_raise_ghs=Decimal("50000000"),
     )
-    car_result = _apply(
-        projection, _one(car_watcher), paid_up_min=Decimal("400000000")
-    )
-    paid_up_result = _apply(
-        projection, _one(paid_up_watcher), paid_up_min=Decimal("400000000")
-    )
+    car_result = _apply(projection, _one(car_watcher), paid_up_min=Decimal("400000000"))
+    paid_up_result = _apply(projection, _one(paid_up_watcher), paid_up_min=Decimal("400000000"))
     assert car_result.actions[0].fired is False
     assert paid_up_result.actions[0].fired is True
 
@@ -118,7 +124,13 @@ def test_on_severity_trigger_respects_the_threshold() -> None:
     )
     assert _apply(projection, _one(action), severity="severe").actions[0].fired is True
     assert _apply(projection, _one(action), severity="moderate").actions[0].fired is False
-    assert _apply(projection, _one(action), severity=None).actions[0].fired is False
+    # An UNDECLARED band ranks below every threshold, so the trigger stays shut.
+    # The action is priced flat across the bands because a differentiated action
+    # run against an undeclared band now refuses outright (see
+    # ``test_an_undeclared_scenario_severity_refuses_a_differentiated_action``) —
+    # this case is about the trigger, not about the magnitude.
+    flat = replace(action, severity_factors={"mild": _ONE, "moderate": _ONE, "severe": _ONE})
+    assert _apply(projection, _one(flat), severity=None).actions[0].fired is False
 
 
 # --- Quantified effects ------------------------------------------------------
@@ -136,8 +148,11 @@ def test_fixed_capital_raise_lifts_capital_paid_up_and_car() -> None:
         capital_raise_ghs=raise_amount,
         counts_as_paid_up=True,
     )
-    # severity=None ⇒ factor 1.0, so the raise lands at its full authored amount.
-    result = _apply(projection, _one(action), severity=None)
+    # severity="severe" ⇒ factor 1.0, so the raise lands at its full authored
+    # amount. This used to pass ``severity=None`` for the same factor, which is
+    # exactly the substitution WS-A3 closed: an undeclared band is not the severe
+    # band, it is an unanswered question.
+    result = _apply(projection, _one(action), severity="severe")
     assert result.actions[0].fired is True
     assert result.actions[0].resolved_capital_raise == raise_amount
     for post, stress in zip(result.post_action, projection.stress, strict=True):
@@ -165,7 +180,7 @@ def test_rwa_reduction_raises_car_and_shrinks_leverage_exposure() -> None:
         rwa_reduction_ghs=reduction,
         shrinks_leverage_exposure=True,
     )
-    result = _apply(projection, _one(action), severity=None)
+    result = _apply(projection, _one(action), severity="severe")  # factor 1.0
     for post, stress in zip(result.post_action, projection.stress, strict=True):
         # Credit RWA relief flows straight through to total RWA (relief < credit).
         assert post.total_rwa == money(stress.rwa.total_rwa - reduction)
@@ -187,7 +202,7 @@ def test_dividend_reduction_accumulates_into_cet1() -> None:
         effective_year=1,
         dividend_reduction_pct=Decimal("100"),
     )
-    result = _apply(projection, _one(action), severity=None)
+    result = _apply(projection, _one(action), severity="severe")  # factor 1.0
     cumulative = Decimal("0")
     for post, stress in zip(result.post_action, projection.stress, strict=True):
         cumulative = money(cumulative + stress.pnl.dividends)
@@ -214,6 +229,60 @@ def test_severity_differentiation_scales_the_action() -> None:
     assert mild.actions[0].resolved_capital_raise == Decimal("50000000.0000")
     assert severe.actions[0].resolved_capital_raise == Decimal("100000000.0000")
     assert mild.post_action[0].total_capital < severe.post_action[0].total_capital
+
+
+def test_an_undeclared_scenario_severity_refuses_a_differentiated_action() -> None:
+    """WS-A3 open item 2, closed: ``severity=None`` no longer means "severe".
+
+    ``macro_scenarios.severity`` is nullable by design, and an undeclared band
+    used to resolve to a factor of ``1.0``. In the default register
+    ``{mild: 0.5, moderate: 0.75, severe: 1}`` that IS the severe factor, so a
+    scenario that declared no severity pulled every action to its full authored
+    magnitude and produced the plan's most favourable post-action capital
+    position — from the absence of a declaration, not from a declared severe
+    scenario.
+    """
+    projection = _projection(severe_paths())
+    action = ManagementAction(
+        action_id="equity",
+        kind="raise_capital",
+        label="Rights issue",
+        trigger=ActionTrigger(kind="always"),
+        capital_raise_ghs=Decimal("100000000"),
+    )
+    with pytest.raises(ManagementActionNotComputable) as exc:
+        _apply(projection, _one(action), severity=None)
+    assert exc.value.code == "scenario_severity_undeclared"
+    assert exc.value.state is OutcomeState.POLICY_UNRESOLVED
+    assert exc.value.details[0].items == ("action:equity", "scenario:severity")
+    # And it is NOT the previous refusal, which is about a band the plan does
+    # not price rather than a band the scenario does not declare.
+    assert exc.value.details[0].context["severity"] is None
+
+
+def test_an_undeclared_severity_is_fine_when_the_band_cannot_change_the_magnitude() -> None:
+    """The documented exception: an explicit zero, not an absent one.
+
+    An action priced identically across every band is not differentiated by
+    paragraph 81, so the undeclared band cannot change what it does. There is
+    nothing to resolve and the unambiguous factor stands.
+    """
+    projection = _projection(severe_paths())
+    flat = ManagementAction(
+        action_id="equity_flat",
+        kind="raise_capital",
+        label="Rights issue, undifferentiated",
+        trigger=ActionTrigger(kind="always"),
+        capital_raise_ghs=Decimal("100000000"),
+        severity_factors={
+            "mild": Decimal("0.6"),
+            "moderate": Decimal("0.6"),
+            "severe": Decimal("0.6"),
+        },
+    )
+    result = _apply(projection, _one(flat), severity=None)
+    assert result.actions[0].severity_factor == Decimal("0.6")
+    assert result.actions[0].resolved_capital_raise == Decimal("60000000.0000")
 
 
 # --- Fill-residual sizing + timeline -----------------------------------------
@@ -282,7 +351,5 @@ def test_result_serializes_json_safe() -> None:
 def test_overlay_is_reproducible() -> None:
     projection = _projection(severe_paths(), paid_up_min=Decimal("400000000"))
     first = _apply(projection, default_action_plan(), paid_up_min=Decimal("400000000")).serialize()
-    second = _apply(
-        projection, default_action_plan(), paid_up_min=Decimal("400000000")
-    ).serialize()
+    second = _apply(projection, default_action_plan(), paid_up_min=Decimal("400000000")).serialize()
     assert first == second

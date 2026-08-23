@@ -11,9 +11,9 @@ state. Existing rows are preserved and their period becomes nullable provenance
 No regulatory run, package, or historical fact is changed by this migration.
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = "202608190017"
 down_revision = "202608160016"
@@ -38,16 +38,22 @@ def upgrade() -> None:
 
     with op.batch_alter_table("live_metrics") as batch:
         batch.drop_constraint("uq_live_metrics_org_bank_period_module", type_="unique")
-        batch.alter_column("reporting_period_id", new_column_name="source_fact_period_id", nullable=True)
+        batch.alter_column(
+            "reporting_period_id", new_column_name="source_fact_period_id", nullable=True
+        )
         batch.add_column(sa.Column("source_as_of_date", sa.Date(), nullable=True))
         batch.add_column(
-            sa.Column("engine_version", sa.String(length=80), nullable=False, server_default="unknown")
+            sa.Column(
+                "engine_version", sa.String(length=80), nullable=False, server_default="unknown"
+            )
         )
         batch.add_column(
             sa.Column("calculation_generation", sa.Integer(), nullable=False, server_default="0")
         )
         batch.add_column(
-            sa.Column("pipeline_state", sa.String(length=16), nullable=False, server_default="ready")
+            sa.Column(
+                "pipeline_state", sa.String(length=16), nullable=False, server_default="ready"
+            )
         )
         batch.add_column(sa.Column("pipeline_error", sa.Text(), nullable=True))
     # Historical rows were unique per period; retain only the newest cache row
@@ -68,7 +74,8 @@ def upgrade() -> None:
     op.create_index("ix_live_metrics_org_bank", "live_metrics", ["organization_id", "bank_id"])
     op.execute(
         "UPDATE live_metrics SET source_as_of_date = bank_reporting_periods.period_end "
-        "FROM bank_reporting_periods WHERE live_metrics.source_fact_period_id = bank_reporting_periods.id"
+        "FROM bank_reporting_periods "
+        "WHERE live_metrics.source_fact_period_id = bank_reporting_periods.id"
     )
     # Some legacy cache rows may not see their old period through RLS during a
     # migration. The computation timestamp is an honest fallback provenance;
@@ -82,11 +89,14 @@ def upgrade() -> None:
 
     op.drop_index("uq_live_findings_open", table_name="live_findings")
     with op.batch_alter_table("live_findings") as batch:
-        batch.alter_column("reporting_period_id", new_column_name="source_fact_period_id", nullable=True)
+        batch.alter_column(
+            "reporting_period_id", new_column_name="source_fact_period_id", nullable=True
+        )
         batch.add_column(sa.Column("source_as_of_date", sa.Date(), nullable=True))
     op.execute(
         "UPDATE live_findings SET source_as_of_date = bank_reporting_periods.period_end "
-        "FROM bank_reporting_periods WHERE live_findings.source_fact_period_id = bank_reporting_periods.id"
+        "FROM bank_reporting_periods "
+        "WHERE live_findings.source_fact_period_id = bank_reporting_periods.id"
     )
     op.execute(
         "UPDATE live_findings SET source_as_of_date = created_at::date "
@@ -123,7 +133,9 @@ def downgrade() -> None:
     op.drop_index("uq_live_findings_open", table_name="live_findings")
     with op.batch_alter_table("live_findings") as batch:
         batch.drop_column("source_as_of_date")
-        batch.alter_column("source_fact_period_id", new_column_name="reporting_period_id", nullable=False)
+        batch.alter_column(
+            "source_fact_period_id", new_column_name="reporting_period_id", nullable=False
+        )
     op.create_index(
         "uq_live_findings_open",
         "live_findings",
@@ -141,7 +153,9 @@ def downgrade() -> None:
         batch.drop_column("calculation_generation")
         batch.drop_column("engine_version")
         batch.drop_column("source_as_of_date")
-        batch.alter_column("source_fact_period_id", new_column_name="reporting_period_id", nullable=False)
+        batch.alter_column(
+            "source_fact_period_id", new_column_name="reporting_period_id", nullable=False
+        )
         batch.create_unique_constraint(
             "uq_live_metrics_org_bank_period_module",
             ["organization_id", "bank_id", "reporting_period_id", "module"],

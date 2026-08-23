@@ -16,7 +16,11 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
 
-from app.core.config import get_operator_settings, get_settings
+from app.core.config import (
+    get_operator_settings,
+    get_settings,
+    is_undeployed_environment,
+)
 from app.core.errors import (
     OPENAPI_ERROR_RESPONSES,
     UnhandledExceptionMiddleware,
@@ -41,6 +45,7 @@ from app.operator.features.overview import router as overview_router
 from app.operator.features.provision import router as provision_router
 from app.operator.features.regulatory_parameters import router as regulatory_parameters_router
 from app.operator.features.tenants import router as tenants_router
+from app.operator.features.worker_health import router as worker_health_router
 from app.schemas.health import HealthResponse
 
 OPERATOR_APP_NAME = "aequoros-operator"
@@ -54,14 +59,20 @@ def generate_operation_id(route: APIRoute) -> str:
 def create_operator_app() -> FastAPI:
     settings = get_settings()
     operator_settings = get_operator_settings()
-    # HARD guard, not a warning: dev-token auth in production would be a
+    # HARD guard, not a warning: dev-token auth on a DEPLOYED host would be a
     # static shared secret protecting cross-tenant god-mode. The app refuses
-    # to exist rather than serve a single request that way.
-    if operator_settings.dev_auth_enabled and settings.app.app_env == "production":
+    # to exist rather than serve a single request that way. The test is an
+    # allow-list of undeployed environments, not ``!= "production"`` — the
+    # latter left ``staging`` (same containers, same primary database, a host
+    # somebody else can reach) wide open.
+    if operator_settings.dev_auth_enabled and not is_undeployed_environment(
+        settings.app.app_env
+    ):
         msg = (
-            "OPERATOR_DEV_AUTH_ENABLED=1 with APP_ENV=production: dev-token auth is "
-            "forbidden in production. Configure workforce OIDC "
-            "(OPERATOR_OIDC_ISSUER / OPERATOR_OIDC_CLIENT_ID) and disable dev auth."
+            f"OPERATOR_DEV_AUTH_ENABLED=1 with APP_ENV={settings.app.app_env}: dev-token "
+            "auth exists only for local development and is forbidden on a deployed "
+            "environment. Configure workforce OIDC (OPERATOR_OIDC_ISSUER / "
+            "OPERATOR_OIDC_CLIENT_ID) and disable dev auth."
         )
         raise RuntimeError(msg)
 
@@ -81,8 +92,8 @@ def create_operator_app() -> FastAPI:
             CORSMiddleware,
             allow_origins=operator_settings.cors_origins,
             allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_methods=operator_settings.cors_methods,
+            allow_headers=operator_settings.cors_headers,
         )
     register_exception_handlers(app)
 
@@ -108,6 +119,7 @@ def create_operator_app() -> FastAPI:
     operator_router.include_router(inspector_reads_router)
     operator_router.include_router(inspector_fix_router)
     operator_router.include_router(jobs_router)
+    operator_router.include_router(worker_health_router)
     operator_router.include_router(data_engines_router)
     operator_router.include_router(desk_router)
     operator_router.include_router(curves_router)

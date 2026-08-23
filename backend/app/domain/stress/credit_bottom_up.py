@@ -50,9 +50,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.domain.stress.translation import (
     MacroPathPoint,
     ShockMapping,
+    require_macro_variables,
     translate,
 )
 
@@ -85,7 +87,9 @@ CRD_EXPOSURE_CLASSES: tuple[str, ...] = (
     "other",
 )
 _CRD_CLASS_SET = frozenset(CRD_EXPOSURE_CLASSES)
-_OTHER_CLASS = "other"
+#: The FX driver the book's revaluation reads — outside the ``capital``
+#: elasticity register, so ``translate`` never checks it.
+FX_MACRO_VARIABLE = "fx_usd_ghs"
 
 
 @dataclass(frozen=True)
@@ -125,7 +129,31 @@ class CreditExposure:
     is_foreign_currency: bool = False
 
     def normalized_class(self) -> str:
-        return self.crd_class if self.crd_class in _CRD_CLASS_SET else _OTHER_CLASS
+        """The exposure's CRD class — refusing an unrecognised one.
+
+        An unmapped class used to be silently re-labelled ``other``, which moved
+        the exposure's stressed loss onto a different line of the filed
+        Appendix II Table 1 "Impact of Adverse" without any signal that the
+        classification had failed (audit 2026-08-22 D-8). The class is supplied
+        by the canonical book; one the registry does not know is a data-quality
+        failure, not an "other".
+        """
+        if self.crd_class in _CRD_CLASS_SET:
+            return self.crd_class
+        raise NotComputable(
+            outcome(
+                OutcomeState.DATA_QUALITY_BLOCK,
+                metric_id="bottom_up_credit.exposure_class",
+                reason=(
+                    f"Exposure '{self.exposure_id}' carries CRD exposure class "
+                    f"'{self.crd_class}', which is not one of the registered classes "
+                    f"{CRD_EXPOSURE_CLASSES}. Its stressed loss would be reported "
+                    "against a class it does not belong to."
+                ),
+                items=(f"exposure:{self.exposure_id}", f"crd_class:{self.crd_class}"),
+                context={"exposure_id": self.exposure_id, "crd_class": self.crd_class},
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -219,7 +247,27 @@ def compute_bottom_up_credit(
     (from the capital translation); ``fx_fraction`` is the fractional cedi
     depreciation the FX path implies. All three are 1.0 / 1.0 / 0.0 under a base
     scenario, collapsing the stress onto the base.
+
+    Refuses an empty book: the result's headline is the credit-RWA **uplift
+    factor** the projection multiplies its own credit RWA by, and an empty book
+    used to yield 1.0 — "the rating migration and FX revaluation add nothing" —
+    from the absence of the exposure data rather than from the book's resilience
+    (audit 2026-08-22 D-8).
     """
+    if not exposures:
+        raise NotComputable(
+            outcome(
+                OutcomeState.MISSING_REQUIRED_INPUT,
+                metric_id="credit_rwa_uplift_factor",
+                reason=(
+                    "The bottom-up credit stress was asked to run over an empty "
+                    "exposure book, so the rating-migration and FX-revaluation uplift "
+                    "cannot be established. Ingest the exposure-level credit book, or "
+                    "do not run the bottom-up overlay."
+                ),
+                items=("fact:credit_exposure",),
+            )
+        )
     fx_uplift = max(fx_fraction, _ZERO)
     migration_fraction = min(
         params.migration_sensitivity * max(pd_multiplier - _ONE, _ZERO),
@@ -274,11 +322,27 @@ def compute_bottom_up_credit(
     stressed_credit_rwa = money(sum((impact.stressed_rwa for impact in by_class), _ZERO))
     base_el = money(sum((impact.base_expected_loss for impact in by_class), _ZERO))
     stressed_el = money(sum((impact.stressed_expected_loss for impact in by_class), _ZERO))
-    uplift = (
-        (stressed_credit_rwa / base_credit_rwa).quantize(Decimal("0.000001"))
-        if base_credit_rwa > _ZERO
-        else _ONE
-    )
+    # The uplift factor is a ratio, and a ratio needs a denominator. A book whose
+    # every exposure carries a zero EAD or a zero risk weight has no base credit
+    # RWA, and the factor used to come back as 1.0 — applied downstream to the
+    # PROJECTION's real credit RWA, so the projection's stress leg carried no
+    # migration or revaluation uplift at all (audit 2026-08-22 D-8).
+    if base_credit_rwa <= _ZERO:
+        raise NotComputable(
+            outcome(
+                OutcomeState.NOT_COMPUTABLE,
+                metric_id="credit_rwa_uplift_factor",
+                reason=(
+                    f"The {len(exposures)} supplied credit exposures produce no base "
+                    "credit RWA, so the rating-migration and FX-revaluation uplift has "
+                    "no denominator and is not a number. Check the exposure balances "
+                    "and their governed risk weights."
+                ),
+                items=("input:base_credit_rwa",),
+                context={"exposure_count": len(exposures)},
+            )
+        )
+    uplift = (stressed_credit_rwa / base_credit_rwa).quantize(Decimal("0.000001"))
     return BottomUpCreditResult(
         pd_multiplier=pd_multiplier,
         lgd_multiplier=lgd_multiplier,
@@ -300,17 +364,58 @@ def _year_points(paths: Sequence[MacroPathPoint], year_index: int) -> list[Macro
     return [point for point in paths if point.year_index == year_index]
 
 
+def _require_fx_path(
+    paths: Sequence[MacroPathPoint], exposures: Sequence[CreditExposure], *, metric_id: str
+) -> None:
+    """Refuse a missing / zero-based FX path when the book carries FC exposures.
+
+    ``translate("capital")`` validates only the ``capital`` register's own
+    drivers, so ``fx_usd_ghs`` was read straight off the points and an absent (or
+    zero-based) FX path read as "the cedi does not move": every foreign-currency
+    exposure kept its base EAD and the revaluation channel silently vanished
+    (audit 2026-08-22 D-8). A scenario in which the cedi genuinely holds is
+    authored FLAT, which contributes exactly zero.
+    """
+    if not any(exposure.is_foreign_currency for exposure in exposures):
+        return
+    require_macro_variables(
+        paths,
+        (FX_MACRO_VARIABLE,),
+        metric_id=metric_id,
+        context={"reason": "the exposure book carries foreign-currency positions"},
+    )
+    zero_base = tuple(
+        f"macro:{FX_MACRO_VARIABLE}@y{point.year_index}"
+        for point in paths
+        if point.variable == FX_MACRO_VARIABLE and point.base_value == _ZERO
+    )
+    if zero_base:
+        raise NotComputable(
+            outcome(
+                OutcomeState.DATA_QUALITY_BLOCK,
+                metric_id=metric_id,
+                reason=(
+                    "The exchange-rate path is authored with a zero base value, so the "
+                    "fractional depreciation that revalues the foreign-currency book is "
+                    "undefined. A zero base used to read as no depreciation."
+                ),
+                items=zero_base,
+            )
+        )
+
+
 def _macro_conditioning(
     year_points: Sequence[MacroPathPoint],
     overrides: Mapping[str, Sequence[ShockMapping]] | None,
 ) -> tuple[Decimal, Decimal, Decimal]:
     """(pd_mult, lgd_mult, fx_frac) implied by one set of macro points."""
-    shocks = translate(year_points, "capital", overrides) if year_points else {}
+    # Fail closed rather than neutralise on an empty/incomplete year (P0-9).
+    shocks = translate(year_points, "capital", overrides)
     pd_mult = shocks.get("ecl_pd_multiplier", _ONE)
     lgd_mult = shocks.get("ecl_lgd_multiplier", _ONE)
     fx_frac = _ZERO
     for point in year_points:
-        if point.variable == "fx_usd_ghs" and point.base_value != _ZERO:
+        if point.variable == FX_MACRO_VARIABLE and point.base_value != _ZERO:
             fx_frac = (point.stress_value - point.base_value) / point.base_value
             break
     return pd_mult, lgd_mult, fx_frac
@@ -331,9 +436,11 @@ def result_for_year(
     scenario whose severity varies over the horizon produces a different uplift
     per year.
     """
-    pd_mult, lgd_mult, fx_frac = _macro_conditioning(
-        _year_points(scenario_paths, year_index), overrides
+    year_points = _year_points(scenario_paths, year_index)
+    _require_fx_path(
+        year_points, exposures, metric_id=f"bottom_up_credit_year:{year_index}"
     )
+    pd_mult, lgd_mult, fx_frac = _macro_conditioning(year_points, overrides)
     return compute_bottom_up_credit(
         exposures,
         pd_multiplier=pd_mult,
@@ -356,6 +463,7 @@ def result_at_peak(
     orchestrator's other engines) rather than a single year — the single
     enterprise-snapshot view the orchestrator reports alongside the projection.
     """
+    _require_fx_path(scenario_paths, exposures, metric_id="bottom_up_credit_peak")
     shocks = translate(scenario_paths, "capital", overrides)
     pd_mult = shocks.get("ecl_pd_multiplier", _ONE)
     lgd_mult = shocks.get("ecl_lgd_multiplier", _ONE)
@@ -370,13 +478,18 @@ def result_at_peak(
 
 
 def _peak_fx_fraction(paths: Sequence[MacroPathPoint]) -> Decimal:
+    """Peak DEPRECIATION fraction across the path (0 when the cedi never weakens).
+
+    ``compute_bottom_up_credit`` floors the FX uplift at zero, so selecting the
+    largest-magnitude move of either sign let an appreciation year cancel a
+    depreciation year outright (enterprise audit P0-9).
+    """
     peak = _ZERO
     for point in paths:
-        if point.variable != "fx_usd_ghs" or point.base_value == _ZERO:
+        if point.variable != FX_MACRO_VARIABLE or point.base_value == _ZERO:
             continue
         frac = (point.stress_value - point.base_value) / point.base_value
-        if abs(frac) > abs(peak):
-            peak = frac
+        peak = max(peak, frac)
     return peak
 
 

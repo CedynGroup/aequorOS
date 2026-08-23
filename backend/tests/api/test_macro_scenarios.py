@@ -68,6 +68,12 @@ def _create_payload(code: str = "adverse_2027", bank_id: str | None = None) -> d
             _path("interest_rate", 1, "0.20", "0.25"),
             _path("gdp_growth", 1, "0.05", "0.00"),
             _path("fx_usd_ghs", 1, "12.5", "15.0"),
+            # The liquidity elasticity register also reads inflation, and a
+            # scenario that omits a driver a module reads is now refused rather
+            # than silently translated as a zero delta (enterprise audit P0-9).
+            # Authored FLAT, so it contributes exactly zero and every shock
+            # asserted in this module is unchanged.
+            _path("inflation", 1, "0.15", "0.15"),
         ],
         "reason": "Author the annual adverse scenario.",
     }
@@ -91,11 +97,11 @@ def test_create_lists_and_gets_a_draft(db_client: TestClient) -> None:
     assert created["version"] == 1
     assert created["created_by"] == str(MAKER)
     assert created["approved_by"] is None
-    assert len(created["paths"]) == 3
+    assert len(created["paths"]) == 4
 
     listing = db_client.get(URL, headers=headers()).json()
     assert listing["total"] == 1
-    assert listing["scenarios"][0]["path_count"] == 3
+    assert listing["scenarios"][0]["path_count"] == 4
     assert listing["scenarios"][0]["status"] == "draft"
 
     fetched = db_client.get(f"{URL}/{created['id']}", headers=headers()).json()

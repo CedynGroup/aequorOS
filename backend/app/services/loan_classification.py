@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.capital import loan_classification as engine
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
-from app.services import institution_types
+from app.services import institution_types, jurisdictions
 from app.services import regulatory_parameters as rp
 
 # Mirrors fact_derivation / le_generation: the derivation slice is the current
@@ -167,13 +167,14 @@ def _load_loan_exposures(
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == _LOAN_POSITION_TYPE,
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
 
-    base_currency = (bank.currency or "GHS").strip().upper()
+    base_currency = jurisdictions.base_currency(bank)
     exposures: list[engine.LoanExposure] = []
     unconverted = 0
     for snapshot, position in records:
@@ -216,11 +217,12 @@ def _load_raw_dpd_exposures(
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == _LOAN_POSITION_TYPE,
         )
     ).all()
-    base_currency = (bank.currency or "GHS").strip().upper()
+    base_currency = jurisdictions.base_currency(bank)
     exposures: list[_DpdExposure] = []
     for snapshot, position in records:
         days_past_due = _coerce_dpd((snapshot.attributes or {}).get("days_past_due"))

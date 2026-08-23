@@ -1,3 +1,11 @@
+"""Case balance-sheet forecast contracts (advisory, never filed).
+
+`CalculationRun` is the case plane's immutable run record. It is not
+`RegulatoryRun`: it snapshots case-local financial records and reviewed
+scenario assumptions, and its `input_hash` has no lineage into the regulatory
+spine. See `app.services.case_plane`.
+"""
+
 from __future__ import annotations
 
 from datetime import date, datetime

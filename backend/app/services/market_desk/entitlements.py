@@ -118,11 +118,9 @@ def curve_allowed(curve_code: str, datasets: set[str]) -> bool:
         return True
     if "DESK_CURVES_SOVEREIGN" in datasets and ".SOV." in curve_code:
         return True
-    # Unknown AEQ curves require premium sovereign+ unless explicitly credit/ois.
-    if curve_code.startswith("AEQ."):
-        return False
-    # Non-AEQ vendor curves are not gated by desk entitlements.
-    return True
+    # Unknown AEQ curves require premium sovereign+ unless explicitly credit/ois;
+    # non-AEQ vendor curves are not gated by desk entitlements at all.
+    return not curve_code.startswith("AEQ.")
 
 
 def org_tier(datasets: set[str]) -> str:
@@ -198,13 +196,12 @@ def index_allowed(index_code: str, datasets: set[str]) -> bool:
             continue
         if any(index_code.startswith(p) or index_code == p for p in prefixes):
             return True
-    # Unknown non-desk indices (vendor macros etc.) are not gated here.
-    if index_code.startswith("GHS."):
-        return False
-    return True
+    # An ungranted GHS.* index is a desk index the org does not hold; unknown
+    # non-desk indices (vendor macros etc.) are not gated here.
+    return not index_code.startswith("GHS.")
 
 
-def grant_tier(
+def grant_tier(  # noqa: PLR0913 - keyword-only grant record: every field is audited
     db: Session,
     *,
     organization_id: str,
@@ -243,7 +240,7 @@ def grant_tier(
     return created
 
 
-def grant_dataset(
+def grant_dataset(  # noqa: PLR0913 - keyword-only grant record: every field is audited
     db: Session,
     *,
     organization_id: str,
@@ -279,10 +276,25 @@ def revoke(
     db: Session,
     entitlement_id: Any,
     *,
+    organization_id: str,
     revoked_by: str,
     effective_to: date | None = None,
 ) -> MarketDataEntitlement:
-    row = db.get(MarketDataEntitlement, entitlement_id)
+    """End-date one grant. ``organization_id`` is REQUIRED and is part of the
+    lookup key, never a check applied afterwards.
+
+    It used to be a bare ``db.get`` by id: any operator could revoke ANY
+    tenant's market-data entitlement by guessing or enumerating a uuid, with
+    nothing tying the call to the tenant it affected (audit finding D-26). A
+    row belonging to another organization is indistinguishable here from one
+    that does not exist — the same 404, so the id space stays unprobeable.
+    """
+    row = db.scalar(
+        select(MarketDataEntitlement).where(
+            MarketDataEntitlement.id == entitlement_id,
+            MarketDataEntitlement.organization_id == organization_id,
+        )
+    )
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -9,9 +9,9 @@ one current generation per bank and is replaced by pipeline refreshes. Period
 facts and regulatory runs remain historical/governance structures.
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = "202608190021"
 down_revision = "202608190020"

@@ -24,7 +24,7 @@ import {
 } from '@/components/basel/sdiHooks';
 import { useLiquidityDashboard } from '@/lib/api/hooks';
 import { axisProps, CHART_GRID, chartTooltipProps, seriesColor } from '@/lib/chartTheme';
-import { num } from '@/lib/api/values';
+import { num, numOrNull } from '@/lib/api/values';
 import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
 
 function ratioTone(status: SdiLiquidityRatio['status']) {
@@ -123,10 +123,17 @@ export default function SdiLiquidityMonitoringView({
   const baselData = baselLiquidity.data;
   const concentration = data?.funding_concentration;
   const capacity = data?.counterbalancing_capacity;
-  const providerChart = (concentration?.providers ?? []).map((provider) => ({
+  // A provider whose share of deposits is not computable is left OUT of the
+  // concentration chart rather than plotted at 0% — a zero bar reads as "this
+  // provider concentrates nothing", which is the opposite of "we do not know".
+  const providerShares = (concentration?.providers ?? []).map((provider) => ({
     name: provider.name,
-    share: num(provider.pct_total_deposits ?? '0'),
+    share: numOrNull(provider.pct_total_deposits),
   }));
+  const providerChart = providerShares.filter(
+    (provider): provider is { name: string; share: number } => provider.share !== null
+  );
+  const providersWithoutShare = providerShares.length - providerChart.length;
   const ratioBuffers = (sdiData?.ratios ?? [])
     .filter((ratio) => ratio.value_pct !== null)
     .map((ratio) => ({
@@ -148,10 +155,20 @@ export default function SdiLiquidityMonitoringView({
     (bucket) =>
       bucket.cumulative_mismatch_ghs !== null && num(bucket.cumulative_mismatch_ghs) < 0
   );
+  // "None" is only an answer when there was something to look at. A ladder with
+  // no computable cumulative position must not report a clean bill of health.
+  const cumulativeComputable = (data?.maturity_ladder ?? []).some(
+    (bucket) => bucket.cumulative_mismatch_ghs !== null
+  );
+  const firstDeficitAmount = numOrNull(firstCumulativeDeficit?.cumulative_mismatch_ghs);
+  // A bucket with no cumulative mismatch is a GAP in the series, not a zero
+  // bar: the table beside this chart already renders it "—", and a zero bar
+  // reads as a measured "no mismatch" at exactly the bucket a reviewer is
+  // checking for one. Recharts omits null points.
   const ladderChart = (data?.maturity_ladder ?? []).map((bucket) => ({
     label: bucket.label,
-    net: num(bucket.net_mismatch_ghs),
-    cumulative: bucket.cumulative_mismatch_ghs === null ? 0 : num(bucket.cumulative_mismatch_ghs),
+    net: numOrNull(bucket.net_mismatch_ghs),
+    cumulative: numOrNull(bucket.cumulative_mismatch_ghs),
   }));
   const readinessExceptions = (data?.readiness ?? []).filter(
     (item) => item.status !== 'ready'
@@ -198,15 +215,25 @@ export default function SdiLiquidityMonitoringView({
               </>}
               <KpiStat
                 label="First maturity deficit"
-                value={firstCumulativeDeficit ? firstCumulativeDeficit.label : 'None'}
-                status={firstCumulativeDeficit ? 'crit' : 'ok'}
-                hint={firstCumulativeDeficit?.cumulative_mismatch_ghs ? `Cumulative ${fmtCurrencySigned(num(firstCumulativeDeficit.cumulative_mismatch_ghs))}` : 'No cumulative contractual deficit'}
+                value={firstCumulativeDeficit ? firstCumulativeDeficit.label : cumulativeComputable ? 'None' : 'Not computable'}
+                status={firstCumulativeDeficit ? 'crit' : cumulativeComputable ? 'ok' : 'warn'}
+                hint={
+                  firstDeficitAmount !== null
+                    ? `Cumulative ${fmtCurrencySigned(firstDeficitAmount)}`
+                    : cumulativeComputable
+                      ? 'No cumulative contractual deficit'
+                      : 'No bucket carries a cumulative position — not assessed'
+                }
               />
               <KpiStat
                 label="Top five funding share"
-                value={concentration.top_five_pct === null ? '—' : fmtPct(num(concentration.top_five_pct), 2)}
-                status={concentration.top_five_pct !== null && num(concentration.top_five_pct) >= 50 ? 'warn' : 'ok'}
-                hint={`${fmtCurrency(num(concentration.top_five_deposits_ghs))} of ${fmtCurrency(num(concentration.total_deposits_ghs))} deposits`}
+                value={concentration.top_five_pct === null ? 'Not computable' : fmtPct(num(concentration.top_five_pct), 2)}
+                status={concentration.top_five_pct === null ? 'warn' : num(concentration.top_five_pct) >= 50 ? 'warn' : 'ok'}
+                hint={
+                  concentration.top_five_pct === null
+                    ? 'Deposit concentration could not be derived — not assessed'
+                    : `${fmtCurrency(num(concentration.top_five_deposits_ghs))} of ${fmtCurrency(num(concentration.total_deposits_ghs))} deposits`
+                }
               />
               <KpiStat
                 label="Monetisable capacity"
@@ -230,7 +257,7 @@ export default function SdiLiquidityMonitoringView({
                 </ResponsiveContainer>
               </SectionCard>
               {isSdi ? (
-                <SectionCard title="LMTD compliance" subtitle="Binding Table 1 liquidity ratios and minimum buffers for this SDI." noPadding>
+                <SectionCard title="LMTD compliance" subtitle="Table 1 liquidity ratios and buffers for this SDI, against the Liquidity Monitoring Tools Directive exposure draft (not yet in force)." noPadding>
                   <DataTable columns={ratioColumns} rows={sdiData?.ratios ?? []} density="compact" maxHeight={300} stickyHeader />
                 </SectionCard>
               ) : (
@@ -263,6 +290,13 @@ export default function SdiLiquidityMonitoringView({
                 ) : (
                   <p className="text-body text-slate">No attributable deposit providers are available for concentration analysis.</p>
                 )}
+                {providersWithoutShare > 0 ? (
+                  <p className="mt-3 text-caption text-warning">
+                    {providersWithoutShare} provider{providersWithoutShare === 1 ? '' : 's'} carry no computable share of
+                    deposits and {providersWithoutShare === 1 ? 'is' : 'are'} excluded from this chart — the concentration
+                    shown is therefore incomplete.
+                  </p>
+                ) : null}
               </SectionCard>
               <SectionCard title="Counterbalancing capacity" subtitle="Assets available to generate liquidity without selling encumbered positions.">
                 <dl className="grid grid-cols-2 gap-x-5 gap-y-4 text-caption">

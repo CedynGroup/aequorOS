@@ -585,8 +585,7 @@ function AboutPanel({ bankId }: { bankId: string | undefined }) {
           <p className="text-caption text-slate leading-relaxed">
             Every calculation persists an immutable run with engine version and
             input hash · regulatory math executes server-side only · identical
-            inputs reproduce identical outputs · synthetic demo dataset — no
-            production bank data.
+            inputs reproduce identical outputs.
           </p>
         </div>
       </CardBody>

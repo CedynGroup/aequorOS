@@ -134,6 +134,37 @@ class RegulatoryRunErrorRead(ClosedModel):
 type RegulatoryRunError = RegulatoryRunErrorRead | None
 
 
+class WithdrawalImpactRead(ClosedModel):
+    """One governed withdrawal that retired rows a sealed run computed on."""
+
+    withdrawal_id: str
+    entity: str
+    source_system: str
+    as_of_date: date
+    position_type: str | None
+    rows_withdrawn: int
+    approved_at: datetime | None
+    reason: str
+
+
+class RunEvidenceRead(ClosedModel):
+    """Whether a sealed run's inputs are still the institution's current book.
+
+    DERIVED on every read from the append-only withdrawal register — never a
+    column, because stamping one would rewrite the immutable run this block
+    exists to characterise, and a withdrawal is reversible. ``status`` is
+    ``current`` or ``inputs_withdrawn``; a run in the second state is retained
+    unchanged as evidence and must not be filed.
+    """
+
+    status: Literal["current", "inputs_withdrawn"]
+    is_current: bool
+    blocks_filing: bool
+    reason: str | None
+    rows_withdrawn: int
+    withdrawals: list[WithdrawalImpactRead]
+
+
 class RegulatoryMetricResultRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -175,8 +206,12 @@ class RegulatoryRunRead(ClosedModel):
     organization_id: str
     bank_id: str
     reporting_period_id: UUID
-    module: RegulatoryModule
-    scenario_code: RegulatoryScenarioCode
+    # Immutable history also includes dedicated reverse- and enterprise-stress
+    # runs. Enterprise scenarios use Board-defined codes, so output reads must
+    # preserve the stored identifiers rather than validate against create-only
+    # request enums.
+    module: str
+    scenario_code: str
     status: RegulatoryRunStatus
     engine_version: str
     input_schema_version: str
@@ -190,6 +225,10 @@ class RegulatoryRunRead(ClosedModel):
     metric_results: list[RegulatoryMetricResultRead]
     line_items: list[RegulatoryLineItemRead]
     validations: list[RegulatoryValidationRead]
+    #: Derived standing of the run's inputs (D-12). A sealed run whose canonical
+    #: rows were later withdrawn under two-officer approval is retained
+    #: unchanged, but must never present as the current position.
+    evidence: RunEvidenceRead
     created_by: UUID
     created_at: datetime
     updated_at: datetime
@@ -197,8 +236,8 @@ class RegulatoryRunRead(ClosedModel):
 
 class RegulatoryRunSummaryRead(ClosedModel):
     id: UUID
-    module: RegulatoryModule
-    scenario_code: RegulatoryScenarioCode
+    module: str
+    scenario_code: str
     status: RegulatoryRunStatus
     reporting_period_id: UUID
     period_label: str
@@ -206,6 +245,9 @@ class RegulatoryRunSummaryRead(ClosedModel):
     input_hash: str
     metrics: dict[str, Any]
     error: RegulatoryRunError
+    #: See :class:`RegulatoryRunRead.evidence`. Carried on the summary too, so a
+    #: run-history LIST cannot present an orphaned run as current either.
+    evidence: RunEvidenceRead
     created_at: datetime
 
 

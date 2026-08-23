@@ -77,6 +77,7 @@ def _available_dates(
                 CanonicalPositionSnapshot.bank_id == bank.id,
                 CanonicalPositionSnapshot.as_of_date <= as_of,
                 CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
                 CanonicalPositionSnapshot.validation_status.in_(_INCLUDED),
             )
             .distinct()
@@ -108,6 +109,7 @@ def _actual_provision(
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED),
             CanonicalPosition.position_type == "LOAN",
         )
@@ -123,34 +125,10 @@ def _actual_provision(
 def _capital_rows(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> list[CanonicalReferenceRow]:
-    scope = (
-        CanonicalReferenceRow.organization_id == ctx.organization_id,
-        CanonicalReferenceRow.bank_id == bank.id,
-        CanonicalReferenceRow.dataset_kind == "capital_structure",
-    )
-    latest = db.scalar(
-        select(CanonicalReferenceRow.as_of_date)
-        .where(*scope, CanonicalReferenceRow.as_of_date <= as_of)
-        .order_by(CanonicalReferenceRow.as_of_date.desc())
-        .limit(1)
-    )
-    if latest is None:
-        return []
-    batch = db.scalar(
-        select(CanonicalReferenceRow.ingestion_batch_id)
-        .where(*scope, CanonicalReferenceRow.as_of_date == latest)
-        .order_by(CanonicalReferenceRow.created_at.desc(), CanonicalReferenceRow.id.desc())
-        .limit(1)
-    )
-    return list(
-        db.scalars(
-            select(CanonicalReferenceRow).where(
-                *scope,
-                CanonicalReferenceRow.as_of_date == latest,
-                CanonicalReferenceRow.ingestion_batch_id == batch,
-            )
-        )
-    )
+    """The latest ingested capital_structure generation — the SAME reader the
+    ratio and the checks use, so the reconciliation cannot be run against a
+    different generation than the CAR it reconciles."""
+    return sdi_capital.latest_capital_structure_rows(db, ctx, bank, as_of)
 
 
 def _mapped_gl_capital(
@@ -173,6 +151,7 @@ def _mapped_gl_capital(
                 CanonicalGlAccount.bank_id == bank.id,
                 CanonicalGlAccount.as_of_date == as_of,
                 CanonicalGlAccount.superseded_by.is_(None),
+                CanonicalGlAccount.withdrawn_at.is_(None),
                 CanonicalGlAccount.account_code.in_(codes),
             )
         )
@@ -187,9 +166,15 @@ def _reserve(components: dict[str, Decimal]) -> Decimal:
 
 
 def _history_point(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    *,
+    summary: sdi_capital.SdiCapitalSummary | None = None,
 ) -> CapitalHistoryPoint:
-    summary = sdi_capital.compute_sdi_capital_summary(db, ctx, bank, as_of)
+    if summary is None:
+        summary = sdi_capital.compute_sdi_capital_summary(db, ctx, bank, as_of)
     classification = loan_classification.classify_loan_book(db, ctx, bank, as_of).result
     actual_provision = _actual_provision(db, ctx, bank, as_of)
     headroom = (
@@ -202,11 +187,35 @@ def _history_point(
         if actual_provision is not None and classification.npl_exposure_ghs > _ZERO
         else None
     )
+    # A figure resting on an unconfirmed regulatory input is PROVISIONAL: a
+    # pending risk weight, an unconfirmed capital floor, an ungoverned bucket
+    # taxonomy, an ungoverned RISK-CLASS COMPOSITION, or exposure excluded from
+    # RWA because it carries no ingested currency conversion (which understates
+    # RWA and so overstates the ratio).
+    #
+    # The FLOOR's own confirmation status counts (WS-K, 2026-08-21): the SDI
+    # minimum capital ratio is cited to an ENABLING provision rather than a
+    # published figure, so whether it is settled is a control-plane fact, not
+    # something this module may assume. Reading the status rather than the value
+    # means re-statusing the parameter is all that is needed here.
+    #
+    # The composition counts for the same reason (forensic audit "DIVERGENCE
+    # #1"): which risk classes the ratio charges for was an emergent property of
+    # which code paths existed. While it is the platform's documented default
+    # rather than an approved scope, the ratio is provisional — a governed
+    # ``sdi_rwa_composition`` row settles it without touching this module.
+    provisional = bool(
+        summary.pending_parameters
+        or summary.car_min_confirmation != "confirmed"
+        or not summary.taxonomy_confirmed
+        or not summary.composition_confirmed
+        or summary.unconverted_position_count
+    )
     assessment_status = (
         "not_computable"
         if summary.car_pct is None
         else "provisional"
-        if summary.pending_parameters
+        if provisional
         else "review_required"
     )
     return CapitalHistoryPoint(
@@ -234,7 +243,8 @@ def get_sdi_capital_assurance(
 ) -> CapitalAssurance:
     """Return historic controls plus explicit evidence blockers for an SDI review."""
     history_dates = _available_dates(db, ctx, bank, as_of, history_limit)
-    current = _history_point(db, ctx, bank, as_of)
+    current_summary = sdi_capital.compute_sdi_capital_summary(db, ctx, bank, as_of)
+    current = _history_point(db, ctx, bank, as_of, summary=current_summary)
     history = [_history_point(db, ctx, bank, point_date) for point_date in history_dates]
     if not history or history[-1].as_of != as_of:
         history.append(current)
@@ -252,12 +262,44 @@ def get_sdi_capital_assurance(
 
     blockers = [
         "The prescribed BoG SDI capital-adequacy return template is not registered.",
-        "The simplified SDI RWA methodology requires regulator-confirmed scope before filing.",
     ]
+    # What the ratio charges for is disclosed on the summary itself
+    # (``rwa_scope_note``) whatever the scope is. It becomes a FILING blocker only
+    # while that scope is the platform's documented default rather than one
+    # approved for this institution — an approved credit-only scope is a decision,
+    # not an omission.
+    if not current_summary.composition_confirmed:
+        blockers.append(
+            current_summary.rwa_scope_note
+            + " Which risk classes the ratio must cover is the platform's documented "
+            "default, not a scope approved for this institution. Approve it in the "
+            "regulatory-parameter control plane before filing."
+        )
     if current.assessment_status == "not_computable":
         blockers.append("Capital adequacy is not computable for this reporting date.")
-    if current.assessment_status == "provisional":
+    if current_summary.pending_parameters:
         blockers.append("One or more simplified risk weights remain pending confirmation.")
+    if current_summary.car_min_confirmation != "confirmed":
+        blockers.append(
+            "The minimum capital adequacy ratio this institution is measured against is "
+            "not yet confirmed against a published regulatory instrument, so whether "
+            f"the {current_summary.car_min_pct}% floor is met is not a filing "
+            "conclusion. Confirm the parameter in the control plane."
+        )
+    if not current_summary.taxonomy_confirmed:
+        blockers.append(
+            "The mapping from product type to risk-weight band is the platform's "
+            "documented default, not a mapping approved for this institution. Approve "
+            "it in the regulatory-parameter control plane before filing."
+        )
+    if current_summary.unconverted_position_count:
+        blockers.append(
+            f"{current_summary.unconverted_position_count} asset position(s) in "
+            + ", ".join(current_summary.unconverted_currencies)
+            + " have no converted balance, so they are left out of risk-weighted "
+            "assets. Supply the converted balances — the ratio is overstated until "
+            "they are included."
+        )
     if current.actual_provision_ghs is None:
         blockers.append("Booked ECL provision balances were not supplied on the loan snapshots.")
     if mapped_gl_capital is None:

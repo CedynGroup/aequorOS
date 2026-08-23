@@ -164,6 +164,13 @@ class ManagementActionPlanRead(ClosedModel):
     approved_by: UUID | None
     approval_timestamp: datetime | None
     actions: list[ActionItemRead]
+    #: Actions whose size depends on how severe the scenario is (¶81). A plan
+    #: holding any of these needs a scenario that states its severity; run
+    #: against one that does not, it refuses rather than quietly applying every
+    #: action at full size. Empty means the plan runs against any scenario.
+    severity_priced_actions: list[str]
+    #: Convenience mirror of ``severity_priced_actions`` being non-empty.
+    requires_declared_severity: bool
     created_at: datetime
     updated_at: datetime
 

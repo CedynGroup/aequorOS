@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
+from app.domain.ingestion.constants import STUCK_DEDUP_STATUSES
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -40,11 +41,19 @@ from app.schemas.operator import (
     FixJobEnqueuedRead,
     FixOfficialRunRequest,
     FixRecomputeRequest,
+    FixRedriveDedupRead,
+    FixRedriveDedupRequest,
     FixRerunIngestionRead,
     FixRerunIngestionRequest,
 )
 from app.services import job_queue
 from app.services.public_ids import normalize_public_id
+
+#: The out-of-band ML-ETL dedup job type, named literally for the same reason as
+#: in ``operator_views``: importing ``app.services.etl_dedup_jobs`` would drag the
+#: ETL and model-loading stack into the operator app. ``job_queue.enqueue``
+#: validates it against the allow-list.
+_ETL_DEDUP_JOB_TYPE = "etl_dedup"
 
 #: Marks jobs enqueued from the operator inspector so the tenant's own audit
 #: trail and the worker can distinguish a support-triggered run from a
@@ -230,6 +239,92 @@ def rerun_ingestion(
     )
 
 
+def redrive_dedup(
+    db: Session, organization_id: str, payload: FixRedriveDedupRequest
+) -> FixRedriveDedupRead:
+    """Re-enqueue the out-of-band ML-ETL dedup pass for one batch.
+
+    The handler (``etl_dedup_jobs.run_etl_dedup``) is idempotent and re-runnable
+    — a completed batch is a no-op, a failed one is retried — so the only thing
+    missing was a way to ask for it again. The queue stops at ``max_attempts``,
+    so a batch whose job exhausted its attempts is stranded for ever with no
+    surface to recover it: four batches / 611,869 records sat that way on the
+    primary for weeks.
+
+    Deliberately NOT automatic. Those four failed for three unrelated reasons —
+    a severed DB connection across the long non-SQL phase, a live job reclaimed
+    at the 900s stale-job threshold while legitimately running for 2h02m, and a
+    ``MappingConfig`` schema skew since healed. A retry timer would have hidden
+    all three, and two of them needed a code change before any retry could
+    succeed. An operator reads the recorded error, then asks.
+
+    Refuses a batch whose pass already completed (409): re-running it would
+    duplicate nothing (the handler short-circuits) but the request means the
+    operator has misread the board, and saying so is better than enqueuing a
+    no-op that reports success.
+    """
+    batch = db.scalar(
+        select(IngestionBatch).where(
+            IngestionBatch.id == payload.batch_id,
+            IngestionBatch.organization_id == organization_id,
+        )
+    )
+    if batch is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ingestion batch not found for this organization.",
+        )
+    dedup_status = (batch.etl_report or {}).get("dedup_status")
+    if dedup_status not in STUCK_DEDUP_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This batch's deduplication pass is not awaiting a re-drive "
+                f"(dedup_status={dedup_status!r}); only a deferred or failed pass "
+                "can be re-driven."
+            ),
+        )
+    previous = job_queue.latest_for_entity(
+        db,
+        organization_id=organization_id,
+        job_type=_ETL_DEDUP_JOB_TYPE,
+        entity_id=batch.id,
+    )
+    if previous is not None and previous.status in {"queued", "running"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A deduplication job for this batch is already "
+                f"{previous.status}; wait for it to finish before re-driving."
+            ),
+        )
+    job = job_queue.enqueue(
+        db,
+        organization_id,
+        _ETL_DEDUP_JOB_TYPE,
+        bank_id=batch.bank_id,
+        payload={
+            "batch_id": str(batch.id),
+            "reason": payload.note,
+            "initiated_by": _INITIATED_BY,
+            "redrive_of_job_id": str(previous.id) if previous is not None else None,
+        },
+        run_after=utc_now(),
+        coalesce_key=f"etl_dedup:{batch.id}",
+        entity_type="ingestion_batch",
+        entity_id=batch.id,
+    )
+    return FixRedriveDedupRead(
+        job_id=job.id,
+        job_type=job.job_type,
+        status=job.status,
+        batch_id=batch.id,
+        previous_dedup_status=str(dedup_status),
+        previous_job_id=previous.id if previous is not None else None,
+        previous_job_error=previous.error if previous is not None else None,
+    )
+
+
 # -- scoped config change --------------------------------------------------------
 def apply_config(
     db: Session, organization_id: str, payload: FixConfigRequest, *, approved_by: str
@@ -371,7 +466,7 @@ def _guard_same_day(effective_from: date) -> None:
         )
 
 
-def _supersede_liquidity(
+def _supersede_liquidity(  # noqa: PLR0913 - the full supersession record, one arg each
     db: Session,
     current: ParamLiquidityThreshold,
     new_value: Decimal,
@@ -416,7 +511,7 @@ def _supersede_liquidity(
     )
 
 
-def _supersede_capital(
+def _supersede_capital(  # noqa: PLR0913 - the full supersession record, one arg each
     db: Session,
     current: ParamCapitalThreshold,
     new_value: Decimal,

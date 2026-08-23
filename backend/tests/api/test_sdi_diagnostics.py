@@ -98,3 +98,25 @@ def test_universal_bank_loan_classification_uses_neutral_endpoint(db_client) -> 
     assert body["institution_class"] == "bank"
     assert "olem" in {bucket["grade"] for bucket in body["buckets"]}
     assert len(body["delinquency_buckets"]) == 7
+
+def test_sdi_capital_summary_declares_the_risk_classes_it_omits(db_client) -> None:  # noqa: ANN001
+    """The scope of the ratio reaches the wire, not just the service.
+
+    A CAR computed on credit risk alone has to say so on the surface that
+    presents it (forensic audit "DIVERGENCE #1"), so the payload carries every
+    known risk class, in scope or not, and the one-line disclosure.
+    """
+    bank_id = _create_sdi_bank()
+    response = db_client.get(f"/api/v1/banks/{bank_id}/sdi/capital-summary", headers=headers())
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    assert body["composition_source"] == "code_default"
+    by_class = {row["risk_class"]: row for row in body["risk_classes"]}
+    assert set(by_class) == {"credit", "market", "operational"}
+    assert by_class["credit"]["in_scope"] is True
+    assert by_class["market"]["in_scope"] is False
+    assert by_class["operational"]["in_scope"] is False
+    assert "credit risk only" in body["rwa_scope_note"]
+    # Reader-facing copy, no parameter codes or raw enums.
+    assert "no charge is assumed" in by_class["operational"]["note"]

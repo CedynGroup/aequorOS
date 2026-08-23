@@ -12,8 +12,9 @@
  * API client attaches the access token as `Authorization: Bearer` on every call.
  * The browser never sets the tenant identity — it comes from the verified token.
  */
-import NextAuth, { type NextAuthConfig } from 'next-auth';
+import NextAuth, { customFetch, type NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import { OutboundTargetBlocked, checkOutboundUrl, guardedFetchFor } from './lib/outbound';
 
 const apiOrigin = (process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? 'http://localhost:8000')
   .replace(/\/api\/v1\/?$/, '');
@@ -116,6 +117,40 @@ let ssoCache: { config: SsoClientConfig | null; fetchedAt: number } = {
 };
 const SSO_CACHE_MS = 60_000;
 
+/**
+ * Refuse an SSO config whose issuer is not a routable public destination.
+ *
+ * `issuer` is set by an org admin (Settings → Authentication) and openid-client
+ * fetches it from INSIDE this Node process — its discovery request and its
+ * token-endpoint exchange are server-side fetches the backend's Python egress
+ * guard structurally cannot see, because they happen in a different runtime in
+ * a different container. Without this, `http://169.254.169.254/…` as an issuer
+ * aims the dashboard server at cloud instance metadata.
+ *
+ * A blocked issuer is reported as "no SSO", not as an error: the provider is
+ * simply never constructed, so there is nothing to sign in with and nothing
+ * about the deployment's network leaks into a page. The reason and the resolved
+ * address go to the server log only.
+ */
+export async function vetSsoIssuer(
+  config: SsoClientConfig | null,
+  options?: Parameters<typeof checkOutboundUrl>[1],
+): Promise<SsoClientConfig | null> {
+  if (!config?.enabled || !config.issuer) return config;
+  try {
+    await checkOutboundUrl(config.issuer, { field: 'SSO issuer', ...options });
+    return config;
+  } catch (error) {
+    if (error instanceof OutboundTargetBlocked) {
+      console.warn(
+        `[sso] issuer blocked by the egress guard (${error.reason}): ${error.internalDetail}`,
+      );
+      return null;
+    }
+    throw error;
+  }
+}
+
 async function fetchSsoConfig(): Promise<SsoClientConfig | null> {
   const internalKey = process.env.SSO_INTERNAL_KEY;
   if (!internalKey) return null;
@@ -126,8 +161,10 @@ async function fetchSsoConfig(): Promise<SsoClientConfig | null> {
       cache: 'no-store',
       signal: AbortSignal.timeout(3000),
     });
+    // Vetted BEFORE it is cached, so the cache can only ever hold a permitted
+    // issuer and the provider below is built from a checked value by construction.
     ssoCache = {
-      config: res.ok ? ((await res.json()) as SsoClientConfig) : null,
+      config: await vetSsoIssuer(res.ok ? ((await res.json()) as SsoClientConfig) : null),
       fetchedAt: Date.now(),
     };
   } catch {
@@ -136,9 +173,36 @@ async function fetchSsoConfig(): Promise<SsoClientConfig | null> {
   return ssoCache.config;
 }
 
+/**
+ * Tell the backend to revoke the refresh token's whole session lineage on sign-out.
+ *
+ * Clearing the NextAuth cookie only makes the browser forget the token; the token
+ * itself stayed valid for the rest of its 14 days. `/auth/logout` is idempotent,
+ * unauthenticated (the refresh token IS the credential) and always answers 204,
+ * so a failure here must never block the sign-out the user asked for.
+ */
+async function revokeBackendSession(refreshToken: unknown): Promise<void> {
+  if (typeof refreshToken !== 'string' || !refreshToken) return;
+  try {
+    await fetch(`${apiOrigin}/api/v1/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  } catch {
+    // Backend unreachable: the cookie is still cleared and the token still
+    // expires on its own. Nothing useful to report to a user who is leaving.
+  }
+}
+
 const baseConfig = {
   session: { strategy: 'jwt' },
   pages: { signIn: '/login' },
+  events: {
+    async signOut(message) {
+      await revokeBackendSession('token' in message ? message.token?.refreshToken : undefined);
+    },
+  },
   callbacks: {
     // Middleware gate (see middleware.ts matcher, which already excludes /login
     // and /api/auth): every other route requires an authenticated session, so an
@@ -227,6 +291,8 @@ const credentialsProvider = Credentials({
 export const { handlers, signIn, signOut, auth } = NextAuth(async (req) => {
   const providers: NextAuthConfig['providers'] = [credentialsProvider];
   if (req?.nextUrl.pathname.startsWith('/api/auth')) {
+    // fetchSsoConfig() has already put the issuer through the egress guard, so
+    // reaching this line at all means the destination was permitted.
     const sso = await fetchSsoConfig();
     if (sso?.enabled && sso.issuer && sso.client_id && sso.client_secret) {
       providers.push({
@@ -236,6 +302,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth(async (req) => {
         issuer: sso.issuer,
         clientId: sso.client_id,
         clientSecret: sso.client_secret,
+        // Every server-side fetch of the OIDC flow — discovery, the
+        // token-endpoint exchange, userinfo — is routed through the egress
+        // guard here. Checking the issuer alone is NOT enough: the token
+        // endpoint is named by the discovery document, i.e. by whatever
+        // answered the first request, so it is a second, separately
+        // attacker-influenced URL. `customFetch` is the one seam @auth/core
+        // threads into all of them (see @auth/core/lib/actions/**), which is
+        // why the guard lives at the fetch boundary rather than on the issuer
+        // string. Auth.js sets `allowInsecureRequests` internally, so the
+        // https allow-list here is the only thing requiring TLS.
+        [customFetch]: guardedFetchFor('OIDC endpoint'),
       });
     }
   }

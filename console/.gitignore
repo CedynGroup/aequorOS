@@ -2,6 +2,9 @@
 node_modules
 .next
 *.tsbuildinfo
+# Transient emit for the node:test suites (`pnpm test` deletes it, but a failing
+# run leaves it behind). Mirrors backend/dashboard/.gitignore.
+/.test-out/
 
 # local env (the committed .env.example documents the variables)
 .env*.local

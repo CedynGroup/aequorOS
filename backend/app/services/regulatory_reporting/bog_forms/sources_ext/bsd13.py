@@ -46,17 +46,27 @@ Conventions (documented in docs/bog_returns/bsd13_line_map.md):
   TRADING POSITION reconciles to the fact's ``net_derivatives_ccy``.
 * Sales are returned NEGATIVE: the template's own formulas are
   ``Net Spot = Spot Purchase + Spot Sale`` with the caption "(L + or S −)".
+* **No rate is ever assumed.** Every cedi-equivalent aggregation on this form
+  (the *Other Currencies* column, everywhere it appears) goes through
+  :func:`_to_report_currency`, which counts what it cannot convert, and the
+  cell then refuses via :func:`_refuse_unconverted` — ``MISSING_REQUIRED_INPUT``
+  naming the currencies, blank cell, reason in the completion notes. Parity
+  with the reporting currency is not a fallback: it is a rate nobody governs,
+  and on a filed net open position it reports the foreign amount itself
+  (audit 2026-08-22 D-13 / D-21).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select
 
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import RegulatoryRun
 from app.models.canonical import (
     CanonicalCounterparty,
@@ -184,6 +194,87 @@ def spot_rate(rc: ResolveContext, currency: str) -> Decimal | None:
     return spot
 
 
+@dataclass
+class _Unconverted:
+    """Amounts whose currency carries no governed rate, counted per currency.
+
+    Deliberately the same shape ``sdi_capital._Exposures`` reports as
+    ``unconverted_position_count`` / ``unconverted_currencies`` (audit D-21):
+    an amount that cannot be converted is EXCLUDED and COUNTED, never taken at
+    face value and never quietly dropped to zero. The difference is what
+    happens next — the SDI summary carries the count to a filing blocker,
+    whereas a BoG cell has nowhere to carry it, so the cell itself refuses.
+    """
+
+    counts: dict[str, int] = field(default_factory=dict)
+
+    def record(self, currency: str) -> None:
+        self.counts[currency] = self.counts.get(currency, 0) + 1
+
+    @property
+    def count(self) -> int:
+        return sum(self.counts.values())
+
+    @property
+    def currencies(self) -> tuple[str, ...]:
+        return tuple(sorted(self.counts))
+
+    def __bool__(self) -> bool:
+        return bool(self.counts)
+
+
+def _to_report_currency(
+    rc: ResolveContext, amount: Decimal, currency: str, unconverted: _Unconverted
+) -> Decimal:
+    """``amount`` (in ``currency``) restated in the bank's reporting currency.
+
+    Returns zero and COUNTS the currency when no governed rate resolves; the
+    caller must inspect ``unconverted`` and refuse the whole line before using
+    the running total, so that zero is never filed.
+    """
+    if amount == _ZERO:
+        return _ZERO  # a nil amount is nil at every rate — no rate is required
+    spot = spot_rate(rc, currency)
+    if spot is None:
+        unconverted.record(currency)
+        return _ZERO
+    return amount * spot
+
+
+def _refuse_unconverted(
+    rc: ResolveContext, unconverted: _Unconverted, *, metric_id: str, subject: str
+) -> NotComputable:
+    """The refusal a cedi-equivalent cell raises instead of assuming parity.
+
+    Audit D-13: this line used to value an unrateable currency at 1.00 against
+    the reporting currency, which reports the foreign amount itself as though
+    it were already converted — on a currency trading near 14 to the unit, a
+    ~14x overstatement of a FILED net open position, in a plausible-looking
+    cell. A rate nobody governs is not a rate.
+
+    The engine catches this at the resolver boundary, leaves the cell blank
+    with status ``input_required``, and records the message in the form's
+    completion notes — so the return states what is missing instead of
+    carrying an invented figure.
+    """
+    listed = ", ".join(unconverted.currencies)
+    return NotComputable(
+        outcome(
+            OutcomeState.MISSING_REQUIRED_INPUT,
+            metric_id=metric_id,
+            reason=(
+                f"{unconverted.count} {subject} in {listed} carry no exchange rate for "
+                f"{rc.period.period_end.isoformat()}: none was ingested, the "
+                f"foreign-exchange run holds none, and no market rate is published. "
+                f"They cannot be stated in {rc.bank.currency}, and valuing them at par "
+                f"would report the foreign amount as though it were already "
+                f"{rc.bank.currency}. Ingest a rate for {listed} at this reporting date."
+            ),
+            items=tuple(f"fx_spot:{ccy}" for ccy in unconverted.currencies),
+        )
+    )
+
+
 def _named(params: dict[str, Any]) -> tuple[str, ...]:
     named = params.get("named")
     return tuple(str(c).upper() for c in named) if named else NAMED_CURRENCIES
@@ -235,6 +326,8 @@ def _latest_snapshots(rc: ResolveContext) -> Any:
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.as_of_date <= rc.period.period_end,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
         .group_by(CanonicalPositionSnapshot.position_id)
         .subquery()
@@ -285,7 +378,10 @@ def contracts(rc: ResolveContext) -> tuple[Contract, ...]:
             CanonicalPositionSnapshot.organization_id == rc.ctx.organization_id,
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
             CanonicalPosition.position_type == "FX_HEDGE",
         )
     )
@@ -320,7 +416,13 @@ def _contract_measure(
     rc: ResolveContext, currency: str, measure: str, named: tuple[str, ...]
 ) -> Decimal | None:
     """Σ purchases (+) or sales (−) of ``currency`` under spot / forward
-    contracts; for ``other`` the cedi equivalent over every other currency."""
+    contracts; for ``other`` the cedi equivalent over every other currency.
+
+    A named column is reported in ITS OWN currency's units, so no conversion
+    happens and no rate is needed. The *Other Currencies* column is an
+    aggregate in the reporting currency, so every leg it absorbs needs a
+    governed rate — and the column refuses when one is missing (audit D-13).
+    """
     kind, side = measure.split("_", 1)  # spot|forward, long|short
     book = [c for c in contracts(rc) if c.kind == kind]
     if not book:
@@ -331,16 +433,26 @@ def _contract_measure(
         return _is_other(ccy, rc, named) if other else ccy == currency
 
     total = _ZERO
+    unconverted = _Unconverted()
     for contract in book:
         if side == "long" and qualifies(contract.buy):
             amount = contract.buy_amount
             if amount is None:
                 continue
-            factor = (spot_rate(rc, contract.buy) or Decimal("1")) if other else Decimal("1")
-            total += amount * factor
+            total += _to_report_currency(rc, amount, contract.buy, unconverted) if other else amount
         elif side == "short" and qualifies(contract.sell):
-            factor = (spot_rate(rc, contract.sell) or Decimal("1")) if other else Decimal("1")
-            total -= contract.notional * factor
+            total -= (
+                _to_report_currency(rc, contract.notional, contract.sell, unconverted)
+                if other
+                else contract.notional
+            )
+    if unconverted:
+        raise _refuse_unconverted(
+            rc,
+            unconverted,
+            metric_id=f"bsd13.nop.{measure}.other",
+            subject=f"outstanding {kind} contract leg(s)",
+        )
     return total
 
 
@@ -386,6 +498,7 @@ def _nop(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:  # noqa:
         return _currency_measure(currency, measure, facts.get(currency), run_ccy.get(currency))
     total = _ZERO
     seen = False
+    unconverted = _Unconverted()
     for ccy in sorted(set(facts) | set(run_ccy)):
         if not _is_other(ccy, rc, named):
             continue
@@ -394,10 +507,16 @@ def _nop(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:  # noqa:
             continue
         seen = True
         if measure in ("net_ghs",):
-            total += value
-        else:  # currency units → cedi equivalent
-            spot = spot_rate(rc, ccy)
-            total += value * spot if spot is not None else value
+            total += value  # already in the reporting currency
+        else:  # currency units → reporting-currency equivalent
+            total += _to_report_currency(rc, value, ccy, unconverted)
+    if unconverted:
+        raise _refuse_unconverted(
+            rc,
+            unconverted,
+            metric_id=f"bsd13.nop.{measure}.other",
+            subject="open position(s)",
+        )
     return total if seen else None
 
 
@@ -472,7 +591,10 @@ def _positions_ccy(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
             CanonicalPositionSnapshot.organization_id == rc.ctx.organization_id,
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
         )
     )
     if types := params.get("position_types"):
@@ -513,19 +635,30 @@ def _positions_ccy(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
         k: [str(v).lower() for v in vs] for k, vs in (params.get("attribute_not_in") or {}).items()
     }
     missing_ok = bool(params.get("attribute_missing_ok", False))
+    unconverted = _Unconverted()
     for row_currency, amount, attrs in rc.db.execute(stmt):
         attributes = dict(attrs or {})
         if not _attribute_filters_pass(attributes, attr_in, attr_not_in, missing_ok):
             continue
         value = Decimal(str(amount or 0))
         if currency == OTHER:
+            # The bank's own ingested conversion first; otherwise a governed
+            # rate. Never par: a foreign balance carried at 1.00 files the
+            # foreign amount as a reporting-currency figure (audit D-13/D-21).
             ghs = _dec(attributes.get("balance_ghs"))
-            if ghs is not None and value != _ZERO:
-                value = ghs
-            else:
-                spot = spot_rate(rc, str(row_currency))
-                value = value * spot if spot is not None else value
+            value = (
+                ghs
+                if ghs is not None and value != _ZERO
+                else _to_report_currency(rc, value, str(row_currency), unconverted)
+            )
         total += value
+    if unconverted:
+        raise _refuse_unconverted(
+            rc,
+            unconverted,
+            metric_id="bsd13.positions_ccy.other",
+            subject="position(s)",
+        )
     return total * Decimal(str(params.get("sign", 1)))
 
 

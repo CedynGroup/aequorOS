@@ -43,7 +43,7 @@ export default function IrrOverviewPage() {
   return (
     <IrrWorkspace
       crumb="Overview"
-      subtitle={`Banking book IRRBB · Repricing gap · EVE & EaR sensitivity · ${regShort()} CRD`}
+      subtitle={`Banking book IRRBB · Repricing gap · EVE & EaR sensitivity · Basel IRRBB standard (BCBS d368/d578); the ${regShort()} IRRBB guideline is an exposure draft`}
     >
       {({ data, metrics: m, latestRun, computedAt }) => {
         const eveLimit = num(m.eveLimitPct);
@@ -153,7 +153,7 @@ export default function IrrOverviewPage() {
 
               <SectionCard
                 title="Repricing gap profile"
-                subtitle={`Net gap per ${regShort()} CRD tenor bucket with cumulative overlay`}
+                subtitle="Net gap per Basel IRRBB tenor bucket with cumulative overlay"
                 actions={
                   <Link
                     href="/irr/gaps"

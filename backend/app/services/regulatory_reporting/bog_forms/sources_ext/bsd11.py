@@ -35,6 +35,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalPosition,
@@ -42,6 +43,7 @@ from app.models.canonical import (
     CanonicalProduct,
 )
 from app.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
+from app.services import jurisdictions
 
 from ..sources import ResolveContext, resolver
 
@@ -269,6 +271,13 @@ def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> lis
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.as_of_date <= rc.period.period_end,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            # The "latest as-of" must be the latest ADMITTED one (re-audit D-4).
+            # Without this the newest date could come from a pending/error
+            # snapshot that the outer query then refuses, and the facility would
+            # vanish from the return instead of falling back to its last
+            # accepted snapshot — a silent omission, not a visible refusal.
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
         .group_by(CanonicalPositionSnapshot.position_id)
         .subquery()
@@ -292,13 +301,15 @@ def _load_facilities(rc: ResolveContext, position_types: tuple[str, ...]) -> lis
             CanonicalPositionSnapshot.organization_id == rc.ctx.organization_id,
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(("accepted", "warning")),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
             CanonicalPosition.position_type.in_(list(position_types)),
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
-    base = (rc.bank.currency or "GHS").strip().upper()
+    base = jurisdictions.base_currency(rc.bank)
     facilities = [
         _Facility(
             position=position,

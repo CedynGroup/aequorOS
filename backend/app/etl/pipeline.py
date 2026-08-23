@@ -60,6 +60,14 @@ class EtlConfig:
     resolve_references: bool = True
     deduplicate: bool = True
     detect_anomalies: bool = True
+    # The counterparty matcher is the only O(n^2)-within-block, model-scored stage
+    # in the pass: at ~370us per candidate pair a core-banking counterparty file
+    # runs for HOURS, which is what made the deferred ``etl_dedup`` job outlive its
+    # worker's stale-job window and get reclaimed mid-flight (three of the five
+    # observed job failures). Callers that must complete inside a bounded window
+    # set this False and SAY SO in their report -- the pass is never silently
+    # dropped. Position/anomaly stages are linear and always run with ``deduplicate``.
+    match_counterparties: bool = True
     # Counterparty matcher thresholds (forwarded verbatim).
     auto_confirm_threshold: float = 0.90
     review_floor: float = 0.55
@@ -95,13 +103,14 @@ def run_etl(
 
     linkages: list[LinkageRecord] = []
     if cfg.deduplicate:
-        linkages.extend(
-            CounterpartyMatcher(
-                model=cfg.counterparty_model,
-                auto_confirm_threshold=cfg.auto_confirm_threshold,
-                review_floor=cfg.review_floor,
-            ).link(cleaned_records)
-        )
+        if cfg.match_counterparties:
+            linkages.extend(
+                CounterpartyMatcher(
+                    model=cfg.counterparty_model,
+                    auto_confirm_threshold=cfg.auto_confirm_threshold,
+                    review_floor=cfg.review_floor,
+                ).link(cleaned_records)
+            )
         linkages.extend(PositionDeduplicator().link(cleaned_records))
 
     if cfg.detect_anomalies:

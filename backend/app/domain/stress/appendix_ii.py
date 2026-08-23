@@ -7,7 +7,8 @@ into those exact structures — pure, deterministic, Decimal-only. It reads the
 projection's per-year ``RwaResult``/``CapitalRatiosResult`` (the authoritative
 capital build the pure engines produced) and never re-derives a ratio.
 
-Amounts are reported in **GHS'000** per the directive convention; ratios stay as
+Amounts are reported in **thousands of the institution's own reporting currency**
+(``<currency>'000``) per the directive convention; ratios stay as
 percentages. The projection passed here is the required "results WITHOUT
 management actions" output (¶67(f)); when the run also models a management-action
 plan, its :class:`ManagementActionsResult` is passed as ``management_actions`` and
@@ -34,6 +35,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.domain.authority.outcomes import (
+    NotComputable,
+    OutcomeDetail,
+    OutcomeState,
+    outcome,
+)
 from app.domain.capital.engine import CapitalLineItem, CapitalRatiosResult, RwaResult
 from app.domain.stress.credit_bottom_up import CRD_EXPOSURE_CLASSES
 from app.domain.stress.management_actions import ManagementActionsResult, PostActionYear
@@ -41,7 +48,6 @@ from app.domain.stress.projection import (
     EnterpriseProjection,
     ProjectedYear,
     component_breakdown,
-    general_provisions_amount,
 )
 from app.domain.stress.translation import MacroPathPoint
 
@@ -62,7 +68,28 @@ _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
 MONEY = Decimal("0.001")  # GHS'000 to three decimals
 
-DEFAULT_CAR_TARGET_PCT = Decimal("13")
+# There is deliberately NO ``DEFAULT_CAR_TARGET_PCT`` here (audit 2026-08-22
+# D-15). This module used to carry ``Decimal("13")``, applied to Table 1's
+# "capital required at CAR target", Table 5's Pillar-1 requirement and the
+# management-action RWA-relief valuation. Three things were wrong with it:
+#
+# * **It is a regulatory floor, and floors are governed, effective-dated data.**
+#   The minimum CAR a Ghanaian bank must hold is BoG CRD ¶71's 10% plus ¶75's
+#   capital conservation buffer, and BoG has moved that buffer more than once —
+#   the total minimum has been 13%, 11.5%, 13%, 10% and 13% over the life of the
+#   directive. A literal cannot be any of those on the right date; the governed
+#   ``car_min`` parameter (``regulatory_parameters``, effective-dated, clamped)
+#   can be all of them.
+# * **It is jurisdiction-specific inside a jurisdiction-neutral package.** 13 is a
+#   Ghanaian figure and ``app/domain`` must stay neutral (CLAUDE.md).
+# * **It is not even the right floor for every Ghanaian institution.** An SDI's
+#   statutory minimum is Act 930 s.29's 10%, not 13% — so this literal computed a
+#   savings-and-loans institution's Appendix II capital requirement against the
+#   universal-bank floor.
+#
+# ``car_target_pct`` is therefore a REQUIRED argument of :func:`build_appendix_ii`
+# and the caller resolves it from the control plane. Absence refuses; it is never
+# assumed.
 
 # AT1 is eligible up to 1.5% of RWA, Tier 2 up to 2% of RWA (AppII Table 2).
 AT1_CAP_PCT_RWA = Decimal("1.5")
@@ -241,7 +268,51 @@ class Table2Row:
     tier2_cap: Decimal
     tier2_eligible: Decimal
     total_regulatory_capital: Decimal
-    credit_risk_reserve: Decimal
+    #: BoG's **Credit Risk Reserve** — the excess of the BoG prudential provision
+    #: over the IFRS 9 impairment, transferred out of income surplus, not
+    #: distributable, and EXCLUDED from the adjusted capital base for CAR
+    #: (Guide for Financial Publication BSD/2017 §2.2.1(ii)-(iv) p.10, §2.5 item
+    #: 5 p.44; CRD June 2018 ¶32 omits it from CET1).
+    #:
+    #: ALWAYS ``None`` today. Until 2026-08-21 this line was fed
+    #: ``general_provisions_amount(ratios)`` — the Tier-2 RECOGNISED general
+    #: provisions, i.e. the capped allowance ADDED to Tier 2. That is a different
+    #: quantity with the opposite capital sign, and it was being reported into a
+    #: BoG template line. The correct figure is ``prudential provision - IFRS 9
+    #: ECL``, and the enterprise projection carries no loan-classification
+    #: dimension, so no prudential provision exists to subtract from. The repo's
+    #: rule for a template cell with no honest source is to leave it unpopulated
+    #: with a stated reason, never to substitute a plausible number: see
+    #: ``AppendixIITables.not_computable``.
+    credit_risk_reserve: Decimal | None
+
+
+#: Why Appendix II's "Credit Risk Reserve" line is not populated.
+#:
+#: BoG's Credit Risk Reserve is ``BoG prudential provision - IFRS 9 impairment``,
+#: appropriated from income surplus, non-distributable, and excluded from the
+#: adjusted capital base (Guide for Financial Publication BSD/2017 §2.2.1(ii)-(iv)
+#: p.10 and §2.5 item 5 p.44; CRD June 2018 ¶32 does not list it in CET1). The
+#: enterprise projection models loans as aggregate categories and carries no loan
+#: classification, so it computes no BoG prudential provision — there is nothing
+#: to subtract the IFRS 9 impairment from. Reporting the Tier-2 recognised general
+#: provisions here instead (the pre-2026-08-21 behaviour) reported a different
+#: quantity with the OPPOSITE capital sign into a BoG template line.
+CREDIT_RISK_RESERVE_NOT_COMPUTABLE: OutcomeDetail = outcome(
+    OutcomeState.MISSING_REQUIRED_INPUT,
+    metric_id="appendix_ii.table2.credit_risk_reserve",
+    reason=(
+        "The Credit Risk Reserve is the excess of the BoG prudential provision over "
+        "the IFRS 9 impairment (Guide for Financial Publication BSD/2017 section "
+        "2.2.1). The enterprise projection carries no loan classification, so no "
+        "prudential provision is computed for any projected year and the reserve "
+        "cannot be established. It is reported as not computed rather than "
+        "substituted with the Tier 2 general provisions, which are a different "
+        "quantity and move the capital base in the opposite direction."
+    ),
+    items=("fact:loan_classification", "metric:bog_prudential_provision"),
+    context={"table": "appendix_ii_table2", "line": "credit_risk_reserve"},
+)
 
 
 @dataclass(frozen=True)
@@ -358,6 +429,20 @@ class Table6RiskDrivers:
 
 @dataclass(frozen=True)
 class AppendixIITables:
+    #: Appendix II lines this build could NOT establish from the projection, each
+    #: carrying WS-A's fail-closed state, the metric, the reason and the specific
+    #: missing inputs. A line listed here is serialized as ``null``, never as a
+    #: plausible substitute (CLAUDE.md: a template cell with no honest source is
+    #: ``input_required``, never dropped and never guessed).
+    not_computable: tuple[OutcomeDetail, ...]
+    #: The institution's OWN reporting currency (ISO code), resolved by the
+    #: service from ``jurisdictions.base_currency(bank)``. The serialized ``unit``
+    #: is ``"<currency>'000"``. Before 2026-08-21 the unit was the literal
+    #: ``"GHS'000"``, so a non-Ghana tenant's ICAAP Appendix II was labelled in
+    #: cedis whatever its reporting currency (CLAUDE.md: jurisdiction is data).
+    #: REQUIRED and carrying no default — a currency that cannot be established
+    #: is a skipped decision at the bank-creation site, not a Ghanaian bank.
+    currency: str
     scenario_code: str
     horizon_years: int
     table1_summary: Table1Summary
@@ -460,7 +545,10 @@ def _table2_row(year: ProjectedYear, label: str) -> Table2Row:
         tier2_cap=thousands(tier2_cap),
         tier2_eligible=thousands(min(ratios.tier2_capital, tier2_cap)),
         total_regulatory_capital=thousands(ratios.total_capital),
-        credit_risk_reserve=thousands(general_provisions_amount(ratios)),
+        # Deliberately unpopulated — see Table2Row.credit_risk_reserve. Note that
+        # the Tier-2 recognised general provisions are UNCHANGED and still inside
+        # ``tier2_nominal`` / ``tier2_eligible`` above, where they belong.
+        credit_risk_reserve=None,
     )
 
 
@@ -650,6 +738,34 @@ def _build_management_blocks(
     return actions_block, post_cap, residual
 
 
+def _require_full_horizon_losses(
+    projection: EnterpriseProjection,
+    exposure_class_losses: Mapping[int, Mapping[str, Decimal]] | None,
+) -> None:
+    """A supplied bottom-up decomposition must cover every stress year."""
+    if exposure_class_losses is None:
+        return
+    uncovered = tuple(
+        str(year.year) for year in projection.stress if year.year not in exposure_class_losses
+    )
+    if not uncovered:
+        return
+    raise NotComputable(
+        outcome(
+            OutcomeState.MISSING_REQUIRED_INPUT,
+            metric_id="appendix_ii.table1.impact_of_adverse",
+            reason=(
+                "The exposure-level bottom-up loss decomposition was supplied but does "
+                "not cover every stress year. The uncovered years would silently fall "
+                "back to the credit-RWA-share allocation, mixing two methodologies "
+                "inside one filed Table 1."
+            ),
+            items=tuple(f"stress_year:{year}" for year in uncovered),
+            context={"uncovered": list(uncovered)},
+        )
+    )
+
+
 def _table1(
     projection: EnterpriseProjection,
     car_target_pct: Decimal,
@@ -661,18 +777,20 @@ def _table1(
     pre = tuple(_snapshot(year, f"base_y{year.year}") for year in projection.base)
     post = tuple(_snapshot(year, f"stress_y{year.year}") for year in projection.stress)
 
+    # Phase 4: use the real exposure-level bottom-up decomposition when the
+    # service supplies it; otherwise the documented credit-RWA-share allocation
+    # (the Phase-2 contract when there is no canonical book). Those are two
+    # different methodologies, and a per-year ``.get`` used to mix them inside one
+    # filed table whenever the supplied map covered only part of the horizon —
+    # silently, with nothing in the table saying which line came from which
+    # method (audit 2026-08-22 D-8).
+    _require_full_horizon_losses(projection, exposure_class_losses)
     impact: list[tuple[int, tuple[ExposureClassLoss, ...]]] = []
     for base_year, stress_year in zip(projection.base, projection.stress, strict=True):
-        # Phase 4: use the real exposure-level bottom-up decomposition when the
-        # service supplies it; otherwise fall back to the documented credit-RWA-
-        # share allocation (keeps the Phase-2 contract when no canonical book).
-        bottom_up = (
-            exposure_class_losses.get(stress_year.year)
-            if exposure_class_losses is not None
-            else None
-        )
-        if bottom_up is not None:
-            impact.append((stress_year.year, _bottom_up_class_losses(bottom_up)))
+        if exposure_class_losses is not None:
+            impact.append(
+                (stress_year.year, _bottom_up_class_losses(exposure_class_losses[stress_year.year]))
+            )
         else:
             impact.append((stress_year.year, _exposure_class_losses(base_year, stress_year)))
 
@@ -743,7 +861,8 @@ def build_appendix_ii(  # noqa: PLR0913 - the builder names its full optional-ov
     projection: EnterpriseProjection,
     scenario_paths: Sequence[MacroPathPoint],
     *,
-    car_target_pct: Decimal = DEFAULT_CAR_TARGET_PCT,
+    currency: str,
+    car_target_pct: Decimal,
     paid_up_min: Decimal | None = None,
     source: str | None = None,
     exposure_class_losses: Mapping[int, Mapping[str, Decimal]] | None = None,
@@ -753,10 +872,20 @@ def build_appendix_ii(  # noqa: PLR0913 - the builder names its full optional-ov
 ) -> AppendixIITables:
     """Assemble Tables 1–6 from a base+stress enterprise projection.
 
-    ``scenario_paths`` are the authored macro paths (for Table 6). ``car_target_pct``
-    is the directive's 13% total CAR target used for the Table 1 capital-required
-    and Table 5 Pillar-1-requirement lines. ``paid_up_min`` defaults to the floor
-    carried on the projection's minima checks.
+    ``scenario_paths`` are the authored macro paths (for Table 6).
+
+    ``car_target_pct`` is REQUIRED and carries no default (audit 2026-08-22
+    D-15): it is the institution's own governed minimum CAR — the floor the
+    Table 1 "capital required" and Table 5 Pillar-1-requirement lines are
+    measured against, and the rate at which a management action's RWA relief is
+    valued as freed capital. The caller resolves it from the regulatory-parameter
+    control plane (``CapitalParams.car_min_pct``), which is effective-dated and
+    institution-class aware; a bank modelling an internal target ABOVE that floor
+    passes it here. This module never assumes one — see the note where the old
+    ``DEFAULT_CAR_TARGET_PCT`` literal used to live.
+
+    ``paid_up_min`` defaults to the floor carried on the projection's minima
+    checks.
 
     Phase 4 overlays (both optional; absent ⇒ Phase-2 behaviour preserved):
     ``exposure_class_losses`` — the real bottom-up ``{stress_year: {crd_class:
@@ -766,7 +895,24 @@ def build_appendix_ii(  # noqa: PLR0913 - the builder names its full optional-ov
     for Table 5. Neither perturbs the Pillar-1 RWA, so the T5 == T1 tie holds.
     """
     if paid_up_min is None:
-        paid_up_min = projection.stress[0].minima.paid_up_min if projection.stress else _ZERO
+        # The ¶77 paid-up floor is a governed parameter. Defaulting it to zero on
+        # an empty stress leg would report "no paid-up shortfall in any year" from
+        # the absence of the projection, not from the bank's capital (audit
+        # 2026-08-22 D-8).
+        if not projection.stress:
+            raise NotComputable(
+                outcome(
+                    OutcomeState.MISSING_REQUIRED_INPUT,
+                    metric_id="appendix_ii.table1.capital_required_paid_up",
+                    reason=(
+                        "No paid-up minimum was supplied and the projection carries no "
+                        "stress years to read it from, so the paid-up shortfall cannot "
+                        "be established."
+                    ),
+                    items=("param:paid_up_min",),
+                )
+            )
+        paid_up_min = projection.stress[0].minima.paid_up_min
 
     table1 = _table1(
         projection, car_target_pct, paid_up_min, exposure_class_losses, management_actions
@@ -817,6 +963,8 @@ def build_appendix_ii(  # noqa: PLR0913 - the builder names its full optional-ov
     table6 = build_table6(scenario_paths, source=source)
 
     tables = AppendixIITables(
+        not_computable=(CREDIT_RISK_RESERVE_NOT_COMPUTABLE,),
+        currency=currency,
         scenario_code=projection.scenario_code,
         horizon_years=projection.horizon_years,
         table1_summary=table1,
@@ -928,7 +1076,8 @@ def _serialize_tables(tables: AppendixIITables) -> dict[str, object]:
     return {
         "scenario_code": tables.scenario_code,
         "horizon_years": tables.horizon_years,
-        "unit": "GHS'000",
+        "unit": f"{tables.currency}'000",
+        "not_computable": [detail.to_dict() for detail in tables.not_computable],
         "table1_summary": {
             "car_target_pct": _s(t1.car_target_pct),
             "paid_up_min": _s(t1.paid_up_min),

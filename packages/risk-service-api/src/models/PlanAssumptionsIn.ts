@@ -85,9 +85,19 @@ import {
 /**
  * The bank's base-case business plan (the base-leg forecast assumptions).
  *
- * Every field is optional; unset fields fall back to the service defaults
- * (documented in ``app/services/enterprise_stress.py``). All values are Decimal
- * percentages (pp for the securities shift).
+ * Every field is optional; an unset field falls back to a macro-derived value
+ * where the scenario supports one, otherwise to a documented PLATFORM DEFAULT
+ * (``app/services/enterprise_stress.py``). Which of the three supplied each
+ * number is reported on the run as ``plan_provenance`` — a Board-attested ICAAP
+ * must be able to show which assumptions were the institution's own
+ * (enterprise audit P0-13).
+ *
+ * All values are Decimal percentages (pp for the securities shift). **Every
+ * field is bounded.** Before 2026-08-21 all ten were unbounded ``Decimal |
+ * None``, so ``tax_rate_pct = -9999`` was accepted and projected. The bounds
+ * below are structural domain limits — a payout ratio is a share of profit, a
+ * tax rate is a share of income — not regulatory numbers, so they belong in the
+ * contract rather than the control plane.
  * @export
  * @interface PlanAssumptionsIn
  */

@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
+from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.stress.credit_bottom_up import (
     CRD_EXPOSURE_CLASSES,
     CreditExposure,
@@ -151,7 +154,18 @@ def test_perfect_foresight_uses_each_years_own_macro() -> None:
     def gdp(year: int, stress: str) -> MacroPathPoint:
         return MacroPathPoint("gdp_growth", year, Decimal("0.05"), Decimal(stress))
 
-    paths = (gdp(1, "0.00"), gdp(2, "0.02"))  # y1 delta −0.05 (pd 1.15), y2 −0.03 (pd 1.09)
+    # unemployment and gse_index are read by the capital register and are
+    # authored FLAT (zero contribution) so the scenario is complete under the
+    # P0-9 fail-closed rule; the PD multipliers asserted below are unchanged.
+    def flat(variable: str, year: int, level: str) -> MacroPathPoint:
+        return MacroPathPoint(variable, year, Decimal(level), Decimal(level))
+
+    paths = (
+        gdp(1, "0.00"),  # y1 delta −0.05 ⇒ pd 1.15
+        gdp(2, "0.02"),  # y2 delta −0.03 ⇒ pd 1.09
+        *(flat("unemployment", year, "0.06") for year in (1, 2)),
+        *(flat("gse_index", year, "5000") for year in (1, 2)),
+    )
     book = (
         CreditExposure("C", "corporates", Decimal("100000000"), Decimal("2"), Decimal("45"),
                        Decimal("100")),
@@ -164,10 +178,55 @@ def test_perfect_foresight_uses_each_years_own_macro() -> None:
     assert year1.credit_rwa_uplift_factor > year2.credit_rwa_uplift_factor > Decimal("1")
 
 
-def test_empty_book_is_neutral() -> None:
-    result = compute_bottom_up_credit(
-        (), pd_multiplier=Decimal("2"), lgd_multiplier=Decimal("2"), fx_fraction=Decimal("1")
+def test_an_empty_book_refuses_rather_than_reporting_a_neutral_uplift() -> None:
+    """An absent exposure book is a missing input, not a resilient one (D-8).
+
+    This test previously asserted the opposite — ``credit_rwa_uplift_factor ==
+    1`` for an empty book — which is the fail-open the 2026-08-22 re-audit
+    names: the factor is multiplied into the PROJECTION's own credit RWA, so a
+    book that failed to load produced a stress leg with no rating-migration and
+    no FX-revaluation uplift at all, and nothing downstream could tell that
+    apart from a book that genuinely does not migrate.
+    """
+    with pytest.raises(NotComputable) as exc:
+        compute_bottom_up_credit(
+            (), pd_multiplier=Decimal("2"), lgd_multiplier=Decimal("2"), fx_fraction=Decimal("1")
+        )
+    assert exc.value.state is OutcomeState.MISSING_REQUIRED_INPUT
+    assert exc.value.blocks_filing is True
+    assert exc.value.details[0].metric_id == "credit_rwa_uplift_factor"
+    assert exc.value.details[0].items == ("fact:credit_exposure",)
+
+
+def test_a_book_with_no_base_credit_rwa_refuses_the_uplift_factor() -> None:
+    """The uplift is a ratio; a book with zero base RWA has no denominator (D-8)."""
+    zero_rwa_book = (
+        CreditExposure("E1", "corporates", Decimal("100000000"), Decimal("2"), Decimal("45"),
+                       Decimal("0")),
     )
-    assert result.base_credit_rwa == Decimal("0")
-    assert result.credit_rwa_uplift_factor == Decimal("1")
-    assert result.by_class == ()
+    with pytest.raises(NotComputable) as exc:
+        compute_bottom_up_credit(
+            zero_rwa_book,
+            pd_multiplier=Decimal("2"),
+            lgd_multiplier=Decimal("2"),
+            fx_fraction=Decimal("0"),
+        )
+    assert exc.value.state is OutcomeState.NOT_COMPUTABLE
+    assert exc.value.details[0].metric_id == "credit_rwa_uplift_factor"
+
+
+def test_an_unregistered_crd_class_refuses_instead_of_becoming_other() -> None:
+    """A class the registry does not know moved the loss onto the wrong Table 1 line."""
+    book = (
+        CreditExposure("E1", "project_finance", Decimal("100000000"), Decimal("2"),
+                       Decimal("45"), Decimal("100")),
+    )
+    with pytest.raises(NotComputable) as exc:
+        compute_bottom_up_credit(
+            book,
+            pd_multiplier=Decimal("1"),
+            lgd_multiplier=Decimal("1"),
+            fx_fraction=Decimal("0"),
+        )
+    assert exc.value.state is OutcomeState.DATA_QUALITY_BLOCK
+    assert "crd_class:project_finance" in exc.value.details[0].items

@@ -39,6 +39,9 @@ type ReturnFamily = Literal[
     # Official Bank of Ghana BSD prudential returns (BSD1 … BSD17) — see
     # docs/bog_returns/00_full_return_registry.md and bog_forms/.
     "bsd",
+    # Specialised deposit-taking institution reports compiled from published
+    # BoG directive appendices. These are never aliases for BSD forms.
+    "sdi",
 ]
 type ReturnFrequency = Literal["weekly", "monthly", "quarterly", "semiannual", "annual", "daily"]
 type ChannelCode = Literal["orass_sandbox", "email", "manual"]
@@ -151,6 +154,46 @@ class ReturnDefinition:
     # the default — the SDI/ORASS return pack (docs/sdi.md §Phase F, blocked on
     # BoG) sets ('sdi',) or ('bank', 'sdi') explicitly when its layouts land.
     institution_classes: tuple[str, ...] = ("bank",)
+    # --- eligibility dimensions (forensic audit ARCH-8) ------------------
+    # Evaluated by the SINGLE eligibility authority, ``eligibility.py``, which
+    # both the reporting calendar and the package-mint site consume. A dimension
+    # added here changes both surfaces at once, by construction — the audit
+    # found the question answered twice, on different criteria.
+    #
+    # Jurisdictions the return applies in. Every return registered so far is a
+    # Bank of Ghana return (the BoG research dossiers in this module's docstring
+    # are the only source registered), so ``("GH",)`` states a fact rather than
+    # standing in for an unmade decision. An empty tuple = unrestricted.
+    jurisdictions: tuple[str, ...] = ("GH",)
+    # The date this return comes into force, where the registry establishes one.
+    # ``None`` means NO effective date is established here, and the eligibility
+    # decision says so explicitly instead of treating silence as "in force
+    # forever". Several citations above DO name a directive commencement date
+    # ("effective 1 Jan 2027"); those are deliberately not encoded as generation
+    # gates, because blocking generation on them would stop a bank preparing and
+    # dry-running a return before its first live filing.
+    effective_from: date | None = None
+    # Declarative prerequisites a package needs before it can be generated
+    # ("run:liquidity:baseline", "template:pending"). Reported on the
+    # eligibility decision as metadata and ENFORCED where the answer can be
+    # obtained honestly — the generators' 409s. Re-enforcing them here would
+    # recreate the two-implementations defect this authority exists to end.
+    prerequisites: tuple[str, ...] = ()
+    # The ingested datasets the return draws on, for the same reporting purpose.
+    required_data: tuple[str, ...] = ()
+    # ``((metric_id, methodology_id), …)`` — WHICH declared methodology this
+    # return means for a metric that legitimately has more than one (audit CF-1:
+    # LCR-NSFR's aggregate-capped LCR vs LMT Table 11's per-currency 75% cap;
+    # BOTH cap inflows — see the authority registry's divergence entry). Resolved
+    # against the WS-A metric authority registry and written into the package's
+    # provenance block, so a filed return states which number it reports. Only
+    # methodologies the repository establishes are declared; nothing is guessed.
+    # A tuple of pairs rather than a dict so the frozen definition stays
+    # hashable and genuinely immutable.
+    declared_methodologies: tuple[tuple[str, str], ...] = ()
+    # A working workbook is an internal review artifact with recalculable
+    # formulas. It is separately labelled and never filed or signed.
+    supports_working_copy: bool = False
 
 
 def _bog_definitions() -> list[ReturnDefinition]:
@@ -197,6 +240,29 @@ REGISTRY: dict[str, ReturnDefinition] = {
             template_id="bog-bsd3-liquidity-v1",
             fidelity="PARTIAL",
             default_channel="orass_sandbox",
+            prerequisites=("run:liquidity:baseline",),
+            # Audit CF-1: ``lcr_pct`` legitimately exists twice. BOTH cap
+            # inflows; the divergence is in HOW. THIS return applies ONE
+            # AGGREGATE cap across the whole book, at the governed,
+            # effective-dated ``lcr_inflow_cap_pct`` threshold (required by
+            # ``regulatory_liquidity._REQUIRED_THRESHOLDS``, applied
+            # unconditionally at ``domain/liquidity/engine.py``). The LMT return
+            # below caps SEPARATELY PER CURRENCY at a hard-coded 75%
+            # (``le_generation._LCR_INFLOW_CAP``). Both are correct under their
+            # own authority — never assert them equal.
+            # This comment used to say THIS return reports the "uncapped" LCR.
+            # That was FALSE and it contradicted the authority registry's own
+            # divergence entry, which warns that saying so invites an engineer
+            # to add a cap that is already there — or to remove one believing it
+            # was never intended. Do not restore it.
+            # The id is the AUTHORITY registry's own
+            # (``app.domain.authority.registry``); a name that resolves nowhere
+            # makes the declaration a no-op. Audit 2026-08-22 D-10: this read
+            # ``basel_bog_bsd3``, which is registered for no metric, so the
+            # flagship LCR return shipped ``registry_status: not_registered``
+            # and disclosed no divergence at all. Pinned by
+            # ``test_every_declared_methodology_resolves_in_the_authority_registry``.
+            declared_methodologies=(("lcr_pct", "basel_bog_liquidity_run"),),
         ),
         ReturnDefinition(
             code="LMT",
@@ -223,6 +289,47 @@ REGISTRY: dict[str, ReturnDefinition] = {
             template_id="bog-lmt-liquidity-v1",
             fidelity="PARTIAL",
             default_channel="orass_sandbox",
+            prerequisites=("run:liquidity:baseline",),
+            # Audit CF-1, the other half: the Table 11 LCR applies the LMTD
+            # 75% inflow cap and is therefore lower than, and NOT reconcilable
+            # by equality with, the LCR-NSFR figure above.
+            declared_methodologies=(("lcr_pct", "lmtd_table11_capped"),),
+        ),
+        ReturnDefinition(
+            code="SDI-LMT-MONTHLY",
+            family="sdi",
+            title="SDI Liquidity Monitoring Tools Return (LMTD Tables 1-10)",
+            directive_citation=(
+                "Liquidity Monitoring Tools Directive (LMTD), 2026 — EXPOSURE DRAFT "
+                "posted 19 February 2026, effective 1 January 2027 — Part II ¶7 and "
+                "Appendix Tables 1-10: applies to Savings and Loans and Finance "
+                "Houses. ¶9 would make the SDI Table 1 ratios binding compliance "
+                "ratios ON COMMENCEMENT; the directive is not in force, so they bind "
+                "nothing today. Table 11 is excluded because it is banks-only."
+            ),
+            frequency="monthly",
+            deadline_rule=monthly_day(9),
+            generator="sdi_lmt",
+            template_id="bog-sdi-lmt-monthly-v1",
+            # The public appendix structures are confirmed. BoG has not
+            # published an institution-specific SDI ORASS form catalogue, so
+            # this is an evidence-backed packet rather than a claimed portal ID.
+            fidelity="PARTIAL",
+            default_channel="orass_sandbox",
+            institution_classes=("sdi",),
+            jurisdictions=("GH",),
+            required_data=("canonical_positions",),
+            supports_working_copy=True,
+            # The Table 1 ratios this return files are owned by the LMTD
+            # methodology, which is registered for BOTH institution classes.
+            declared_methodologies=(
+                ("narrow_to_volatile", "lmtd_table1_ratio"),
+                ("broad_to_volatile", "lmtd_table1_ratio"),
+                ("narrow_to_short_term", "lmtd_table1_ratio"),
+                ("broad_to_short_term", "lmtd_table1_ratio"),
+                ("narrow_to_total_deposits", "lmtd_table1_ratio"),
+                ("broad_to_total_deposits", "lmtd_table1_ratio"),
+            ),
         ),
         # NOTE (2026-08-15, right-reporting reconciliation): registered as
         # "BSD2" before the official templates were available. Official BSD2 is
@@ -250,6 +357,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
             template_id="bog-bsd2-capital-v1",
             fidelity="REPRESENTATIVE",
             default_channel="orass_sandbox",
+            prerequisites=("run:capital:baseline",),
         ),
         ReturnDefinition(
             code="IRRBB-PILOT",
@@ -270,6 +378,40 @@ REGISTRY: dict[str, ReturnDefinition] = {
             template_id="bog-irrbb-pilot-v1",
             fidelity="REPRESENTATIVE",
             default_channel="email",
+        ),
+        ReturnDefinition(
+            code="SDI-IRRBB-QUARTERLY",
+            family="sdi",
+            title="SDI IRRBB Quarterly Pilot Return (Appendix IV)",
+            directive_citation=(
+                "Guideline on Management and Measurement of IRRBB, 2026 — EXPOSURE "
+                "DRAFT, February 2026, NOT IN FORCE — ¶¶3, 10-11 and Appendix IV: "
+                "Savings and Loans and Finance "
+                "Houses pilot quarterly reporting in the prescribed templates. This packet "
+                "uses the actual computed GHS shocks and omits the bank Tier 1 outlier "
+                "verdict because the SDI capital regime is Act 930 s.29."
+            ),
+            frequency="quarterly",
+            deadline_rule=quarterly_days_after(9),
+            generator="sdi_irrbb",
+            template_id="bog-sdi-irrbb-quarterly-v1",
+            fidelity="PARTIAL",
+            default_channel="manual",
+            institution_classes=("sdi",),
+            jurisdictions=("GH",),
+            prerequisites=("run:irr:baseline",),
+            required_data=("bank_financial_facts", "capital_structure"),
+            supports_working_copy=True,
+            # DELIBERATELY EMPTY, and this comment is the reason the completeness
+            # gate requires. The only registered IRRBB methodology is
+            # ``basel_irrbb_run``, which is institution_class=bank / regime=crd.
+            # Declaring it here would hand a CRD authority to an s.29 institution
+            # - precisely the regime inheritance the D-9 gate was built to stop
+            # (see statutory_reserve_fund_ghs, narrowed 2026-08-22). No s.29 IRRBB
+            # authority exists because BoG has published none: the Guideline is an
+            # exposure draft. Until one does, this return files its shocks with no
+            # claimed regulatory basis, which the citation states on its face.
+            declared_methodologies=(),
         ),
         ReturnDefinition(
             code="FX-NOP",
@@ -342,6 +484,35 @@ REGISTRY: dict[str, ReturnDefinition] = {
             default_channel="orass_sandbox",
         ),
         ReturnDefinition(
+            code="SDI-LE-MONTHLY",
+            family="sdi",
+            title="SDI Large Exposures Return (Templates 1, 1a, 2, 3 and 4)",
+            directive_citation=(
+                "Large Exposures Directive, September 2025 — FINAL but NOT YET IN "
+                "FORCE, effective 1 January 2027 (docs/bog_parameter_sources.md: "
+                "\"All VERIFIED; none in force yet\") — ¶¶11-12 and ¶¶57-58, Appendix "
+                "Templates 1, 1a, 2, 3 and 4: applies to Savings and Loans and Finance "
+                "Houses; monthly reporting; 15% of Net Own Funds limit on commencement."
+            ),
+            frequency="monthly",
+            # The Directive establishes monthly reporting but does not publish
+            # a day count. The calendar stays provisional until the institution's
+            # ORASS obligation confirms it.
+            deadline_rule=monthly_day(9),
+            generator="sdi_large_exposures",
+            template_id="bog-sdi-le-monthly-v1",
+            fidelity="PARTIAL",
+            default_channel="orass_sandbox",
+            institution_classes=("sdi",),
+            jurisdictions=("GH",),
+            required_data=("canonical_positions", "capital_structure"),
+            supports_working_copy=True,
+            # Exposures are expressed as a percentage of Net Own Funds, and NOF
+            # for an SDI comes from the governed Act 930 s.29 calculation - the
+            # s29 authority, never the bank CRD one.
+            declared_methodologies=(("net_own_funds_ghs", "act930_s29_nof_rwa"),),
+        ),
+        ReturnDefinition(
             code="ICAAP-STRESS",
             family="icaap_stress",
             title="ICAAP Data Companion & Stress Summary",
@@ -387,6 +558,38 @@ REGISTRY: dict[str, ReturnDefinition] = {
             # stress run (docs/stress.md §1.8, §3.4, §3.8).
             fidelity="CONFIRMED",
             default_channel="manual",
+        ),
+        ReturnDefinition(
+            code="SDI-STRESS-ANNUAL",
+            family="sdi",
+            title="SDI Annual Stress Test Return (Proportionate Appendix II)",
+            directive_citation=(
+                "Stress Testing Guideline, 2026 — EXPOSURE DRAFT, February 2026, NOT "
+                "IN FORCE — ¶3 and ¶67: applies proportionately to Savings and Loans "
+                "and Finance Houses. "
+                "This packet renders the SDI-applicable Appendix II evidence from a "
+                "Board-attested enterprise-stress run; the Basel CET1/AT1/Tier2 "
+                "Table 2 is excluded because the SDI uses the Act 930 s.29 capital regime."
+            ),
+            frequency="annual",
+            deadline_rule=annual_month_day(3, 31),
+            generator="sdi_stress_annual",
+            template_id="bog-sdi-stress-annual-v1",
+            # Appendix II is public, but BoG has not published a separate SDI
+            # ORASS layout or submission identity. Do not claim otherwise.
+            fidelity="PARTIAL",
+            default_channel="manual",
+            institution_classes=("sdi",),
+            jurisdictions=("GH",),
+            prerequisites=("run:enterprise_stress:board_attested",),
+            required_data=("canonical_positions", "capital_structure", "macro_scenario"),
+            supports_working_copy=True,
+            # The packet renders a Board-attested enterprise-stress run; that
+            # engine's authority is class-neutral (advisory_internal).
+            declared_methodologies=(
+                ("stressed_car_end_pct", "enterprise_stress_orchestrator"),
+                ("car_erosion_pp", "enterprise_stress_orchestrator"),
+            ),
         ),
         # --- Template-gated returns (product.md §Phase 2 items 12/14) ------
         # The former "BSD-MONTHLY" placeholder (Balance Sheet + P&L pack, gated

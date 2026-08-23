@@ -24,6 +24,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank, BankReportingPeriod
+from app.services.regulatory_reporting.common import unvalidated_book_finding
+from app.services.regulatory_reporting.provenance import (
+    ReportAuthority,
+    build_template_provenance,
+    line_status_authority,
+)
 
 from .catalog import form_spec
 from .engine import FormResult, compute_form, scale_for_export
@@ -64,6 +70,18 @@ def _cells_payload(result: FormResult) -> dict[str, dict[str, Any]]:
     return cells
 
 
+def unit_kind(unit: str) -> str:
+    """The normalised measure kind for a sheet's official unit convention.
+
+    Deferred import: ``regulatory_reporting.generation`` imports this module at
+    the bottom of its own module body, so the normaliser is fetched at call
+    time rather than at import time.
+    """
+    from app.services.regulatory_reporting.generation import unit_kind as _kind  # noqa: PLC0415
+
+    return _kind(unit)
+
+
 def build_sections(result: FormResult) -> list[dict[str, Any]]:
     """One generic section per official sheet (csv/pdf + validation path).
 
@@ -71,6 +89,13 @@ def build_sections(result: FormResult) -> list[dict[str, Any]]:
     so) and is ``None`` — a blank cell — when the line is input_required /
     unmapped; the generic renderer treats an empty string as a corrupt
     snapshot, so absence must be None, never "".
+
+    Each row carries the :class:`~...provenance.ReportAuthority` that owns its
+    value, derived from the resolver that produced it. Row-level rather than
+    section-level because on a BoG sheet the authority genuinely varies line by
+    line: most cells are canonical data mapped into official inputs, a few are
+    engine-run figures, and BSD2A's percentage column is computed under a Guide
+    paragraph because the official grid carries no formula for it (audit CF-3).
     """
     sections: list[dict[str, Any]] = []
     for sheet in result.spec.sheets:
@@ -91,6 +116,7 @@ def build_sections(result: FormResult) -> list[dict[str, Any]]:
                 "status": lv.status,
                 "source": lv.source or "",
                 "notes": lv.notes,
+                "authority": line_status_authority(lv.status, lv.source).value,
             }
             for lv in result.lines
             if lv.sheet == sheet.name
@@ -102,10 +128,52 @@ def build_sections(result: FormResult) -> list[dict[str, Any]]:
                 "optional": True,
                 "rows": rows,
                 "total": None,
+                # ``unit`` stays the Guide's OWN convention for this sheet
+                # (¢'Million / ¢'000 / units / percent / count) — it is printed
+                # on the official form and must survive verbatim. ``unit_kind``
+                # normalises it onto the same closed set the generic families
+                # use, so one renderer can switch on one key across every
+                # return without losing the official scale.
                 "unit": sheet.unit,
+                "unit_kind": unit_kind(sheet.unit),
+                # The sheet's declared INPUT cells. Its DERIVED cells are BoG's
+                # own formulas and are recorded at package level as
+                # ``template_formula`` — they are not rows here.
+                "authority": ReportAuthority.TEMPLATE_INPUT_MAPPING.value,
             }
         )
     return sections
+
+
+def authority_counts(result: FormResult) -> dict[str, int]:
+    """Per-field authority tally for the package's provenance block.
+
+    Counts every declared input line by its owning authority, plus every
+    evaluated formula cell as ``template_formula`` — so the record states, in
+    numbers, how much of the return is BoG's own arithmetic versus the
+    platform's mapping, and how much is honestly not yet sourced.
+    """
+    counts: dict[str, int] = {}
+    for lv in result.lines:
+        key = line_status_authority(lv.status, lv.source).value
+        counts[key] = counts.get(key, 0) + 1
+    if result.unmapped_cells:
+        key = ReportAuthority.NOT_YET_SOURCED.value
+        counts[key] = counts.get(key, 0) + len(result.unmapped_cells)
+    if result.formulas:
+        counts[ReportAuthority.TEMPLATE_FORMULA.value] = len(result.formulas)
+    return counts
+
+
+def unvalidated_findings(result: FormResult) -> list[dict[str, str]]:
+    """WARNING, once, when this return was compiled off a partly unvalidated book.
+
+    The rule id and the severity reasoning live in
+    ``common.unvalidated_book_finding`` — shared with the Large Exposures and
+    LMT generators, which read the same canonical book under the same exclusion
+    and must reach an approver under the same rule.
+    """
+    return unvalidated_book_finding(result.unvalidated_note)
 
 
 def _section_code(sheet_name: str) -> str:
@@ -123,6 +191,7 @@ def build_snapshot(  # noqa: PLR0913
     regulator: str,
     template_id: str,
     fidelity: str,
+    provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     counts = result.status_counts
     return {
@@ -148,7 +217,22 @@ def build_snapshot(  # noqa: PLR0913
             "period_end": period.period_end.isoformat(),
         },
         "sections": build_sections(result),
+        # EMPTY BY DESIGN, and the ``provenance`` block below is what says so.
+        # A generic family builds a headline ``totals`` list because it owns its
+        # own arithmetic; an official BoG return does not — its roll-ups are the
+        # template's own formula cells, evaluated as published, and a totals
+        # section assembled here would be a roll-up BoG never printed on the
+        # form. The package validation pipeline reads the declaration rather
+        # than the generator name: ``validation._template_authoritative_rollups``
+        # excuses this block only for a snapshot whose authority record is
+        # ``template_formula`` AND names the committed template digest it
+        # evaluated, so a family that genuinely owes headline totals still
+        # ERRORs when it omits them.
         "totals": [],
+        # The authority record (forensic audit §8 / §10 item 3). ``source_runs``
+        # is empty for a BoG form because BoG's template produced the figures,
+        # and this block SAYS so instead of leaving an examiner to infer it.
+        "provenance": provenance,
         "metadata": {
             "generated_at": datetime.now(UTC).isoformat(),
             "basis": spec.basis,
@@ -156,6 +240,11 @@ def build_snapshot(  # noqa: PLR0913
             "official_sheets": list(result.layout.sheet_names),
             "line_status_counts": counts,
             "missing_dependencies": result.missing_dependencies,
+            # Folded into the package validation report by
+            # ``validation._generation_note_findings``, so an unvalidated book
+            # reaches the approver as a WARNING they must read rather than as a
+            # figure that is quietly short (forensic re-audit D-4).
+            "generation_findings": unvalidated_findings(result),
         },
         "bog_form": {
             "schema_version": BOG_FORM_SCHEMA_VERSION,
@@ -170,6 +259,11 @@ def build_snapshot(  # noqa: PLR0913
             "missing_dependencies": result.missing_dependencies,
             "errors": result.errors,
             "status_counts": counts,
+            # Carried in the immutable payload so the export path — which never
+            # recomputes — can print the same disclosure on the Completion notes
+            # sheet of the artifact that is actually filed.
+            "unvalidated_rows": result.unvalidated_rows,
+            "unvalidated_note": result.unvalidated_note,
         },
     }
 
@@ -187,6 +281,15 @@ def generate_bog_form(
 
     spec = form_spec(definition.code)
     result = compute_with_dependencies(db, ctx, bank, period, spec.code)
+    provenance = build_template_provenance(
+        definition=definition,
+        bank=bank,
+        effective_date=period.period_end,
+        form_code=spec.code,
+        workbook=spec.workbook,
+        authority_counts=authority_counts(result),
+        formula_cells_evaluated=len(result.formulas),
+    ).to_dict()
     snapshot = build_snapshot(
         bank,
         period,
@@ -197,7 +300,13 @@ def generate_bog_form(
         regulator=definition.regulator,
         template_id=definition.template_id,
         fidelity=definition.fidelity,
+        provenance=provenance,
     )
+    # source_runs stays EMPTY, and that is now a statement rather than a hole:
+    # no calculation run produced these figures because the official Bank of
+    # Ghana workbook did, by evaluating its own formulas over official input
+    # cells. snapshot["provenance"] carries the template digest, the line-map
+    # digest and the evaluator version that stand in place of a run lineage.
     return GeneratedReturn(snapshot=snapshot, source_runs=[])
 
 

@@ -7,10 +7,20 @@ never crosses a response boundary — only status, fingerprint, and expiry do.
 
 Validation checks credential SHAPE and signs on structurally (no live core is
 required); a live health check plugs in when the portal-gated transport lands.
+
+**Egress (SSRF) guard.** ``endpoint`` is a destination the tenant chooses, so
+:func:`guard_endpoint` resolves it and validates every address it answers with
+before any sign-on/fetch path runs — the ``/test`` endpoint here, and the
+scheduled pull in ``temenos_jobs``. The schema-level screen on the create/update
+payloads is fast feedback; this is the authoritative check. Live OFS/IRIS/Open
+API transports are still portal-gated (they classify as ``CORE_UNAVAILABLE``),
+so the guard currently fronts a simulated sign-on — it is deliberately wired
+now so the transports land behind a guarded seam rather than an open one.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -38,11 +48,13 @@ from app.adapters.temenos_t24.domains import (
     category_of,
 )
 from app.adapters.temenos_t24.mappings.default import default_t24_mapping_config
+from app.core.outbound import OutboundTargetBlocked, check_url
 from app.db.base import utc_now
 from app.models import Bank, MappingConfigRecord
 from app.models.temenos import TemenosConnection
 from app.schemas.ingestion import MappingConfigCreate
 from app.schemas.temenos_connections import (
+    TEMENOS_ENDPOINT_SCHEMES,
     TemenosBackfillRequest,
     TemenosConnectionCreate,
     TemenosConnectionListRead,
@@ -71,6 +83,48 @@ _STATUS_BY_ERROR_CODE: dict[str, str] = {
     "CREDENTIAL_REVOKED": "REVOKED",
     "CONFIGURATION_ERROR": "INVALID",
 }
+
+_LIVE_TRANSPORT_UNAVAILABLE = (
+    "Live Temenos connectivity is not available in this deployment. "
+    "Configuration is stored, but pulls and backfills stay blocked until a "
+    "bank-approved transport is installed."
+)
+
+logger = logging.getLogger(__name__)
+
+
+def guard_endpoint(endpoint: str) -> None:
+    """Resolve a connection endpoint and refuse a blocked destination.
+
+    The authoritative SSRF control for this connector, called immediately
+    before any sign-on/fetch path. Raises
+    :class:`~app.core.outbound.OutboundTargetBlocked`; the caller decides how
+    to surface it (this module returns a 400, the worker parks the job).
+
+    **Residual risk — TOCTOU / DNS rebinding.** The check resolves the name and
+    validates every answer, but the transport resolves the name again when it
+    connects. Pinning the socket to a validated address is not possible from
+    here without owning the transport's connect path; the live OFS/IRIS/Open
+    API transports are unimplemented, so the mitigation is recorded as a
+    requirement for whoever wires them: build the client with a resolver that
+    reuses the validated addresses, and attach
+    :func:`app.core.outbound.redirect_guard` for the REST modes.
+    """
+    check_url(endpoint, allowed_schemes=TEMENOS_ENDPOINT_SCHEMES, field="endpoint")
+
+
+def _guard_endpoint_or_400(endpoint: str) -> None:
+    try:
+        guard_endpoint(endpoint)
+    except OutboundTargetBlocked as exc:
+        logger.warning(
+            "temenos connection blocked by the egress guard (%s): %s",
+            exc.reason,
+            exc.internal_detail,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message
+        ) from exc
 
 
 # --- Reads -----------------------------------------------------------------
@@ -273,34 +327,20 @@ def validate_connection(
 def test_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosTestPullRead:
-    """Sign on and report the pull plan. A live pull runs when the portal-gated
-    transport is enabled; MVP verifies configuration + credentials end-to-end
-    short of the live network."""
+    """Report the unavailable live transport without attempting egress.
+
+    The stored configuration and credential shape are checked during lifecycle
+    operations. Until a bank-approved transport exists, this endpoint must not
+    imply that it reached a core or resolve a tenant-provided endpoint.
+    """
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
-    credentials = _retrieve_credentials(db, connection)
-    try:
-        session = SimulatedSessionProvider().sign_on(
-            connection.connection_mode,
-            connection.endpoint,
-            credentials,
-            company=connection.companies[0] if connection.companies else None,
-        )
-    except ValueError as exc:
-        return TemenosTestPullRead(success=False, sample_values={}, error=str(exc))
     return TemenosTestPullRead(
-        success=True,
-        sample_values={
-            "connection_mode": connection.connection_mode,
-            "endpoint": connection.endpoint,
-            "company": str(session.company or ""),
-            "enabled_domains": str(len(connection.domains)),
-            "note": "Configuration and credentials verified; a live pull runs when the "
-            "core transport is enabled.",
-        },
-        error=None,
+        success=False,
+        sample_values={},
+        error=_LIVE_TRANSPORT_UNAVAILABLE,
     )
 
 
@@ -452,6 +492,7 @@ def trigger_pull(
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
+    _require_live_transport()
     as_of = payload.as_of_date or utc_now().date()
     job = job_queue.enqueue(
         db,
@@ -478,6 +519,7 @@ def trigger_backfill(
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
+    _require_live_transport()
     try:
         jobs = enqueue_backfill(db, ctx, connection, payload.start_date, payload.end_date)
     except TemenosJobError as exc:
@@ -550,6 +592,18 @@ def _ensure_not_disabled(connection: TemenosConnection) -> None:
             status_code=status.HTTP_409_CONFLICT,
             detail="This connection is disabled; enable it first.",
         )
+
+
+def _require_live_transport() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=_LIVE_TRANSPORT_UNAVAILABLE,
+    )
+
+
+def live_transport_available() -> bool:
+    """Whether this deployment can dispatch a Temenos request."""
+    return False
 
 
 def _vault(db: Session) -> TemenosCredentialVault:

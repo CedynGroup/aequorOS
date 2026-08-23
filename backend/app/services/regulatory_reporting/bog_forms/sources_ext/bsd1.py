@@ -41,6 +41,7 @@ from typing import Any
 
 from sqlalchemy import case, func, or_, select
 
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalPosition,
@@ -113,6 +114,8 @@ def _ladder_has_rung(
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.as_of_date == day,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
     )
     if types:
@@ -120,6 +123,7 @@ def _ladder_has_rung(
             CanonicalPosition, CanonicalPosition.id == CanonicalPositionSnapshot.position_id
         ).where(
             CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
             CanonicalPosition.position_type.in_(list(types)),
         )
     exists = rc.db.scalar(stmt)
@@ -164,7 +168,10 @@ def _ladder_sum(rc: ResolveContext, params: dict[str, Any], day: date) -> Decima
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.as_of_date == day,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
         )
     )
     if types := params.get("position_types"):

@@ -4,7 +4,8 @@ Invariants (never frozen goldens — the real book moves): horizon → path leng
 and monotone period labels; projection identities (assets = funding, income
 = NII + fees, summary derived from its own path); metric statuses and
 validations consistent with thresholds; year-0 LCR/NSFR equal the standalone
-liquidity engine; determinism of input_hash; module scoping; tenant isolation.
+liquidity engine and year-0 CAR/Tier 1/CET1 the standalone capital engine;
+determinism of input_hash; module scoping; tenant isolation.
 """
 
 from __future__ import annotations
@@ -36,9 +37,14 @@ RESOLVED_ASSUMPTION_KEYS = ASSUMPTION_KEYS | {
     "tax_rate_pct",
     "securities_shift_pp",
 }
+# The declared forecast fact scope. It is a SUPERSET of both downstream
+# engines' scopes (see tests/equivalence/), so a given bank's snapshot carries
+# these groups minus the ones it has no facts in.
 FORECAST_FACT_GROUPS = {
     "balance_sheet",
     "capital_component",
+    "crm_collateral",
+    "ecl_exposure",
     "lcr_inflow",
     "loan_exposure",
     "market_risk",
@@ -185,8 +191,16 @@ def test_create_base_forecast_run_persists_projection_and_outputs(  # noqa: PLR0
     assert snapshot["as_of_date"] == period["period_end"]
     assert snapshot["reporting_period"]["label"] == period["label"]
     assert snapshot["facts"], "the forecast snapshot must carry facts"
-    # The snapshot is scoped to exactly the groups both downstream engines read.
-    assert {fact["fact_group"] for fact in snapshot["facts"]} == FORECAST_FACT_GROUPS
+    # The snapshot is scoped to exactly the groups the downstream engines read —
+    # never wider, and it must carry ``ecl_exposure``, the capital input whose
+    # absence used to make year-0 CAR diverge from the capital run.
+    snapshot_groups = {fact["fact_group"] for fact in snapshot["facts"]}
+    assert snapshot_groups <= FORECAST_FACT_GROUPS
+    assert "ecl_exposure" in snapshot_groups
+    assert FORECAST_FACT_GROUPS - snapshot_groups <= {"crm_collateral"}, (
+        "the real book has no crm_collateral facts; every other declared group "
+        "must be present in the snapshot"
+    )
     assert snapshot["assumption_overrides"] is None
     presets = real_client.get(
         f"/api/v1/banks/{REAL_BANK_ID}/forecast/scenarios", headers=real_headers()
@@ -223,11 +237,19 @@ def test_create_base_forecast_run_persists_projection_and_outputs(  # noqa: PLR0
     summary = run["summary"]
     _assert_summary_matches_path(summary, path)
 
-    # Year-0 liquidity ratios equal the standalone liquidity engine's baseline on
-    # the same period (cross-module consistency). The year-0 CAR is NOT asserted
-    # equal to the capital engine's: the capital snapshot additionally carries
-    # ``ecl_exposure`` (IFRS 9) facts that the forecast snapshot deliberately
-    # excludes, so the two diverge on any book with ECL data — the real one has.
+    # Year-0 ratios equal the standalone engines' baselines on the same period.
+    # This is cross-module consistency, not a coincidence: year 0 IS the as-of
+    # book, so the projection hands the same facts to the same engines.
+    #
+    # The CAR arm of this used to be missing, with a comment claiming the two
+    # were expected to differ because the forecast snapshot excluded
+    # ``ecl_exposure``. That was the forensic audit's High finding, and the
+    # comment was also wrong about the cause: the forecast additionally
+    # excluded ``crm_collateral``, and excluding ECL exposures diverges only
+    # once a bank ALSO configures its IFRS 9 assumption register (the modeled
+    # override is gated on both). The forecast now carries the capital run's
+    # full input set, so the equality below holds by construction.
+    # tests/equivalence/ carries the hermetic proof and the scope guard.
     liquidity = real_client.post(
         f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
         headers=real_headers(),
@@ -241,6 +263,22 @@ def test_create_base_forecast_run_persists_projection_and_outputs(  # noqa: PLR0
     assert liquidity.json()["status"] == "succeeded"
     assert _dec(path[0]["lcr_pct"]) == _dec(liquidity.json()["metrics"]["lcr_pct"])
     assert _dec(path[0]["nsfr_pct"]) == _dec(liquidity.json()["metrics"]["nsfr_pct"])
+
+    capital = real_client.post(
+        f"/api/v1/banks/{REAL_BANK_ID}/regulatory-runs",
+        headers=real_headers(),
+        json={
+            "module": "capital",
+            "reporting_period_id": period["id"],
+            "scenario_code": "baseline",
+        },
+    )
+    assert capital.status_code == 201, capital.text
+    assert capital.json()["status"] == "succeeded"
+    capital_metrics = capital.json()["metrics"]
+    assert _dec(path[0]["car_pct"]) == _dec(capital_metrics["car_pct"])
+    assert _dec(path[0]["tier1_ratio_pct"]) == _dec(capital_metrics["tier1_ratio_pct"])
+    assert _dec(path[0]["cet1_ratio_pct"]) == _dec(capital_metrics["cet1_ratio_pct"])
 
     metric_results = {item["metric_code"]: item for item in run["metric_results"]}
     assert set(metric_results) == {

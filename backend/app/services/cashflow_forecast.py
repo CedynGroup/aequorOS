@@ -330,6 +330,7 @@ def _contractual_daily_flows(
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date <= as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED),
         )
     )
@@ -343,6 +344,7 @@ def _contractual_daily_flows(
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == snapshot_as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED),
             CanonicalPosition.position_type.in_((*_ASSET_TYPES, *_LIABILITY_TYPES)),
         )

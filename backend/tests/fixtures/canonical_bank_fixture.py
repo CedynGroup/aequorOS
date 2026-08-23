@@ -35,6 +35,7 @@ from app.models import (
     User,
 )
 from app.models.regulatory import RegulatoryParameterMixin
+from tests.factories.reconciliation import allow_fixture_balance_gap
 
 # Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
 # format; Crockford charset). Real tenants — the primary DB sandbox included —
@@ -615,6 +616,17 @@ def materialize_canonical_test_book(session: Session) -> CanonicalTestBookSummar
     session.add_all(periods)
     session.flush()
 
+    # The fail-closed balance-sheet control (audit P0-10) refuses to derive
+    # official facts on this book: its sub-ledgers deliberately do not tie to
+    # the GL. Register the SAME governed exception a real bank would need, so
+    # the fixture exercises the control instead of disabling it.
+    allow_fixture_balance_gap(
+        session,
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        actor_user_id=DEMO_USER_ID,
+    )
+
     fact_count = 0
     for index, period in enumerate(periods):
         facts = _build_period_facts(period, index)
@@ -698,6 +710,9 @@ _DEPENDENT_TABLES: tuple[str, ...] = (
     "bank_licenses",
     "bank_name_history",
     "institution_profiles",
+    # Governed data-integrity exceptions (audit P0-10): FK'd to banks, so a
+    # reseed must clear them before the bank row is deleted.
+    "reconciliation_exceptions",
     "regulatory_runs",
     "canonical_position_snapshots",
     "canonical_positions",
@@ -714,6 +729,15 @@ _DEPENDENT_TABLES: tuple[str, ...] = (
 def _delete_bank_dependents(session: Session) -> None:
     inspector = sql_inspect(session.get_bind())
     existing = set(inspector.get_table_names())
+    if session.get_bind().dialect.name == "postgresql":
+        # Migration 202608220031 makes approvals/submission events append-only.
+        # This fixture is the sole test-only reset path and runs in a disposable
+        # test transaction; normal application sessions never set this GUC.
+        session.execute(
+            sql_text(
+                "SELECT set_config('app.aequoros_regulatory_event_test_reset', '1', true)"
+            )
+        )
     params = {"bank_id": str(SAMPLE_BANK_ID), "organization_id": str(DEMO_ORG_ID)}
     for table in _DEPENDENT_TABLES:
         if table not in existing:

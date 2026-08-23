@@ -24,16 +24,24 @@ Config (channel ``orass_api``): ``api_base_url`` (required), ``auth_mode``
 ``timeout_seconds`` (default 30), ``verify_tls`` (default true).
 Credentials (vaulted, write-only): ``api_key`` for bearer auth, or
 ``username``/``password`` for basic auth.
+
+``api_base_url`` is tenant-supplied (Settings -> Regulatory Reporting, an
+``analyst``-level mutation), so it is an SSRF sink: every client build resolves
+it through :mod:`app.core.outbound` and refuses a loopback/private/metadata
+destination, redirects are not followed, and each hop is re-checked by
+:func:`~app.core.outbound.redirect_guard` in case that ever changes.
 """
 
 from __future__ import annotations
 
 import base64
+import logging
 from collections.abc import Sequence
 from typing import Any
 
 import httpx
 
+from app.core.outbound import OutboundTargetBlocked, check_url, redirect_guard
 from app.models import RegulatoryPackage
 from app.services.regulatory_reporting.channels.base import (
     FiledArtifact,
@@ -50,6 +58,8 @@ PROVISIONAL_CONTRACT_NOTE = (
     "BoG/Regnology-issued specification; transport and lifecycle are "
     "production-real, field names will be aligned at onboarding."
 )
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 _SUBMITTABLE_STATUSES = ("approved", "submitted")
@@ -159,15 +169,42 @@ class OrassApiChannel:
             )
         return {"Authorization": f"Bearer {api_key}"}
 
+    def _guarded_base_url(self) -> str:
+        """The configured base URL, refused unless it is a routable https host.
+
+        Authoritative pre-connect check (:mod:`app.core.outbound`): resolves the
+        host and validates every address it answers with. A blocked target is a
+        channel *configuration* fault, not regulator downtime, so it must not
+        route the operator into the BG/FMD/2026/07 email fallback.
+        """
+        base_url = self._base_url
+        try:
+            check_url(base_url, field="ORASS API base URL")
+        except OutboundTargetBlocked as exc:
+            logger.warning(
+                "ORASS API channel blocked by the egress guard (%s): %s",
+                exc.reason,
+                exc.internal_detail,
+            )
+            raise ChannelPreconditionError(
+                f"{exc.message} Update api_base_url in the channel configuration "
+                "(Settings -> Regulatory Reporting)."
+            ) from exc
+        return base_url
+
     def _client(self) -> httpx.Client:
         timeout = float(self._config.get("timeout_seconds") or _DEFAULT_TIMEOUT_SECONDS)
         verify = bool(self._config.get("verify_tls", True))
         return httpx.Client(
-            base_url=self._base_url,
+            base_url=self._guarded_base_url(),
             headers=self._auth_headers(),
             timeout=timeout,
             verify=verify,
             transport=self._transport,
+            # A redirect is a second, unvalidated destination. Do not follow one;
+            # the hook is the belt-and-braces check if that ever changes.
+            follow_redirects=False,
+            event_hooks={"response": [redirect_guard(field="ORASS API redirect")]},
         )
 
     # -- protocol ------------------------------------------------------------
@@ -266,6 +303,19 @@ class OrassApiChannel:
         try:
             with self._client() as client:
                 response = client.request(method, path, json=json)
+        except OutboundTargetBlocked as exc:
+            # Raised by the redirect hook: the regulator host answered with a
+            # Location pointing somewhere we will not follow.
+            logger.warning(
+                "ORASS API redirect blocked by the egress guard (%s): %s",
+                exc.reason,
+                exc.internal_detail,
+            )
+            raise ChannelPreconditionError(
+                "The ORASS API redirected the request to a destination "
+                "AequorOS will not follow; verify api_base_url in the channel "
+                "configuration."
+            ) from exc
         except httpx.HTTPError as exc:
             # Connectivity/timeout failures ARE the ORASS-downtime scenario:
             # BG/FMD/2026/07 routes the operator to the email fallback.

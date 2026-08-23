@@ -126,6 +126,7 @@ export interface LiveModuleView {
  */
 export const LiveModuleViewPipelineStateEnum = {
   Ready: "ready",
+  Blocked: "blocked",
   Failed: "failed",
 } as const;
 export type LiveModuleViewPipelineStateEnum =

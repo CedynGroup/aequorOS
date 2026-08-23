@@ -1,3 +1,13 @@
+"""Case and assessment finding review endpoints.
+
+Findings raised by the CASE plane — cash-flow adequacy
+(`app.services.liquidity`) and solvency pressure (`app.services.capital`) —
+are internal credit analysis and are never filed. They carry the standing
+advisory note in their rationale. Regulatory breaches are not findings: they
+surface as `RegulatoryValidation` rows on a sealed `RegulatoryRun`. See
+`app.services.case_plane`.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -52,7 +62,7 @@ def list_case_findings(case_id: UUID, db: DbSession, ctx: Tenant) -> list[RiskFi
 
 @router.post("/cases/{case_id}/findings", response_model=FindingRead, status_code=201)
 def create_case_finding(
-    case_id: UUID, payload: FindingCreate, db: DbSession, ctx: Tenant
+    case_id: UUID, payload: FindingCreate, db: DbSession, ctx: MutationTenant
 ) -> RiskFinding:
     return findings_service.create_case_finding(db, ctx, case_id, payload.to_command())
 

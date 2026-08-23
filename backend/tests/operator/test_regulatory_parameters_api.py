@@ -31,6 +31,9 @@ def _propose_body(**overrides: object) -> dict[str, object]:
         "scope_type": "institution_class",
         "scope_key": "sdi",
         "param_code": "car_min",
+        # REQUIRED since 2026-08-21 (enterprise audit §6): a governed value is
+        # scoped BY jurisdiction, so the schema no longer defaults it to "GH".
+        "jurisdiction_code": "GH",
         "value_numeric": "11",
         "unit": "percent",
         "source_citation": "test uplift",

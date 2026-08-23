@@ -13,8 +13,10 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
+from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.domain.capital.engine import (
     GREEN_BUFFER_PP,
+    BiaGrossIncomeUnavailable,
     CapitalComputationError,
     CapitalFact,
     CapitalParams,
@@ -255,6 +257,135 @@ def test_operational_bia_excludes_non_positive_years() -> None:
     }
     assert operational["gross_income_2023"].weighted_amount == Decimal("0")
     assert "Excluded" in operational["gross_income_2023"].description
+
+
+#: The four ``operational_income`` series that are NOT the ¶649 base. A real
+#: book carries all of them alongside ``gross_income_*`` because
+#: ``services/implied_rating`` reads them by prefix. Deliberately sized so that
+#: averaging the whole group would change the answer in an obvious direction:
+#: net interest income is a COMPONENT of gross income (double counting) and
+#: operating expenses / provisions are costs, not income at all.
+NON_BIA_INCOME_SERIES = tuple(
+    CapitalFact(
+        fact_group="operational_income",
+        category=f"{metric}_{year}",
+        amount=Decimal(millions) * M,
+        income_year=year,
+    )
+    for metric, millions in (
+        ("net_interest_income", "300"),
+        ("net_income", "90"),
+        ("operating_expenses", "210"),
+        ("provisions", "35"),
+    )
+    for year in (2023, 2024, 2025)
+)
+
+
+def test_bia_base_is_gross_income_only_not_the_whole_operational_income_group() -> None:
+    """Basel II ¶649's base is annual GROSS income — one named series.
+
+    Regression guard for the 2026-08-21 defect: the engine selected every
+    ``operational_income`` fact carrying an ``income_year``, so it averaged
+    operating expenses and provisions as if they were income, double-counted
+    net interest income, and divided by a ROW count instead of a YEAR count.
+    On the hermetic canonical book (two series x three years) that understated
+    operational RWA by 10% and therefore OVERSTATED the filed CAR. Widening
+    the group must leave the charge byte-identical.
+    """
+    base = compute_rwa(sample_bank_latest_facts(), bog_capital_params())
+    widened = compute_rwa(
+        (*sample_bank_latest_facts(), *NON_BIA_INCOME_SERIES), bog_capital_params()
+    )
+
+    assert widened.gross_income_positive_total == base.gross_income_positive_total
+    assert widened.positive_income_years == base.positive_income_years == 3
+    assert widened.bia_charge == base.bia_charge == Decimal("56000000").quantize(MONEY)
+    assert widened.operational_rwa == base.operational_rwa
+    assert widened.total_rwa == base.total_rwa
+    operational = {
+        item.line_code: item for item in widened.line_items if item.section == "operational_rwa"
+    }
+    assert set(operational) == {
+        "gross_income_2023",
+        "gross_income_2024",
+        "gross_income_2025",
+        "bia_charge",
+        "operational_rwa",
+    }
+
+
+def test_bia_window_is_the_three_most_recent_gross_income_years() -> None:
+    """¶649 averages "the previous three years", so a fourth year is excluded.
+
+    ``n`` is a count of years inside that window, never a count of facts.
+    """
+    facts = (
+        *sample_bank_latest_facts(),
+        CapitalFact(
+            fact_group="operational_income",
+            category="gross_income_2022",
+            # 10x the other years: if 2022 entered the average the charge would
+            # be unmissable rather than subtly wrong.
+            amount=Decimal("4000") * M,
+            income_year=2022,
+        ),
+    )
+    result = compute_rwa(facts, bog_capital_params())
+
+    # Still (340+380+400) x 15 / 300 = 56M — 2022 is outside the window.
+    assert result.positive_income_years == 3
+    assert result.gross_income_positive_total == Decimal("1120000000").quantize(MONEY)
+    assert result.bia_charge == Decimal("56000000").quantize(MONEY)
+    operational = {
+        item.line_code: item for item in result.line_items if item.section == "operational_rwa"
+    }
+    excluded = operational["gross_income_2022"]
+    assert excluded.exposure_amount == Decimal("4000000000").quantize(MONEY)
+    assert excluded.weighted_amount == Decimal("0")
+    assert "Outside 3-Year Window" in excluded.description
+
+
+def test_bia_refuses_when_the_group_carries_no_gross_income_series() -> None:
+    """No gross income means no ¶649 base — refuse, never substitute a proxy.
+
+    A book with net income and provisions but no gross-income series is a
+    derivation gap. Averaging what IS there would manufacture an operational
+    RWA, and a manufactured RWA is filed as if it were measured.
+    """
+    without_income = [
+        fact for fact in sample_bank_latest_facts() if fact.fact_group != "operational_income"
+    ]
+    facts = (*without_income, *NON_BIA_INCOME_SERIES)
+
+    with pytest.raises(BiaGrossIncomeUnavailable) as excinfo:
+        compute_rwa(facts, bog_capital_params())
+
+    # Doubly typed, so the capital service boundary still fails the run.
+    assert isinstance(excinfo.value, CapitalComputationError)
+    detail = excinfo.value.details[0]
+    assert detail.state is OutcomeState.MISSING_REQUIRED_INPUT
+    assert detail.metric_id == "operational_rwa_ghs"
+    assert detail.items == ("fact:gross_income",)
+    assert detail.blocks_filing
+
+
+def test_bia_refusal_carries_a_typed_fail_closed_outcome() -> None:
+    """The all-non-positive refusal is ``NotComputable``, not a bare string."""
+    facts = tuple(
+        replace(fact, amount=Decimal("0")) if fact.fact_group == "operational_income" else fact
+        for fact in sample_bank_latest_facts()
+    )
+
+    with pytest.raises(NotComputable) as excinfo:
+        compute_rwa(facts, bog_capital_params())
+
+    detail = excinfo.value.details[0]
+    assert detail.state is OutcomeState.NOT_COMPUTABLE
+    assert detail.metric_id == "operational_rwa_ghs"
+    assert detail.blocks_filing
+    # Still a CapitalComputationError, so every existing boundary keeps working.
+    assert isinstance(excinfo.value, CapitalComputationError)
 
 
 def test_baseline_capital_structure_golden() -> None:

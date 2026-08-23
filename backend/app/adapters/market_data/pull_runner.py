@@ -612,6 +612,7 @@ def _supersede(  # noqa: PLR0913 - natural-key supersession needs full scope
                 model.bank_id == bank_id,
                 model.as_of_date == as_of_date,
                 model.superseded_by.is_(None),
+                model.withdrawn_at.is_(None),
                 *key_clauses,
             )
         )

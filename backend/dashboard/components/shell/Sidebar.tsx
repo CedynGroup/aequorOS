@@ -194,11 +194,11 @@ export default function Sidebar() {
         {!collapsed && (
           <div className="rounded bg-white/5 p-3 mb-2">
             <p className="text-caption text-white/50 uppercase tracking-wider font-medium">
-              Environment
+              Institution workspace
             </p>
-            <p className="mt-1 text-body text-white">Demo · Sandbox data</p>
+            <p className="mt-1 text-body text-white">Tenant-scoped data</p>
             <p className="mt-1 text-caption text-white/50">
-              {`Synthetic ${centralBankName()} licensee`}
+              {centralBankName()}
             </p>
           </div>
         )}

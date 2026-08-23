@@ -2,6 +2,41 @@
 node = "24"
 pnpm = "11.2.2"
 
+# ---------------------------------------------------------------------------
+# THE DELEGATION CONTRACT, and the outage that made it worth writing down.
+#
+# Every `risk-service:*` task below is a two-line proxy: `dir = "backend"` moves
+# into the service directory, and `run = "mise run risk-service:<same name>"`
+# re-invokes mise there, where `backend/mise.toml` defines the same name with
+# the real command. CI runs `mise run` from the repository ROOT, so this file is
+# the one that has to carry every task a workflow names; the backend file is the
+# one that has to carry every real command.
+#
+# Both halves are load-bearing, and the second half failed. Commit `f33e869`
+# (2026-08-20) moved `backend/mise.toml` to `backend/docs/mise.toml`. With the
+# target gone, each proxy re-resolved to ITSELF and recursed — measured under
+# mise 2026.7.7 against exactly that layout: 525 self-invocations in 8 seconds,
+# `uv` never started. The `Risk Service CI` run on 2026-08-21 died in its first
+# step, "Install risk service dependencies", after 440 of them, and read like a
+# hang rather than a missing file.
+#
+# So the invariant is: EVERY task here must exist in BOTH files, and the backend
+# one must hold the real command. A task defined only in the backend file is
+# "task not found" in CI while working perfectly in a local `cd backend` shell;
+# a task defined only here recurses until the runner gives up.
+#
+# It is guarded in two places, deliberately not one:
+#   * `backend/tests/architecture/test_ci_task_wiring.py` — the static contract
+#     (no self-delegation, every workflow-invoked task defined here, every
+#     delegation target present in the backend file);
+#   * `.github/scripts/mise_wiring_preflight.py` — the SAME check in plain
+#     Python with no mise and no uv, run as the `preflight` job every other job
+#     depends on. The test above cannot catch this failure on its own: reaching
+#     it requires `mise run risk-service:test-architecture`, which is itself one
+#     of the proxies that recurses. A guard that can only run when the thing it
+#     guards is healthy is not a guard.
+# ---------------------------------------------------------------------------
+
 [tasks."risk-service:sync"]
 description = "Install risk service dependencies with uv"
 dir = "backend"
@@ -22,6 +57,11 @@ description = "Run risk service FastAPI dev server"
 dir = "backend"
 run = "mise run risk-service:dev"
 
+[tasks."risk-service:worker"]
+description = "Run the risk service live-engine background worker"
+dir = "backend"
+run = "mise run risk-service:worker"
+
 [tasks."risk-service:test"]
 description = "Run risk service pytest"
 dir = "backend"
@@ -37,14 +77,35 @@ description = "Run risk service Postgres-backed Alembic migration tests"
 dir = "backend"
 run = "mise run risk-service:test-postgres-migrations"
 
-# Every risk-service task must exist in BOTH this file and backend/mise.toml:
-# CI invokes `mise run` from the repository root, so a task defined only in the
-# backend file resolves to "task not found" there while working perfectly in a
-# local `cd backend` shell.
 [tasks."risk-service:test-postgres-locks"]
 description = "Run risk service Postgres-only concurrency tests"
 dir = "backend"
 run = "mise run risk-service:test-postgres-locks"
+
+[tasks."risk-service:test-architecture"]
+description = "Run risk service architecture, dependency-boundary and migration-guard tests"
+dir = "backend"
+run = "mise run risk-service:test-architecture"
+
+[tasks."risk-service:test-postgres-schema"]
+description = "Run risk service Postgres schema, migration and RLS suites"
+dir = "backend"
+run = "mise run risk-service:test-postgres-schema"
+
+[tasks."risk-service:test-postgres-suite"]
+description = "Run the full risk service suite against Postgres"
+dir = "backend"
+run = "mise run risk-service:test-postgres-suite"
+
+[tasks."risk-service:test-real-data"]
+description = "Run the risk service opt-in real-data API suite"
+dir = "backend"
+run = "mise run risk-service:test-real-data"
+
+[tasks."risk-service:test-storage"]
+description = "Run the risk service S3-compatible storage contract suite"
+dir = "backend"
+run = "mise run risk-service:test-storage"
 
 [tasks."risk-service:lint"]
 description = "Run risk service Ruff checks"
@@ -109,9 +170,4 @@ run = 'mise run risk-service:revision "${usage_message?}"'
 [tasks."risk-service:smoke"]
 description = "Run risk service local smoke checks that do not require Postgres"
 dir = "backend"
-run = [
-  "uv sync",
-  "uv run ruff check .",
-  "uv run basedpyright",
-  "uv run pytest",
-]
+run = "mise run risk-service:smoke"

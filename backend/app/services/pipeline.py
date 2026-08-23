@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.domain.authority.registry import InstitutionClass, MetricFamily
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -36,6 +37,7 @@ from app.models import (
 )
 from app.services import (
     data_activation,
+    filing_reconciliation,
     implied_rating,
     institution_types,
     regulatory_capital,
@@ -44,6 +46,7 @@ from app.services import (
     regulatory_fx,
     regulatory_irr,
     regulatory_liquidity,
+    sdi_regime,
 )
 from app.services.audit import record_event
 from app.services.fact_derivation import DerivationError, derive_current_facts, derive_facts
@@ -52,6 +55,15 @@ from app.services.live_types import LiveFindingSpec, LiveModuleResult
 REFRESH_EVENT = "bank_data.refreshed"
 OFFICIAL_EVENT = "official_run.completed"
 FORECAST_MODULE = "forecast"
+
+#: Stamped INTO the live metrics payload — not only beside it — whenever the
+#: book behind a live figure fails the balance-sheet identity. ``pipeline_state``
+#: already says so on the row, but a consumer that reads only ``metrics`` (the
+#: daily snapshot ladder has nothing else) would otherwise see a bare number
+#: indistinguishable from a sound one. Present ONLY when blocked, so a
+#: reconciled book's payload is byte-identical to what it was before.
+RECONCILIATION_METRIC_KEY = "reconciliation_status"
+RECONCILIATION_METRIC_BLOCKED = "blocked"
 
 # Modules with a current canonical-data compute path. No function here writes a
 # RegulatoryRun: official snapshots are created only by ``run_official``.
@@ -82,12 +94,32 @@ _MODULE_SCOPE_KEY: dict[str, str] = {
 }
 
 
+#: Live modules whose outputs are authoritative only for a declared institution
+#: class. The declaration itself lives in WS-A's metric authority registry; this
+#: maps the live module key onto the metric family to look up there, so the live
+#: tier can never disagree with the registry about who a metric belongs to.
+_MODULE_METRIC_FAMILY: dict[str, MetricFamily] = {
+    "forecast": MetricFamily.FORECAST,
+}
+
+
 def _scoped_modules(
     db: Session, bank: Bank
 ) -> tuple[tuple[str, _ComputeLive], ...]:
     """The cheap-tier modules the tenant's institution type is entitled to run."""
     institution_type = institution_types.get_type(db, bank)
     allowed = set(institution_type.default_modules)
+    klass = InstitutionClass(institution_type.institution_class)
+
+    def in_regime(module: str) -> bool:
+        # The projection measures a bank against Basel CET1/Tier 1/CAR/leverage
+        # and LCR/NSFR. No projection method is registered for the s.29 regime,
+        # so an SDI's live summary and Alerts must not carry those ratios as its
+        # position (architecture audit sections 6 + 10). Registry-driven, so the
+        # boundary follows the declaration rather than a second opinion here.
+        family = _MODULE_METRIC_FAMILY.get(module)
+        return family is None or sdi_regime.family_has_authority(klass, family)
+
     return tuple(
         (module, compute)
         for module, compute in _CHEAP_MODULES
@@ -96,6 +128,7 @@ def _scoped_modules(
         # Its control signals are read directly from the position book until a
         # BoG-approved SDI stress/live methodology is configured.
         and not (module == "liquidity" and institution_type.institution_class == "sdi")
+        and in_regime(module)
     )
 
 
@@ -111,13 +144,31 @@ class RecomputeOutcome:
     modules_ok: list[str]
     modules_failed: dict[str, str]
     skipped_reason: str | None
+    #: The balance-sheet control's refusal message when the live derivation ran
+    #: on a book that does not reconcile, else ``None``. The live plane keeps
+    #: materialising — an operator has to see the broken book to fix it — but
+    #: every module row it writes carries this and ``pipeline_state="blocked"``,
+    #: so no reader can take the figures for sound ones (audit 2026-08-22 D-1).
+    reconciliation_block: str | None = None
 
 
 def recompute_modules(
-    session: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+    session: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    *,
+    reconciliation_block: str | None = None,
 ) -> tuple[list[str], dict[str, str]]:
     """Recompute every module's live view from the CURRENT facts and upsert the
     ``live_metrics`` + findings. Creates **zero** ``RegulatoryRun`` rows.
+
+    ``reconciliation_block`` is the balance-sheet control's refusal message when
+    the facts underneath were derived from a book that does not reconcile. It
+    does not suppress the computation — the whole point of the live plane is
+    that the operator can see the state they must repair — but it stamps every
+    row it writes ``pipeline_state="blocked"`` with the message, so the figures
+    are never served as sound ones.
 
     This is the light, read-safe half of the live tier: it does NOT re-derive
     facts (no mass delete/insert), so it is fast and non-blocking on the request
@@ -142,6 +193,7 @@ def recompute_modules(
                 result.input_hash,
                 result.engine_version,
                 result.source_as_of_date,
+                reconciliation_block=reconciliation_block,
             )
             _reconcile_findings(
                 session,
@@ -173,7 +225,7 @@ def recompute_live(
     only explicit official runs derive period-keyed ``BankFinancialFact`` rows.
     """
     try:
-        derive_current_facts(session, ctx, bank.id, as_of)
+        derivation = derive_current_facts(session, ctx, bank.id, as_of)
     except DerivationError as exc:
         session.rollback()
         if exc.code == "no_canonical_data":
@@ -182,9 +234,23 @@ def recompute_live(
         raise
     session.commit()
 
+    # The verdict the derivation already computed. It used to be discarded here
+    # (audit 2026-08-22 D-1), which is how a tenant 3.68% out of balance came to
+    # serve seven live-metric rows, every one ``pipeline_state='ready'``.
+    identity = derivation.reconciliation
+    reconciliation_block = (
+        identity.message(bank.currency or "")
+        if identity is not None and identity.blocks_filing
+        else None
+    )
+
     period = _ensure_live_period(session, ctx, bank, as_of)
-    modules_ok, modules_failed = recompute_modules(session, ctx, bank, period)
-    return RecomputeOutcome(period, modules_ok, modules_failed, None)
+    modules_ok, modules_failed = recompute_modules(
+        session, ctx, bank, period, reconciliation_block=reconciliation_block
+    )
+    return RecomputeOutcome(
+        period, modules_ok, modules_failed, None, reconciliation_block=reconciliation_block
+    )
 
 
 def run_refresh(session: Session, job: Job) -> None:
@@ -217,6 +283,7 @@ def run_refresh(session: Session, job: Job) -> None:
             "reporting_period_id": str(outcome.period.id),
             "modules_ok": outcome.modules_ok,
             "modules_failed": sorted(outcome.modules_failed),
+            "reconciliation_blocked": outcome.reconciliation_block is not None,
         },
     )
     session.commit()
@@ -224,6 +291,7 @@ def run_refresh(session: Session, job: Job) -> None:
         "as_of_date": as_of.isoformat(),
         "modules_ok": outcome.modules_ok,
         "modules_failed": outcome.modules_failed,
+        "reconciliation_blocked": outcome.reconciliation_block is not None,
     }
 
 
@@ -244,7 +312,17 @@ def run_official(session: Session, job: Job) -> None:
         session.commit()
         period_id = derivation.reporting_period_id
     else:
+        # Facts already exist, so the derivation — and with it the only place
+        # the balance-sheet control used to run — is skipped for input_hash
+        # stability. That skipped the CONTROL too (audit 2026-08-22 D-3a): a
+        # later ingestion at this as-of can break the identity while the facts
+        # sit there balanced and stale, and the scheduled run minted immutable
+        # runs on them with no verdict anywhere in the chain. The gate is
+        # read-only, so reproducibility is untouched.
         period_id = period.id
+        filing_reconciliation.assert_filing_reconciled(
+            session, ctx, bank, as_of=as_of, period_id=period_id, purpose="official_run"
+        )
 
     runs = data_activation.run_official_modules(session, ctx, bank.id, period_id)
     record_event(
@@ -279,7 +357,23 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
     input_hash: str | None,
     engine_version: str | None = None,
     source_as_of_date: date | None = None,
+    *,
+    reconciliation_block: str | None = None,
 ) -> None:
+    """Upsert one module's live row.
+
+    ``pipeline_state`` is the row's own honesty flag, and it has three values,
+    not two: ``ready`` (computed, and the book behind it reconciles),
+    ``blocked`` (computed, but the book does NOT reconcile — the metrics are
+    kept so the operator can see what they must repair, and ``pipeline_error``
+    carries the control's message), and ``failed`` (not computed at all; see
+    :func:`_upsert_live_failure`). ``blocked`` is deliberately distinct from
+    ``failed``: a failure invites a retry, and re-running the pipeline cannot
+    fix a general ledger.
+    """
+    pipeline_state = "blocked" if reconciliation_block is not None else "ready"
+    if reconciliation_block is not None:
+        metrics = {**metrics, RECONCILIATION_METRIC_KEY: RECONCILIATION_METRIC_BLOCKED}
     existing = session.scalar(
         select(LiveMetric).where(
             LiveMetric.organization_id == ctx.organization_id,
@@ -301,8 +395,8 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
                 computed_from_input_hash=input_hash,
                 engine_version=engine_version or f"live-{module}",
                 calculation_generation=1,
-                pipeline_state="ready",
-                pipeline_error=None,
+                pipeline_state=pipeline_state,
+                pipeline_error=reconciliation_block,
                 computed_at=now,
             )
         )
@@ -314,8 +408,8 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
         existing.source_as_of_date = source_as_of_date or period.period_end
         existing.engine_version = engine_version or f"live-{module}"
         existing.calculation_generation += 1
-        existing.pipeline_state = "ready"
-        existing.pipeline_error = None
+        existing.pipeline_state = pipeline_state
+        existing.pipeline_error = reconciliation_block
         existing.computed_at = now
     _upsert_live_snapshot(session, ctx, bank, period, module, metrics, status, now)
     session.flush()

@@ -22,6 +22,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models import BankFinancialFact
+from app.services import regulatory_capital
 from tests.real_data import (
     REAL_BANK_ID,
     REAL_ORG_ID,
@@ -264,7 +265,8 @@ def test_create_baseline_capital_run_persists_snapshot_metrics_and_outputs(
     assert run["status"] == "succeeded"
     assert run["module"] == "capital"
     assert run["scenario_code"] == "baseline"
-    assert run["engine_version"] == "regulatory-capital-v1.0.0"
+    # Resolved, not restated — see the liquidity peer (re-audit D-5).
+    assert run["engine_version"] == regulatory_capital.ENGINE_VERSION
     assert run["input_schema_version"] == "bank-facts-v2"
     assert run["output_schema_version"] == "capital-metrics-v1"
     assert run["started_at"] is not None
@@ -419,12 +421,24 @@ def test_run_all_capital_scenarios_returns_four_runs_with_stress_outputs(  # noq
         if triggers["breach"]["fired"]:
             assert triggers["early_warning"]["fired"]
 
+        # A stress run seals NO end-state capital ratio as a metric result. Such a
+        # row carries a threshold and a compliance status, and the STRESS-PACK
+        # copies both verbatim into a filed return - a compliance verdict on a
+        # post-stress ratio that no BoG instrument requires to meet the minimum.
+        # The end-state figure itself is not lost: it is the last quarter of the
+        # stored path, which the pack tabulates, and it is asserted here from the
+        # same source the pack reads.
         metric_results = {item["metric_code"]: item for item in run["metric_results"]}
-        assert _dec(metric_results["car_pct_end"]["metric_value"]) == end_car[scenario], scenario
-        assert _dec(metric_results["car_pct_end"]["threshold_min"]) == car_min
-        assert metric_results["car_pct_end"]["status"] == _expected_status(
-            end_car[scenario], car_min
-        ), scenario
+        assert "car_pct_end" not in metric_results, scenario
+        assert set(metric_results) == {
+            "car_pct",
+            "tier1_ratio_pct",
+            "cet1_ratio_pct",
+            "leverage_ratio_pct",
+        }, scenario
+        # The CAR row this run DOES seal is the as-of ratio, which is what the
+        # Capital Requirements Directive minimum binds - Q0 of the same path.
+        assert _dec(metric_results["car_pct"]["metric_value"]) == baseline_car, scenario
 
     # The severe scenario cannot leave the bank better capitalised than the mild one.
     assert end_car["severe"] <= end_car["mild"]
@@ -461,6 +475,21 @@ def test_capital_dashboard_computes_inline_then_prefers_stored_runs(  # noqa: PL
     assert metrics["car_status"] == _expected_status(metrics["car_pct"], buffers["car_min_pct"])
     for status_key in ("car_status", "tier1_status", "cet1_status", "leverage_status"):
         assert metrics[status_key] in {"green", "amber", "red"}
+    # NEW-53. The buffers block is the ONE authority for every capital floor on
+    # this payload, including the Basel sub-tiers: a consumer must never fall
+    # back to a stored run's threshold_min, which is absent before the bank's
+    # first official run (`latest_run_id` is None on this very path). A bank
+    # cannot compute these ratios without the floors, so they are always present
+    # here, they are the floors the statuses were classified against, and they
+    # are the floors the validation messages cite.
+    for metric_code, buffer_key, status_key in (
+        ("tier1_ratio_pct", "tier1_min_pct", "tier1_status"),
+        ("cet1_ratio_pct", "cet1_min_pct", "cet1_status"),
+        ("leverage_ratio_pct", "leverage_min_pct", "leverage_status"),
+    ):
+        floor = buffers[buffer_key]
+        assert floor is not None, buffer_key
+        assert metrics[status_key] == _expected_status(metrics[metric_code], floor), metric_code
 
     composition = body["rwa_composition"]
     assert _dec(composition["total_rwa_ghs"]) == total_rwa

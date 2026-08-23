@@ -20,6 +20,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { guardedFetch } from '../outbound';
 
 /** Correlates the authorize redirect with its callback. HttpOnly, short-lived. */
 export const STATE_COOKIE = 'aeq-stepup-state';
@@ -108,11 +109,24 @@ export async function fetchClientConfig(): Promise<OidcClientConfig> {
   return (await response.json()) as OidcClientConfig;
 }
 
+/**
+ * Read the IdP's discovery document.
+ *
+ * The URL is derived from the org admin's `issuer`, so it goes through the
+ * egress guard (`lib/outbound`) before it becomes a socket — this runtime is
+ * not covered by the backend's Python guard, and an unguarded fetch here aims
+ * the dashboard server wherever the issuer points (cloud metadata, an RFC1918
+ * neighbour, a container's own loopback). Both callers already convert a throw
+ * into the fixed `idp_unreachable` / `failed` ceremony marker, so a block never
+ * reaches the signer's browser as anything but "try the password path".
+ */
 export async function discover(issuer: string): Promise<OidcDiscovery> {
   const base = issuer.replace(/\/$/, '');
-  const response = await fetch(`${base}/.well-known/openid-configuration`, {
-    cache: 'no-store',
-  });
+  const response = await guardedFetch(
+    `${base}/.well-known/openid-configuration`,
+    { cache: 'no-store' },
+    { field: 'SSO issuer' },
+  );
   if (!response.ok) {
     throw new Error(`OIDC discovery failed for ${base} (${response.status}).`);
   }
@@ -189,7 +203,14 @@ export async function takeAuthorizationCookie(): Promise<string | null> {
   return token;
 }
 
-/** Exchange an authorization code for tokens. Runs server-side only. */
+/**
+ * Exchange an authorization code for tokens. Runs server-side only.
+ *
+ * `tokenEndpoint` comes from the discovery document, i.e. from whatever
+ * answered `discover()` — a SECOND attacker-influenced URL that guarding the
+ * issuer does not cover. It is therefore re-checked here, and the client secret
+ * only leaves the process once the destination has passed.
+ */
 export async function exchangeCode(params: {
   tokenEndpoint: string;
   code: string;
@@ -206,12 +227,16 @@ export async function exchangeCode(params: {
     client_secret: params.clientSecret,
     code_verifier: params.codeVerifier,
   });
-  const response = await fetch(params.tokenEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-    cache: 'no-store',
-  });
+  const response = await guardedFetch(
+    params.tokenEndpoint,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+      cache: 'no-store',
+    },
+    { field: 'OIDC token endpoint' },
+  );
   if (!response.ok) {
     throw new Error(`Token exchange failed (${response.status}).`);
   }

@@ -1,3 +1,12 @@
+"""Case cash-flow adequacy contracts (advisory, never filed).
+
+Model and field names keep the historical `Liquidity*` spelling because they
+are a published wire contract (`packages/risk-service-api` is generated from
+them). The human-readable `label`, `description` and `rationale` VALUES these
+models carry are the case plane's own wording — cash-flow adequacy, not Basel
+LCR/NSFR. See `app.services.case_plane`.
+"""
+
 from __future__ import annotations
 
 from datetime import date, datetime

@@ -135,6 +135,18 @@ export interface ManagementActionPlanRead {
   organizationId: string;
   /**
    *
+   * @type {boolean}
+   * @memberof ManagementActionPlanRead
+   */
+  requiresDeclaredSeverity: boolean;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof ManagementActionPlanRead
+   */
+  severityPricedActions: Array<string>;
+  /**
+   *
    * @type {PlanStatus}
    * @memberof ManagementActionPlanRead
    */
@@ -177,6 +189,16 @@ export function instanceOfManagementActionPlanRead(
   if (!("name" in value) || value["name"] === undefined) return false;
   if (!("organizationId" in value) || value["organizationId"] === undefined)
     return false;
+  if (
+    !("requiresDeclaredSeverity" in value) ||
+    value["requiresDeclaredSeverity"] === undefined
+  )
+    return false;
+  if (
+    !("severityPricedActions" in value) ||
+    value["severityPricedActions"] === undefined
+  )
+    return false;
   if (!("status" in value) || value["status"] === undefined) return false;
   if (!("updatedAt" in value) || value["updatedAt"] === undefined) return false;
   if (!("version" in value) || value["version"] === undefined) return false;
@@ -209,6 +231,8 @@ export function ManagementActionPlanReadFromJSONTyped(
     id: json["id"],
     name: json["name"],
     organizationId: json["organization_id"],
+    requiresDeclaredSeverity: json["requires_declared_severity"],
+    severityPricedActions: json["severity_priced_actions"],
     status: PlanStatusFromJSON(json["status"]),
     updatedAt: new Date(json["updated_at"]),
     version: json["version"],
@@ -241,6 +265,8 @@ export function ManagementActionPlanReadToJSONTyped(
     id: value["id"],
     name: value["name"],
     organization_id: value["organizationId"],
+    requires_declared_severity: value["requiresDeclaredSeverity"],
+    severity_priced_actions: value["severityPricedActions"],
     status: PlanStatusToJSON(value["status"]),
     updated_at: value["updatedAt"].toISOString(),
     version: value["version"],

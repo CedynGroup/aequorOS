@@ -3,8 +3,8 @@
 /**
  * "Connect a Temenos core" — the onboarding flow as a stepper: choose the
  * transport mode, provide the endpoint + company context, enter the service
- * credentials (validated on submission), pick the domains to pull, then create
- * + test + activate. Credentials are write-only password fields; after creation
+ * credentials, pick the domains to map, then save the configuration.
+ * Credentials are write-only password fields; after creation
  * the only stored representation shown is the fingerprint on the connection card.
  */
 
@@ -167,10 +167,10 @@ export default function AddConnectionPanel({
     <section className="card p-5 space-y-5">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-h2 text-navy">Connect a Temenos core</h2>
+          <h2 className="text-h2 text-navy">Configure a Temenos core</h2>
           <p className="mt-1 text-body text-slate">
-            The same flow works for every transport: endpoint, credentials, domains,
-            test, activate. Credentials are encrypted at rest and never displayed again.
+            Save the endpoint, credentials, and domain mapping for onboarding. Live OFS, IRIS,
+            and Open API transport is not enabled in this deployment.
           </p>
         </div>
         <button
@@ -410,9 +410,8 @@ export default function AddConnectionPanel({
           {!created && (
             <>
               <p className="text-body text-slate">
-                AequorOS will store the connection, validate the credentials, and confirm
-                the pull plan. A live pull runs on the schedule once the core transport is
-                enabled for this site.
+                AequorOS will store the configuration and check its credential structure. This
+                deployment does not make a network request to T24, and live pulls stay blocked.
               </p>
               <button
                 type="button"
@@ -425,7 +424,7 @@ export default function AddConnectionPanel({
                 ) : (
                   <Plug size={15} aria-hidden />
                 )}
-                Create, validate &amp; test connection
+                Save configuration
               </button>
             </>
           )}
@@ -437,7 +436,7 @@ export default function AddConnectionPanel({
                 <p className="text-body text-navy">
                   {created.status === 'TESTING'
                     ? 'Connection stored, but credential validation failed — fix it from the connection card (Rotate credentials).'
-                    : `${modeName(created.connectionMode)} connection active.`}
+                    : `${modeName(created.connectionMode)} configuration saved. Live transport remains unavailable.`}
                 </p>
               </div>
               {created.validationError && (
@@ -461,8 +460,8 @@ export default function AddConnectionPanel({
                     )}
                     <p className="text-body font-medium text-navy">
                       {testResult.success
-                        ? 'Connection verified. Pull plan:'
-                        : 'Verification failed'}
+                        ? 'Configuration check complete.'
+                        : 'Live transport unavailable'}
                     </p>
                   </div>
                   {testResult.success ? (

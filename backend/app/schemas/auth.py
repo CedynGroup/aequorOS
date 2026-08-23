@@ -98,6 +98,29 @@ class SsoConnectionUpdateRequest(BaseModel):
     omit (None) to keep the stored one, send a value to replace it."""
 
     issuer: str = Field(min_length=8, max_length=512)
+
+    @field_validator("issuer")
+    @classmethod
+    def _screen_issuer(cls, value: str) -> str:
+        """Egress screening at the boundary — the issuer is an outbound target.
+
+        The backend fetches ``<issuer>/.well-known/openid-configuration`` on
+        every SSO sign-in, so an admin naming ``https://169.254.169.254`` here
+        would aim the backend at cloud instance-metadata. The non-resolving half
+        of :mod:`app.core.outbound` gives an immediate 422 for the obvious forms;
+        the authoritative resolving check runs in
+        ``app.core.security._discover_jwks_uri`` just before the fetch, because
+        a name that merely *resolves* to a blocked address cannot be caught here.
+        The loopback carve-out is honoured so a developer can still point a
+        tenant at a local stub IdP; it is off on every deployed environment,
+        ``staging`` included.
+        """
+        from app.core.outbound import check_url_syntax  # noqa: PLC0415 - avoid an import cycle
+        from app.core.security import _is_loopback_issuer_allowed  # noqa: PLC0415
+
+        if _is_loopback_issuer_allowed(value):
+            return value
+        return check_url_syntax(value, field="issuer")
     client_id: str = Field(min_length=1, max_length=255)
     client_secret: str | None = Field(default=None, max_length=1024)
     allowed_email_domains: list[str] = Field(default_factory=list, max_length=32)

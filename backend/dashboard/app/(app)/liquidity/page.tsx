@@ -99,8 +99,10 @@ export default function LiquidityCockpit() {
   const data = dashboard.data;
   const run = latestRun.data;
 
-  // Regulatory floors from the stored run's parameter snapshot; the standard
-  // BoG CRD values are the fallback before a run is persisted.
+  // Liquidity floors from the stored run's parameter snapshot. The 100%
+  // fallback is the BASEL figure (BCBS 238 ¶17), not a Ghanaian requirement:
+  // BoG has published no LCR directive and nothing at all on NSFR
+  // (backend/docs/bog_parameter_sources.md §2.6). Label it accordingly.
   const thresholds = runThresholds(run);
   const lcrMin = thresholds['lcr_min'] ?? 100;
   const lcrRedFloor = thresholds['lcr_amber_floor'] ?? 90;
@@ -166,7 +168,7 @@ export default function LiquidityCockpit() {
           { label: 'Cockpit' },
         ]}
         title="Liquidity Cockpit"
-        subtitle={`Basel III LCR & NSFR per ${centralBankName()} CRD framework · 30-day stressed horizon`}
+        subtitle={`Basel III LCR & NSFR · 30-day stressed horizon · ${centralBankName()} has issued no LCR or NSFR directive, so Basel parameters apply`}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 
@@ -324,8 +326,8 @@ export default function LiquidityCockpit() {
 
             {/* Regulatory floors — LCR & NSFR are floor limits (direction above) */}
             <SectionCard
-              title="Regulatory floors"
-              subtitle={`${regShort()} CRD thresholds from the active parameter set — green ≥ minimum, amber down to the red floor`}
+              title="Liquidity floors"
+              subtitle={`Basel LCR/NSFR minimums from the active parameter set — ${centralBankName()} has published no LCR requirement and none on NSFR (green ≥ minimum, amber down to the red floor)`}
               computedAt={computedAt}
               footer={provenance}
             >
@@ -343,7 +345,7 @@ export default function LiquidityCockpit() {
                   direction="above"
                   unit="%"
                   limitLabel="Red floor"
-                  warnLabel={`${regShort()} minimum`}
+                  warnLabel="Basel minimum"
                   format={(v) => v.toFixed(1)}
                 />
                 <LimitBar
@@ -358,8 +360,8 @@ export default function LiquidityCockpit() {
                   warnAt={nsfrMin}
                   direction="above"
                   unit="%"
-                  limitLabel={nsfrRedFloor === nsfrMin ? `${regShort()} minimum` : 'Red floor'}
-                  warnLabel={`${regShort()} minimum`}
+                  limitLabel={nsfrRedFloor === nsfrMin ? 'Basel minimum' : 'Red floor'}
+                  warnLabel="Basel minimum"
                   format={(v) => v.toFixed(1)}
                 />
               </div>
@@ -431,7 +433,7 @@ export default function LiquidityCockpit() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <SectionCard
                 title="Cash outflows"
-                subtitle={`30-day stressed runoff per ${regShort()} CRD weights`}
+                subtitle="30-day stressed runoff per Basel III run-off weights (BCBS 238) — no run-off table is prescribed locally"
                 noPadding
                 computedAt={computedAt}
                 footer={provenance}

@@ -11,9 +11,12 @@ chosen so the derived facts have hand-checkable aggregates:
 - capital     = 45M GHS (40M CET1 - 5M deduction + 10M T2)
 - FX          = one long USD book (12.85M loan vs 2.57M deposit)
 
-The GL asset residual (placements + fixed assets; the provision contra sits in
-the loan GL range and is excluded with it) is 12M, leaving a deliberate funding
-shortfall that exercises the balance plug.
+The GL asset residual is 10M: fixed assets 7M plus the interbank placement 5M
+(the GL placement account is skipped in favour of the matching sub-ledger
+position, so the 5M is counted once) less the 2M loan-loss provision contra,
+which no position line stands in for — the loan sub-ledger is gross — so total
+assets are stated net of impairment. That leaves a deliberate 15.28M funding
+shortfall which exercises the balance plug.
 """
 
 from __future__ import annotations

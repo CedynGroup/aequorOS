@@ -31,8 +31,8 @@ from app.models import (
     CanonicalYieldCurvePoint,
 )
 from app.services.ingestion import bank_slug as resolve_bank_slug
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.adapters.market_data.contract import VENDOR_INTERNAL_MARKER
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.storage.inmemory import InMemoryStorageClient
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"

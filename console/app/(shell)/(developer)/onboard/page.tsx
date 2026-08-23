@@ -55,15 +55,36 @@ const LICENSE_PRESETS = ['universal', 'commercial', 'savings_and_loans', 'rural'
 
 // institution_type IS a closed enum: the seven codes in the global
 // institution_types registry (docs/sdi.md §1). The saga validates the value
-// against that registry, so this list must stay in lockstep with it. Distinct
-// from license_type above (free text) — the typed discriminator that scopes the
-// tenant's modules and prudential requirements in later phases.
+// against that registry, so this list must stay in lockstep with it — the
+// CODES cannot change here. Distinct from license_type above (free text) — the
+// typed discriminator that scopes the tenant's modules and prudential
+// requirements in later phases.
+//
+// The LABELS carry the Ghanaian licence reform. Notice BG/GOV/SEC/2026/03
+// (27 Jan 2026, effective on issuance) folded savings & loans companies,
+// finance houses, deposit-taking microfinance and micro-credit companies into
+// a single Microfinance Bank class, and converted rural banks into community
+// banks — compliance date 31 Dec 2026. The old codes are retained because
+// institutions mid-transition are still on them, but an operator must not be
+// shown them as current forward-looking classes.
 const INSTITUTION_TYPES = [
   { value: 'universal_bank', label: 'Universal Bank' },
-  { value: 'savings_and_loans', label: 'Savings & Loans' },
-  { value: 'finance_house', label: 'Finance House' },
-  { value: 'rural_community_bank', label: 'Rural & Community Bank' },
-  { value: 'microfinance_bank', label: 'Microfinance Institution' },
+  {
+    value: 'microfinance_bank',
+    label: 'Microfinance Bank (current class, Notice BG/GOV/SEC/2026/03)',
+  },
+  {
+    value: 'rural_community_bank',
+    label: 'Community Bank (formerly Rural Bank)',
+  },
+  {
+    value: 'savings_and_loans',
+    label: 'Savings & Loans — legacy, transitioning to Microfinance Bank by 31 Dec 2026',
+  },
+  {
+    value: 'finance_house',
+    label: 'Finance House — legacy, transitioning to Microfinance Bank by 31 Dec 2026',
+  },
   { value: 'financial_holding_company', label: 'Financial Holding Company' },
   { value: 'other_rfi', label: 'Other Regulated Financial Institution' },
 ] as const;

@@ -25,7 +25,7 @@ three writers show exactly the same numbers.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
@@ -656,7 +656,6 @@ _LMT_TEMPLATE = ReturnTemplate(
             ),
             optional=True,
         ),
-
     ),
     notes=(
         "Beyond the LCR subset (Table 11 taxonomy, aggregate currency), the return "
@@ -798,6 +797,65 @@ _LE_TEMPLATE = ReturnTemplate(
         "The monthly deadline day-count is not stated in the directive (draft Part VI); "
         "the calendar applies the observed BoG monthly convention (day 9) pending the "
         "bank's onboarding confirmation.",
+        _T_MINUS_1_NOTE,
+    ),
+)
+
+_SDI_LMT_SECTION_CODES = frozenset(
+    {
+        "prudential_ratio_inputs",
+        "prudential_ratio_percentages",
+        "maturity_ladder",
+        "items_no_contractual_maturity",
+        "collateral_rehypothecation",
+        "funding_concentration",
+        "assets_liabilities_by_currency",
+        "maturity_of_exposures",
+        "deposit_funding_concentration",
+        "unencumbered_assets",
+        "collateral_received",
+        "liquidity_reserves",
+    }
+)
+
+# The LMTD appendix is public and applies to SDIs, but Table 11 is expressly
+# banks-only. Reusing the confirmed Table 1-10 layouts prevents a customer pack
+# from drifting from the published structures while giving it its own report
+# identity and an unambiguous scope statement.
+_SDI_LMT_TEMPLATE = replace(
+    _LMT_TEMPLATE,
+    template_id="bog-sdi-lmt-monthly-v1",
+    return_code="SDI-LMT-MONTHLY",
+    title="SDI Liquidity Monitoring Tools Return (LMTD Tables 1-10)",
+    sections=tuple(
+        section
+        for section in _LMT_TEMPLATE.sections
+        if section.section_code in _SDI_LMT_SECTION_CODES
+    ),
+    notes=(
+        "This SDI packet renders the published LMTD Appendix Tables 1-10. "
+        "Table 11 (LCR by Significant Currency) is excluded because the Directive "
+        "limits it to banks.",
+        "Table 1 ratios use the SDI binding floors resolved from the governed "
+        "regulatory-parameter register; a missing or zero denominator is disclosed "
+        "as not computable, never reported as compliant.",
+        _T_MINUS_1_NOTE,
+    ),
+)
+
+_SDI_LE_TEMPLATE = replace(
+    _LE_TEMPLATE,
+    template_id="bog-sdi-le-monthly-v1",
+    return_code="SDI-LE-MONTHLY",
+    title="SDI Large Exposures Return (Templates 1, 1a, 2, 3 and 4)",
+    notes=(
+        "The five published Large Exposures Directive templates apply to Savings and "
+        "Loans and Finance Houses. Net Own Funds comes from the governed Act 930 s.29 "
+        "SDI capital calculation, not a Basel Tier 1 proxy.",
+        _LE_DERIVATION_NOTE,
+        _LE_CRM_NOTE,
+        "The monthly deadline day-count is not published in the Directive; the calendar "
+        "uses a provisional 9-day rule until the institution's ORASS obligation confirms it.",
         _T_MINUS_1_NOTE,
     ),
 )
@@ -1003,6 +1061,59 @@ _IRRBB_TEMPLATE = ReturnTemplate(
     notes=(
         "Quarterly pilot reports use 'the prescribed templates in Appendix IV' (¶10); the "
         "quarterly grid beyond Table 8 is INFERRED, not published (research §4.4).",
+    ),
+)
+
+
+def _sdi_irrbb_section(section: SectionLayout) -> SectionLayout:
+    if section.section_code == "eve_scenarios":
+        return replace(
+            section,
+            sheet_title="Appendix IV — Delta EVE by Actual Shock",
+            columns=(
+                ColumnSpec("code", "Scenario", "text"),
+                ColumnSpec("eve_ghs", "EVE (GHS '000)", "ghs"),
+                ColumnSpec("value", "Delta EVE (GHS '000)", "ghs"),
+            ),
+            notes=(
+                "The SDI packet reports the actual EVE shocks produced by the run. It does "
+                "not assert the bank-only Tier 1 percentage or 15% outlier verdict; the "
+                "SDI uses the Act 930 s.29 capital regime.",
+                "GHS +/-450 bp rows appear only when the run computed them from active "
+                "governed shocks. No shock value is renamed or fabricated.",
+            ),
+        )
+    if section.section_code == "summary":
+        return replace(
+            section,
+            sheet_title="SDI IRRBB Summary",
+            source_citation=(
+                f"{_IRRBB_CITATION} — Appendix IV quantitative disclosure; SDI "
+                "capital-denominator/outlier treatment remains regulator-confirmation dependent"
+            ),
+            notes=(
+                "Summary reports currency EVE changes and duration gap only. A Tier 1 "
+                "capital denominator and bank outlier conclusion are deliberately absent.",
+            ),
+        )
+    return section
+
+
+_SDI_IRRBB_TEMPLATE = replace(
+    _IRRBB_TEMPLATE,
+    template_id="bog-sdi-irrbb-quarterly-v1",
+    return_code="SDI-IRRBB-QUARTERLY",
+    title="SDI IRRBB Quarterly Pilot Return (Appendix IV)",
+    fidelity="PARTIAL",
+    sections=tuple(_sdi_irrbb_section(section) for section in _IRRBB_TEMPLATE.sections),
+    notes=(
+        "The IRRBB Guideline applies to Savings and Loans and Finance Houses; this quarterly "
+        "pilot packet uses the published Appendix IV quantitative disclosure where the run "
+        "provides an honest value.",
+        "The engine's EVE denominator is the SDI's signed Act 930 s.29 Net Own Funds. The "
+        "return presents currency results, not a bank Tier 1 outlier conclusion, until BoG "
+        "confirms the SDI denominator and threshold treatment.",
+        "The regulator's SDI-specific ORASS form identity and transport contract are not public.",
     ),
 )
 
@@ -1518,6 +1629,100 @@ _ICAAP_STRESS_APPENDIX2_TEMPLATE = ReturnTemplate(
     ),
 )
 
+_SDI_STRESS_SECTION_CODES = frozenset(
+    {
+        "t1_summary_positions",
+        "t1_impact_of_adverse",
+        "t1_capital_required",
+        "t1_management_actions",
+        "t1_post_capitalisation",
+        "t1_residual",
+        "t3_profit_and_loss",
+        "t4_financial_position",
+        "t5_rwa",
+        "t6_risk_drivers",
+        "governance",
+    }
+)
+
+_SDI_A2_POSITION_COLUMNS: tuple[ColumnSpec, ...] = (
+    _A2_CODE,
+    _A2_PERIOD,
+    _a2_num("value", "Net Own Funds"),
+    _a2_num("total_rwa", "Risk-Weighted Assets"),
+    ColumnSpec("car_pct", "CAR %", "pct"),
+    _a2_num("paid_up", "Paid-up Capital"),
+)
+
+
+def _sdi_stress_section(section: SectionLayout) -> SectionLayout:
+    if section.section_code == "t1_summary_positions":
+        return replace(section, columns=_SDI_A2_POSITION_COLUMNS)
+    if section.section_code == "t1_impact_of_adverse":
+        return replace(
+            section,
+            sheet_title="Table 1 — Impact of Adverse (Loss by Exposure Class)",
+            columns=(
+                ColumnSpec("code", "Key", "text"),
+                ColumnSpec("description", "Exposure Class", "text"),
+                _a2_num("value", "Adverse Loss"),
+                ColumnSpec("year", "Projection Year", "text"),
+            ),
+        )
+    if section.section_code == "t1_capital_required":
+        return replace(
+            section,
+            sheet_title="Table 1 — Capital Required to Meet SDI Minima",
+            columns=(
+                ColumnSpec("code", "Key", "text"),
+                _A2_PERIOD,
+                _a2_num("value", "To Meet Governed CAR"),
+                _a2_num("paid_up_shortfall", "To Meet Paid-up Minimum"),
+            ),
+        )
+    if section.section_code == "t5_rwa":
+        return replace(
+            section,
+            columns=(
+                _A2_CODE,
+                _A2_PERIOD,
+                _a2_num("value", "Risk-Weighted Assets"),
+                _a2_num("credit_rwa", "Credit RWA"),
+                _a2_num("operational_rwa", "Operational RWA (if governed)"),
+                _a2_num("market_rwa", "Market RWA (if governed)"),
+                _a2_num("pillar1_requirement", "Capital Requirement at Governed CAR"),
+                _a2_num("total_capital_requirement", "Total Capital Requirement"),
+            ),
+        )
+    return section
+
+
+_SDI_STRESS_TEMPLATE = replace(
+    _ICAAP_STRESS_APPENDIX2_TEMPLATE,
+    template_id="bog-sdi-stress-annual-v1",
+    return_code="SDI-STRESS-ANNUAL",
+    title="SDI Annual Stress Test Return (Proportionate Appendix II)",
+    fidelity="PARTIAL",
+    sections=tuple(
+        _sdi_stress_section(section)
+        for section in _ICAAP_STRESS_APPENDIX2_TEMPLATE.sections
+        if section.section_code in _SDI_STRESS_SECTION_CODES
+    ),
+    notes=(
+        "This proportionate SDI stress packet is sourced only from a Board-attested "
+        "enterprise-stress run. It reuses the published Appendix II structures where "
+        "the SDI engine produces an honest value.",
+        "Table 2 (Basel CET1/AT1/Tier2 regulatory-capital projection) is excluded: the "
+        "SDI uses the Act 930 s.29 capital regime and its enterprise-stress run does not "
+        "produce a Basel tier build.",
+        "The packet does not state stressed LMTD Table 1 ratios or a survival horizon: the "
+        "SDI stress methodology for those liquidity measures is not established in the run "
+        "and no value is fabricated.",
+        "The regulator's SDI-specific ORASS form identity and transport contract are not "
+        "public. This is a proportionate evidence packet, not a claimed portal layout.",
+    ),
+)
+
 # ---------------------------------------------------------------------------
 # Stress Test Output Report pack (product.md §Phase 2 item 6)
 # ---------------------------------------------------------------------------
@@ -1546,14 +1751,27 @@ _STRESS_PACK_TEMPLATE = ReturnTemplate(
                 ColumnSpec("value", "Value", "auto"),
                 ColumnSpec("threshold", "Threshold", "auto"),
                 ColumnSpec("status", "Status", "text"),
+                ColumnSpec("compliance_basis", "Compliance Basis", "text"),
                 ColumnSpec("module", "Module", "text"),
                 ColumnSpec("scenario_code", "Scenario", "text"),
             ),
             fidelity="REPRESENTATIVE",
             source_citation=(
-                f"{_STRESS_PACK_CITATION} — values, thresholds and green/amber/red "
-                "classifications are the engines' stored headline metric results, "
-                "re-tabulated without reclassification"
+                f"{_STRESS_PACK_CITATION} — values are the engines' stored headline "
+                "metric results, re-tabulated without reclassification; a threshold "
+                "and a green/amber/red classification are shown only where the metric "
+                "authority register holds a filed regulatory authority for that figure "
+                "under the engine that sealed it, and the Compliance Basis column "
+                "carries either that authority or the reason the classification was "
+                "withheld"
+            ),
+            notes=(
+                "A value and a verdict on that value are different claims. Every "
+                "figure below is reported; a minimum and a compliance classification "
+                "are shown only where a filed regulatory authority establishes them. "
+                "Where the Compliance Basis column reads \u201creported for "
+                "information only\u201d, the figure stands but no minimum applies to "
+                "it under any instrument recorded by this platform.",
             ),
         ),
         SectionLayout(
@@ -1571,8 +1789,7 @@ _STRESS_PACK_TEMPLATE = ReturnTemplate(
             ),
             fidelity="REPRESENTATIVE",
             source_citation=(
-                f"{_STRESS_PACK_CITATION} — quarterly path from each stored "
-                "capital-stress run"
+                f"{_STRESS_PACK_CITATION} — quarterly path from each stored capital-stress run"
             ),
             optional=True,
         ),
@@ -2100,13 +2317,17 @@ TEMPLATES: dict[str, ReturnTemplate] = {
     for template in (
         _BSD3_TEMPLATE,
         _LMT_TEMPLATE,
+        _SDI_LMT_TEMPLATE,
         _BSD2_TEMPLATE,
         _IRRBB_TEMPLATE,
+        _SDI_IRRBB_TEMPLATE,
         _FX_NOP_TEMPLATE,
         _DBK_DAILY_TEMPLATE,
         _LE_TEMPLATE,
+        _SDI_LE_TEMPLATE,
         _ICAAP_STRESS_TEMPLATE,
         _ICAAP_STRESS_APPENDIX2_TEMPLATE,
+        _SDI_STRESS_TEMPLATE,
         _STRESS_PACK_TEMPLATE,
         _LAS_QUARTERLY_TEMPLATE,
         _LRT_PROFILE_TEMPLATE,
@@ -2294,6 +2515,101 @@ def resolve_basis_label(snapshot: dict[str, Any], template: ReturnTemplate) -> s
     return f"{raw} (basis recorded on the package; no citation wording is registered for it)"
 
 
+def _declared_methodology_lines(provenance: dict[str, Any]) -> list[str]:
+    """The CF-1 divergence disclosure, printed on the filed artifact.
+
+    Audit 2026-08-22 D-20: the generator recorded, per metric, WHICH of several
+    registered methodologies this return means — and the artifact an examiner
+    actually reads printed the template digest, the line-map version and the
+    formula evaluator, but never this. A return whose LCR is deliberately not
+    the same number as another return's LCR said so nowhere on its own face.
+
+    Only methodologies that declare a divergence produce a line. A metric with a
+    single registered methodology has nothing to disclose, and padding every
+    artifact with a restatement of the obvious would bury the ones that matter.
+    """
+    declared = provenance.get("declared_methodologies")
+    if not isinstance(declared, list):
+        return []
+    lines: list[str] = []
+    for entry in declared:
+        if not isinstance(entry, dict):
+            continue
+        divergence = entry.get("divergence")
+        if not isinstance(divergence, dict):
+            continue
+        metric = str(entry.get("metric_id") or "").strip()
+        methodology = str(entry.get("methodology_id") or "").strip()
+        versus = str(divergence.get("versus_methodology_id") or "").strip()
+        reason = str(divergence.get("reason") or "").strip()
+        rule = str(divergence.get("reconciliation_rule") or "").strip()
+        direction = str(divergence.get("direction") or "").strip()
+        citation = str(divergence.get("authority_reference") or "").strip()
+        sentence = f"Declared methodology — {metric}: {methodology}"
+        if citation:
+            sentence += f" ({citation})"
+        sentence += (
+            f". This figure is a different measure from {versus} and the two are not "
+            "expected to be equal"
+        )
+        if direction in {"lower", "higher"}:
+            sentence += f"; this one reads {direction}"
+        sentence += "."
+        if reason:
+            sentence += f" {reason}"
+        if rule:
+            sentence += f" {rule}"
+        lines.append(" ".join(sentence.split()))
+    return lines
+
+
+def _authority_lines(
+    snapshot: dict[str, Any], provenance_runs: tuple[tuple[str, str, str, str], ...]
+) -> tuple[str, ...]:
+    """The provenance sentence every exported artifact carries.
+
+    Every artifact used to state, unconditionally, that "every figure traces to
+    the source calculation runs below" — including on the BoG-form and corporate
+    packs whose run list is empty by design. That is a false statement printed
+    on a document an examiner reads (forensic audit §8), and the fix is not to
+    delete the sentence but to say what is actually true of THIS return: the
+    authority the package recorded when it was generated.
+    """
+    provenance = snapshot.get("provenance")
+    if isinstance(provenance, dict):
+        lines: list[str] = []
+        basis = str(provenance.get("authority_basis") or "").strip()
+        if basis:
+            lines.append(basis)
+        rationale = str(provenance.get("source_runs_rationale") or "").strip()
+        if rationale and not provenance_runs:
+            lines.append(rationale)
+        if provenance_runs:
+            lines.append(
+                "Source calculation runs below (module · run id · input hash · engine version)."
+            )
+        for label, key in (
+            ("Official template digest", "template_hash"),
+            ("Line-map version", "mapping_version"),
+            ("Formula evaluator", "formula_evaluator_version"),
+        ):
+            value = str(provenance.get(key) or "").strip()
+            if value:
+                lines.append(f"{label}: {value}")
+        lines.extend(_declared_methodology_lines(provenance))
+        if lines:
+            return tuple(lines)
+    if provenance_runs:
+        return (
+            "Every figure traces to the source calculation runs below "
+            "(module · run id · input hash · engine version).",
+        )
+    return (
+        "This return binds no calculation run: its figures come from the registered template "
+        "and master data recorded on the package, not from an engine run.",
+    )
+
+
 def build_rendered_return(
     template: ReturnTemplate,
     snapshot: dict[str, Any],
@@ -2373,8 +2689,7 @@ def build_rendered_return(
     provenance_lines = (
         f"{GENERATED_BY_LINE} · package {package_id} (version {package_version})",
         f"Snapshot schema: {snapshot.get('schema_version', '')}",
-        "Every figure traces to the source calculation runs below "
-        "(module · run id · input hash · engine version).",
+        *_authority_lines(snapshot, provenance_runs),
     )
     return RenderedReturn(
         template=template,

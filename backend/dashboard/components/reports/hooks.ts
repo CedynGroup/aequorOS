@@ -26,6 +26,8 @@ export const MODULE_HREFS: Record<string, string> = {
   forecast: '/forecasting',
   optimizer: '/forecasting',
   whatif: '/forecasting',
+  reverse_stress: '/forecasting/reverse-stress',
+  enterprise_stress: '/liquidity/stress',
 };
 
 /** Human labels for the run registry's module column and filters. */
@@ -38,6 +40,8 @@ export const MODULE_LABELS: Record<string, string> = {
   forecast: 'Forecasting',
   optimizer: 'Optimizer',
   whatif: 'What-if',
+  reverse_stress: 'Reverse Stress',
+  enterprise_stress: 'Enterprise Stress',
 };
 
 /** A same-day batch of runs, newest day first. */

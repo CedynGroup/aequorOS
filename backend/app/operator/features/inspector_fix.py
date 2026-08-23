@@ -23,6 +23,8 @@ from app.schemas.operator import (
     FixJobEnqueuedRead,
     FixOfficialRunRequest,
     FixRecomputeRequest,
+    FixRedriveDedupRead,
+    FixRedriveDedupRequest,
     FixRerunIngestionRead,
     FixRerunIngestionRequest,
 )
@@ -102,6 +104,41 @@ def fix_rerun_ingestion(
             "note": payload.note,
             "batch_id": str(payload.batch_id),
             "job_id": str(result.job_id),
+        },
+    )
+    db.commit()
+    return result
+
+
+@router.post("/{org_id}/fix/redrive-dedup", response_model=FixRedriveDedupRead)
+def fix_redrive_dedup(
+    org_id: str, payload: FixRedriveDedupRequest, db: OperatorDb, operator: Operator
+) -> FixRedriveDedupRead:
+    """Re-drive a stranded ML-ETL dedup pass (re-enqueues ``etl_dedup``).
+
+    The only way back for a batch whose dedup job exhausted its attempts — the
+    queue will never retry it and nothing else re-enqueues it. Manual by design
+    (see ``inspector_fix.redrive_dedup``). Session-gated + audited as
+    ``inspector.fix.redrive_dedup``, carrying the recorded failure it recovers
+    from so the audit says what was being fixed."""
+    organization_id = normalize_public_id(org_id)
+    session = require_active_inspection(db, operator, organization_id)
+    result = inspector_fix.redrive_dedup(db, organization_id, payload)
+    record_operator_action(
+        db,
+        operator,
+        action="inspector.fix.redrive_dedup",
+        target_org=organization_id,
+        detail={
+            "session_id": str(session.id),
+            "note": payload.note,
+            "batch_id": str(payload.batch_id),
+            "job_id": str(result.job_id),
+            "previous_dedup_status": result.previous_dedup_status,
+            "previous_job_id": (
+                str(result.previous_job_id) if result.previous_job_id is not None else None
+            ),
+            "previous_job_error": result.previous_job_error,
         },
     )
     db.commit()

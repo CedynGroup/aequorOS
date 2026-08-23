@@ -197,12 +197,29 @@ export default function BoardPackPage() {
                   Data state
                 </dt>
                 <dd className="mt-1 text-navy">
+                  {/* isStale answers "was data ingested after these figures were
+                      computed?" — not drift versus the last official run, which
+                      is the /freshness endpoint. The old copy named the wrong
+                      concept and, while isStale was hardcoded false server-side,
+                      always claimed the reassuring half of it. */}
                   {live.data
                     ? live.data.isStale
-                      ? 'Changed since last official run'
-                      : 'In sync with official runs'
+                      ? 'Recomputing — new data ingested since these figures'
+                      : 'Current with the latest ingested data'
                     : '—'}
                 </dd>
+                {live.data?.reconciliation?.blocksFiling ? (
+                  <div className="sm:col-span-2">
+                    <dt className="text-micro font-medium uppercase tracking-wider text-critical">
+                      Balance-sheet control
+                    </dt>
+                    <dd className="mt-1 text-navy">
+                      This book does not balance. Every figure in this pack is
+                      computed on a balance sheet that was forced to add up and
+                      none of it may be filed.
+                    </dd>
+                  </div>
+                ) : null}
               </div>
             </dl>
 

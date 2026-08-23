@@ -109,12 +109,33 @@ class CapitalTrendPointRead(ClosedModel):
 
 
 class CapitalBuffersRead(ClosedModel):
+    """The floors a capital ratio is judged against, from the ONE authority.
+
+    Every value here is resolved from the institution's active regulatory
+    parameter set (board register, clamped tighten-only against the control
+    plane) — the same dict :func:`_engine_params` hands the engine, so the KPI
+    traffic light, the validation rules and this block cannot disagree. A run's
+    ``threshold_min`` is the historical record of what was applied when that run
+    executed; it is NOT the current requirement and its absence is not evidence
+    of compliance, so no consumer may substitute it for these fields.
+
+    The three Basel sub-tier floors are nullable because they are structurally
+    absent under the SDI s.29 regime (Act 930 s.29 has no CET1/Tier 1 or
+    leverage minimum — the same ``basel_applicable`` gate that omits their
+    validation rules) and because a bank register may simply not carry one.
+    Absence renders as absence: a consumer must show "not assessed", never a
+    substituted floor.
+    """
+
     car_min_pct: Decimal
     car_early_warning_pct: Decimal
     car_early_warning_label: str
     car_critical_pct: Decimal
     current_car_pct: Decimal
     headroom_pp: Decimal
+    cet1_min_pct: Decimal | None = Field(default=None, title="Capital Buffers Cet1 Min Pct")
+    tier1_min_pct: Decimal | None = Field(default=None, title="Capital Buffers Tier1 Min Pct")
+    leverage_min_pct: Decimal | None = Field(default=None, title="Capital Buffers Leverage Min Pct")
 
 
 class CapitalDashboardRead(ClosedModel):

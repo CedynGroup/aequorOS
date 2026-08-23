@@ -178,6 +178,17 @@ def bog_liquidity_params() -> LiquidityParams:
         lcr_amber_floor_pct=Decimal("90"),
         nsfr_min_pct=Decimal("100"),
         nsfr_amber_floor_pct=Decimal("90"),
+        # Basel HQLA haircuts + Level-2 caps (BCBS 238 ¶47-54) — in the pure
+        # engine these are parameters like any other rate. The golden book here
+        # is entirely Level 1, so the haircut is 0%, neither cap can bind, and
+        # every ratio golden in this file is unchanged by the P0-8 control.
+        hqla_haircut_pct={
+            "L1": Decimal("0"),
+            "L2A": Decimal("15"),
+            "L2B": Decimal("50"),
+        },
+        hqla_level2_cap_pct=Decimal("40"),
+        hqla_level2b_cap_pct=Decimal("15"),
     )
 
 

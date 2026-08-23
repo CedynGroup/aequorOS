@@ -25,6 +25,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import Bank, BankReportingPeriod, RegulatoryRun
 from app.models.canonical import (
     CanonicalCounterparty,
@@ -199,6 +200,8 @@ def _positions_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.as_of_date <= rc.period.period_end,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
         .group_by(CanonicalPositionSnapshot.position_id)
         .subquery()
@@ -216,7 +219,10 @@ def _positions_sum(rc: ResolveContext, params: dict[str, Any]) -> Decimal:  # no
             CanonicalPositionSnapshot.organization_id == rc.ctx.organization_id,
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
         )
     )
     if types := params.get("position_types"):

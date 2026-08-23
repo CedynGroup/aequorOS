@@ -95,6 +95,19 @@ def _seed_canonical_positions(bank_id: str) -> None:
             product_code="LN.CORP",
             name="Corporate Term Loan",
             regulatory_category="CORPORATE_UNRATED",
+            # A risk weight is a regulatory determination about the exposure and
+            # is never assumed (audit 2026-08-22 D-8a) — the stress exposure book
+            # now resolves it through ``capital.engine.resolve_risk_weight`` and
+            # refuses a book that carries none, exactly as the capital engine
+            # already did. ``CanonicalProduct.risk_weight_code`` is the field real
+            # ingestion populates for precisely this (the T24 catalogs map
+            # ``RISK.WEIGHT.BAND`` / ``riskWeightBand`` onto it), so a fixture
+            # without one was modelling a book that cannot occur. RW100 is the
+            # weight the Capital Requirements Directive gives a claim on a
+            # corporate (¶138) and the code ``fact_derivation._LOAN_CATEGORY_MAP``
+            # derives for ``CORPORATE_UNRATED`` on the fact plane, so the two
+            # planes agree on the same book.
+            risk_weight_code="RW100",
         )
         session.add(corp_product)
         session.flush()
@@ -144,9 +157,15 @@ def _seed_canonical_positions(bank_id: str) -> None:
         # Foreign-currency corporate loan (FX revaluation channel).
         position("LOAN/USD", "LOAN", "USD", balance="2000000",
                  balance_ghs="30000000", stage=1, product=corp_product, counterparty=corporate)
-        # Interbank placement (banks CRD class).
+        # Interbank placement (banks CRD class). No product register row, so the
+        # risk-weight code rides on the snapshot attribute — the other of the two
+        # paths ``_exposure_risk_weight`` reads. RW50 is the Capital Requirements
+        # Directive weight for a claim on an UNRATED bank (¶123, and the ¶123
+        # table's "Unrated" column); the peer is a Ghanaian bank with no external
+        # credit assessment on the fixture.
         position("IBP/PEER", "INTERBANK_PLACEMENT", "GHS", balance="20000000",
-                 balance_ghs="20000000", counterparty=peer_bank)
+                 balance_ghs="20000000", counterparty=peer_bank,
+                 extra={"risk_weight_code": "RW50"})
         # A deposit funder (funding-source concentration).
         position("DEP/BIG", "DEPOSIT", "GHS", balance="60000000",
                  balance_ghs="60000000", counterparty=corporate)

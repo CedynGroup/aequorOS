@@ -1,28 +1,97 @@
 name: Dashboard CI
 
+# Gate inventory. Everything below is BLOCKING:
+#
+#   typecheck (client) — the generated API client compiles
+#   test (client) — packages/risk-service-api/tests/generated-contracts.test.ts.
+#                CLAUDE.md and packages/risk-service-api/README.md both name
+#                `pnpm --filter @aequoros/risk-service-api test` as a required
+#                verification step, and it appeared in NO workflow until
+#                2026-08-22: CI ran `tsc --noEmit` only, so the contract
+#                assertions the client is regenerated against had never been
+#                enforced anywhere.
+#   typecheck (dashboard) — the product surface compiles against it
+#   lint       — ESLint (next/core-web-vitals). Added 2026-08-22; it had never
+#                run in CI, and the tree carried one committed
+#                react/no-unescaped-entities error, fixed in the same change so
+#                this can be a gate rather than a warning nobody reads.
+#   test       — node:test suites. These are CONTROLS, not unit trivia, and were
+#                the reason this job existed at all without enforcing them:
+#                  * lib/api/fail-open-guard.test.ts — a static guard over 220
+#                    regulatory UI files (with its own negative control) proving
+#                    no regulatory surface fails OPEN. The test reports the count
+#                    itself and floor-asserts it at 210; "123" here was stale;
+#                  * lib/outbound.test.ts + lib/ip-version.test.ts — the SSRF
+#                    egress guard, including a 60,000-case differential test
+#                    against node:net.
+#                Both are described as load-bearing in the audit's security and
+#                production-readiness sections; neither was enforced anywhere.
+#   build      — production Next build
+#
+# NOT gated here, and named rather than left to be discovered (D-32, 2026-08-22):
+#   e2e        — `pnpm --filter dashboard e2e`, the 7 Playwright specs under
+#                backend/dashboard/e2e (attestation, full-lifecycle,
+#                submission-lifecycle, stress, visual-tour, home, bell). They run
+#                in NO workflow. The blocker is object storage: the harness needs
+#                S3 credentials that live only in untracked backend/.env, and
+#                scripts/e2e_bootstrap.py additionally has to stand in for both
+#                the migrations and the worker (see NEW-52). The storage half is
+#                now demonstrably solvable — risk-service.yml's `storage` job runs
+#                MinIO with its built-in KMS and the object-store contract passes
+#                45/45 against it — so what remains is standing up the backend,
+#                the bootstrap seed and the browser download in one job. That is a
+#                job to build deliberately, not a line to add here, and claiming
+#                the gate before it exists would be worse than naming the gap.
+
+# REQUIRED-CHECK SAFETY (2026-08-22). This workflow used to be `paths:`-filtered
+# on both triggers, which makes it impossible to mark required: a required check
+# whose workflow is path-filtered never REPORTS on a pull request touching none
+# of those paths, and GitHub then holds that pull request at "Expected — waiting
+# for status" forever. The filter therefore moved off the trigger and into an
+# `if:` fed by the `changes` job, and the `gate` job below aggregates the result
+# into one context that always reports. Trade-off: every pull request in the
+# repository now pays for two ~30-second jobs; the expensive job still runs only
+# when the dashboard or the generated client changes. The context to mark
+# required is `Dashboard gate` (a status context is the job's name), never the
+# `dashboard` job itself, which legitimately reports `skipped`.
+
 on:
   pull_request:
-    paths:
-      - "backend/dashboard/**"
-      - "packages/risk-service-api/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "package.json"
-      - ".github/workflows/dashboard.yml"
   push:
     branches: [main]
-    paths:
-      - "backend/dashboard/**"
-      - "packages/risk-service-api/**"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/dashboard.yml"
 
 permissions:
   contents: read
 
+# Superseded PR runs are cancelled; `main` runs are not (that is the recorded
+# history). See risk-service.yml for the reasoning.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  dashboard:
+  changes:
+    name: Detect changes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      dashboard: ${{ steps.areas.outputs.dashboard }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: areas
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          .github/scripts/changed_area.sh dashboard
+          '^(backend/dashboard/|packages/risk-service-api/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/dashboard\.yml$|\.github/scripts/)'
+
+  dashboard:
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,7 +102,37 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Typecheck generated API client
         run: pnpm --filter @aequoros/risk-service-api exec tsc --noEmit
+      - name: Test generated API client
+        run: pnpm --filter @aequoros/risk-service-api test
       - name: Typecheck dashboard
         run: pnpm --filter dashboard exec tsc --noEmit
+      - name: Lint dashboard
+        run: pnpm --filter dashboard lint
+      - name: Test dashboard
+        run: pnpm --filter dashboard test
       - name: Build dashboard
         run: pnpm --filter dashboard build
+
+  # The single context to mark required for this workflow. `dashboard` reports
+  # `skipped` on a pull request that does not touch it, and a skipped required
+  # check never satisfies branch protection.
+  gate:
+    name: Dashboard gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs: [changes, dashboard]
+    steps:
+      - name: Require every dashboard gate to have passed or been skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RESULTS" | jq -r 'to_entries[] | "  \(.key): \(.value.result)"'
+          FAILED="$(printf '%s\n' "$RESULTS" \
+            | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key')"
+          if [ -n "$FAILED" ]; then
+            echo "::error::These dashboard gates did not pass: $(printf '%s' "$FAILED" | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "Every dashboard gate passed or was skipped."

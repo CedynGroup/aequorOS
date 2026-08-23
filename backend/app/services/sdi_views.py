@@ -383,6 +383,22 @@ def get_sdi_large_exposures(
             f"{unattributed_count} position(s) totalling {unattributed_ghs} GHS "
             "have no attributable counterparty."
         )
+    # A limit whose regulatory basis is not yet confirmed must not be presented as
+    # a settled test (WS-K, 2026-08-21: several SDI parameter seeds are cited to
+    # instruments made under a repealed law). Driven by the parameter's own
+    # confirmation status, so re-statusing it in the control plane is enough.
+    unconfirmed = sorted(
+        parameter.param_code
+        for parameter in (single_obligor, large_exposure)
+        if parameter.confirmation_status != "confirmed"
+    )
+    if unconfirmed:
+        findings.append(
+            "The exposure limit(s) "
+            + ", ".join(unconfirmed)
+            + " are not yet confirmed against a published regulatory instrument, so "
+            "any breach shown here is provisional rather than a filing conclusion."
+        )
     return SdiLargeExposures(
         as_of=as_of,
         net_own_funds_ghs=net_own_funds,

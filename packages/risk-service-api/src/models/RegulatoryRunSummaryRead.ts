@@ -18,20 +18,6 @@ import {
   RegulatoryRunStatusToJSON,
   RegulatoryRunStatusToJSONTyped,
 } from "./RegulatoryRunStatus";
-import type { RegulatoryScenarioCode } from "./RegulatoryScenarioCode";
-import {
-  RegulatoryScenarioCodeFromJSON,
-  RegulatoryScenarioCodeFromJSONTyped,
-  RegulatoryScenarioCodeToJSON,
-  RegulatoryScenarioCodeToJSONTyped,
-} from "./RegulatoryScenarioCode";
-import type { RegulatoryModule } from "./RegulatoryModule";
-import {
-  RegulatoryModuleFromJSON,
-  RegulatoryModuleFromJSONTyped,
-  RegulatoryModuleToJSON,
-  RegulatoryModuleToJSONTyped,
-} from "./RegulatoryModule";
 import type { RegulatoryRunErrorRead } from "./RegulatoryRunErrorRead";
 import {
   RegulatoryRunErrorReadFromJSON,
@@ -39,6 +25,13 @@ import {
   RegulatoryRunErrorReadToJSON,
   RegulatoryRunErrorReadToJSONTyped,
 } from "./RegulatoryRunErrorRead";
+import type { RunEvidenceRead } from "./RunEvidenceRead";
+import {
+  RunEvidenceReadFromJSON,
+  RunEvidenceReadFromJSONTyped,
+  RunEvidenceReadToJSON,
+  RunEvidenceReadToJSONTyped,
+} from "./RunEvidenceRead";
 
 /**
  *
@@ -66,6 +59,12 @@ export interface RegulatoryRunSummaryRead {
   error: RegulatoryRunErrorRead | null;
   /**
    *
+   * @type {RunEvidenceRead}
+   * @memberof RegulatoryRunSummaryRead
+   */
+  evidence: RunEvidenceRead;
+  /**
+   *
    * @type {string}
    * @memberof RegulatoryRunSummaryRead
    */
@@ -84,10 +83,10 @@ export interface RegulatoryRunSummaryRead {
   metrics: { [key: string]: any };
   /**
    *
-   * @type {RegulatoryModule}
+   * @type {string}
    * @memberof RegulatoryRunSummaryRead
    */
-  module: RegulatoryModule | null;
+  module: string;
   /**
    *
    * @type {string}
@@ -102,10 +101,10 @@ export interface RegulatoryRunSummaryRead {
   reportingPeriodId: string;
   /**
    *
-   * @type {RegulatoryScenarioCode}
+   * @type {string}
    * @memberof RegulatoryRunSummaryRead
    */
-  scenarioCode: RegulatoryScenarioCode;
+  scenarioCode: string;
   /**
    *
    * @type {RegulatoryRunStatus}
@@ -124,6 +123,7 @@ export function instanceOfRegulatoryRunSummaryRead(
   if (!("engineVersion" in value) || value["engineVersion"] === undefined)
     return false;
   if (!("error" in value) || value["error"] === undefined) return false;
+  if (!("evidence" in value) || value["evidence"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
   if (!("inputHash" in value) || value["inputHash"] === undefined) return false;
   if (!("metrics" in value) || value["metrics"] === undefined) return false;
@@ -159,13 +159,14 @@ export function RegulatoryRunSummaryReadFromJSONTyped(
     createdAt: new Date(json["created_at"]),
     engineVersion: json["engine_version"],
     error: RegulatoryRunErrorReadFromJSON(json["error"]),
+    evidence: RunEvidenceReadFromJSON(json["evidence"]),
     id: json["id"],
     inputHash: json["input_hash"],
     metrics: json["metrics"],
-    module: RegulatoryModuleFromJSON(json["module"]),
+    module: json["module"],
     periodLabel: json["period_label"],
     reportingPeriodId: json["reporting_period_id"],
-    scenarioCode: RegulatoryScenarioCodeFromJSON(json["scenario_code"]),
+    scenarioCode: json["scenario_code"],
     status: RegulatoryRunStatusFromJSON(json["status"]),
   };
 }
@@ -188,13 +189,14 @@ export function RegulatoryRunSummaryReadToJSONTyped(
     created_at: value["createdAt"].toISOString(),
     engine_version: value["engineVersion"],
     error: RegulatoryRunErrorReadToJSON(value["error"]),
+    evidence: RunEvidenceReadToJSON(value["evidence"]),
     id: value["id"],
     input_hash: value["inputHash"],
     metrics: value["metrics"],
-    module: RegulatoryModuleToJSON(value["module"]),
+    module: value["module"],
     period_label: value["periodLabel"],
     reporting_period_id: value["reportingPeriodId"],
-    scenario_code: RegulatoryScenarioCodeToJSON(value["scenarioCode"]),
+    scenario_code: value["scenarioCode"],
     status: RegulatoryRunStatusToJSON(value["status"]),
   };
 }

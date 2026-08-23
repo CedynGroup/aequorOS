@@ -66,6 +66,12 @@ export interface EnterpriseStressRead {
    * @type {{ [key: string]: any; }}
    * @memberof EnterpriseStressRead
    */
+  planProvenance?: { [key: string]: any };
+  /**
+   *
+   * @type {{ [key: string]: any; }}
+   * @memberof EnterpriseStressRead
+   */
   projection: { [key: string]: any };
   /**
    *
@@ -147,6 +153,8 @@ export function EnterpriseStressReadFromJSONTyped(
     engineVersion: json["engine_version"],
     inputHash: json["input_hash"],
     outcome: json["outcome"],
+    planProvenance:
+      json["plan_provenance"] == null ? undefined : json["plan_provenance"],
     projection: json["projection"],
     reportingPeriodId: json["reporting_period_id"],
     runId: json["run_id"],
@@ -175,6 +183,7 @@ export function EnterpriseStressReadToJSONTyped(
     engine_version: value["engineVersion"],
     input_hash: value["inputHash"],
     outcome: value["outcome"],
+    plan_provenance: value["planProvenance"],
     projection: value["projection"],
     reporting_period_id: value["reportingPeriodId"],
     run_id: value["runId"],

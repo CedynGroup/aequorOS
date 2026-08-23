@@ -55,6 +55,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -64,12 +65,24 @@ from app.models import (
     CanonicalProduct,
     ParamLiquidityHaircut,
     ParamLiquidityThreshold,
+    RegulatoryRun,
     RelatedParty,
 )
-from app.services import regulatory_capital, regulatory_liquidity, regulatory_parameters
+from app.services import (
+    jurisdictions,
+    regulatory_capital,
+    regulatory_liquidity,
+    regulatory_parameters,
+    sdi_capital,
+)
 from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.liquidity_thresholds import BANK_MINIMUM_PCT as _TABLE1_BANK_MINIMUM_PCT
 from app.services.params import get_active_params
+from app.services.regulatory_reporting.common import (
+    unvalidated_book_detail,
+    unvalidated_book_finding,
+    unvalidated_book_rows,
+)
 from app.services.regulatory_reporting.generation import (
     MODULE_CAPITAL,
     MODULE_LIQUIDITY,
@@ -90,10 +103,6 @@ from app.services.regulatory_reporting.registry import ReturnDefinition
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
 _PCT = Decimal("0.0001")
-
-# Mirrors fact_derivation._INCLUDED_VALIDATION_STATUSES: the derivation slice
-# is the current (non-superseded) generation with accepted/warning status.
-_INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 
 _LE_POSITION_TYPES = ("LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING")
 _EXEMPT_COUNTERPARTY_TYPES = ("SOVEREIGN", "CENTRAL_BANK", "GOVERNMENT_ENTITY")
@@ -301,6 +310,31 @@ def _counterparty_tin(counterparty: CanonicalCounterparty) -> str:
     return ""
 
 
+def _unvalidated_disclosure(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> tuple[dict[str, dict[str, int]], list[dict[str, str]]]:
+    """What ``_load_canonical_rows`` refused to read at ``as_of``, stated.
+
+    Forensic re-audit 2026-08-22, D-4. Closing that finding gave every canonical
+    reader in this package the engines' admitted scope
+    (``INCLUDED_VALIDATION_STATUSES``), so the Large Exposures and LMT returns
+    no longer report exposures the capital and liquidity engines refuse. The
+    exclusion alone is only half of it: a return compiled while rows sit in
+    ``pending``, ``error`` or ``blocked`` simply reports a smaller figure and
+    says nothing, and on THESE two returns the understatement is a
+    concentration limit and a maturity ladder — the reader cannot infer it from
+    a subtotal, because the omitted counterparty has no row to be short.
+
+    ``bound="on"`` because ``_load_canonical_rows`` matches ``as_of_date``
+    EXACTLY (unlike the BoG-form resolvers, which take the latest snapshot on or
+    before period end). Disclosing an earlier date's backlog here would name
+    rows this return never looked at.
+    """
+    counts = unvalidated_book_rows(db, ctx, bank, as_of=as_of, bound="on")
+    note = unvalidated_book_detail(counts, as_of=as_of, bound="on")
+    return counts, unvalidated_book_finding(note)
+
+
 def _load_canonical_rows(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date, position_types: tuple[str, ...]
 ) -> list[_CanonicalRow]:
@@ -319,13 +353,14 @@ def _load_canonical_rows(
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type.in_(position_types),
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
 
-    base_currency = (bank.currency or "GHS").strip().upper()
+    base_currency = jurisdictions.base_currency(bank)
     rows: list[_CanonicalRow] = []
     for snapshot, position, counterparty, product in records:
         attributes = snapshot.attributes or {}
@@ -715,13 +750,50 @@ def _append_related_party_finding(  # noqa: PLR0913 - findings accumulator + con
         )
 
 
-def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
+@dataclass(frozen=True)
+class _OwnFunds:
+    """The Net Own Funds denominator, and where the regime says it comes from.
+
+    The two institution classes answer this from different instruments — an SDI
+    from the governed Act 930 s.29 calculation, a bank from the Tier 1 total of
+    its baseline capital run — so the resolution is lifted out of the assembly
+    below rather than inlined as a branch in the middle of it.
+
+    ``tier1`` is bank-only and stays ``None`` for an SDI, which is what makes the
+    Tier 1 totals row conditional without a second class test.
+    """
+
+    nof: Decimal
+    tier1: Decimal | None
+    capital_run: RegulatoryRun | None
+    sdi_summary: sdi_capital.SdiCapitalSummary | None
+
+
+def _resolve_own_funds(
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
-    definition: ReturnDefinition,
-) -> GeneratedReturn:
+    *,
+    is_sdi: bool,
+) -> _OwnFunds:
+    """Net Own Funds for the exposure percentages, or a 409 naming why not."""
+    if is_sdi:
+        # A code-default RWA taxonomy or composition is useful as a live
+        # diagnostic but cannot support a filed exposure return. The same
+        # governed scope gate used by the official capital mint applies here.
+        sdi_capital.assert_official_rwa_scope_governed(db, bank, period.period_end)
+        summary = sdi_capital.compute_sdi_capital_summary(db, ctx, bank, period.period_end)
+        nof = summary.net_own_funds_ghs
+        if not summary.computable or nof <= _ZERO:
+            raise _conflict_409(
+                "sdi_nof_not_computable",
+                "Net Own Funds from the governed Act 930 s.29 SDI capital calculation is "
+                "not computable or not positive; exposures cannot be expressed as a "
+                "percentage of Net Own Funds.",
+            )
+        return _OwnFunds(nof=nof, tier1=None, capital_run=None, sdi_summary=summary)
+
     capital_run = baseline_run_or_409(
         db, ctx, bank, period, MODULE_CAPITAL, artifact="the Large Exposures return"
     )
@@ -733,9 +805,27 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
             "Tier 1 capital from the baseline capital run is not positive; exposures "
             "cannot be expressed as a percentage of Net Own Funds.",
         )
-    nof = tier1  # documented proxy: NOF = Tier 1 (CET1 + AT1) from the capital run
+    return _OwnFunds(nof=tier1, tier1=tier1, capital_run=capital_run, sdi_summary=None)
+
+
+def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    is_sdi = definition.generator == "sdi_large_exposures"
+    own_funds = _resolve_own_funds(db, ctx, bank, period, is_sdi=is_sdi)
+    nof = own_funds.nof
+    tier1 = own_funds.tier1
+    capital_run = own_funds.capital_run
+    sdi_summary = own_funds.sdi_summary
 
     rows = _load_canonical_rows(db, ctx, bank, period.period_end, _LE_POSITION_TYPES)
+    unvalidated_rows, unvalidated_finding = _unvalidated_disclosure(
+        db, ctx, bank, period.period_end
+    )
     if not rows:
         raise _conflict_409(
             "no_canonical_positions",
@@ -841,14 +931,27 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
     ]
     largest_pct = _pct_of(entities[0].total, nof) if entities else _ZERO
     totals = [
-        snapshot_row("tier1_ghs", "Tier 1 Capital", tier1, unit="ghs"),
-        snapshot_row("nof_ghs", "Net Own Funds (Tier 1 proxy)", nof, unit="ghs"),
+        snapshot_row(
+            "nof_ghs",
+            "Net Own Funds (Act 930 s.29 calculation)"
+            if is_sdi
+            else "Net Own Funds (Tier 1 proxy)",
+            nof,
+            unit="ghs",
+        ),
         snapshot_row("large_exposure_count", "Exposures ≥10% of NOF", len(template_1)),
         snapshot_row("largest_exposure_pct_nof", "Largest exposure (% NOF)", largest_pct),
     ]
+    if not is_sdi:
+        # ``tier1`` is always bound on the bank path; the assert states the
+        # invariant for the reader and the type checker in one line.
+        assert tier1 is not None
+        totals.insert(0, snapshot_row("tier1_ghs", "Tier 1 Capital", tier1, unit="ghs"))
     metadata = {
         "nof_basis": (
-            "Net Own Funds proxied by Tier 1 capital (CET1 + AT1) from the succeeded "
+            "Net Own Funds from the governed Act 930 s.29 SDI capital calculation."
+            if is_sdi
+            else "Net Own Funds proxied by Tier 1 capital (CET1 + AT1) from the succeeded "
             "baseline capital run; the CRD Net-Own-Funds definition is not separately "
             "computed."
         ),
@@ -868,15 +971,39 @@ def generate_large_exposures(  # noqa: PLR0914 - one linear template assembly
             "construction. Collateral columns are omitted, not zero-filled."
         ),
         "large_exposure_threshold_pct_nof": "10",
-        "single_exposure_limit_pct_nof": "20",
+        "single_exposure_limit_pct_nof": str(
+            regulatory_parameters.resolve(
+                db, bank, "single_obligor_limit_pct", as_of=period.period_end
+            ).value
+        ),
         "threshold_ghs": str(threshold),
         "canonical_position_count": len(rows),
-        "capital_baseline_run_id": str(capital_run.id),
-        "generation_findings": findings,
+        # D-4: the rows the exposure tables refused to read, carried in the
+        # immutable snapshot so the export path — which never recomputes —
+        # states the same exclusion the approver cleared.
+        "unvalidated_rows": unvalidated_rows,
+        "generation_findings": [*findings, *unvalidated_finding],
     }
+    if is_sdi and sdi_summary is not None:
+        metadata.update(
+            {
+                "sdi_capital_as_of": sdi_summary.as_of.isoformat(),
+                "sdi_total_rwa_ghs": str(sdi_summary.total_rwa_ghs),
+                "sdi_car_pct": str(sdi_summary.car_pct)
+                if sdi_summary.car_pct is not None
+                else None,
+                "sdi_car_min_pct": str(sdi_summary.car_min_pct),
+                "sdi_rwa_scope": sdi_summary.rwa_scope_note,
+                "sdi_rwa_taxonomy_source": sdi_summary.bucket_map_source,
+                "sdi_rwa_composition_source": sdi_summary.composition_source,
+                "sdi_pending_parameters": sdi_summary.pending_parameters,
+            }
+        )
+    elif capital_run is not None:
+        metadata["capital_baseline_run_id"] = str(capital_run.id)
     return GeneratedReturn(
         snapshot=build_envelope(bank, period, definition, sections, totals, metadata),
-        source_runs=[source_run_entry(capital_run)],
+        source_runs=[source_run_entry(capital_run)] if capital_run is not None else [],
     )
 
 
@@ -1204,7 +1331,7 @@ def _table1_thresholds(
                 "the liquidity return.",
             )
         resolved[code] = (default, "regulatory_default")
-    jurisdiction = (bank.jurisdiction_code or "GH").strip().upper()
+    jurisdiction = jurisdictions.jurisdiction_code(bank)
     for row in get_active_params(
         db, ctx.organization_id, jurisdiction, ParamLiquidityThreshold, as_of
     ):
@@ -1930,7 +2057,7 @@ def _haircut_schedule(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> list[tuple[str, Decimal]]:
     """Active liquidity-value rows, longest asset-class prefix first."""
-    jurisdiction = (bank.jurisdiction_code or "GH").strip().upper()
+    jurisdiction = jurisdictions.jurisdiction_code(bank)
     rows = get_active_params(db, ctx.organization_id, jurisdiction, ParamLiquidityHaircut, as_of)
     return sorted(
         ((row.asset_class.upper(), Decimal(str(row.haircut_pct))) for row in rows),
@@ -2385,7 +2512,12 @@ def _append_liquidity_reserve_check(  # noqa: PLR0913 - the LMT block's accumula
 
 
 def _build_lmt_tool_block(  # noqa: PLR0915 - the eleven tables assemble linearly
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    *,
+    include_lcr_by_currency: bool = True,
 ) -> _LmtToolBlock:
     sections: list[dict[str, Any]] = []
     totals: list[dict[str, Any]] = []
@@ -2539,9 +2671,10 @@ def _build_lmt_tool_block(  # noqa: PLR0915 - the eleven tables assemble linearl
         if table10 is not None:
             sections.append(table10)
 
-        # Table 11 — LCR by significant currency.
-        base_currency = (bank.currency or "GHS").strip().upper()
-        sections.append(_table11_section(ladder_rows, period.period_end, base_currency))
+        if include_lcr_by_currency:
+            # Table 11 — LCR by significant currency (banks only).
+            base_currency = jurisdictions.base_currency(bank)
+            sections.append(_table11_section(ladder_rows, period.period_end, base_currency))
 
     return _LmtToolBlock(
         sections=sections, totals=totals, findings=findings, notes=list(_LMT_TOOL_NOTES)
@@ -2567,10 +2700,18 @@ def generate_lmt(
     tools = _build_lmt_tool_block(db, ctx, bank, period)
     sections.extend(tools.sections)
     totals.extend(tools.totals)
+    # D-4, as for the Large Exposures return above. The LCR subset comes from a
+    # sealed liquidity run whose engine already excluded these rows; the tool
+    # tables read the canonical book directly. One disclosure covers both,
+    # because both are compiled from the same admitted book.
+    unvalidated_rows, unvalidated_finding = _unvalidated_disclosure(
+        db, ctx, bank, period.period_end
+    )
     metadata = {
         **liquidity_snapshot_metadata(preview),
         "lmt_tool_notes": tools.notes,
-        "generation_findings": tools.findings,
+        "unvalidated_rows": unvalidated_rows,
+        "generation_findings": [*tools.findings, *unvalidated_finding],
     }
     runs = latest_succeeded_runs_by_scenario(db, ctx, bank, period, MODULE_LIQUIDITY)
     return GeneratedReturn(
@@ -2579,13 +2720,58 @@ def generate_lmt(
     )
 
 
+def generate_sdi_lmt(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    """Published LMTD Tables 1-10 for an SDI, without bank-only LCR reporting."""
+    tools = _build_lmt_tool_block(db, ctx, bank, period, include_lcr_by_currency=False)
+    if not tools.sections:
+        raise _conflict_409(
+            "no_canonical_positions",
+            "No accepted canonical positions exist for the reporting period. Ingest the "
+            "SDI balance-sheet and deposit book before generating the LMTD return.",
+        )
+    unvalidated_rows, unvalidated_finding = _unvalidated_disclosure(
+        db, ctx, bank, period.period_end
+    )
+    metadata = {
+        "report_scope": "SDI LMTD Appendix Tables 1-10; Table 11 excluded as banks-only.",
+        "lmt_tool_notes": tools.notes,
+        "unvalidated_rows": unvalidated_rows,
+        "generation_findings": [*tools.findings, *unvalidated_finding],
+    }
+    return GeneratedReturn(
+        snapshot=build_envelope(bank, period, definition, tools.sections, tools.totals, metadata),
+        source_runs=[],
+    )
+
+
+def generate_sdi_large_exposures(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    definition: ReturnDefinition,
+) -> GeneratedReturn:
+    """Published Large Exposures templates using the governed SDI NOF basis."""
+    return generate_large_exposures(db, ctx, bank, period, definition)
+
+
 LE_GENERATORS = {
     "large_exposures": generate_large_exposures,
     "lmt": generate_lmt,
+    "sdi_large_exposures": generate_sdi_large_exposures,
+    "sdi_lmt": generate_sdi_lmt,
 }
 
 __all__ = [
     "LE_GENERATORS",
     "generate_large_exposures",
     "generate_lmt",
+    "generate_sdi_large_exposures",
+    "generate_sdi_lmt",
 ]

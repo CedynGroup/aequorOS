@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Database, Shield } from 'lucide-react';
+import { Database, Lock, Shield } from 'lucide-react';
 import {
   grantDeskEntitlementDataset,
   grantDeskEntitlementTier,
@@ -27,25 +27,49 @@ import {
   SubTabs,
 } from '@/components/ui';
 import { OrgSelect } from '@/components/deskdata/OrgSelect';
+import { InspectTenantButton } from '@/components/tenants/InspectTenantButton';
+import { isInspectionRequired } from '@/components/tenants/util';
 
 /**
- * Desk dataset entitlements (spec §10) — which published products each bank org
+ * Desk dataset entitlements (spec §10) — which published products one bank
  * receives. Two grant shapes: a TIER (core / standard / premium bundle) or a
- * single DATASET override; default when an org has no rows is standard. Revoke
+ * single DATASET override; default when a bank has no rows is standard. Revoke
  * end-dates a grant append-only.
+ *
+ * The page works ONE bank at a time, inside an inspection session. An
+ * entitlement is that bank's commercial terms, so viewing or changing it is a
+ * look inside the tenant — the same audited control every other deep tenant
+ * surface passes. The page used to open on every bank's grants at once, with
+ * no session and no audit record of the read.
  */
 
 type Tier = 'core' | 'standard' | 'premium';
 
 export default function EntitlementsPage() {
   const [includeRevoked, setIncludeRevoked] = useState(false);
+  const [orgId, setOrgId] = useState('');
+  const selectedOrg = orgId.trim();
   const { data, error, loading, reload } = useApi(
-    () => listDeskEntitlements({ includeRevoked }),
-    [includeRevoked],
+    () =>
+      selectedOrg
+        ? listDeskEntitlements({ organizationId: selectedOrg, includeRevoked })
+        : Promise.resolve(null),
+    [selectedOrg, includeRevoked],
   );
+  const gated = isInspectionRequired(error);
+  // `useApi` keeps the PREVIOUS result on screen while the next one is in
+  // flight, and this table no longer carries a bank column (the page is
+  // single-bank now). Between picking bank B and its rows arriving, the
+  // previous bank's grants would therefore render under bank B's heading. Show
+  // rows only once they are settled AND every one of them belongs to the bank
+  // currently selected — a stale render of another bank's commercial terms is
+  // exactly what this page was rebuilt to prevent.
+  const grants =
+    !loading && data && data.entitlements.every((e) => e.organization_id === selectedOrg)
+      ? data
+      : null;
 
   const [grantMode, setGrantMode] = useState<'tier' | 'dataset'>('tier');
-  const [orgId, setOrgId] = useState('');
   const [tier, setTier] = useState<Tier>('standard');
   const [datasetCode, setDatasetCode] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().slice(0, 10));
@@ -55,12 +79,12 @@ export default function EntitlementsPage() {
   const datasets = catalog?.datasets ?? [];
 
   const grantTier = useMutation(grantDeskEntitlementTier, {
-    successMessage: `Granted ${tier} tier to ${orgId.trim()}`,
+    successMessage: `Granted the ${tier} tier to ${selectedOrg}`,
     errorContext: 'Grant tier',
     onSuccess: () => reload(),
   });
   const grantDataset = useMutation(grantDeskEntitlementDataset, {
-    successMessage: `Granted ${datasetCode} to ${orgId.trim()}`,
+    successMessage: `Granted ${datasetCode} to ${selectedOrg}`,
     errorContext: 'Grant dataset',
     onSuccess: () => reload(),
   });
@@ -73,10 +97,10 @@ export default function EntitlementsPage() {
   const grantBusy = grantTier.loading || grantDataset.loading;
 
   function submitGrant() {
-    if (!orgId.trim()) return;
+    if (!selectedOrg) return;
     if (grantMode === 'tier') {
       void grantTier.mutate({
-        organization_id: orgId.trim(),
+        organization_id: selectedOrg,
         tier,
         effective_from: effectiveFrom,
         notes: notes.trim() || undefined,
@@ -84,7 +108,7 @@ export default function EntitlementsPage() {
     } else {
       if (!datasetCode.trim()) return;
       void grantDataset.mutate({
-        organization_id: orgId.trim(),
+        organization_id: selectedOrg,
         dataset_code: datasetCode.trim(),
         effective_from: effectiveFrom,
         notes: notes.trim() || undefined,
@@ -140,7 +164,7 @@ export default function EntitlementsPage() {
               variant="ghost"
               className="text-critical hover:text-critical"
               loading={revoke.loading}
-              onClick={() => void revoke.mutate(e.id)}
+              onClick={() => void revoke.mutate(e.id, e.organization_id)}
             >
               Revoke
             </Button>
@@ -154,11 +178,40 @@ export default function EntitlementsPage() {
     <div>
       <PageHeader
         title="Entitlements"
-        sub="Which desk-published datasets each bank receives (spec §10). Default when no rows: standard tier. Premium unlocks the Stage 3 credit curve."
+        sub="Which desk-published datasets a bank receives. A bank with no grants receives the standard tier. Premium adds the corporate credit curve."
       />
 
+      {/* ------------------------------------------------------ bank picker */}
+      <SectionCard
+        title="Bank"
+        subtitle="Entitlements are one bank's commercial terms, so this page works one bank at a time inside an audited inspection session."
+        className="mb-5"
+      >
+        <OrgSelect value={orgId} onChange={setOrgId} label="Bank" required className="w-72" />
+      </SectionCard>
+
+      {!selectedOrg && (
+        <SectionCard title="Grants">
+          <EmptyState
+            title="Choose a bank to see its entitlements"
+            description="Every view and every change is recorded against that bank in the operator audit log."
+          />
+        </SectionCard>
+      )}
+
+      {selectedOrg && gated && (
+        <SectionCard title="Grants" subtitle="Audited inspection required">
+          <EmptyState
+            Icon={Lock}
+            title="Start an inspection session to view this bank's entitlements"
+            description="Entitlements decide which desk data this bank receives. Viewing or changing them opens a time-boxed session that is written to the operator audit log."
+            action={<InspectTenantButton orgId={selectedOrg} />}
+          />
+        </SectionCard>
+      )}
+
       {/* -------------------------------------------------- tier catalog */}
-      {catalog && (
+      {selectedOrg && !gated && catalog && (
         <div className="mb-5 grid gap-4 md:grid-cols-3">
           {Object.entries(catalog.tiers ?? {}).map(([name, tierDatasets]) => (
             <SectionCard
@@ -184,7 +237,7 @@ export default function EntitlementsPage() {
       )}
 
       {/* ---------------------------------------------- dataset catalog */}
-      {datasets.length > 0 && (
+      {selectedOrg && !gated && datasets.length > 0 && (
         <SectionCard
           title={
             <span className="inline-flex items-center gap-2">
@@ -217,6 +270,7 @@ export default function EntitlementsPage() {
       )}
 
       {/* --------------------------------------------------- grant panel */}
+      {selectedOrg && !gated && (
       <SectionCard title="Grant access" className="mb-5" noPadding>
         <SubTabs
           items={[
@@ -234,7 +288,6 @@ export default function EntitlementsPage() {
           }}
         >
           <div className="flex flex-wrap items-start gap-3">
-            <OrgSelect value={orgId} onChange={setOrgId} required className="w-56" />
             {grantMode === 'tier' ? (
               <Field label="Tier" required>
                 <Select value={tier} onChange={(e) => setTier(e.target.value as Tier)}>
@@ -274,7 +327,7 @@ export default function EntitlementsPage() {
               <Button
                 type="submit"
                 loading={grantBusy}
-                disabled={!orgId.trim() || (grantMode === 'dataset' && !datasetCode.trim())}
+                disabled={!selectedOrg || (grantMode === 'dataset' && !datasetCode.trim())}
               >
                 {grantMode === 'tier' ? 'Grant tier' : 'Grant dataset'}
               </Button>
@@ -282,8 +335,10 @@ export default function EntitlementsPage() {
           </div>
         </form>
       </SectionCard>
+      )}
 
       {/* -------------------------------------------------- grants table */}
+      {selectedOrg && !gated && (
       <SectionCard
         title="Grants"
         actions={
@@ -299,28 +354,29 @@ export default function EntitlementsPage() {
         noPadding
       >
         {loading && <SkeletonRows rows={5} />}
-        {error && (
+        {error && !gated && (
           <div className="p-4">
             <ErrorPanel error={error} onRetry={reload} context="Loading entitlements" />
           </div>
         )}
-        {data && data.entitlements.length === 0 && (
+        {grants && grants.entitlements.length === 0 && (
           <EmptyState
             title="No explicit grants"
-            hint="Banks without rows receive the standard tier automatically at publish and read time."
+            hint="A bank with no grants receives the standard tier automatically, at publish and at read time."
           />
         )}
-        {data && data.entitlements.length > 0 && (
+        {grants && grants.entitlements.length > 0 && (
           <DataTable
             columns={columns}
-            rows={data.entitlements}
+            rows={grants.entitlements}
             density="compact"
             pageSize={25}
-            getFilterText={(e) => `${e.organization_id} ${e.dataset_code} ${e.tier ?? ''} ${e.status}`}
-            filterPlaceholder="Filter by org, dataset, tier…"
+            getFilterText={(e) => `${e.dataset_code} ${e.tier ?? ''} ${e.status}`}
+            filterPlaceholder="Filter by dataset, tier or status…"
           />
         )}
       </SectionCard>
+      )}
     </div>
   );
 }

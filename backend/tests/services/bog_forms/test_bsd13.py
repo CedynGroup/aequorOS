@@ -26,11 +26,14 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.db.session import get_sessionmaker
 from app.models import (
+    BankFinancialFact,
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
@@ -417,3 +420,149 @@ def test_contract_classification_and_sector_free_helpers() -> None:
     assert ext._classify({}, as_of + timedelta(days=2), as_of) == "spot"
     assert ext._classify({}, as_of + timedelta(days=3), as_of) == "forward"
     assert ext._classify({"instrument": "option"}, None, as_of) == "forward"
+
+
+# ---------------------------------------------------------------------------
+# 6. a currency with no governed rate REFUSES — it is never taken at parity
+# ---------------------------------------------------------------------------
+
+JPY_LOAN = Decimal("500000000")
+JPY_FORWARD_PURCHASE = Decimal("500000000")
+
+
+def _seed_unrateable_currency(session: Any, as_of: date, period_id: str) -> None:
+    """A JPY book with no JPY rate knowable from anywhere.
+
+    No ``balance_ghs`` on the position, no ``spot_ghs`` on the ``fx_position``
+    fact (``fact_derivation`` writes ``""`` when no rate is knowable), no FX
+    run, and no market spot — so :func:`ext.spot_rate` returns ``None`` for JPY
+    on every path it has.
+    """
+    common = {
+        "organization_id": ORG_1,
+        "bank_id": SAMPLE_BANK_ID,
+        "as_of_date": as_of,
+        "source_system": "API_PUSH",
+        "validation_status": "accepted",
+    }
+    batch = session.scalars(
+        select(IngestionBatch).where(IngestionBatch.bank_id == SAMPLE_BANK_ID)
+    ).first()
+    lineage = session.scalars(select(LineageRecord)).first()
+    common |= {"ingestion_batch_id": batch.id, "lineage_id": lineage.id}
+
+    def position(ref: str, position_type: str, attributes: dict[str, Any]) -> None:
+        row = CanonicalPosition(
+            **common, source_reference=ref, position_type=position_type, currency="JPY"
+        )
+        session.add(row)
+        session.flush()
+        session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=ref,
+                position_id=row.id,
+                balance=JPY_LOAN if position_type == "LOAN" else JPY_FORWARD_PURCHASE,
+                notional=JPY_LOAN if position_type == "LOAN" else JPY_FORWARD_PURCHASE,
+                contractual_maturity=as_of + timedelta(days=90),
+                attributes=attributes,
+            )
+        )
+
+    # 5. Loans & advances, Schedule A row 20 — no ingested cedi conversion
+    position("LOAN/JPY", "LOAN", {})
+    # a forward PURCHASE of JPY against cedis (Schedule C row 16)
+    position(
+        "FWD/JPY",
+        "FX_HEDGE",
+        {
+            "instrument": "forward",
+            "sell_currency": "GHS",
+            "buy_currency": "JPY",
+            "contract_rate": "1.0",
+        },
+    )
+    # the fx_position fact the FX book would carry for JPY, with NO spot
+    session.add(
+        BankFinancialFact(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            reporting_period_id=UUID(period_id),
+            fact_group="fx_position",
+            category="JPY",
+            amount=Decimal("0"),
+            currency="JPY",
+            attributes={
+                "currency": "JPY",
+                "side": "long",
+                "spot_ghs": "",
+                "net_ccy": str(JPY_LOAN),
+                "assets_ccy": str(JPY_LOAN),
+                "liabilities_ccy": "0",
+                "net_derivatives_ccy": str(JPY_FORWARD_PURCHASE),
+                "net_ghs": "0",
+            },
+        )
+    )
+    session.flush()
+
+
+def test_a_currency_with_no_governed_rate_refuses_instead_of_reporting_at_parity(
+    db_client: TestClient,
+) -> None:
+    """Audit D-13 / D-21: the Other Currencies column may not assume a rate.
+
+    Before this fix each cell below reported the JPY amount ITSELF as a
+    reporting-currency figure — ``F20`` = 500,000,000, ``F16`` = 500,000,000,
+    ``N19`` = 500,000,000 — because an unresolvable spot fell back to 1.00 (the
+    contract legs) or to the unconverted amount (the position sums). A
+    ~14x overstatement of a filed net open position, in a plausible cell.
+    """
+    period_id, reporting_date = _prepare(db_client)
+    session = get_sessionmaker()()
+    try:
+        session.info["organization_id"] = ORG_1
+        _seed_unrateable_currency(session, date.fromisoformat(reporting_date), period_id)
+        session.commit()
+    finally:
+        session.close()
+
+    snapshot = _generate(db_client, reporting_date)
+    cells = snapshot["bog_form"]["cells"]
+    errors = snapshot["bog_form"]["errors"]
+
+    # every affected cell is BLANK and honestly input_required — never a number
+    for sheet, ref in ((SCH_A, "F20"), (SCH_C, "F16"), (MAIN, "N19"), (MAIN, "N24")):
+        assert cells[sheet].get(ref) is None, (sheet, ref, cells[sheet].get(ref))
+        assert _statuses(snapshot, sheet)[ref] == "input_required", (sheet, ref)
+
+    # …and the return SAYS why, naming the currency and counting what it covers
+    joined = " | ".join(errors)
+    assert errors, "a refused cell must state its reason in the completion notes"
+    assert "Missing required input" in joined, joined
+    assert "fx_spot:JPY" in joined, joined
+    assert "JPY" in joined and "no exchange rate" in joined, joined
+    for metric in (
+        "bsd13.positions_ccy.other",
+        "bsd13.nop.forward_long.other",
+        "bsd13.nop.net_assets.other",
+    ):
+        assert metric in joined, (metric, joined)
+    # the reporting currency is the bank's own, never a literal
+    assert "stated in GHS" in joined, joined
+
+    # a currency that IS rateable still reports: the cedi-equivalent NOP cells
+    # that need no conversion are untouched by the refusal
+    assert _statuses(snapshot, MAIN)["N29"] == "mapped"
+
+
+def test_unconverted_amounts_are_counted_by_currency_not_dropped() -> None:
+    """The SDI's ``unconverted_position_count`` shape, reused (audit D-21)."""
+    unconverted = ext._Unconverted()
+    assert not unconverted
+    unconverted.record("JPY")
+    unconverted.record("JPY")
+    unconverted.record("CHF")
+    assert unconverted.count == 3  # noqa: PLR2004 - two JPY + one CHF
+    assert unconverted.currencies == ("CHF", "JPY")
+    assert bool(unconverted)

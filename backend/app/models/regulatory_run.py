@@ -83,6 +83,19 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     metrics: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
+    #: Which ``regulatory_parameter`` ROWS this run resolved (audit D-18,
+    #: migration ``202608230039``). ``inputs["parameters"]`` records the values
+    #: and is sealed by the value-based ``input_hash``; this records the
+    #: authority behind them — row id, scope key, effective window,
+    #: confirmation status, four-eyes evidence and ``updated_at`` as the version
+    #: marker. It lives BESIDE the snapshot, never inside it: row ids and
+    #: timestamps are identity, not values, and hashing them would break
+    #: reproducibility against every sealed run.
+    #:
+    #: ``None`` means the run predates the column. ``[]`` is a positive
+    #: statement — this run resolved no governed parameter — and the two must
+    #: never be collapsed.
+    parameter_provenance: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)

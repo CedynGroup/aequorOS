@@ -61,6 +61,7 @@ CHECKER = TenantContext(
 )
 REPORTING_DATE = date(2026, 3, 31)
 RETURN_CODE = "ICAAP-STRESS-APPENDIX2"
+SDI_RETURN_CODE = "SDI-STRESS-ANNUAL"
 
 
 @pytest.fixture
@@ -254,6 +255,18 @@ def _generate(db: Session) -> RegulatoryPackage:
     return row
 
 
+def _generate_sdi(db: Session) -> RegulatoryPackage:
+    read = generation.generate_package(
+        db,
+        MAKER,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(return_code=SDI_RETURN_CODE, reporting_date=REPORTING_DATE),
+    )
+    row = db.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == read.id))
+    assert row is not None
+    return row
+
+
 def _section(snapshot: dict[str, Any], code: str) -> dict[str, Any] | None:
     return next((s for s in snapshot["sections"] if s["code"] == code), None)
 
@@ -334,6 +347,31 @@ def test_generates_appendix_ii_tables_from_attested_run(db_session: Session) -> 
     assert governance["scenario_narrative"]
     assert governance["credibility_rationale"]
     assert governance["attested_by"]
+
+
+def test_sdi_stress_return_uses_attested_evidence_without_basel_table2(
+    db_session: Session,
+) -> None:
+    materialize_canonical_test_book(db_session)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    bank.institution_type = "savings_and_loans"
+    db_session.flush()
+    _seed_checker(db_session)
+    scenario_id = _approved_scenario(db_session, code="sdi_adverse_2027")
+    run_id = _run_enterprise_stress(db_session, scenario_id)
+    _attested_signoff(db_session, run_id)
+
+    package = _generate_sdi(db_session)
+
+    assert package.return_family == "sdi"
+    assert package.return_code == SDI_RETURN_CODE
+    assert _section(package.snapshot, "t2_capital_projection") is None
+    assert _section(package.snapshot, "t1_summary_positions") is not None
+    assert _section(package.snapshot, "t5_rwa") is not None
+    assert package.snapshot["metadata"]["basel_table2_included"] is False
+    assert package.snapshot["metadata"]["report_scope"].endswith("Table 2 excluded.")
+    assert [entry["module"] for entry in package.source_runs] == ["enterprise_stress"]
 
 
 def test_default_signing_policy_applies_to_the_stress_return(db_session: Session) -> None:

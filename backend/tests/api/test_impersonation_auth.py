@@ -81,9 +81,7 @@ def _add_bank(org_id: str, bank_id: str, name: str) -> None:
 def test_impersonation_token_reads_as_examiner(db_client: TestClient) -> None:
     _add_bank(ORG_1, "BK-IMPRSN01", "Impersonation Read Bank")
 
-    response = db_client.get(
-        "/api/v1/banks", headers=_bearer(_impersonation_token(ORG_1))
-    )
+    response = db_client.get("/api/v1/banks", headers=_bearer(_impersonation_token(ORG_1)))
     assert response.status_code == 200, response.text
     bank_ids = [bank["id"] for bank in response.json()["banks"]]
     assert "BK-IMPRSN01" in bank_ids
@@ -108,23 +106,45 @@ def test_impersonation_is_single_org_isolated(db_client: TestClient) -> None:
 
 
 def test_impersonation_blocks_every_mutation(db_client: TestClient) -> None:
-    """Representative POST/PUT mutations across modules all return 403.
+    """Representative mutations across modules all return 403.
 
-    The auth dependency (``get_mutation_tenant_context`` / ``get_approver_tenant_context``)
-    short-circuits before body validation, so a dummy id + empty body still
-    exercises the gate.
+    The auth dependency short-circuits before body validation, so a dummy id +
+    empty body still exercises the gate.
+
+    This sample originally held only the first five entries — all of them already
+    behind ``MutationTenant``/``ApproverTenant`` — so it agreed with a broken
+    boundary: audit P0-2 found 14 mutations declared ``ctx: Tenant``, which this
+    dependency never sees, and P0-3 an irreversible object-storage delete among
+    them. The second block below is that blind spot, sampled directly; the
+    exhaustive form — every unsafe-method route enumerated from the app's own
+    route table — lives in ``test_impersonation_boundary.py``, together with the
+    role-ladder half that this file does not cover.
     """
     token = _impersonation_token(ORG_1)
     case_id = str(uuid4())
+    document_id = str(uuid4())
     mutations = [
         ("post", "/api/v1/banks/BK-IMPRSN01/regulatory-runs"),
         ("post", f"/api/v1/cases/{case_id}/calculation-runs"),
         ("post", f"/api/v1/cases/{case_id}/scenarios"),
         ("put", "/api/v1/banks/BK-IMPRSN01/capital-plan"),
         ("post", "/api/v1/banks/BK-IMPRSN01/capital-plan/approve"),  # approver ladder
+        # The P0-2 / P0-3 surface: routes that reach state through a dependency
+        # with no impersonation check of its own.
+        ("delete", f"/api/v1/documents/{document_id}"),  # P0-3: irreversible
+        ("post", "/api/v1/documents/upload-request"),
+        ("post", f"/api/v1/documents/{document_id}/parse"),
+        ("post", "/api/v1/cases"),
+        ("patch", f"/api/v1/cases/{case_id}"),
+        ("post", f"/api/v1/cases/{case_id}/archive"),
+        ("post", f"/api/v1/cases/{case_id}/decisions"),
+        ("post", "/api/v1/cases/bulk-actions"),
+        ("post", "/api/v1/assessments"),
+        ("post", f"/api/v1/cases/{case_id}/financial-data/validate"),
     ]
     for method, path in mutations:
-        response = getattr(db_client, method)(path, headers=_bearer(token), json={})
+        # ``request`` (not the per-verb helpers) so DELETE can carry a body too.
+        response = db_client.request(method.upper(), path, headers=_bearer(token), json={})
         assert response.status_code == 403, f"{method.upper()} {path} -> {response.status_code}"
 
 
@@ -134,9 +154,7 @@ def test_expired_impersonation_token_is_401(db_client: TestClient) -> None:
     assert response.status_code == 401, response.text
 
 
-def test_impersonation_fails_closed_when_secret_unset(
-    db_client: TestClient, monkeypatch
-) -> None:
+def test_impersonation_fails_closed_when_secret_unset(db_client: TestClient, monkeypatch) -> None:
     """With the dedicated secret unset, a would-be impersonation token is
     rejected: the accept branch is a no-op, so the token falls through to the
     normal decode (wrong secret) and is refused. No impersonation is possible."""

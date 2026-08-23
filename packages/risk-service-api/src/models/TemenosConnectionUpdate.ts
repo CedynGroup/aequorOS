@@ -81,6 +81,9 @@ import {
  * When ``credentials`` is present the new set is validated FIRST; only on
  * success are the stored ciphertext, fingerprint, and expiry swapped in one
  * transaction. On failure nothing changes and the error is returned as a 422.
+ *
+ * ``endpoint`` is re-screened on every edit: an ACTIVE connection may not be
+ * re-pointed at a blocked destination.
  * @export
  * @interface TemenosConnectionUpdate
  */

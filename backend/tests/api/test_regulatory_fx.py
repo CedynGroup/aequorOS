@@ -315,13 +315,17 @@ def test_run_all_fx_scenarios_persists_four_runs_with_consistent_metrics(  # noq
         _assert_validations_consistent(run)
 
     metric_results = {item["metric_code"]: item for item in baseline["metric_results"]}
+    # diversification_benefit_ghs is deliberately absent: it is the residual of
+    # two value-at-risk figures and no BoG instrument establishes a value-at-risk
+    # measure, so it must not be sealed into a run as a filed metric result. It
+    # remains on run.metrics (asserted above by _assert_var_and_hedges_consistent)
+    # and on FxMetricsRead, where the VaR waterfall reads it.
     assert set(metric_results) == {
         "nop_pct_tier1",
         "single_ccy_max_pct",
         "nop_ghs",
         "var_99_1d_ghs",
         "stressed_var_ghs",
-        "diversification_benefit_ghs",
     }
     nop_result = metric_results["nop_pct_tier1"]
     assert nop_result["unit"] == "pct"
@@ -347,9 +351,11 @@ def test_run_all_fx_scenarios_persists_four_runs_with_consistent_metrics(  # noq
         assert _dec(position_lines[position["currency"]]["weighted_amount"]) == _dec(
             position["net_ghs"]
         )
-    # portfolio_var + diversification + one standalone per currency + stressed_var.
-    assert len(sections["fx_var"]) == 3 + len(metrics["currencies"])
+    # portfolio_var + one standalone per currency + stressed_var. No
+    # diversification line: see the metric-result comment above.
+    assert len(sections["fx_var"]) == 2 + len(metrics["currencies"])
     var_lines = {line["line_code"]: line for line in sections["fx_var"]}
+    assert "diversification_benefit" not in var_lines
     assert _dec(var_lines["portfolio_var"]["weighted_amount"]) == _dec(metrics["var_99_1d_ghs"])
     assert _dec(var_lines["stressed_var"]["weighted_amount"]) == _dec(metrics["stressed_var_ghs"])
     assert len(sections.get("fx_hedge", [])) == len(metrics["hedges"])

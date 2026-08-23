@@ -222,6 +222,7 @@ def test_publish_writes_canonical_market_data_for_every_bank(
             .where(LineageRecord.ingestion_batch_id == batch.id)
         )
         assert (lineage_count or 0) >= 3  # extract -> translate -> validation
+        assert bank.storage_slug is not None
         raw = storage.read(
             StorageLocation(
                 institution_slug=bank.storage_slug,

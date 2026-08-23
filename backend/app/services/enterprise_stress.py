@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -28,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
 from app.domain.capital.ecl import EclAssumption, EclExposure
 from app.domain.capital.engine import (
     FACT_GROUP_ECL_EXPOSURE,
@@ -35,14 +37,21 @@ from app.domain.capital.engine import (
     TIER_T2,
     CapitalFact,
     CapitalParams,
+    RiskWeightUnavailable,
     compute_capital_ratios,
     compute_rwa,
+    resolve_risk_weight,
     tier1_capital,
 )
 from app.domain.forecasting.engine import ForecastAssumptions, ForecastFact, ForecastParams
 from app.domain.fx.engine import FxPosition
 from app.domain.irr.engine import IrrPosition
-from app.domain.liquidity.engine import LiquidityFact, LiquidityParams
+from app.domain.liquidity.engine import (
+    HQLA_LEVEL_1,
+    LiquidityFact,
+    LiquidityParams,
+    consumed_hqla_levels,
+)
 from app.domain.stress.appendix_ii import Pillar2Requirement, build_appendix_ii, thousands
 from app.domain.stress.concentration import (
     ConcentrationExposure,
@@ -60,6 +69,7 @@ from app.domain.stress.credit_bottom_up import (
     result_for_year,
 )
 from app.domain.stress.management_actions import (
+    ManagementActionError,
     ManagementActionsResult,
     apply_management_actions,
 )
@@ -77,7 +87,11 @@ from app.domain.stress.projection import (
     ProjectionInputError,
     project_enterprise,
 )
-from app.domain.stress.translation import MacroPathPoint
+from app.domain.stress.translation import (
+    MacroPathPoint,
+    missing_variables,
+    required_variables,
+)
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -86,6 +100,7 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    FinancialFactRow,
     MacroScenario,
     MacroScenarioPath,
     ManagementActionPlan,
@@ -107,16 +122,25 @@ from app.schemas.enterprise_stress import (
 )
 from app.services import (
     institution_types,
+    jurisdictions,
     macro_scenarios,
     management_action_plans,
     regulatory_parameters,
+    sdi_capital,
 )
 from app.services.audit import record_event
 from app.services.params import get_active_params
 from app.services.regulatory_capital import _SDI_STRUCTURAL_CAPITAL
 
 ENGINE_VERSION = "enterprise-stress-v1.0.0"
-INPUT_SCHEMA_VERSION = "enterprise-stress-input-v1"
+#: v2 (forensic re-audit 2026-08-22 NEW-A1-1) adds the top-level ``parameters``
+#: block — every governed control-plane number the run consumed. The bump is not
+#: cosmetic: a v1 snapshot and a v2 snapshot are DIFFERENT SHAPES, and a reader
+#: comparing two sealed runs has to know that a v1 payload is silent about the
+#: risk weights, thresholds, runoff rates and HQLA rates the run was filed under
+#: rather than asserting they were unset. ``ENGINE_VERSION`` deliberately does
+#: NOT move: no methodology changed, only what the reproducibility spine records.
+INPUT_SCHEMA_VERSION = "enterprise-stress-input-v2"
 OUTPUT_SCHEMA_VERSION = "enterprise-stress-outcome-v1"
 MODULE_ENTERPRISE_STRESS = "enterprise_stress"
 
@@ -181,10 +205,33 @@ _EMPTY_LIQUIDITY_PARAMS = LiquidityParams(
     lcr_amber_floor_pct=_ZERO,
     nsfr_min_pct=_ZERO,
     nsfr_amber_floor_pct=_ZERO,
+    # No HQLA rates: an SDI never runs ``compute_lcr``, and if this sentinel ever
+    # DID reach the engine the empty map would make it refuse rather than weight
+    # an asset at face value. Fail-closed even in the unreachable branch.
+    hqla_haircut_pct={},
+    hqla_level2_cap_pct=None,
+    hqla_level2b_cap_pct=None,
 )
 
-# Base-case plan defaults (used where the request omits a field). Documented,
-# conservative, jurisdiction-neutral business-as-usual assumptions.
+# --- Base-case plan: PLATFORM DEFAULTS (enterprise audit P0-13) --------------
+#
+# These are the platform's documented business-as-usual assumptions, used only
+# where the request omits a field AND the approved scenario carries no base path
+# to derive one from. They are NOT the institution's business plan and they are
+# NOT regulatory numbers (a net interest margin is not a BoG parameter), so they
+# do not belong in the regulatory-parameter control plane.
+#
+# What was wrong before 2026-08-21: a stress request omitting ``plan`` minted a
+# full 3-year Appendix II on these seven constants with nothing on the run
+# saying so, and a Board could attest an ICAAP whose base case was invented by
+# the platform. They are still available — refusing every run without a plan
+# would break the workbench's exploratory use — but every fallback is now
+# recorded field-by-field in ``plan_provenance`` and summarised on the run as
+# ``plan_fully_supplied_by_institution``.
+PLATFORM_DEFAULT_SOURCE = "platform_default"
+BANK_PLAN_SOURCE = "bank_plan"
+MACRO_SCENARIO_SOURCE = "macro_scenario"
+
 _DEFAULT_NIM_PCT = Decimal("4.8")
 _DEFAULT_COST_TO_INCOME_PCT = Decimal("50")
 _DEFAULT_CREDIT_LOSS_RATE_PCT = Decimal("1.0")
@@ -192,6 +239,27 @@ _DEFAULT_DIVIDEND_PAYOUT_PCT = Decimal("30")
 _DEFAULT_FEE_INCOME_PCT_ASSETS = Decimal("1.2")
 _DEFAULT_TAX_RATE_PCT = Decimal("25")
 _DEFAULT_LOAN_GROWTH_PCT = Decimal("15")
+
+#: The written basis for each platform default, reported in ``plan_provenance``
+#: so a reader is never left to guess where a number came from.
+_PLATFORM_DEFAULT_BASIS: dict[str, str] = {
+    "loan_growth_pct": (
+        "Platform default nominal growth, used only when the scenario carries no "
+        "base GDP + inflation path to derive it from."
+    ),
+    "deposit_growth_pct": (
+        "Platform default nominal growth, used only when the scenario carries no "
+        "base GDP + inflation path to derive it from."
+    ),
+    "nim_pct": "Platform default net interest margin on earning assets.",
+    "cost_to_income_pct": "Platform default operating cost as a share of total income.",
+    "credit_loss_rate_pct": "Platform default credit loss as a share of gross loans.",
+    "fx_depreciation_pct": "No depreciation assumed in the base case (zero).",
+    "dividend_payout_pct": "Platform default dividend payout as a share of net income.",
+    "fee_income_pct_assets": "Platform default fee income as a share of average assets.",
+    "tax_rate_pct": "Platform default effective tax rate.",
+    "securities_shift_pp": "No securities re-weighting assumed in the base case (zero).",
+}
 
 
 class EnterpriseStressError(HTTPException):
@@ -256,7 +324,7 @@ def _load_facts(
     )
 
 
-def _capital_fact(fact: BankFinancialFact) -> CapitalFact:
+def _capital_fact(fact: FinancialFactRow) -> CapitalFact:
     return CapitalFact(
         fact_group=fact.fact_group,
         category=fact.category,
@@ -270,7 +338,7 @@ def _capital_fact(fact: BankFinancialFact) -> CapitalFact:
     )
 
 
-def _liquidity_fact(fact: BankFinancialFact) -> LiquidityFact:
+def _liquidity_fact(fact: FinancialFactRow) -> LiquidityFact:
     return LiquidityFact(
         fact_group=fact.fact_group,
         category=fact.category,
@@ -281,7 +349,7 @@ def _liquidity_fact(fact: BankFinancialFact) -> LiquidityFact:
     )
 
 
-def _forecast_fact(fact: BankFinancialFact) -> ForecastFact:
+def _forecast_fact(fact: FinancialFactRow) -> ForecastFact:
     return ForecastFact(
         fact_group=fact.fact_group,
         category=fact.category,
@@ -310,7 +378,23 @@ def _capital_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
     crm_rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, as_of
     )
-    thresholds = {row.threshold_code: _dec(row.value_pct) for row in threshold_rows}
+    # Tighten-only guard (QA audit 2026-08-20 P1-5), adopted here 2026-08-22 while
+    # closing D-15. This loader read the tenant's board register RAW while
+    # ``regulatory_capital`` and ``regulatory_forecasting`` both clamped it against
+    # the control plane — the third of the three capital-threshold loaders, and the
+    # only one still unenforced. The consequence is the same "two authorities for
+    # one floor" defect D-15 names, one layer under it: a board ``car_min`` of 10
+    # bound the ICAAP stress's minima checks and Appendix II capital requirement
+    # while the filed capital return used the governed 13, so an institution at
+    # 11% CAR read as compliant in the stress and breaching in the return.
+    # A board minimum weaker than the regulatory floor is raised to it; a stricter
+    # one stands; a code with no seeded control-plane row passes through untouched.
+    thresholds = regulatory_parameters.clamp_overrides(
+        db,
+        bank,
+        {row.threshold_code: _dec(row.value_pct) for row in threshold_rows},
+        as_of=as_of,
+    ).values
     risk_weights = {row.risk_weight_code: _dec(row.weight_pct) for row in weight_rows}
     crm_haircuts = {row.collateral_class: _dec(row.haircut_pct) for row in crm_rows}
     # SDI simplified s.29 solvency (docs/sdi.md §4.6, Phase H): only the CAR floor
@@ -342,6 +426,50 @@ def _capital_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
     )
 
 
+def _resolve_car_target_pct(
+    payload: EnterpriseStressRunCreate, capital_params: CapitalParams
+) -> Decimal:
+    """THE CAR floor this run measures its capital requirement against (D-15).
+
+    One run used to carry **two** capital floors: ``capital_params.car_min_pct``
+    — governed, effective-dated, institution-class aware, clamped against the
+    control plane — which the engines check every projected ratio against; and
+    ``payload.car_target_pct``, an API request field defaulting to the literal
+    ``13``, from which Appendix II Table 1's "capital required", Table 5's
+    Pillar-1 requirement and the management-action RWA-relief valuation were all
+    computed. They are the same regulatory quantity resolved twice, and the
+    literal was wrong in three independent ways: BoG's minimum has moved with the
+    ¶75 conservation buffer (CRD ¶71's 10% plus the buffer in force), an SDI's
+    Act 930 s.29 floor is 10% rather than 13%, and a Ghana-specific number had no
+    business being the platform default at all.
+
+    Now: absent ⇒ the institution's own governed floor. Present ⇒ an INTERNAL
+    ICAAP target, which may sit above the regulatory floor but never below it —
+    a "capital required" line computed against a target weaker than the binding
+    minimum understates the requirement, so it is refused rather than filed.
+    """
+    governed = capital_params.car_min_pct
+    requested = payload.car_target_pct
+    if requested is None:
+        return governed
+    if requested < governed:
+        raise EnterpriseStressError(
+            "car_target_below_regulatory_minimum",
+            (
+                f"The requested CAR target of {requested}% is below this institution's "
+                f"governed minimum capital adequacy ratio of {governed}%, so the "
+                "Appendix II capital-requirement lines computed from it would understate "
+                "what the institution must hold. Model an internal target at or above "
+                "the regulatory minimum, or omit the field to use the governed floor."
+            ),
+            {
+                "requested_car_target_pct": str(requested),
+                "governed_car_min_pct": str(governed),
+            },
+        )
+    return requested
+
+
 def _sdi_capital_params(  # noqa: PLR0913 - the resolved capital inputs
     db: Session,
     bank: Bank,
@@ -353,7 +481,12 @@ def _sdi_capital_params(  # noqa: PLR0913 - the resolved capital inputs
     """SDI simplified s.29 capital params for the stress projection — the CAR floor
     from the tenant board register, else the control-plane class default; the Basel
     sub-tier constructs take the shared structural sentinels (mirror of
-    ``regulatory_capital._sdi_engine_params``)."""
+    ``regulatory_capital._sdi_engine_params``).
+
+    WHICH risk classes the stressed total charges for comes from the SAME governed
+    scope the live s.29 view and the official filing run read
+    (``sdi_capital.resolve_rwa_scope``) — a stress path that charged for a different
+    set than the position it stresses would be a third authority."""
     car_min = thresholds.get("car_min")
     if car_min is None:
         param = regulatory_parameters.try_resolve(db, bank, "car_min", as_of=as_of)
@@ -364,6 +497,17 @@ def _sdi_capital_params(  # noqa: PLR0913 - the resolved capital inputs
             "The SDI CAR floor (car_min) is configured neither on the board register "
             "nor in the regulatory-parameter control plane.",
             {"threshold_codes": ["car_min"]},
+        )
+    scope = sdi_capital.resolve_rwa_scope(db, bank, as_of)
+    if not scope.credit_in_scope:
+        raise EnterpriseStressError(
+            "policy_unresolved",
+            "The approved capital-adequacy scope for this institution does not "
+            "include credit risk measured from the asset book, which is the only "
+            "basis on which risk-weighted assets can be projected. Correct "
+            f"{sdi_capital.COMPOSITION_PARAM} in the regulatory-parameter control "
+            "plane.",
+            {"param_codes": [sdi_capital.COMPOSITION_PARAM]},
         )
     s = _SDI_STRUCTURAL_CAPITAL
     return CapitalParams(
@@ -380,6 +524,7 @@ def _sdi_capital_params(  # noqa: PLR0913 - the resolved capital inputs
         car_critical_pct=car_min,
         crm_haircuts=crm_haircuts,
         basel_applicable=False,
+        rwa_pct_of_credit_rwa=dict(scope.pct_of_credit_rwa),
     )
 
 
@@ -412,6 +557,7 @@ def _liquidity_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) 
             {"threshold_codes": missing},
         )
     amber_floor = thresholds["lcr_amber_floor"]
+    hqla = regulatory_parameters.resolve_hqla_parameters(db, bank, as_of=as_of)
     return LiquidityParams(
         outflow_rates=outflow_rates,
         inflow_rates=inflow_rates,
@@ -422,6 +568,10 @@ def _liquidity_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) 
         lcr_amber_floor_pct=amber_floor,
         nsfr_min_pct=thresholds["nsfr_min"],
         nsfr_amber_floor_pct=amber_floor,
+        # Basel HQLA haircuts + Level-2 caps from the control plane (P0-8).
+        hqla_haircut_pct=hqla.haircut_pct,
+        hqla_level2_cap_pct=hqla.level2_cap_pct,
+        hqla_level2b_cap_pct=hqla.level2b_cap_pct,
     )
 
 
@@ -430,7 +580,7 @@ def _ecl_inputs(
     ctx: TenantContext,
     bank: Bank,
     as_of: date,
-    capital_rows: list[BankFinancialFact],
+    capital_rows: Sequence[FinancialFactRow],
 ) -> tuple[list[EclExposure], list[EclAssumption]]:
     assumptions_rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, as_of
@@ -476,7 +626,7 @@ def _irr_inputs(  # noqa: PLR0913 - a read helper naming its scope
     return IrrStressInputs(positions=tuple(positions), curve=curve, tier1=tier1)
 
 
-def _irr_positions(rows: list[BankFinancialFact]) -> list[IrrPosition]:
+def _irr_positions(rows: Sequence[FinancialFactRow]) -> list[IrrPosition]:
     positions: list[IrrPosition] = []
     for fact in rows:
         attributes = fact.attributes or {}
@@ -546,7 +696,7 @@ def _fx_inputs(  # noqa: PLR0913 - a read helper naming its scope
     )
 
 
-def _fx_positions(rows: list[BankFinancialFact]) -> list[FxPosition]:
+def _fx_positions(rows: Sequence[FinancialFactRow]) -> list[FxPosition]:
     positions: list[FxPosition] = []
     for fact in rows:
         attributes = fact.attributes or {}
@@ -612,16 +762,21 @@ class _ExposureRow:
     product_risk_weight_code: str | None
     product_code: str | None
 
-# Documented PD/LGD/RW defaults used when the source carries none on the
-# snapshot (¶45); a snapshot attribute always wins. Sovereign-ish classes get a
-# zero PD so they contribute no modelled expected loss.
+# Documented PD/LGD defaults used when the source carries none on the snapshot
+# (¶45); a snapshot attribute always wins. Sovereign-ish classes get a zero PD so
+# they contribute no modelled expected loss.
+#
+# There is deliberately NO risk-weight default here (audit 2026-08-22 D-8a). PD and
+# LGD are modelling inputs to an expected-loss overlay the directive lets a bank
+# assume in the absence of its own estimates; a risk weight is a regulatory
+# determination that decides filed RWA, and the registered authority
+# (``capital.engine.resolve_risk_weight``) refuses rather than assuming one.
 _DEFAULT_PD_BY_STAGE: dict[int, Decimal] = {
     1: Decimal("2"),
     2: Decimal("12"),
     3: Decimal("100"),
 }
 _DEFAULT_LGD_PCT = Decimal("45")
-_DEFAULT_RISK_WEIGHT_PCT = Decimal("100")
 _DEFAULT_DERIVATIVE_PFE_PCT = Decimal("5")
 _ZERO_PD_CLASSES = frozenset(
     {"gog", "bog", "other_sovereigns_central_banks", "multilateral_development_banks"}
@@ -655,7 +810,11 @@ def _load_exposure_rows(
     resolved to GHS here (foreign books without an ingested conversion contribute
     zero, mirroring ``fact_derivation``/``le_generation``).
     """
-    base_currency = (bank.currency or "GHS").strip().upper()
+    # ``jurisdictions.base_currency`` deliberately raises rather than substituting
+    # (enterprise audit 2026-08-20 §6): ``banks.currency`` is NOT NULL with no
+    # default, so an unset value is a skipped decision at the creation site, not a
+    # Ghanaian bank. Byte-identical for every bank that has one.
+    base_currency = jurisdictions.base_currency(bank)
     records = db.execute(
         select(
             CanonicalPositionSnapshot,
@@ -677,6 +836,7 @@ def _load_exposure_rows(
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_CANONICAL_INCLUDED_STATUSES),
             CanonicalPosition.position_type.in_(position_types),
         )
@@ -772,10 +932,20 @@ def _crd_class_for(row: _ExposureRow) -> str:  # noqa: PLR0911 - a flat CRD clas
 
 
 def _exposure_risk_weight(row: _ExposureRow, capital_params: CapitalParams) -> Decimal:
+    """Resolve through the REGISTERED capital authority (audit 2026-08-22 D-8a).
+
+    This used to read ``risk_weights.get(code, 100)`` and return a flat 100% for a
+    row with no code at all — so a book the parameter register does not cover
+    produced a complete, plausible stressed CAR built entirely on an assumed
+    weight, while ``capital.engine`` refused the identical input one module away.
+    Two authorities, one of them fail-open. There is now one, and it refuses.
+    """
     code = row.attributes.get("risk_weight_code") or row.product_risk_weight_code
-    if code is not None:
-        return capital_params.risk_weights.get(str(code), _DEFAULT_RISK_WEIGHT_PCT)
-    return _DEFAULT_RISK_WEIGHT_PCT
+    return resolve_risk_weight(
+        capital_params,
+        str(code) if code is not None else None,
+        row.source_reference,
+    )
 
 
 def _exposure_pd_lgd(row: _ExposureRow, crd_class: str) -> tuple[Decimal, Decimal]:
@@ -788,15 +958,38 @@ def _exposure_pd_lgd(row: _ExposureRow, crd_class: str) -> tuple[Decimal, Decima
     return pd_pct, lgd_pct
 
 
+#: How many offending exposures / codes the refusal payload names before it
+#: summarises. A refusal an operator cannot act on is only half a control.
+_MAX_REPORTED_UNRESOLVED = 20
+
+
 def _build_credit_exposures(
     rows: list[_ExposureRow], capital_params: CapitalParams
 ) -> list[CreditExposure]:
+    """The exposure book for the bottom-up credit stress — or a refusal.
+
+    Every row must resolve a governed risk weight (audit 2026-08-22 D-8a). The
+    refusal is aggregated rather than raised on the first row, because a book with
+    no governed coverage at all would otherwise report a single arbitrary exposure
+    and hide that the whole register is missing.
+    """
     exposures: list[CreditExposure] = []
+    unresolved_exposures: list[str] = []
+    unresolved_codes: set[str] = set()
+    missing_code_only = True
     for row in rows:
         if row.balance_ghs <= _ZERO:
             continue
         crd_class = _crd_class_for(row)
         pd_pct, lgd_pct = _exposure_pd_lgd(row, crd_class)
+        try:
+            risk_weight_pct = _exposure_risk_weight(row, capital_params)
+        except RiskWeightUnavailable as exc:
+            unresolved_exposures.append(row.source_reference)
+            if exc.details[0].state is OutcomeState.POLICY_UNRESOLVED:
+                missing_code_only = False
+                unresolved_codes.add(exc.name)
+            continue
         exposures.append(
             CreditExposure(
                 exposure_id=row.source_reference,
@@ -804,11 +997,49 @@ def _build_credit_exposures(
                 ead=row.balance_ghs,
                 pd_pct=pd_pct,
                 lgd_pct=lgd_pct,
-                risk_weight_pct=_exposure_risk_weight(row, capital_params),
+                risk_weight_pct=risk_weight_pct,
                 is_foreign_currency=row.is_foreign_currency,
             )
         )
+    if unresolved_exposures:
+        raise _unresolved_risk_weight_error(
+            unresolved_exposures, sorted(unresolved_codes), missing_code_only
+        )
     return exposures
+
+
+def _unresolved_risk_weight_error(
+    exposures: list[str], codes: list[str], missing_code_only: bool
+) -> EnterpriseStressError:
+    """Refuse the run, naming the exposures and the codes that did not resolve."""
+    state = (
+        OutcomeState.MISSING_REQUIRED_INPUT if missing_code_only else OutcomeState.POLICY_UNRESOLVED
+    )
+    reason = (
+        f"{len(exposures)} credit exposures cannot be risk weighted, so the stressed "
+        "risk-weighted assets and the capital ratios built on them are not numbers. "
+        "A risk weight is a regulatory determination about the exposure — it is never "
+        "assumed. Ingest a risk-weight code for each position, and configure every code "
+        "it uses in the regulatory-parameter control plane."
+    )
+    detail = OutcomeDetail(
+        state=state,
+        metric_id="stressed_credit_rwa",
+        reason=reason,
+        items=tuple(f"param:risk_weight:{code}" for code in codes[:_MAX_REPORTED_UNRESOLVED])
+        or tuple(f"exposure:{ref}" for ref in exposures[:_MAX_REPORTED_UNRESOLVED]),
+        context={"exposure_count": len(exposures)},
+    )
+    return EnterpriseStressError(
+        "risk_weight_unresolved",
+        reason,
+        {
+            "exposure_count": len(exposures),
+            "exposures": exposures[:_MAX_REPORTED_UNRESOLVED],
+            "unresolved_codes": codes[:_MAX_REPORTED_UNRESOLVED],
+            "outcome": detail.to_dict(),
+        },
+    )
 
 
 def _build_concentration_inputs(
@@ -1015,42 +1246,104 @@ def _base_value_at_year1(paths: list[MacroPathPoint], variable: str) -> Decimal 
     return fallback[0] if fallback else None
 
 
+@dataclass(frozen=True)
+class _ResolvedPlan:
+    """The effective base-case plan plus the origin of every one of its fields."""
+
+    assumptions: ForecastAssumptions
+    #: field -> {"value", "source", "basis"}; ``source`` is one of
+    #: ``bank_plan`` / ``macro_scenario`` / ``platform_default``.
+    provenance: dict[str, dict[str, str]]
+
+    @property
+    def fully_supplied_by_institution(self) -> bool:
+        return all(
+            entry["source"] == BANK_PLAN_SOURCE for entry in self.provenance.values()
+        )
+
+    @property
+    def platform_default_fields(self) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                name
+                for name, entry in self.provenance.items()
+                if entry["source"] == PLATFORM_DEFAULT_SOURCE
+            )
+        )
+
+
 def _resolve_plan(
     payload_plan: PlanAssumptionsIn | None, paths: list[MacroPathPoint]
-) -> ForecastAssumptions:
-    """The base-case business plan: request overrides on top of macro-derived defaults.
+) -> _ResolvedPlan:
+    """The base-case business plan, with the ORIGIN of every field recorded.
 
-    Default nominal loan/deposit growth = base GDP growth + base inflation
-    (year-1 base macro); the rest fall back to documented business-as-usual
-    constants. The base leg holds these constant across the horizon.
+    Precedence per field: the institution's own value, then a value derived from
+    the approved scenario's base macro path where one exists (nominal growth =
+    base GDP growth + base inflation at year 1), then the documented platform
+    default. The base leg holds these constant across the horizon.
+
+    The returned provenance is what makes P0-13 answerable: a reader of the run
+    can see, field by field, which assumptions the institution owns and which the
+    platform supplied. It is deliberately NOT part of the ``input_hash`` — the
+    hash is value-based and two runs with identical effective assumptions must
+    reproduce identically whether or not the values were typed in or defaulted.
     """
     gdp = _base_value_at_year1(paths, "gdp_growth")
     inflation = _base_value_at_year1(paths, "inflation")
-    if gdp is not None and inflation is not None:
-        nominal_growth = (gdp + inflation) * _HUNDRED
-    else:
-        nominal_growth = _DEFAULT_LOAN_GROWTH_PCT
-    plan = payload_plan or PlanAssumptionsIn()
-    return ForecastAssumptions(
-        loan_growth_pct=_first_not_none(plan.loan_growth_pct, nominal_growth),
-        deposit_growth_pct=_first_not_none(plan.deposit_growth_pct, nominal_growth),
-        nim_pct=_first_not_none(plan.nim_pct, _DEFAULT_NIM_PCT),
-        cost_to_income_pct=_first_not_none(plan.cost_to_income_pct, _DEFAULT_COST_TO_INCOME_PCT),
-        credit_loss_rate_pct=_first_not_none(
-            plan.credit_loss_rate_pct, _DEFAULT_CREDIT_LOSS_RATE_PCT
-        ),
-        fx_depreciation_pct=_first_not_none(plan.fx_depreciation_pct, _ZERO),
-        dividend_payout_pct=_first_not_none(plan.dividend_payout_pct, _DEFAULT_DIVIDEND_PAYOUT_PCT),
-        fee_income_pct_assets=_first_not_none(
-            plan.fee_income_pct_assets, _DEFAULT_FEE_INCOME_PCT_ASSETS
-        ),
-        tax_rate_pct=_first_not_none(plan.tax_rate_pct, _DEFAULT_TAX_RATE_PCT),
-        securities_shift_pp=_first_not_none(plan.securities_shift_pp, _ZERO),
+    macro_growth: Decimal | None = (
+        (gdp + inflation) * _HUNDRED if gdp is not None and inflation is not None else None
     )
+    plan = payload_plan or PlanAssumptionsIn()
+    provenance: dict[str, dict[str, str]] = {}
 
+    def resolve(
+        name: str, supplied: Decimal | None, default: Decimal, *, macro: Decimal | None = None
+    ) -> Decimal:
+        if supplied is not None:
+            value, source, basis = supplied, BANK_PLAN_SOURCE, "Supplied on the run request."
+        elif macro is not None:
+            value, source, basis = (
+                macro,
+                MACRO_SCENARIO_SOURCE,
+                "Base GDP growth + base inflation at year 1 of the approved scenario.",
+            )
+        else:
+            value, source, basis = (
+                default,
+                PLATFORM_DEFAULT_SOURCE,
+                _PLATFORM_DEFAULT_BASIS[name],
+            )
+        provenance[name] = {"value": str(value), "source": source, "basis": basis}
+        return value
 
-def _first_not_none(value: Decimal | None, default: Decimal) -> Decimal:
-    return default if value is None else value
+    assumptions = ForecastAssumptions(
+        loan_growth_pct=resolve(
+            "loan_growth_pct", plan.loan_growth_pct, _DEFAULT_LOAN_GROWTH_PCT, macro=macro_growth
+        ),
+        deposit_growth_pct=resolve(
+            "deposit_growth_pct",
+            plan.deposit_growth_pct,
+            _DEFAULT_LOAN_GROWTH_PCT,
+            macro=macro_growth,
+        ),
+        nim_pct=resolve("nim_pct", plan.nim_pct, _DEFAULT_NIM_PCT),
+        cost_to_income_pct=resolve(
+            "cost_to_income_pct", plan.cost_to_income_pct, _DEFAULT_COST_TO_INCOME_PCT
+        ),
+        credit_loss_rate_pct=resolve(
+            "credit_loss_rate_pct", plan.credit_loss_rate_pct, _DEFAULT_CREDIT_LOSS_RATE_PCT
+        ),
+        fx_depreciation_pct=resolve("fx_depreciation_pct", plan.fx_depreciation_pct, _ZERO),
+        dividend_payout_pct=resolve(
+            "dividend_payout_pct", plan.dividend_payout_pct, _DEFAULT_DIVIDEND_PAYOUT_PCT
+        ),
+        fee_income_pct_assets=resolve(
+            "fee_income_pct_assets", plan.fee_income_pct_assets, _DEFAULT_FEE_INCOME_PCT_ASSETS
+        ),
+        tax_rate_pct=resolve("tax_rate_pct", plan.tax_rate_pct, _DEFAULT_TAX_RATE_PCT),
+        securities_shift_pp=resolve("securities_shift_pp", plan.securities_shift_pp, _ZERO),
+    )
+    return _ResolvedPlan(assumptions=assumptions, provenance=provenance)
 
 
 def _general_provisions(capital_facts: list[CapitalFact]) -> Decimal:
@@ -1069,7 +1362,7 @@ def _general_provisions(capital_facts: list[CapitalFact]) -> Decimal:
 # --- Input hash (value-based) ------------------------------------------------
 
 
-def _fact_snapshot(rows: list[BankFinancialFact]) -> list[dict[str, Any]]:
+def _fact_snapshot(rows: Sequence[FinancialFactRow]) -> list[dict[str, Any]]:
     """A value-based fact snapshot (no ``fact.id``), canonically ordered."""
     snapshot = [
         {
@@ -1103,6 +1396,134 @@ def _plan_snapshot(plan: ForecastAssumptions) -> dict[str, str]:
         "tax_rate_pct": str(plan.tax_rate_pct),
         "securities_shift_pp": str(plan.securities_shift_pp),
     }
+
+
+def _stringified(values: Mapping[str, Decimal]) -> dict[str, str]:
+    return {key: str(_dec(value)) for key, value in sorted(values.items())}
+
+
+def _governed_parameters(
+    capital: CapitalParams,
+    liquidity: LiquidityParams | None,
+    liquidity_facts: Sequence[LiquidityFact],
+    ecl_assumptions: Sequence[EclAssumption],
+) -> dict[str, Any]:
+    """Every governed control-plane number this run CONSUMES, for ``input_hash``.
+
+    Forensic re-audit 2026-08-22 **NEW-A1-1**. The enterprise-stress snapshot
+    used to carry the scenario paths, the plan and the facts and **no governed
+    parameter at all** — no risk weights, no runoff rates, no capital
+    thresholds, no HQLA haircuts or caps. Every one of them is resolved from the
+    regulatory-parameter control plane a few lines earlier and fed straight into
+    the engines, so a supervisor moving any of them moved the filed ICAAP stress
+    result while its ``input_hash`` stood still. That is exactly the defect
+    ``D-7`` named on the liquidity plane, one module wider: binding only the
+    HQLA haircuts here would have been arbitrary, because the block was missing
+    wholesale.
+
+    Built from the RESOLVED ``CapitalParams``/``LiquidityParams`` the run
+    actually passed to the engines rather than by re-querying, so the hash can
+    never record a generation the arithmetic did not read.
+
+    The repo's value-based rule is unchanged: a block joins when the arithmetic
+    CONSUMES it.
+
+    * The Basel liquidity block is present only when the Basel liquidity regime
+      applies. An SDI never resolves those parameters and never runs
+      ``compute_lcr`` (docs/sdi.md §4.6); ``liquidity`` is ``None`` and the
+      inert ``_EMPTY_LIQUIDITY_PARAMS`` sentinel is never hashed as if it were a
+      Basel claim.
+    * The HQLA haircuts cover exactly the levels the stressed ``compute_lcr``
+      will charge — ``consumed_hqla_levels``, the engine's own filter — and the
+      Level-2 caps join only when a Level-2 holding exists, because
+      ``_hqla_stock`` resolves them only then. A Level-1-only book is therefore
+      never hashed against a rate it cannot bind.
+    * ``crm_haircuts_pct``, the SDI ``rwa_pct_of_credit_rwa`` charges and the
+      ECL assumptions join only when non-empty; each is a book-shaped input that
+      most institutions do not configure, and an absent one moves no number.
+    """
+    capital_block: dict[str, Any] = {
+        "risk_weights_pct": _stringified(capital.risk_weights),
+        "thresholds_pct": {
+            "bia_alpha_pct": str(capital.bia_alpha_pct),
+            "car_critical": str(capital.car_critical_pct),
+            "car_early_warning": str(capital.car_early_warning_pct),
+            "car_min": str(capital.car_min_pct),
+            "cet1_min": str(capital.cet1_min_pct),
+            "fx_charge_pct": str(capital.fx_charge_pct),
+            "leverage_min": str(capital.leverage_min_pct),
+            "rwa_multiplier": str(capital.rwa_multiplier_pct),
+            "tier2_gp_cap_pct_credit_rwa": str(capital.tier2_gp_cap_pct_credit_rwa),
+            "tier1_min": str(capital.tier1_min_pct),
+        },
+        # WHICH regime measured the run. Not a rate, but the determination that
+        # decides which of these blocks the arithmetic reads at all, so a reader
+        # of the sealed run never has to infer it from a missing key.
+        "basel_applicable": capital.basel_applicable,
+    }
+    if capital.crm_haircuts:
+        capital_block["crm_haircuts_pct"] = _stringified(capital.crm_haircuts)
+    if capital.rwa_pct_of_credit_rwa:
+        capital_block["sdi_rwa_charges_pct_of_credit_rwa"] = _stringified(
+            capital.rwa_pct_of_credit_rwa
+        )
+
+    parameters: dict[str, Any] = {"capital": capital_block}
+
+    if liquidity is not None:
+        liquidity_block: dict[str, Any] = {
+            "outflow_runoff_rates_pct": _stringified(liquidity.outflow_rates),
+            "inflow_rates_pct": _stringified(liquidity.inflow_rates),
+            "asf_weights_pct": _stringified(liquidity.asf_weights),
+            "rsf_weights_pct": _stringified(liquidity.rsf_weights),
+            "thresholds_pct": {
+                "lcr_amber_floor": str(liquidity.lcr_amber_floor_pct),
+                "lcr_inflow_cap_pct": str(liquidity.inflow_cap_pct),
+                "lcr_min": str(liquidity.lcr_min_pct),
+                "nsfr_amber_floor": str(liquidity.nsfr_amber_floor_pct),
+                "nsfr_min": str(liquidity.nsfr_min_pct),
+            },
+        }
+        consumed = consumed_hqla_levels(liquidity_facts)
+        if consumed:
+            liquidity_block["hqla_haircuts_pct"] = _stringified(
+                {
+                    level: rate
+                    for level, rate in liquidity.hqla_haircut_pct.items()
+                    if level in consumed
+                }
+            )
+        if consumed - {HQLA_LEVEL_1}:
+            liquidity_block["hqla_caps_pct"] = {
+                code: str(value)
+                for code, value in (
+                    (
+                        regulatory_parameters.HQLA_LEVEL2_CAP_CODE,
+                        liquidity.hqla_level2_cap_pct,
+                    ),
+                    (
+                        regulatory_parameters.HQLA_LEVEL2B_CAP_CODE,
+                        liquidity.hqla_level2b_cap_pct,
+                    ),
+                )
+                if value is not None
+            }
+        parameters["liquidity"] = liquidity_block
+
+    if ecl_assumptions:
+        parameters["ecl_assumptions"] = sorted(
+            (
+                {
+                    "segment": row.segment,
+                    "stage": row.stage,
+                    "pd_pct": str(row.pd_pct),
+                    "lgd_pct": str(row.lgd_pct),
+                }
+                for row in ecl_assumptions
+            ),
+            key=lambda entry: json.dumps(entry, sort_keys=True),
+        )
+    return parameters
 
 
 def _hash(payload: dict[str, Any]) -> str:
@@ -1147,6 +1568,74 @@ def _serialize_projection(projection: EnterpriseProjection) -> dict[str, Any]:
 # --- Public entrypoints ------------------------------------------------------
 
 
+def _require_complete_scenario(
+    scenario_code: str,
+    paths: list[MacroPathPoint],
+    payload: EnterpriseStressRunCreate,
+) -> None:
+    """Refuse a scenario that does not carry every macro variable this run reads.
+
+    The service-level companion to the pure ``translate`` guard (enterprise audit
+    P0-9), so a mis-keyed or partially-authored scenario is rejected BEFORE any
+    engine runs and with a message naming the exact variables and years, instead
+    of surfacing as an unhandled fail-closed exception mid-run.
+
+    Two checks, because the engines read the paths two ways:
+
+    * **Whole-path.** ``compose_capital_shocks``, ``_run_liquidity``, ``_run_irr``
+      and ``_run_fx`` translate the FULL path set for their module.
+    * **Per projected year.** The projection and the bottom-up credit stress
+      condition each year on that year's own macro (¶48), so year ``n`` must
+      itself carry every capital driver — a scenario with years 1 and 3 but no
+      year 2 would leave year 2 unstressed inside an "official" run.
+
+    A driver the bank considers irrelevant to the scenario is authored FLAT
+    (stress == base): an explicit zero contribution, visible in the scenario.
+    """
+    # The liquidity register is read even on an SDI run: the projection's year-1
+    # mark-to-market haircut comes from it regardless of the Basel LCR leg.
+    modules = ["capital", "liquidity"]
+    if payload.include_irr:
+        modules.append("irr")
+    if payload.include_fx:
+        modules.append("fx")
+    missing: dict[str, list[str]] = {}
+    for module in modules:
+        absent = missing_variables(paths, module)
+        if absent:
+            missing[module] = list(absent)
+    if missing:
+        raise EnterpriseStressError(
+            "scenario_incomplete_paths",
+            (
+                f"The approved scenario '{scenario_code}' does not carry every macro "
+                "variable this run reads. A missing variable translates to a zero delta "
+                "and would silently leave the module unstressed — author it flat "
+                "(stress equals base) if it is genuinely not part of the scenario."
+            ),
+            {"missing_by_module": missing},
+        )
+
+    capital_drivers = set(required_variables("capital"))
+    years_missing: dict[str, list[str]] = {}
+    for year in range(1, payload.horizon_years + 1):
+        present = {point.variable for point in paths if point.year_index == year}
+        absent_year = sorted(capital_drivers - present)
+        if absent_year:
+            years_missing[str(year)] = absent_year
+    if years_missing:
+        raise EnterpriseStressError(
+            "scenario_year_coverage_incomplete",
+            (
+                f"The approved scenario '{scenario_code}' does not carry every macro "
+                "driver in every projected year. Each year is conditioned on its own "
+                "macro (Stress Testing Guideline paragraphs 48-49), so a year missing a "
+                "driver would be projected unstressed inside an official run."
+            ),
+            {"missing_by_year": years_missing},
+        )
+
+
 def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of the run
     db: Session, ctx: TenantContext, bank_id: str, payload: EnterpriseStressRunCreate
 ) -> EnterpriseStressRead:
@@ -1184,6 +1673,7 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
             ),
             {"scenario_max_year": max_path_year, "horizon_years": payload.horizon_years},
         )
+    _require_complete_scenario(scenario.code, paths, payload)
 
     capital_rows = _load_facts(db, ctx, bank, period, _CAPITAL_GROUPS)
     liquidity_rows = _load_facts(db, ctx, bank, period, _LIQUIDITY_GROUPS)
@@ -1196,6 +1686,7 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
     capital_facts = [_capital_fact(fact) for fact in capital_rows]
     forecast_facts = [_forecast_fact(fact) for fact in forecast_rows]
     capital_params = _capital_params(db, ctx, bank, as_of)
+    car_target_pct = _resolve_car_target_pct(payload, capital_params)
     # The Basel liquidity leg (LCR/NSFR + its params) is a bank-only regime. An SDI
     # run omits it entirely (docs/sdi.md §4.6; QA audit 2026-08-20 P0-1) — do NOT
     # resolve the Basel liquidity thresholds for an SDI, which would fail-loud on the
@@ -1233,7 +1724,8 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         derivative_rows, base_ratios.leverage_exposure, tier1
     )
 
-    plan = _resolve_plan(payload.plan, paths)
+    resolved_plan = _resolve_plan(payload.plan, paths)
+    plan = resolved_plan.assumptions
     # ForecastParams.liquidity is non-optional, but the enterprise projection reads
     # it ONLY when basel_liquidity is True (docs/sdi.md §4.6 gate in projection.py),
     # so an SDI passes the inert empty sentinel — never evaluated, never a Basel claim.
@@ -1300,19 +1792,34 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
     management_result: ManagementActionsResult | None = None
     if plan_model is not None:
         domain_plan = management_action_plans.build_domain_plan(db, plan_model)
-        management_result = apply_management_actions(
-            projection,
-            domain_plan,
-            severity=scenario.severity,
-            capital_params=capital_params,
-            paid_up_min=paid_up_min,
-            car_target_pct=payload.car_target_pct,
-        )
+        try:
+            management_result = apply_management_actions(
+                projection,
+                domain_plan,
+                severity=scenario.severity,
+                capital_params=capital_params,
+                paid_up_min=paid_up_min,
+                car_target_pct=car_target_pct,
+            )
+        except ManagementActionError as exc:
+            # A plan whose modelled relief leaves a post-action ratio without a
+            # denominator refuses the run rather than filing a manufactured 0%
+            # (audit 2026-08-22 D-8b). Previously a 500; now the actionable 409
+            # this module uses for every other unusable input.
+            details: dict[str, Any] = {"plan_id": domain_plan.plan_id}
+            if isinstance(exc, NotComputable):
+                details["outcome"] = exc.to_dict()
+            raise EnterpriseStressError(exc.code, exc.message, details) from exc
 
     appendix = build_appendix_ii(
         projection,
         paths,
-        car_target_pct=payload.car_target_pct,
+        # The Appendix II reporting unit is the institution's OWN currency
+        # (CLAUDE.md: jurisdiction is data). ``base_currency`` deliberately raises
+        # rather than defaulting — an unset ``banks.currency`` is a skipped
+        # decision at the creation site, not a Ghanaian bank.
+        currency=jurisdictions.base_currency(bank),
+        car_target_pct=car_target_pct,
         paid_up_min=paid_up_min,
         source=scenario.source,
         exposure_class_losses=exposure_class_losses,
@@ -1345,11 +1852,20 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         "plan": _plan_snapshot(plan),
         "horizon_years": payload.horizon_years,
         "paid_up_min": str(paid_up_min),
-        "car_target_pct": str(payload.car_target_pct),
+        # The RESOLVED target, not the request field: the request field is now
+        # optional and a run that lets the governed floor decide must still hash
+        # the number the arithmetic actually used (audit 2026-08-22 D-15).
+        "car_target_pct": str(car_target_pct),
         "include_irr": payload.include_irr,
         "include_fx": payload.include_fx,
         "capital_facts": _fact_snapshot(capital_rows),
         "liquidity_facts": _fact_snapshot(liquidity_rows),
+        # Every governed control-plane number the run consumed (NEW-A1-1). Until
+        # 2026-08-22 the reproducibility spine of the filed ICAAP stress carried
+        # none of them — see ``_governed_parameters``.
+        "parameters": _governed_parameters(
+            capital_params, liquidity_params, liquidity_facts, ecl_assumptions
+        ),
         "irr_evaluated": irr_inputs is not None,
         "fx_evaluated": fx_inputs is not None,
         # Phase 4 exposure-level evidence (empty when no canonical book) — the
@@ -1377,6 +1893,16 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         "projection": projection_json,
         "appendix_ii": appendix_json,
         "management_actions": management_json,
+        # P0-13: the origin of every base-case assumption, persisted on the
+        # immutable run so an examiner reading the filed ICAAP can see which
+        # assumptions the institution owns and which the platform supplied.
+        # Metadata about the inputs, not an input — deliberately outside the
+        # value-based ``input_hash`` so reproducibility is unaffected.
+        "plan_provenance": {
+            "fields": resolved_plan.provenance,
+            "fully_supplied_by_institution": resolved_plan.fully_supplied_by_institution,
+            "platform_default_fields": list(resolved_plan.platform_default_fields),
+        },
     }
     run = RegulatoryRun(
         organization_id=ctx.organization_id,
@@ -1391,6 +1917,11 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         input_hash=input_hash,
         inputs=inputs,
         metrics=metrics,
+        # Audit D-18: WHICH governed control-plane rows produced the values in
+        # ``inputs["parameters"]``. Beside the snapshot, never inside it — row
+        # ids and timestamps are identity, not values, and the ``input_hash`` is
+        # value-based by contract.
+        parameter_provenance=regulatory_parameters.consume_parameter_provenance(db),
         created_by=ctx.actor_user_id,
         started_at=datetime.now(UTC),
         completed_at=datetime.now(UTC),
@@ -1641,6 +2172,10 @@ def _read(run: RegulatoryRun, scenario: MacroScenario) -> EnterpriseStressRead:
     coupling = outcome.get("coupling")
     liquidity_assessed = "stressed_lcr_pct" in liquidity
     management = metrics.get("management_actions")
+    # Runs minted before the P0-13 provenance landed carry no block; they are
+    # reported as NOT fully institution-supplied, which is the honest reading —
+    # their assumption origins were never recorded.
+    plan_provenance = metrics.get("plan_provenance") or {}
     summary = EnterpriseStressSummary(
         scenario_code=scenario.code,
         stressed_car_end_pct=_dec(capital["stressed_car_end_pct"]),
@@ -1663,6 +2198,9 @@ def _read(run: RegulatoryRun, scenario: MacroScenario) -> EnterpriseStressRead:
         residual_capital_required_after_actions=(
             None if management is None else _dec(management["residual_capital_required"])
         ),
+        plan_fully_supplied_by_institution=bool(
+            plan_provenance.get("fully_supplied_by_institution", False)
+        ),
     )
     return EnterpriseStressRead(
         run_id=run.id,
@@ -1676,5 +2214,6 @@ def _read(run: RegulatoryRun, scenario: MacroScenario) -> EnterpriseStressRead:
         outcome=outcome,
         projection=projection,
         appendix_ii=appendix,
+        plan_provenance=plan_provenance,
         created_at=run.created_at,
     )

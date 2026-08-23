@@ -48,6 +48,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.domain.capital.engine import (
     GENERAL_PROVISIONS_CATEGORY,
     TIER_AT1,
@@ -74,7 +75,12 @@ from app.domain.forecasting.engine import (
     _to_liquidity_facts,
 )
 from app.domain.liquidity.engine import compute_lcr, compute_nsfr
-from app.domain.stress.translation import MacroPathPoint, ShockMapping, translate
+from app.domain.stress.translation import (
+    MacroPathPoint,
+    ShockMapping,
+    require_macro_variables,
+    translate,
+)
 
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
@@ -282,25 +288,85 @@ def _year_multipliers(
     year's macro implies — so each projected year knows its own macro (¶48–49).
     """
     year_paths = _paths_at_year(paths, year_index)
-    shocks = translate(year_paths, "capital", overrides) if year_paths else {}
+    # No ``if year_paths else {}`` guard (enterprise audit P0-9): a projected year
+    # with no macro points is a scenario that does not cover the horizon it is
+    # being run over, and neutralising it mints an "official" stress whose tail
+    # years are unstressed. ``translate`` fails closed on both the empty and the
+    # incomplete case.
+    shocks = translate(year_paths, "capital", overrides)
     return shocks.get("ecl_pd_multiplier", _ONE), shocks.get("ecl_lgd_multiplier", _ONE)
 
 
+#: The macro drivers the stress leg's plan perturbation reads DIRECTLY, per
+#: projected year. ``translate("capital")`` validates only the ``capital``
+#: elasticity register's own drivers (GDP / unemployment / equity index), so
+#: ``interest_rate`` and ``inflation`` were read through :func:`_delta`, which
+#: answers ``0`` for an absent variable — a scenario whose rate path stopped at
+#: year 1 projected years 2 and 3 with the plan's own NIM and cost-to-income, an
+#: unstressed tail inside an official three-year stress (audit 2026-08-22 D-8).
+STRESS_LEG_MACRO_VARIABLES: tuple[str, ...] = (
+    "gdp_growth",
+    "inflation",
+    "interest_rate",
+)
+
+#: The FX driver the year-1 revaluation reads directly, with the same problem.
+FX_MACRO_VARIABLE = "fx_usd_ghs"
+
+
 def _delta(paths: Sequence[MacroPathPoint], variable: str, year_index: int) -> Decimal:
+    """Stress-vs-base delta for one variable at one year.
+
+    The caller must have established that the year carries the variable (see
+    :func:`_require_year_drivers`); ``_ZERO`` here is only reachable for a
+    variable/year pair the guard already accepted.
+    """
     for point in paths:
         if point.variable == variable and point.year_index == year_index:
             return point.stress_value - point.base_value
     return _ZERO
 
 
+def _require_year_drivers(
+    paths: Sequence[MacroPathPoint], variables: Sequence[str], year_index: int
+) -> None:
+    """Refuse unless every named driver is authored at ``year_index``."""
+    require_macro_variables(
+        [point for point in paths if point.year_index == year_index],
+        variables,
+        metric_id=f"stress_projection_year:{year_index}",
+        context={"year_index": year_index},
+    )
+
+
 def _frac_delta_fx(paths: Sequence[MacroPathPoint], year_index: int) -> Decimal:
-    """Stress-vs-base fractional cedi depreciation at one year (0 if base==stress)."""
+    """Stress-vs-base fractional cedi depreciation at one year (0 if base==stress).
+
+    Refuses when the year carries no FX path, or carries one with a zero base:
+    both used to read as "no depreciation", so a scenario that omitted the FX
+    driver silently ran the stress leg with the plan's own FX assumption only
+    (audit 2026-08-22 D-8).
+    """
+    _require_year_drivers(paths, (FX_MACRO_VARIABLE,), year_index)
     for point in paths:
-        if point.variable == "fx_usd_ghs" and point.year_index == year_index:
+        if point.variable == FX_MACRO_VARIABLE and point.year_index == year_index:
             if point.base_value == _ZERO:
-                return _ZERO
+                raise NotComputable(
+                    outcome(
+                        OutcomeState.DATA_QUALITY_BLOCK,
+                        metric_id=f"stress_projection_year:{year_index}",
+                        reason=(
+                            "The exchange-rate path is authored with a zero base value, "
+                            "so the fractional depreciation the year-1 revaluation "
+                            "applies is undefined. A zero base used to read as no "
+                            "depreciation at all."
+                        ),
+                        items=(f"macro:{FX_MACRO_VARIABLE}@y{year_index}",),
+                        context={"year_index": year_index},
+                    )
+                )
             return (point.stress_value - point.base_value) / point.base_value
-    return _ZERO
+    return _ZERO  # pragma: no cover - _require_year_drivers already refused
 
 
 def _stress_assumptions_for_year(
@@ -314,6 +380,7 @@ def _stress_assumptions_for_year(
     """
     plan = inputs.plan
     paths = inputs.scenario_paths
+    _require_year_drivers(paths, STRESS_LEG_MACRO_VARIABLES, year_index)
     gdp_delta = _delta(paths, "gdp_growth", year_index)
     rate_delta = _delta(paths, "interest_rate", year_index)
     infl_delta = _delta(paths, "inflation", year_index)
@@ -417,19 +484,46 @@ def _stress_fx_year1(inputs: EnterpriseProjectionInputs) -> Decimal:
     the horizon, added to the plan's own FX assumption. Zero under a base
     scenario, so the stress leg's year-1 FX equals the base leg's.
     """
+    # Peak over the DEPRECIATING years only (enterprise audit P0-9). Selecting
+    # the largest-magnitude move and then flooring it at zero meant a scenario
+    # with +30% depreciation in year 1 and a larger appreciation in year 3
+    # applied no FX stress at all.
     peak = _ZERO
     for year in range(1, inputs.horizon_years + 1):
         candidate = _frac_delta_fx(inputs.scenario_paths, year)
-        if abs(candidate) > abs(peak):
-            peak = candidate
-    return inputs.plan.fx_depreciation_pct + max(peak, _ZERO) * _HUNDRED
+        peak = max(peak, candidate)
+    return inputs.plan.fx_depreciation_pct + peak * _HUNDRED
 
 
 def _credit_rwa_factor(inputs: EnterpriseProjectionInputs, year: int) -> Decimal:
-    """The stress leg's credit-RWA uplift for one year (1.0 when unmodelled)."""
+    """The stress leg's credit-RWA uplift for one year (1.0 when unmodelled).
+
+    ``None`` means the bottom-up overlay was not run at all — a documented
+    Phase-2 position, not a substitution. A SUPPLIED map that does not cover a
+    projected year is different: the year silently fell back to 1.0, so the
+    rating-migration and FX-revaluation uplift applied to years 1–2 and not to
+    year 3, mixing two methodologies inside one projection (audit 2026-08-22
+    D-8).
+    """
     if inputs.credit_rwa_uplift is None:
         return _ONE
-    return inputs.credit_rwa_uplift.get(year, _ONE)
+    factor = inputs.credit_rwa_uplift.get(year)
+    if factor is None:
+        raise NotComputable(
+            outcome(
+                OutcomeState.MISSING_REQUIRED_INPUT,
+                metric_id="stressed_credit_rwa",
+                reason=(
+                    "The bottom-up credit-RWA uplift was supplied but does not cover "
+                    f"projected year {year}, so that year's stressed credit RWA would "
+                    "carry no rating-migration or FX-revaluation uplift while the other "
+                    "years do. Compute the uplift for every projected year."
+                ),
+                items=(f"input:credit_rwa_uplift@y{year}",),
+                context={"year": year, "covered": sorted(inputs.credit_rwa_uplift)},
+            )
+        )
+    return factor
 
 
 def _apply_credit_rwa_uplift(rwa: RwaResult, factor: Decimal) -> RwaResult:
@@ -534,7 +628,13 @@ def _project_one_year(  # noqa: PLR0913, PLR0915 - the year step names its full 
         state.components.get(RETAINED_EARNINGS_CATEGORY, _ZERO) + retained
     )
     _apply_funding_plug(state)
-    state.gi_history.append((state.gi_history[-1][0] + 1, total_income))
+    # ``gi_history`` rows are ``(income_year, category, amount)`` — the shape the
+    # shared forecasting ``_State`` carries so the operational-income facts it
+    # emits are indistinguishable from the as-of ones.
+    next_income_year = state.gi_history[-1][0] + 1
+    state.gi_history.append(
+        (next_income_year, f"gross_income_{next_income_year}", total_income)
+    )
 
     pnl = Pnl(
         nii=nii,

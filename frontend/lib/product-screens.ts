@@ -30,7 +30,7 @@ export const productScreens: ProductScreen[] = [
     title: 'Data Engine',
     label: 'Data Engine',
     caption:
-      'Connect core systems, watch ingestion health, and land every accepted load in an auditable canonical model.',
+      'Land data by file upload, push API, or a read-only core extract — watch ingestion health and every accepted load in an auditable canonical model.',
     alt: 'AequorOS Data Engine overview with connection health and recent ingestion batches',
   },
   {

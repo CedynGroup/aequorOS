@@ -10,17 +10,23 @@ inputs — the layer the /banks/{id}/sdi/* endpoints delegate to.
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
+import pytest
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank
+from app.models import Bank, BankReportingPeriod, RegulatoryPackage, RegulatoryParameter
+from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import loan_classification, sdi_capital, sdi_capital_checks, sdi_readiness
-from app.services.regulatory_reporting import calendar
+from app.services.regulatory_reporting import calendar, generation
 from app.services.regulatory_reporting.le_generation import (
     _table1_thresholds,  # pyright: ignore[reportPrivateUsage]
+    generate_sdi_large_exposures,
+    generate_sdi_lmt,
 )
+from app.services.regulatory_reporting.registry import REGISTRY
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 
@@ -41,6 +47,61 @@ def _onboard_sdi(db: Session) -> Bank:
     db.flush()
     seed_canonical_fixture(db, organization_id=ORG_1, bank_id=bank.id, as_of=FIXTURE_AS_OF)
     return bank
+
+
+def _period(db: Session, bank: Bank) -> BankReportingPeriod:
+    period = BankReportingPeriod(
+        organization_id=bank.organization_id,
+        bank_id=bank.id,
+        period_start=date(FIXTURE_AS_OF.year, FIXTURE_AS_OF.month, 1),
+        period_end=FIXTURE_AS_OF,
+        label=FIXTURE_AS_OF.strftime("%Y-%m"),
+        status="closed",
+    )
+    db.add(period)
+    db.flush()
+    return period
+
+
+def _govern_sdi_rwa_scope(db: Session) -> None:
+    """Approve the two s.29 decisions required before a return can be filed."""
+    common = {
+        "scope_type": "institution_class",
+        "scope_key": "sdi",
+        "jurisdiction_code": "GH",
+        "unit": "count",
+        "source_citation": "test governed SDI filing scope",
+        "confirmation_status": "confirmed",
+        "effective_from": date(2025, 1, 1),
+        "status": "approved",
+        "proposed_by": "test-maker",
+        "approved_by": "test-checker",
+    }
+    db.add_all(
+        [
+            RegulatoryParameter(
+                **common,
+                param_code=sdi_capital.COMPOSITION_PARAM,
+                value_numeric=None,
+                value_json={
+                    "credit": sdi_capital.MEASURE_BUCKET_WEIGHTED_EXPOSURE,
+                },
+            ),
+            RegulatoryParameter(
+                **common,
+                param_code=sdi_capital.BUCKET_MAP_PARAM,
+                value_numeric=None,
+                value_json={
+                    "CASH": "cash",
+                    "SECURITY_HOLDING": "sovereign",
+                    "INTERBANK_PLACEMENT": "interbank",
+                    "LOAN": "other_loans",
+                    "OTHER_ASSET": "other_assets",
+                },
+            ),
+        ]
+    )
+    db.flush()
 
 
 def test_sdi_end_to_end_engine_slice(db_session: Session) -> None:
@@ -86,8 +147,92 @@ def test_sdi_end_to_end_engine_slice(db_session: Session) -> None:
     assert loan_band.exposure_ghs == report.result.total_exposure_ghs
     assert summary.pending_parameters  # risk weights are still pending BoG
 
-    # 5. The SDI's return calendar is scoped (bank BSD forms do not apply).
+    # 5. The SDI sees only the evidence-backed SDI packet, never BSD returns.
     obligations = calendar.list_obligations(
         db_session, _CTX, sdi.id, as_of=FIXTURE_AS_OF
     ).obligations
-    assert obligations == []
+    assert {obligation.return_code for obligation in obligations} == {
+        "SDI-LMT-MONTHLY",
+        "SDI-LE-MONTHLY",
+        "SDI-STRESS-ANNUAL",
+        "SDI-IRRBB-QUARTERLY",
+    }
+
+
+def test_sdi_lmt_generator_renders_only_the_published_applicable_tables(
+    db_session: Session,
+) -> None:
+    sdi = _onboard_sdi(db_session)
+    period = _period(db_session, sdi)
+
+    generated = generate_sdi_lmt(db_session, _CTX, sdi, period, REGISTRY["SDI-LMT-MONTHLY"])
+
+    sections = {section["code"] for section in generated.snapshot["sections"]}
+    assert {
+        "prudential_ratio_inputs",
+        "prudential_ratio_percentages",
+        "maturity_ladder",
+    } <= sections
+    assert "lcr_by_currency" not in sections
+    assert generated.snapshot["metadata"]["report_scope"].endswith(
+        "Table 11 excluded as banks-only."
+    )
+    assert generated.source_runs == []
+
+
+def test_sdi_lmt_mints_through_the_sealed_package_lifecycle(
+    db_session: Session,
+) -> None:
+    sdi = _onboard_sdi(db_session)
+    _period(db_session, sdi)
+
+    package = generation.generate_package(
+        db_session,
+        _CTX,
+        sdi.id,
+        RegulatoryPackageCreate(
+            return_code="SDI-LMT-MONTHLY",
+            reporting_date=FIXTURE_AS_OF,
+        ),
+    )
+
+    assert package.return_family == "sdi"
+    assert package.return_code == "SDI-LMT-MONTHLY"
+    assert package.status == "generated"
+    persisted = db_session.get(RegulatoryPackage, package.id)
+    assert persisted is not None
+    assert persisted.content_digest
+
+
+def test_sdi_large_exposures_refuses_an_ungoverned_s29_filing_basis(
+    db_session: Session,
+) -> None:
+    sdi = _onboard_sdi(db_session)
+    period = _period(db_session, sdi)
+
+    with pytest.raises(sdi_capital.SdiCapitalPolicyUnresolved):
+        generate_sdi_large_exposures(db_session, _CTX, sdi, period, REGISTRY["SDI-LE-MONTHLY"])
+
+
+def test_sdi_large_exposures_uses_governed_s29_net_own_funds(
+    db_session: Session,
+) -> None:
+    sdi = _onboard_sdi(db_session)
+    period = _period(db_session, sdi)
+    _govern_sdi_rwa_scope(db_session)
+
+    generated = generate_sdi_large_exposures(
+        db_session, _CTX, sdi, period, REGISTRY["SDI-LE-MONTHLY"]
+    )
+
+    summary = sdi_capital.compute_sdi_capital_summary(db_session, _CTX, sdi, FIXTURE_AS_OF)
+    totals = {row["code"]: row for row in generated.snapshot["totals"]}
+    assert Decimal(str(totals["nof_ghs"]["value"])) == summary.net_own_funds_ghs
+    assert "tier1_ghs" not in totals
+    metadata = generated.snapshot["metadata"]
+    assert (
+        metadata["nof_basis"]
+        == "Net Own Funds from the governed Act 930 s.29 SDI capital calculation."
+    )
+    assert metadata["sdi_rwa_taxonomy_source"] == sdi_capital.BUCKET_MAP_CONTROL_PLANE
+    assert metadata["sdi_rwa_composition_source"] == sdi_capital.COMPOSITION_CONTROL_PLANE

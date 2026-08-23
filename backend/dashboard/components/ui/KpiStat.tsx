@@ -10,6 +10,25 @@ const edgeStyles: Record<KpiStatus, string> = {
 };
 
 /**
+ * A KPI value that is a PHRASE rather than a figure.
+ *
+ * The fail-closed states pass words where a number normally goes — "Not
+ * computable", "Not assessed", "None". At the 28px mono KPI size a fourteen-
+ * character phrase is wider than the tile and, because the value is
+ * `whitespace-nowrap` with nothing clipping it, it spilled straight across the
+ * card border into the neighbouring stat (seen on the SDI capital view's
+ * "Capital headroom"). Truncating it instead would be worse: a half-shown
+ * regulatory state reads as a rendering bug rather than a deliberate refusal.
+ *
+ * So a phrase is typeset one step down and allowed to wrap; anything carrying a
+ * digit — every real figure, including "GHS 1.4B" and "15.83" — keeps the
+ * tabular KPI treatment unchanged.
+ */
+function isPhraseValue(value: string | number): boolean {
+  return typeof value === 'string' && !/\d/.test(value) && /[A-Za-z]{3,}/.test(value);
+}
+
+/**
  * Dense KPI stat for module dashboards: micro label, big tabular-numeral
  * value, optional unit, delta vs the prior period, a sparkline slot, and a
  * status edge-glow on the left border.
@@ -56,7 +75,11 @@ export default function KpiStat({
       <div className="flex items-end justify-between gap-3">
         <div className="flex items-baseline gap-1 min-w-0">
           <span
-            className="font-mono text-kpi text-navy tnum whitespace-nowrap"
+            className={`font-mono ${
+              isPhraseValue(value)
+                ? 'text-h2 whitespace-normal'
+                : 'text-kpi whitespace-nowrap'
+            } text-navy tnum`}
             title={typeof value === 'number' ? String(value) : value}
           >
             {typeof value === 'number' ? String(value) : value}

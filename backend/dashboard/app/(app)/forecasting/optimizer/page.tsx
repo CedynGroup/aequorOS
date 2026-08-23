@@ -254,7 +254,7 @@ export default function StrategicOptimizer() {
               <EmptyState
                 Icon={Search}
                 title="No optimizer runs yet"
-                description={`Run the optimizer to search the decision grid for the highest 5-year average ROE strategy that keeps CAR, LCR, and NSFR above their ${regShort()} minimums. The full result is kept as a saved optimizer projection.`}
+                description={`Run the optimizer to search the decision grid for the highest 5-year average ROE strategy that keeps CAR above its ${regShort()} minimum and LCR and NSFR above their Basel minimums. The full result is kept as a saved optimizer projection.`}
                 action={runButton}
               />
             </>
@@ -270,7 +270,7 @@ export default function StrategicOptimizer() {
                 <KpiStat
                   label="Feasible strategies"
                   value={`${view.feasibleCount}`}
-                  hint={`of ${view.candidatesEvaluated} cleared all ${regShort()} floors`}
+                  hint={`of ${view.candidatesEvaluated} cleared every capital and liquidity floor`}
                 />
                 <KpiStat
                   label="Best 5Y average ROE"
@@ -305,7 +305,7 @@ export default function StrategicOptimizer() {
               {view.top.length === 0 ? (
                 <SectionCard
                   title="No feasible strategy in this search"
-                  subtitle={`Every candidate breached at least one ${regShort()} floor`}
+                  subtitle="Every candidate breached at least one capital or liquidity floor"
                   footer={
                     <RunProvenance
                       createdAt={view.provenance.createdAt}
@@ -501,7 +501,8 @@ function StrategyCard({
       {/* Constraint headroom */}
       <div className="border-t border-border-light pt-3 space-y-3">
         <p className="text-micro font-medium uppercase tracking-wider text-slate">
-          Constraint headroom (5-year minimum vs {regShort()} floor)
+          Constraint headroom (5-year minimum vs floor) — CAR from {regShort()};
+          LCR and NSFR are Basel minimums, neither is set locally
         </p>
         {candidate.constraints.map((c) => (
           <LimitBar
@@ -512,7 +513,7 @@ function StrategyCard({
             direction="above"
             unit="%"
             format={(v) => v.toFixed(1)}
-            limitLabel={`${regShort()} floor`}
+            limitLabel={c.constraint.toLowerCase() === 'car' ? `${regShort()} floor` : 'Basel floor'}
           />
         ))}
       </div>

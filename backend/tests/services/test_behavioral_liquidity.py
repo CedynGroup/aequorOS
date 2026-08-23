@@ -23,7 +23,9 @@ CTX = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=None)
 
 
 def test_behavioral_liquidity_metrics_require_evidence() -> None:
-    points = [
+    # Annotated to the parameter's element type: the rate leg is optional there,
+    # and ``list`` is invariant, so an inferred ``float`` leg would not be accepted.
+    points: list[tuple[date, float, int, float | None]] = [
         (date(2025, month, 28), 1_000.0 - month * 10, 100 - month, 8.0 + month * 0.1)
         for month in range(1, 13)
     ]

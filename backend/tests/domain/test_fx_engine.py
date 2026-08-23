@@ -100,11 +100,14 @@ def test_var_golden_five_day_hand_check() -> None:
     assert var.standalone_total == Decimal("1040000")
     # Diversification benefit = (900000 + 140000) - 970000 = 70000.
     assert var.diversification_benefit == Decimal("70000")
-    assert [item.line_code for item in var.line_items][:2] == [
-        "portfolio_var",
-        "diversification_benefit",
-    ]
+    assert [item.line_code for item in var.line_items][0] == "portfolio_var"
     assert all(item.section == "fx_var" for item in var.line_items)
+    # The benefit is computed and returned, but it is NOT a filed line: it is the
+    # residual of two value-at-risk figures, and the Capital Requirements
+    # Directive establishes no value-at-risk measure (paragraph 310 mandates the
+    # Standardised Method). Line items are sealed into a regulatory run, so a
+    # figure with no regulatory basis must not become one.
+    assert "diversification_benefit" not in {item.line_code for item in var.line_items}
 
 
 def test_stressed_var_uses_only_the_crisis_window() -> None:

@@ -22,6 +22,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.models import ParamLcrRunoffRate
+from app.services import regulatory_liquidity
 from tests.real_data import (
     REAL_BANK_ID,
     REAL_ORG_ID,
@@ -96,7 +97,10 @@ def test_baseline_run_persists_snapshot_metrics_and_outputs(  # noqa: PLR0915
     assert run["status"] == "succeeded"
     assert run["module"] == "liquidity"
     assert run["scenario_code"] == "baseline"
-    assert run["engine_version"] == "regulatory-liquidity-v1.0.0"
+    # Resolved, not restated: the API must return the engine generation the
+    # engine currently declares. A hard-coded literal here would have gone on
+    # passing through the P0-8 methodology change (re-audit D-5).
+    assert run["engine_version"] == regulatory_liquidity.ENGINE_VERSION
     assert run["input_schema_version"] == "bank-facts-v3"
     assert run["output_schema_version"] == "liquidity-metrics-v1"
     assert run["started_at"] is not None

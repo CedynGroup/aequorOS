@@ -61,6 +61,10 @@ export interface AuthLoginRequest {
   loginRequest: LoginRequest;
 }
 
+export interface AuthLogoutRequest {
+  tokenRefreshRequest: TokenRefreshRequest;
+}
+
 export interface AuthPutSsoConnectionRequest {
   ssoConnectionUpdateRequest: SsoConnectionUpdateRequest;
 }
@@ -295,6 +299,54 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
+   * Sign out: revoke the refresh token\'s whole session lineage.  Unauthenticated by design — the refresh token IS the credential, and signing out has to work after the access token has already expired. Always 204, even for an unknown or expired token, so it never reports whether one was valid.
+   * Logout
+   */
+  async authLogoutRaw(
+    requestParameters: AuthLogoutRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["tokenRefreshRequest"] == null) {
+      throw new runtime.RequiredError(
+        "tokenRefreshRequest",
+        'Required parameter "tokenRefreshRequest" was null or undefined when calling authLogout().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    const response = await this.request(
+      {
+        path: `/api/v1/auth/logout`,
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: TokenRefreshRequestToJSON(
+          requestParameters["tokenRefreshRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Sign out: revoke the refresh token\'s whole session lineage.  Unauthenticated by design — the refresh token IS the credential, and signing out has to work after the access token has already expired. Always 204, even for an unknown or expired token, so it never reports whether one was valid.
+   * Logout
+   */
+  async authLogout(
+    requestParameters: AuthLogoutRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.authLogoutRaw(requestParameters, initOverrides);
+  }
+
+  /**
    * Me
    */
   async authMeRaw(
@@ -400,6 +452,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
+   * Rotate a refresh token: the presented one is retired and a new pair issued.  The old token stops working immediately. Replaying it after the concurrency grace window is treated as theft and revokes the whole session lineage.
    * Refresh
    */
   async authRefreshRaw(
@@ -438,6 +491,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
+   * Rotate a refresh token: the presented one is retired and a new pair issued.  The old token stops working immediately. Replaying it after the concurrency grace window is treated as theft and revokes the whole session lineage.
    * Refresh
    */
   async authRefresh(

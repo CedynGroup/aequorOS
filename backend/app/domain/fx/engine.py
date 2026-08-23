@@ -301,6 +301,14 @@ def compute_var(
 
     Returns the diversified portfolio VaR, each currency's standalone VaR, and
     the diversification benefit (standalone sum minus portfolio VaR).
+
+    The diversification benefit is returned on :class:`VarResult` but is
+    deliberately NOT emitted as an ``fx_var`` line item. Line items are sealed
+    into a regulatory run and reach filed returns; this figure is the residual of
+    two value-at-risk numbers, and the Capital Requirements Directive establishes
+    no value-at-risk measure to take a residual of (it mandates the Standardised
+    Method at paragraph 310 and contains no value-at-risk provision). It stays
+    available to the FX read models as a management measure.
     """
     if not positions:
         raise FxComputationError("At least one FX position is required to compute VaR.")
@@ -336,14 +344,6 @@ def compute_var(
             exposure_amount=None,
             rate_pct=confidence_pct,
             weighted_amount=portfolio_var,
-        ),
-        FxLineItem(
-            section="fx_var",
-            line_code="diversification_benefit",
-            description="Diversification Benefit (Standalone Sum - Portfolio VaR)",
-            exposure_amount=standalone_total,
-            rate_pct=None,
-            weighted_amount=diversification,
         ),
     ]
     line_items.extend(

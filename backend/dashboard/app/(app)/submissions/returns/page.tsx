@@ -123,15 +123,15 @@ export default function ReturnsWorkspacePage() {
 const EXPORT_KINDS: ArtifactKind[] = ['xlsx', 'csv', 'pdf'];
 
 // Friendly artifact-kind labels. `xlsx_working` is the ALM/Finance working copy
-// carrying the template's LIVE formulas — a review aid, never a filing artifact —
-// and is produced ONLY for the official BoG BSD forms (generator 'bog_form').
+// carrying formulas — a review aid, never a filing artifact. BSD forms preserve
+// BoG's workbook formulas; SDI packets carry an explicit AequorOS working
+// calculation sheet derived from the sealed snapshot.
 const KIND_LABELS: Record<string, string> = {
   xlsx: 'XLSX',
   csv: 'CSV',
   pdf: 'PDF',
   xlsx_working: 'XLSX with formulas',
 };
-const FORMULA_GENERATOR = 'bog_form';
 const CHANNEL_OPTIONS: ChannelCode[] = [
   'orass_api',
   'orass_sandbox',
@@ -203,8 +203,11 @@ function ReturnsWorkspace() {
 
   const templatesQuery = useReturnTemplates();
   const templates = useMemo(
-    () => templatesQuery.data?.templates ?? [],
-    [templatesQuery.data]
+    () =>
+      (templatesQuery.data?.templates ?? []).filter((template) =>
+        isSdi ? template.family === 'sdi' : template.family !== 'sdi'
+      ),
+    [isSdi, templatesQuery.data]
   );
 
   const periodDates = useMemo(
@@ -556,9 +559,10 @@ function PackageWorkspace({
     pkg?.submissionRevision ?? summary.submissionRevision;
   const regulatorComments = pkg?.regulatorComments ?? summary.regulatorComments;
 
-  // Offer the live-formulas working copy only for the official BoG BSD forms
-  // that actually carry template formulas; other returns have no such artifact.
-  const supportsWorkingCopy = template?.generator === FORMULA_GENERATOR;
+  // The API declares working-copy support so the UI never guesses from a return
+  // family. BSD forms preserve official workbook formulas; SDI packets expose a
+  // reviewed calculation sheet derived from the sealed snapshot.
+  const supportsWorkingCopy = template?.supportsWorkingCopy ?? false;
   const exportKinds: ArtifactKind[] = supportsWorkingCopy
     ? [...EXPORT_KINDS, 'xlsx_working']
     : EXPORT_KINDS;

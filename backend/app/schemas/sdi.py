@@ -106,6 +106,22 @@ class RiskWeightBandRead(ClosedModel):
     confirmation_status: str
 
 
+class SdiRwaRiskClassRead(ClosedModel):
+    """One risk class of the declared RWA composition — in scope or not.
+
+    Out-of-scope classes are returned deliberately: a capital ratio computed on
+    credit risk alone has to say so on the surface that presents it.
+    """
+
+    risk_class: str
+    in_scope: bool
+    #: The declared measurement, null when the class is out of scope.
+    measurement: str | None
+    rwa_ghs: Decimal
+    #: What this class contributes and why — reader-facing copy.
+    note: str
+
+
 class SdiCapitalSummaryRead(ClosedModel):
     """The s.29 capital-adequacy summary: CAR = Net Own Funds ÷ RWA vs the floor."""
 
@@ -124,6 +140,13 @@ class SdiCapitalSummaryRead(ClosedModel):
     bands: list[RiskWeightBandRead]
     #: Risk-weight param codes whose value is still pending confirmation.
     pending_parameters: list[str]
+    #: 'control_plane' when a governed composition declared which risk classes
+    #: the ratio covers, 'code_default' while none exists (ratio provisional).
+    composition_source: str
+    #: Every known risk class, in scope or not, with what it contributed.
+    risk_classes: list[SdiRwaRiskClassRead]
+    #: One sentence stating what this ratio charges for and what it omits.
+    rwa_scope_note: str
 
 
 class SdiCapitalHistoryPointRead(ClosedModel):

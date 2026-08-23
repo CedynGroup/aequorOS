@@ -31,9 +31,9 @@ from app.services import (
     regulatory_liquidity,
 )
 from app.services.fact_derivation import derive_facts
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 _MODULE_HASHES = {
     "liquidity": regulatory_liquidity.current_input_hash,

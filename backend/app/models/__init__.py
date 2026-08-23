@@ -29,11 +29,13 @@ from app.models.canonical import (
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
 )
+from app.models.canonical_withdrawal import CanonicalWithdrawal
 from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
 from app.models.capital_plan import CapitalPlan, IlaapSnapshot
 from app.models.database_connection import DatabaseDirectConnection
 from app.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
 from app.models.entitlements import MarketDataEntitlement
+from app.models.facts import FinancialFactRow
 from app.models.financial import (
     FinancialAccount,
     FinancialBalance,
@@ -72,7 +74,13 @@ from app.models.liquidity_cfp import (
     ContingencyFundingPlan,
     LiquidityEwiIndicator,
 )
-from app.models.live import CurrentFinancialFact, LiveFinding, LiveMetric, LiveMetricSnapshot
+from app.models.live import (
+    CurrentFinancialFact,
+    LiveFinding,
+    LiveMetric,
+    LiveMetricSnapshot,
+    WorkerHeartbeat,
+)
 from app.models.market_data import (
     MarketDataConnection,
     MarketDataOverlay,
@@ -95,6 +103,8 @@ from app.models.operator import (
     TenantStorage,
 )
 from app.models.organization import Organization
+from app.models.reconciliation import ReconciliationException
+from app.models.refresh_token import RefreshToken
 from app.models.regulatory import (
     Bank,
     BankFinancialFact,
@@ -149,6 +159,7 @@ from app.models.stress import (
     ManagementActionItem,
     ManagementActionPlan,
 )
+from app.models.system_of_record import SystemOfRecordDeclaration
 from app.models.temenos import TemenosConnection
 from app.models.user import User
 
@@ -158,6 +169,7 @@ __all__ = [
     "AuditEvent",
     "Bank",
     "BankFinancialFact",
+    "FinancialFactRow",
     "BankLicense",
     "BankNameHistory",
     "BankProduct",
@@ -168,6 +180,7 @@ __all__ = [
     "CanonicalGlAccount",
     "CanonicalMarketIndex",
     "CanonicalPosition",
+    "CanonicalWithdrawal",
     "CanonicalPositionSnapshot",
     "CanonicalProduct",
     "CanonicalReferenceRow",
@@ -206,6 +219,7 @@ __all__ = [
     "LiveFinding",
     "LiveMetric",
     "LiveMetricSnapshot",
+    "WorkerHeartbeat",
     "MappingConfigRecord",
     "DatabaseDirectConnection",
     "MarketDataConnection",
@@ -252,6 +266,9 @@ __all__ = [
     "ParamRiskWeight",
     "ParamStressShock",
     "RegulatoryChannelConfig",
+    "ReconciliationException",
+    "SystemOfRecordDeclaration",
+    "RefreshToken",
     "RegulatoryLineItem",
     "RegulatoryMetricResult",
     "RegulatoryPackage",

@@ -50,7 +50,7 @@ from app.schemas.regulatory_reporting import (
     SubmissionEventRead,
     SubmissionPollRead,
 )
-from app.services import institution_profile, notifications
+from app.services import filing_reconciliation, institution_profile, notifications
 from app.services.audit import record_event
 from app.services.regulatory_reporting import artifact_versions
 from app.services.regulatory_reporting.channel_config import (
@@ -268,6 +268,12 @@ def ensure_decidable(package: RegulatoryPackage, actor_user_id: UUID) -> None:
 
     Extracted so the signing ceremony's approve-and-sign is subject to the SAME
     maker-checker rule as the bare decision, rather than a second reading of it.
+
+    There are exactly two routes to ``approved`` and both pass through here: the
+    bare decision below, and certification, which calls this per checker
+    signature from ``attestation.workflow.ensure_checked_release`` at the moment
+    it would release the package. Keep it that way — a rule with two
+    implementations is a rule with two behaviours.
     """
     if package.status != "pending_approval":
         raise HTTPException(
@@ -368,6 +374,13 @@ def decide_approval(
     ensure_decidable(package, actor_user_id)
     if payload.action == "approved":
         _ensure_approval_is_not_the_signature(db, ctx, package)
+        # Data-integrity gate (audit 2026-08-22 D-2). Mint-time already asked
+        # the balance-sheet control; a monthly return then waits days for its
+        # approver, and the book can break in that window. Asked BEFORE any row
+        # is written so a refusal leaves the package exactly as it was.
+        filing_reconciliation.assert_package_reconciled(
+            db, ctx, package, purpose="package_approval"
+        )
     _add_approval(
         db,
         ctx,
@@ -470,6 +483,10 @@ def submit_package(  # noqa: PLR0913
     require_actor(ctx)
     get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
+    # Transmission is the last moment the platform can refuse (audit D-2).
+    filing_reconciliation.assert_package_reconciled(
+        db, ctx, package, purpose="package_submission"
+    )
     transition(db, ctx, package, "submitted", details={"channel": channel})
     add_submission_event(
         db,
@@ -826,10 +843,16 @@ def _ensure_attested(db: Session, ctx: TenantContext, package: RegulatoryPackage
     record — without every signature its policy requires.
 
     Lives in the service rather than the route so a future caller cannot bypass
-    it (docs/attestation_esignature.md §4.1 T5). When no signing policy is
-    configured the gate is a no-op, which is deliberate: the Bank of Ghana
-    requirements are unconfirmed and a guessed one must not block a statutory
-    filing.
+    it (docs/attestation_esignature.md §4.1 T5).
+
+    An institution that has configured NO signing policy is NOT exempt: since
+    2026-07-25 ``policy.default_policy`` requires a preparer and an approver, so
+    the unconfigured case is the strictest one, not a hole. (This docstring
+    previously described the gate as a no-op without a policy, which had been
+    untrue since that change.) The gate is suspended only by an explicit,
+    audited relaxation row or by ``ATTESTATION_ESIGN_REQUIRED=0`` — and neither
+    suspends maker-checker, which the transition table and ``ensure_decidable``
+    enforce on the bare approval path that a suspended ceremony falls back to.
     """
     from app.services.attestation.workflow import (  # noqa: PLC0415 - breaks an import cycle
         ensure_submittable,
@@ -898,6 +921,12 @@ def submit_package_via_channel(
     is_reupload, prior_email_ref = _ensure_channel_submittable(db, package, channel_code)
 
     _ensure_attested(db, ctx, package)
+    # Sits beside the attestation gate for the same reason it lives in the
+    # service rather than the route: no channel — including the manual record —
+    # transmits a return whose book does not reconcile (audit 2026-08-22 D-2).
+    filing_reconciliation.assert_package_reconciled(
+        db, ctx, package, purpose="package_submission"
+    )
 
     if channel_code == "manual":
         transition(db, ctx, package, "submitted", details={"channel": channel_code})

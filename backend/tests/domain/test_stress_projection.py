@@ -96,11 +96,25 @@ def test_perfect_foresight_uses_each_years_own_macro() -> None:
     def gdp(year: int, stress: str) -> MacroPathPoint:
         return MacroPathPoint("gdp_growth", year, Decimal("0.05"), Decimal(stress))
 
+    # The capital elasticity register also reads unemployment and gse_index, and
+    # ``translate`` now refuses a scenario that omits a variable it reads (P0-9).
+    # Both are authored FLAT, contributing exactly zero, so every PD multiplier
+    # asserted below is the same number this test has always asserted.
+    def flat(variable: str, year: int, level: str) -> MacroPathPoint:
+        return MacroPathPoint(variable, year, Decimal(level), Decimal(level))
+
     paths = (
         gdp(0, "0.05"),
         gdp(1, "0.00"),  # delta −0.05 ⇒ pd 1.15
         gdp(2, "0.01"),  # delta −0.04 ⇒ pd 1.12
         gdp(3, "0.03"),  # delta −0.02 ⇒ pd 1.06
+        *(flat("unemployment", year, "0.06") for year in range(4)),
+        *(flat("gse_index", year, "5000") for year in range(4)),
+        # The projection also drives the liquidity register (the year-1
+        # mark-to-market haircut), so its variables are authored flat too.
+        *(flat("interest_rate", year, "0.20") for year in range(4)),
+        *(flat("inflation", year, "0.15") for year in range(4)),
+        *(flat("fx_usd_ghs", year, "12.5") for year in range(4)),
     )
     projection = project_enterprise(_inputs(paths))
     assert projection.stress[0].pd_multiplier == Decimal("1.15")

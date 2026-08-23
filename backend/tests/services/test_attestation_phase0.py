@@ -24,9 +24,11 @@ import io
 import re
 import zipfile
 import zlib
+from copy import deepcopy
 from datetime import UTC, date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -86,6 +88,27 @@ def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
 
 def _seed_with_baseline_run(db: Session) -> None:
     materialize_canonical_test_book(db)
+    period_id = db.scalar(
+        select(BankReportingPeriod.id).where(
+            BankReportingPeriod.organization_id == DEMO_ORG_ID,
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+            BankReportingPeriod.period_end == REPORTING_DATE,
+        )
+    )
+    assert period_id is not None
+    run = regulatory_liquidity.create_liquidity_run(
+        db,
+        MAKER,
+        SAMPLE_BANK_ID,
+        RegulatoryRunCreate(
+            module="liquidity", reporting_period_id=period_id, scenario_code="baseline"
+        ),
+    )
+    assert run.status == "succeeded"
+
+
+def _rerun_liquidity(db: Session) -> None:
+    """Re-execute the baseline liquidity engine over the ALREADY-seeded book."""
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,
@@ -184,6 +207,92 @@ def test_content_digest_is_sealed_and_survives_regeneration(db_session: Session)
     assert second.content_digest == first.content_digest
 
 
+def test_content_digest_survives_a_source_run_rerun(db_session: Session) -> None:
+    """The OTHER volatility axis: re-executing the engines over unchanged data.
+
+    Audit 2026-08-22 D-16. ``_stamp_provenance`` writes ``snapshot["provenance"]``
+    before the package is sealed, and every ``source_runs`` entry carries the
+    executing run's ``run_id``, ``computed_at`` and ``actor_id``. A rerun over an
+    unchanged book mints a new run row, so those three move while the
+    value-based ``input_hash`` and every reported figure stand still. Before the
+    fix ``strip_volatile_fields`` reached only ``snapshot["metadata"]``, so the
+    content fingerprint moved with the execution — destroying the one property
+    it exists for, on the value signers sign.
+    """
+    _seed_with_baseline_run(db_session)
+    first = _generate(db_session)
+    first_run_ids = [entry["run_id"] for entry in first.snapshot["provenance"]["source_runs"]]
+    first_hashes = [entry["input_hash"] for entry in first.snapshot["provenance"]["source_runs"]]
+    first_digest = first.content_digest
+    assert first_run_ids, "LCR-NSFR binds engine runs — that is the axis under test"
+
+    # A genuinely new execution of the same engine over the same canonical book:
+    # the run row is re-minted, the book is not re-seeded.
+    _rerun_liquidity(db_session)
+    second = _generate(db_session)
+    second_prov = second.snapshot["provenance"]["source_runs"]
+
+    assert [entry["run_id"] for entry in second_prov] != first_run_ids
+    assert [entry["input_hash"] for entry in second_prov] == first_hashes
+    assert second.snapshot_sha256 != first.snapshot_sha256  # the version seal moves
+    assert second.content_digest == first_digest  # the content fingerprint does not
+
+
+def test_content_digest_excludes_run_identity_and_nothing_else(db_session: Session) -> None:
+    """Both directions of the exclusion, on a REAL package snapshot.
+
+    The stored snapshot keeps the full provenance block — run identity, timing
+    and actor are the evidence a supervisor needs. Only the digest INPUT drops
+    them, and it drops nothing else: ``input_hash`` is value-based and is
+    therefore content, so tampering with it must still move the digest.
+    """
+    _seed_with_baseline_run(db_session)
+    package = _generate(db_session)
+    snapshot = deepcopy(package.snapshot)
+    baseline = digests.content_digest(snapshot)
+    assert baseline == package.content_digest
+
+    entries = snapshot["provenance"]["source_runs"]
+    assert entries
+    for entry in entries:
+        # The stored evidence is present — it is excluded, not deleted.
+        assert {"run_id", "computed_at", "actor_id"} <= set(entry)
+        entry["run_id"] = str(uuid4())
+        entry["computed_at"] = "2099-01-01T00:00:00+00:00"
+        entry["actor_id"] = str(uuid4())
+    assert digests.content_digest(snapshot) == baseline
+
+    entries[0]["input_hash"] = "0" * 64
+    assert digests.content_digest(snapshot) != baseline
+
+
+def test_content_digest_moves_when_a_reported_figure_moves(db_session: Session) -> None:
+    """The exclusion did not blunt the fingerprint: figures still move it."""
+    _seed_with_baseline_run(db_session)
+    package = _generate(db_session)
+    baseline = digests.content_digest(package.snapshot)
+
+    moved = deepcopy(package.snapshot)
+    row = next(
+        row
+        for section in moved["sections"]
+        for row in section.get("rows", [])
+        if _is_numeric(row.get("value"))
+    )
+    row["value"] = str(Decimal(str(row["value"])) + Decimal("1"))
+    assert digests.content_digest(moved) != baseline
+
+
+def _is_numeric(value: object) -> bool:
+    if value is None:
+        return False
+    try:
+        Decimal(str(value))
+    except InvalidOperation:
+        return False
+    return True
+
+
 def test_every_registered_return_family_seals_a_content_digest(db_session: Session) -> None:
     _seed_full_register(db_session)
     period_id = db_session.scalar(
@@ -239,8 +348,11 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
     Tables 1–6 formats; docs/stress.md §3.6, also routed through generate_package).
     """
     generators = generation._GENERATORS  # pyright: ignore[reportPrivateUsage]
-    assert len(REGISTRY) == 39  # noqa: PLR2004
+    # 39 bank returns + the 4 SDI reports added 2026-08-22 (family "sdi":
+    # SDI-LMT-MONTHLY, SDI-IRRBB-QUARTERLY, SDI-LE-MONTHLY, SDI-STRESS-ANNUAL).
+    assert len(REGISTRY) == 43  # noqa: PLR2004
     assert sum(1 for d in REGISTRY.values() if d.family == "bsd") == 23  # noqa: PLR2004
+    assert sum(1 for d in REGISTRY.values() if d.family == "sdi") == 4  # noqa: PLR2004
     for definition in REGISTRY.values():
         assert definition.generator in generators, definition.code
 

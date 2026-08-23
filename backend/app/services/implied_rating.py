@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -37,6 +38,7 @@ from app.models import (
     CanonicalMarketIndex,
     CurrentFinancialFact,
     DeskMethodology,
+    FinancialFactRow,
     ImpliedRatingRun,
     InstitutionProfile,
     Jurisdiction,
@@ -379,7 +381,7 @@ DEFAULT_PARAMETERS_V2: dict[str, Any] = {
 
 @dataclass(frozen=True)
 class _RatingSources:
-    facts: list[BankFinancialFact]
+    facts: Sequence[FinancialFactRow]
     capital: dict[str, Any]
     liquidity: dict[str, Any]
     irr: dict[str, Any]
@@ -474,7 +476,7 @@ def _ratio(value: Decimal, denominator: Decimal, label: str) -> Decimal:
     return value / denominator * _HUNDRED
 
 
-def _fact_values(facts: list[BankFinancialFact]) -> dict[tuple[str, str], Decimal]:
+def _fact_values(facts: Sequence[FinancialFactRow]) -> dict[tuple[str, str], Decimal]:
     return {(fact.fact_group, fact.category): Decimal(str(fact.amount)) for fact in facts}
 
 
@@ -562,6 +564,7 @@ def _current_sovereign(
             CanonicalCounterpartyRating.issuer == issuer,
             CanonicalCounterpartyRating.as_of_date <= as_of,
             CanonicalCounterpartyRating.superseded_by.is_(None),
+            CanonicalCounterpartyRating.withdrawn_at.is_(None),
             CanonicalCounterpartyRating.validation_status.in_(("accepted", "warning")),
         )
         .order_by(
@@ -599,6 +602,7 @@ def _operating_environment(
                 CanonicalMarketIndex.scenario == "base",
                 CanonicalMarketIndex.as_of_date <= as_of,
                 CanonicalMarketIndex.superseded_by.is_(None),
+                CanonicalMarketIndex.withdrawn_at.is_(None),
                 CanonicalMarketIndex.validation_status.in_(("accepted", "warning")),
             )
             .order_by(
@@ -869,7 +873,7 @@ def _result_payload(result: Any) -> dict[str, Any]:
     }
 
 
-def _period_governed_ratios(facts: list[BankFinancialFact]) -> dict[str, Decimal] | None:
+def _period_governed_ratios(facts: Sequence[FinancialFactRow]) -> dict[str, Decimal] | None:
     """The five §2.2 problem-loan/profitability ratios for one period's facts.
 
     Returns ``None`` when the period lacks the balance-sheet or income-statement

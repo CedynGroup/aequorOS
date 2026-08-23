@@ -107,7 +107,7 @@ export interface TemenosConnectionCreate {
    * @type {string}
    * @memberof TemenosConnectionCreate
    */
-  defaultCurrency?: string;
+  defaultCurrency: string;
   /**
    *
    * @type {string}
@@ -141,6 +141,8 @@ export function instanceOfTemenosConnectionCreate(
   value: object,
 ): value is TemenosConnectionCreate {
   if (!("connectionMode" in value) || value["connectionMode"] === undefined)
+    return false;
+  if (!("defaultCurrency" in value) || value["defaultCurrency"] === undefined)
     return false;
   if (!("displayName" in value) || value["displayName"] === undefined)
     return false;
@@ -181,8 +183,7 @@ export function TemenosConnectionCreateFromJSONTyped(
       json["credentials"] == null
         ? undefined
         : ConnectionCredentialsFromJSON(json["credentials"]),
-    defaultCurrency:
-      json["default_currency"] == null ? undefined : json["default_currency"],
+    defaultCurrency: json["default_currency"],
     displayName: json["display_name"],
     domains: json["domains"] == null ? undefined : json["domains"],
     endpoint: json["endpoint"],

@@ -71,6 +71,9 @@ export const TERMINAL_CODES = new Set([
   'preparer_certification_missing',
   'register_state_missing',
   'maker_checker',
+  // Retrying is exactly what the lock exists to stop: keep the password box
+  // disabled until it expires rather than letting the signer burn attempts.
+  'step_up_locked',
 ]);
 
 /**

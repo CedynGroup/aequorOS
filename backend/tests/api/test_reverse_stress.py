@@ -77,3 +77,22 @@ def test_reverse_stress_persists_frontier_with_provenance(db_client: TestClient)
         headers=headers(ORG_2),
     )
     assert foreign.status_code == 404
+
+
+def test_regulatory_runs_registry_includes_reverse_stress(db_client: TestClient) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    created = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={"reporting_period_id": period_id},
+    )
+    assert created.status_code == 201, created.text
+
+    registry = db_client.get(
+        f"/api/v1/banks/{bank_id}/regulatory-runs",
+        headers=headers(),
+    )
+    assert registry.status_code == 200, registry.text
+    reverse_run = next(run for run in registry.json()["runs"] if run["module"] == "reverse_stress")
+    assert reverse_run["scenario_code"] == "frontier"

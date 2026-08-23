@@ -74,11 +74,16 @@ export default function RatioTrendChart({
   height = 260,
 }: {
   data: TrendPoint[];
-  /** Regulatory minimum (dashed red line). */
-  threshold: number;
+  /**
+   * Regulatory minimum (dashed red line). `null` when the floor did not
+   * resolve — no line is drawn and the axis is driven by the data alone. A
+   * stand-in number here would print a labelled regulatory floor across a
+   * chart nobody set that floor for.
+   */
+  threshold: number | null;
   thresholdLabel?: string;
   /** Optional lower amber/red boundary (dashed amber line). */
-  redFloor?: number;
+  redFloor?: number | null;
   redFloorLabel?: string;
   primaryLabel?: string;
   secondaryLabel?: string;
@@ -89,9 +94,13 @@ export default function RatioTrendChart({
   const values = data.flatMap((d) =>
     d.secondary === undefined ? [d.primary] : [d.primary, d.secondary]
   );
-  const floors = [threshold, ...(redFloor !== undefined ? [redFloor] : [])];
-  const min = yMin ?? Math.floor(Math.min(...values, ...floors) - 5);
-  const max = yMax ?? Math.ceil(Math.max(...values, ...floors) + 5);
+  const floors = [
+    ...(threshold === null ? [] : [threshold]),
+    ...(redFloor === null || redFloor === undefined ? [] : [redFloor]),
+  ];
+  const scale = [...values, ...floors];
+  const min = yMin ?? (scale.length > 0 ? Math.floor(Math.min(...scale) - 5) : 0);
+  const max = yMax ?? (scale.length > 0 ? Math.ceil(Math.max(...scale) + 5) : 100);
   const primaryColor = CHART_ACCENT;
   const secondaryColor = seriesColor(1);
 
@@ -113,18 +122,20 @@ export default function RatioTrendChart({
           formatter={(v: number, name) => [`${v.toFixed(2)}%`, name]}
         />
         {secondaryLabel && <Legend {...chartLegendProps} verticalAlign="top" align="right" height={24} iconType="line" />}
-        <ReferenceLine
-          y={threshold}
-          stroke={CHART_CRIT}
-          strokeDasharray="4 4"
-          label={{
-            value: `${thresholdLabel} ${threshold}%`,
-            position: 'insideBottomRight',
-            fill: CHART_CRIT,
-            fontSize: 11,
-          }}
-        />
-        {redFloor !== undefined && (
+        {threshold !== null && (
+          <ReferenceLine
+            y={threshold}
+            stroke={CHART_CRIT}
+            strokeDasharray="4 4"
+            label={{
+              value: `${thresholdLabel} ${threshold}%`,
+              position: 'insideBottomRight',
+              fill: CHART_CRIT,
+              fontSize: 11,
+            }}
+          />
+        )}
+        {redFloor !== undefined && redFloor !== null && (
           <ReferenceLine
             y={redFloor}
             stroke={CHART_WARN}

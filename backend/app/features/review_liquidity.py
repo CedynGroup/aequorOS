@@ -1,3 +1,13 @@
+"""Case cash-flow adequacy endpoints (advisory, never filed).
+
+Case-scoped routes over `app.services.liquidity`, which rolls case cash
+forward and raises review findings. These are not regulatory liquidity ratios
+— Basel LCR/NSFR live under `/banks/{bank_id}/liquidity`. The route paths keep
+the historical `liquidity` spelling because they are a wire contract; the
+figures they return are labelled cash-flow adequacy. See
+`app.services.case_plane`.
+"""
+
 from __future__ import annotations
 
 from typing import Annotated

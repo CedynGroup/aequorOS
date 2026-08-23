@@ -2,9 +2,8 @@
 
 /**
  * "Connect a market data source" — the §9.2 onboarding flow as a stepper:
- * choose vendor, provide credentials (validated on submission), select data
- * scopes grouped by category with live quota impact from the scopes catalog,
- * review the pull schedule defaults, then create + test + activate.
+ * choose vendor, provide credentials, select data scopes grouped by category,
+ * review the pull schedule defaults, then save configuration for onboarding.
  *
  * Credential inputs are write-only password fields; after creation the only
  * stored representation shown is the fingerprint on the source card.
@@ -173,10 +172,10 @@ export default function AddSourcePanel({
     <section className="card p-5 space-y-5">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-h2 text-navy">Connect a market data source</h2>
+          <h2 className="text-h2 text-navy">Configure a market data source</h2>
           <p className="mt-1 text-body text-slate">
-            The flow is identical for every vendor: credentials, scopes, schedule, test,
-            activate. Credentials are encrypted at rest and never displayed again.
+            Save vendor credentials, scopes, and schedules for onboarding. Bloomberg and LSEG
+            live transport is not enabled in this deployment; credentials are encrypted at rest.
           </p>
         </div>
         <button
@@ -229,7 +228,7 @@ export default function AddSourcePanel({
                   <p className="text-body text-slate">{option.description}</p>
                   {taken && (
                     <p className="text-caption text-slate">
-                      Already connected for this bank.
+                      Already configured for this bank.
                     </p>
                   )}
                 </button>
@@ -258,8 +257,8 @@ export default function AddSourcePanel({
         <div className="space-y-4">
           <p className="text-body text-slate">
             {vendor === 'refinitiv'
-              ? 'Create an OAuth application in your LSEG Data Platform account (formerly Refinitiv Data Platform), then enter its credentials. If you do not have them, contact your LSEG account administrator.'
-              : 'Contact your Bloomberg administrator to authorize AequorOS access to your subscription and provision an application identifier.'}
+              ? 'Save the credentials issued for your LSEG Data Platform account (formerly Refinitiv Data Platform). They are retained for vendor onboarding; this deployment does not validate them against LSEG.'
+              : 'Save the credentials issued by your Bloomberg administrator for vendor onboarding. This deployment does not validate them against Bloomberg.'}
           </p>
           <CredentialFields
             vendor={vendor}
@@ -384,10 +383,9 @@ export default function AddSourcePanel({
           {!created && (
             <>
               <p className="text-body text-slate">
-                AequorOS will store the connection, validate the credentials against{' '}
-                {vendor ? vendorName(vendor) : 'the vendor'}, and run a small
-                representative test pull so you can eyeball the values before relying on
-                them.
+                AequorOS will store the connection and validate its local configuration. It does
+                not dispatch vendor requests in this deployment. Use manual upload for current
+                market data.
               </p>
               <button
                 type="button"
@@ -402,7 +400,7 @@ export default function AddSourcePanel({
                 )}
                 {vendor === 'manual_upload'
                   ? 'Create manual upload source'
-                  : 'Create, validate & test connection'}
+                  : 'Save vendor configuration'}
               </button>
             </>
           )}
@@ -414,7 +412,9 @@ export default function AddSourcePanel({
                 <p className="text-body text-navy">
                   {created.status === 'TESTING'
                     ? 'Connection stored, but credential validation failed — fix the credentials from the source card (Rotate credentials).'
-                    : `${vendorName(created.vendor)} connection active.`}
+                    : created.vendor === 'manual_upload'
+                      ? 'Manual upload source active.'
+                      : `${vendorName(created.vendor)} configuration saved. Live vendor transport remains unavailable.`}
                 </p>
               </div>
               {created.validationError && (
@@ -438,8 +438,8 @@ export default function AddSourcePanel({
                     )}
                     <p className="text-body font-medium text-navy">
                       {testResult.success
-                        ? "Test successful. Here's a sample of what we pulled:"
-                        : 'Test pull failed'}
+                        ? 'Configuration check complete.'
+                        : 'Live vendor transport unavailable'}
                     </p>
                   </div>
                   {testResult.success ? (

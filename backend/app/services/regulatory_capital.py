@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from datetime import UTC, date, datetime
@@ -44,7 +45,6 @@ from app.domain.capital.engine import (
     MissingParameterError,
     RwaResult,
     UnsupportedShockError,
-    classify_capital_ratio,
     compute_capital_ratios,
     compute_rwa,
     money,
@@ -55,6 +55,7 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
+    FinancialFactRow,
     ParamCapitalThreshold,
     ParamCrmHaircut,
     ParamEclAssumption,
@@ -90,7 +91,12 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunCreate,
     RegulatoryRunRead,
 )
-from app.services import regulatory_parameters, sdi_capital_checks
+from app.services import (
+    filing_reconciliation,
+    regulatory_parameters,
+    sdi_capital,
+    sdi_capital_checks,
+)
 from app.services.audit import record_event
 from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.jurisdictions import base_currency, regulator_name
@@ -105,7 +111,24 @@ from app.services.live_types import (
 from app.services.params import get_active_params
 from app.services.regulatory_liquidity import get_regulatory_run, preview_note
 
-ENGINE_VERSION = "regulatory-capital-v1.0.0"
+#: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR, because the
+#: change moves a FILED figure over unchanged inputs: the Basel II ¶649 basic-
+#: indicator base correction re-based operational RWA, taking Sample-scale
+#: ``car_pct`` 30.486772 → 29.367617. Four distinct capital-metric generations
+#: are already sealed on the primary under the single string ``v1.0.0`` — two
+#: runs there can carry identical ``input_hash``, identical
+#: ``input_schema_version`` and identical ``engine_version`` and still disagree
+#: on ``car_pct``, which is precisely what
+#: docs/audit/10_calculation_versioning.md says cannot happen. Historical rows
+#: are NOT rewritten: a stored ``v1.0.0`` now means "one of the pre-2026-08-22
+#: generations, not individually identifiable", and that is a fact about those
+#: runs, not something a backfill could honestly change.
+#:
+#: THE RULE, so the next change does not have to re-derive it: MAJOR when the
+#: engine would produce a different number from the same ``input_hash``; MINOR
+#: when it adds an output, a line item or a diagnostic without moving an
+#: existing figure; PATCH for anything a filed figure cannot see.
+ENGINE_VERSION = "regulatory-capital-v2.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "capital-metrics-v1"
 MODULE_CAPITAL = "capital"
@@ -191,11 +214,15 @@ class _ActiveCapitalParams:
     crm_haircuts: dict[str, Decimal] = dataclass_field(default_factory=dict)
     ecl_assumptions: tuple[EclAssumption, ...] = ()
     # SDI Phase E (docs/sdi.md §4.2): the institution class selects the capital
-    # regime (bank Basel CRD vs SDI simplified s.29), and the control-plane CAR
+    # regime (bank BoG CRD vs SDI simplified s.29), and the control-plane CAR
     # floor is the fallback when the tenant has no board threshold row. Defaults
     # keep every existing constructor on the byte-identical bank path.
     institution_class: str = "bank"
     car_min_fallback: Decimal | None = None
+    # The GOVERNED s.29 risk-weighted-asset scope (``sdi_capital.resolve_rwa_scope``),
+    # resolved for an SDI and None for a bank. It is the ONE authority for which risk
+    # classes an SDI charges for; this module consumes it and never restates it.
+    rwa_scope: sdi_capital.SdiRwaScope | None = None
 
 
 @dataclass(frozen=True)
@@ -210,7 +237,7 @@ class CapitalScenarioAnalysis:
 
 
 def _execute_scenario_compute(
-    facts: list[BankFinancialFact],
+    facts: Sequence[FinancialFactRow],
     active: _ActiveCapitalParams,
     shocks: dict[str, Decimal],
     scenario_code: str,
@@ -271,6 +298,16 @@ def create_capital_run(
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
+    # Audit 2026-08-22 D-3(b): this endpoint mints the same immutable runs as an
+    # activation but never went through ``derive_facts``, so the balance-sheet
+    # control had no say over CAR, CET1 or RWA reached this way.
+    filing_reconciliation.assert_filing_reconciled(
+        db, ctx, bank, as_of=period.period_end, period_id=period.id, purpose="official_run"
+    )
+    # Audit 2026-08-22 D-19: an SDI's risk-weighted-asset SCOPE is a regulatory
+    # determination. Refuse the mint before the run row exists rather than sealing
+    # a CAR onto the platform's own placeholder. A no-op for a bank.
+    sdi_capital.assert_official_rwa_scope_governed(db, bank, period.period_end)
     return _create_and_execute(db, ctx, bank, period, payload.scenario_code)
 
 
@@ -280,6 +317,11 @@ def run_all_capital_scenarios(
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
+    # See ``create_capital_run``: the 22-scenario batch is the same mint.
+    filing_reconciliation.assert_filing_reconciled(
+        db, ctx, bank, as_of=period.period_end, period_id=period.id, purpose="official_run"
+    )
+    sdi_capital.assert_official_rwa_scope_governed(db, bank, period.period_end)
     runs = [
         _create_and_execute(db, ctx, bank, period, scenario_code)
         for scenario_code in CAPITAL_SCENARIO_CODES
@@ -348,7 +390,7 @@ def get_capital_dashboard(
         ),
         capital_structure=_structure_from_lines(sections.get("capital_component", [])),
         trend=_build_trend(db, ctx, bank, periods),
-        buffers=_buffers_or_409(active.thresholds, metrics.car_pct),
+        buffers=_buffers_or_409(active, metrics.car_pct),
         validations=validations,
         live=live_block(db, ctx, bank.id, MODULE_CAPITAL),
     )
@@ -546,6 +588,11 @@ def _create_and_execute(
         input_hash=_snapshot_hash(snapshot),
         inputs=snapshot,
         metrics={},
+        # Audit D-18: WHICH governed control-plane rows produced the values in
+        # ``inputs["parameters"]``. Beside the snapshot, never inside it — row
+        # ids and timestamps are identity, not values, and the ``input_hash`` is
+        # value-based by contract.
+        parameter_provenance=regulatory_parameters.consume_parameter_provenance(db),
         created_by=ctx.actor_user_id,
     )
     db.add(run)
@@ -765,17 +812,28 @@ def _persist_success(  # noqa: PLR0913
             ratios.leverage_status,
         ),
     ]
-    if stress is not None:
-        end_state = stress.path[-1]
-        metric_rows.append(
-            (
-                "car_pct_end",
-                end_state.car,
-                "pct",
-                params.car_min_pct,
-                classify_capital_ratio(end_state.car, params.car_min_pct),
-            )
-        )
+    # A stress run persists NO end-state capital ratio here, deliberately. A
+    # RegulatoryMetricResult row carries a threshold and a compliance status, and
+    # the STRESS-PACK used to copy both verbatim into a filed return
+    # (regulatory_reporting/generation.py::_stress_traffic_lights). No Bank of
+    # Ghana instrument requires a POST-STRESS capital adequacy ratio to meet the
+    # minimum: the stress-testing and ICAAP directives are February 2026 exposure
+    # drafts, and the minimum the Capital Requirements Directive does set binds
+    # the ACTUAL ratio and is time-varying (CRD paragraph 71 with the paragraph 75
+    # capital conservation buffer), so a single threshold would misstate it even
+    # where one applied. The full quarterly path stays in metrics["stress_path"]
+    # and the STRESS-PACK still tabulates it (_stress_ratio_evolution,
+    # _stress_pro_forma, _stress_attribution); the advisory end-state figure with
+    # a declared authority is the enterprise-stress engine's
+    # ``stressed_car_end_pct`` (supervisory monitoring, not filed).
+    #
+    # Not persisting it fixes only what is sealed from here on. Runs sealed
+    # BEFORE this change still carry the row, and a sealed run is append-only
+    # evidence that must not be rewritten — so the pack refuses the verdict on
+    # the READ path as well: ``_stress_traffic_lights`` prints a threshold and a
+    # status only where the WS-A metric authority register declares the figure
+    # filed under the engine that sealed it, and states in the artifact when it
+    # does not.
     for position, (code, value, unit, threshold_min, metric_status) in enumerate(
         metric_rows, start=1
     ):
@@ -1083,7 +1141,21 @@ def _structure_from_lines(lines: list[CapitalLineRead]) -> CapitalStructureSumma
     )
 
 
-def _buffers_or_409(thresholds: dict[str, Decimal], current_car: Decimal) -> CapitalBuffersRead:
+def _buffers_or_409(active: _ActiveCapitalParams, current_car: Decimal) -> CapitalBuffersRead:
+    """The dashboard's floor block — ONE authority for every ratio's minimum (NEW-53).
+
+    Carries the Basel sub-tier floors alongside the CAR ladder so a consumer
+    never has to fall back to a stored run's ``threshold_min`` to find out what
+    Tier 1, CET1 and leverage are judged against. A run's threshold is a record
+    of what was applied when it ran; reading it as the current requirement made
+    the Basel overview claim "this run carries no Tier 1 minimum" beside a green
+    Tier 1 KPI and a passing Tier 1 validation, all on one screen, for any bank
+    before its first official capital run.
+
+    Read-only: the values come straight from the same ``active.thresholds`` dict
+    :func:`_engine_params` hands the engine, so no financial output moves.
+    """
+    thresholds = active.thresholds
     missing = [
         code for code in ("car_min", "car_early_warning", "car_critical") if code not in thresholds
     ]
@@ -1099,6 +1171,15 @@ def _buffers_or_409(thresholds: dict[str, Decimal], current_car: Decimal) -> Cap
                 ),
             },
         )
+    # The Basel sub-tier floors exist only under the bank (CRD) regime — the same
+    # gate ``_validation_rows`` applies. Under SDI s.29 they are structurally
+    # excluded, so they are reported ABSENT rather than as a register row that
+    # the s.29 engine never applies (``_SDI_STRUCTURAL_CAPITAL`` zeroes them).
+    basel_applicable = active.institution_class != "sdi"
+
+    def _sub_tier(code: str) -> Decimal | None:
+        return thresholds.get(code) if basel_applicable else None
+
     return CapitalBuffersRead(
         car_min_pct=thresholds["car_min"],
         car_early_warning_pct=thresholds["car_early_warning"],
@@ -1106,6 +1187,9 @@ def _buffers_or_409(thresholds: dict[str, Decimal], current_car: Decimal) -> Cap
         car_critical_pct=thresholds["car_critical"],
         current_car_pct=current_car,
         headroom_pp=ratio_pct(current_car - thresholds["car_min"]),
+        cet1_min_pct=_sub_tier("cet1_min"),
+        tier1_min_pct=_sub_tier("tier1_min"),
+        leverage_min_pct=_sub_tier("leverage_min"),
     )
 
 
@@ -1263,6 +1347,39 @@ def _sdi_capital_live_findings(
     )
     findings: list[LiveFindingSpec] = []
     status = "green"
+    # Audit 2026-08-22 D-19: the live view MAY compute on an undetermined RWA
+    # scope — a management view of a provisional ratio is legitimate — but it must
+    # say so where the ratio is read, not only on the s.29 diagnostics page. The
+    # official mint refuses the same condition outright
+    # (``sdi_capital.assert_official_rwa_scope_governed``).
+    scope = sdi_capital.resolve_rwa_scope(db, bank, as_of)
+    if not scope.filable:
+        if not scope.confirmed:
+            scope_message = (
+                "This capital adequacy ratio is provisional: which risk classes its "
+                "risk-weighted assets charge for has not been approved for this "
+                "institution, so the platform is applying its documented default of "
+                "credit risk only. No market-risk or operational-risk charge is assumed."
+            )
+        else:
+            scope_message = (
+                "This capital adequacy ratio is provisional: the capital-adequacy scope "
+                "approved for this institution is still pending confirmation against a "
+                "published regulatory instrument."
+            )
+        findings.append(
+            LiveFindingSpec(
+                rule_id="sdi_capital.rwa_scope_provisional",
+                severity="medium",
+                message=(
+                    scope_message + " The ratio may be used for management purposes; an "
+                    "official run cannot be produced until the scope is approved and "
+                    "confirmed in the regulatory-parameter control plane."
+                ),
+                metric="rwa_scope",
+            )
+        )
+        status = worst_status(status, "amber")
     for result, severity, breach_status in checks:
         if result.compliant is False:
             findings.append(
@@ -1413,7 +1530,7 @@ def _load_facts(
     )
 
 
-def _to_engine_fact(fact: BankFinancialFact) -> CapitalFact:
+def _to_engine_fact(fact: FinancialFactRow) -> CapitalFact:
     return CapitalFact(
         fact_group=fact.fact_group,
         category=fact.category,
@@ -1451,19 +1568,25 @@ def _load_active_params(
     # (docs/sdi.md §4.2, §7 Phase E). ``try_resolve`` is None for a jurisdiction
     # with no seeded default — the bank path never depends on it.
     car_min_param = regulatory_parameters.try_resolve(db, bank, "car_min", as_of=as_of)
-    thresholds = {row.threshold_code: Decimal(str(row.value_pct)) for row in threshold_rows}
-    # Tighten-only guard (QA audit 2026-08-20 P1-5): a tenant board CAR floor may
-    # only be AT LEAST as strict as the control-plane regulatory minimum (for Ghana
-    # 13% = 10% + 3% CCB). A board register that sets a weaker minimum is clamped up
-    # to the regulatory floor — it can never weaken it. Codes with no control-plane
-    # counterpart (car_early_warning/critical, cet1/tier1/leverage minima) are
-    # unconstrained here; add a control-plane row to bring them under the guard.
-    if car_min_param is not None and "car_min" in thresholds:
-        control_floor = car_min_param.normalized_value
-        if control_floor is not None:
-            thresholds["car_min"] = regulatory_parameters.tighten(
-                "car_min", thresholds["car_min"], control_floor
-            )
+    # Tighten-only guard, GENERALISED (QA audit 2026-08-20 P1-5): every governed
+    # code in this board register is clamped against its control-plane value in one
+    # pass, not just ``car_min``. A board minimum weaker than the regulatory floor
+    # is raised to it; a stricter one stands. Codes with no seeded control-plane row
+    # pass through untouched — a floor is never invented to clamp against.
+    thresholds = regulatory_parameters.clamp_overrides(
+        db,
+        bank,
+        {row.threshold_code: Decimal(str(row.value_pct)) for row in threshold_rows},
+        as_of=as_of,
+    ).values
+    institution_class = _resolve_institution_class(db, bank)
+    # An SDI's RWA scope is governed data, resolved HERE — before the run row is
+    # created — so a scope that cannot be established refuses (409) instead of
+    # minting a filing run against an incomplete total. A bank never resolves it:
+    # the BoG CRD path has its own scope and is untouched.
+    rwa_scope = (
+        sdi_capital.resolve_rwa_scope(db, bank, as_of) if institution_class == "sdi" else None
+    )
     return _ActiveCapitalParams(
         risk_weights={row.risk_weight_code: Decimal(str(row.weight_pct)) for row in weight_rows},
         thresholds=thresholds,
@@ -1477,20 +1600,33 @@ def _load_active_params(
             )
             for row in ecl_rows
         ),
-        institution_class=_resolve_institution_class(db, bank),
+        institution_class=institution_class,
         car_min_fallback=car_min_param.value if car_min_param is not None else None,
+        rwa_scope=rwa_scope,
     )
 
 
-# SDI simplified s.29 capital (docs/sdi.md §4.2): market-risk and operational-risk
-# charges do not apply, there are no Basel sub-tier (CET1/Tier1) minimums or a
-# leverage floor, and the CAR RAG collapses to the single s.29 floor. These are
-# STRUCTURAL s.29 settings that configure the SHARED engine to compute CAR over
-# the credit-risk base against the s.29 floor — they are NOT tunable regulatory
-# values (the CAR floor and the risk weights are, and come from the control plane
-# / the tenant register). Market and operational charges are zeroed, so the RWA
-# multiplier is neutral; the general-provisions Tier-2 cap keeps the conventional
-# 1.25% of credit RWA.
+# SDI simplified s.29 capital (docs/sdi.md §4.2): there are no Basel sub-tier
+# (CET1/Tier1) minimums and no leverage floor, and the CAR RAG collapses to the
+# single s.29 floor. These are STRUCTURAL s.29 settings that configure the SHARED
+# engine — they are NOT tunable regulatory values (the CAR floor and the risk
+# weights are, and come from the control plane / the tenant register), and they are
+# NOT a scope declaration.
+#
+# WHICH risk classes s.29 risk-weighted assets charge for is governed data with a
+# single authority, ``sdi_capital.resolve_rwa_scope``, consumed by EVERY SDI capital
+# path: this module's live view and filing run, and the solvency stress projection
+# in ``enterprise_stress._sdi_capital_params``. This dict used to answer that
+# question a second time, by zeroing ``fx_charge_pct`` and ``bia_alpha_pct``; a
+# governed row that turned a charge on would then have moved the live CAR and left
+# the official CAR behind.
+#
+# The two Basel MEASUREMENT rates below are zero because no s.29 measurement uses
+# them: a governed composition may only name ``bucket_weighted_exposure`` (credit)
+# or ``pct_of_credit_rwa``, never the BIA gross-income alpha or the FX open-position
+# charge — ``resolve_rwa_scope`` refuses anything else. A class the composition
+# brings into scope therefore reaches the engine through
+# ``CapitalParams.rwa_pct_of_credit_rwa``, never through these two.
 _SDI_STRUCTURAL_CAPITAL = {
     "bia_alpha_pct": _ZERO,
     "fx_charge_pct": _ZERO,
@@ -1504,7 +1640,7 @@ _SDI_STRUCTURAL_CAPITAL = {
 
 def _engine_params(active: _ActiveCapitalParams) -> CapitalParams:
     """Build the engine params for the tenant's capital regime. A bank runs the
-    full Basel CRD set (unchanged — byte-identical); an SDI runs the simplified
+    full BoG CRD set (unchanged — byte-identical); an SDI runs the simplified
     s.29 set (only the CAR floor is a required regulatory value)."""
     if active.institution_class == "sdi":
         return _sdi_engine_params(active)
@@ -1539,8 +1675,14 @@ def _sdi_engine_params(active: _ActiveCapitalParams) -> CapitalParams:
     RAG has a single floor (early-warning = critical = the floor, no CCB band).
     Risk weights come from the tenant's ParamRiskWeight register exactly as for a
     bank — an SDI configures them or the engine fails loud on a loan (never a
-    made-up weight). Market/operational/tier/leverage take the s.29 structural
-    settings above."""
+    made-up weight). Tier/leverage take the s.29 structural settings above.
+
+    WHICH risk classes the total charges for comes from the governed scope
+    (``sdi_capital.resolve_rwa_scope``, resolved in :func:`_load_active_params`) —
+    the same object the live s.29 view and the solvency stress projection consume,
+    so no two of them can charge for different things. A charged class arrives as a
+    percentage of credit RWA; nothing is defaulted here and no percentage is
+    invented."""
     car_min = active.thresholds.get("car_min", active.car_min_fallback)
     if car_min is None:
         raise CapitalRunError(
@@ -1548,6 +1690,35 @@ def _sdi_engine_params(active: _ActiveCapitalParams) -> CapitalParams:
             "The SDI CAR floor (car_min) is configured neither on the institution's "
             "board register nor in the regulatory-parameter control plane.",
             {"threshold_codes": ["car_min"]},
+        )
+    # Audit 2026-08-22 D-19: this read used to substitute
+    # ``sdi_capital.default_rwa_scope()`` when the resolved scope was absent — an
+    # unlabelled fallback to the code default on the path that mints filing
+    # evidence. ``_load_active_params`` resolves the scope for every SDI, so a
+    # missing one means the class check and the params build disagree; that is a
+    # defect, not a default.
+    scope = active.rwa_scope
+    if scope is None:
+        raise CapitalRunError(
+            "policy_unresolved",
+            "The governed capital-adequacy scope for this institution was not resolved, "
+            "so which risk classes risk-weighted assets charge for is unknown. No scope "
+            "is assumed. Resolve "
+            f"{sdi_capital.COMPOSITION_PARAM} in the regulatory-parameter control plane.",
+            {"param_codes": [sdi_capital.COMPOSITION_PARAM]},
+        )
+    if not scope.credit_in_scope:
+        # The filing engine measures credit risk from the risk-weighted book; there
+        # is no way to file a total that leaves credit risk out, and a total that
+        # says it does is not a total.
+        raise CapitalRunError(
+            "policy_unresolved",
+            "The approved capital-adequacy scope for this institution does not "
+            "include credit risk measured from the asset book, which is the only "
+            "basis on which risk-weighted assets can be filed. Correct "
+            f"{sdi_capital.COMPOSITION_PARAM} in the regulatory-parameter control "
+            "plane.",
+            {"param_codes": [sdi_capital.COMPOSITION_PARAM]},
         )
     s = _SDI_STRUCTURAL_CAPITAL
     return CapitalParams(
@@ -1566,6 +1737,7 @@ def _sdi_engine_params(active: _ActiveCapitalParams) -> CapitalParams:
         # s.29: the Basel sub-tier / leverage minima do not apply and must not be
         # surfaced as passing compliance rules against a 0% sentinel (audit M3).
         basel_applicable=False,
+        rwa_pct_of_credit_rwa=dict(scope.pct_of_credit_rwa),
     )
 
 
@@ -1586,7 +1758,7 @@ def _build_snapshot(  # noqa: PLR0913
     bank: Bank,
     period: BankReportingPeriod,
     scenario_code: str,
-    facts: list[BankFinancialFact],
+    facts: Sequence[FinancialFactRow],
     active: _ActiveCapitalParams,
     shocks: dict[str, Decimal],
 ) -> dict[str, Any]:
@@ -1640,6 +1812,27 @@ def _snapshot_parameters(active: _ActiveCapitalParams) -> dict[str, Any]:
     }
     if configured_crm:
         parameters["crm_haircuts_pct"] = _stringified(configured_crm)
+    if active.rwa_scope is not None and active.rwa_scope.pct_of_credit_rwa:
+        # Value-based like every other block: it joins the hash only when it CHANGES
+        # risk-weighted assets, so a credit-only scope (governed or default) hashes
+        # exactly as the pre-composition books did.
+        parameters["sdi_rwa_charges_pct_of_credit_rwa"] = _stringified(
+            dict(active.rwa_scope.pct_of_credit_rwa)
+        )
+    if active.rwa_scope is not None:
+        # Audit 2026-08-22 D-19: the run recorded WHAT the scope charged for (above,
+        # and only when it moved a number) but never WHETHER anyone determined it.
+        # A reader of a sealed run could not tell an approved credit-only scope from
+        # the platform's placeholder. This block is SDI-only — ``rwa_scope`` is None
+        # for every bank — so the BoG CRD input hash is byte-identical.
+        parameters["sdi_rwa_composition"] = {
+            "source": active.rwa_scope.source,
+            "confirmation_status": active.rwa_scope.confirmation_status,
+            "composition": {
+                risk_class: active.rwa_scope.composition[risk_class]
+                for risk_class in sorted(active.rwa_scope.composition)
+            },
+        }
     if active.ecl_assumptions:
         parameters["ecl_assumptions"] = sorted(
             (

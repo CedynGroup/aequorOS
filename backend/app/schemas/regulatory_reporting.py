@@ -21,6 +21,7 @@ type ReturnFamily = Literal[
     "dbk",
     "stress",
     "bsd",
+    "sdi",
 ]
 type ReturnFrequency = Literal["weekly", "monthly", "quarterly", "semiannual", "annual", "daily"]
 type ReturnBasis = Literal["solo", "consolidated"]
@@ -120,11 +121,45 @@ class RegulatoryPackageSummaryRead(ClosedModel):
     updated_at: datetime
 
 
+class DeclaredMethodologyRead(ClosedModel):
+    """One "which figure does this return mean?" disclosure, typed.
+
+    CF-1's answer to the audit's LCR question: BSD3's LCR and LMT Table 11's LCR
+    are different methodologies by design, and forcing them to agree would break
+    a correct engine. The registry has recorded that since ARCH-4 and the
+    generator has written it into ``snapshot["provenance"]`` — where, until
+    2026-08-22, nothing read it (audit D-20). ``snapshot`` is typed
+    ``dict[str, Any]``, so an untyped blob is not a contract; this is.
+    """
+
+    metric_id: str
+    methodology_id: str
+    #: 'registered' when the authority registry knows this pair, else
+    #: 'not_registered' — the registry's own sentinel, never a guess.
+    registry_status: str
+    authority_reference: str | None = None
+    regime: str | None = None
+    calculation_engine: str | None = None
+    calculation_version: str | None = None
+    advisory_designation: str | None = None
+    expected_tolerance: str | None = None
+    #: Other registered methodologies for the same metric. A non-empty list is
+    #: the reader's cue that "the LCR" is ambiguous across surfaces.
+    alternate_methodologies: list[str] = Field(default_factory=list)
+    #: Present only when this methodology declares a documented divergence from
+    #: an alternate: what differs, in which direction, and the rule relating the
+    #: two (usually: they are NOT reconciled by equality).
+    divergence: dict[str, Any] | None = None
+
+
 class RegulatoryPackageRead(RegulatoryPackageSummaryRead):
     snapshot: dict[str, Any]
     source_runs: list[PackageSourceRunRead]
     validation_report: ValidationReportRead | None
     approvals: list[PackageApprovalRead]
+    # Promoted out of the untyped snapshot so the disclosure has a reader
+    # (audit 2026-08-22 D-20). Empty for a return that declares no methodology.
+    declared_methodologies: list[DeclaredMethodologyRead] = Field(default_factory=list)
 
 
 class RegulatoryPackageListRead(ClosedModel):
@@ -200,6 +235,12 @@ class ReportingObligationListRead(ClosedModel):
     as_of: date
     horizon_months: int
     obligations: list[ReportingObligationRead]
+    # Why the list is empty when it is (audit 2026-08-22 D-20).
+    # ``InstitutionEligibility.coverage_note()`` had produced this sentence since
+    # ARCH-8 and had nowhere to go, so an SDI tenant received ``obligations: []``
+    # with no explanation — the exact silence the eligibility authority was built
+    # to end. Always ``None`` when the institution has obligations.
+    coverage_note: str | None = None
 
 
 class ReturnTemplateRead(ClosedModel):
@@ -213,6 +254,7 @@ class ReturnTemplateRead(ClosedModel):
     template_id: str
     fidelity: FidelityGrade
     default_channel: ChannelCode
+    supports_working_copy: bool
 
 
 class ReturnTemplateListRead(ClosedModel):
