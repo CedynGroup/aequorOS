@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import re
 import zipfile
 import zlib
@@ -562,8 +563,13 @@ def test_export_warns_but_proceeds_when_no_seal_was_ever_recorded(
     package.snapshot_sha256 = None
     db_session.commit()
 
-    with caplog.at_level("WARNING"):
-        artifact = export_package(db_session, MAKER, package, "xlsx")
+    target = logging.getLogger("app.services.regulatory_reporting.exports")
+    target.addHandler(caplog.handler)
+    try:
+        with caplog.at_level("WARNING", logger=target.name):
+            artifact = export_package(db_session, MAKER, package, "xlsx")
+    finally:
+        target.removeHandler(caplog.handler)
     db_session.commit()
     assert artifact.size_bytes > 0
     assert _read_output(db_session, storage, artifact.object_path)

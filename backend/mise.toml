@@ -115,9 +115,8 @@ run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features t
 # Two sharp edges, both found by running it:
 #   * the KMS key MUST be named `aequoros-key` — the SSE-KMS assertion pins that
 #     literal against the returned `SSEKMSKeyId`;
-#   * do NOT export STORAGE_RETIRE_AFTER. StorageEngineSettings reads the process
-#     environment, so setting it makes `test_mvp_requires_a_retirement_date` fail
-#     with DID NOT RAISE — the env var defeats the very refusal that test asserts.
+#   * export STORAGE_RETIRE_AFTER for the configured MVP client. The pure config
+#     test deletes it before asserting that a missing date is refused.
 #
 # Requires S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY and STORAGE_KMS_KEY_ID.
 [tasks."risk-service:test-storage"]

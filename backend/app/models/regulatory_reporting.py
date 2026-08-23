@@ -254,7 +254,7 @@ class RegulatoryPackageArtifact(UuidV7PrimaryKeyMixin, Base):
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
     object_path: Mapped[str] = mapped_column(String(512), nullable=False)
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
