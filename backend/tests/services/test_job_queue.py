@@ -228,8 +228,21 @@ def test_the_override_is_a_window_not_an_exemption(db_session: Session) -> None:
 
 
 def test_an_unlisted_job_type_stays_on_the_deployment_default(db_session: Session) -> None:
-    """Only handlers with a measured, documented reason get their own window."""
-    assert set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {"etl_dedup"}
+    """Only handlers with a measured, documented reason get their own window.
+
+    Adding a name here is meant to hurt slightly: each one asserts that the
+    deployment default is too short for that handler, and the cost of being
+    wrong is a live job reclaimed and run twice.
+
+    ``desk_capture`` earned its entry on 2026-08-23 in production. It walks the
+    Bank of Ghana's published tables over paced HTTP (2 s between requests,
+    bounded per table), so its runtime is set by a third party's site and ran
+    past the 3600 s default. ``reclaim_stale`` declared the worker dead and
+    restarted the walk from the top — three attempts, eleven hours, roughly
+    twenty thousand requests to the regulator this platform reports to. The
+    handler was never at fault; the window was shorter than the work.
+    """
+    assert set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {"etl_dedup", "desk_capture"}
     assert job_queue.stale_after_for("pipeline_refresh", timedelta(minutes=15)) == timedelta(
         minutes=15
     )

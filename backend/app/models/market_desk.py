@@ -66,7 +66,10 @@ class DeskSourceCapture(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
     Never discarded — the lineage root every observation points back to.
     Small captures ride inline in ``payload``; large ones live at
-    ``storage_path`` with only the SHA-256 here.
+    ``storage_path`` with only the SHA-256 here. A capture whose bytes are
+    byte-identical to an earlier capture of the SAME source stores no second
+    copy: its payload names the row that holds them and readers resolve the
+    hop. ``app/services/market_desk/snippets.py`` owns that payload contract.
     """
 
     __tablename__ = "desk_source_captures"
@@ -76,6 +79,9 @@ class DeskSourceCapture(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_desk_source_captures_status",
         ),
         Index("ix_desk_source_captures_source_key_as_of", "source_key", "as_of_date"),
+        # The nightly de-duplication probe: "has this source already stored
+        # these exact bytes?" — one lookup per artifact captured.
+        Index("ix_desk_source_captures_source_key_sha256", "source_key", "content_sha256"),
     )
 
     # 'bog_tbill_rates' | 'bog_interbank_fx' | 'gfim_daily' | 'manual' | ...

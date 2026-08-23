@@ -137,6 +137,14 @@ export function CaptureViewer({
             </p>
           )}
 
+          {content.content_deferred_to && (
+            <p className="rounded border border-slate/30 bg-slate/5 p-2.5 text-caption text-slate">
+              These bytes were already captured for this source and are stored once, on
+              capture <MonoId id={content.content_deferred_to} />. The content shown below
+              is that record, read back unchanged.
+            </p>
+          )}
+
           {/* field-level value search (getDeskCaptureSnippet) */}
           <form
             className="flex items-end gap-2"

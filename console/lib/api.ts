@@ -864,6 +864,8 @@ export interface DeskCaptureContentView {
   parser_version: string;
   kind: string;
   content_omitted: string | null;
+  /** Set when these bytes are stored on an earlier capture of the same source. */
+  content_deferred_to: string | null;
   content_available: boolean;
   content_bytes: number;
   text: string | null;
@@ -880,6 +882,7 @@ export interface DeskObservationSnippet {
   kind: string;
   content_available: boolean;
   content_omitted: string | null;
+  content_deferred_to: string | null;
   snippet: string | null;
   needle: string | null;
   hint: string | null;

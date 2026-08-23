@@ -242,6 +242,10 @@ class DeskCaptureContentView(ClosedModel):
     parser_version: str
     kind: str
     content_omitted: str | None = None
+    #: Set when this capture's bytes are stored on an EARLIER capture of the
+    #: same source (a byte-identical re-capture). The content above is that
+    #: row's, resolved transparently; this names where it lives.
+    content_deferred_to: str | None = None
     content_available: bool
     content_bytes: int
     text: str | None = None
@@ -258,6 +262,7 @@ class DeskObservationSnippet(ClosedModel):
     kind: str
     content_available: bool
     content_omitted: str | None = None
+    content_deferred_to: str | None = None
     snippet: str | None = None
     needle: str | None = None
     hint: str | None = None

@@ -6,9 +6,11 @@ notification_email_mirror orphaned-job-type precedent).
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -23,7 +25,7 @@ from app.core.ids import new_uuid7
 from app.db.base import utc_now
 from app.models import DeskDetermination, DeskObservation, DeskSourceCapture, Job
 from app.services import job_queue, scheduler
-from app.services.market_desk import capture_job, register
+from app.services.market_desk import capture_job, register, snippets
 from app.services.market_desk.capture_job import (
     CAPTURE_IDENTITY,
     enqueue_due_desk_capture,
@@ -231,6 +233,136 @@ def test_run_desk_capture_isolates_a_failing_source(
         select(DeskObservation).where(DeskObservation.series_code == "GHS.INTERBANK.ON")
     ).all()
     assert len(observations) == 2
+    get_settings.cache_clear()
+
+
+def _payload(capture: DeskSourceCapture) -> dict[str, Any]:
+    """A capture always carries a payload — absence is stated INSIDE it."""
+    assert capture.payload is not None
+    return capture.payload
+
+
+def test_byte_identical_recapture_stores_no_second_payload(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A source re-fetched nightly hands back the same bytes night after
+    night. Every night still gets its own capture row — the lineage root its
+    observations point back to — but only the FIRST stores the payload; the
+    rest name the row that holds it. Reading any of them returns the original
+    bytes, byte for byte.
+    """
+    _enable(monkeypatch, DESK_CAPTURE_SOURCES="bog_interbank_daily")
+    # The real harvested BoG page, not a synthetic one.
+    page = (
+        Path(__file__).parents[1]
+        / "fixtures"
+        / "market_desk"
+        / "raw"
+        / "bog_wdt_table69_interbank_daily_page.json"
+    ).read_bytes()
+    revised = page.replace(b'"draw":1', b'"draw":2', 1)
+    assert revised != page
+
+    served: list[bytes] = []
+
+    def fake_fetch_source(source_key: str, session: Any, **kwargs: Any) -> list[RawFetch]:
+        return [_raw_fetch("https://bog/t69", served[-1], {"table_id": 69})]
+
+    monkeypatch.setattr(capture_job, "fetch_source", fake_fetch_source)
+
+    def _night(cob: str, content: bytes) -> DeskSourceCapture:
+        served.append(content)
+        job = _desk_job(db_session, {"cob_date": cob})
+        run_desk_capture(db_session, job)
+        assert job.progress["sources"]["bog_interbank_daily"]["status"] == "captured"
+        newest = db_session.scalars(
+            select(DeskSourceCapture)
+            .where(DeskSourceCapture.source_key == "bog_interbank_daily")
+            .order_by(DeskSourceCapture.captured_at.desc(), DeskSourceCapture.id.desc())
+        ).first()
+        assert newest is not None
+        return newest
+
+    first = _night("2026-08-17", page)
+    second = _night("2026-08-18", page)
+    changed = _night("2026-08-19", revised)
+    fourth = _night("2026-08-20", page)
+
+    # Four nights, four lineage rows — de-duplication skips bytes, never rows.
+    assert (
+        db_session.scalar(
+            select(func.count())
+            .select_from(DeskSourceCapture)
+            .where(DeskSourceCapture.source_key == "bog_interbank_daily")
+        )
+        == 4
+    )
+    assert len({first.id, second.id, changed.id, fourth.id}) == 4
+
+    # Night 1 holds the bytes.
+    assert _payload(first)["content_base64"] == base64.b64encode(page).decode("ascii")
+    assert "content_deferred_to" not in _payload(first)
+
+    # Night 2 is byte-identical: no second payload, and it says so explicitly,
+    # naming the row it defers to.
+    assert "content_base64" not in _payload(second)
+    assert _payload(second)["content_deferred_to"] == str(first.id)
+    assert str(first.id) in _payload(second)["content_omitted"]
+    assert second.content_sha256 == first.content_sha256
+    assert _payload(second)["meta"] == {"table_id": 69}
+
+    # Night 3's bytes differ by one byte: stored in full, no deferral.
+    assert _payload(changed)["content_base64"] == base64.b64encode(revised).decode("ascii")
+    assert "content_deferred_to" not in _payload(changed)
+
+    # Night 4 matches night 1 again and defers to the row that HOLDS the
+    # bytes, never to night 2's pointer: resolution is always one hop.
+    assert _payload(fourth)["content_deferred_to"] == str(first.id)
+
+    # Every reader of capture content returns the ORIGINAL bytes.
+    for capture in (first, second, changed, fourth):
+        expected = revised if capture.id == changed.id else page
+        content, _meta, _deferred = snippets._decode_payload(db_session, capture)
+        assert content == expected
+        view = snippets.capture_content_view(db_session, capture.id)
+        assert view["content_available"] is True
+        assert view["content_bytes"] == len(expected)
+        assert json.loads(view["text"]) == json.loads(expected.decode())
+
+    # And the observations of a deferred night are real, hanging off its own row.
+    assert (
+        db_session.scalar(
+            select(func.count())
+            .select_from(DeskObservation)
+            .where(DeskObservation.capture_id == second.id)
+        )
+        or 0
+    ) > 0
+    get_settings.cache_clear()
+
+
+def test_recapture_of_another_sources_bytes_is_not_deferred(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """De-duplication is scoped to the source. Two sources that happen to
+    serve identical bytes each keep their own payload, so lineage from an
+    observation never crosses into an unrelated site's capture."""
+    _enable(monkeypatch, DESK_CAPTURE_SOURCES="bog_interbank_daily,bog_interbank_weekly")
+    page = _wdt_page([["1", "07 Aug 2026", "10.23"]])
+
+    def fake_fetch_source(source_key: str, session: Any, **kwargs: Any) -> list[RawFetch]:
+        return [_raw_fetch("https://bog/shared", page, {"table_id": 69})]
+
+    monkeypatch.setattr(capture_job, "fetch_source", fake_fetch_source)
+    job = _desk_job(db_session, {"cob_date": "2026-08-17"})
+    run_desk_capture(db_session, job)
+
+    captures = db_session.scalars(select(DeskSourceCapture)).all()
+    assert {c.source_key for c in captures} == {"bog_interbank_daily", "bog_interbank_weekly"}
+    assert len(captures) == 2
+    for capture in captures:
+        assert _payload(capture)["content_base64"] == base64.b64encode(page).decode("ascii")
+        assert "content_deferred_to" not in _payload(capture)
     get_settings.cache_clear()
 
 

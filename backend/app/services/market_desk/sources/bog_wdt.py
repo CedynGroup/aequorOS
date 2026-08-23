@@ -34,8 +34,13 @@ from app.services.market_desk.sources.core import (
     ParseResult,
     slugify,
 )
+from app.services.market_desk.sources.fetch import BOG_DATE_FORMAT
 
-BOG_DATE_FORMAT = "%d %b %Y"
+# ``BOG_DATE_FORMAT`` is imported, not defined: how the site renders a date
+# cell is a wire contract owned by the fetch layer, so the watermark that
+# BOUNDS a walk and the parser that READS its rows can never drift to two
+# spellings of the same cell. It keeps this module's published name because
+# ``bog_wdt.BOG_DATE_FORMAT`` has been that since the 2026-08-09 harvest.
 
 _DAY_BILL_RE = re.compile(r"^(\d+)\s+DAY\s+BILL$", re.IGNORECASE)
 _MONTH_COLUMNS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
