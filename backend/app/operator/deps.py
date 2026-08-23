@@ -72,7 +72,7 @@ class OperatorContext:
     auth_mode: Literal["dev", "oidc", "password"]
     #: Staff authorization role. Password/JWT sessions carry it as a claim
     #: verified against the ``operator_users`` row; OIDC sessions take the
-    #: row's role (or ``developer`` when domain-allow-listed without a row);
+    #: active provisioned row's role;
     #: dev sessions are ``super_admin`` — the local root session IS the
     #: documented bootstrap path for creating the first operator account,
     #: and dev auth cannot exist in production (boot refusal + request-level
@@ -159,17 +159,15 @@ def _oidc_context(token: str, operator_settings: OperatorSettings) -> OperatorCo
     domain = email.rsplit("@", 1)[-1].lower()
     if domain != operator_settings.oidc_allowed_domain.lower():
         raise _UNAUTHORIZED
-    # Parity with the client model: when a staff row exists for this email it
-    # is the authority — a deactivated operator cannot slip back in through
-    # SSO, and the row's role governs. A domain-allowed identity WITHOUT a
-    # row keeps the historical allow-list behavior (documented): it
-    # authenticates with the base 'developer' role.
+    # The staff row is the authority: domain membership verifies workforce
+    # identity, but explicit active provisioning grants operator-plane access.
     normalized = email.lower()
     user = _load_operator_user(normalized)
-    if user is not None and not user.is_active:
+    if user is None or not user.is_active:
         raise _UNAUTHORIZED
-    role: OperatorRole = cast("OperatorRole", user.role) if user is not None else "developer"
-    return OperatorContext(email=normalized, auth_mode="oidc", role=role)
+    return OperatorContext(
+        email=normalized, auth_mode="oidc", role=cast("OperatorRole", user.role)
+    )
 
 
 def get_operator_context(

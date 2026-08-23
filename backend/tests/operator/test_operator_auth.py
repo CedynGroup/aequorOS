@@ -335,6 +335,16 @@ class TestJwtContext:
         response = operator_client.get("/operator/v1/tenants", headers=bearer(session))
         assert response.status_code == 401
 
+    def test_deleted_account_kills_live_sessions(
+        self, operator_client: TestClient, operator_db: Session
+    ) -> None:
+        row = make_operator(operator_db)
+        session = login(operator_client, "ama@aequoros.com", PASSWORD)
+        operator_db.delete(row)
+        operator_db.commit()
+        response = operator_client.get("/operator/v1/tenants", headers=bearer(session))
+        assert response.status_code == 401
+
     def test_stale_role_claim_rejected(
         self, operator_client: TestClient, operator_db: Session
     ) -> None:
@@ -387,13 +397,15 @@ class TestOidcRowParity:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         make_operator(operator_db, "root@aequoros.com", role="operator_admin")
-        fake_oidc_verifier(monkeypatch, "root@aequoros.com")
+        # OIDC email casing is not an alternate identity: lookup remains
+        # normalized and the explicit provisioned role remains authoritative.
+        fake_oidc_verifier(monkeypatch, "ROOT@AEQUOROS.COM")
         response = operator_client.get(
             "/operator/v1/operators", headers=operator_headers("some-id-token")
         )
         assert response.status_code == 200
 
-    def test_allow_listed_email_without_row_stays_developer(
+    def test_allow_listed_email_without_row_is_denied(
         self,
         operator_client: TestClient,
         operator_db: Session,
@@ -403,10 +415,23 @@ class TestOidcRowParity:
         _ = operator_db
         fake_oidc_verifier(monkeypatch, "newhire@aequoros.com")
         headers = operator_headers("some-id-token")
-        # Documented allow-list behavior: authenticates …
-        assert operator_client.get("/operator/v1/tenants", headers=headers).status_code == 200
-        # … but with the base role, so account management is out of reach.
-        assert operator_client.get("/operator/v1/operators", headers=headers).status_code == 403
+        # Domain membership alone confers no base developer authority.
+        assert operator_client.get("/operator/v1/tenants", headers=headers).status_code == 401
+        assert operator_client.get("/operator/v1/operators", headers=headers).status_code == 401
+
+    def test_out_of_domain_email_is_denied(
+        self,
+        operator_client: TestClient,
+        operator_db: Session,
+        oidc_configured: None,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        make_operator(operator_db, "outsider@example.com", role="operator_admin")
+        fake_oidc_verifier(monkeypatch, "outsider@example.com")
+        response = operator_client.get(
+            "/operator/v1/tenants", headers=operator_headers("some-id-token")
+        )
+        assert response.status_code == 401
 
 
 # -- /operator/v1/operators management ---------------------------------------------
