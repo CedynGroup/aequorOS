@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.config import get_settings
+from app.core.observability import authorization_denied, cross_tenant_attempt
 from app.db.session import get_sessionmaker
 from app.integrations.storage.base import ObjectStorage
 from app.integrations.storage.s3 import get_object_storage
@@ -38,14 +39,83 @@ class TenantContext:
     actor_operator: str | None = None
 
 
+# HTTP methods the boundary treats as state-changing. GET/HEAD/OPTIONS are the
+# safe set; everything else must justify itself against
+# ``IMPERSONATION_READ_ONLY_ROUTES`` before an impersonated session may reach it.
+_UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+# The ONLY routes an act-as-examiner (impersonated) session may reach with an
+# unsafe HTTP method. An entry is ``(method, templated route path)`` and is a
+# promise that the endpoint COMPUTES AND RETURNS while persisting nothing — a
+# POST purely because its input does not fit in a query string.
+#
+# Adding an entry here is an explicit, reviewable decision to carve a hole in the
+# absolute "an impersonated session may never mutate" invariant. Before adding
+# one, read the service function and confirm it issues no INSERT/UPDATE/DELETE
+# and no ``commit``. ``tests/api/test_impersonation_boundary.py`` pins this set.
+IMPERSONATION_READ_ONLY_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Scenario workbench what-if: ``analysis_workbench.run_analysis`` is
+        # documented and verified as "Writes nothing." Saving an analysis is a
+        # SEPARATE route (…/analyses) and is analyst-gated.
+        ("POST", "/api/v1/banks/{bank_id}/scenario-workbench/{module}/analysis"),
+    }
+)
+
+
+def refuse_impersonated_mutation(request: Request, principal: TenantContext) -> None:
+    """Refuse any unsafe-method request made under an impersonated session.
+
+    THE structural enforcement of the read-only impersonation invariant. It runs
+    at the authentication boundary (``get_current_principal``) and again when a
+    tenant DB session is opened (``get_tenant_db_session``), so it does not
+    depend on a route author choosing the right ``ctx`` dependency: an operator
+    act-as-examiner token cannot POST/PUT/PATCH/DELETE *anything* the exemption
+    set does not name, whatever the route declares.
+
+    Fails CLOSED: if the route cannot be identified from the request scope, an
+    unsafe method is refused rather than admitted.
+    """
+    if principal.impersonation_context is None:
+        return
+    method = request.method.upper()
+    if method not in _UNSAFE_METHODS:
+        return
+    route_path = getattr(request.scope.get("route"), "path", None)
+    if route_path is not None and (method, route_path) in IMPERSONATION_READ_ONLY_ROUTES:
+        return
+    authorization_denied(
+        reason="impersonation_read_only",
+        method=method,
+        route=route_path,
+        organization_id=principal.organization_id,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Impersonation sessions are read-only; this action is not permitted.",
+    )
+
+
 def get_current_principal(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
 ) -> TenantContext:
     """Authenticate a request by verifying its bearer access token (zero-trust).
 
     The tenant + user + roles come from the *verified* token claims, never from a
-    header a caller can spoof. This is the auth boundary the API depends on.
+    header a caller can spoof. This is the auth boundary the API depends on — and
+    therefore where the read-only impersonation invariant is enforced, for every
+    authenticated route, before any handler or narrower ``ctx`` dependency runs.
     """
+    principal = _authenticate_principal(credentials)
+    refuse_impersonated_mutation(request, principal)
+    return principal
+
+
+def _authenticate_principal(
+    credentials: HTTPAuthorizationCredentials | None,
+) -> TenantContext:
+    """Resolve the verified principal from the bearer credential (no policy)."""
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -127,21 +197,47 @@ def require_role(minimum: str):  # noqa: ANN201 - returns a FastAPI dependency c
         ctx: Annotated[TenantContext, Depends(get_current_principal)],
     ) -> TenantContext:
         if not security.has_role(list(ctx.roles), minimum):
+            authorization_denied(
+                reason="insufficient_role",
+                required_role=minimum,
+                held_roles=",".join(ctx.roles),
+                organization_id=ctx.organization_id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"This action requires the '{minimum}' role or higher.",
             )
         return ctx
 
+    # Name the dependency after the role it enforces. The route table is the only
+    # place the mutation-guard invariant can be checked wholesale (see
+    # ``tests/api/test_impersonation_boundary.py``), and it classifies routes by
+    # dependency name — an anonymous ``_dependency`` closure is indistinguishable
+    # from every other factory-produced dependency.
+    _dependency.__name__ = f"require_role_{minimum}"
     return _dependency
+
+
+# Roles that make a route a guarded mutation when required via ``require_role``.
+# ``examiner``/``viewer`` are read roles: requiring one is not a write gate.
+MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
+    {"require_role_admin", "require_role_approver", "require_role_analyst"}
+)
 
 
 def get_tenant_context(
     principal: Annotated[TenantContext, Depends(get_current_principal)],
 ) -> TenantContext:
-    """Tenant context for a request — derived from the verified bearer token.
+    """Tenant context for a READ request — derived from the verified bearer token.
 
     (Was demo header-trust; now every request is authenticated by JWT signature.)
+
+    This dependency applies NO role check: it admits ``viewer`` and ``examiner``.
+    A route that changes state must declare :data:`MutationTenant` (or
+    :data:`ApproverTenant`) — declaring :data:`Tenant` on a mutation is the P0-2
+    defect and hands ``viewer`` a write. Impersonation is refused structurally
+    upstream (``refuse_impersonated_mutation``), but the ROLE ladder is not: it
+    is the route's declaration that carries it.
     """
     return principal
 
@@ -150,13 +246,26 @@ def get_mutation_tenant_context(
     principal: Annotated[TenantContext, Depends(get_current_principal)],
 ) -> TenantContext:
     """Tenant context for a mutating request: requires an acting user AND the
-    ``analyst`` role (or higher). This single gate makes ``viewer`` accounts strictly
-    read-only across every mutation endpoint (RBAC — the write side of the model)."""
+    ``analyst`` role (or higher) — the RBAC write side of the model.
+
+    This gate makes ``viewer`` (and ``examiner``) read-only ONLY on the routes
+    that declare it. It is not a boundary control and never was: a route that
+    declares :data:`Tenant` instead never reaches this function. The invariant
+    that IS enforced at the boundary — no mutation under impersonation — lives in
+    :func:`refuse_impersonated_mutation`; the guard test
+    ``tests/api/test_impersonation_boundary.py`` walks the whole route table to
+    keep the role side honest.
+    """
     # Act-as-examiner impersonation is strictly read-only: an operator viewing a
     # tenant may NEVER mutate its state. Refuse here — before the actor/role
     # checks — so the reason is explicit and unmistakable. Defense in depth: the
-    # role is also pinned to ``examiner``, which sits in no mutation ladder.
+    # boundary already refused (``refuse_impersonated_mutation``) and the role is
+    # pinned to ``examiner``, which sits in no mutation ladder.
     if principal.impersonation_context is not None:
+        authorization_denied(
+            reason="impersonation_read_only_mutation",
+            organization_id=principal.organization_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Impersonation sessions are read-only; this action is not permitted.",
@@ -166,6 +275,12 @@ def get_mutation_tenant_context(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required."
         )
     if not security.has_role(list(principal.roles), "analyst"):
+        authorization_denied(
+            reason="insufficient_role",
+            required_role="analyst",
+            held_roles=",".join(principal.roles),
+            organization_id=principal.organization_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This action requires the 'analyst' role or higher.",
@@ -174,8 +289,15 @@ def get_mutation_tenant_context(
 
 
 def get_tenant_db_session(
+    request: Request,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
 ) -> Iterator[Session]:
+    # Second, independent gate on the read-only impersonation invariant. Every
+    # data-touching route takes this dependency, so even a route that somehow
+    # resolved a principal without the boundary check cannot obtain a writable
+    # session under an impersonated token. Cheap (a frozenset lookup) and it
+    # keeps the invariant true of the SESSION, not just of the auth path.
+    refuse_impersonated_mutation(request, ctx)
     session = get_sessionmaker()()
     session.info["organization_id"] = ctx.organization_id
     try:
@@ -193,6 +315,12 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
         select(Organization.id).where(Organization.id == ctx.organization_id)
     )
     if organization_id is None:
+        # The token names an organization this session cannot see. Either the org
+        # was deleted, or a token is being presented against the wrong tenant.
+        cross_tenant_attempt(
+            reason="organization_not_visible",
+            organization_id=ctx.organization_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tenant context is not valid.",
@@ -216,6 +344,14 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
         )
     )
     if actor_user_id is None:
+        # A verified token whose subject is not an active user of the org it
+        # claims. Deactivation is the benign explanation; a replayed or
+        # cross-tenant token is the one worth seeing.
+        cross_tenant_attempt(
+            reason="actor_not_active_in_organization",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tenant context is not valid.",
@@ -236,6 +372,12 @@ def get_approver_tenant_context(
     approvers release.
     """
     if not security.has_role(list(principal.roles), "approver"):
+        authorization_denied(
+            reason="insufficient_role",
+            required_role="approver",
+            held_roles=",".join(principal.roles),
+            organization_id=principal.organization_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This action requires the 'approver' role or higher.",
@@ -269,8 +411,23 @@ def require_module_access(module_key: str):  # noqa: ANN201 - returns a FastAPI 
             select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
         )
         if bank is None:
+            # RLS makes a genuine miss and a cross-tenant probe identical here:
+            # both return no row. Reported with a reason code that says exactly
+            # what was observed rather than asserting intent.
+            cross_tenant_attempt(
+                reason="bank_not_visible_to_tenant",
+                organization_id=ctx.organization_id,
+                bank_id=str(bank_id),
+                module=module_key,
+            )
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
         if module_key not in institution_types.get_type(db, bank).default_modules:
+            authorization_denied(
+                reason="module_not_entitled",
+                module=module_key,
+                organization_id=ctx.organization_id,
+                bank_id=str(bank_id),
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(

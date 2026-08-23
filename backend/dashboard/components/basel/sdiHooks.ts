@@ -108,6 +108,14 @@ export type RiskWeightBand = {
   confirmation_status: 'confirmed' | 'pending';
 };
 
+export type SdiRwaRiskClass = {
+  risk_class: string;
+  in_scope: boolean;
+  measurement: string | null;
+  rwa_ghs: string;
+  note: string;
+};
+
 export type SdiCapitalSummary = {
   as_of: string;
   net_own_funds_ghs: string;
@@ -119,6 +127,12 @@ export type SdiCapitalSummary = {
   computable: boolean;
   bands: RiskWeightBand[];
   pending_parameters: string[];
+  /** 'code_default' while no approved risk-class scope exists for the tenant. */
+  composition_source: 'control_plane' | 'code_default';
+  /** Every known risk class, in scope or not, with what it contributed. */
+  risk_classes: SdiRwaRiskClass[];
+  /** One sentence stating what the ratio charges for and what it omits. */
+  rwa_scope_note: string;
 };
 
 export type SdiCapitalHistoryPoint = {

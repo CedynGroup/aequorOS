@@ -20,6 +20,7 @@ from app.models import Bank
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services.regulatory_reporting import calendar, generation
 from app.services.regulatory_reporting.registry import REGISTRY
+from app.services.regulatory_reporting.templates import get_template
 from tests.api.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)
@@ -40,12 +41,22 @@ def _make_bank(db: Session, *, institution_type: str) -> Bank:
     return bank
 
 
-def test_every_registered_return_defaults_to_the_bank_class() -> None:
-    """The applicability field is the SDI filter's mechanism. Every return
-    registered so far is a bank/BoG return — the SDI/ORASS pack (Phase F) sets
-    ``('sdi',)``/``('bank', 'sdi')`` when its layouts land."""
-    assert all("bank" in d.institution_classes for d in REGISTRY.values())
-    assert not any("sdi" in d.institution_classes for d in REGISTRY.values())
+def test_sdi_returns_are_explicitly_scoped_and_bank_returns_remain_isolated() -> None:
+    """The public directive packets are SDI-only; no BSD return leaks across."""
+    sdi_codes = {
+        code for code, definition in REGISTRY.items() if "sdi" in definition.institution_classes
+    }
+    assert sdi_codes == {
+        "SDI-LMT-MONTHLY",
+        "SDI-LE-MONTHLY",
+        "SDI-STRESS-ANNUAL",
+        "SDI-IRRBB-QUARTERLY",
+    }
+    assert all(
+        definition.institution_classes == ("bank",)
+        for code, definition in REGISTRY.items()
+        if code not in sdi_codes
+    )
 
 
 def test_universal_bank_sees_the_full_reporting_calendar(db_session: Session) -> None:
@@ -56,22 +67,31 @@ def test_universal_bank_sees_the_full_reporting_calendar(db_session: Session) ->
     assert result.obligations
 
 
-def test_savings_and_loans_calendar_is_class_filtered_to_empty(db_session: Session) -> None:
+def test_savings_and_loans_sees_only_its_sdi_return_calendar(db_session: Session) -> None:
     bank = _make_bank(db_session, institution_type="savings_and_loans")
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
     result = calendar.list_obligations(db_session, ctx, bank.id, as_of=_AS_OF)
-    # No bank return leaks to an SDI tenant — the calendar is honestly empty
-    # until the SDI/ORASS return pack lands (docs/sdi.md §Phase F).
-    assert result.obligations == []
+    assert {obligation.return_code for obligation in result.obligations} == {
+        "SDI-LMT-MONTHLY",
+        "SDI-LE-MONTHLY",
+        "SDI-STRESS-ANNUAL",
+        "SDI-IRRBB-QUARTERLY",
+    }
+    assert {obligation.return_family for obligation in result.obligations} == {"sdi"}
+    assert result.coverage_note is None
 
 
-def test_finance_house_is_also_scoped_out_of_bank_returns(db_session: Session) -> None:
-    # Every deposit-taking non-bank licence resolves to 'sdi' and is scoped out
-    # of the bank return set the same way.
+def test_finance_house_sees_the_same_sdi_return_calendar(db_session: Session) -> None:
+    # Both licence types share the SDI class and its published directive pack.
     bank = _make_bank(db_session, institution_type="finance_house")
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
     result = calendar.list_obligations(db_session, ctx, bank.id, as_of=_AS_OF)
-    assert result.obligations == []
+    assert {obligation.return_code for obligation in result.obligations} == {
+        "SDI-LMT-MONTHLY",
+        "SDI-LE-MONTHLY",
+        "SDI-STRESS-ANNUAL",
+        "SDI-IRRBB-QUARTERLY",
+    }
 
 
 def test_sdi_cannot_generate_a_bank_only_return(db_session: Session) -> None:
@@ -88,3 +108,52 @@ def test_sdi_cannot_generate_a_bank_only_return(db_session: Session) -> None:
         generation.generate_package(db_session, ctx, sdi.id, payload)
     assert exc.value.status_code == 403
     assert "class" in str(exc.value.detail).lower()
+
+
+def test_sdi_lmt_template_contains_only_the_applicable_public_tables() -> None:
+    template = get_template(REGISTRY["SDI-LMT-MONTHLY"].template_id)
+    assert template is not None
+    sections = {section.section_code for section in template.sections}
+    assert "prudential_ratio_inputs" in sections
+    assert "maturity_ladder" in sections
+    assert "unencumbered_assets" in sections
+    assert "lcr_by_currency" not in sections
+    assert not any("LCR" in section.sheet_title for section in template.sections)
+
+
+def test_sdi_large_exposure_template_is_the_five_published_directive_forms() -> None:
+    template = get_template(REGISTRY["SDI-LE-MONTHLY"].template_id)
+    assert template is not None
+    assert [section.section_code for section in template.sections] == [
+        "template_1",
+        "template_1a",
+        "template_2",
+        "template_3",
+        "template_4",
+    ]
+
+
+def test_sdi_stress_template_excludes_the_basel_capital_build() -> None:
+    template = get_template(REGISTRY["SDI-STRESS-ANNUAL"].template_id)
+    assert template is not None
+    sections = {section.section_code for section in template.sections}
+    assert {"t1_summary_positions", "t3_profit_and_loss", "t5_rwa", "governance"} <= sections
+    assert "t2_capital_projection" not in sections
+    table1 = next(
+        section for section in template.sections if section.section_code == "t1_summary_positions"
+    )
+    assert [column.header for column in table1.columns] == [
+        "Label",
+        "Period",
+        "Net Own Funds",
+        "Risk-Weighted Assets",
+        "CAR %",
+        "Paid-up Capital",
+    ]
+
+
+def test_sdi_irrbb_template_omits_the_bank_tier1_outlier_columns() -> None:
+    template = get_template(REGISTRY["SDI-IRRBB-QUARTERLY"].template_id)
+    assert template is not None
+    eve = next(section for section in template.sections if section.section_code == "eve_scenarios")
+    assert [column.key for column in eve.columns] == ["code", "eve_ghs", "value"]

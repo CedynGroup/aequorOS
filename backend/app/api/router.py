@@ -34,9 +34,11 @@ from app.features.manage_market_data_connections import router as market_data_co
 from app.features.manage_market_data_overlays import router as market_data_overlays_router
 from app.features.manage_market_data_uploads import router as market_data_uploads_router
 from app.features.manage_notifications import router as notifications_router
+from app.features.manage_reconciliation import router as reconciliation_router
 from app.features.manage_regulatory_reporting import router as regulatory_reporting_router
 from app.features.manage_scenarios import router as scenarios_router
 from app.features.manage_stress_scenarios import router as stress_scenarios_router
+from app.features.manage_system_of_record import router as system_of_record_router
 from app.features.manage_temenos_connections import router as temenos_connections_router
 from app.features.market_data_sources import router as market_data_sources_router
 from app.features.push_data import router as push_router
@@ -73,6 +75,7 @@ v1_router.include_router(auth_router)
 v1_router.include_router(attestation_router)
 v1_router.include_router(banks_router)
 v1_router.include_router(ingestion_router)
+v1_router.include_router(system_of_record_router)
 v1_router.include_router(push_router)
 v1_router.include_router(database_direct_connections_router)
 v1_router.include_router(regulatory_liquidity_router)
@@ -96,6 +99,11 @@ v1_router.include_router(regulatory_irr_router, dependencies=[require_module_acc
 v1_router.include_router(regulatory_fx_router, dependencies=[require_module_access("fx")])
 v1_router.include_router(regulatory_ftp_router, dependencies=[require_module_access("ftp")])
 v1_router.include_router(regulatory_reporting_router)
+# The reconciliation escape valve (audit 2026-08-22 D-20): the fail-closed
+# balance-sheet identity control had no product path to record an approved,
+# bounded exception, so a blocked tenant could only be unblocked by a database
+# write. Class-agnostic — the control applies to every institution.
+v1_router.include_router(reconciliation_router)
 v1_router.include_router(organization_users_router)
 v1_router.include_router(institution_profile_router)
 v1_router.include_router(integration_keys_router)

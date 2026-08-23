@@ -45,11 +45,17 @@ export function SdiCarThresholdChart({
   height = 180,
 }: {
   carPct: number | null;
-  carMinPct: number;
+  /** The s.29 minimum from the control plane, or null when it is unresolved:
+   *  no threshold line is drawn and the bar takes no compliance colour. */
+  carMinPct: number | null;
   height?: number;
 }) {
   if (carPct === null) return null;
-  const ceiling = Math.max(carPct, carMinPct) * 1.2 || 10;
+  // Axis scale only — never a floor. An unresolved minimum simply drops out of
+  // the extent rather than entering it as a zero (which would also read as a
+  // `?? 0` floor fallback to anyone scanning this file, and to the guard).
+  const extents = carMinPct === null ? [carPct] : [carPct, carMinPct];
+  const ceiling = Math.max(...extents) * 1.2 || 10;
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={[{ label: 'Capital adequacy ratio', actual: carPct }]} layout="vertical" margin={{ top: 16, right: 28, bottom: 8, left: 8 }}>
@@ -57,8 +63,10 @@ export function SdiCarThresholdChart({
         <XAxis type="number" domain={[0, ceiling]} {...axisProps} tickFormatter={(value: number) => `${value.toFixed(0)}%`} />
         <YAxis type="category" dataKey="label" hide />
         <Tooltip {...chartTooltipProps} formatter={(value: number) => [`${value.toFixed(2)}%`, 'CAR']} />
-        <ReferenceLine x={carMinPct} stroke={CHART_CRIT} strokeDasharray="4 3" label={{ value: `Minimum ${carMinPct.toFixed(1)}%`, position: 'top', fill: CHART_CRIT, fontSize: 11 }} />
-        <Bar dataKey="actual" fill={carPct >= carMinPct ? CHART_OK : CHART_CRIT} maxBarSize={30} radius={[0, 3, 3, 0]} />
+        {carMinPct !== null && (
+          <ReferenceLine x={carMinPct} stroke={CHART_CRIT} strokeDasharray="4 3" label={{ value: `Minimum ${carMinPct % 1 === 0 ? carMinPct.toFixed(0) : carMinPct.toFixed(2)}%`, position: 'top', fill: CHART_CRIT, fontSize: 11 }} />
+        )}
+        <Bar dataKey="actual" fill={carMinPct === null ? seriesColor(0) : carPct >= carMinPct ? CHART_OK : CHART_CRIT} maxBarSize={30} radius={[0, 3, 3, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -115,7 +123,8 @@ export function SdiCapitalTrendChart({
   height = 240,
 }: {
   data: SdiCapitalTrendPoint[];
-  carMinPct: number;
+  /** Null when the s.29 minimum is unresolved — no floor line is drawn. */
+  carMinPct: number | null;
   height?: number;
 }) {
   return (
@@ -126,7 +135,9 @@ export function SdiCapitalTrendChart({
         <YAxis {...axisProps} tickFormatter={(value: number) => `${value.toFixed(0)}%`} width={42} />
         <Tooltip {...chartTooltipProps} formatter={(value: number, name: string) => [`${value.toFixed(2)}%`, name]} />
         <Legend {...chartLegendProps} />
-        <ReferenceLine y={carMinPct} stroke={CHART_CRIT} strokeDasharray="4 3" label={{ value: 'CAR floor', position: 'right', fill: CHART_CRIT, fontSize: 11 }} />
+        {carMinPct !== null && (
+          <ReferenceLine y={carMinPct} stroke={CHART_CRIT} strokeDasharray="4 3" label={{ value: 'CAR floor', position: 'right', fill: CHART_CRIT, fontSize: 11 }} />
+        )}
         <Line type="monotone" dataKey="carPct" name="CAR" stroke={CHART_OK} strokeWidth={2} dot={false} connectNulls />
         <Line type="monotone" dataKey="nplPct" name="NPL ratio" stroke={seriesColor(3)} strokeWidth={2} dot={false} />
       </LineChart>

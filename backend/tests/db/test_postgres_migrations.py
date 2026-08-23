@@ -143,6 +143,18 @@ def clear_database_caches() -> None:
     get_engine.cache_clear()
 
 
+def test_reconciliation_migration_targets_the_regulatory_parameter_control_plane() -> None:
+    """The control-plane table is singular; a plural name breaks every fresh upgrade."""
+    migration_path = (
+        Path(__file__).parents[2]
+        / "alembic"
+        / "versions"
+        / "202608220032_reconciliation_control.py"
+    )
+
+    assert '_PARAM_TABLE = "regulatory_parameter"' in migration_path.read_text()
+
+
 @pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,
     reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
@@ -167,6 +179,30 @@ def test_postgres_migrations_create_workflow_constraints_and_rls(
         "risk_scores_tenant_isolation",
         "risk_case_decisions_tenant_isolation",
     }
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_postgres_migrations_require_an_explicit_temenos_currency(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    with migrated_postgres_schema.app_engine.connect() as connection:
+        default = connection.scalar(
+            text(
+                """
+                SELECT column_default
+                FROM information_schema.columns
+                WHERE table_schema = :schema_name
+                  AND table_name = 'temenos_connections'
+                  AND column_name = 'default_currency'
+                """
+            ),
+            {"schema_name": migrated_postgres_schema.schema_name},
+        )
+
+    assert default is None
 
 
 @pytest.mark.skipif(

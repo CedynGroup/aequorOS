@@ -5,6 +5,13 @@ dict (OFS service-user password, IRIS/Open-API client secret or API key), but no
 response model ever contains credential material — only the lifecycle status,
 the SHA-256 fingerprint, and the expiry timestamp. Mirrors the market-data
 connection schemas.
+
+``endpoint`` is an outbound destination an ``analyst`` chooses, so it is
+screened here by :mod:`app.core.outbound` — the non-resolving half, which turns
+``https://169.254.169.254`` or ``ofs://localhost`` into an immediate 422. It is
+fast feedback, NOT the security boundary: the resolving check that gates egress
+runs in the service immediately before sign-on/pull
+(``temenos_connections.guard_endpoint``).
 """
 
 from __future__ import annotations
@@ -13,17 +20,40 @@ from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.core.outbound import check_url_syntax
 
 type ConnectionMode = Literal["OFS", "IRIS", "OPEN_API"]
 type CoreSystem = Literal["T24", "FINACLE", "FLEXCUBE"]
+
+# Schemes a Temenos endpoint may carry. ``ofs``/``ofss`` are the OFS-mode
+# locator forms this codebase already writes (``ofs://sample-bank``); the REST
+# modes (IRIS / Open API) are TLS-only. Plain ``http`` is deliberately absent —
+# no transport in the tree needs it, and a core reached in clear text would
+# carry the whole book unencrypted. A bare ``host``/``host:port`` (no scheme)
+# is accepted and screened as a host.
+TEMENOS_ENDPOINT_SCHEMES: frozenset[str] = frozenset({"https", "ofs", "ofss"})
 
 
 class ClosedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class TemenosConnectionCreate(ClosedModel):
+class _OutboundEndpointField:
+    """Shared egress screening for the create/update payloads."""
+
+    @field_validator("endpoint")
+    @classmethod
+    def _screen_endpoint(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return check_url_syntax(
+            value, allowed_schemes=TEMENOS_ENDPOINT_SCHEMES, field="endpoint"
+        )
+
+
+class TemenosConnectionCreate(_OutboundEndpointField, ClosedModel):
     """Onboard one Temenos core-banking connection.
 
     ``credentials`` is required (the shape depends on ``connection_mode``: OFS
@@ -38,7 +68,7 @@ class TemenosConnectionCreate(ClosedModel):
     endpoint: str = Field(min_length=1, max_length=255)
     core_system: CoreSystem = "T24"
     companies: list[str] = Field(default_factory=list)
-    default_currency: str = Field(default="GHS", min_length=3, max_length=3)
+    default_currency: str = Field(min_length=3, max_length=3)
     domains: list[str] = Field(default_factory=list)
     schedule: dict[str, str] | None = Field(default=None, title="Connection Schedule Input")
     catalog_overrides: dict[str, Any] | None = Field(
@@ -50,12 +80,15 @@ class TemenosConnectionCreate(ClosedModel):
     )
 
 
-class TemenosConnectionUpdate(ClosedModel):
+class TemenosConnectionUpdate(_OutboundEndpointField, ClosedModel):
     """Post-onboarding management and credential rotation.
 
     When ``credentials`` is present the new set is validated FIRST; only on
     success are the stored ciphertext, fingerprint, and expiry swapped in one
     transaction. On failure nothing changes and the error is returned as a 422.
+
+    ``endpoint`` is re-screened on every edit: an ACTIVE connection may not be
+    re-pointed at a blocked destination.
     """
 
     display_name: str | None = Field(default=None, min_length=1, max_length=120)

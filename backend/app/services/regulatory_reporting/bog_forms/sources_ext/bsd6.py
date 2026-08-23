@@ -63,6 +63,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalPosition,
@@ -175,6 +176,8 @@ def _position_rows(  # noqa: PLR0912 — one branch per positions.sum filter
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.as_of_date <= rc.period.period_end,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
         .group_by(CanonicalPositionSnapshot.position_id)
         .subquery()
@@ -199,7 +202,10 @@ def _position_rows(  # noqa: PLR0912 — one branch per positions.sum filter
             CanonicalPositionSnapshot.organization_id == rc.ctx.organization_id,
             CanonicalPositionSnapshot.bank_id == rc.bank.id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
         )
     )
     if types := params.get("position_types"):

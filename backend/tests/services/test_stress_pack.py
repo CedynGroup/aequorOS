@@ -21,7 +21,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod, RegulatoryPackage
+from app.domain.authority.registry import EXTERNAL_REGULATORY_VERIFICATION_REQUIRED
+from app.models import (
+    Bank,
+    BankReportingPeriod,
+    RegulatoryMetricResult,
+    RegulatoryPackage,
+    RegulatoryRun,
+)
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
@@ -29,6 +36,7 @@ from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import regulatory_capital, regulatory_liquidity, reverse_stress
 from app.services.regulatory_reporting import generation
 from app.services.regulatory_reporting.exports import export_package
+from app.services.regulatory_reporting.provenance import compliance_verdict_authority
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -229,3 +237,189 @@ def test_stress_pack_exports_to_xlsx(
         "Recommended Actions",
         "Fidelity & Provenance",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Compliance verdicts must carry an authority (WS-C1, 2026-08-23)
+# ---------------------------------------------------------------------------
+
+#: What a capital stress run persisted before ``regulatory_capital`` stopped
+#: appending it: a POST-STRESS capital adequacy ratio carrying a threshold and a
+#: green/red compliance status. The primary holds 39 such rows on sealed runs,
+#: every one of them with this exact 10% floor. They are append-only evidence and
+#: are never rewritten — the pack must simply refuse to repeat the verdict.
+LEGACY_POST_STRESS_METRIC = "car_pct_end"
+LEGACY_POST_STRESS_THRESHOLD = Decimal("10.000000")
+LEGACY_POST_STRESS_VALUE = Decimal("7.410000")
+LEGACY_POST_STRESS_STATUS = "red"
+
+
+def _seal_legacy_metric_row(
+    db: Session, *, scenario_code: str = "severe"
+) -> RegulatoryMetricResult:
+    """Append the legacy metric row onto an already-sealed capital scenario run.
+
+    This reproduces the shape of a run sealed before the fix; it does not UPDATE
+    or DELETE anything the engine wrote.
+    """
+    run = db.scalar(
+        select(RegulatoryRun).where(
+            RegulatoryRun.organization_id == DEMO_ORG_ID,
+            RegulatoryRun.bank_id == SAMPLE_BANK_ID,
+            RegulatoryRun.module == "capital",
+            RegulatoryRun.scenario_code == scenario_code,
+            RegulatoryRun.status == "succeeded",
+        )
+    )
+    assert run is not None, f"no succeeded capital run for scenario {scenario_code!r}"
+    row = RegulatoryMetricResult(
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        run_id=run.id,
+        metric_code=LEGACY_POST_STRESS_METRIC,
+        metric_value=LEGACY_POST_STRESS_VALUE,
+        unit="pct",
+        threshold_min=LEGACY_POST_STRESS_THRESHOLD,
+        status=LEGACY_POST_STRESS_STATUS,
+        position=99,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def test_a_legacy_post_stress_verdict_never_reaches_the_pack(db_session: Session) -> None:
+    """A sealed run carrying ``car_pct_end`` still yields a pack — with the
+    figure reported and the compliance verdict withheld, in words."""
+    _seed_stress_outcomes(db_session, with_reverse=False)
+    legacy = _seal_legacy_metric_row(db_session)
+
+    package = _generate(db_session)
+    lights = _section(package.snapshot, "traffic_lights")["rows"]
+    row = next(r for r in lights if r["code"] == "capital:severe:car_pct_end")
+
+    # The figure is NOT dropped — the reader still sees the number.
+    assert Decimal(row["value"]) == legacy.metric_value
+    # The verdict is gone: no threshold, no green/amber/red.
+    assert row["threshold"] is None
+    assert row["status"] is None
+    # And the artifact says so, in production copy — not an enum, not a code.
+    basis = row["compliance_basis"]
+    assert "reported for information only" in basis.lower()
+    assert "no regulatory authority is recorded" in basis
+    for leak in ("car_pct_end", "advisory", "filed", "None", "10.000000"):
+        assert leak not in basis
+
+    # The authorised sibling on the SAME run is untouched, and now names the
+    # authority that permits its verdict.
+    authorised = next(r for r in lights if r["code"] == "capital:severe:car_pct")
+    assert authorised["status"] in ("green", "amber", "red")
+    assert Decimal(authorised["threshold"]) > 0
+    assert authorised["compliance_basis"] == (
+        "Basel III / BoG Capital Requirement Directive (CRD)"
+    )
+
+    # The withheld row cannot inflate the headline red count either.
+    totals = {r["code"]: r for r in package.snapshot["totals"]}
+    assert int(totals["red_light_count"]["value"]) == sum(
+        1 for r in lights if r["status"] == "red"
+    )
+
+    # Sealed evidence is untouched: the run still carries the row it wrote.
+    db_session.refresh(legacy)
+    assert legacy.threshold_min == LEGACY_POST_STRESS_THRESHOLD
+    assert legacy.status == LEGACY_POST_STRESS_STATUS
+
+
+def test_the_withheld_verdict_is_absent_from_the_exported_artifact(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    """The snapshot is the record, but the workbook is what a reader opens."""
+    _seed_stress_outcomes(db_session, with_reverse=False)
+    _seal_legacy_metric_row(db_session)
+    package = _generate(db_session)
+    artifact = export_package(db_session, MAKER, package, "xlsx")
+    slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
+    assert slug
+    payload = None
+    for obj in storage.list(slug, "outputs"):
+        if obj.location.object_path == artifact.object_path:
+            _, stream = storage.read(obj.location)
+            payload = stream.read()
+    assert payload is not None
+    sheet = load_workbook(io.BytesIO(payload))["Stress Outcome Traffic Lights"]
+    headers = [cell.value for cell in sheet[5]]
+    assert headers[:6] == ["Row", "Item", "Value", "Threshold", "Status", "Compliance Basis"]
+    by_code = {
+        row[0].value: [cell.value for cell in row]
+        for row in sheet.iter_rows(min_row=6)
+        if row[0].value
+    }
+    withheld = by_code["capital:severe:car_pct_end"]
+    assert withheld[3] is None, "a withheld threshold must render as an empty cell"
+    assert withheld[4] is None, "a withheld classification must render as an empty cell"
+    assert "reported for information only" in str(withheld[5]).lower()
+    # The sheet documents the rule, so an empty cell is never read as "not measured".
+    notes = [
+        str(row[0].value)
+        for row in sheet.iter_rows(min_row=6, max_col=1)
+        if str(row[0].value or "").startswith("Note:")
+    ]
+    assert any("verdict on that value are different claims" in note for note in notes)
+    # Nothing anywhere on the sheet still prints the unauthorised floor.
+    printed = {str(cell.value) for row in sheet.iter_rows() for cell in row if cell.value}
+    assert "10.000000" not in printed
+
+
+def test_a_withheld_row_cannot_produce_a_remedial_action(db_session: Session) -> None:
+    """A recommended action restates the minimum in prose, so it may only follow
+    a classification the pack was authorised to print."""
+    withheld = generation._row(
+        "liquidity:combined:lcr_pct",
+        "lcr_pct under 'combined' (liquidity)",
+        Decimal("87.36"),
+        unit="pct",
+        threshold=None,
+        status=None,
+        compliance_basis="Reported for information only — …",
+        module="liquidity",
+        scenario_code="combined",
+    )
+    assert generation._stress_recommended_actions({}, [withheld]) == []
+    classified = {**withheld, "status": "red", "threshold": "100"}
+    assert len(generation._stress_recommended_actions({}, [classified])) == 1
+
+
+@pytest.mark.parametrize(
+    ("metric_id", "sealed_by", "permitted"),
+    [
+        ("car_pct", "capital", True),
+        ("tier1_ratio_pct", "capital", True),
+        ("lcr_pct", "liquidity", True),
+        ("nsfr_pct", "liquidity", True),
+        # No registered authority at all — the legacy post-stress ratio.
+        ("car_pct_end", "capital", False),
+        # Never registered, and never will be by accident: the rule is a lookup,
+        # not a list of forbidden names.
+        ("some_metric_invented_next_quarter", "capital", False),
+        # Registered and filed, but under a DIFFERENT sealing engine.
+        ("lcr_pct", "capital", False),
+        # Registered, but as supervisory monitoring — reviewed, never filed.
+        ("year5_car_pct", "forecast", False),
+        # Registered only as internal analysis ("must never reach a filing").
+        ("car_pct", "forecast", False),
+    ],
+)
+def test_only_a_filed_authority_permits_a_compliance_verdict(
+    metric_id: str, sealed_by: str, permitted: bool
+) -> None:
+    verdict = compliance_verdict_authority(metric_id, sealed_by=sealed_by)
+    assert verdict.permitted is permitted
+    assert verdict.basis
+    if permitted:
+        # The citation is the register's own string — never composed here.
+        assert verdict.authority_reference == verdict.basis
+        assert EXTERNAL_REGULATORY_VERIFICATION_REQUIRED not in verdict.basis
+    else:
+        assert verdict.authority_reference is None
+        assert verdict.basis.startswith("Reported for information only")

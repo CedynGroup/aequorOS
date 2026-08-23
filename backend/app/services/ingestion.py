@@ -449,6 +449,17 @@ def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orches
         reference_rows=records.reference_row_counts,
         tables=_tables_breakdown(extraction, records, outcome.record_statuses),
     )
+    unvalidated = _unvalidated_records(records, outcome.record_statuses)
+    if unvalidated:
+        # P0-11: these persist as 'pending' and no calculation reads them. Say so
+        # on the batch an operator looks at, rather than leaving them to be
+        # discovered as a silent shortfall in a derived number.
+        summary = report.setdefault("summary", {})
+        summary["records_unvalidated"] = sum(unvalidated.values())
+        report["unvalidated_records"] = [
+            {"entity_type": entity_type, "records": count}
+            for entity_type, count in sorted(unvalidated.items())
+        ]
     batch.validation_report = report
     batch.status = outcome.overall_status
     batch.completed_at = utc_now()
@@ -621,6 +632,7 @@ def get_ingestion_summary(db: Session, ctx: TenantContext, bank_id: str) -> Inge
                     model.organization_id == org_id,
                     model.bank_id == bank.id,
                     model.superseded_by.is_(None),
+                    model.withdrawn_at.is_(None),
                 )
             )
             or 0
@@ -738,6 +750,7 @@ def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter contr
         CanonicalPosition.organization_id == ctx.organization_id,
         CanonicalPosition.bank_id == bank.id,
         CanonicalPosition.superseded_by.is_(None),
+        CanonicalPosition.withdrawn_at.is_(None),
     ]
     if position_type is not None:
         filters.append(CanonicalPosition.position_type == position_type)
@@ -754,6 +767,7 @@ def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter contr
                 CanonicalPositionSnapshot.position_id == CanonicalPosition.id,
                 CanonicalPositionSnapshot.organization_id == ctx.organization_id,
                 CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
                 CanonicalPositionSnapshot.as_of_date == as_of_date,
             )
             .exists()
@@ -798,6 +812,7 @@ def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter contr
         latest_filters = [
             CanonicalPositionSnapshot.organization_id == ctx.organization_id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.position_id.in_([position.id for position in positions]),
         ]
         if as_of_date is not None:
@@ -822,6 +837,7 @@ def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter contr
                 CanonicalPositionSnapshot.organization_id == ctx.organization_id,
                 CanonicalPositionSnapshot.bank_id == bank.id,
                 CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
             )
         )
         snapshots = {snapshot.position_id: snapshot for snapshot in db.scalars(snapshot_query)}
@@ -867,6 +883,7 @@ def list_position_facets(
         CanonicalPosition.organization_id == ctx.organization_id,
         CanonicalPosition.bank_id == bank.id,
         CanonicalPosition.superseded_by.is_(None),
+        CanonicalPosition.withdrawn_at.is_(None),
     )
 
     def _facet(column: Any) -> list[PositionFacetValueRead]:
@@ -1240,6 +1257,42 @@ def _table_resolution_findings(
     return findings
 
 
+#: The status a canonical record carries when validation produced NO status for
+#: it (enterprise audit 2026-08-20, P0-11). ``pending`` is already in
+#: ``VALIDATION_STATUSES`` and is outside
+#: :data:`~app.domain.ingestion.constants.INCLUDED_VALIDATION_STATUSES`, the one
+#: scope every calculation reader admits, so it is the fail-closed default: an
+#: unvalidated row is persisted, visible and traceable, but unusable.
+UNVALIDATED_STATUS = "pending"
+
+
+def _unvalidated_records(
+    records: CanonicalRecords, record_statuses: dict[tuple[str, str], str]
+) -> dict[str, int]:
+    """Per entity type, how many records validation produced no status for.
+
+    In a healthy run this is empty: ``run_validation`` seeds a status for every
+    record it enumerates. A non-empty result means the validator and the
+    persister disagree about what is in the batch — a defect worth surfacing,
+    which the old ``"accepted"`` default hid completely.
+    """
+    missing: dict[str, int] = {}
+
+    def count(entity_type: str, source_reference: str) -> None:
+        if (entity_type, source_reference) not in record_statuses:
+            missing[entity_type] = missing.get(entity_type, 0) + 1
+
+    for gl_account in records.gl_accounts:
+        count("gl_account", gl_account.source_reference)
+    for counterparty in records.counterparties:
+        count("counterparty", counterparty.source_reference)
+    for product in records.products:
+        count("product", product.source_reference)
+    for position in records.positions:
+        count("position", position.source_reference)
+    return missing
+
+
 def _tables_breakdown(
     extraction: ExtractionResult,
     records: CanonicalRecords,
@@ -1274,9 +1327,12 @@ def _tables_breakdown(
         table = table_by_locator.get(source_locator)
         if table is None:
             return
-        record_status = record_statuses.get((entity_type, source_reference), "accepted")
+        # Absence is not acceptance (P0-11): an un-enumerated record counts as
+        # 'pending' here exactly as it persists, so the per-table breakdown an
+        # operator reads matches what the database holds.
+        record_status = record_statuses.get((entity_type, source_reference), UNVALIDATED_STATUS)
         counts = status_counts.setdefault(
-            table, {"accepted": 0, "warning": 0, "error": 0, "blocked": 0}
+            table, {"accepted": 0, "warning": 0, "error": 0, "blocked": 0, UNVALIDATED_STATUS: 0}
         )
         counts[record_status] = counts.get(record_status, 0) + 1
 
@@ -1313,6 +1369,7 @@ def _tables_breakdown(
                 "rows_warning": counts.get("warning", 0),
                 "rows_error": counts.get("error", 0),
                 "rows_blocked": counts.get("blocked", 0),
+                "rows_unvalidated": counts.get(UNVALIDATED_STATUS, 0),
                 "suggestion": None if resolved_to else suggestion_for(table.name),
             }
         )
@@ -1433,6 +1490,7 @@ def _known_references(
                     model.organization_id == ctx.organization_id,
                     model.bank_id == bank.id,
                     model.superseded_by.is_(None),
+                    model.withdrawn_at.is_(None),
                 )
             )
         )
@@ -1461,6 +1519,7 @@ def _prior_balances(
             CanonicalPositionSnapshot.organization_id == ctx.organization_id,
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.as_of_date < as_of_date,
         )
         .order_by(
@@ -1501,7 +1560,26 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
     }
 
     def status_of(entity_type: str, source_reference: str) -> str:
-        return record_statuses.get((entity_type, source_reference), "accepted")
+        """The validation status this record actually earned.
+
+        Absence is NOT acceptance (enterprise audit 2026-08-20, P0-11). The
+        pre-audit default was ``"accepted"``, so a record the validator never
+        enumerated persisted as accepted and was thereafter indistinguishable,
+        in every engine and every filed return, from one that genuinely passed.
+        It now persists as ``"pending"`` — a status every calculation reader
+        excludes (:data:`~app.domain.ingestion.constants.INCLUDED_VALIDATION_STATUSES`),
+        so an unvalidated row cannot reach a regulatory number. The count of
+        such rows is reported on the batch.
+
+        **This claim was HALF TRUE until 2026-08-22** (forensic re-audit D-4).
+        It held in the engines and did not hold in the filed returns: only 2 of
+        the 14 ``bog_forms/sources_ext`` modules carried the predicate, and the
+        shared ``positions.sum`` resolver behind BSD2 and BSD5A did not, so the
+        capital-adequacy return read the very rows the capital engine refuses.
+        The scope now has ONE spelling that both planes import, and the claim is
+        true as written.
+        """
+        return record_statuses.get((entity_type, source_reference), UNVALIDATED_STATUS)
 
     def existing_ids(key_column: Any, model: Any) -> dict[str, UUID]:
         rows = db.execute(
@@ -1509,6 +1587,7 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
                 model.organization_id == ctx.organization_id,
                 model.bank_id == bank.id,
                 model.superseded_by.is_(None),
+                model.withdrawn_at.is_(None),
             )
         )
         return {key: row_id for key, row_id in rows}
@@ -1519,6 +1598,7 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
                 model.organization_id == ctx.organization_id,
                 model.bank_id == bank.id,
                 model.superseded_by.is_(None),
+                model.withdrawn_at.is_(None),
                 *conditions,
             )
         )

@@ -36,8 +36,12 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
   const stressed = num(m.stressedVarGhs);
   const confidence = num(m.varConfidencePct);
 
-  const benefitPct = standaloneTotal > 0 ? (benefit / standaloneTotal) * 100 : 0;
-  const upliftRatio = portfolioVar > 0 ? stressed / portfolioVar : 0;
+  // Both are client-side ratios over engine figures. With no denominator there
+  // is NO ratio — a `0` here would render as a measured "0.0% of standalone sum"
+  // and a "0.00x base VaR", neither of which was computed. Absence stays absence.
+  const benefitPct =
+    standaloneTotal > 0 ? (benefit / standaloneTotal) * 100 : null;
+  const upliftRatio = portfolioVar > 0 ? stressed / portfolioVar : null;
 
   const standalone = data.standaloneVars.map((s) => ({
     currency: s.currency,
@@ -98,14 +102,20 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
           label="Diversification benefit"
           value={fmtCurrency(benefit)}
           status="ok"
-          hint={`${fmtPct(benefitPct, 1)} of standalone sum`}
+          hint={
+            benefitPct === null
+              ? 'No standalone VaR to compare against'
+              : `${fmtPct(benefitPct, 1)} of standalone sum`
+          }
         />
         <KpiStat
           label="Stressed VaR"
           value={fmtCurrency(stressed)}
           status="warn"
           hint={
-            upliftRatio > 0 ? `${upliftRatio.toFixed(2)}× base VaR` : 'Currency-crisis calibration'
+            upliftRatio === null
+              ? 'Currency-crisis calibration'
+              : `${upliftRatio.toFixed(2)}× base VaR`
           }
         />
       </div>
@@ -143,7 +153,7 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
             <p className="text-caption text-slate leading-relaxed">{stressedNote}</p>
             <p className="text-caption text-slate">
               Base VaR {fmtCurrency(portfolioVar)}
-              {upliftRatio > 0 && (
+              {upliftRatio !== null && (
                 <>
                   {' '}
                   · stress multiple{' '}

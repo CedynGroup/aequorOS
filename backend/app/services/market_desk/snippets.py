@@ -88,7 +88,12 @@ def _html_to_text(raw: bytes) -> str:
 
 def _pdf_to_text(raw: bytes) -> str:
     try:
-        from app.services.market_desk.sources.pdf_text import extract_text  # type: ignore
+        # Deferred on purpose: PDF extraction is an optional dependency, so a
+        # module-level import would break every desk import where it is absent —
+        # the except below is the whole point of importing here.
+        from app.services.market_desk.sources.pdf_text import (  # noqa: PLC0415
+            extract_text,  # type: ignore
+        )
     except Exception:
         extract_text = None
     if extract_text is not None:

@@ -85,12 +85,51 @@ def test_capital_path_composition_is_hand_derived() -> None:
     assert composition.baseline["quarterly_credit_loss_m"] == Decimal("3.5000")
 
 
+def test_a_pre_provision_loss_erodes_capital_instead_of_being_clamped_to_zero() -> None:
+    """WS-A3 open item 3, closed: the operating loss now reaches the capital path.
+
+    ``compose_capital_shocks`` used to compute the income leg as
+    ``max(preprovision, 0) x factor x tax``, so a bank that is loss-making BEFORE
+    provisions entered the stress as if it had broken even and its operating loss
+    never eroded capital. That is fail-open, and it flattered the most distressed
+    institutions hardest.
+
+    Both asymmetries the clamp stood in for are resolved conservatively: the loss
+    carries NO tax shield (a distressed bank cannot be assumed to realise the
+    deferred tax asset), and the income-compression factor — which is <= 1 and
+    would otherwise SHRINK the loss under stress — is not applied to it.
+    """
+    loss = Decimal("-80000000")
+    composition = compose_capital_shocks(
+        scenario_paths=severe_paths(),
+        baseline_annual_preprovision_income=loss,
+        baseline_annual_credit_loss=_BASELINE_CREDIT_LOSS,
+        baseline_credit_allowance=_BASELINE_ALLOWANCE,
+    )
+    # -80,000,000 / 4 / 1e6 = -20 per quarter, on BOTH legs: pre-tax, uncompressed.
+    quarterly = Decimal("-20.0000")
+    assert composition.stressed["quarterly_income_m"] == quarterly
+    assert composition.baseline["quarterly_income_m"] == quarterly
+    # The severe scenario still compresses income in general ...
+    assert composition.income_stress_factor == Decimal("0.75")
+    # ... it just never makes a loss smaller.
+    assert composition.stressed["quarterly_income_m"] <= composition.baseline["quarterly_income_m"]
+
+    # A profitable bank is untouched: same arithmetic, same figures as before.
+    profit = compose_capital_shocks(
+        scenario_paths=severe_paths(),
+        baseline_annual_preprovision_income=_BASELINE_PREPROVISION_INCOME,
+        baseline_annual_credit_loss=_BASELINE_CREDIT_LOSS,
+        baseline_credit_allowance=_BASELINE_ALLOWANCE,
+    )
+    assert profit.stressed["quarterly_income_m"] == Decimal("25.3125")
+    assert profit.baseline["quarterly_income_m"] == Decimal("33.7500")
+
+
 def test_compose_uses_the_ecl_engine_when_staged_exposures_are_supplied() -> None:
     exposures = (EclExposure(segment="corporate", stage=1, ead=Decimal("100000000")),)
     assumptions = (
-        EclAssumption(
-            segment="corporate", stage=1, pd_pct=Decimal("2"), lgd_pct=Decimal("45")
-        ),
+        EclAssumption(segment="corporate", stage=1, pd_pct=Decimal("2"), lgd_pct=Decimal("45")),
     )
     composition = compose_capital_shocks(
         scenario_paths=severe_paths(),
@@ -124,6 +163,7 @@ def test_base_scenario_produces_zero_enterprise_delta() -> None:
     # Composed stress keys equal the neutral baseline keys.
     assert outcome.capital.composition.stressed == outcome.capital.composition.baseline
     assert outcome.capital.car_erosion_pp == Decimal("0.000000")
+    assert outcome.liquidity is not None
     assert outcome.liquidity.lcr_erosion_pp == Decimal("0.000000")
     assert outcome.liquidity.nsfr_erosion_pp == Decimal("0.000000")
     assert outcome.irr is not None
@@ -141,10 +181,12 @@ def test_severe_scenario_couples_solvency_and_liquidity() -> None:
     assert outcome.capital.stressed_car_end_pct < outcome.capital.baseline_car_end_pct
     assert outcome.capital.car_erosion_pp < Decimal("0")
     # Stress erodes liquidity (run-off + HQLA haircut + reduced inflows).
+    assert outcome.liquidity is not None
     assert outcome.liquidity.stressed_lcr.lcr_pct < outcome.liquidity.baseline_lcr.lcr_pct
     assert outcome.liquidity.lcr_erosion_pp < Decimal("0")
     # The coupling reports both axes against their floors.
     coupling = outcome.coupling
+    assert coupling is not None
     assert coupling.car_min_pct == bog_capital_params().car_min_pct
     assert coupling.lcr_min_pct == bog_liquidity_params().lcr_min_pct
     assert coupling.stressed_car_end_pct == outcome.capital.stressed_car_end_pct
@@ -190,10 +232,23 @@ def _phase4_overrides() -> dict[str, object]:
     return {
         "bottom_up_credit": BottomUpCreditInputs(
             exposures=(
-                CreditExposure("L1", "corporates", Decimal("100000000"), Decimal("2"),
-                               Decimal("45"), Decimal("100")),
-                CreditExposure("L2", "banks", Decimal("30000000"), Decimal("1"),
-                               Decimal("30"), Decimal("20"), is_foreign_currency=True),
+                CreditExposure(
+                    "L1",
+                    "corporates",
+                    Decimal("100000000"),
+                    Decimal("2"),
+                    Decimal("45"),
+                    Decimal("100"),
+                ),
+                CreditExposure(
+                    "L2",
+                    "banks",
+                    Decimal("30000000"),
+                    Decimal("1"),
+                    Decimal("30"),
+                    Decimal("20"),
+                    is_foreign_currency=True,
+                ),
             )
         ),
         "concentration": ConcentrationInputs(
@@ -251,9 +306,7 @@ def test_phase4_run_serializes_and_is_reproducible() -> None:
     assert first == second
     # The full serialized outcome (Phase-4 sections included) is JSON-safe.
     json.dumps(first)
-    assert {"bottom_up_credit", "concentration", "operational", "contingent_leverage"} <= set(
-        first
-    )
+    assert {"bottom_up_credit", "concentration", "operational", "contingent_leverage"} <= set(first)
 
 
 def _curve() -> dict[Decimal, Decimal]:

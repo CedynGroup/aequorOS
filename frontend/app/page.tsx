@@ -21,8 +21,9 @@ export default function HomePage() {
             </h1>
             <p className="mt-6 text-ice-blue text-lg md:text-xl leading-relaxed max-w-[620px]">
               Cloud-native balance sheet management, regulatory capital and
-              liquidity reporting, and risk modeling — connected to the cores
-              mid-tier banks already run.
+              liquidity reporting, and risk modeling — fed by file upload, a
+              secure push API, or a read-only extract from the core your bank
+              already runs.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-4">
               <LinkButton href="/contact" variant="primary-on-dark">
@@ -33,8 +34,8 @@ export default function HomePage() {
               </LinkButton>
             </div>
             <p className="mt-6 text-sm text-ice-blue/70">
-              Live platform · Data Engine, six ALM engines, and BoG regulatory
-              returns · onboarding pilot banks
+              Working platform · Data Engine, six ALM engines, and Bank of
+              Ghana return formats · onboarding our first design-partner banks
             </p>
           </div>
 
@@ -85,8 +86,8 @@ export default function HomePage() {
                 label="Annual Big 4 consulting spend per bank on stress testing and Basel compliance"
               />
               <StatCard
-                number="10 days"
-                label="Deadline for monthly prudential submissions to the Bank of Ghana, our pilot regulator"
+                number="14 days"
+                label="Bank of Ghana deadline for monthly prudential returns after the reporting date — 9 days for weekly returns"
               />
               <StatCard
                 number="$50–200K+"
@@ -130,7 +131,7 @@ export default function HomePage() {
             {[
               {
                 title: 'Data Engine',
-                body: 'Pull from Oracle/FLEXCUBE, Snowflake, Temenos T24, a secure API, or file upload. Normalize into an auditable canonical model — configured per bank, not hard-coded into the product.',
+                body: 'File upload and secure API push are available now. Database, core-banking, and market-data integrations are configured per bank and enabled only after deployment and vendor onboarding are verified.',
               },
               {
                 title: 'Six ALM engines',
@@ -138,11 +139,11 @@ export default function HomePage() {
               },
               {
                 title: 'Regulatory returns',
-                body: 'Bank of Ghana BSD prudential returns generated in regulator formats and exported to Excel, CSV, or PDF. Ghana is the pilot; other African regulators share the same engine.',
+                body: 'Bank of Ghana BSD prudential returns generated in the regulator’s own workbook formats and exported to Excel, CSV, or PDF, ready for an officer to review and sign. Ghana is the pilot; other African regulators share the same engine.',
               },
               {
                 title: 'Audit by construction',
-                body: 'Immutable snapshots, full lineage, and value-based reproducibility so a past submission can be reproduced exactly — examiner-ready evidence, not a reconstructed spreadsheet.',
+                body: 'Immutable snapshots, full lineage, and value-based reproducibility so a past return can be regenerated exactly, figure by figure — evidence you can put in front of an examiner, not a reconstructed spreadsheet.',
               },
             ].map((item) => (
               <div key={item.title} className="bg-navy p-8">
@@ -182,8 +183,8 @@ export default function HomePage() {
               },
               {
                 num: '02',
-                title: 'Deployed in weeks',
-                body: 'Not six-to-eighteen-month programs. BoG return templates ship today; Nigeria (CBN) and South Africa (SARB) follow on the same engine.',
+                title: 'Weeks, not quarters',
+                body: 'No six-to-eighteen-month program: a bank starts producing numbers from its first data load. Bank of Ghana return formats ship today; Nigeria (CBN) and South Africa (SARB) are next on the same engine.',
               },
               {
                 num: '03',
@@ -225,7 +226,7 @@ export default function HomePage() {
               {
                 num: '01',
                 title: 'Regulatory tightening',
-                body: 'Central banks now expect ILAAP with stress testing, monthly capital calculations, and LCR/NSFR — with mid-tier banks held to Tier 1 rigor while still on Excel.',
+                body: 'Ghana alone put ICAAP, stress testing and two liquidity directives out for exposure in February 2026, all stated effective 1 January 2027. Mid-tier banks are being handed Tier 1 rigor on a dated schedule, while still on Excel.',
               },
               {
                 num: '02',

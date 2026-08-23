@@ -16,6 +16,7 @@ import BatchesTable from '@/components/data-engine/BatchesTable';
 import ActivatePanel from '@/components/data-engine/ActivatePanel';
 import ConnectionHealthPanel from '@/components/data-engine/ConnectionHealthPanel';
 import LiveStatusCard from '@/components/live/LiveStatusCard';
+import UnreconciledBookBanner from '@/components/live/UnreconciledBookBanner';
 
 export default function DataEngineOverviewPage() {
   return (
@@ -26,6 +27,7 @@ export default function DataEngineOverviewPage() {
         subtitle="Connect data sources, ingest into the canonical model, and trace every record back to its source."
       />
       <div className="px-8 py-6 space-y-8 max-w-6xl">
+        <UnreconciledBookBanner />
         <IntegrationCards />
         <ConnectionHealthPanel />
         <LiveStatusCard />

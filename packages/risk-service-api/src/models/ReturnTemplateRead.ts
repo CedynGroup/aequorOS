@@ -96,6 +96,12 @@ export interface ReturnTemplateRead {
   regulator: string;
   /**
    *
+   * @type {boolean}
+   * @memberof ReturnTemplateRead
+   */
+  supportsWorkingCopy: boolean;
+  /**
+   *
    * @type {string}
    * @memberof ReturnTemplateRead
    */
@@ -127,6 +133,11 @@ export function instanceOfReturnTemplateRead(
   if (!("frequency" in value) || value["frequency"] === undefined) return false;
   if (!("generator" in value) || value["generator"] === undefined) return false;
   if (!("regulator" in value) || value["regulator"] === undefined) return false;
+  if (
+    !("supportsWorkingCopy" in value) ||
+    value["supportsWorkingCopy"] === undefined
+  )
+    return false;
   if (!("templateId" in value) || value["templateId"] === undefined)
     return false;
   if (!("title" in value) || value["title"] === undefined) return false;
@@ -154,6 +165,7 @@ export function ReturnTemplateReadFromJSONTyped(
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
     generator: json["generator"],
     regulator: json["regulator"],
+    supportsWorkingCopy: json["supports_working_copy"],
     templateId: json["template_id"],
     title: json["title"],
   };
@@ -180,6 +192,7 @@ export function ReturnTemplateReadToJSONTyped(
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     generator: value["generator"],
     regulator: value["regulator"],
+    supports_working_copy: value["supportsWorkingCopy"],
     template_id: value["templateId"],
     title: value["title"],
   };

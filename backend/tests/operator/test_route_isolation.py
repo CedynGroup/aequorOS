@@ -93,6 +93,10 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/inspector/sessions/{session_id}/end",
         # Cross-tenant worker/job wall.
         "/operator/v1/jobs",
+        # Cross-tenant read-only board of ingestion batches whose ETL dedup pass
+        # can never retry (job terminal, every attempt used). Diagnosis only —
+        # the re-drive itself is the per-tenant inspector mutation below.
+        "/operator/v1/jobs/stuck-dedup",
         # Operating-Environment desk console: compute-preview writes nothing,
         # the maker-checker lifecycle governs the [0,1] jurisdiction score, and
         # publish fans GHANA_OPERATING_ENVIRONMENT_SCORE out to every tenant.
@@ -136,10 +140,18 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/tenants/{org_id}/fix/config",
         "/operator/v1/tenants/{org_id}/fix/official-run",
         "/operator/v1/tenants/{org_id}/fix/recompute",
+        # Re-drive a stranded ETL dedup pass (session-gated inspector fix,
+        # audited as inspector.fix.redrive_dedup). Deliberately operator-
+        # initiated, not a timer: two of the three stranding causes needed a
+        # code change first, so a retry loop would have masked them.
+        "/operator/v1/tenants/{org_id}/fix/redrive-dedup",
         "/operator/v1/tenants/{org_id}/fix/rerun-ingestion",
         "/operator/v1/tenants/{org_id}/ingestion",
         "/operator/v1/tenants/{org_id}/ingestion/{batch_id}",
         "/operator/v1/tenants/{org_id}/metrics",
         "/operator/v1/tenants/{org_id}/storage",
         "/operator/v1/tenants/{org_id}/users",
+        # Worker liveness for the cross-tenant poller (audit P0-16): a worker
+        # that claims zero jobs and reports no error is otherwise invisible.
+        "/operator/v1/worker-health",
     ]

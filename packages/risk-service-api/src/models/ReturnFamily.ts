@@ -25,6 +25,7 @@ export const ReturnFamily = {
   Dbk: "dbk",
   Stress: "stress",
   Bsd: "bsd",
+  Sdi: "sdi",
 } as const;
 export type ReturnFamily = (typeof ReturnFamily)[keyof typeof ReturnFamily];
 

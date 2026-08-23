@@ -356,6 +356,23 @@ def _write_sheet(  # noqa: PLR0912, PLR0913, PLR0915
             ws[ref].value = text
 
 
+def _unvalidated_block(ws: Any, result: FormResult) -> None:
+    """State, on the artifact itself, that part of the book was excluded.
+
+    The validation report carries the same sentence, but this workbook is the
+    audit twin a reviewer may hold on its own — and a figure that is simply
+    smaller than it should be is exactly the kind of silence the forensic
+    re-audit (D-4) was about. Nothing is written when the book is fully
+    validated: the absence of this block is the all-clear.
+    """
+    if not result.unvalidated_note:
+        return
+    ws.append([])
+    ws.append(["Unvalidated canonical rows excluded from every line"])
+    ws[f"A{ws.max_row}"].font = Font(bold=True, color="C00000")
+    ws.append([result.unvalidated_note])
+
+
 def _completion_notes(
     wb: Workbook, result: FormResult, generated_at: datetime, *, mode: str = "official"
 ) -> None:
@@ -388,6 +405,7 @@ def _completion_notes(
     )
     for note in result.spec.scope_notes:
         ws.append([note])
+    _unvalidated_block(ws, result)
     ws.append([])
     ws.append(["Sheet", "Cell", "Line", "Label", "Status", "Source", "Notes"])
     for c in ws[ws.max_row]:

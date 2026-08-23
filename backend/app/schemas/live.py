@@ -25,8 +25,42 @@ class LiveModuleView(ClosedModel):
     source_fact_period_id: UUID | None
     engine_version: str
     calculation_generation: int
-    pipeline_state: Literal["ready", "failed"]
+    # "ready" = computed and the book behind it reconciles; "blocked" = computed
+    # on a book that FAILS the balance-sheet identity (the metrics are kept so
+    # the operator can see what to repair, and ``pipeline_error`` carries the
+    # control's message — nothing derived from it may be filed); "failed" = not
+    # computed at all. A reader must not treat "blocked" as "ready".
+    pipeline_state: Literal["ready", "blocked", "failed"]
     pipeline_error: str | None
+
+
+class LiveReconciliationRead(ClosedModel):
+    """The balance-sheet identity control's verdict on the live book.
+
+    Present only when the control has something to say — a plug was applied, an
+    approved exception is carrying the book, or the identity FAILS. Its absence
+    means the ingested book balanced exactly, because a plug of any size is
+    recorded (``app/services/reconciliation.py``).
+
+    Amounts are strings: they are exact decimals, and JSON floats are not.
+    """
+
+    control: str
+    status: Literal["within_tolerance", "exception_applied", "blocked"]
+    #: True when nothing derived from this book may be filed.
+    blocks_filing: bool
+    assets: str
+    funding: str
+    gap: str
+    gap_fraction: str
+    tolerance_pct: str
+    #: 'control_plane' (a governed, four-eyed, effective-dated row) or
+    #: 'module_default' (no row in force — the module's own versioned default).
+    tolerance_source: str
+    exception_id: str | None
+    #: The control's own sentence, as the derivation phrased it. ``None`` when
+    #: the verdict does not block.
+    message: str | None
 
 
 class LiveSummaryRead(ClosedModel):
@@ -37,9 +71,15 @@ class LiveSummaryRead(ClosedModel):
     period_label: str | None
     source_as_of_date: date | None
     modules: list[LiveModuleView]
-    # Always false: filing drift lives in the governance-only endpoint.
+    # True when data has been ingested since these figures were computed, so a
+    # refresh is queued and the numbers below are behind the book. It is NOT
+    # drift versus the last official filing — that is a governance concept and
+    # lives in ``BankFreshnessRead``. It was previously hardcoded false, which
+    # presented a value computed before the book changed as current.
     is_stale: bool
     computed_at: datetime | None = Field(title="Live Summary Computed At")
+    #: The balance-sheet identity verdict for the book these figures rest on.
+    reconciliation: LiveReconciliationRead | None = None
 
 
 class FreshnessModuleRead(ClosedModel):

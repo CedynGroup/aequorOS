@@ -12,7 +12,7 @@ lifecycle/status/expiry metadata only.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.domain.ingestion.constants import BATCH_ACCEPTED_STATUSES, STUCK_DEDUP_STATUSES
 from app.models import (
     AuditEvent,
     Bank,
@@ -38,6 +39,7 @@ from app.models import (
     TemenosConnection,
     TenantStorage,
     User,
+    WorkerHeartbeat,
 )
 from app.schemas.market_desk import DeskEntitlementRead
 from app.schemas.operator import (
@@ -48,13 +50,15 @@ from app.schemas.operator import (
     NeedsAttentionItemRead,
     OperatorAuditLogListRead,
     OperatorAuditLogRead,
+    OperatorJobRead,
+    OperatorJobsRead,
     OverviewConnectionsRead,
     OverviewDeskRead,
     OverviewIngestionRead,
     OverviewJobsRead,
     OverviewTenantsRead,
-    OperatorJobRead,
-    OperatorJobsRead,
+    StuckDedupBatchesRead,
+    StuckDedupBatchRead,
     TenantActivityRead,
     TenantEntitlementsRead,
     TenantFreshnessSummaryRead,
@@ -64,8 +68,11 @@ from app.schemas.operator import (
     TenantStorageRead,
     TenantUserRead,
     TenantUsersListRead,
+    WorkerHealthRead,
+    WorkerHeartbeatRead,
 )
 from app.services import freshness as freshness_service
+from app.services import job_queue
 from app.services.market_desk import entitlements as entitlements_service
 
 # Connection status → fleet health bucket (all three connection tables share the
@@ -678,6 +685,112 @@ def list_jobs(
             )
             for job in rows
         ]
+    )
+
+
+#: The out-of-band ML-ETL dedup job type. Named literally rather than imported
+#: from ``app.services.etl_dedup_jobs``: that module pulls in the whole ETL and
+#: model-loading stack, which the operator app has no reason to load. The
+#: allow-list in ``job_queue.JOB_TYPES`` validates it on every use.
+ETL_DEDUP_JOB_TYPE = "etl_dedup"
+
+
+def stuck_dedup_batches(db: Session, *, limit: int) -> StuckDedupBatchesRead:
+    """Ingestion batches whose out-of-band ML-ETL dedup pass can no longer run.
+
+    "Can no longer run" is a precise state, not a guess: the batch's own
+    ``etl_report.dedup_status`` still reads ``deferred`` or ``failed`` AND its
+    most recent ``etl_dedup`` job is terminal with every attempt used, so the
+    queue will never touch it again. A batch whose job is still queued/running,
+    or which has retries left, is working as designed and is not listed.
+
+    Cross-tenant by nature (this is the fleet backlog board) and therefore
+    read-only: each row carries the organization it belongs to, and acting on
+    one goes through the org-scoped, session-gated re-drive in
+    ``inspector_fix.redrive_dedup``.
+    """
+    batches = list(
+        db.scalars(
+            select(IngestionBatch)
+            .where(
+                IngestionBatch.etl_report.is_not(None),
+                IngestionBatch.status.in_(BATCH_ACCEPTED_STATUSES),
+            )
+            .order_by(IngestionBatch.created_at.desc())
+        )
+    )
+    rows: list[StuckDedupBatchRead] = []
+    for batch in batches:
+        dedup_status = (batch.etl_report or {}).get("dedup_status")
+        if dedup_status not in STUCK_DEDUP_STATUSES:
+            continue
+        job = job_queue.latest_for_entity(
+            db,
+            organization_id=batch.organization_id,
+            job_type=ETL_DEDUP_JOB_TYPE,
+            entity_id=batch.id,
+        )
+        if job is None or not job_queue.is_exhausted(job):
+            continue
+        rows.append(
+            StuckDedupBatchRead(
+                batch_id=batch.id,
+                organization_id=batch.organization_id,
+                bank_id=batch.bank_id,
+                source_system=batch.source_system,
+                as_of_date=batch.as_of_date,
+                records_extracted=batch.records_extracted,
+                dedup_status=str(dedup_status),
+                job_id=job.id,
+                job_status=job.status,
+                job_attempts=job.attempts,
+                job_max_attempts=job.max_attempts,
+                job_error=job.error,
+                job_completed_at=job.completed_at,
+            )
+        )
+        if len(rows) >= limit:
+            break
+    return StuckDedupBatchesRead(batches=rows)
+
+
+# -- worker health --------------------------------------------------------------
+def worker_health(db: Session, *, stale_after_seconds: float) -> WorkerHealthRead:
+    """Return durable worker evidence, marking stale rows from governed config.
+
+    ``worker_heartbeats`` is intentionally global: it holds no tenant data and
+    records a cross-tenant process's liveness. This operator-only read is the
+    controlled surface for it; the public tenant readiness route remains an
+    availability probe, not an operations dashboard.
+    """
+    observed_at = utc_now()
+    stale_before = observed_at - timedelta(seconds=stale_after_seconds)
+    rows = list(db.scalars(select(WorkerHeartbeat).order_by(WorkerHeartbeat.worker_id)))
+    workers: list[WorkerHeartbeatRead] = []
+    for row in rows:
+        last_seen_at = row.last_seen_at
+        comparable_last_seen = (
+            last_seen_at.replace(tzinfo=UTC)
+            if last_seen_at.tzinfo is None
+            else last_seen_at
+        )
+        is_stale = comparable_last_seen < stale_before
+        workers.append(
+            WorkerHeartbeatRead(
+                worker_id=row.worker_id,
+                status="stale" if is_stale else "healthy",
+                started_at=row.started_at,
+                last_seen_at=last_seen_at,
+                last_job_at=row.last_job_at,
+                last_error_at=row.last_error_at,
+                last_error=row.last_error,
+            )
+        )
+    return WorkerHealthRead(
+        ready=bool(workers) and all(worker.status == "healthy" for worker in workers),
+        stale_after_seconds=stale_after_seconds,
+        observed_at=observed_at,
+        workers=workers,
     )
 
 

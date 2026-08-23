@@ -104,10 +104,12 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).
-  `POST /banks/seed-demo` exists ONLY as the hermetic test fixture behind
-  `DEMO_SEED_ENABLED` (default off; tests/conftest.py enables it) — never enable it
-  against the primary database, never add seeding paths to the UI, and never re-add
-  seed CLI scripts.
+  There is **no seeding route at all**: `POST /banks/seed-demo` and its
+  `DEMO_SEED_ENABLED` flag were deleted in `2dc359f` — this file asserted they still
+  existed until 2026-08-22, and `grep` finds neither anywhere under `backend/app/`.
+  `tests/api/test_banks.py::test_seed_route_is_retired` pins that the path resolves to
+  no handler for any role or tenant. Never add seeding paths to the UI, and never
+  re-add seed CLI scripts.
 
 - **Official BoG BSD returns are generated from the templates themselves (built 2026-08-15;
   registry `docs/bog_returns/00_full_return_registry.md`).** Every workbook under
@@ -198,6 +200,24 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - The background worker claims jobs **across tenants**, so on RLS-forced Postgres it must run with
   a BYPASSRLS role — set `WORKER_DATABASE_URL` (the tenant-scoped app role sees zero queued rows).
   Falls back to `DATABASE_URL` for SQLite tests.
+- **The stale-job reclaim window is per job type (2026-08-22).** `reclaim_stale` requires its
+  window to EXCEED the longest legitimate handler runtime or it reclaims a live job and runs it
+  twice — which is exactly what happened: `etl_dedup` measurably ran **2h02m** against the 900 s
+  `WORKER_STALE_JOB_SECONDS` default, was marked "worker presumed dead" mid-flight, and executed
+  concurrently with itself. A handler that outgrows the fleet default gets an entry in
+  `job_queue.STALE_AFTER_OVERRIDES_SECONDS`, **never a bigger global number** (the global also
+  governs how fast a genuinely dead worker's jobs come back). Setting the default asserts every
+  unlisted type finishes inside it — the config comment names them. When a job exhausts
+  `max_attempts` nothing re-enqueues it: the recovery surface is
+  `GET /operator/v1/jobs/stuck-dedup` (fleet board, read) +
+  `POST /operator/v1/tenants/{org}/fix/redrive-dedup` (session-gated, audited), and it is
+  manual on purpose — the four stranded batches failed for three unrelated reasons.
+- **CI enforces every surface (2026-08-22).** `risk-service.yml` (backend), `dashboard.yml`
+  (typecheck + **lint** + **test** + build) and `web.yml` (`frontend` lint+build, `console`
+  typecheck+test+build). Before this, `frontend/` and `console/` were in no workflow and the
+  dashboard's fail-open guard and SSRF egress guard were unenforced. Each workflow's header
+  comment is its gate inventory — keep it accurate. `console` is deliberately NOT lint-gated
+  (no ESLint dependency or config in that workspace); see ARCHITECTURE.md §8.
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,
@@ -213,6 +233,18 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   validator) so a developer's `.env` can never leak into tests. Remote gotchas: the single role
   has no BYPASSRLS (worker needs a granted role before running remotely), and ad-hoc `psql` must
   set the `app.organization_id` GUC or FORCE-RLS tables read as empty.
+- **Anything built with `Base.metadata.create_all` runs no migration and no worker, so it
+  must seed what those two would have written** (2026-08-22). That is the hermetic pytest
+  suite AND the Playwright stack (`scripts/e2e_bootstrap.py`). Two shared fixtures own it:
+  `tests/fixtures/reference_data.py` seeds every GLOBAL registry from the same catalogues
+  the migrations read (`jurisdictions`; `institution_types.seed_rows`;
+  `regulatory_parameters.seed_rows`) — add a new registry there once and both callers get
+  it — and `tests/fixtures/live_plane.py` stands in for the worker's `pipeline_refresh`,
+  because every Treasury/ALM cockpit reads `current_financial_facts`, which only the worker
+  writes. Skip either and the failure is late and misleading: a missing registry surfaces as
+  a fail-closed 409 naming a seed migration, a missing live plane as "no computed data yet"
+  on every module page. Full prerequisites (object storage included):
+  `backend/dashboard/README.md` §End-to-end.
 - Regulatory `input_hash` must stay **value-based**: the snapshot `facts` list excludes `fact.id`
   and is sorted by canonical JSON (`INPUT_SCHEMA_VERSION = "bank-facts-v2"`). The live engine
   re-derives facts (new UUIDs) on every refresh, so an id- or order-dependent hash would break
@@ -312,6 +344,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   citations, the GHS ’000 unit convention in `SnapshotPreview`/`lib/templates.ts`,
   and the `sample_bank_seed` test fixture. Return families per jurisdiction are the
   unbuilt half (product.md §Phase 5 item 0).
+  **A `bog_`-prefixed IDENTIFIER is not a jurisdiction leak — and must not be
+  renamed** (2026-08-22): the `bog_required_reserves` / `bog_excess_reserves` /
+  `bog_excess_reserves_hqla` fact categories mean "central-bank reserves" in every
+  jurisdiction and are load-bearing wire/DB keys (value-based `input_hash`, BSD
+  line maps, goldens) — same rule as the `refinitiv` vendor id surviving its
+  rebrand. Country identity in *matching logic* is the real defect: the GL cash
+  classifier tested the literal token `"bog"`, so the SDI's `GL-1020 "Balances
+  with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
+  `fact_derivation._CentralBankNames` (the bank's own `central_bank_name` +
+  `regulator_short` from the registry — never `country_name`, which would sweep
+  "Government of Ghana bonds" into the cash line).
   **`banks.currency` and `banks.jurisdiction_code` are REQUIRED and carry no
   defaults** (2026-07-31). They previously defaulted to `"GHS"`/`"GH"`
   independently, so they could silently disagree — a bank created with

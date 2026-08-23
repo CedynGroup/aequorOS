@@ -119,9 +119,14 @@ def test_no_op_shocks_are_omitted_but_real_ones_kept() -> None:
     # A rate FALL: parallel shift is a real negative shock (kept); the
     # duration haircut and runoff floor at 0 and drop; a GDP rise lifts the
     # inflow multiplier to its 1.0 cap (neutral) and drops.
+    # inflation and fx_usd_ghs are read by the liquidity register and are
+    # authored FLAT (zero contribution) so the scenario is complete under the
+    # P0-9 fail-closed rule; every assertion below is unchanged.
     paths = (
         _p("interest_rate", 1, "0.20", "0.17"),  # Δ = −0.03
         _p("gdp_growth", 1, "0.05", "0.08"),  # Δ = +0.03
+        _p("inflation", 1, "0.15", "0.15"),  # flat
+        _p("fx_usd_ghs", 1, "12.5", "12.5"),  # flat
     )
     liquidity = translate(paths, "liquidity")
     assert liquidity == {}  # haircut→0, runoff→0, inflow_multiplier→1.0 (cap)

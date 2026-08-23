@@ -38,6 +38,7 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    CanonicalReferenceRow,
     IngestionBatch,
     LineageRecord,
     ParamLiquidityHaircut,
@@ -52,6 +53,7 @@ from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import regulatory_capital, regulatory_irr, regulatory_liquidity
 from app.services.regulatory_reporting import calendar, generation, validation
+from app.services.regulatory_reporting.common import UNVALIDATED_BOOK_RULE
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY
 from tests.fixtures.canonical_bank_fixture import (
@@ -122,7 +124,9 @@ def _tier1(db: Session) -> Decimal:
 class _CanonicalSeeder:
     """Minimal canonical scaffold (batch + lineage + row builders) at as-of."""
 
-    def __init__(self, db: Session, as_of: date = REPORTING_DATE) -> None:
+    def __init__(
+        self, db: Session, as_of: date = REPORTING_DATE, *, validation_status: str = "accepted"
+    ) -> None:
         self.db = db
         batch = IngestionBatch(
             organization_id=DEMO_ORG_ID,
@@ -151,7 +155,7 @@ class _CanonicalSeeder:
             "source_system": "EXCEL_CSV",
             "ingestion_batch_id": batch.id,
             "lineage_id": lineage.id,
-            "validation_status": "accepted",
+            "validation_status": validation_status,
         }
 
     def counterparty(  # noqa: PLR0913 - keyword-only fixture builder
@@ -710,9 +714,7 @@ def _seed_table1_book(db: Session) -> None:
     """
     seeder = _CanonicalSeeder(db)
     bog = seeder.counterparty("CP/BOG", "Central Bank", "CENTRAL_BANK")
-    corr_de = seeder.counterparty(
-        "CP/CORR-DE", "Frankfurt Corr Bank", "BANK_OECD", resident=False
-    )
+    corr_de = seeder.counterparty("CP/CORR-DE", "Frankfurt Corr Bank", "BANK_OECD", resident=False)
     aaa_bank = seeder.counterparty(
         "CP/AAA", "Zurich Prime Bank", "BANK_OECD", rating="AAA", resident=False
     )
@@ -729,19 +731,32 @@ def _seed_table1_book(db: Session) -> None:
     seeder.position("IBP/AAA", "INTERBANK_PLACEMENT", Decimal("4000000"), counterparty=aaa_bank)
     seeder.position("IBP/GH", "INTERBANK_PLACEMENT", Decimal("2500000"), counterparty=local_bank)
     seeder.position(
-        "SEC/TBILL", "SECURITY_HOLDING", Decimal("5000000"), product=tbill,
+        "SEC/TBILL",
+        "SECURITY_HOLDING",
+        Decimal("5000000"),
+        product=tbill,
         maturity=date(2026, 9, 30),
     )  # leg (e)
     seeder.position(
-        "SEC/TBILL-ENC", "SECURITY_HOLDING", Decimal("1000000"), product=tbill,
-        maturity=date(2026, 9, 30), encumbered=True,
+        "SEC/TBILL-ENC",
+        "SECURITY_HOLDING",
+        Decimal("1000000"),
+        product=tbill,
+        maturity=date(2026, 9, 30),
+        encumbered=True,
     )  # excluded: encumbered
     seeder.position(
-        "SEC/MDB", "SECURITY_HOLDING", Decimal("800000"),
-        maturity=date(2026, 12, 31), redeemable_within_two_days=True,
+        "SEC/MDB",
+        "SECURITY_HOLDING",
+        Decimal("800000"),
+        maturity=date(2026, 12, 31),
+        redeemable_within_two_days=True,
     )  # leg (f)
     seeder.position(
-        "SEC/GOGBOND", "SECURITY_HOLDING", Decimal("6000000"), product=bond,
+        "SEC/GOGBOND",
+        "SECURITY_HOLDING",
+        Decimal("6000000"),
+        product=bond,
         maturity=date(2030, 6, 30),
     )  # broad only
     seeder.position("SEC/EQ", "SECURITY_HOLDING", Decimal("3000000"), product=equity)
@@ -752,18 +767,25 @@ def _seed_table1_book(db: Session) -> None:
         "DEP/SAV", "DEPOSIT", Decimal("8000000"), deposit_account_type="SAVINGS"
     )  # stable, by-nature short-term
     seeder.position(
-        "DEP/FIX-LONG", "DEPOSIT", Decimal("5000000"), deposit_account_type="FIXED",
+        "DEP/FIX-LONG",
+        "DEPOSIT",
+        Decimal("5000000"),
+        deposit_account_type="FIXED",
         maturity=date(2028, 3, 31),
     )  # NOT short-term
     seeder.position(
-        "DEP/FIX-SHORT", "DEPOSIT", Decimal("4000000"), deposit_account_type="FIXED",
+        "DEP/FIX-SHORT",
+        "DEPOSIT",
+        Decimal("4000000"),
+        deposit_account_type="FIXED",
         maturity=date(2026, 6, 30),
     )  # short-term by maturity
+    seeder.position("IBB/1", "INTERBANK_BORROWING", Decimal("3000000"), maturity=date(2026, 4, 30))
     seeder.position(
-        "IBB/1", "INTERBANK_BORROWING", Decimal("3000000"), maturity=date(2026, 4, 30)
-    )
-    seeder.position(
-        "LCG/ST", "LC_GUARANTEE", Decimal("0"), maturity=date(2026, 8, 31),
+        "LCG/ST",
+        "LC_GUARANTEE",
+        Decimal("0"),
+        maturity=date(2026, 8, 31),
         extra_attributes={"notional_ghs": "1500000"},
     )  # contingent ≤ 1 yr
 
@@ -832,9 +854,7 @@ def test_lmt_table1_uses_board_register_floor(db_session: Session) -> None:
     totals = {item["code"]: item["value"] for item in package.snapshot["totals"]}
     assert totals["prudential_ratio_breaches"] == "1"
     findings = package.snapshot["metadata"]["generation_findings"]
-    assert any(
-        item["rule"] == "lmt.prudential_ratio_below_minimum" for item in findings
-    ), findings
+    assert any(item["rule"] == "lmt.prudential_ratio_below_minimum" for item in findings), findings
 
 
 def _seed_currency_book(db: Session) -> None:
@@ -850,32 +870,51 @@ def _seed_currency_book(db: Session) -> None:
     tbill = seeder.product("SEC.GOG.TBILL.C", "SOVEREIGN_GOG_TBILL_0RW")
     seeder.position("CCY/DEP-GHS", "DEPOSIT", Decimal("10000000"), deposit_account_type="CALL")
     seeder.position(
-        "CCY/DEP-USD", "DEPOSIT", Decimal("4000000"), currency="USD",
-        deposit_account_type="FIXED", maturity=date(2026, 4, 20),
+        "CCY/DEP-USD",
+        "DEPOSIT",
+        Decimal("4000000"),
+        currency="USD",
+        deposit_account_type="FIXED",
+        maturity=date(2026, 4, 20),
         extra_attributes={"balance_ghs": "4000000"},
     )
     seeder.position(
-        "CCY/DEP-GBP", "DEPOSIT", Decimal("1100000"), currency="GBP",
+        "CCY/DEP-GBP",
+        "DEPOSIT",
+        Decimal("1100000"),
+        currency="GBP",
         deposit_account_type="CURRENT",
         extra_attributes={"balance_ghs": "1100000"},
     )
     seeder.position(
-        "CCY/IBB-EUR", "INTERBANK_BORROWING", Decimal("900000"), currency="EUR",
+        "CCY/IBB-EUR",
+        "INTERBANK_BORROWING",
+        Decimal("900000"),
+        currency="EUR",
         maturity=date(2026, 10, 31),
         extra_attributes={"balance_ghs": "900000"},
     )
     seeder.position(
-        "CCY/TBILL", "SECURITY_HOLDING", Decimal("6000000"), product=tbill,
+        "CCY/TBILL",
+        "SECURITY_HOLDING",
+        Decimal("6000000"),
+        product=tbill,
         maturity=date(2026, 9, 30),
     )
     seeder.position("CCY/VAULT", "CASH", Decimal("2000000"))
     seeder.position(
-        "CCY/LOAN-USD", "LOAN", Decimal("3000000"), currency="USD",
+        "CCY/LOAN-USD",
+        "LOAN",
+        Decimal("3000000"),
+        currency="USD",
         maturity=date(2026, 4, 15),
         extra_attributes={"balance_ghs": "3000000"},
     )
     seeder.position(
-        "CCY/SEC-EUR", "SECURITY_HOLDING", Decimal("700000"), currency="EUR",
+        "CCY/SEC-EUR",
+        "SECURITY_HOLDING",
+        Decimal("700000"),
+        currency="EUR",
         maturity=date(2027, 6, 30),
         extra_attributes={"balance_ghs": "700000"},
     )
@@ -955,24 +994,42 @@ def test_lmt_funding_concentration_netting_related_and_tables_7_8(
     gov_cp = seeder.counterparty("CP/GOV", "Cocoa Board Agency", "GOVERNMENT_ENTITY")
     seeder.position("LN/BIG", "LOAN", Decimal("50000000"), maturity=date(2029, 3, 31))
     seeder.position(
-        "DEP/REL-A", "DEPOSIT", Decimal("6000000"), counterparty=related_cp,
+        "DEP/REL-A",
+        "DEPOSIT",
+        Decimal("6000000"),
+        counterparty=related_cp,
         deposit_account_type="CALL",
     )
     seeder.position(
-        "DEP/REL-B", "DEPOSIT", Decimal("2000000"), counterparty=related_cp,
-        deposit_account_type="CALL", pledged_as_collateral=True,
+        "DEP/REL-B",
+        "DEPOSIT",
+        Decimal("2000000"),
+        counterparty=related_cp,
+        deposit_account_type="CALL",
+        pledged_as_collateral=True,
     )
     seeder.position(
-        "DEP/BANK", "DEPOSIT", Decimal("5000000"), counterparty=bank_cp,
-        deposit_account_type="FIXED", maturity=date(2026, 5, 30),  # 60 days
+        "DEP/BANK",
+        "DEPOSIT",
+        Decimal("5000000"),
+        counterparty=bank_cp,
+        deposit_account_type="FIXED",
+        maturity=date(2026, 5, 30),  # 60 days
     )
     seeder.position(
-        "DEP/GOV", "DEPOSIT", Decimal("4000000"), counterparty=gov_cp,
-        deposit_account_type="FIXED", maturity=date(2026, 10, 17),  # 200 days
+        "DEP/GOV",
+        "DEPOSIT",
+        Decimal("4000000"),
+        counterparty=gov_cp,
+        deposit_account_type="FIXED",
+        maturity=date(2026, 10, 17),  # 200 days
     )
     seeder.position("DEP/ANON", "DEPOSIT", Decimal("1000000"))
     seeder.position(
-        "NP/1", "OTHER_LIABILITY", Decimal("3000000"), maturity=date(2026, 12, 31),
+        "NP/1",
+        "OTHER_LIABILITY",
+        Decimal("3000000"),
+        maturity=date(2026, 12, 31),
         extra_attributes={"funding_instrument": "negotiable_paper"},
     )
 
@@ -1042,14 +1099,23 @@ def test_lmt_collateral_and_no_maturity_tables(db_session: Session) -> None:
     bond = seeder.product("SEC.GOG.BOND.T9", "SOVEREIGN_GOG_BOND_0RW")
     equity = seeder.product("SEC.GSE.EQ.T9", "EQUITY_GSE_LISTED")
     seeder.position(
-        "T9/BOND", "SECURITY_HOLDING", Decimal("4000000"), product=bond,
+        "T9/BOND",
+        "SECURITY_HOLDING",
+        Decimal("4000000"),
+        product=bond,
         maturity=date(2029, 6, 30),
     )
     seeder.position(
-        "T9/EQ", "SECURITY_HOLDING", Decimal("1000000"), product=equity,
+        "T9/EQ",
+        "SECURITY_HOLDING",
+        Decimal("1000000"),
+        product=equity,
     )  # undated equity → Table 3 row too
     seeder.position(
-        "T4/LOAN", "LOAN", Decimal("9000000"), maturity=date(2027, 3, 31),
+        "T4/LOAN",
+        "LOAN",
+        Decimal("9000000"),
+        maturity=date(2027, 3, 31),
         extra_attributes={
             "collateral_instrument": "GoG bonds received",
             "collateral_asset_class": "debt_government",
@@ -1061,7 +1127,10 @@ def test_lmt_collateral_and_no_maturity_tables(db_session: Session) -> None:
         },
     )
     seeder.position(
-        "T10/OWN", "OTHER_LIABILITY", Decimal("0"), maturity=date(2028, 1, 1),
+        "T10/OWN",
+        "OTHER_LIABILITY",
+        Decimal("0"),
+        maturity=date(2028, 1, 1),
         extra_attributes={
             "own_debt_available_ghs": "1200000",
             "own_debt_unavailable_ghs": "300000",
@@ -1079,9 +1148,7 @@ def test_lmt_collateral_and_no_maturity_tables(db_session: Session) -> None:
 
     # Table 3: only the undated equity (deposits excluded by rule).
     table3 = sections["items_no_contractual_maturity"]["rows"]
-    assert [(row["description"], row["value"]) for row in table3] == [
-        ("SEC.GSE.EQ.T9", "1000000")
-    ]
+    assert [(row["description"], row["value"]) for row in table3] == [("SEC.GSE.EQ.T9", "1000000")]
 
     # Table 4: A=6.0M, B=2.5M, C=3.5M.
     table4 = sections["collateral_rehypothecation"]["rows"]
@@ -1207,8 +1274,7 @@ def test_irrbb_450_rows_render_only_when_metrics_carry_them(db_session: Session)
     run.metrics = {
         key: value
         for key, value in run.metrics.items()
-        if key
-        not in ("eve_up_450_ghs", "eve_down_450_ghs", "ear_up_450_ghs", "ear_down_450_ghs")
+        if key not in ("eve_up_450_ghs", "eve_down_450_ghs", "ear_up_450_ghs", "ear_down_450_ghs")
     }
     db_session.commit()
     package = _generate(db_session, "IRRBB-PILOT")
@@ -1240,3 +1306,230 @@ def test_irrbb_450_rows_render_only_when_metrics_carry_them(db_session: Session)
     assert ear_rows["ear_down_450_ghs"]["value"] == "16000000"
     assert "BoG GHS calibration" in eve_rows["eve_up_450_ghs"]["description"]
     assert regenerated.snapshot["metadata"]["bog_ghs_450_rows_present"] is True
+
+
+def test_sdi_irrbb_uses_net_own_funds_and_omits_bank_outlier_fields(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    materialize_canonical_test_book(db_session)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    bank.institution_type = "savings_and_loans"
+
+    batch = IngestionBatch(
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=REPORTING_DATE,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=DEMO_ORG_ID,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="sdi-irrbb-nof",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    db_session.add(
+        CanonicalReferenceRow(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            ingestion_batch_id=batch.id,
+            lineage_id=lineage.id,
+            dataset_kind="capital_structure",
+            as_of_date=REPORTING_DATE,
+            row_index=1,
+            source_reference="SDI-CAPITAL/1",
+            payload={
+                "capital_component": "paid_up_capital",
+                "amount_ghs": "20000000",
+                "tier": "CET1",
+            },
+        )
+    )
+    db_session.commit()
+
+    regulatory_irr.run_all_irr_scenarios(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        IrrScenarioBatchCreate(reporting_period_id=_period_id(db_session)),
+    )
+    run = _irr_baseline_run(db_session)
+    assert Decimal(run.metrics["tier1_ghs"]) == Decimal("20000000")
+
+    package = _generate(db_session, "SDI-IRRBB-QUARTERLY")
+    sections = _sections(package)
+    assert package.return_family == "sdi"
+    assert package.snapshot["metadata"]["capital_denominator"] == "Net Own Funds (Act 930 s.29)"
+    assert package.snapshot["metadata"]["tier1_outlier_verdict"] == "not_assessed_for_sdi"
+    assert all("tier1" not in row for row in sections["eve_scenarios"]["rows"])
+    assert "tier1_ghs" not in {row["code"] for row in sections["summary"]["rows"]}
+
+    artifact = export_package(db_session, MAKER, package, "xlsx_working")
+    db_session.refresh(bank)
+    assert bank.storage_slug is not None
+    stored = next(
+        obj
+        for obj in storage.list(bank.storage_slug, "outputs")
+        if obj.location.object_path == artifact.object_path
+    )
+    _, stream = storage.read(stored.location)
+    workbook = load_workbook(io.BytesIO(stream.read()), data_only=False)
+    calculations = workbook["Working Calculations"]
+    assert calculations["D6"].data_type == "f"
+    assert calculations["D6"].value == "=B6-C6"
+
+
+# ---------------------------------------------------------------------------
+# The unvalidated book, stated (forensic re-audit 2026-08-22, D-4)
+# ---------------------------------------------------------------------------
+#
+# D-4's first half — the return layer reading canonical rows every calculation
+# engine refuses — is closed in ``_load_canonical_rows`` and held by the AST
+# gate in ``tests/services/test_validation_status_fail_closed.py``. Its second
+# half is silence: once the rows are excluded, LE and LMT simply report a
+# smaller book and say nothing. On THESE two returns that is worse than on a
+# balance sheet, because the omission has no subtotal to be short — a
+# concentration limit loses an entire counterparty row, and a maturity ladder
+# loses a bucket. ``bog_form`` returns already disclose
+# (``tests/services/bog_forms/test_unvalidated_book_disclosure.py``); these are
+# the other two families that read the canonical book directly.
+
+
+def _seed_unvalidated_loan(db: Session, *, status: str, as_of: date = REPORTING_DATE) -> None:
+    """One LOAN in a status no calculation reader admits, big enough to be obvious."""
+    seeder = _CanonicalSeeder(db, as_of, validation_status=status)
+    counterparty = seeder.counterparty("CP/UNVALIDATED", "Never Validated Ltd", "CORPORATE")
+    seeder.position(
+        "LOAN/NEVER-VALIDATED",
+        "LOAN",
+        Decimal("777000000"),
+        counterparty=counterparty,
+        maturity=date(2028, 3, 31),
+    )
+
+
+def _disclosures(package: RegulatoryPackage) -> list[dict[str, str]]:
+    return [
+        finding
+        for finding in package.snapshot["metadata"]["generation_findings"]
+        if finding["rule"] == UNVALIDATED_BOOK_RULE
+    ]
+
+
+@pytest.mark.parametrize("unvalidated_status", ["pending", "error", "blocked"])
+def test_large_exposures_states_the_rows_it_refused_to_read(
+    db_session: Session, unvalidated_status: str
+) -> None:
+    """``pending`` matters most: P0-11 made it the PERSISTED DEFAULT for a record
+    validation never enumerated, so quiet understatement is the path an
+    incomplete validation pass takes, not an exotic one.
+
+    A 777m exposure omitted from a return whose whole subject is concentration
+    is not recoverable from the artifact — there is no row to look short.
+    """
+    materialize_canonical_test_book(db_session)
+    _run_capital_baseline(db_session)
+    _seed_le_book(db_session, _tier1(db_session))
+    _seed_unvalidated_loan(db_session, status=unvalidated_status)
+
+    package = _generate(db_session, "LE-MONTHLY")
+
+    counts = package.snapshot["metadata"]["unvalidated_rows"]
+    assert counts == {"canonical_position_snapshots": {unvalidated_status: 1}}
+    # The excluded exposure did NOT reach a filed line: no counterparty row
+    # anywhere on the return carries the name or the amount.
+    rendered = str(package.snapshot["sections"])
+    assert "Never Validated Ltd" not in rendered
+    assert "777000000" not in rendered
+
+    disclosure = _disclosures(package)
+    assert len(disclosure) == 1, package.snapshot["metadata"]["generation_findings"]
+    assert disclosure[0]["severity"] == "WARNING"
+    assert unvalidated_status in disclosure[0]["detail"]
+    # The exact-date phrasing: LE reads ONE reporting date, so the sentence must
+    # not promise a fallback to an earlier passing snapshot that cannot happen.
+    assert f"dated {REPORTING_DATE.isoformat()}" in disclosure[0]["detail"]
+    assert "on or before" not in disclosure[0]["detail"]
+
+    # The approver's surface — the validation report that must be cleared.
+    read = validation.validate_package(db_session, MAKER, SAMPLE_BANK_ID, package.id)
+    assert read.validation_report is not None
+    reported = [
+        finding
+        for finding in read.validation_report.findings
+        if finding.rule == UNVALIDATED_BOOK_RULE
+    ]
+    assert [finding.severity for finding in reported] == ["WARNING"]
+    # WARNING and never ERROR: refusing to generate here would refuse a filing
+    # the capital engine computes happily off exactly the same admitted book —
+    # D-4's divergence rebuilt backwards.
+    assert read.validation_report.error_count == 0
+
+
+def test_lmt_states_the_rows_it_refused_to_read(db_session: Session) -> None:
+    """The same disclosure on the LMT return, under the same rule id.
+
+    LMT's LCR subset comes from a sealed liquidity run whose engine already
+    excluded these rows; its tool tables read the canonical book directly. One
+    disclosure covers both, because both are compiled from one admitted book.
+    """
+    materialize_canonical_test_book(db_session)
+    _run_liquidity_baseline(db_session)
+    _seed_lmt_book(db_session)
+    _seed_unvalidated_loan(db_session, status="error")
+
+    package = _generate(db_session, "LMT")
+
+    assert package.snapshot["metadata"]["unvalidated_rows"] == {
+        "canonical_position_snapshots": {"error": 1}
+    }
+    disclosure = _disclosures(package)
+    assert len(disclosure) == 1, package.snapshot["metadata"]["generation_findings"]
+    assert disclosure[0]["severity"] == "WARNING"
+    assert "have NOT passed validation" in disclosure[0]["detail"]
+
+
+def test_a_fully_validated_book_makes_no_claim_on_le_or_lmt(db_session: Session) -> None:
+    """The negative control, and the reason there is no all-clear line.
+
+    Absence of the finding IS the statement that nothing was excluded. Emitting
+    "0 rows were excluded" on every return would be the blanket reassurance
+    P0-14 removed from the prior-period movement rule.
+    """
+    materialize_canonical_test_book(db_session)
+    _run_capital_baseline(db_session)
+    _run_liquidity_baseline(db_session)
+    _seed_le_book(db_session, _tier1(db_session))
+
+    for code in ("LE-MONTHLY", "LMT"):
+        package = _generate(db_session, code)
+        assert package.snapshot["metadata"]["unvalidated_rows"] == {}, code
+        assert _disclosures(package) == [], code
+
+
+def test_an_earlier_periods_backlog_is_not_claimed_on_this_return(db_session: Session) -> None:
+    """``bound="on"``: LE reads ONE date, so it must not name rows it never read.
+
+    ``_load_canonical_rows`` matches ``as_of_date`` exactly. Disclosing the
+    BoG-form bound (``<= period_end``) here would put a sentence on a filed
+    artifact claiming this return excluded a February backlog it never looked
+    at — a false statement, which is the same class of defect as the silence the
+    disclosure replaces.
+    """
+    materialize_canonical_test_book(db_session)
+    _run_capital_baseline(db_session)
+    _seed_le_book(db_session, _tier1(db_session))
+    _seed_unvalidated_loan(db_session, status="error", as_of=date(2026, 2, 28))
+
+    package = _generate(db_session, "LE-MONTHLY")
+
+    assert package.snapshot["metadata"]["unvalidated_rows"] == {}
+    assert _disclosures(package) == []

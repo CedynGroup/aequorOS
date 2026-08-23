@@ -67,6 +67,12 @@ export interface EnterpriseStressSummary {
   managementActionPlanCode?: string | null;
   /**
    *
+   * @type {boolean}
+   * @memberof EnterpriseStressSummary
+   */
+  planFullySuppliedByInstitution?: boolean;
+  /**
+   *
    * @type {string}
    * @memberof EnterpriseStressSummary
    */
@@ -170,6 +176,10 @@ export function EnterpriseStressSummaryFromJSONTyped(
       json["management_action_plan_code"] == null
         ? undefined
         : json["management_action_plan_code"],
+    planFullySuppliedByInstitution:
+      json["plan_fully_supplied_by_institution"] == null
+        ? undefined
+        : json["plan_fully_supplied_by_institution"],
     residualCapitalRequiredAfterActions:
       json["residual_capital_required_after_actions"] == null
         ? undefined
@@ -213,6 +223,7 @@ export function EnterpriseStressSummaryToJSONTyped(
     car_erosion_pp: value["carErosionPp"],
     first_breach_year: value["firstBreachYear"],
     management_action_plan_code: value["managementActionPlanCode"],
+    plan_fully_supplied_by_institution: value["planFullySuppliedByInstitution"],
     residual_capital_required_after_actions:
       value["residualCapitalRequiredAfterActions"],
     scenario_code: value["scenarioCode"],

@@ -26,12 +26,13 @@ export const VENDORS: {
     key: 'bloomberg',
     name: 'Bloomberg',
     description:
-      'Connect your existing Bloomberg B-PIPE or Data License subscription.',
+      'Save onboarding details for a Bloomberg B-PIPE or Data License subscription. Live requests are not enabled in this deployment.',
   },
   {
     key: 'refinitiv',
     name: 'LSEG (formerly Refinitiv)',
-    description: 'Connect your LSEG Data Platform subscription (the platform APIs behind LSEG Workspace).',
+    description:
+      'Save onboarding details for an LSEG Data Platform subscription. Live requests are not enabled in this deployment.',
   },
   {
     key: 'manual_upload',
@@ -83,14 +84,14 @@ export const CREDENTIAL_FIELDS: Record<
     {
       key: 'client_id',
       label: 'Client ID',
-      hint: 'Provided when you create an OAuth application in your Refinitiv Data Platform account.',
+      hint: 'Provided when you create an OAuth application in your LSEG Data Platform account (formerly Refinitiv Data Platform).',
     },
     { key: 'client_secret', label: 'Client secret', secret: true },
     { key: 'scope', label: 'Scope' },
     { key: 'subscription_type', label: 'Subscription type' },
     { key: 'refresh_token', label: 'Refresh token', secret: true },
     { key: 'token_endpoint', label: 'Token endpoint' },
-    { key: 'contact_admin', label: 'Refinitiv administrator contact' },
+    { key: 'contact_admin', label: 'LSEG administrator contact' },
   ],
 };
 

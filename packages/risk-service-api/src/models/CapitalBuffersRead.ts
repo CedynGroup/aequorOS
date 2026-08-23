@@ -11,8 +11,45 @@
  */
 
 import { mapValues } from "../runtime";
+import type { CapitalBuffersCet1MinPct } from "./CapitalBuffersCet1MinPct";
+import {
+  CapitalBuffersCet1MinPctFromJSON,
+  CapitalBuffersCet1MinPctFromJSONTyped,
+  CapitalBuffersCet1MinPctToJSON,
+  CapitalBuffersCet1MinPctToJSONTyped,
+} from "./CapitalBuffersCet1MinPct";
+import type { CapitalBuffersLeverageMinPct } from "./CapitalBuffersLeverageMinPct";
+import {
+  CapitalBuffersLeverageMinPctFromJSON,
+  CapitalBuffersLeverageMinPctFromJSONTyped,
+  CapitalBuffersLeverageMinPctToJSON,
+  CapitalBuffersLeverageMinPctToJSONTyped,
+} from "./CapitalBuffersLeverageMinPct";
+import type { CapitalBuffersTier1MinPct } from "./CapitalBuffersTier1MinPct";
+import {
+  CapitalBuffersTier1MinPctFromJSON,
+  CapitalBuffersTier1MinPctFromJSONTyped,
+  CapitalBuffersTier1MinPctToJSON,
+  CapitalBuffersTier1MinPctToJSONTyped,
+} from "./CapitalBuffersTier1MinPct";
+
 /**
+ * The floors a capital ratio is judged against, from the ONE authority.
  *
+ * Every value here is resolved from the institution's active regulatory
+ * parameter set (board register, clamped tighten-only against the control
+ * plane) — the same dict :func:`_engine_params` hands the engine, so the KPI
+ * traffic light, the validation rules and this block cannot disagree. A run's
+ * ``threshold_min`` is the historical record of what was applied when that run
+ * executed; it is NOT the current requirement and its absence is not evidence
+ * of compliance, so no consumer may substitute it for these fields.
+ *
+ * The three Basel sub-tier floors are nullable because they are structurally
+ * absent under the SDI s.29 regime (Act 930 s.29 has no CET1/Tier 1 or
+ * leverage minimum — the same ``basel_applicable`` gate that omits their
+ * validation rules) and because a bank register may simply not carry one.
+ * Absence renders as absence: a consumer must show "not assessed", never a
+ * substituted floor.
  * @export
  * @interface CapitalBuffersRead
  */
@@ -43,6 +80,12 @@ export interface CapitalBuffersRead {
   carMinPct: string;
   /**
    *
+   * @type {CapitalBuffersCet1MinPct}
+   * @memberof CapitalBuffersRead
+   */
+  cet1MinPct?: CapitalBuffersCet1MinPct;
+  /**
+   *
    * @type {string}
    * @memberof CapitalBuffersRead
    */
@@ -53,6 +96,18 @@ export interface CapitalBuffersRead {
    * @memberof CapitalBuffersRead
    */
   headroomPp: string;
+  /**
+   *
+   * @type {CapitalBuffersLeverageMinPct}
+   * @memberof CapitalBuffersRead
+   */
+  leverageMinPct?: CapitalBuffersLeverageMinPct;
+  /**
+   *
+   * @type {CapitalBuffersTier1MinPct}
+   * @memberof CapitalBuffersRead
+   */
+  tier1MinPct?: CapitalBuffersTier1MinPct;
 }
 
 /**
@@ -98,8 +153,20 @@ export function CapitalBuffersReadFromJSONTyped(
     carEarlyWarningLabel: json["car_early_warning_label"],
     carEarlyWarningPct: json["car_early_warning_pct"],
     carMinPct: json["car_min_pct"],
+    cet1MinPct:
+      json["cet1_min_pct"] == null
+        ? undefined
+        : CapitalBuffersCet1MinPctFromJSON(json["cet1_min_pct"]),
     currentCarPct: json["current_car_pct"],
     headroomPp: json["headroom_pp"],
+    leverageMinPct:
+      json["leverage_min_pct"] == null
+        ? undefined
+        : CapitalBuffersLeverageMinPctFromJSON(json["leverage_min_pct"]),
+    tier1MinPct:
+      json["tier1_min_pct"] == null
+        ? undefined
+        : CapitalBuffersTier1MinPctFromJSON(json["tier1_min_pct"]),
   };
 }
 
@@ -120,7 +187,12 @@ export function CapitalBuffersReadToJSONTyped(
     car_early_warning_label: value["carEarlyWarningLabel"],
     car_early_warning_pct: value["carEarlyWarningPct"],
     car_min_pct: value["carMinPct"],
+    cet1_min_pct: CapitalBuffersCet1MinPctToJSON(value["cet1MinPct"]),
     current_car_pct: value["currentCarPct"],
     headroom_pp: value["headroomPp"],
+    leverage_min_pct: CapitalBuffersLeverageMinPctToJSON(
+      value["leverageMinPct"],
+    ),
+    tier1_min_pct: CapitalBuffersTier1MinPctToJSON(value["tier1MinPct"]),
   };
 }

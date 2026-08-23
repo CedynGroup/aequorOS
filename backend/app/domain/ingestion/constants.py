@@ -124,6 +124,20 @@ GlAccountClass = Literal["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE", "O
 VALIDATION_STATUSES: tuple[str, ...] = ("pending", "accepted", "warning", "error", "blocked")
 ValidationStatus = Literal["pending", "accepted", "warning", "error", "blocked"]
 
+#: The canonical rows a CALCULATION may read: what the validator accepted, plus
+#: what it accepted with warnings. Everything else — ``pending`` (a record the
+#: validator never enumerated, P0-11), ``error``, ``blocked`` — must not reach a
+#: regulatory number.
+#:
+#: One spelling of the scope ``ingestion.status_of`` promises holds "in every
+#: engine and every filed return". It was previously copied into eighteen
+#: module-private constants under fifteen different names, and the filed-return
+#: layer simply omitted it: on 2026-08-22 only 2 of 14 ``bog_forms/sources_ext``
+#: modules filtered on it, and the shared ``positions.sum`` resolver behind BSD2
+#: and BSD5A did not, so the capital-adequacy return read rows the capital
+#: engine excludes. New readers must use THIS constant.
+INCLUDED_VALIDATION_STATUSES: tuple[str, ...] = ("accepted", "warning")
+
 BATCH_STATUSES: tuple[str, ...] = (
     "created",
     "extracting",
@@ -151,6 +165,21 @@ BATCH_TERMINAL_STATUSES: tuple[str, ...] = (
     "failed",
 )
 BATCH_ACCEPTED_STATUSES: tuple[str, ...] = ("accepted", "accepted_with_warnings")
+
+# ``IngestionBatch.etl_report["dedup_status"]`` — the ML-ETL dedup pass's own
+# lifecycle, written by ``app.services.ingestion`` (inline) and
+# ``app.services.etl_dedup_jobs`` (out of band) and READ by the operator backlog
+# board. It lives here, with the other batch lifecycle vocabularies, because
+# three modules in two layers share it and the operator control plane must be
+# able to name a stuck pass without importing the ETL stack.
+DEDUP_STATUS_DEFERRED = "deferred"
+DEDUP_STATUS_COMPLETED = "completed"
+DEDUP_STATUS_FAILED = "failed"
+#: A pass in one of these states has NOT produced its linkage/anomaly metadata:
+#: ``deferred`` never ran, ``failed`` ran and could not finish. Neither blocks a
+#: filing (see ``etl_dedup_jobs.DEDUP_STATUS_FAILED``) — they are backlog, and
+#: whether the backlog is recoverable depends on the job behind it.
+STUCK_DEDUP_STATUSES: tuple[str, ...] = (DEDUP_STATUS_DEFERRED, DEDUP_STATUS_FAILED)
 
 EXTRACTION_MODES: tuple[str, ...] = ("full", "incremental")
 ExtractionMode = Literal["full", "incremental"]

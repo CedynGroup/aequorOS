@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.services.market_desk.calculation import CORP_CODE, run_pipeline
 from app.services.market_desk import register
+from app.services.market_desk.calculation import CORP_CODE, run_pipeline
 
 COB = date(2026, 8, 7)
 PARAMS = dict(register.DEFAULT_METHODOLOGY_PARAMETERS_V1)

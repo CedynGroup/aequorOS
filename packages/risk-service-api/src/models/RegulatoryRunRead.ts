@@ -39,20 +39,6 @@ import {
   RegulatoryLineItemReadToJSON,
   RegulatoryLineItemReadToJSONTyped,
 } from "./RegulatoryLineItemRead";
-import type { RegulatoryScenarioCode } from "./RegulatoryScenarioCode";
-import {
-  RegulatoryScenarioCodeFromJSON,
-  RegulatoryScenarioCodeFromJSONTyped,
-  RegulatoryScenarioCodeToJSON,
-  RegulatoryScenarioCodeToJSONTyped,
-} from "./RegulatoryScenarioCode";
-import type { RegulatoryModule } from "./RegulatoryModule";
-import {
-  RegulatoryModuleFromJSON,
-  RegulatoryModuleFromJSONTyped,
-  RegulatoryModuleToJSON,
-  RegulatoryModuleToJSONTyped,
-} from "./RegulatoryModule";
 import type { RegulatoryRunErrorRead } from "./RegulatoryRunErrorRead";
 import {
   RegulatoryRunErrorReadFromJSON,
@@ -67,6 +53,13 @@ import {
   RegulatoryRunStartedAtToJSON,
   RegulatoryRunStartedAtToJSONTyped,
 } from "./RegulatoryRunStartedAt";
+import type { RunEvidenceRead } from "./RunEvidenceRead";
+import {
+  RunEvidenceReadFromJSON,
+  RunEvidenceReadFromJSONTyped,
+  RunEvidenceReadToJSON,
+  RunEvidenceReadToJSONTyped,
+} from "./RunEvidenceRead";
 import type { RegulatoryRunCompletedAt } from "./RegulatoryRunCompletedAt";
 import {
   RegulatoryRunCompletedAtFromJSON,
@@ -119,6 +112,12 @@ export interface RegulatoryRunRead {
   error: RegulatoryRunErrorRead | null;
   /**
    *
+   * @type {RunEvidenceRead}
+   * @memberof RegulatoryRunRead
+   */
+  evidence: RunEvidenceRead;
+  /**
+   *
    * @type {string}
    * @memberof RegulatoryRunRead
    */
@@ -161,10 +160,10 @@ export interface RegulatoryRunRead {
   metrics: { [key: string]: any };
   /**
    *
-   * @type {RegulatoryModule}
+   * @type {string}
    * @memberof RegulatoryRunRead
    */
-  module: RegulatoryModule | null;
+  module: string;
   /**
    *
    * @type {string}
@@ -185,10 +184,10 @@ export interface RegulatoryRunRead {
   reportingPeriodId: string;
   /**
    *
-   * @type {RegulatoryScenarioCode}
+   * @type {string}
    * @memberof RegulatoryRunRead
    */
-  scenarioCode: RegulatoryScenarioCode;
+  scenarioCode: string;
   /**
    *
    * @type {RegulatoryRunStartedAt}
@@ -229,6 +228,7 @@ export function instanceOfRegulatoryRunRead(
   if (!("engineVersion" in value) || value["engineVersion"] === undefined)
     return false;
   if (!("error" in value) || value["error"] === undefined) return false;
+  if (!("evidence" in value) || value["evidence"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
   if (!("inputHash" in value) || value["inputHash"] === undefined) return false;
   if (
@@ -283,6 +283,7 @@ export function RegulatoryRunReadFromJSONTyped(
     createdBy: json["created_by"],
     engineVersion: json["engine_version"],
     error: RegulatoryRunErrorReadFromJSON(json["error"]),
+    evidence: RunEvidenceReadFromJSON(json["evidence"]),
     id: json["id"],
     inputHash: json["input_hash"],
     inputSchemaVersion: json["input_schema_version"],
@@ -294,11 +295,11 @@ export function RegulatoryRunReadFromJSONTyped(
       RegulatoryMetricResultReadFromJSON,
     ),
     metrics: json["metrics"],
-    module: RegulatoryModuleFromJSON(json["module"]),
+    module: json["module"],
     organizationId: json["organization_id"],
     outputSchemaVersion: json["output_schema_version"],
     reportingPeriodId: json["reporting_period_id"],
-    scenarioCode: RegulatoryScenarioCodeFromJSON(json["scenario_code"]),
+    scenarioCode: json["scenario_code"],
     startedAt: RegulatoryRunStartedAtFromJSON(json["started_at"]),
     status: RegulatoryRunStatusFromJSON(json["status"]),
     updatedAt: new Date(json["updated_at"]),
@@ -327,6 +328,7 @@ export function RegulatoryRunReadToJSONTyped(
     created_by: value["createdBy"],
     engine_version: value["engineVersion"],
     error: RegulatoryRunErrorReadToJSON(value["error"]),
+    evidence: RunEvidenceReadToJSON(value["evidence"]),
     id: value["id"],
     input_hash: value["inputHash"],
     input_schema_version: value["inputSchemaVersion"],
@@ -338,11 +340,11 @@ export function RegulatoryRunReadToJSONTyped(
       RegulatoryMetricResultReadToJSON,
     ),
     metrics: value["metrics"],
-    module: RegulatoryModuleToJSON(value["module"]),
+    module: value["module"],
     organization_id: value["organizationId"],
     output_schema_version: value["outputSchemaVersion"],
     reporting_period_id: value["reportingPeriodId"],
-    scenario_code: RegulatoryScenarioCodeToJSON(value["scenarioCode"]),
+    scenario_code: value["scenarioCode"],
     started_at: RegulatoryRunStartedAtToJSON(value["startedAt"]),
     status: RegulatoryRunStatusToJSON(value["status"]),
     updated_at: value["updatedAt"].toISOString(),

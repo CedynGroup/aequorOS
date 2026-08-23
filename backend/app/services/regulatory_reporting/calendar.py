@@ -26,9 +26,9 @@ from app.schemas.regulatory_reporting import (
     ReportingObligationListRead,
     ReportingObligationRead,
 )
-from app.services.institution_types import institution_class as resolve_institution_class
 from app.services.regulatory_reporting.common import get_bank_or_404
-from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition, monthly_day
+from app.services.regulatory_reporting.eligibility import resolve_eligibility
+from app.services.regulatory_reporting.registry import ReturnDefinition, monthly_day
 from app.services.regulatory_reporting.workflow import has_pending_orass_reupload
 
 DUE_SOON_DAYS = 7
@@ -161,17 +161,18 @@ def list_obligations(
     total_months = today.year * 12 + (today.month - 1) + horizon_months
     horizon_end = _month_end(total_months // 12, total_months % 12 + 1)
     overrides = _deadline_overrides(db, ctx, bank.id)
-    # SDI scoping (docs/sdi.md §6.2): the calendar is class-filtered so a tenant
-    # sees only the returns its institution class is subject to. Every return
-    # registered so far is a bank/BoG return, so a savings-&-loans tenant
-    # resolves to an empty calendar until the SDI/ORASS return pack lands
-    # (docs/sdi.md §Phase F) — the honest state, not a bug.
-    bank_class = resolve_institution_class(db, bank)
+    # Return eligibility resolves through the SINGLE authority (audit ARCH-8,
+    # ``eligibility.py``) — the same object ``generation.generate_package``
+    # gates on, so the calendar and the package-mint site cannot disagree about
+    # what this institution may file. SDI scoping (docs/sdi.md §6.2) is one of
+    # its dimensions: every return registered so far is a bank/BoG return, so a
+    # savings-&-loans tenant resolves to an empty calendar until the SDI/ORASS
+    # return pack lands. That is BoG's deferral, not a bug, and it is stated in
+    # words on ``ReportingObligationListRead.coverage_note`` below.
+    eligibility = resolve_eligibility(db, ctx, bank, as_of=today)
 
     obligations: list[ReportingObligationRead] = []
-    for definition in REGISTRY.values():
-        if bank_class not in definition.institution_classes:
-            continue
+    for definition in eligibility.eligible_definitions():
         # Event-driven returns (plan W5: the LRT corporate packs) have no
         # periodic reporting cycle — expanding their nominal frequency would
         # fabricate obligations that do not exist. Their packages still
@@ -231,4 +232,9 @@ def list_obligations(
         as_of=today,
         horizon_months=horizon_months,
         obligations=obligations,
+        # The note the eligibility authority has always been able to write, now
+        # carried on the payload (audit 2026-08-22 D-20). It is None whenever the
+        # institution has an eligible return set, so this adds a sentence exactly
+        # where a reader would otherwise see an unexplained empty calendar.
+        coverage_note=eligibility.coverage_note(),
     )

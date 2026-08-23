@@ -7,6 +7,16 @@
  * from the persisted result; the right panel compares the base and shocked
  * paths on any persisted metric, with per-year deltas and run provenance.
  * Mutation flow (useRunWhatIf + stored-run hydration) is unchanged.
+ *
+ * FAIL CLOSED ON THE CAR FLOOR (NEW-37). This page used to judge every shocked
+ * path against a literal `10`. Bank of Ghana's requirement is not a constant —
+ * it is CRD ¶71's minimum plus the ¶75 capital-conservation buffer, 13% today,
+ * and it has moved four times since 2020; an SDI is assessed against Act 930
+ * s.29 instead. The floor is therefore RESOLVED from the same sources the rest
+ * of the app uses — the capital dashboard's buffer block for a bank, the
+ * control plane's s.29 summary for an SDI — and when neither resolves, this
+ * page renders "not assessed" and draws no reference line. It never asserts a
+ * breach, and it never asserts a pass.
  */
 
 import { useState } from 'react';
@@ -31,13 +41,21 @@ import ScenarioLinesChart, {
 } from '@/components/forecasting/charts/ScenarioLinesChart';
 import { ASSUMPTION_FIELDS } from '@/components/forecasting/lib';
 import { useBankContext } from '@/components/shell/BankContext';
+import { useSdiCapitalSummary } from '@/components/basel/sdiHooks';
 import {
+  useCapitalDashboard,
   useRegulatoryRun,
   useRegulatoryRuns,
   useRunWhatIf,
 } from '@/lib/api/hooks';
-import { num } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
+import {
+  assessAgainstFloor,
+  floorStatus,
+  fmtFloorPct,
+  num,
+  numOrNull,
+} from '@/lib/api/values';
+import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from '@/lib/format';
 
 // ---------------------------------------------------------------------------
 // Shock library — the four shock codes the what-if endpoint accepts.
@@ -77,9 +95,12 @@ const SHOCKS: { code: WhatIfShockCode; label: string; description: string }[] = 
 
 type PathPoint = {
   year: number;
-  carPct: number;
-  lcrPct: number;
-  nsfrPct: number;
+  // Nullable on purpose: a year the engine could not compute must render as a
+  // GAP in the line, never as 0%. `num()` maps null to 0, and a 0% CAR plots
+  // and compares as a real, catastrophic ratio (P0-23).
+  carPct: number | null;
+  lcrPct: number | null;
+  nsfrPct: number | null;
   netIncome: number | null;
   totalAssets: number;
 };
@@ -112,9 +133,9 @@ type WhatIfView = {
 function pointFromRead(p: ProjectionYearRead): PathPoint {
   return {
     year: p.year,
-    carPct: num(p.carPct),
-    lcrPct: num(p.lcrPct),
-    nsfrPct: num(p.nsfrPct),
+    carPct: numOrNull(p.carPct),
+    lcrPct: numOrNull(p.lcrPct),
+    nsfrPct: numOrNull(p.nsfrPct),
     netIncome: p.year === 0 ? null : num(p.netIncome),
     totalAssets: num(p.totalAssets),
   };
@@ -189,9 +210,9 @@ function fromStoredRun(run: RegulatoryRunRead): WhatIfView | null {
 
   const point = (p: RawYear): PathPoint => ({
     year: p.year,
-    carPct: num(p.car_pct as string),
-    lcrPct: num(p.lcr_pct as string),
-    nsfrPct: num(p.nsfr_pct as string),
+    carPct: numOrNull(p.car_pct as string | null),
+    lcrPct: numOrNull(p.lcr_pct as string | null),
+    nsfrPct: numOrNull(p.nsfr_pct as string | null),
     netIncome: p.year === 0 ? null : num(p.net_income as string),
     totalAssets: num(p.total_assets as string),
   });
@@ -243,16 +264,22 @@ const WHATIF_METRICS = [
     label: 'CAR',
     fmt: (v: number) => fmtPct(v, 2),
     tick: (v: number) => `${Math.round(v)}%`,
-    threshold: 10,
-    thresholdLabel: 'Regulatory min 10%',
+    // NEW-37: the CAR floor is tenant data, not a constant — it is resolved at
+    // render from the capital buffers (bank) or the s.29 summary (SDI). No
+    // floor resolves ⇒ no reference line and no verdict.
+    threshold: undefined,
+    thresholdLabel: undefined,
   },
   {
     code: 'lcrPct',
     label: 'LCR',
     fmt: (v: number) => fmtPct(v, 1),
     tick: (v: number) => `${Math.round(v)}%`,
+    // 100% is the BCBS 238 standard, not a Bank of Ghana requirement — the
+    // regulator has published no LCR minimum, so the line must be attributed
+    // to Basel (README "Regulatory attribution rules"). Same for NSFR.
     threshold: 100,
-    thresholdLabel: 'Regulatory min 100%',
+    thresholdLabel: 'Basel minimum 100%',
   },
   {
     code: 'nsfrPct',
@@ -260,7 +287,7 @@ const WHATIF_METRICS = [
     fmt: (v: number) => fmtPct(v, 1),
     tick: (v: number) => `${Math.round(v)}%`,
     threshold: 100,
-    thresholdLabel: 'Regulatory min 100%',
+    thresholdLabel: 'Basel minimum 100%',
   },
   {
     code: 'netIncome',
@@ -282,10 +309,39 @@ const WHATIF_METRICS = [
 
 type WhatIfMetricCode = (typeof WHATIF_METRICS)[number]['code'];
 
+/**
+ * The lowest CAR the engine actually COMPUTED across a projected path.
+ *
+ * A year the engine could not compute is not a data point: it is absent. Under
+ * the old `num()` it became `0`, and `0 < floor` is true — so an uncomputed
+ * year raised a false breach badge. `null` here means "no year on this path was
+ * computed", which `assessAgainstFloor` turns into `assessed: false`.
+ */
+function lowestComputedCar(path: PathPoint[]): number | null {
+  const computed = path
+    .map((p) => p.carPct)
+    .filter((v): v is number => v !== null);
+  return computed.length > 0 ? Math.min(...computed) : null;
+}
+
 export default function WhatIfLab() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  const isSdi = moduleScope.institutionClass === 'sdi';
+
+  // ---- The CAR floor (NEW-37) -------------------------------------------
+  // Bank: the capital module's own configured minimum, the same field the limit
+  // wall and the Basel screens read. SDI: the control plane's Act 930 s.29
+  // floor. Neither is loaded for the other regime, and neither carries a
+  // fallback — an unresolved floor stays null and nothing here claims a verdict.
+  const capital = useCapitalDashboard(
+    moduleScope.isResolved && !isSdi ? bankId : undefined
+  );
+  const sdiCapital = useSdiCapitalSummary(isSdi ? bankId : undefined);
+  const carFloorPct = isSdi
+    ? numOrNull(sdiCapital.data?.car_min_pct)
+    : numOrNull(capital.data?.buffers.carMinPct);
 
   const [activeShock, setActiveShock] = useState<WhatIfShockCode>(
     'rate_shock_up_400'
@@ -428,9 +484,19 @@ export default function WhatIfLab() {
                   const view = viewFor(shock.code);
                   const isActive = shock.code === activeShock;
                   const isRunning = pendingShock === shock.code;
-                  const breach =
-                    view !== null &&
-                    view.shockedPath.some((p) => p.carPct < 10);
+                  // The worst COMPUTED year on the shocked path, judged against
+                  // the resolved floor. Three outcomes, all honest: breach,
+                  // clear, or — when no year computed or no floor resolved —
+                  // not assessed. A missing floor never yields a pass.
+                  const carAssessment =
+                    view === null
+                      ? null
+                      : assessAgainstFloor(
+                          lowestComputedCar(view.shockedPath),
+                          carFloorPct
+                        );
+                  const carStatus =
+                    carAssessment === null ? null : floorStatus(carAssessment);
                   return (
                     <button
                       key={shock.code}
@@ -449,12 +515,12 @@ export default function WhatIfLab() {
                         </p>
                         {isRunning ? (
                           <StatusPill tone="pending">Running</StatusPill>
-                        ) : view ? (
-                          breach ? (
-                            <StatusPill tone="critical">CAR breach</StatusPill>
-                          ) : (
-                            <StatusPill tone="success">Run</StatusPill>
-                          )
+                        ) : carStatus === 'crit' ? (
+                          <StatusPill tone="critical">CAR breach</StatusPill>
+                        ) : carStatus === 'ok' ? (
+                          <StatusPill tone="success">CAR clears floor</StatusPill>
+                        ) : carStatus === 'warn' ? (
+                          <StatusPill tone="amber">CAR not assessed</StatusPill>
                         ) : (
                           <StatusPill tone="slate">Not run</StatusPill>
                         )}
@@ -498,6 +564,12 @@ export default function WhatIfLab() {
                   assumption set and keeps the result as a saved what-if
                   projection alongside the unshocked base.
                 </p>
+
+                <p className="text-caption text-slate leading-relaxed">
+                  {carFloorPct === null
+                    ? `No capital adequacy minimum is on file for this institution, so shocked paths are shown but not assessed against one. Set it in ${regShort()} capital parameters and re-open this page.`
+                    : `Shocked paths are assessed against the capital adequacy minimum on file for this institution, ${fmtFloorPct(carFloorPct)}. A year the engine could not compute is left out of the assessment rather than counted as a breach.`}
+                </p>
               </div>
             </SectionCard>
 
@@ -514,7 +586,11 @@ export default function WhatIfLab() {
                   description={`Run “${activeMeta.label}” to compare the shocked 5-year path against the deterministic base projection on identical canonical inputs.`}
                 />
               ) : (
-                <ShockResult view={activeView} shockLabel={activeMeta.label} />
+                <ShockResult
+                  view={activeView}
+                  shockLabel={activeMeta.label}
+                  carFloorPct={carFloorPct}
+                />
               )}
             </div>
           </div>
@@ -531,12 +607,26 @@ export default function WhatIfLab() {
 function ShockResult({
   view,
   shockLabel,
+  carFloorPct,
 }: {
   view: WhatIfView;
   shockLabel: string;
+  /** Resolved CAR minimum, or null when none is on file (NEW-37). */
+  carFloorPct: number | null;
 }) {
   const [metricCode, setMetricCode] = useState<WhatIfMetricCode>('carPct');
   const metric = WHATIF_METRICS.find((m) => m.code === metricCode)!;
+
+  // CAR's reference line is the resolved floor, never a literal. Unresolved ⇒
+  // no line at all, so the chart cannot imply a threshold it does not know.
+  const threshold: number | undefined =
+    metricCode === 'carPct' ? carFloorPct ?? undefined : metric.threshold;
+  const thresholdLabel: string | undefined =
+    metricCode === 'carPct'
+      ? carFloorPct === null
+        ? undefined
+        : `${regShort()} minimum ${fmtFloorPct(carFloorPct)}`
+      : metric.thresholdLabel;
 
   const chartData: ScenarioPoint[] = view.basePath.map((p) => {
     const shocked = view.shockedPath.find((s) => s.year === p.year);
@@ -590,7 +680,11 @@ function ShockResult({
       {/* Base vs shocked path */}
       <ChartFrame
         title="Base vs shocked path"
-        subtitle={`${shockLabel} · both paths persisted on the what-if run`}
+        subtitle={
+          metricCode === 'carPct' && carFloorPct === null
+            ? `${shockLabel} · both paths persisted on the what-if run · no capital adequacy minimum on file, so no floor is drawn`
+            : `${shockLabel} · both paths persisted on the what-if run`
+        }
         height={280}
         actions={
           <select
@@ -621,8 +715,8 @@ function ShockResult({
           ]}
           valueFormatter={metric.fmt}
           tickFormatter={metric.tick}
-          threshold={metric.threshold}
-          thresholdLabel={metric.thresholdLabel}
+          threshold={threshold}
+          thresholdLabel={thresholdLabel}
         />
       </ChartFrame>
 

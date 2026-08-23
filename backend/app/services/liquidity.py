@@ -1,3 +1,23 @@
+"""Cash-flow adequacy analysis for a risk case (advisory, never filed).
+
+This is the CASE plane. It reads `CalculationForecastPeriod` rows produced by
+`app.services.calculations` from case-local `Financial*` records and scenario
+assumptions, and rolls cash forward across the case's own forecast periods on
+book values.
+
+It is not the regulatory liquidity plane. Basel LCR and NSFR are computed by
+`app.domain.liquidity.engine` from `BankFinancialFact`, sealed into a
+`RegulatoryRun`, and filed. Nothing here reads a bank fact, calls a regulatory
+engine, or reaches a return — see `app.services.case_plane` for the boundary
+rule and `tests/architecture/test_case_plane_boundary.py` for the guard.
+
+The outputs are therefore labelled "cash-flow adequacy" rather than
+"liquidity". Stored identifiers (`liquidity_analysis_results`, the
+`liquidity.*` rule ids, the `liquidity_risk` risk type, the route paths) keep
+their historical spelling because they are storage and wire contracts; only
+the wording a person reads changed. No formula or threshold moved.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -38,6 +58,7 @@ from app.schemas.liquidity import (
 )
 from app.services import findings as findings_service
 from app.services.audit import record_event
+from app.services.case_plane import CASH_FLOW_ADEQUACY, with_advisory_note
 from app.services.cases import get_case_or_404
 
 RULE_VERSION = "liquidity-v1.0.0"
@@ -70,16 +91,18 @@ class LiquidityResult:
 
 def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResult:
     if not periods:
-        raise ValueError("Liquidity analysis requires at least one forecast output period.")
+        raise ValueError(
+            "Cash-flow adequacy analysis requires at least one forecast output period."
+        )
     ordered = sorted(periods, key=lambda item: item.period_number)
     period_numbers = [item.period_number for item in ordered]
     if period_numbers != list(range(1, len(ordered) + 1)):
         raise ValueError(
-            "Liquidity analysis requires one sequential forecast output for every period."
+            "Cash-flow adequacy analysis requires one sequential forecast output for every period."
         )
     currencies = {item.currency for item in ordered}
     if len(currencies) != 1:
-        raise ValueError("Liquidity analysis requires forecast outputs in one currency.")
+        raise ValueError("Cash-flow adequacy analysis requires forecast outputs in one currency.")
 
     minimum = min(ordered, key=lambda item: (item.cash, item.period_number))
     peak_gap_period = minimum
@@ -91,7 +114,7 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
     minimum_coverage: Decimal | None = None
     coverage_diagnostic: str | None = None
     if invalid_uses:
-        coverage_diagnostic = _undefined_uses_diagnostic("Sources coverage", invalid_uses)
+        coverage_diagnostic = _undefined_uses_diagnostic("Minimum cash cover", invalid_uses)
     else:
         coverage_rows = [
             (item, _ratio(item.projected_inflows + item.credit_draw, uses))
@@ -121,27 +144,31 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
             unit=minimum.currency,
             period_number=minimum.period_number,
             period_end=minimum.period_end,
-            description="Lowest projected ending cash balance across the forecast.",
+            description=with_advisory_note(
+                "Lowest projected ending cash balance across the forecast."
+            ),
         ),
         LiquidityMetricRead(
             key="peak_liquidity_gap",
-            label="Peak liquidity gap",
+            label="Peak cash shortfall",
             value=_money(peak_gap),
             unit=minimum.currency,
             period_number=peak_gap_period.period_number if peak_gap > 0 else None,
             period_end=peak_gap_period.period_end if peak_gap > 0 else None,
-            description="Largest amount by which projected ending cash falls below zero.",
+            description=with_advisory_note(
+                "Largest amount by which projected ending cash falls below zero."
+            ),
         ),
         LiquidityMetricRead(
             key="minimum_sources_coverage",
-            label="Minimum sources coverage",
+            label="Minimum cash cover",
             value=minimum_coverage,
             unit="ratio",
             availability="unavailable" if minimum_coverage is None else "available",
             diagnostic=coverage_diagnostic,
             period_number=coverage_period.period_number if coverage_period else None,
             period_end=coverage_period.period_end if coverage_period else None,
-            description=(
+            description=with_advisory_note(
                 "Lowest projected inflows plus credit draws divided by outflows plus "
                 "debt repayment."
             ),
@@ -153,7 +180,9 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
             unit="ratio",
             availability="unavailable" if credit_reliance is None else "available",
             diagnostic=credit_reliance_diagnostic,
-            description="Forecast credit draws divided by total projected liquidity uses.",
+            description=with_advisory_note(
+                "Forecast credit draws divided by total projected cash uses."
+            ),
         ),
         LiquidityMetricRead(
             key="cash_runway_periods",
@@ -162,7 +191,9 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
             unit="forecast_periods",
             period_number=first_negative.period_number if first_negative else None,
             period_end=first_negative.period_end if first_negative else None,
-            description="Completed forecast periods before projected ending cash becomes negative.",
+            description=with_advisory_note(
+                "Completed forecast periods before projected ending cash becomes negative."
+            ),
         ),
     ]
 
@@ -177,10 +208,10 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
                     f"Cash is projected to fall below zero in forecast period "
                     f"{first_negative.period_number}."
                 ),
-                "rationale": (
+                "rationale": with_advisory_note(
                     f"The lowest projected ending cash is {_money(peak_gap_period.cash)} "
                     f"{peak_gap_period.currency} in forecast period "
-                    f"{peak_gap_period.period_number}, creating a peak liquidity gap of "
+                    f"{peak_gap_period.period_number}, creating a peak cash shortfall of "
                     f"{_money(peak_gap)} {peak_gap_period.currency}."
                 ),
                 "period": peak_gap_period,
@@ -205,12 +236,12 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
             {
                 "rule_id": SOURCES_COVERAGE_RULE_ID,
                 "severity": "high" if minimum_coverage < Decimal(1) else "medium",
-                "title": "Thin liquidity sources coverage",
+                "title": "Thin cash cover",
                 "summary": (
-                    f"Liquidity sources cover {minimum_coverage}x of uses in forecast period "
+                    f"Cash sources cover {minimum_coverage}x of uses in forecast period "
                     f"{coverage_period.period_number}."
                 ),
-                "rationale": (
+                "rationale": with_advisory_note(
                     "Projected inflows and credit draws provide less than 1.20x coverage of "
                     "projected outflows and debt repayment."
                 ),
@@ -224,8 +255,8 @@ def calculate_metrics(periods: list[CalculationForecastPeriod]) -> LiquidityResu
                 "rule_id": CREDIT_RELIANCE_RULE_ID,
                 "severity": "high" if credit_reliance > Decimal("0.50") else "medium",
                 "title": "Elevated reliance on credit",
-                "summary": f"Credit draws fund {credit_reliance} of projected liquidity uses.",
-                "rationale": (
+                "summary": f"Credit draws fund {credit_reliance} of projected cash uses.",
+                "rationale": with_advisory_note(
                     "Forecast credit draws exceed 25% of total projected outflows and "
                     "debt repayment."
                 ),
@@ -305,7 +336,7 @@ def generate_findings(  # noqa: PLR0913
             liquidity = finding.details.get("liquidity", {})
             if liquidity.get("scenario_id") == str(run.scenario_id):
                 finding.status = "superseded"
-                finding.disposition_reason = "Superseded by the latest liquidity forecast run."
+                finding.disposition_reason = f"Superseded by the latest {CASH_FLOW_ADEQUACY} run."
                 record_event(
                     db,
                     ctx,
@@ -331,7 +362,7 @@ def generate_findings(  # noqa: PLR0913
             rule_id=concern["rule_id"],
             rule_version=RULE_VERSION,
             disposition_reason=(
-                "Superseded by a newer liquidity forecast run."
+                f"Superseded by a newer {CASH_FLOW_ADEQUACY} run."
                 if newer_run_id is not None
                 else None
             ),
@@ -635,7 +666,7 @@ def review_finding(
     if finding.status not in ("open", "needs_review"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Liquidity finding is read-only.",
+            detail="Cash-flow adequacy finding is read-only.",
         )
     updated = findings_service.apply_finding_update(
         db,
@@ -730,7 +761,7 @@ def _finding_read(db: Session, ctx: TenantContext, finding: RiskFinding) -> Liqu
 
 def _ratio(numerator: Decimal, denominator: Decimal) -> Decimal:
     if denominator <= 0:
-        raise ValueError("Liquidity ratios require positive uses.")
+        raise ValueError("Cash-flow adequacy ratios require positive uses.")
     return (numerator / denominator).quantize(RATIO, rounding=ROUND_HALF_UP)
 
 

@@ -289,6 +289,7 @@ def _load_rows(db: Session, ctx: TenantContext, bank: Bank, period_end: date) ->
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == period_end,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_ACCEPTED_STATUSES),
             CanonicalPosition.position_type.in_((*_ASSET_TYPES, *_LIABILITY_TYPES)),
         )

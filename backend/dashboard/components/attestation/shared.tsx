@@ -470,6 +470,11 @@ export const ATTESTATION_ERROR_HELP: Record<string, AttestationErrorHelp> = {
     guidance:
       'The proof was not accepted. Password re-entry only works for password accounts; if your institution signs in through its identity provider, re-authenticate there instead.',
   },
+  step_up_locked: {
+    title: 'Account locked after repeated failures',
+    guidance:
+      'Password re-entry is throttled, so signing is closed until the lock expires — the same lock applies at sign-in. Wait it out, or ask an administrator to reset your password. Nothing was signed.',
+  },
   maker_checker: {
     title: 'Segregation of duties blocks this signature',
     guidance:

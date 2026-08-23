@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.api.deps import DbSession, Tenant
+from app.api.deps import DbSession, MutationTenant, Tenant
 from app.models import RiskCaseDecision
 from app.schemas.cases import CaseDecisionCreate, CaseDecisionRead
 from app.services import cases as cases_service
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 
 @router.post("/{case_id}/decisions", response_model=CaseDecisionRead)
 def create_case_decision(
-    case_id: UUID, payload: CaseDecisionCreate, db: DbSession, ctx: Tenant
+    case_id: UUID, payload: CaseDecisionCreate, db: DbSession, ctx: MutationTenant
 ) -> RiskCaseDecision:
     return cases_service.decide_case(db, ctx, case_id, payload.to_command())
 

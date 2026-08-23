@@ -82,17 +82,78 @@ def _projection():
     )
 
 
+#: The two institution classes' governed CAR floors, as the control plane seeds
+#: them: Act 930 s.29 for an SDI, Basel CRD ¶71 + the ¶75 conservation buffer for
+#: a universal bank. They are passed EXPLICITLY because ``build_appendix_ii`` no
+#: longer carries a default (audit 2026-08-22 D-15) — before that fix an SDI's
+#: Appendix II capital requirement was computed at the bank's 13%.
+_SDI_CAR_MIN_PCT = Decimal("10")
+_BANK_CAR_MIN_PCT = Decimal("13")
+
+
 def test_sdi_appendix_ii_omits_the_basel_table2_capital_build() -> None:
     projection = _projection()
-    sdi_tables = build_appendix_ii(projection, severe_paths(), basel_applicable=False)
+    sdi_tables = build_appendix_ii(
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_SDI_CAR_MIN_PCT,
+        basel_applicable=False,
+    )
     # Table 2 (Basel CET1/AT1/Tier2 build) is excluded for an SDI ...
     assert sdi_tables.table2_capital.rows == ()
     # ... while the class-agnostic tables remain.
     assert sdi_tables.table1_summary is not None
     assert sdi_tables.table5_rwa is not None
 
-    bank_tables = build_appendix_ii(projection, severe_paths())  # default: bank
+    bank_tables = build_appendix_ii(
+        projection, severe_paths(), currency="GHS", car_target_pct=_BANK_CAR_MIN_PCT
+    )
     assert len(bank_tables.table2_capital.rows) > 0
+
+
+def test_the_capital_requirement_is_measured_against_the_institutions_own_floor() -> None:
+    """D-15: the CAR floor is the CALLER's governed parameter, not a module literal.
+
+    ``appendix_ii`` used to hold ``DEFAULT_CAR_TARGET_PCT = Decimal("13")`` — the
+    universal-bank floor — and apply it to every institution, so a savings-and-
+    loans institution whose statutory minimum is Act 930 s.29's 10% had its
+    Appendix II Table 1 "capital required" and Table 5 Pillar-1 requirement
+    overstated by three percentage points of RWA. Both lines must now move with
+    the floor the caller resolves.
+    """
+    projection = _projection()
+    sdi = build_appendix_ii(
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_SDI_CAR_MIN_PCT,
+        basel_applicable=False,
+    )
+    bank = build_appendix_ii(
+        projection, severe_paths(), currency="GHS", car_target_pct=_BANK_CAR_MIN_PCT
+    )
+
+    assert sdi.table1_summary.car_target_pct == _SDI_CAR_MIN_PCT
+    assert sdi.table5_rwa.car_target_pct == _SDI_CAR_MIN_PCT
+
+    # Table 5's Pillar-1 requirement is car_target% of the same Pillar-1 RWA, so
+    # the two classes' requirements stand in the exact ratio of their floors.
+    sdi_rows = {row.label: row for row in sdi.table5_rwa.rows}
+    bank_rows = {row.label: row for row in bank.table5_rwa.rows}
+    for label, sdi_row in sdi_rows.items():
+        bank_row = bank_rows[label]
+        assert sdi_row.total_pillar1_rwa == bank_row.total_pillar1_rwa
+        assert sdi_row.pillar1_requirement < bank_row.pillar1_requirement
+
+    # Table 1's "capital required at CAR target" moves with it too. It is a
+    # SHORTFALL floored at zero (``max(target% x RWA - total capital, 0)``), so
+    # for a projection that stays above both floors it is zero on both sides —
+    # never larger for the institution with the lower floor.
+    sdi_required = dict(sdi.table1_summary.capital_required_car_target)
+    bank_required = dict(bank.table1_summary.capital_required_car_target)
+    assert sdi_required.keys() == bank_required.keys()
+    assert all(sdi_required[year] <= bank_required[year] for year in sdi_required)
 
 
 def _orchestrator_inputs(*, basel_liquidity: bool) -> EnterpriseStressInputs:

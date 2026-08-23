@@ -33,6 +33,8 @@ from app.db.base import utc_now
 from app.domain.stress.management_actions import (
     ActionTrigger,
     ManagementAction,
+    default_severity_factors,
+    severity_pricing_binds,
 )
 from app.domain.stress.management_actions import (
     ManagementActionPlan as DomainPlan,
@@ -116,6 +118,23 @@ def _item_read(item: ManagementActionItem) -> ActionItemRead:
 def _read(
     plan: ManagementActionPlan, items: list[ManagementActionItem]
 ) -> ManagementActionPlanRead:
+    # Which actions need the scenario to declare a severity band, answered from
+    # the stored pricing alone — no scenario, no run, no database. It calls the
+    # same domain predicate the run-time gate calls, so this screen and that gate
+    # cannot disagree about which actions need a band.
+    #
+    # An item storing NO factors is band-priced, not band-free: it inherits the
+    # default register, which carries three distinct factors. Reading absent
+    # pricing as "no band needed" would understate the requirement.
+    severity_priced = sorted(
+        item.action_id
+        for item in items
+        if severity_pricing_binds(
+            {k: Decimal(str(v)) for k, v in item.severity_factors.items()}
+            if item.severity_factors
+            else default_severity_factors()
+        )
+    )
     return ManagementActionPlanRead(
         id=plan.id,
         organization_id=plan.organization_id,
@@ -129,6 +148,8 @@ def _read(
         approved_by=plan.approved_by,
         approval_timestamp=plan.approval_timestamp,
         actions=[_item_read(item) for item in items],
+        severity_priced_actions=severity_priced,
+        requires_declared_severity=bool(severity_priced),
         created_at=plan.created_at,
         updated_at=plan.updated_at,
     )

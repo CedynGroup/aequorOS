@@ -4,11 +4,12 @@ Credential handling is the load-bearing concern: credentials go in through
 request bodies, round-trip the encrypted vault, and must NEVER appear in any
 response — only status, fingerprint, and expiry do. The T24 session provider is
 the offline SimulatedSessionProvider — no core is ever contacted. Invariants:
-activation on valid credentials (TESTING on a bad shape), unique display names
-(409), rotation validates first, disable/enable/revoke states, the test endpoint
-reports the pull plan, onboarding leaves exactly ONE active T24 mapping, pull /
-backfill enqueue one job per date, tenant isolation. The vault key is set by the
-test (never read from .env). Opt-in via REAL_DATA_DATABASE_URL, rolled back
+credential-shape acceptance on valid credentials (TESTING on a bad shape),
+unique display names (409), rotation validates first, disable/enable/revoke
+states, the test endpoint reports the unavailable live transport, onboarding
+leaves exactly ONE active T24 mapping, pull/backfill are blocked until a live
+transport is installed, tenant isolation. The vault key is set by the test
+(never read from .env). Opt-in via REAL_DATA_DATABASE_URL, rolled back
 (tests/real_data.py).
 """
 
@@ -21,6 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
+from tests.factories.outbound import stub_public_dns
 from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
 
 pytestmark = requires_real_data
@@ -35,6 +37,13 @@ BASE = f"/api/v1/banks/{REAL_BANK_ID}/temenos/connections"
 def vault_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", MASTER_KEY)
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _resolvable_core(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The egress guard resolves the endpoint host before a live test; stub DNS
+    so the suite stays offline and deterministic."""
+    stub_public_dns(monkeypatch, "sample-bank")
 
 
 def _unique_name(stem: str = "Core OFS") -> str:
@@ -54,6 +63,7 @@ def _create(
         "connection_mode": mode,
         "display_name": display_name or _unique_name(),
         "endpoint": "ofs://sample-bank",
+        "default_currency": "GHS",
         "credentials": credentials if credentials is not None else OFS_CREDENTIALS,
     }
     if domains is not None:
@@ -152,13 +162,14 @@ def test_disable_enable_revoke_lifecycle(real_client: TestClient) -> None:
 
 
 @pytest.mark.usefixtures("vault_key")
-def test_test_endpoint_reports_pull_plan(real_client: TestClient) -> None:
+def test_test_endpoint_reports_live_transport_unavailable(real_client: TestClient) -> None:
     conn_id = _create(real_client).json()["id"]
     response = real_client.post(f"{BASE}/{conn_id}/test", headers=real_headers())
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["success"] is True
-    assert body["sample_values"]["connection_mode"] == "OFS"
+    assert body["success"] is False
+    assert body["sample_values"] == {}
+    assert "not available in this deployment" in body["error"]
     assert SECRET not in response.text
 
 
@@ -196,29 +207,25 @@ def test_create_seeds_default_t24_mapping(real_client: TestClient) -> None:
 
 
 @pytest.mark.usefixtures("vault_key")
-def test_trigger_pull_enqueues_a_job(real_client: TestClient) -> None:
+def test_trigger_pull_is_blocked_without_live_transport(real_client: TestClient) -> None:
     conn_id = _create(real_client).json()["id"]
     response = real_client.post(
         f"{BASE}/{conn_id}/pull", headers=real_headers(), json={"as_of_date": "2026-06-30"}
     )
-    assert response.status_code == 202, response.text
-    body = response.json()
-    assert body["count"] == 1
-    assert len(body["job_ids"]) == 1
+    assert response.status_code == 503, response.text
+    assert "not available in this deployment" in response.json()["error"]["message"]
 
 
 @pytest.mark.usefixtures("vault_key")
-def test_trigger_backfill_enqueues_one_job_per_date(real_client: TestClient) -> None:
+def test_trigger_backfill_is_blocked_without_live_transport(real_client: TestClient) -> None:
     conn_id = _create(real_client).json()["id"]
     response = real_client.post(
         f"{BASE}/{conn_id}/backfill",
         headers=real_headers(),
         json={"start_date": "2026-06-28", "end_date": "2026-06-30"},
     )
-    assert response.status_code == 202, response.text
-    body = response.json()
-    assert body["count"] == 3
-    assert len(set(body["job_ids"])) == 3
+    assert response.status_code == 503, response.text
+    assert "not available in this deployment" in response.json()["error"]["message"]
 
 
 @pytest.mark.usefixtures("vault_key")

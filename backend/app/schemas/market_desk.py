@@ -280,6 +280,18 @@ class DeskEntitlementGrantDataset(ClosedModel):
     notes: str | None = None
 
 
+class DeskEntitlementRevoke(ClosedModel):
+    """Which tenant's grant is being ended.
+
+    The organization is REQUIRED even though the entitlement id alone would
+    identify the row: it is what binds the call to a Tenant Inspector session
+    and to an ``operator_audit_log`` row carrying ``target_org`` (audit finding
+    D-26). Absence refuses — a revoke that cannot name its tenant does not run.
+    """
+
+    organization_id: str = Field(min_length=1, max_length=20)
+
+
 class DeskEntitlementRead(ClosedModel):
     id: UUID
     organization_id: str

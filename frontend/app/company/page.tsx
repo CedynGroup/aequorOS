@@ -16,22 +16,22 @@ const statusCards = [
   {
     title: 'Platform',
     status: 'LIVE',
-    body: 'End-to-end product: Data Engine, six ALM engines, and regulatory reporting — working UI shown publicly on this site.',
+    body: 'End-to-end product: Data Engine, six ALM engines, and regulatory reporting — the working UI is shown publicly on this site, running on a synthetic bank profile.',
   },
   {
     title: 'Data Engine',
     status: 'LIVE',
-    body: 'Connects to Oracle/FLEXCUBE, Snowflake, Temenos T24, a secure API, or file upload, mapped per institution to an auditable canonical model.',
+    body: 'File upload and secure API push are available today, and Oracle read-only extraction ships in the standard deployment. Other database backends and core-banking adapters are built and tested but need a driver-carrying deployment image and vendor onboarding.',
   },
   {
     title: 'Regulatory reporting',
     status: 'LIVE',
-    body: 'Bank of Ghana BSD prudential returns generated from the platform, export-ready to Excel, CSV, and PDF. CBN and SARB share the same engine on the roadmap.',
+    body: 'Bank of Ghana BSD prudential returns generated in the regulator’s own workbook layouts, export-ready to Excel, CSV, and PDF for officer review and signature. CBN and SARB share the same engine on the roadmap.',
   },
   {
     title: 'Pilot banks',
-    status: 'ONBOARDING',
-    body: 'First cohort of design-partner banks. Engaging with the Bank of Ghana on certification pathways.',
+    status: 'IN DISCUSSION',
+    body: 'We are in conversation with a first cohort of design-partner banks. No bank is in production on the platform yet, and no return has been filed with the Bank of Ghana.',
   },
 ];
 
@@ -47,8 +47,9 @@ export default function CompanyPage() {
             </h1>
             <p className="mt-8 text-text-muted text-lg leading-relaxed max-w-[720px]">
               Founded in 2025, working across Winchester, Virginia and Accra,
-              Ghana. The product is live — Data Engine through regulatory
-              returns — and we&apos;re onboarding our first pilot banks.
+              Ghana. The product is built and running — Data Engine through
+              regulatory returns — and we&apos;re in conversation with our first
+              design-partner banks.
             </p>
           </div>
         </div>
@@ -72,7 +73,7 @@ export default function CompanyPage() {
                 </p>
                 <p>
                   African banks need something different: tools that are
-                  affordable, deployable in weeks, and built for volatile
+                  affordable, quick to stand up, and built for volatile
                   currencies, fast-moving regulation, and the core banking
                   systems that actually run finance on the continent.
                 </p>
@@ -157,7 +158,7 @@ export default function CompanyPage() {
           <div className="max-w-3xl">
             <SectionLabel>WHERE WE ARE</SectionLabel>
             <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Product live. Onboarding pilots.
+              Product built. Pilots in discussion.
             </h2>
           </div>
 

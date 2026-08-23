@@ -312,6 +312,19 @@ def delete_document(
     *,
     storage_client: ObjectStorage,
 ) -> Document:
+    """Soft-delete the document rows and remove the stored object. Irreversible.
+
+    Authorization is the route's (``MutationTenant`` — analyst or higher; audit
+    P0-3 found this reachable by a ``viewer`` and by an act-as-examiner token).
+
+    ORDERING IS LOAD-BEARING — do not reorder. The object-store delete is the
+    irreversible half, so it runs BEFORE ``db.commit()``: if it raises, the
+    exception unwinds through ``get_tenant_db_session``, which rolls the session
+    back, and the caller sees a failure over a document that is still intact.
+    Committing first would trade that recoverable failure for the unrecoverable
+    one — an object destroyed while the database still serves the row.
+    ``tests/api/test_impersonation_boundary.py`` pins the behaviour.
+    """
     document = get_document_or_404(db, ctx.organization_id, document_id)
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
     document.status = "deleted"

@@ -269,7 +269,8 @@ export default function RegulatoryCalendarPage() {
                           Up to GH¢{fmtInt(penalty.baseGhs)} (500 units) on the
                           institution and responsible officers, plus GH¢
                           {fmtInt(penalty.dailyGhs)}/day (50 units) ×{' '}
-                          <span className="font-mono">{days}</span> days ≈ GH¢
+                          <span className="font-mono">{days}</span>{' '}
+                          {days === 1 ? 'day' : 'days'} ≈ GH¢
                           {fmtInt(penalty.runningGhs)} running — indicative.
                         </p>
                       </div>

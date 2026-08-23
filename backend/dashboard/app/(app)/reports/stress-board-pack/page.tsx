@@ -7,6 +7,14 @@
  * comparison, management-action with/without, analyst/CRO narrative (composer-
  * local capture, item 7), and the full Appendix II Tables 1–6 — printable to PDF
  * via the app's print-optimised board-pack path (design system §5).
+ *
+ * FAIL CLOSED (NEW-10). Every floor on this page comes from the run payload —
+ * the run's own §59(f) coupling block for a bank, the control plane's s.29
+ * floor for an SDI. This page used to read `num(coupling?.car_min_pct ?? '0')`,
+ * so a run with no configured floor drew a 0% reference line that every ratio
+ * clears and lit the CAR tile green. A board pack is printed and signed, so an
+ * unassessable ratio must say so: no floor ⇒ no floor line, no verdict, an
+ * amber tile and a caption that names the reason.
  */
 
 import { useMemo, useState } from 'react';
@@ -19,8 +27,18 @@ import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import ChartFrame from '@/components/ui/ChartFrame';
 import { useBankContext } from '@/components/shell/BankContext';
-import { useSdiLiquidityPosition } from '@/components/basel/sdiHooks';
-import { num, fmtDateUTC, shortId } from '@/lib/api/values';
+import { useSdiCapitalSummary, useSdiLiquidityPosition } from '@/components/basel/sdiHooks';
+import {
+  assessAgainstFloor,
+  floorNotAssessedReason,
+  floorStatus,
+  fmtFloorPct,
+  fmtPctOrNull,
+  num,
+  numOrNull,
+  fmtDateUTC,
+  shortId,
+} from '@/lib/api/values';
 import { useEnterpriseStressRegistry, useMacroScenarios } from '@/components/stress/hooks';
 import ProjectionPaths from '@/components/stress/charts/ProjectionPaths';
 import DriverWaterfall from '@/components/stress/charts/DriverWaterfall';
@@ -34,6 +52,7 @@ export default function StressBoardPack() {
   const periodId = period?.id;
   const isSdi = moduleScope.institutionClass === 'sdi';
   const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bankId : undefined);
+  const sdiCapital = useSdiCapitalSummary(isSdi ? bankId : undefined);
 
   const approved = useMacroScenarios({ status: 'approved' });
   const scenarioIds = useMemo(
@@ -58,6 +77,23 @@ export default function StressBoardPack() {
     () => runs.find((r) => r.run_id === selectedRunId) ?? runs[0] ?? null,
     [runs, selectedRunId]
   );
+
+  // Bank: the run's own coupling minimum. SDI: the s.29 floor from the control
+  // plane. Neither present ⇒ null ⇒ nothing on this page claims a verdict.
+  const carFloor =
+    numOrNull(run?.outcome.coupling?.car_min_pct) ??
+    (isSdi ? numOrNull(sdiCapital.data?.car_min_pct) : null);
+  const lcrFloor = numOrNull(run?.outcome.coupling?.lcr_min_pct);
+  const carAssessment = assessAgainstFloor(
+    numOrNull(run?.summary.stressed_car_end_pct),
+    carFloor
+  );
+  const lcrAssessment = assessAgainstFloor(
+    numOrNull(run?.summary.stressed_lcr_pct),
+    lcrFloor
+  );
+  const floorCaption = (floor: number | null, what: string) =>
+    floor === null ? `No ${what} floor configured` : `Floor ${fmtFloorPct(floor)}`;
 
   return (
     <>
@@ -153,12 +189,27 @@ export default function StressBoardPack() {
                 actions={<StatusPill tone={run.summary.stress_stays_above_all_minima ? 'success' : 'critical'}>{run.summary.stress_stays_above_all_minima ? 'Above all minima' : 'Breach'}</StatusPill>}
               >
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <KpiStat label="Stressed CAR" value={`${num(run.summary.stressed_car_end_pct).toFixed(2)}%`} status={num(run.summary.stressed_car_end_pct) < num(run.outcome.coupling?.car_min_pct ?? '0') ? 'crit' : 'ok'} hint={`Base ${num(run.summary.baseline_car_end_pct).toFixed(2)}%`} />
+                  <KpiStat
+                    label="Stressed CAR"
+                    value={fmtPctOrNull(numOrNull(run.summary.stressed_car_end_pct))}
+                    status={floorStatus(carAssessment)}
+                    hint={`Base ${fmtPctOrNull(numOrNull(run.summary.baseline_car_end_pct))} · ${
+                      floorNotAssessedReason(carAssessment, 'CAR') ?? floorCaption(carFloor, 'CAR')
+                    }`}
+                  />
                   <KpiStat label="CAR erosion" value={`${num(run.summary.car_erosion_pp).toFixed(2)} pp`} status="warn" />
                   {run.summary.stressed_lcr_pct === null ? (
                     <KpiStat label="Liquidity regime" value="LMTD" status="ok" hint="Basel LCR/NSFR n/a for SDIs (§4.6)" />
                   ) : (
-                    <KpiStat label="Stressed LCR" value={`${num(run.summary.stressed_lcr_pct).toFixed(1)}%`} status={num(run.summary.stressed_lcr_pct) < num(run.outcome.coupling?.lcr_min_pct ?? '0') ? 'crit' : 'ok'} />
+                    <KpiStat
+                      label="Stressed LCR"
+                      value={fmtPctOrNull(numOrNull(run.summary.stressed_lcr_pct), 1)}
+                      status={floorStatus(lcrAssessment)}
+                      hint={
+                        floorNotAssessedReason(lcrAssessment, 'LCR') ??
+                        floorCaption(lcrFloor, 'LCR')
+                      }
+                    />
                   )}
                   <KpiStat label="Capital gap" value={`GHS'000 ${num(run.summary.capital_gap).toLocaleString()}`} status={num(run.summary.capital_gap) > 0 ? 'warn' : 'ok'} />
                 </div>
@@ -188,8 +239,12 @@ export default function StressBoardPack() {
 
               {sections.charts && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <ChartFrame title="CAR — base vs stress" subtitle="vs regulatory floor" height={240}>
-                    <ProjectionPaths projection={run.projection} metricKey="car_pct" threshold={num(run.outcome.coupling?.car_min_pct ?? '0')} thresholdLabel="CAR floor" />
+                  <ChartFrame
+                    title="CAR — base vs stress"
+                    subtitle={carFloor === null ? 'No CAR floor configured — no floor line drawn' : `Against the ${fmtFloorPct(carFloor)} floor on this run`}
+                    height={240}
+                  >
+                    <ProjectionPaths projection={run.projection} metricKey="car_pct" threshold={carFloor} thresholdLabel="CAR floor" />
                   </ChartFrame>
                   {run.summary.stressed_lcr_pct === null ? (
                     <ChartFrame title="Liquidity — SDI (LMTD)" subtitle="Basel LCR/NSFR excluded (§4.6)" height={240}>
@@ -200,8 +255,12 @@ export default function StressBoardPack() {
                       />
                     </ChartFrame>
                   ) : (
-                    <ChartFrame title="LCR — base vs stress" subtitle="vs regulatory floor" height={240}>
-                      <ProjectionPaths projection={run.projection} metricKey="lcr_pct" threshold={num(run.outcome.coupling?.lcr_min_pct ?? '0')} thresholdLabel="LCR floor" />
+                    <ChartFrame
+                      title="LCR — base vs stress"
+                      subtitle={lcrFloor === null ? 'No LCR floor configured — no floor line drawn' : `Against the ${fmtFloorPct(lcrFloor)} floor on this run`}
+                      height={240}
+                    >
+                      <ProjectionPaths projection={run.projection} metricKey="lcr_pct" threshold={lcrFloor} thresholdLabel="LCR floor" />
                     </ChartFrame>
                   )}
                 </div>
@@ -210,7 +269,13 @@ export default function StressBoardPack() {
               {sections.driver && <DriverWaterfall run={run} />}
 
               {sections.comparison && runs.length > 1 && (
-                <ScenarioComparison runs={runs} focusedRunId={run.run_id} onFocus={(r) => setSelectedRunId(r.run_id)} />
+                <ScenarioComparison
+                  runs={runs}
+                  focusedRunId={run.run_id}
+                  isSdiTenant={isSdi}
+                  sdiCapitalFloor={sdiCapital.data?.car_min_pct}
+                  onFocus={(r) => setSelectedRunId(r.run_id)}
+                />
               )}
 
               {sections.actions && <ManagementActionsPanel run={run} />}

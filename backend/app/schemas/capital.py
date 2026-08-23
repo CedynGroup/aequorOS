@@ -1,3 +1,11 @@
+"""Case solvency-pressure contracts (advisory, never filed).
+
+Model and field names keep the historical `Capital*` spelling because they are
+a published wire contract (`packages/risk-service-api` is generated from
+them). The figures they carry are unweighted equity-to-assets pressure from a
+case forecast, not regulatory CAR/CET1/Tier 1. See `app.services.case_plane`.
+"""
+
 from __future__ import annotations
 
 from datetime import date, datetime

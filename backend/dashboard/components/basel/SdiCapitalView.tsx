@@ -14,7 +14,7 @@ import SectionCard from '@/components/ui/SectionCard';
 import StatusPill from '@/components/ui/StatusPill';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
-import { num } from '@/lib/api/values';
+import { fmtFloorPct, num, numOrNull } from '@/lib/api/values';
 import { fmtCurrency } from '@/lib/format';
 import {
   SdiCapitalControlsChart,
@@ -45,6 +45,16 @@ const BUCKET_LABELS: Record<string, string> = {
   other_assets: 'Other assets',
 };
 
+// The risk classes a capital ratio can charge for. The backend returns every one
+// of them, in scope or not, so a ratio that covers credit risk alone says so
+// here rather than leaving a reader to infer it from the bands that happen to
+// be present.
+const RISK_CLASS_LABELS: Record<string, string> = {
+  credit: 'Credit risk',
+  market: 'Market risk',
+  operational: 'Operational risk',
+};
+
 function checkTone(c: CapitalCheck): 'success' | 'critical' | 'amber' | 'slate' {
   if (c.compliant === null) return 'slate';
   return c.compliant ? 'success' : 'critical';
@@ -67,9 +77,25 @@ export default function SdiCapitalView({ bankId }: { bankId: string | undefined 
   const classification = useSdiLoanClassification(bankId);
 
   const cap = summary.data;
-  const carMin = num(cap?.car_min_pct ?? '10');
+  // The s.29 minimum is control-plane data carried on the summary. There is
+  // deliberately no `?? '10'` literal: an unresolved minimum must surface as
+  // unresolved, not be invented — it drives the headroom figure, the threshold
+  // lines and the compliance colour on this screen.
+  const carMin = numOrNull(cap?.car_min_pct);
   const weightsPending = (cap?.pending_parameters.length ?? 0) > 0;
-  const capitalHeadroom = cap?.car_pct === null || !cap
+  // Which risk classes the ratio charges for is declared data, not an emergent
+  // property of the code. Anything the ratio leaves out is named on the headline
+  // and spelled out in full on the RWA card below.
+  const riskClasses = cap?.risk_classes ?? [];
+  const excludedRiskClasses = riskClasses.filter((rc) => !rc.in_scope);
+  const chargedRiskClasses = riskClasses.filter((rc) => rc.in_scope);
+  const scopeSuffix =
+    chargedRiskClasses.length > 0 && excludedRiskClasses.length > 0
+      ? ` · ${chargedRiskClasses
+          .map((rc) => (RISK_CLASS_LABELS[rc.risk_class] ?? rc.risk_class).toLowerCase())
+          .join(', ')} only`
+      : '';
+  const capitalHeadroom = cap?.car_pct === null || !cap || carMin === null
     ? null
     : num(cap.net_own_funds_ghs) - (num(cap.total_rwa_ghs) * carMin) / 100;
   const capitalControls = (checks.data?.checks ?? []).map((check) => ({
@@ -170,16 +196,22 @@ export default function SdiCapitalView({ bankId }: { bankId: string | undefined 
               unit={cap.car_pct !== null ? '%' : undefined}
               status={kpiStatus(cap.status)}
               hint={
-                weightsPending
-                  ? `s.29 minimum ${carMin.toFixed(1)}% · risk weights pending BoG`
-                  : `s.29 minimum ${carMin.toFixed(1)}%`
+                carMin === null
+                  ? `s.29 minimum not resolved — ratio shown without a compliance verdict${scopeSuffix}`
+                  : weightsPending
+                    ? `s.29 minimum ${fmtFloorPct(carMin)} · risk weights pending confirmation${scopeSuffix}`
+                    : `s.29 minimum ${fmtFloorPct(carMin)}${scopeSuffix}`
               }
             />
             <KpiStat
               label="Capital headroom"
-              value={capitalHeadroom === null ? '—' : fmtCurrency(capitalHeadroom)}
-              status={capitalHeadroom !== null && capitalHeadroom < 0 ? 'crit' : 'ok'}
-              hint="Net Own Funds less capital required at the s.29 minimum"
+              value={capitalHeadroom === null ? 'Not computable' : fmtCurrency(capitalHeadroom)}
+              status={capitalHeadroom === null ? 'warn' : capitalHeadroom < 0 ? 'crit' : 'ok'}
+              hint={
+                capitalHeadroom === null
+                  ? 'Requires both a computed CAR and a resolved s.29 minimum'
+                  : 'Net Own Funds less capital required at the s.29 minimum'
+              }
             />
             <KpiStat
               label="NPL ratio"
@@ -209,10 +241,57 @@ export default function SdiCapitalView({ bankId }: { bankId: string | undefined 
       {cap ? (
         <div className="grid gap-6 xl:grid-cols-2">
           <SectionCard title="CAR against statutory minimum" subtitle="Current Section 29 capital adequacy ratio and the resolved minimum.">
-            <SdiCarThresholdChart carPct={cap.car_pct === null ? null : num(cap.car_pct)} carMinPct={carMin} />
+            {/* The chart renders nothing when there is no ratio to plot, and this
+                card sits in a grid row sized by its taller sibling — so an
+                unresolved CAR left a card-height void with no word of
+                explanation, which reads as a broken panel rather than the
+                fail-closed state it is. Say what is missing instead. */}
+            {cap.car_pct === null ? (
+              <p className="py-8 text-center text-body text-slate">
+                No capital adequacy ratio has been computed for this period, so there is
+                nothing to plot against the statutory minimum.
+              </p>
+            ) : (
+              <SdiCarThresholdChart carPct={numOrNull(cap.car_pct)} carMinPct={carMin} />
+            )}
           </SectionCard>
-          <SectionCard title="Simplified risk-weighted assets" subtitle="Current eligible asset exposure and its simplified RWA contribution.">
+          <SectionCard
+            title="Simplified risk-weighted assets"
+            subtitle="Current eligible asset exposure and its simplified RWA contribution."
+            footer={
+              cap.composition_source === 'code_default' ? (
+                <span className="text-caption text-warning">
+                  This scope is the platform&rsquo;s documented default, not a scope approved for
+                  this institution — the ratio is provisional until it is approved.
+                </span>
+              ) : undefined
+            }
+          >
             <SdiRwaCompositionChart data={riskWeightBands} />
+            {riskClasses.length > 0 ? (
+              <div className="mt-5 border-t border-border-light pt-4">
+                <p className="text-caption font-medium uppercase tracking-wider text-slate-light">
+                  What this ratio charges for
+                </p>
+                <p className="mt-1 text-body text-slate">{cap.rwa_scope_note}</p>
+                <ul className="mt-3 space-y-3">
+                  {riskClasses.map((rc) => (
+                    <li key={rc.risk_class} className="flex items-start gap-3">
+                      <StatusPill tone={rc.in_scope ? 'success' : 'amber'}>
+                        {rc.in_scope ? 'Charged' : 'Not charged'}
+                      </StatusPill>
+                      <div className="min-w-0">
+                        <p className="text-body text-navy">
+                          {RISK_CLASS_LABELS[rc.risk_class] ?? rc.risk_class}
+                          {rc.in_scope ? ` — ${fmtCurrency(num(rc.rwa_ghs))}` : ''}
+                        </p>
+                        <p className="text-caption text-slate">{rc.note}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </SectionCard>
         </div>
       ) : null}
@@ -321,7 +400,7 @@ export default function SdiCapitalView({ bankId }: { bankId: string | undefined 
                 <div className="bg-surface p-4">
                   <p className="text-caption text-slate">s.29 minimum</p>
                   <p className="mt-1 text-body font-semibold text-navy">
-                    {carMin.toFixed(1)}%
+                    {carMin === null ? 'not resolved' : fmtFloorPct(carMin)}
                   </p>
                 </div>
               </div>

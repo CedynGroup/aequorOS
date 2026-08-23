@@ -44,6 +44,7 @@ def _counterparty_rows(db: Session, ctx: TenantContext, bank_id: str) -> list[di
             CanonicalCounterparty.organization_id == ctx.organization_id,
             CanonicalCounterparty.bank_id == bank_id,
             CanonicalCounterparty.superseded_by.is_(None),
+            CanonicalCounterparty.withdrawn_at.is_(None),
             CanonicalCounterparty.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
     ).all()
@@ -71,6 +72,7 @@ def _position_records(db: Session, ctx: TenantContext, bank_id: str) -> list[Raw
             CanonicalPosition.organization_id == ctx.organization_id,
             CanonicalPosition.bank_id == bank_id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
     ).all()

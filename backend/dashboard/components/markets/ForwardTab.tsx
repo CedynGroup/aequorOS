@@ -419,7 +419,7 @@ export default function ForwardTab({
             <p className="text-micro font-medium uppercase tracking-wider text-slate">Information retrieval</p>
             <h2 className="mt-1 text-h2 text-navy">Curve pull</h2>
             <p className="mt-1 text-caption text-slate">
-              Retrieve a historical published grid or the selected curve's implied future forward periods.
+              Retrieve a historical published grid or the selected curve&apos;s implied future forward periods.
             </p>
           </div>
           {meta && (

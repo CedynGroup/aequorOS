@@ -36,7 +36,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core import security
-from app.core.config import OperatorSettings, get_operator_settings, get_settings
+from app.core.config import (
+    OperatorSettings,
+    get_operator_settings,
+    get_settings,
+    is_undeployed_environment,
+)
 from app.db.session import get_engine
 from app.models import OperatorAuditLog, OperatorUser
 from app.models.operator import OPERATOR_ROLE_RANK
@@ -76,11 +81,20 @@ class OperatorContext:
 
 
 def _dev_context(token: str, operator_settings: OperatorSettings) -> OperatorContext | None:
-    """Dev-token auth: enabled, token configured, matching — and NEVER in
-    production (belt to the boot-refusal braces in ``create_operator_app``)."""
+    """Dev-token auth: enabled, token configured, matching — and ONLY on an
+    UNDEPLOYED environment (belt to the boot-refusal braces in
+    ``create_operator_app``).
+
+    This asked ``app_env == "production"`` until 2026-08-23, which admitted a
+    static shared secret as ``super_admin`` on ``staging`` — a deployed host
+    on the same primary database, reached by the same cross-tenant BYPASSRLS
+    session. "Not production" is an unbounded set whose default branch is the
+    dangerous one; the allow-list in :func:`is_undeployed_environment` inverts
+    it, so anything that is not ``local``/``test`` is treated as deployed.
+    """
     if not operator_settings.dev_auth_enabled:
         return None
-    if get_settings().app.app_env == "production":
+    if not is_undeployed_environment():
         return None
     if operator_settings.dev_token is None:
         return None

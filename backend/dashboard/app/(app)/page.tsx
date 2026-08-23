@@ -26,6 +26,7 @@ import { fmtDateUTC, labelize } from '@/lib/api/values';
 import { useEffectivePeriod } from '@/components/home/hooks';
 import RoleLensTabs, { ROLE_CONFIG, useRoleLens } from '@/components/home/RoleLens';
 import BreachBanner from '@/components/home/BreachBanner';
+import UnreconciledBookBanner from '@/components/live/UnreconciledBookBanner';
 import PulseWall from '@/components/home/PulseWall';
 import BalanceSheetStrip from '@/components/home/BalanceSheetStrip';
 import RatioTrendChart from '@/components/home/RatioTrendChart';
@@ -58,6 +59,7 @@ export default function CommandCenterPage() {
         <CommandCenterSkeleton />
       ) : effective.isEmpty ? (
         <div className="px-8 py-6 space-y-6">
+          <UnreconciledBookBanner bankId={bankId} />
           <BreachBanner bankId={bankId} hasData={false} />
           <PulseWall bankId={bankId} moduleOrder={lens.moduleOrder} hasData={false} />
           <div className="py-4 max-w-2xl mx-auto">
@@ -104,6 +106,9 @@ export default function CommandCenterPage() {
             </div>
           )}
 
+          {/* Above the breach banner on purpose: a limit breach computed on a
+              book that does not balance is not a trustworthy breach. */}
+          <UnreconciledBookBanner bankId={bankId} />
           <BreachBanner bankId={bankId} />
 
           {isSdi && <SdiLiquiditySummary bankId={bankId} />}

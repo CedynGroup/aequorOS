@@ -10,7 +10,16 @@ generalizes; the canonical tables do not change shape.
 Immutability: accepted records are never updated in place. A correction or a
 re-ingestion for the same ``as_of_date`` writes new rows and stamps the old
 ones' ``superseded_by``. Partial unique indexes enforce natural-key uniqueness
-among the *current* (non-superseded) generation only.
+among the *current* generation only.
+
+Two lifecycle columns decide that generation, and both must be checked:
+``superseded_by IS NULL AND withdrawn_at IS NULL`` (:data:`CURRENT_GENERATION_SQL`,
+:func:`is_current_generation`). Supersession means "replaced by this newer row";
+WITHDRAWAL means "this record should never have been counted and has no
+replacement" — the retirement of a whole source system's book for a business
+date, which supersession structurally cannot express because it requires a
+replacement row. Withdrawal is an explicit governed act
+(``app/services/canonical_withdrawal.py``); nothing withdraws automatically.
 
 Monetary amounts are ``NUMERIC(28, 6)`` (report at 2 dp, calculate at 6).
 Rates are decimals, never percentages: ``0.245``, not ``24.5``.
@@ -33,6 +42,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     Uuid,
 )
@@ -85,6 +95,31 @@ class CanonicalMetadataMixin(UuidV7PrimaryKeyMixin, TimestampMixin):
     superseded_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
 
+    # --- withdrawal (the second half of the current-generation predicate) ----
+    #
+    # ``superseded_by`` can only retire a record by naming its REPLACEMENT, so
+    # it cannot express "this book is gone": a full-refresh batch that omits
+    # 150k rows leaves all 150k current, and a second source system's duplicate
+    # book is carried in full because supersession is scoped per source system
+    # (deliberately — a bank legitimately splits its book across systems).
+    # These three columns are that missing representation, and they are written
+    # ONLY by an approved withdrawal (``app/services/canonical_withdrawal.py``).
+    #
+    # Append-only: no row is deleted and no business field is rewritten. The
+    # marker is stamped exactly as ``superseded_by`` is stamped today, and the
+    # governing ``canonical_withdrawals`` record, both lineage nodes and both
+    # audit events survive a reversal.
+    withdrawn_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: The withdrawal batch that retired this row — a real ``ingestion_batches``
+    #: row carrying the SUPERSESSION lineage node, so a withdrawal is walkable
+    #: in lineage exactly like an ingestion.
+    withdrawn_by_batch_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    #: Mandatory at the service boundary; nullable in the column only because a
+    #: never-withdrawn row has no reason to carry.
+    withdrawal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
 
 def canonical_constraints(table_name: str) -> tuple:
     """Constraints and indexes every canonical entity shares.
@@ -119,14 +154,32 @@ def canonical_constraints(table_name: str) -> tuple:
     )
 
 
+#: The current generation, as SQL. Every partial index over the live generation
+#: and every reader's predicate uses exactly this pair of conditions. A reader
+#: that checks only ``superseded_by`` resurrects a withdrawn book, which is why
+#: ``tests/architecture/test_current_generation_predicate.py`` fails the build
+#: when a query filters one without the other.
+CURRENT_GENERATION_SQL = "superseded_by IS NULL AND withdrawn_at IS NULL"
+
+
+def is_current_generation(model: type[CanonicalMetadataMixin]) -> tuple[Any, ...]:
+    """SQLAlchemy predicates selecting ``model``'s current generation."""
+    return (model.superseded_by.is_(None), model.withdrawn_at.is_(None))
+
+
 def _current_generation_unique(table_name: str, *columns: str) -> Index:
-    """Natural-key uniqueness among non-superseded rows only."""
+    """Natural-key uniqueness among current-generation rows only.
+
+    Withdrawn rows are excluded so a withdrawn book can be re-ingested: the
+    replacement carries the same natural key while the withdrawn evidence stays
+    in the table.
+    """
     return Index(
         f"uq_{table_name}_current",
         *columns,
         unique=True,
-        postgresql_where=sql_text("superseded_by IS NULL"),
-        sqlite_where=sql_text("superseded_by IS NULL"),
+        postgresql_where=sql_text(CURRENT_GENERATION_SQL),
+        sqlite_where=sql_text(CURRENT_GENERATION_SQL),
     )
 
 
@@ -263,8 +316,8 @@ class CanonicalPosition(CanonicalMetadataMixin, Base):
             "source_reference",
             "id",
             postgresql_include=("position_type", "currency"),
-            postgresql_where=sql_text("superseded_by IS NULL"),
-            sqlite_where=sql_text("superseded_by IS NULL"),
+            postgresql_where=sql_text(CURRENT_GENERATION_SQL),
+            sqlite_where=sql_text(CURRENT_GENERATION_SQL),
         ),
         Index(
             "ix_canonical_positions_current_org_bank_type",
@@ -272,8 +325,8 @@ class CanonicalPosition(CanonicalMetadataMixin, Base):
             "bank_id",
             "position_type",
             "currency",
-            postgresql_where=sql_text("superseded_by IS NULL"),
-            sqlite_where=sql_text("superseded_by IS NULL"),
+            postgresql_where=sql_text(CURRENT_GENERATION_SQL),
+            sqlite_where=sql_text(CURRENT_GENERATION_SQL),
         ),
         *canonical_constraints("canonical_positions"),
     )
@@ -455,8 +508,8 @@ class CanonicalFxRate(CanonicalMetadataMixin, Base):
             "rate_type",
             sql_text("coalesce(tenor_months, 0)"),
             unique=True,
-            postgresql_where=sql_text("superseded_by IS NULL"),
-            sqlite_where=sql_text("superseded_by IS NULL"),
+            postgresql_where=sql_text(CURRENT_GENERATION_SQL),
+            sqlite_where=sql_text(CURRENT_GENERATION_SQL),
         ),
         *canonical_constraints("canonical_fx_rates"),
     )
@@ -491,8 +544,8 @@ class CanonicalMarketIndex(CanonicalMetadataMixin, Base):
             "scenario",
             sql_text("coalesce(horizon_months, 0)"),
             unique=True,
-            postgresql_where=sql_text("superseded_by IS NULL"),
-            sqlite_where=sql_text("superseded_by IS NULL"),
+            postgresql_where=sql_text(CURRENT_GENERATION_SQL),
+            sqlite_where=sql_text(CURRENT_GENERATION_SQL),
         ),
         *canonical_constraints("canonical_market_indices"),
     )

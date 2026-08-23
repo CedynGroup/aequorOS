@@ -149,7 +149,12 @@ class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     fact_group: Mapped[str] = mapped_column(String(40), nullable=False)
     category: Mapped[str] = mapped_column(String(80), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), default="GHS", nullable=False)
+    # NO default (enterprise audit 2026-08-20 §6). ``default="GHS"`` here meant a
+    # fact row inserted without an explicit currency silently became a cedi amount
+    # — the same trap ``banks.currency`` was made mandatory to prevent, one table
+    # further down. Every writer sets it: ``fact_derivation._fact`` passes
+    # ``spec.currency or bank.currency``.
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
     risk_weight_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
     hqla_level: Mapped[str | None] = mapped_column(String(8), nullable=True)
     ccf_pct: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
@@ -170,7 +175,13 @@ class RegulatoryParameterMixin(UuidV4PrimaryKeyMixin, TimestampMixin):
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id"), nullable=False
     )
-    jurisdiction_code: Mapped[str] = mapped_column(String(8), default="GH", nullable=False)
+    # NO default (enterprise audit 2026-08-20 §6). This mixin is inherited by NINE
+    # parameter tables, so a single ``default="GH"`` silently filed every board
+    # register generation under Ghana — including a Nigerian tenant's. The
+    # jurisdiction is part of the parameter's identity (it is in the resolution
+    # key), so it must be an explicit decision at every write site; all of them
+    # already pass it.
+    jurisdiction_code: Mapped[str] = mapped_column(String(8), nullable=False)
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     approved_by: Mapped[str] = mapped_column(String(120), nullable=False)

@@ -104,9 +104,9 @@ class TemenosConnection(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     companies: Mapped[list[str]] = mapped_column(
         JSON, default=list, server_default=sql_text("'[]'"), nullable=False
     )
-    default_currency: Mapped[str] = mapped_column(
-        String(3), default="GHS", server_default=sql_text("'GHS'"), nullable=False
-    )
+    # The connection's reporting currency must be named at onboarding. There is
+    # intentionally no ORM or database fallback: a missing currency is unsafe.
+    default_currency: Mapped[str] = mapped_column(String(3), nullable=False)
     # CoreBankingDomain names this connection is authorized/enabled to pull.
     domains: Mapped[list[str]] = mapped_column(
         JSON, default=list, server_default=sql_text("'[]'"), nullable=False

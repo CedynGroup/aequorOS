@@ -51,6 +51,14 @@ GENESIS_HASH = "0" * 64
 #: must have passed validation with zero errors before anyone attests to them.
 CERTIFIABLE_STATUSES: frozenset[str] = frozenset({"validated"})
 
+#: Slots whose holder is a CHECKER — the second pair of eyes a regulated filing
+#: requires. Canonical here because this module owns the release guard;
+#: ``attestation.routing.CHECKER_ROLES`` and ``attestation_api.CHECKER_ROLES``
+#: mirror it for their own role gates (they cannot import this module without
+#: closing a cycle), and ``test_checker_roles_do_not_drift`` pins the three
+#: together so the mirrors cannot diverge from the guard.
+CHECKER_ROLES: frozenset[str] = frozenset({"approver", "board"})
+
 
 class AttestationConflict(HTTPException):
     """A 409 with a stable error code the dashboard can branch on.
@@ -304,6 +312,68 @@ def ensure_maker_checker(  # noqa: PLR0913 - every argument is a distinct SoD in
             )
 
 
+def ensure_checked_release(
+    package: RegulatoryPackage, signatures: list[AttestationSignature]
+) -> list[AttestationSignature]:
+    """Segregation of duties at the ONE moment certification releases a package.
+
+    Every other maker-checker guard in this module runs when a signature is
+    *offered*, and each is therefore conditional on configuration:
+    :func:`ensure_maker_checker` only compares against prior signers when the
+    policy left ``distinct_signers`` true, and it never asks whether the policy
+    named a checker slot at all. A policy of ``[preparer]`` alone — or one with
+    ``distinct_signers=False`` — could therefore drive
+    ``pending_approval -> approved`` on the strength of one officer's signature.
+
+    This guard runs when the package is *released* instead. It reads the
+    signatures that actually exist rather than the policy that asked for them,
+    so no row in ``return_signing_policies`` can shape a filing that one officer
+    both prepared and approved:
+
+    * a checker must have signed (an ``approver``/``board`` slot — a ``witness``
+      is not a second pair of eyes, and a preparer is the first pair);
+    * no checker may be anyone who signed as preparer, compared on BOTH the user
+      id and the permanent signer id, exactly as :func:`ensure_maker_checker`
+      compares them;
+    * every checker passes ``ensure_decidable`` — the SAME primitive the bare
+      approval decision passes through, so the two routes to ``approved`` cannot
+      drift into two readings of one rule.
+
+    Returns the checker signatures: the caller must attribute the approval
+    decision to one of them, and re-deriving the set would be a second reading.
+    """
+    # Lazily imported: the reporting workflow reaches back into this module, so
+    # a module-level import would close the cycle.
+    from app.services.regulatory_reporting.workflow import (  # noqa: PLC0415
+        ensure_decidable,
+    )
+
+    checkers = [signature for signature in signatures if signature.signing_role in CHECKER_ROLES]
+    if not checkers:
+        required = ", ".join(sorted(CHECKER_ROLES))
+        raise AttestationConflict(
+            "maker_checker_not_satisfied",
+            "This return cannot be approved: nobody has signed it as a checker. "
+            "A regulated filing is released by an officer other than the one who "
+            f"prepared it, so its signing policy must require one of: {required}.",
+        )
+    preparer_users = {
+        signature.signer_user_id for signature in signatures if signature.signing_role == "preparer"
+    }
+    preparer_signers = {
+        signature.signer_id for signature in signatures if signature.signing_role == "preparer"
+    }
+    for checker in checkers:
+        if checker.signer_user_id in preparer_users or checker.signer_id in preparer_signers:
+            raise AttestationConflict(
+                "maker_checker",
+                "Maker-checker: the officer who prepared this return cannot also "
+                "be an officer who approves it.",
+            )
+        ensure_decidable(package, checker.signer_user_id)
+    return checkers
+
+
 def ensure_digest_unchanged(package: RegulatoryPackage, binding: BindingInputs) -> None:
     """The frozen figures must still be the figures being signed."""
     frozen = package.certification_digest
@@ -404,17 +474,25 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
             package.status = "pending_approval"
 
     if is_fully_certified(policy, signatures_after):
+        # ``released`` is false only for a package already approved through the
+        # bare decision (the esign kill-switch dropped mid-ceremony and came
+        # back): maker-checker was enforced there by ``ensure_decidable``, and
+        # this signature merely completes the attestation state.
+        released = package.status in {"validated", "pending_approval"}
+        # BEFORE the status moves, never after: this is the only place
+        # certification reaches ``approved``, so it is the only place the
+        # separation has to hold, and a guard that ran afterwards would be
+        # describing a filing rather than preventing one.
+        checkers = ensure_checked_release(package, signatures_after) if released else []
         package.attestation_state = "fully_certified"
         package.fully_certified_at = now
-        released = package.status in {"validated", "pending_approval"}
         if released:
             package.status = "approved"
-        # Only a CHECKER's signature is an approval decision. A policy that
-        # requires the preparer alone still releases the package — that is the
-        # institution's own choice — but recording it as a checker decision
-        # would attribute an approval to the officer who prepared the return,
-        # which is the opposite of what the row is for.
-        if released and role != "preparer" and ctx.actor_user_id is not None:
+            # A checker's signature over the frozen figures IS their approval,
+            # so the decision is attributed to the CHECKER rather than to
+            # whoever happened to sign last — the guard above has already
+            # proved at least one exists and is not the preparer.
+            #
             # Lazily imported: the reporting workflow reaches back into this
             # module, so a module-level import would close the cycle.
             from app.services.regulatory_reporting.workflow import (  # noqa: PLC0415
@@ -422,7 +500,11 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
             )
 
             record_certification_approval(
-                db, ctx, package, actor_user_id=ctx.actor_user_id, reason=reason
+                db,
+                ctx,
+                package,
+                actor_user_id=checkers[-1].signer_user_id,
+                reason=reason,
             )
 
     record_event(
@@ -437,6 +519,19 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
             "binding_class": binding.binding_class,
             "outstanding": [
                 {"role": r, "count": c} for r, c in outstanding_slots(policy, signatures_after)
+            ],
+            # Both halves of maker-checker, on the IMMUTABLE trail. An examiner
+            # asking "who prepared this and who approved it" must be answerable
+            # from ``audit_events`` alone: the approval row lives in a CASCADE
+            # child of the package, and the signature rows are reachable only by
+            # someone who knows to look for them.
+            "signatories": [
+                {
+                    "signing_role": signature.signing_role,
+                    "signer_id": signature.signer_id,
+                    "signer_user_id": str(signature.signer_user_id),
+                }
+                for signature in signatures_after
             ],
         },
     )

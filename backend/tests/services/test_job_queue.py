@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.base import utc_now
 from app.models import Job
 from app.services import job_queue
-from tests.api.helpers import ORG_1
+from tests.api.helpers import ORG_1, ORG_2
 
 
 def test_enqueue_inserts_queued_job(db_session: Session) -> None:
@@ -181,3 +182,102 @@ def test_reclaim_stale_fails_a_job_past_max_attempts(db_session: Session) -> Non
     db_session.refresh(claimed)
     assert claimed.status == "failed"
     assert claimed.completed_at is not None
+
+
+# --------------------------------------------------------------------------
+# Per-job-type stale windows
+# --------------------------------------------------------------------------
+
+
+def test_a_long_running_handler_is_not_reclaimed_at_the_fleet_default(
+    db_session: Session,
+) -> None:
+    """``etl_dedup`` measurably runs for 2h02m; the 900s default reclaimed it alive.
+
+    Three jobs on the primary were marked "worker presumed dead" while still
+    working, one of them twice — so the reaper requeued a job whose handler was
+    mid-flight and three copies ran concurrently. The reclaim window is now
+    per-job-type: the fleet default still governs everything else.
+    """
+    job_queue.enqueue(db_session, ORG_1, "etl_dedup")
+    db_session.commit()
+    claimed = job_queue.claim_next(db_session, utc_now(), ("etl_dedup",))
+    assert claimed is not None
+    claimed.started_at = utc_now() - timedelta(hours=2, minutes=2)
+    db_session.commit()
+
+    reclaimed = job_queue.reclaim_stale(db_session, utc_now(), stale_after=timedelta(minutes=15))
+    assert reclaimed == 0
+    assert claimed.status == "running"
+
+
+def test_the_override_is_a_window_not_an_exemption(db_session: Session) -> None:
+    """A genuinely dead etl_dedup worker is still recovered, just later."""
+    job_queue.enqueue(db_session, ORG_1, "etl_dedup")
+    db_session.commit()
+    claimed = job_queue.claim_next(db_session, utc_now(), ("etl_dedup",))
+    assert claimed is not None
+    claimed.started_at = utc_now() - timedelta(hours=5)
+    db_session.commit()
+
+    reclaimed = job_queue.reclaim_stale(db_session, utc_now(), stale_after=timedelta(minutes=15))
+    assert reclaimed == 1
+    db_session.refresh(claimed)
+    assert claimed.status == "queued"
+    assert claimed.error is not None and "4:00:00" in claimed.error
+
+
+def test_an_unlisted_job_type_stays_on_the_deployment_default(db_session: Session) -> None:
+    """Only handlers with a measured, documented reason get their own window."""
+    assert set(job_queue.STALE_AFTER_OVERRIDES_SECONDS) == {"etl_dedup"}
+    assert job_queue.stale_after_for("pipeline_refresh", timedelta(minutes=15)) == timedelta(
+        minutes=15
+    )
+    assert job_queue.stale_after_for("etl_dedup", timedelta(minutes=15)) == timedelta(hours=4)
+
+
+# --------------------------------------------------------------------------
+# Exhaustion and entity lookup (the re-drive surface's primitives)
+# --------------------------------------------------------------------------
+
+
+def test_is_exhausted_separates_stranded_from_will_retry(db_session: Session) -> None:
+    """The distinction four stranded batches on the primary could not express."""
+    job = job_queue.enqueue(db_session, ORG_1, "etl_dedup", max_attempts=3)
+    db_session.commit()
+    assert job_queue.is_exhausted(job) is False
+
+    job.status = "failed"
+    job.attempts = 2
+    db_session.commit()
+    assert job_queue.is_exhausted(job) is False
+
+    job.attempts = 3
+    db_session.commit()
+    assert job_queue.is_exhausted(job) is True
+
+
+def test_latest_for_entity_is_org_scoped_and_newest_first(db_session: Session) -> None:
+    entity = uuid4()
+    older = job_queue.enqueue(
+        db_session, ORG_1, "etl_dedup", entity_type="ingestion_batch", entity_id=entity
+    )
+    older.queued_at = utc_now() - timedelta(hours=1)
+    newer = job_queue.enqueue(
+        db_session, ORG_1, "etl_dedup", entity_type="ingestion_batch", entity_id=entity
+    )
+    job_queue.enqueue(
+        db_session, ORG_2, "etl_dedup", entity_type="ingestion_batch", entity_id=entity
+    )
+    db_session.commit()
+
+    found = job_queue.latest_for_entity(
+        db_session, organization_id=ORG_1, job_type="etl_dedup", entity_id=entity
+    )
+    assert found is not None and found.id == newer.id
+    # The identically-keyed job in another org is invisible: the operator's
+    # session bypasses RLS, so this filter IS the isolation.
+    other = job_queue.latest_for_entity(
+        db_session, organization_id=ORG_2, job_type="etl_dedup", entity_id=entity
+    )
+    assert other is not None and other.organization_id == ORG_2

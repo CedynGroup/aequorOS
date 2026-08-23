@@ -45,12 +45,12 @@ export default function MarketDataPage() {
           { label: 'Market Data' },
         ]}
         title="Market Data"
-        subtitle="Yield curves, FX rates, ratings, and macro forecasts from Bloomberg, LSEG (formerly Refinitiv), or manual upload — normalized into one canonical model with freshness and attribution."
+        subtitle="Manual uploads are available now for yield curves, FX rates, ratings, and macro forecasts. Bloomberg and LSEG (formerly Refinitiv) configuration can be saved for onboarding, but live vendor transport is unavailable in this deployment."
       />
       <div className="px-8 py-6 max-w-6xl space-y-8">
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-h3 text-navy">Connected sources</h2>
+            <h2 className="text-h3 text-navy">Configured sources</h2>
             {!adding && (
               <button
                 type="button"
@@ -70,8 +70,8 @@ export default function MarketDataPage() {
           ) : rows.length === 0 && !adding ? (
             <EmptyState
               Icon={LineChart}
-              title="No market data sources connected yet"
-              description="Connect Bloomberg or LSEG, or use manual upload below — calculations consume the same canonical scopes either way."
+              title="No market data sources configured yet"
+              description="Configure Bloomberg or LSEG for onboarding, or use the available manual upload path below. Calculations consume the same canonical scopes either way."
               action={
                 <button
                   type="button"

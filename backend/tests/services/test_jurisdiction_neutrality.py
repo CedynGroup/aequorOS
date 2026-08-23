@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from app.adapters.market_data.scope_taxonomy import DataScope
-from app.models import Bank
+from app.models import Bank, BankFinancialFact, ParamCapitalThreshold, RegulatoryParameter
 from app.services.jurisdictions import base_currency
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -43,7 +43,27 @@ _CURRENCY_NEUTRAL_MODULES = (
     "app/services/reverse_stress.py",
     "app/services/examiner_mode.py",
     "app/domain/capital/ecl.py",
+    # Joined the guard 2026-08-21 (enterprise audit §6): enterprise_stress was
+    # explicitly called out as a module the guard did not scan, and the policy
+    # layer must be neutral by construction.
+    "app/services/enterprise_stress.py",
+    "app/services/loan_classification.py",
+    "app/services/regulatory_forecasting.py",
+    "app/services/regulatory_parameters.py",
+    "app/services/institution_types.py",
+    "app/domain/policy/resolver.py",
 )
+
+# Modules that must never SUBSTITUTE a country identity when one is missing.
+# This is a different defect from naming a currency in narrative: ``(bank.currency
+# or "GHS")`` produces a perfectly neutral-looking string and silently converts a
+# Nigerian book to cedis. The whole of app/services and app/models is scanned,
+# because the pattern spread by copy-paste rather than by design.
+_SUBSTITUTION_SCAN_ROOTS = ("app/services", "app/models", "app/schemas", "app/domain")
+
+# ``or ""`` is NOT a substitution — it degrades to "unknown" and the caller then
+# handles it. Only a non-empty country/currency literal is the bug.
+_SUBSTITUTION_PATTERN = re.compile(r'\bor\s+["\'](?:GH|GHS|NG|NGN|KE|KES|ZA|ZAR)["\']')
 
 # ISO 4217 codes for the jurisdictions the registry seeds, plus the majors the
 # curve taxonomy covers. A bare one of these in narrative is the bug.
@@ -91,6 +111,56 @@ def test_calculation_modules_name_no_currency(module_path: str) -> None:
         f"{module_path} names a currency in bank-facing text. Resolve it from "
         f"the bank via jurisdictions.base_currency instead:\n  " + "\n  ".join(leaks)
     )
+
+
+def test_no_module_substitutes_a_country_identity() -> None:
+    """``(bank.jurisdiction_code or "GH")`` must not exist anywhere.
+
+    Every one of these was a copy-paste of the same line, and each one re-creates
+    the trap ``banks.currency``/``banks.jurisdiction_code`` were made mandatory to
+    close: a bank licensed elsewhere silently inherits Ghana's parameter set —
+    CAR floor, provisioning grid, DPD boundaries, LMTD floors — or reports in
+    cedis. Resolve through ``jurisdictions.jurisdiction_code`` /
+    ``jurisdictions.base_currency``, which raise instead of guessing.
+    """
+    leaks: list[str] = []
+    for root in _SUBSTITUTION_SCAN_ROOTS:
+        for path in sorted((_BACKEND_ROOT / root).rglob("*.py")):
+            # Docstrings are stripped first: they describe the defect on purpose
+            # (this module's own docstring quotes the pattern it forbids).
+            source = re.sub(r'"""(?:.|\n)*?"""', "", path.read_text(encoding="utf-8"))
+            for number, raw in enumerate(source.splitlines(), 1):
+                line = raw.strip()
+                if line.startswith("#"):
+                    continue
+                if _SUBSTITUTION_PATTERN.search(line):
+                    leaks.append(f"{path.relative_to(_BACKEND_ROOT)}:~{number}: {line}")
+    assert not leaks, (
+        "A country/currency identity is being substituted rather than resolved:\n  "
+        + "\n  ".join(leaks)
+    )
+
+
+def test_parameter_tables_carry_no_jurisdiction_default() -> None:
+    """The jurisdiction is part of a governed parameter's IDENTITY.
+
+    ``RegulatoryParameterMixin`` defaulted ``jurisdiction_code="GH"`` and is
+    inherited by NINE parameter tables, so one default filed every board-register
+    generation under Ghana — a Nigerian tenant's included (enterprise audit §6).
+    ``bank_financial_facts.currency`` defaulted to "GHS" the same way.
+    """
+    checks = (
+        (ParamCapitalThreshold, "jurisdiction_code"),
+        (RegulatoryParameter, "jurisdiction_code"),
+        (BankFinancialFact, "currency"),
+    )
+    for model, column_name in checks:
+        column = model.__table__.columns[column_name]
+        assert column.default is None, (
+            f"{model.__tablename__}.{column_name} must not carry a default — it is "
+            "part of the row's identity and belongs to the write site."
+        )
+        assert not column.nullable
 
 
 def test_bank_model_carries_no_jurisdiction_default() -> None:

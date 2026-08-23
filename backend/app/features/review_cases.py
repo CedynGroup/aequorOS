@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, Tenant
+from app.api.deps import DbSession, MutationTenant, Tenant
 from app.domain.risk_constants import (
     CaseDecision,
     CaseSort,
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 
 
 @router.post("", response_model=CaseRead, status_code=status.HTTP_201_CREATED)
-def create_case(payload: CaseCreate, db: DbSession, ctx: Tenant) -> RiskCase:
+def create_case(payload: CaseCreate, db: DbSession, ctx: MutationTenant) -> RiskCase:
     return cases_service.create_case(db, ctx, payload.to_command())
 
 
@@ -99,12 +99,12 @@ def get_case(case_id: UUID, db: DbSession, ctx: Tenant) -> RiskCase:
 
 
 @router.patch("/{case_id}", response_model=CaseRead)
-def update_case(case_id: UUID, payload: CaseUpdate, db: DbSession, ctx: Tenant) -> RiskCase:
+def update_case(case_id: UUID, payload: CaseUpdate, db: DbSession, ctx: MutationTenant) -> RiskCase:
     return cases_service.update_case(db, ctx, case_id, payload.to_command())
 
 
 @router.post("/{case_id}/assign", response_model=CaseRead)
-def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: Tenant) -> RiskCase:
+def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: MutationTenant) -> RiskCase:
     return cases_service.assign_case(db, ctx, case_id, payload.assigned_to_user_id)
 
 
@@ -114,5 +114,5 @@ def list_case_scores(case_id: UUID, db: DbSession, ctx: Tenant) -> list[RiskScor
 
 
 @router.post("/{case_id}/archive", response_model=CaseRead)
-def archive_case(case_id: UUID, db: DbSession, ctx: Tenant) -> RiskCase:
+def archive_case(case_id: UUID, db: DbSession, ctx: MutationTenant) -> RiskCase:
     return cases_service.archive_case(db, ctx, case_id)

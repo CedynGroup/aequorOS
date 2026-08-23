@@ -50,11 +50,12 @@ from app.adapters.temenos_t24.transport import T24Transport
 from app.adapters.temenos_t24.transports import live_transport_for
 from app.api.deps import TenantContext
 from app.core.config import get_settings
+from app.core.outbound import OutboundTargetBlocked
 from app.db.base import utc_now
 from app.models import Bank, Job, MappingConfigRecord
 from app.models.temenos import TemenosConnection
 from app.schemas.ingestion import MappingConfigCreate
-from app.services import job_queue
+from app.services import job_queue, temenos_connections
 from app.services.audit import record_event
 from app.services.ingestion import create_mapping_config
 from app.storage.factory import get_storage_client
@@ -108,6 +109,13 @@ def run_temenos_pull(session: Session, job: Job) -> None:
     Payload: ``{"connection_id": ..., "as_of_date": ...}``.
     """
     connection = _connection_or_error(session, job)
+    if not temenos_connections.live_transport_available():
+        job.progress = {
+            "connection_id": str(connection.id),
+            "status": "failed_no_retry",
+            "error": "Live Temenos connectivity is not available in this deployment.",
+        }
+        return
     if connection.status not in _SCHEDULABLE_STATUSES and connection.status != "TESTING":
         job.progress = {
             "connection_id": str(connection.id),
@@ -116,6 +124,24 @@ def run_temenos_pull(session: Session, job: Job) -> None:
         }
         return
     _bank_or_error(session, job.organization_id, connection.bank_id)  # tenant/bank guard
+    # Authoritative egress check: a scheduled pull reaches the stored endpoint
+    # with no operator in the loop, so it is re-validated here rather than
+    # trusted from onboarding. Retrying cannot fix a blocked destination.
+    try:
+        temenos_connections.guard_endpoint(connection.endpoint)
+    except OutboundTargetBlocked as exc:
+        logger.warning(
+            "Temenos pull for %s blocked by the egress guard (%s): %s",
+            connection.id,
+            exc.reason,
+            exc.internal_detail,
+        )
+        job.progress = {
+            "connection_id": str(connection.id),
+            "status": "failed_no_retry",
+            "error": exc.message,
+        }
+        return
     as_of = _as_of_from_payload(job)
     ctx = TenantContext(
         organization_id=connection.organization_id, actor_user_id=connection.created_by
@@ -217,7 +243,10 @@ def enqueue_due_temenos_pulls(
     Also runs the cheap expiry-based credential health check (ACTIVE →
     EXPIRING_SOON → EXPIRED). Inert unless ``TEMENOS_PULL_ENABLED``.
     """
-    if not get_settings().temenos.temenos_pull_enabled:
+    if (
+        not get_settings().temenos.temenos_pull_enabled
+        or not temenos_connections.live_transport_available()
+    ):
         return []
     now = now or utc_now()
     connections = list(

@@ -18,9 +18,9 @@ const modules = [
     number: '01',
     name: 'Liquidity Risk',
     description:
-      'LCR, NSFR, and cash-flow forecasting at portfolio and institution level, recalculated automatically as new data lands.',
+      'Basel LCR and NSFR plus cash-flow forecasting at portfolio and institution level, recalculated automatically as new data lands.',
     detail:
-      'Shock-scenario liquidity stress on the same engine. ML cash-flow views are labeled separately from regulatory ratios.',
+      'Shock-scenario liquidity stress on the same engine. ML cash-flow views are labeled separately from regulatory ratios, and Basel parameters are labeled as Basel wherever a local rule has not been published.',
     screenId: 'liquidity',
   },
   {
@@ -45,9 +45,9 @@ const modules = [
     number: '04',
     name: 'Interest Rate Risk',
     description:
-      'Repricing-gap and duration analysis, EVE, and Earnings-at-Risk across the full Basel IRRBB scenario set.',
+      'Repricing-gap and duration analysis, EVE, and Earnings-at-Risk across the six Basel IRRBB shock scenarios.',
     detail:
-      'Interest-rate-swap decomposition included. Deterministic and fully auditable for examiner review.',
+      'Interest-rate-swap decomposition included. Deterministic, and every figure traces back to the inputs that produced it.',
     screenId: 'irr',
   },
   {
@@ -74,7 +74,7 @@ const steps = [
   {
     n: '1',
     title: 'Connect',
-    body: 'The Data Engine connects to systems you already run — Oracle/FLEXCUBE, Snowflake, Temenos T24, a secure API, or file upload. Each institution maps to the canonical model; unusual sources are configured, not hard-coded.',
+    body: 'The Data Engine ingests file uploads and secure API pushes today. Oracle read-only extraction ships in the standard deployment; SQL Server, JDBC/ODBC and Snowflake are built and tested but need a deployment image carrying their drivers. Market-data vendor feeds are configured per institution and enabled only after vendor onboarding.',
   },
   {
     n: '2',
@@ -84,7 +84,7 @@ const steps = [
   {
     n: '3',
     title: 'Report',
-    body: 'ALCO outputs and Bank of Ghana BSD returns export to Excel, CSV, and PDF — every figure traceable to the source input that produced it.',
+    body: 'ALCO outputs and Bank of Ghana BSD returns generate in the regulator’s own workbook layouts and export to Excel, CSV, and PDF for officer review and signature — every figure traceable to the source input that produced it.',
   },
 ];
 
@@ -93,7 +93,7 @@ const infrastructure = [
   'PostgreSQL canonical store with row-level tenant isolation',
   'Per-institution, cloud-based object storage',
   'Immutable, versioned snapshots with full data lineage',
-  'SOC 2 readiness on the roadmap ahead of production banking data',
+  'No SOC 2, ISO or other third-party certification today — independent audit is planned before production banking data',
 ];
 
 const security = [
@@ -117,7 +117,7 @@ export default function ProductPage() {
           <div className="max-w-4xl">
             <SectionLabel>THE PLATFORM</SectionLabel>
             <h1 className="mt-6 font-serif font-bold text-navy text-4xl md:text-5xl lg:text-6xl leading-[1.1]">
-              From your core to your regulator, in one platform.
+              From core data to a signed regulatory return, in one platform.
             </h1>
             <p className="mt-8 text-text-muted text-lg leading-relaxed max-w-[720px]">
               Ingestion, ALM calculation, and regulatory reporting on a single
@@ -152,7 +152,7 @@ export default function ProductPage() {
             <div>
               <SectionLabel>THE DATA ENGINE</SectionLabel>
               <h2 className="mt-6 font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-                Connect any source. Normalize everything.
+                Connect the source you have. Normalize everything.
               </h2>
               <div className="mt-6 space-y-5 text-ice-blue text-base md:text-lg leading-relaxed">
                 <p>
@@ -169,9 +169,9 @@ export default function ProductPage() {
               </div>
               <ul className="mt-8 space-y-4">
                 {[
-                  'Direct database pull from Oracle/FLEXCUBE, Snowflake, SQL Server, or generic JDBC/ODBC',
-                  'Temenos T24 adapter today; Finacle on the roadmap',
-                  'File upload and API push for any source',
+                  'File upload and secure API push, source-agnostic',
+                  'Oracle read-only extraction in the standard deployment; other database backends need a driver-carrying image',
+                  'Core-banking and market-data adapters configured per institution, enabled only after network and vendor onboarding checks',
                   'Per-institution mapping — no custom product forks',
                   'Immutable canonical model with end-to-end lineage',
                   'Automatic recalculation on every accepted data load',

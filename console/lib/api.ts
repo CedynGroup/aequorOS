@@ -25,7 +25,8 @@
  *   - workforce OIDC (secondary): identical cookie mechanics, id_token;
  *   - dev token (local only): the sessionStorage token rides the
  *     Authorization header and the proxy forwards it verbatim (the backend
- *     hard-refuses dev auth when APP_ENV=production).
+ *     hard-refuses dev auth on any DEPLOYED environment — the rule is an
+ *     allow-list of local/test, not a production check).
  *   The proxy also means the operator API itself never needs to be reachable
  *   from the operator's browser — only from the console server.
  */
@@ -929,14 +930,20 @@ export interface DeskEntitlementsResponse {
   };
 }
 
-export function listDeskEntitlements(opts?: {
-  organizationId?: string;
+// Entitlements are TENANT state, so all four routes are Tenant Inspector
+// surfaces: each names ONE organization, requires an ACTIVE inspection session
+// for it (403 `inspection_required` otherwise), and is written to the operator
+// audit log against that session. The organization is REQUIRED everywhere —
+// there is no "all tenants" form (backend/app/operator/features/desk.py).
+
+export function listDeskEntitlements(opts: {
+  organizationId: string;
   includeRevoked?: boolean;
 }): Promise<DeskEntitlementsResponse> {
   return request<DeskEntitlementsResponse>(
     `${DESK}/entitlements${query({
-      organization_id: opts?.organizationId,
-      include_revoked: opts?.includeRevoked ? true : undefined,
+      organization_id: opts.organizationId,
+      include_revoked: opts.includeRevoked ? true : undefined,
     })}`,
   );
 }
@@ -953,10 +960,19 @@ export function grantDeskEntitlementTier(body: {
   });
 }
 
-export function revokeDeskEntitlement(entitlementId: string): Promise<DeskEntitlement> {
+/**
+ * POST /desk/entitlements/{id}/revoke — end-date one grant. The organization is
+ * sent in the body, not inferred from the id: it is what binds the call to the
+ * inspection session and to an audit row naming the tenant, and a grant
+ * belonging to a different organization is a 404.
+ */
+export function revokeDeskEntitlement(
+  entitlementId: string,
+  organizationId: string,
+): Promise<DeskEntitlement> {
   return request<DeskEntitlement>(
     `${DESK}/entitlements/${encodeURIComponent(entitlementId)}/revoke`,
-    { method: 'POST' },
+    { method: 'POST', body: { organization_id: organizationId } },
   );
 }
 
@@ -1677,7 +1693,12 @@ export interface RegulatoryParameter {
   value_json: Record<string, unknown> | null;
   unit: string;
   source_citation: string;
-  /** `pending` = a documented default awaiting BoG confirmation — surface it prominently. */
+  /**
+   * `pending` = a documented working value not yet verified against the cited
+   * regulation. It IS used by the calculations, so surface it prominently — the
+   * regulator whose confirmation is outstanding follows from `jurisdiction_code`
+   * and must never be named as a literal in display code.
+   */
   confirmation_status: 'confirmed' | 'pending';
   effective_from: string; // date
   effective_to: string | null; // date; set when a later generation supersedes this one
@@ -1701,8 +1722,13 @@ export interface RegulatoryParameterProposeRequest {
   scope_type: 'institution_class' | 'institution_type';
   scope_key: string;
   param_code: string;
-  /** Defaults to "GH" server-side when omitted. */
-  jurisdiction_code?: string;
+  /**
+   * REQUIRED — no server-side default. Jurisdiction is part of the parameter's
+   * resolution key, so a proposal that omits it used to be filed under Ghana and
+   * a Nigerian scope silently inherited Ghana's floors (enterprise audit
+   * 2026-08-20 §6). Always send the record's own jurisdiction.
+   */
+  jurisdiction_code: string;
   /** Sent as a string to preserve decimal precision (the backend coerces to Decimal). */
   value_numeric: string;
   unit: string;
@@ -2219,8 +2245,8 @@ export function grantDeskEntitlementDataset(body: {
   dataset_code: string;
   effective_from: string;
   notes?: string;
-}): Promise<DeskEntitlementsResponse> {
-  return request<DeskEntitlementsResponse>(`${DESK}/entitlements/grant-dataset`, {
+}): Promise<DeskEntitlement> {
+  return request<DeskEntitlement>(`${DESK}/entitlements/grant-dataset`, {
     method: 'POST',
     body,
   });

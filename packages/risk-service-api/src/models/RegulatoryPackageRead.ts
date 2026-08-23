@@ -25,6 +25,13 @@ import {
   SubmissionRevisionToJSON,
   SubmissionRevisionToJSONTyped,
 } from "./SubmissionRevision";
+import type { DeclaredMethodologyRead } from "./DeclaredMethodologyRead";
+import {
+  DeclaredMethodologyReadFromJSON,
+  DeclaredMethodologyReadFromJSONTyped,
+  DeclaredMethodologyReadToJSON,
+  DeclaredMethodologyReadToJSONTyped,
+} from "./DeclaredMethodologyRead";
 import type { PackageStatus } from "./PackageStatus";
 import {
   PackageStatusFromJSON,
@@ -139,6 +146,12 @@ export interface RegulatoryPackageRead {
    * @memberof RegulatoryPackageRead
    */
   createdAt: Date;
+  /**
+   *
+   * @type {Array<DeclaredMethodologyRead>}
+   * @memberof RegulatoryPackageRead
+   */
+  declaredMethodologies?: Array<DeclaredMethodologyRead>;
   /**
    *
    * @type {ReturnFrequency}
@@ -328,6 +341,12 @@ export function RegulatoryPackageReadFromJSONTyped(
     bankId: json["bank_id"],
     basis: ReturnBasisFromJSON(json["basis"]),
     createdAt: new Date(json["created_at"]),
+    declaredMethodologies:
+      json["declared_methodologies"] == null
+        ? undefined
+        : (json["declared_methodologies"] as Array<any>).map(
+            DeclaredMethodologyReadFromJSON,
+          ),
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
     generatedAt: new Date(json["generated_at"]),
     generatedBy: json["generated_by"],
@@ -374,6 +393,12 @@ export function RegulatoryPackageReadToJSONTyped(
     bank_id: value["bankId"],
     basis: ReturnBasisToJSON(value["basis"]),
     created_at: value["createdAt"].toISOString(),
+    declared_methodologies:
+      value["declaredMethodologies"] == null
+        ? undefined
+        : (value["declaredMethodologies"] as Array<any>).map(
+            DeclaredMethodologyReadToJSON,
+          ),
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     generated_at: value["generatedAt"].toISOString(),
     generated_by: value["generatedBy"],

@@ -35,6 +35,7 @@ def _connection(db_session: Session) -> TemenosConnection:
         connection_mode="OFS",
         display_name="Core OFS",
         endpoint="ofs://bank",
+        default_currency="GHS",
         vault_path="",
     )
     db_session.add(connection)

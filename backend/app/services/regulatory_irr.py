@@ -11,10 +11,11 @@ Every IRR run computes the complete banking-book analysis — repricing gap,
 duration gap, base EVE with all six Basel scenarios, and parallel ±200 bp
 earnings-at-risk. ``scenario_code`` tags which scenario the run highlights; the
 stored metrics and line items are the full analysis so any run is a
-self-contained snapshot. Tier 1 capital is read from the capital-component
-facts at run time as the denominator for the ΔEVE limit but is deliberately
-kept OUT of the input hash, so the IRR hash scopes reproducibility to the
-interest-rate positions, hedges, and IRR parameters.
+self-contained snapshot. A bank uses Tier 1 capital from capital-component
+facts as the ΔEVE denominator; an SDI uses its signed Act 930 s.29 Net Own
+Funds. The denominator is deliberately kept OUT of the input hash, so the IRR
+hash scopes reproducibility to the interest-rate positions, hedges, and IRR
+parameters.
 
 Dual-curve discounting (curve platform spec §6/§13 Stage 2): when the desk
 publishes a discounting curve for the bank's currency (the AGD,
@@ -70,6 +71,7 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
+    FinancialFactRow,
     ParamCapitalThreshold,
     ParamStressShock,
     RegulatoryLineItem,
@@ -93,7 +95,14 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunCreate,
     RegulatoryRunRead,
 )
-from app.services import jurisdictions, market_data_sources
+from app.services import (
+    filing_reconciliation,
+    institution_types,
+    jurisdictions,
+    market_data_sources,
+    regulatory_parameters,
+    sdi_capital,
+)
 from app.services.audit import record_event
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
@@ -178,6 +187,13 @@ def run_all_irr_scenarios(
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
+    # Every immutable ``RegulatoryRun`` is filing evidence, so the balance-sheet
+    # control gates this mint exactly as it gates capital and liquidity
+    # (audit 2026-08-22 D-3b named those two; the reasoning is the module's
+    # output being filed, which is equally true here).
+    filing_reconciliation.assert_filing_reconciled(
+        db, ctx, bank, as_of=period.period_end, period_id=period.id, purpose="official_run"
+    )
     runs = [
         _create_and_execute(db, ctx, bank, period, scenario_code)
         for scenario_code in IRR_RUN_SCENARIO_CODES
@@ -269,6 +285,11 @@ def _create_and_execute(
         input_hash=_snapshot_hash(snapshot),
         inputs=snapshot,
         metrics={},
+        # Audit D-18: WHICH governed control-plane rows produced the values in
+        # ``inputs["parameters"]``. Beside the snapshot, never inside it — row
+        # ids and timestamps are identity, not values, and the ``input_hash`` is
+        # value-based by contract.
+        parameter_provenance=regulatory_parameters.consume_parameter_provenance(db),
         created_by=ctx.actor_user_id,
     )
     db.add(run)
@@ -350,7 +371,7 @@ def _run_analysis(  # noqa: PLR0913
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
-    facts: list[BankFinancialFact],
+    facts: Sequence[FinancialFactRow],
     active: _IrrParams | None,
     tier1: Decimal | None = None,
 ) -> _IrrAnalysis:
@@ -1064,7 +1085,7 @@ def compute_live(
 
 
 def _positions_from_facts(
-    facts: list[BankFinancialFact], curve: dict[Decimal, Decimal]
+    facts: Sequence[FinancialFactRow], curve: dict[Decimal, Decimal]
 ) -> list[IrrPosition]:
     positions: list[IrrPosition] = []
     for fact in facts:
@@ -1089,7 +1110,7 @@ def _positions_from_facts(
     return positions
 
 
-def _swap_legs(fact: BankFinancialFact, curve: dict[Decimal, Decimal]) -> list[IrrPosition]:
+def _swap_legs(fact: FinancialFactRow, curve: dict[Decimal, Decimal]) -> list[IrrPosition]:
     """Decompose an interest-rate swap fact into its two hedge legs.
 
     The fact attributes locate the leg the bank RECEIVES (``receive_bucket`` /
@@ -1173,6 +1194,8 @@ def _load_facts(
 def _load_tier1(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> Decimal:
+    if institution_types.institution_class(db, bank) == "sdi":
+        return sdi_capital.net_own_funds(db, ctx, bank, period.period_end)
     components = list(
         db.scalars(
             select(BankFinancialFact).where(
@@ -1186,7 +1209,7 @@ def _load_tier1(
     return _tier1_from_facts(components)
 
 
-def _tier1_from_facts(facts: list[BankFinancialFact]) -> Decimal:
+def _tier1_from_facts(facts: Sequence[FinancialFactRow]) -> Decimal:
     capital_facts = [
         CapitalFact(
             fact_group=_CAPITAL_COMPONENT_GROUP,
@@ -1307,7 +1330,7 @@ def _build_snapshot(
     bank: Bank,
     period: BankReportingPeriod,
     scenario_code: str,
-    facts: list[BankFinancialFact],
+    facts: Sequence[FinancialFactRow],
     active: _IrrParams | None,
 ) -> dict[str, Any]:
     return {

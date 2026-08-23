@@ -11,18 +11,34 @@
  */
 
 import { mapValues } from "../runtime";
+import type { ComponentHealth } from "./ComponentHealth";
+import {
+  ComponentHealthFromJSON,
+  ComponentHealthFromJSONTyped,
+  ComponentHealthToJSON,
+  ComponentHealthToJSONTyped,
+} from "./ComponentHealth";
+
 /**
+ * Per-subsystem readiness.
  *
+ * Deliberately NOT a ``HealthResponse`` subclass with subsystems nested under
+ * ``database``: until 2026-08-21 storage health was reported as
+ * ``database.storage``, which read as a property of the database and made a
+ * storage outage look like a database one (audit finding P0-17). Each
+ * subsystem is now its own entry under ``checks`` so a consumer can tell them
+ * apart, and ``status`` can say "serving, but something is wrong" without
+ * either lying or failing the probe.
  * @export
  * @interface ReadinessResponse
  */
 export interface ReadinessResponse {
   /**
    *
-   * @type {{ [key: string]: string; }}
+   * @type {{ [key: string]: ComponentHealth; }}
    * @memberof ReadinessResponse
    */
-  database: { [key: string]: string };
+  checks: { [key: string]: ComponentHealth };
   /**
    *
    * @type {string}
@@ -60,6 +76,7 @@ export type ReadinessResponseEnvironmentEnum =
  */
 export const ReadinessResponseStatusEnum = {
   Ok: "ok",
+  Degraded: "degraded",
 } as const;
 export type ReadinessResponseStatusEnum =
   (typeof ReadinessResponseStatusEnum)[keyof typeof ReadinessResponseStatusEnum];
@@ -70,7 +87,7 @@ export type ReadinessResponseStatusEnum =
 export function instanceOfReadinessResponse(
   value: object,
 ): value is ReadinessResponse {
-  if (!("database" in value) || value["database"] === undefined) return false;
+  if (!("checks" in value) || value["checks"] === undefined) return false;
   if (!("environment" in value) || value["environment"] === undefined)
     return false;
   if (!("service" in value) || value["service"] === undefined) return false;
@@ -90,7 +107,7 @@ export function ReadinessResponseFromJSONTyped(
     return json;
   }
   return {
-    database: json["database"],
+    checks: mapValues(json["checks"], ComponentHealthFromJSON),
     environment: json["environment"],
     service: json["service"],
     status: json["status"],
@@ -110,7 +127,7 @@ export function ReadinessResponseToJSONTyped(
   }
 
   return {
-    database: value["database"],
+    checks: mapValues(value["checks"], ComponentHealthToJSON),
     environment: value["environment"],
     service: value["service"],
     status: value["status"],

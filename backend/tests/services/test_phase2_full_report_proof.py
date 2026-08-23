@@ -57,6 +57,17 @@ TEMPLATE_GATED = {"LAS-QUARTERLY"}  # BSD-MONTHLY retired: official BSD forms ge
 # tests/services/test_icaap_stress_appendix2_report.py.
 STRESS_RUN_GATED = {"ICAAP-STRESS-APPENDIX2"}
 
+# Returns scoped to an institution class this fixture is not. The sample tenant is
+# a BANK, so an SDI-only return must REFUSE here — that refusal is the eligibility
+# control working, and asserting it keeps every registered return inside the sweep.
+# Derived from the registry rather than listed, so a future class-scoped return is
+# covered the day it is added instead of silently dropping out of the proof.
+CLASS_GATED = {
+    code
+    for code, definition in REGISTRY.items()
+    if "bank" not in definition.institution_classes
+}
+
 
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
@@ -180,6 +191,13 @@ def test_every_registered_return_generates_and_exports_end_to_end(
                 excinfo.value.detail["error_code"] == "no_attested_stress_run"  # type: ignore[index]
             ), code
             continue
+        if code in CLASS_GATED:
+            with pytest.raises(HTTPException) as excinfo:
+                generation.generate_package(db_session, MAKER, SAMPLE_BANK_ID, payload)
+            assert (
+                excinfo.value.detail["error_code"] == "return_not_eligible"  # type: ignore[index]
+            ), code
+            continue
         read = generation.generate_package(db_session, MAKER, SAMPLE_BANK_ID, payload)
         package = db_session.scalar(
             select(RegulatoryPackage).where(RegulatoryPackage.id == read.id)
@@ -196,7 +214,11 @@ def test_every_registered_return_generates_and_exports_end_to_end(
 
     # Every registered return generates, except the gated ones that refuse by design
     # (LAS-QUARTERLY: template pending; ICAAP-STRESS-APPENDIX2: no attested stress run).
-    assert len(generated) == len(REGISTRY) - len(TEMPLATE_GATED) - len(STRESS_RUN_GATED)
+    assert len(generated) == (
+        len(REGISTRY) - len(TEMPLATE_GATED) - len(STRESS_RUN_GATED) - len(CLASS_GATED)
+    )
+    # The class-scoped returns are proven to refuse, not quietly skipped.
+    assert CLASS_GATED, "no class-scoped return in the registry — has the axis regressed?"
     # Phase 2 signature checks. LMT tool sections are data-gated (they render
     # only when their canonical inputs exist — plan W6.3), so this minimal
     # book yields the LCR subset + the data-backed tools; the full 16-section

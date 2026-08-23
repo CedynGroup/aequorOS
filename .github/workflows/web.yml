@@ -1,0 +1,125 @@
+name: Web CI
+
+# The two Next.js surfaces that no workflow touched at all until 2026-08-22
+# (measured: `grep -rn "frontend\|console" .github/workflows/` returned nothing),
+# so both could regress on main with nothing to stop them.
+#
+#   frontend — the marketing site. `build` was its ONLY automated check because
+#              the workspace had eslint + eslint-config-next as devDependencies
+#              and a `lint` script but NO ESLint configuration file, so
+#              `next lint` dropped into its interactive setup prompt and could
+#              never run unattended. A `.eslintrc.json` (next/core-web-vitals,
+#              matching the dashboard) was added in the same change and the
+#              surface lints clean, so `lint` is a real gate here, not a
+#              placeholder.
+#   console  — the operator/staff control-plane UI: 27 node:test cases covering
+#              the regulatory-parameter form's client-side refusals (required
+#              fields, back-dated effective dates, negative values, column
+#              limits). ESLint is NOT gated for this workspace: it has no ESLint
+#              dependency and no configuration, and has therefore never run —
+#              adding one is a separate change with its own findings to triage,
+#              and claiming a gate that does not exist is worse than naming the
+#              gap. Recorded in docs/audit/12_test_evidence.md §5.
+#
+# Both jobs are BLOCKING.
+
+# REQUIRED-CHECK SAFETY (2026-08-22) — same reasoning as dashboard.yml: a
+# `paths:`-filtered workflow cannot supply a required status check, because it
+# never reports on a pull request outside those paths and GitHub waits on it
+# forever. The filter moved into an `if:` fed by the `changes` job; `Web gate` is
+# the context to mark required (a status context is the job's name), not
+# `frontend` or `console`, either of which legitimately reports `skipped`.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Superseded PR runs are cancelled; `main` runs are not (that is the recorded
+# history). See risk-service.yml for the reasoning.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      web: ${{ steps.areas.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: areas
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          .github/scripts/changed_area.sh web
+          '^(frontend/|console/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/web\.yml$|\.github/scripts/)'
+
+  frontend:
+    name: Marketing site
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint marketing site
+        run: pnpm --filter @aequoros/frontend lint
+      - name: Build marketing site
+        run: pnpm --filter @aequoros/frontend build
+
+  console:
+    name: Operator console
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck console
+        run: pnpm --filter @aequoros/console typecheck
+      - name: Test console
+        run: pnpm --filter @aequoros/console test
+      - name: Build console
+        run: pnpm --filter @aequoros/console build
+
+  # The single context to mark required for this workflow.
+  gate:
+    name: Web gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs: [changes, frontend, console]
+    steps:
+      - name: Require every web gate to have passed or been skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RESULTS" | jq -r 'to_entries[] | "  \(.key): \(.value.result)"'
+          FAILED="$(printf '%s\n' "$RESULTS" \
+            | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key')"
+          if [ -n "$FAILED" ]; then
+            echo "::error::These web gates did not pass: $(printf '%s' "$FAILED" | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "Every web gate passed or was skipped."

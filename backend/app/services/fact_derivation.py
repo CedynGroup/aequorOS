@@ -24,28 +24,65 @@ balance_sheet
     GL accounts + position aggregates. Cash GLs are classified by account code
     (1001 → ``cash_vault``, 1002 → ``bog_required_reserves``, 1003 →
     ``bog_excess_reserves`` per the documented chart ranges) with a
-    name-pattern fallback; when the required/excess split is unavailable the
-    whole cash balance maps to ``cash_vault`` with a warning. Securities split
+    name-pattern fallback; the central-bank name forms in that fallback come
+    from the bank's jurisdiction registry row (``_CentralBankNames``), never a
+    country literal. When the required/excess split is unavailable the whole
+    cash balance maps to ``cash_vault`` with a warning. Securities split
     ``securities_bog_bills`` vs ``securities_gog_bonds`` by product code
     (TBILL/BOND) with a ≤ 397-day remaining-maturity fallback. ``loans_gross``
-    is Σ LOAN ``balance_ghs``. ``other_assets`` is the GL asset residual — all
-    leaf ASSET GL balances not classified as cash, securities, or loan-book
-    accounts (interbank placements, fixed assets, and sundry assets live here;
-    the loan-loss provision contra sits in the loan GL range and is excluded
-    with it, since the balance sheet carries loans gross like the seed).
-    Deposits are classified by product:
+    is Σ LOAN ``balance_ghs`` over the positions that HAVE one — a
+    foreign-currency position with no ingested conversion is excluded and
+    counted in the group warnings, never taken at zero. ``other_assets`` is the
+    GL asset residual — all leaf ASSET GL balances not classified as cash and
+    not COVERED by a sub-ledger aggregate — plus the INTERBANK_PLACEMENT
+    sub-ledger. A GL block
+    is skipped only when the sub-ledger genuinely carries positions of the
+    covering type (``_GlCoverage``), so a bank that keeps a block in the GL
+    without the matching sub-ledger never loses the balance, and a bank with
+    both never counts it twice. The loan-loss allowance is never covered — the
+    loan sub-ledger is gross — so it stays in ``other_assets`` and total assets
+    are stated net of impairment. Deposits are classified by product:
     retail products split stable/less-stable via the ``DEPOSIT_STABILITY``
     behavioral assumption (products without an assumption default to fully
     less-stable — conservative); wholesale current accounts split operational
     /non-operational via the same assumption, non-operational current →
     ``wholesale_non_op_sme`` and wholesale term → ``wholesale_non_op_corporate``.
     Interbank borrowings ≤ 1y → ``secured_funding_l1``, > 1y →
-    ``term_borrowings_gt_1y``. ``capital_total`` = Σ signed capital-structure
-    amounts. The balance-sheet identity is then enforced: any gap between
-    assets and liabilities+equity is plugged into ``other_assets`` (assets
-    short) or ``term_borrowings_gt_1y`` (funding short); a gap above 0.5% of
-    assets additionally emits a warning — uploaded books are imperfect and the
-    plug is reported, not hidden.
+    ``term_borrowings_gt_1y``; a GL borrowing block with no sub-ledger behind it
+    joins the ≤ 1y bucket, the same rule already applied to a borrowing position
+    with no contractual maturity. ``capital_total`` is the LEDGER's equity (Σ GL
+    EQUITY balances), falling back to the capital register only when no GL
+    equity block was ingested: ``capital_structure`` is the regulatory capital
+    register — Tier 2 subordinated debt plus regulatory deductions — and using
+    it as the balance sheet's equity line measured accounting assets against
+    regulatory capital. GL liabilities that no derived line carries (payables,
+    accruals, sundry provisions) are NOT bucketed anywhere: they are named in
+    the derivation warnings and widen the identity gap, because guessing a home
+    for them would put an unchosen number on a regulatory return. The GL itself
+    is read as a chart, not as a pile of rows: see ``_resolve_gl_chart`` for the
+    retirement-versus-sparse-reporting rule. The balance-sheet identity is then
+    a FAIL-CLOSED control
+    (``app/services/reconciliation.py``; enterprise audit 2026-08-20 P0-10):
+    a gap within the GOVERNED tolerance (control-plane
+    ``balance_identity_tolerance_pct``, effective-dated) is plugged into
+    ``other_assets`` (assets short) or ``term_borrowings_gt_1y`` (funding
+    short) and the plug is recorded in that line's provenance at ANY size; a
+    larger gap needs an approved, dated reconciliation exception, and without
+    one ``derive_facts`` REFUSES — no period, no facts, no run, no filing.
+    Every official check writes an ``audit_events`` row. The live plane keeps
+    materialising (the operator has to see the broken book) and REPORTS the
+    block: ``derive_current_facts`` returns the verdict on
+    ``CurrentDerivationResult.reconciliation``, ``pipeline.recompute_live``
+    stamps every ``live_metrics`` row it writes ``pipeline_state="blocked"``
+    with the control's message, and ``live_view.get_live_summary`` carries the
+    verdict on the payload. That reporting half did not exist until 2026-08-22
+    (forensic re-audit D-1): the verdict was computed here and discarded, so a
+    tenant 3.68% out of balance served a CAR marked ``ready``.
+    SECURITY_HOLDING rows reach ``securities_bog_bills`` /
+    ``securities_gog_bonds`` only on positive evidence of sovereign or
+    central-bank issuance; anything else is carried in ``other_assets``. Those
+    two lines are unaffected by the HQLA level test below — a demotion out of
+    Level 1 moves no balance-sheet figure.
 
 loan_exposure
     LOAN positions partitioned by IFRS 9 stage and product
@@ -54,14 +91,32 @@ loan_exposure
     ``corporate_unrated`` (RW100), SME_UNRATED → ``sme_retail`` (RW75),
     RETAIL_UNSECURED → ``retail_other`` (RW75), RESIDENTIAL_MORTGAGE →
     ``residential_mortgage`` (RW35), COMMERCIAL_REAL_ESTATE →
-    ``commercial_real_estate`` (RW100). Unknown/missing categories fall back
-    to ``corporate_unrated`` with a warning. Σ exposures == ``loans_gross``
-    by construction.
+    ``commercial_real_estate`` (RW100). An unknown or missing category gets NO
+    risk weight: it is exposed as ``unclassified_<category>`` with a null
+    ``risk_weight_code``, and ``capital.engine.resolve_risk_weight`` refuses the
+    capital run naming it. 100% is a regulatory determination as much as 0% is,
+    and no directive licenses one from a product label. Σ exposures ==
+    ``loans_gross`` by construction.
 
 securities
-    The balance-sheet bills/bonds split re-emitted as L1/RW0 HQLA rows, plus
-    the two cash-mirror rows (``cash_vault_hqla``, ``bog_excess_reserves_hqla``)
-    carrying ``source="cash"`` so stress haircuts skip them.
+    The HQLA stock: the balance-sheet bills/bonds split re-emitted one row per
+    established Basel HQLA level, plus the two cash-mirror rows
+    (``cash_vault_hqla``, ``bog_excess_reserves_hqla``) carrying
+    ``source="cash"`` so stress haircuts skip them. Two independent gates:
+
+    * **Issuer.** Only SOVEREIGN / central-bank paper reaches these rows —
+      ``_is_sovereign_security`` (typed ``counterparty_type``, the documented
+      ``attributes.instrument`` / ``issuer_class`` conventions, a sovereign
+      product code, or an issuer named in the jurisdiction registry). Paper with
+      none of those signals is not HQLA and is not zero-risk-weighted.
+    * **Level.** ``_classify_security_hqla`` then establishes L1 / L2A / L2B
+      from the evidence, or refuses. Until 2026-08-22 all four emission sites
+      stamped a literal ``"L1"`` (forensic re-audit D-6), so no Level-2 fact
+      could exist and the haircuts and 40%/15% caps built for P0-8 were
+      unreachable. A holding whose level cannot be established is emitted as
+      ``hqla_unclassified`` with ``hqla_level=None`` — the LCR filters it out
+      of the stock, while the amount, the risk weight and therefore every
+      capital, NSFR and stress figure stay exactly where they were.
 
 off_balance
     LC_GUARANTEE positions → ``committed_retail`` (RETAIL_INDIVIDUAL
@@ -74,8 +129,10 @@ lcr_inflow
     Positions maturing within 30 days of the as-of date:
     ``retail_loan_repayments`` (retail_other + residential_mortgage loans, 50%),
     ``corporate_sme_repayments`` (all other loans, 50%), ``interbank_maturing``
-    (INTERBANK_PLACEMENT, 100%). If no loan carries a maturity date the
-    documented fallback books 2% of each segment's gross balance and warns.
+    (INTERBANK_PLACEMENT, 100%). If no loan carries a maturity date the loan
+    repayment inflows are NOT COMPUTABLE and book zero: an assumed inflow
+    reduces net outflows and therefore RAISES the LCR, so absence of evidence
+    of a repayment is never treated as a repayment.
 
 market_risk / fx_position
     Per non-GHS currency: assets (LOAN, SECURITY_HOLDING, INTERBANK_PLACEMENT)
@@ -86,11 +143,21 @@ market_risk / fx_position
     bought currency's net (GHS legs are ignored — GHS is the base currency, so
     only foreign-currency exposure moves). The delta per currency is carried
     as ``net_derivatives_ccy`` in the fact attributes, mirroring the seed.
-    Spot from ``fx_rates_current``. LC_GUARANTEE is off-balance and excluded
-    from the NOP. A currency without a daily return history is excluded from
-    ``fx_position`` (the VaR engine requires a history) and warned.
-    ``net_long_fx`` / ``net_short_fx`` are the long/short sums over the
-    included currencies' post-hedge nets.
+    Spot from ``fx_rates_current``, else implied from the position book (warned
+    and stamped ``spot_source``); a rate is never invented, so a currency whose
+    hedge legs cannot be converted is excluded from the book entirely rather
+    than valued at par, and the implied fallback is withdrawn altogether once
+    part of a currency's book carries no conversion. A position with no ingested
+    ``balance_ghs`` is EXCLUDED from the reporting-currency leg and COUNTED
+    (``unconverted_position_count`` on the fact) rather than converted to zero;
+    the currency leg still carries it in full, so the two legs describe
+    different books and ``regulatory_fx`` refuses the run. LC_GUARANTEE is
+    off-balance and excluded from the NOP.
+    A currency without a daily return history has no ``fx_position`` row (the
+    VaR engine requires a history) but still counts in the net open position.
+    ``net_long_fx`` / ``net_short_fx`` are the long/short sums over EVERY
+    currency's post-hedge net — the capital charge and the NOP limits cover the
+    whole book even where the VaR row cannot exist.
 
 fx_return_history
     ``fx_rates_historical`` per currency, chronological: simple daily returns
@@ -178,10 +245,11 @@ state.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Literal
+from typing import Any, Literal, Self
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -189,20 +257,22 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.authority.outcomes import NotComputable, OutcomeDetail
 from app.domain.ftp.engine import CurvePoint, CurveResult, build_curve
 from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
-    CurrentFinancialFact,
     CanonicalCounterparty,
     CanonicalGlAccount,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
     CanonicalReferenceRow,
+    CurrentFinancialFact,
+    IngestionBatch,
 )
-from app.services import jurisdictions, market_data_sources
+from app.services import jurisdictions, market_data_sources, reconciliation
 from app.services.market_data import (
     CurveView,
     desk_projection_curve_name,
@@ -218,12 +288,9 @@ _TWELVE = Decimal("12")
 
 SOURCE_TAG = "data_engine"
 _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
-# |assets - liabilities - equity| above this fraction of assets warns.
-BALANCE_GAP_WARN_FRACTION = Decimal("0.005")
 # Bills vs bonds fallback split: remaining maturity at or under 397 days is a bill.
 _BILL_MAX_REMAINING_DAYS = 397
 _LCR_WINDOW_DAYS = 30
-_LCR_FALLBACK_FRACTION = Decimal("0.02")
 _FX_RETURN_WINDOW = 250
 # A canonical FX spot history replaces the legacy reference-row history for a
 # currency only when it is deep enough to feed a meaningful VaR return series.
@@ -259,8 +326,15 @@ _LOAN_CATEGORY_MAP: dict[str, tuple[str, str]] = {
     "RESIDENTIAL_MORTGAGE": ("residential_mortgage", "RW35"),
     "COMMERCIAL_REAL_ESTATE": ("commercial_real_estate", "RW100"),
 }
-_PAST_DUE_CATEGORY = ("past_due_90", "RW150")
+_PAST_DUE_CATEGORY: tuple[str, str] = ("past_due_90", "RW150")
 _RETAIL_LOAN_CATEGORIES = ("retail_other", "residential_mortgage")
+
+#: The IRR/FTP family for an exposure whose regulatory class is unrecognised.
+#: Rate risk is measured on the whole book, so the balance is NOT dropped —
+#: dropping it would understate the repricing gap and the funding-cost base.
+#: It gets its own label rather than joining ``corporate_loans``, because the
+#: platform does not know that it is corporate.
+_UNCLASSIFIED_FAMILY = "unclassified_loans"
 
 # Loan seed category → IRR/FTP family label.
 _LOAN_FAMILY = {
@@ -309,6 +383,38 @@ class DerivationError(Exception):
         self.message = message
 
 
+class ReconciliationBlockedError(DerivationError, NotComputable):
+    """The official derivation is refused by a data-integrity control (P0-10).
+
+    Doubly typed like ``sdi_capital.SdiCapitalPolicyUnresolved``: every existing
+    ``except DerivationError`` handler keeps working (the activation API's 409,
+    the pipeline's job failure, the history loader's per-period rollback), and a
+    boundary that already handles WS-A's fail-closed outcomes handles this one
+    identically through ``NotComputable`` — with the full ``OutcomeDetail``
+    (metric, reason, failing items, gap/tolerance/exception context) instead of
+    a bare string.
+
+    ``DerivationError.__init__`` is deliberately not called: ``super()`` inside
+    it would follow this class's MRO into ``NotComputable`` with a plain string.
+    """
+
+    def __init__(self, code: str, message: str, detail: OutcomeDetail) -> None:
+        NotComputable.__init__(self, detail)
+        self._code = code
+        self.message = message
+
+    @property
+    def code(self) -> str:
+        """The derivation error code, not ``NotComputable``'s state code.
+
+        ``NotComputable`` exposes ``code`` as the outcome state; every existing
+        ``DerivationError`` consumer reads it as the machine-readable refusal
+        code it puts on the 409 payload, so the ``DerivationError`` meaning wins
+        here. The outcome state is still reachable as ``.state``.
+        """
+        return self._code
+
+
 @dataclass
 class GroupResult:
     group: str
@@ -328,6 +434,12 @@ class DerivationResult:
     facts_deleted: int
     facts_created: int
     groups: tuple[GroupResult, ...]
+    #: The balance-sheet identity verdict for this derivation, with its governed
+    #: tolerance and any applied exception. Always present on the official plane.
+    reconciliation: reconciliation.BalanceIdentityOutcome | None = None
+    #: Which source systems duplicated each other's books, if any. Diagnostic:
+    #: it explains the identity verdict above and never overrides it.
+    source_overlap: reconciliation.SourceOverlapOutcome | None = None
 
     @property
     def warnings(self) -> list[str]:
@@ -344,6 +456,12 @@ class CurrentDerivationResult:
     facts_replaced: int
     facts_created: int
     groups: tuple[GroupResult, ...]
+    #: The live plane keeps deriving on an unreconciled book (the operator needs
+    #: to SEE the broken book to fix it), but the failure is carried here and in
+    #: the group warnings — it is never presented as a clean balance sheet.
+    reconciliation: reconciliation.BalanceIdentityOutcome | None = None
+    #: Which source systems duplicated each other's books, if any (diagnostic).
+    source_overlap: reconciliation.SourceOverlapOutcome | None = None
 
     @property
     def warnings(self) -> list[str]:
@@ -355,10 +473,26 @@ class _PositionRow:
     """One current-generation snapshot flattened to the fields derivation uses."""
 
     source_reference: str
+    #: Which of the bank's ingestion channels pushed this row. Supersession is
+    #: scoped per (bank, source_system, source_ref) by design, so two systems
+    #: can each hold a complete, live book for the same positions; this is the
+    #: field ``reconciliation.detect_source_overlap`` reads to say so.
+    source_system: str
     position_type: str
     currency: str
     balance: Decimal
-    balance_ghs: Decimal
+    #: The position restated in the institution's reporting currency, or ``None``
+    #: when NO such amount has been established: a foreign-currency position whose
+    #: snapshot carries no ingested ``balance_ghs``. It is deliberately optional
+    #: rather than zero (forensic audit 2026-08-22 D-21). Zero is a CLAIM — it
+    #: says the exposure does not exist — and substituting it here understated one
+    #: leg of every reporting-currency total while the native-currency leg carried
+    #: the position in full. On the FX book that asymmetry reversed the direction
+    #: of a filed net open position: a book short USD 144.7m reported LONG 21.0m
+    #: cedis. Every consumer therefore EXCLUDES an unstated row and COUNTS it
+    #: (:class:`_Unconverted`); none of them may take it at face value, and none of
+    #: them may substitute a zero.
+    balance_ghs: Decimal | None
     interest_rate: Decimal | None
     rate_type: str | None
     contractual_maturity: date | None
@@ -376,12 +510,176 @@ class _PositionRow:
 
 
 @dataclass(frozen=True)
+class _Unconverted:
+    """Positions left out of a reporting-currency total for want of a conversion.
+
+    Deliberately the same shape ``sdi_capital._Exposures`` reports as
+    ``unconverted_position_count`` / ``unconverted_currencies``, and that
+    ``regulatory_reporting.bog_forms.sources_ext.bsd13`` reuses as
+    ``_Unconverted`` (forensic audit 2026-08-22 D-21): an amount that cannot be
+    stated in the reporting currency is EXCLUDED and COUNTED — never taken at
+    face value, and never quietly dropped to zero.
+
+    What happens NEXT is the difference between the three, and this one carries
+    the least authority on purpose. The SDI summary carries its count to a
+    filing blocker and a BoG cell refuses outright; a derived fact has nowhere
+    to refuse, because derivation produces evidence rather than verdicts. So
+    this counter makes the omission VISIBLE — in the group warnings an operator
+    reads, and (for the FX book, where the omission changes a filed figure) in
+    the fact's own attributes — and leaves the refusal to the engine that files
+    the number. ``regulatory_fx._unstatable_position`` is that engine.
+    """
+
+    counts: Mapping[str, int] = field(default_factory=dict)
+
+    @classmethod
+    def over(cls, rows: Iterable[_PositionRow]) -> Self:
+        counts: dict[str, int] = {}
+        for row in rows:
+            if row.balance_ghs is None:
+                counts[row.currency] = counts.get(row.currency, 0) + 1
+        return cls(counts=counts)
+
+    @property
+    def count(self) -> int:
+        return sum(self.counts.values())
+
+    @property
+    def currencies(self) -> tuple[str, ...]:
+        return tuple(sorted(self.counts))
+
+    def __bool__(self) -> bool:
+        return bool(self.counts)
+
+    def note(self, subject: str, base_currency: str) -> str:
+        """The warning naming what this total leaves out, and how to repair it."""
+        listed = ", ".join(f"{currency} x{self.counts[currency]}" for currency in self.currencies)
+        return (
+            f"{self.count} foreign-currency {subject} carry no ingested "
+            f"{base_currency} balance ({listed}), so they are EXCLUDED from the "
+            f"{base_currency} total rather than counted at zero — zero would state that "
+            "the exposure does not exist. The total is therefore incomplete by those "
+            "rows. Ingest attributes.balance_ghs on them, or the rate behind it."
+        )
+
+
+def _stated(rows: Iterable[_PositionRow]) -> Iterator[tuple[_PositionRow, Decimal]]:
+    """Every row carrying a stated reporting-currency amount, paired with it.
+
+    The single reader of ``_PositionRow.balance_ghs`` that aggregation sites are
+    expected to use. A foreign-currency position with no ingested conversion is
+    skipped here because ``_position_row`` no longer invents a zero for it;
+    callers that need to say how much they left out build an
+    :class:`_Unconverted` over the same rows.
+    """
+    for row in rows:
+        amount = row.balance_ghs
+        if amount is not None:
+            yield row, amount
+
+
+@dataclass(frozen=True)
+class _CentralBankNames:
+    """How THIS jurisdiction's central bank is named in a chart of accounts.
+
+    Registry-driven (``jurisdictions``), never a country literal — CLAUDE.md's
+    jurisdiction rule. The pre-fix classifier tested ``"bog" in name``, which
+    missed the SDI's ``GL-1020 "Balances with Bank of Ghana"`` (44.7m of central-
+    bank money booked to ``other_assets``, understating HQLA) and could never
+    have matched a Nigerian or Kenyan tenant naming its own central bank.
+
+    The two forms are matched differently on purpose:
+
+    * ``full`` ("bank of ghana", "central bank of nigeria") is a multi-word
+      phrase; a substring test is safe.
+    * ``short`` ("bog", "cbn", "cbk", "sarb") is three or four letters and would
+      otherwise match inside ordinary words, so it is matched as a WHOLE WORD.
+
+    ``country_name`` is deliberately absent. "Government of Ghana bonds" is
+    sovereign paper, not a balance held at the central bank, and a country token
+    would sweep the securities book into the cash line.
+    """
+
+    full: tuple[str, ...] = ()
+    short: tuple[str, ...] = ()
+
+    @classmethod
+    def from_registry(cls, central_bank_name: str | None, regulator_short: str | None) -> Self:
+        full = (central_bank_name or "").strip().lower()
+        short = (regulator_short or "").strip().lower()
+        return cls(full=(full,) if full else (), short=(short,) if short else ())
+
+    def matches(self, name: str) -> bool:
+        """Does this lower-cased GL account name identify the central bank?
+
+        ``central bank`` is included as a generic English form: it is a
+        jurisdiction-NEUTRAL phrase (every country has one), not a country
+        literal, so it keeps working for a tenant whose registry row is missing.
+        """
+        if _CENTRAL_BANK_GENERIC in name:
+            return True
+        if any(token in name for token in self.full):
+            return True
+        return any(re.search(rf"\b{re.escape(token)}\b", name) for token in self.short)
+
+
+#: The jurisdiction-neutral generic form. Not a country literal: it names the
+#: institution type, and reads correctly in every jurisdiction's chart.
+_CENTRAL_BANK_GENERIC = "central bank"
+
+
+def _central_bank_names(db: Session, bank: Bank) -> _CentralBankNames:
+    """The bank's own central-bank name forms, from the jurisdiction registry."""
+    row = jurisdictions.get_jurisdiction(db, bank)
+    if row is None:
+        return _CentralBankNames()
+    return _CentralBankNames.from_registry(row.central_bank_name, row.regulator_short)
+
+
+@dataclass(frozen=True)
 class _Canonical:
     as_of: date
     base_currency: str
     positions: list[_PositionRow]
     gl_accounts: list[CanonicalGlAccount]
     refs: dict[str, list[dict[str, Any]]]
+    #: The as-of date of the chart of accounts in force (``_resolve_gl_chart``).
+    #: A GL row dated earlier than this is a balance CARRIED FORWARD into the
+    #: current chart, which the balance-sheet block reports rather than hides.
+    gl_chart_as_of: date | None = None
+    #: ``(code, name, last balance)`` for every account code the current chart
+    #: has retired. Dropped from the book, never silently — the balance-sheet
+    #: block names them and their amounts in its warnings.
+    gl_retired: tuple[tuple[str, str, Decimal], ...] = ()
+    # The governed data-integrity policy for this (bank, as-of): the effective
+    # balance-sheet identity tolerance and any approved exception. Resolved once
+    # at load time so the derivation itself stays pure.
+    reconciliation: reconciliation.ReconciliationPolicy = field(
+        default_factory=lambda: reconciliation.ReconciliationPolicy(
+            tolerance=reconciliation.ResolvedTolerance(
+                fraction=reconciliation.MODULE_DEFAULT_TOLERANCE_PCT / _HUNDRED,
+                percent=reconciliation.MODULE_DEFAULT_TOLERANCE_PCT,
+                source="module_default",
+                param_code=reconciliation.TOLERANCE_PARAM_CODE,
+                module_default_version=reconciliation.MODULE_DEFAULT_VERSION,
+            ),
+            exception=None,
+        )
+    )
+    # Whether two or more of the bank's source systems are carrying the SAME
+    # position types at this as-of. Diagnostic only: it never changes a figure
+    # and never blocks — it explains a balance-sheet identity failure that the
+    # identity control can only report as a percentage. Resolved at load time
+    # (it needs the governed tolerance) so the derivation stays pure.
+    source_overlap: reconciliation.SourceOverlapOutcome | None = None
+    # Lower-cased sovereign / central-bank issuer names for this bank's
+    # jurisdiction (registry-driven, never a country literal) — the last of the
+    # sovereign-paper signals in ``_is_sovereign_security``.
+    sovereign_issuer_names: tuple[str, ...] = ()
+    # How this bank's OWN central bank is named in its chart of accounts
+    # (registry-driven, never a country literal) — the GL cash classifier's
+    # central-bank test. See ``_CentralBankNames``.
+    central_bank_names: _CentralBankNames = field(default_factory=_CentralBankNames)
     # Canonical market data (vendor-blind, via app.services.market_data).
     # When present it wins over the legacy reference-row datasets; the
     # reference rows remain the fallback so uploads without market data
@@ -434,10 +732,24 @@ def derive_facts(
             "Ingest position data for this as-of date before activating.",
         )
 
+    # The reconciliation control runs BEFORE any period or fact is written: a
+    # book that fails it must leave no trace of a "successful" official
+    # derivation behind (audit P0-10).
+    specs, groups, identity = _derive_specs(canonical)
+    # ``record_check`` commits the refusal itself, so it survives the caller's
+    # rollback / 409.
+    reconciliation.record_check(
+        db, ctx, bank, as_of_date, identity, source_overlap=canonical.source_overlap
+    )
+    if identity.blocks_filing:
+        raise ReconciliationBlockedError(
+            reconciliation.BALANCE_IDENTITY_BLOCK_CODE,
+            identity.message(canonical.base_currency),
+            reconciliation.balance_identity_detail(bank, as_of_date, identity),
+        )
+
     period, period_created = _ensure_period(db, ctx, bank, as_of_date)
     facts_deleted = _delete_period_facts(db, ctx, bank, period)
-
-    specs, groups = _derive_specs(canonical)
     facts = [_fact(bank, period, spec) for spec in specs]
 
     db.add_all(facts)
@@ -451,6 +763,8 @@ def derive_facts(
         facts_deleted=facts_deleted,
         facts_created=len(facts),
         groups=tuple(groups),
+        reconciliation=identity,
+        source_overlap=canonical.source_overlap,
     )
 
 
@@ -469,7 +783,7 @@ def derive_current_facts(
             "no_canonical_data",
             f"No accepted canonical position snapshots exist for {as_of_date.isoformat()}.",
         )
-    specs, groups = _derive_specs(canonical)
+    specs, groups, identity = _derive_specs(canonical, live=True)
     previous = list(
         db.scalars(
             select(CurrentFinancialFact).where(
@@ -494,21 +808,29 @@ def derive_current_facts(
         facts_replaced=len(previous),
         facts_created=len(specs),
         groups=tuple(groups),
+        reconciliation=identity,
+        source_overlap=canonical.source_overlap,
     )
 
 
-def _derive_specs(canonical: _Canonical) -> tuple[list[_FactSpec], list[GroupResult]]:
+def _derive_specs(
+    canonical: _Canonical, *, live: bool = False
+) -> tuple[list[_FactSpec], list[GroupResult], reconciliation.BalanceIdentityOutcome]:
     """Build deterministic facts once for either live or official materialisation."""
     groups: list[GroupResult] = []
     specs: list[_FactSpec] = []
-    balance_sheet, loan_rows, cash_amounts, securities_split = _derive_balance_sheet_block(
-        canonical, groups
-    )
+    (
+        balance_sheet,
+        loan_rows,
+        cash_amounts,
+        securities,
+        identity,
+    ) = _derive_balance_sheet_block(canonical, groups, live=live)
     specs.extend(balance_sheet)
     specs.extend(_derive_loan_exposure(loan_rows, groups))
     specs.extend(_derive_ecl_exposure(loan_rows, groups))
     specs.extend(_derive_crm_collateral(loan_rows, groups))
-    specs.extend(_derive_securities(securities_split, cash_amounts, groups))
+    specs.extend(_derive_securities(securities, cash_amounts, groups))
     specs.extend(_derive_off_balance(canonical, groups))
     specs.extend(_derive_lcr_inflows(canonical, loan_rows, groups))
     fx_specs, fx_currencies = _derive_fx_positions(canonical, groups)
@@ -525,7 +847,7 @@ def _derive_specs(canonical: _Canonical) -> tuple[list[_FactSpec], list[GroupRes
     specs.extend(_derive_ftp_products(canonical, loan_rows, curve, groups))
     specs.extend(_derive_ftp_branches(canonical, groups))
     specs.extend(_derive_ftp_nmd(canonical, groups))
-    return specs, groups
+    return specs, groups, identity
 
 
 # ---------------------------------------------------------------------------
@@ -542,7 +864,16 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     return bank
 
 
-def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> _Canonical:
+def _load_position_rows(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date, base_currency: str
+) -> list[_PositionRow]:
+    """The current, accepted position book at ``as_of``, flattened.
+
+    One query, one base-currency resolution, one definition of "the book the
+    derivation used" — the source-overlap diagnosis reads exactly these rows,
+    so it can never be measured over a different population than the balance
+    sheet it explains.
+    """
     rows = db.execute(
         select(
             CanonicalPositionSnapshot, CanonicalPosition, CanonicalProduct, CanonicalCounterparty
@@ -558,34 +889,128 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
     ).all()
-
-    base_currency = jurisdictions.base_currency(bank)
-    positions = [
+    return [
         _position_row(snapshot, position, product, counterparty, base_currency)
         for snapshot, position, product, counterparty in rows
     ]
 
-    gl_accounts = list(
-        db.scalars(
-            select(CanonicalGlAccount).where(
-                CanonicalGlAccount.organization_id == ctx.organization_id,
-                CanonicalGlAccount.bank_id == bank.id,
-                CanonicalGlAccount.as_of_date <= as_of,
-                CanonicalGlAccount.superseded_by.is_(None),
-                CanonicalGlAccount.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
-                CanonicalGlAccount.balance.is_not(None),
-            )
+
+def _source_overlap(
+    positions: list[_PositionRow], policy: reconciliation.ReconciliationPolicy
+) -> reconciliation.SourceOverlapOutcome:
+    """Diagnose duplicated source books over the rows the derivation will use.
+
+    Measured over the STATED rows only, in the same reporting-currency units as
+    the balance-sheet identity it exists to explain: a position with no
+    reporting-currency amount contributes to no balance-sheet line, so counting
+    it here — at a fabricated zero — would have inflated one system's row count
+    against the other's while adding nothing to either total.
+    """
+    return reconciliation.detect_source_overlap(
+        reconciliation.tally_source_books(
+            (row.source_system, row.position_type, amount) for row, amount in _stated(positions)
+        ),
+        tolerance=policy.tolerance,
+    )
+
+
+def diagnose_source_overlap(
+    db: Session, ctx: TenantContext, bank_id: str, as_of_date: date
+) -> reconciliation.SourceOverlapOutcome:
+    """Report whether this bank's source systems duplicate each other at ``as_of_date``.
+
+    Read-only and side-effect free: it writes nothing, derives no fact and
+    blocks nothing. An as-of with no accepted position data comes back
+    ``determined=False`` with ``MISSING_REQUIRED_INPUT`` — "not assessed" is
+    never dressed up as "no overlap".
+    """
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    positions = _load_position_rows(db, ctx, bank, as_of_date, jurisdictions.base_currency(bank))
+    policy = reconciliation.load_policy(db, ctx.organization_id, bank, as_of_date)
+    return _source_overlap(positions, policy)
+
+
+def evaluate_balance_identity(
+    db: Session, ctx: TenantContext, bank: Bank, as_of_date: date
+) -> reconciliation.BalanceIdentityOutcome | None:
+    """The identity verdict for the CURRENT canonical book at ``as_of_date``.
+
+    Read-only and side-effect free: it loads the same canonical state
+    :func:`derive_facts` would, runs only the balance-sheet block, and returns
+    that block's verdict. No period, fact, audit event or run is written, so a
+    filing-plane caller can ask "does this bank's book balance *now*?" without
+    re-deriving anything (audit 2026-08-22 D-3).
+
+    ``None`` means NOT ASSESSED, never "reconciled": an as-of with no accepted
+    position snapshots has no canonical book for the control to weigh, and
+    dressing that up as a pass is precisely the silent substitution this module
+    exists to stop. Callers must treat ``None`` as the absence of an answer.
+    """
+    canonical = _load_canonical(db, ctx, bank, as_of_date)
+    if not canonical.positions:
+        return None
+    # Only the balance-sheet block: it owns the identity, and running the other
+    # groups would spend the whole derivation's work on a question none of them
+    # answer.
+    groups: list[GroupResult] = []
+    *_rest, identity = _derive_balance_sheet_block(canonical, groups)
+    return identity
+
+
+def current_reconciliation_record(
+    db: Session, ctx: TenantContext, bank_id: str
+) -> dict[str, Any] | None:
+    """The balance-sheet control's record stamped on the CURRENT live facts.
+
+    The live derivation writes ``BalanceIdentityOutcome.provenance()`` onto the
+    balance-sheet line that received the plug, so the live plane's verdict —
+    gap, tolerance, tolerance source, exception, ``status`` — is recoverable
+    from the fact set itself with one query and no new column.
+
+    ``None`` means the control had nothing to record: either no live facts
+    exist, or the book balanced exactly and no plug was applied. A plug of any
+    size is recorded, so ``None`` can never hide one.
+    """
+    rows = db.scalars(
+        select(CurrentFinancialFact.attributes).where(
+            CurrentFinancialFact.organization_id == ctx.organization_id,
+            CurrentFinancialFact.bank_id == bank_id,
+            CurrentFinancialFact.fact_group == "balance_sheet",
         )
     )
-    # Keep only the latest generation per account code at or before the as-of.
-    latest_by_code: dict[str, CanonicalGlAccount] = {}
-    for account in gl_accounts:
-        current = latest_by_code.get(account.account_code)
-        if current is None or account.as_of_date > current.as_of_date:
-            latest_by_code[account.account_code] = account
+    for attributes in rows:
+        record = (attributes or {}).get("reconciliation")
+        if isinstance(record, dict):
+            return record
+    return None
+
+
+def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> _Canonical:
+    base_currency = jurisdictions.base_currency(bank)
+    positions = _load_position_rows(db, ctx, bank, as_of, base_currency)
+
+    # The whole current GL history at or before the as-of, INCLUDING rows with
+    # no balance: a balance-less row still proves the code is on the chart, and
+    # the chart is what decides whether an older balance may be carried forward.
+    gl_rows = db.execute(
+        select(CanonicalGlAccount, IngestionBatch.extraction_mode)
+        .join(IngestionBatch, CanonicalGlAccount.ingestion_batch_id == IngestionBatch.id)
+        .where(
+            CanonicalGlAccount.organization_id == ctx.organization_id,
+            CanonicalGlAccount.bank_id == bank.id,
+            CanonicalGlAccount.as_of_date <= as_of,
+            CanonicalGlAccount.superseded_by.is_(None),
+            CanonicalGlAccount.withdrawn_at.is_(None),
+            CanonicalGlAccount.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+        )
+    ).all()
+    gl_accounts, gl_chart_as_of, gl_retired = _resolve_gl_chart(
+        [(account, mode) for account, mode in gl_rows]
+    )
 
     refs: dict[str, list[dict[str, Any]]] = {}
     # Latest ingestion batch per dataset kind. Postgres has no max(uuid), so the
@@ -627,16 +1052,115 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         refs[kind] = list(payloads)
 
     market_curve, market_spots, market_fx_history = _load_market_data(db, ctx, bank, as_of)
+    policy = reconciliation.load_policy(db, ctx.organization_id, bank, as_of)
     return _Canonical(
         as_of=as_of,
         base_currency=base_currency,
         positions=positions,
-        gl_accounts=sorted(latest_by_code.values(), key=lambda account: account.account_code),
+        gl_accounts=gl_accounts,
+        gl_chart_as_of=gl_chart_as_of,
+        gl_retired=gl_retired,
         refs=refs,
+        reconciliation=policy,
+        source_overlap=_source_overlap(positions, policy),
+        sovereign_issuer_names=_sovereign_issuer_names(db, bank),
+        central_bank_names=_central_bank_names(db, bank),
         market_curve=market_curve,
         market_spots=market_spots,
         market_fx_history=market_fx_history,
     )
+
+
+def _resolve_gl_chart(
+    rows: list[tuple[CanonicalGlAccount, str]],
+) -> tuple[list[CanonicalGlAccount], date | None, tuple[tuple[str, str, Decimal], ...]]:
+    """The chart of accounts in force, with balances carried forward inside it.
+
+    Two legitimate behaviours have to be told apart, and the pre-fix rule
+    conflated them by keeping the newest row per account code across ALL
+    history:
+
+    * **Sparse reporting.** An account that is not re-reported in a period
+      keeps its last reported balance. Legitimate — many cores only send the
+      accounts that moved.
+    * **Retirement.** An account code removed from the chart stops existing.
+      Under a per-code rule nothing newer ever carries that code, so its last
+      balance survives forever. That is how ``1000 Cash and balances`` and
+      ``2000 Customer deposits`` — codes last seen on a 2026-04-30 upload —
+      were still contributing 24m and 180m to a 2026-06-30 book.
+
+    The rule, stated rather than emergent:
+
+    1. Only a **full** extraction can retire a code: an ``incremental`` batch
+       carries the accounts that moved, so a code's absence from it says
+       nothing. ``rows`` therefore arrives paired with its batch's declared
+       ``extraction_mode``.
+    2. The **chart of accounts in force** is the set of codes in the most
+       recent GL generation, at or before the as-of, that a full extraction
+       wrote — plus any code reported AFTER that date (an incremental top-up
+       is an addition to the chart, never a redefinition of it). Balance-less
+       rows count: they still assert the code is on the chart, which matters
+       because a core can push a chart refresh with no balances at all — the
+       primary's 2026-06-30 generation is exactly that.
+    3. A code absent from that chart has been retired. It is dropped; an older
+       balance is never resurrected under it. With no full extraction anywhere
+       in the history there is no authority to retire anything, so every code
+       stays.
+    4. A code on the chart takes its most recent NON-NULL balance at or before
+       the as-of — sparse reporting carried forward, inside the chart only.
+    5. A charted code that has never carried a balance contributes nothing. No
+       value is invented for it, and it is not read as a zero.
+
+    Returns the resolved accounts (ordered by code), the chart's own as-of date
+    so the balance-sheet block can report which balances are carried forward
+    rather than current, and the retired codes with the balance they last
+    carried so the drop is reported rather than silent.
+    """
+    if not rows:
+        return [], None, ()
+    full_dates = [account.as_of_date for account, mode in rows if mode == "full"]
+    chart_as_of = max(full_dates) if full_dates else None
+    if chart_as_of is None:
+        chart = {account.account_code for account, _ in rows}
+    else:
+        chart = {
+            account.account_code for account, _ in rows if account.as_of_date >= chart_as_of
+        }
+    # Deterministic scan: (organization, bank, code, as_of) is unique among
+    # current rows, so the max by as_of_date is unambiguous; sorting keeps the
+    # walk reproducible regardless of the database's row order.
+    resolved: dict[str, CanonicalGlAccount] = {}
+    retired: dict[str, CanonicalGlAccount] = {}
+    for account, _ in sorted(rows, key=lambda row: (row[0].account_code, row[0].as_of_date)):
+        if account.balance is None:
+            continue
+        target = resolved if account.account_code in chart else retired
+        current = target.get(account.account_code)
+        if current is None or account.as_of_date > current.as_of_date:
+            target[account.account_code] = account
+    return (
+        sorted(resolved.values(), key=lambda account: account.account_code),
+        chart_as_of,
+        tuple(
+            (account.account_code, account.name, _dec(account.balance))
+            for account in sorted(retired.values(), key=lambda row: row.account_code)
+        ),
+    )
+
+
+def _sovereign_issuer_names(db: Session, bank: Bank) -> tuple[str, ...]:
+    """Lower-cased issuer names that identify this jurisdiction's sovereign.
+
+    Registry-driven (``jurisdictions``), never a country literal — CLAUDE.md's
+    jurisdiction rule. Used only as the last-resort signal in the SECURITY_HOLDING
+    issuer test, behind the typed ``counterparty_type`` and the documented
+    ``attributes.instrument`` / ``attributes.issuer_class`` conventions.
+    """
+    row = jurisdictions.get_jurisdiction(db, bank)
+    if row is None:
+        return ()
+    names = (row.country_name, row.central_bank_name, row.sovereign_rating_issuer)
+    return tuple(sorted({name.strip().lower() for name in names if name and name.strip()}))
 
 
 def _load_market_data(
@@ -690,11 +1214,16 @@ def _position_row(
     attributes = snapshot.attributes or {}
     balance = _dec(snapshot.balance, _ZERO)
     balance_ghs = _dec_or_none(attributes.get("balance_ghs"))
-    if balance_ghs is None:
-        # Base-currency books carry no explicit conversion; fall back to balance.
-        balance_ghs = balance if position.currency == base_currency else _ZERO
+    if balance_ghs is None and position.currency == base_currency:
+        # A book already denominated in the reporting currency needs no
+        # conversion: its own balance IS the reporting-currency amount. This is
+        # the ONLY substitution left here. A foreign-currency position with no
+        # ingested conversion keeps ``None`` — see ``_PositionRow.balance_ghs``
+        # for why it must not become zero.
+        balance_ghs = balance
     return _PositionRow(
         source_reference=snapshot.source_reference,
+        source_system=snapshot.source_system,
         position_type=position.position_type,
         currency=position.currency,
         balance=balance,
@@ -851,34 +1380,169 @@ def _current_fact(
 class _LoanRow:
     row: _PositionRow
     category: str
-    risk_weight_code: str
+    #: The governed risk-weight code for this exposure, or ``None`` when the
+    #: loan's regulatory category maps to no Basel/CRD exposure class this
+    #: platform recognises. ``None`` is carried onto the ``loan_exposure`` fact
+    #: and ``capital.engine.resolve_risk_weight`` refuses on it — see
+    #: :func:`_classify_loans`.
+    risk_weight_code: str | None
+
+
+#: The category an exposure lands in when its regulatory classification is not
+#: one this platform recognises. It is deliberately not a Basel exposure class:
+#: it carries no risk weight, and the capital engine refuses the moment it reads
+#: one of these facts.
+_UNCLASSIFIED_PREFIX = "unclassified_"
+_NON_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _loan_family(category: str) -> str:
+    """The IRR/FTP family label for an exposure category."""
+    return _LOAN_FAMILY.get(category, _UNCLASSIFIED_FAMILY)
+
+
+def _unclassified_category(regulatory_category: str | None) -> str:
+    """The exposure category for a loan whose regulatory class is unrecognised.
+
+    Named after the bank's OWN category token so the refusal downstream points at
+    the product taxonomy that has to be fixed, rather than at a generic bucket.
+    """
+    token = _NON_SLUG_RE.sub("_", (regulatory_category or "unmapped").strip().lower()).strip("_")
+    return f"{_UNCLASSIFIED_PREFIX}{token or 'unmapped'}"
 
 
 def _classify_loans(canonical: _Canonical, warnings: list[str]) -> list[_LoanRow]:
+    """Every LOAN position bound to its exposure category and risk-weight code.
+
+    A regulatory category the map does not carry gets NO risk weight (forensic
+    audit 2026-08-22 D-22). The prior form substituted ``CORPORATE_UNRATED``
+    (RW100) and logged a warning, which is the same defect this programme has
+    been removing everywhere else: a risk weight is a regulatory determination
+    about an exposure, and 100% is a determination as much as 0% is. On the
+    measured book the substitution weighted GHS 387,209,829.04 across 363
+    positions at 100% on the strength of product LABELs the platform could not
+    interpret (``LOAN_MORTGAGE``, ``LOAN_RETAIL``, ``LOAN_SME``, at 2026-06-30
+    and in every period of that institution's ten-year history) — conservative
+    in direction, but wrong, and filed.
+
+    Nothing here guesses the right weight, because the directive does not
+    license one from a label. The Capital Requirements Directive (BoG, 2018)
+    weights a residential mortgage at 35% ONLY where loan-to-value is at or
+    below 80% and six further conditions hold (¶131), and at 100% otherwise
+    (¶132); a retail exposure at 75% only where it QUALIFIES (¶128). Whether an
+    exposure qualifies is a fact about the loan, not about the string its source
+    system files it under. So the exposure keeps its full balance, carries no
+    code, and ``capital.engine.resolve_risk_weight`` refuses the capital run
+    naming the category — MISSING_REQUIRED_INPUT, the same refusal it already
+    raises for an exposure that arrives with no code at all.
+
+    The remedy is data, in either of two places: map the product to a recognised
+    ``regulatory_category`` at ingestion, or extend the map here once the
+    directive genuinely settles the class.
+    """
     loans: list[_LoanRow] = []
-    unknown: set[str] = set()
+    unknown: dict[str, set[str]] = {}
     for row in canonical.by_type("LOAN"):
+        code: str | None
         if row.ifrs9_stage == 3:
             category, code = _PAST_DUE_CATEGORY
         else:
             mapped = _LOAN_CATEGORY_MAP.get((row.regulatory_category or "").upper())
             if mapped is None:
-                unknown.add(row.regulatory_category or row.product_code or "<unmapped>")
-                mapped = _LOAN_CATEGORY_MAP["CORPORATE_UNRATED"]
-            category, code = mapped
+                declared = row.regulatory_category or "<none>"
+                unknown.setdefault(declared, set()).add(row.product_code or "<no-product>")
+                category, code = _unclassified_category(row.regulatory_category), None
+            else:
+                category, code = mapped
         loans.append(_LoanRow(row=row, category=category, risk_weight_code=code))
-    if unknown:
+    for declared in sorted(unknown):
         warnings.append(
-            "Loan products without a mapped regulatory category defaulted to "
-            f"corporate_unrated (RW100): {', '.join(sorted(unknown))}."
+            f"Loan products declare regulatory category {declared!r}, which is not a "
+            "Basel/CRD exposure class this platform recognises, so NO risk weight is "
+            f"established for them and they are exposed as "
+            f"'{_unclassified_category(None if declared == '<none>' else declared)}'. The "
+            "capital run refuses rather than weighting them at 100%: a risk weight is a "
+            "regulatory determination about the exposure, and the directive does not "
+            "license one from a product label (a residential mortgage is 35% only where "
+            "loan-to-value and six further conditions hold, 100% otherwise). Map these "
+            f"products to a recognised regulatory category at ingestion: "
+            f"{_shown(sorted(unknown[declared]))}."
         )
     return loans
 
 
+#: Matches the four-digit chart code inside an account code, so the documented
+#: numeric chart convention (1x = assets, 12xx = securities, 13xx = the loan
+#: book, 21xx = interbank borrowings, …) reads the same whether the source
+#: system emits ``1201`` or ``GL-1200``. Charts that do not use the convention
+#: at all are classified by account NAME, which is the only tenant-neutral
+#: signal left. Neither branch hardcodes a tenant's chart.
+_CHART_CODE_RE = re.compile(r"\d{4}")
+
+
+def _chart_code(code: str) -> int | None:
+    """The four-digit chart code inside ``code``, or ``None``."""
+    match = _CHART_CODE_RE.search(code)
+    return int(match.group(0)) if match else None
+
+
+def _in_block(code: str, low: int, high: int) -> bool:
+    chart = _chart_code(code)
+    return chart is not None and low <= chart <= high
+
+
+@dataclass(frozen=True)
+class _GlCoverage:
+    """Which GL blocks the sub-ledger actually stands in for.
+
+    A GL account is replaced by a position aggregate ONLY when the sub-ledger
+    genuinely carries positions of the covering type. Without the gate, a bank
+    that keeps a block in the GL but has not ingested the matching sub-ledger
+    silently loses the balance — which is how the SDI's ``GL-2400 Borrowings``
+    would vanish, and the mirror image of how its ``GL-1200`` was counted twice.
+    """
+
+    securities: bool
+    loans: bool
+    interbank_placements: bool
+    deposits: bool
+    interbank_borrowings: bool
+
+
+def _gl_coverage(canonical: _Canonical) -> _GlCoverage:
+    return _GlCoverage(
+        securities=bool(canonical.by_type("SECURITY_HOLDING")),
+        loans=bool(canonical.by_type("LOAN")),
+        interbank_placements=bool(canonical.by_type("INTERBANK_PLACEMENT")),
+        deposits=bool(canonical.by_type("DEPOSIT")),
+        interbank_borrowings=bool(canonical.by_type("INTERBANK_BORROWING")),
+    )
+
+
 def _classify_gl_assets(
-    canonical: _Canonical, warnings: list[str]
+    canonical: _Canonical, coverage: _GlCoverage, warnings: list[str]
 ) -> tuple[dict[str, Decimal], Decimal]:
-    """Classify leaf ASSET GLs → (cash rows by category, other-assets residual)."""
+    """Classify leaf ASSET GLs → (cash rows by category, other-assets residual).
+
+    Every ASSET account lands in exactly one place: a cash line, a sub-ledger
+    line that stands in for it, or the ``other_assets`` residual. Nothing is
+    dropped on the floor — a block is skipped only when ``coverage`` says a
+    position aggregate is genuinely carrying it.
+
+    Central-bank balances are identified by the numeric chart convention first
+    (``1003``) and, for charts that do not use it, by the bank's OWN central-bank
+    name forms from the jurisdiction registry (``canonical.central_bank_names``).
+    The pre-fix test was the literal token ``"bog"``, so an institution whose
+    chart spells the central bank out — the SDI's ``GL-1020 "Balances with Bank
+    of Ghana"`` — fell through to ``other_assets``, understating high-quality
+    liquid assets by the whole central-bank balance (NEW-40). ``"bill"`` still
+    excludes central-bank BILLS: those are securities, not a settlement balance.
+
+    The ``bog_*`` keys are historical fact-category identifiers kept for wire and
+    database stability (the same reason the ``refinitiv`` vendor id survives its
+    rebrand). They mean "central-bank required/excess reserves" for every
+    jurisdiction and carry no country claim.
+    """
     cash = {"cash_vault": _ZERO, "bog_required_reserves": _ZERO, "bog_excess_reserves": _ZERO}
     other = _ZERO
     have_reserve_split = False
@@ -888,16 +1552,27 @@ def _classify_gl_assets(
         balance = _dec(account.balance)
         name = account.name.lower()
         code = account.account_code.strip()
-        if code == "1001" or ("cash" in name and "flow" not in name):
+        if _chart_code(code) == 1001 or ("cash" in name and "flow" not in name):
             cash["cash_vault"] += balance
-        elif code == "1002" or "statutory" in name or "required" in name:
+        elif _chart_code(code) == 1002 or "statutory" in name or "required" in name:
             cash["bog_required_reserves"] += balance
             have_reserve_split = True
-        elif code == "1003" or (("bog" in name or "central bank" in name) and "bill" not in name):
+        elif _chart_code(code) == 1003 or (
+            canonical.central_bank_names.matches(name) and "bill" not in name
+        ):
             cash["bog_excess_reserves"] += balance
             have_reserve_split = True
-        elif _is_securities_gl(code, name) or _is_loan_gl(code, name):
-            continue  # covered by position-level lines
+        elif _is_loan_loss_allowance_gl(code, name):
+            # A credit-balance contra inside the asset side. No position line
+            # carries it (the loan sub-ledger is gross), so it stays here: total
+            # assets are stated net of impairment, as the ledger states them.
+            other += balance
+        elif coverage.securities and _is_securities_gl(code, name):
+            continue  # covered by SECURITY_HOLDING positions
+        elif coverage.loans and _is_loan_gl(code, name):
+            continue  # covered by LOAN positions
+        elif coverage.interbank_placements and _is_interbank_placement_gl(code, name):
+            continue  # covered by INTERBANK_PLACEMENT positions
         else:
             other += balance
     if (
@@ -911,16 +1586,161 @@ def _classify_gl_assets(
     return cash, other
 
 
+def _classify_gl_funding(
+    canonical: _Canonical, coverage: _GlCoverage, warnings: list[str]
+) -> tuple[Decimal, Decimal, list[tuple[str, str, Decimal]]]:
+    """Classify LIABILITY + EQUITY GLs the same way the asset side is classified.
+
+    The pre-fix derivation never read a GL liability or equity account at all:
+    the asset side was GL-plus-positions while the funding side was
+    positions-plus-the-regulatory-capital-register, so the identity compared two
+    different books. This is the mirror of :func:`_classify_gl_assets`.
+
+    Returns ``(uncovered borrowings, GL equity, unreconciled liabilities)``.
+    """
+    uncovered_borrowings = _ZERO
+    gl_equity = _ZERO
+    unreconciled: list[tuple[str, str, Decimal]] = []
+    for account in canonical.gl_accounts:
+        if account.balance is None:
+            continue
+        balance = _dec(account.balance)
+        name = account.name.lower()
+        code = account.account_code.strip()
+        if account.account_class == "EQUITY":
+            gl_equity += balance
+            continue
+        if account.account_class != "LIABILITY":
+            continue  # INCOME / EXPENSE are not balance-sheet lines
+        if _is_deposit_gl(code, name):
+            if coverage.deposits:
+                continue  # covered by DEPOSIT positions
+            # A deposit block with no sub-ledger cannot be split stable /
+            # less-stable / operational, and every deposit fact category
+            # demands that split. Naming it beats inventing one.
+            if balance != _ZERO:
+                unreconciled.append((account.account_code, account.name, balance))
+            continue
+        if coverage.interbank_borrowings and _is_interbank_borrowing_gl(code, name):
+            continue  # covered by INTERBANK_BORROWING positions
+        if _is_borrowing_gl(code, name):
+            uncovered_borrowings += balance
+            continue
+        if balance != _ZERO:
+            unreconciled.append((account.account_code, account.name, balance))
+    if unreconciled:
+        # NOT bucketed anywhere. Payables, accruals and sundry provisions have
+        # no honest home in the balance-sheet fact taxonomy, and guessing one
+        # would put a number on a regulatory return that nobody chose. They are
+        # named here and left to show up in the identity gap, which is exactly
+        # what the fail-closed control exists to surface.
+        listed = ", ".join(
+            f"{code} {name} ({money(amount)} {canonical.base_currency})"
+            for code, name, amount in unreconciled
+        )
+        warnings.append(
+            f"{len(unreconciled)} GL liability account(s) are carried by no derived "
+            f"balance-sheet line and are therefore absent from funding: {listed}. They widen "
+            "the balance-sheet identity gap until the matching sub-ledger is ingested or the "
+            "accounts are mapped."
+        )
+    return uncovered_borrowings, gl_equity, unreconciled
+
+
+def _warn_carried_forward_gl(canonical: _Canonical, warnings: list[str]) -> None:
+    """Say which GL balances are older than the chart they are reported under.
+
+    ``_resolve_gl_chart`` carries a charted account's last reported balance
+    forward, which is right — sparse reporting is legitimate. It becomes a
+    silent substitution the moment nobody is told. On the primary's Sample Bank
+    the whole 2026-06-30 chart refresh landed with NULL balances, so every
+    single 2026-06-30 GL figure is in fact the 2026-05-31 balance; that has to
+    be visible on the derivation, not inferred from a database query.
+    """
+    if canonical.gl_retired:
+        listed = ", ".join(
+            f"{code} {name} ({money(balance)} {canonical.base_currency})"
+            for code, name, balance in canonical.gl_retired
+        )
+        warnings.append(
+            f"{len(canonical.gl_retired)} GL account code(s) are absent from the chart of "
+            "accounts in force and were NOT carried forward into this book: "
+            f"{listed}. Re-report them if they are still live."
+        )
+    chart_as_of = canonical.gl_chart_as_of
+    if chart_as_of is None:
+        return
+    stale = [account for account in canonical.gl_accounts if account.as_of_date < chart_as_of]
+    if not stale:
+        return
+    oldest = min(account.as_of_date for account in stale)
+    codes = ", ".join(sorted(account.account_code for account in stale)[:12])
+    more = "" if len(stale) <= 12 else f", +{len(stale) - 12} more"  # noqa: PLR2004
+    warnings.append(
+        f"{len(stale)} of {len(canonical.gl_accounts)} GL account balances are carried forward "
+        f"from an earlier reporting date (oldest {oldest.isoformat()}) into the "
+        f"{chart_as_of.isoformat()} chart of accounts, because the newer generation reported no "
+        f"balance for them: {codes}{more}."
+    )
+
+
+#: Name tokens that identify an impairment / loan-loss contra account. Checked
+#: BEFORE the loan-block test, because such an account sits inside the loan code
+#: block on most charts yet is not carried by the (gross) loan sub-ledger.
+_ALLOWANCE_NAME_TOKENS = ("provision", "impairment", "allowance", "contra", "write-off")
+
+
+def _is_loan_loss_allowance_gl(code: str, name: str) -> bool:
+    del code  # named by convention, never by code block
+    return any(token in name for token in _ALLOWANCE_NAME_TOKENS)
+
+
 def _is_securities_gl(code: str, name: str) -> bool:
-    if code.isdigit() and 1200 <= int(code) <= 1299:
+    if _in_block(code, 1200, 1299):
         return True
-    return "t-bill" in name or "tbill" in name or "bond" in name
+    return any(
+        token in name for token in ("t-bill", "tbill", "treasury bill", "bond", "securit", "gilt")
+    )
 
 
 def _is_loan_gl(code: str, name: str) -> bool:
-    if code.isdigit() and 1300 <= int(code) <= 1399:
+    if _is_loan_loss_allowance_gl(code, name):
+        return False
+    if _in_block(code, 1300, 1399):
         return True
-    return "loan" in name or "mortgage" in name
+    return any(token in name for token in ("loan", "mortgage", "advance"))
+
+
+def _is_interbank_placement_gl(code: str, name: str) -> bool:
+    if _in_block(code, 1100, 1199):
+        return True
+    return any(token in name for token in ("interbank", "placement", "due from bank"))
+
+
+def _is_deposit_gl(code: str, name: str) -> bool:
+    if _in_block(code, 2000, 2099):
+        return True
+    return "deposit" in name
+
+
+def _is_interbank_borrowing_gl(code: str, name: str) -> bool:
+    """The interbank block — the only borrowings INTERBANK_BORROWING covers."""
+    if _in_block(code, 2100, 2199):
+        return True
+    return any(token in name for token in ("interbank", "due to bank", "repo", "money market"))
+
+
+def _is_borrowing_gl(code: str, name: str) -> bool:
+    """Borrowed funding of any kind, interbank or not.
+
+    Subordinated debt and term loans from development banks are borrowed money
+    on the balance sheet but are NOT interbank placements, so they are never
+    covered by the interbank sub-ledger. Treating them as covered dropped real
+    funding off the sheet — on the primary that was 33.9m of Tier 2 debt.
+    """
+    if _is_interbank_borrowing_gl(code, name):
+        return True
+    return any(token in name for token in ("borrow", "debt", "note issued", "bond issued"))
 
 
 def _is_retail_deposit_product(row: _PositionRow) -> bool:
@@ -983,25 +1803,29 @@ def _split_deposits(canonical: _Canonical, warnings: list[str]) -> _DepositSplit
     stability = _stability_by_product(canonical)
     split = _DepositSplit()
     missing_retail: set[str] = set()
-    for row in canonical.by_type("DEPOSIT"):
+    deposits = canonical.by_type("DEPOSIT")
+    for row, balance in _stated(deposits):
         product_code = row.product_code or "<no-product>"
         share = stability.get(product_code)
         if _is_retail_deposit_product(row):
             if share is None:
                 missing_retail.add(product_code)
                 share = _ZERO  # conservative: all less-stable
-            stable = row.balance_ghs * share
+            stable = balance * share
             split.retail_stable += stable
-            split.retail_less_stable += row.balance_ghs - stable
+            split.retail_less_stable += balance - stable
         else:
             is_term = row.contractual_maturity is not None
             if is_term:
-                split.wholesale_non_op_corporate += row.balance_ghs
+                split.wholesale_non_op_corporate += balance
             else:
                 operational_share = share if share is not None else _ZERO
-                operational = row.balance_ghs * operational_share
+                operational = balance * operational_share
                 split.wholesale_operational += operational
-                split.wholesale_non_op_sme += row.balance_ghs - operational
+                split.wholesale_non_op_sme += balance - operational
+    unconverted = _Unconverted.over(deposits)
+    if unconverted:
+        warnings.append(unconverted.note("DEPOSIT positions", canonical.base_currency))
     if missing_retail:
         warnings.append(
             "Retail deposit products without a DEPOSIT_STABILITY assumption were "
@@ -1010,46 +1834,121 @@ def _split_deposits(canonical: _Canonical, warnings: list[str]) -> _DepositSplit
     return split
 
 
-def _derive_balance_sheet_block(
-    canonical: _Canonical, groups: list[GroupResult]
-) -> tuple[list[_FactSpec], list[_LoanRow], dict[str, Decimal], tuple[Decimal, Decimal]]:
+def _derive_balance_sheet_block(  # noqa: PLR0912, PLR0915 - one linear balance-sheet assembly
+    canonical: _Canonical, groups: list[GroupResult], *, live: bool = False
+) -> tuple[
+    list[_FactSpec],
+    list[_LoanRow],
+    dict[str, Decimal],
+    _SecuritiesSplit,
+    reconciliation.BalanceIdentityOutcome,
+]:
     warnings: list[str] = []
+    coverage = _gl_coverage(canonical)
     loan_rows = _classify_loans(canonical, warnings)
-    cash, gl_other_assets = _classify_gl_assets(canonical, warnings)
+    cash, gl_other_assets = _classify_gl_assets(canonical, coverage, warnings)
+    uncovered_borrowings, gl_equity, _unreconciled = _classify_gl_funding(
+        canonical, coverage, warnings
+    )
+    _warn_carried_forward_gl(canonical, warnings)
     deposit_split = _split_deposits(canonical, warnings)
 
-    bills = _ZERO
-    bonds = _ZERO
-    for row in canonical.by_type("SECURITY_HOLDING"):
-        if _is_bill(row, canonical.as_of):
-            bills += row.balance_ghs
-        else:
-            bonds += row.balance_ghs
-    loans_gross = sum((loan.row.balance_ghs for loan in loan_rows), _ZERO)
+    securities, non_sovereign_securities = _split_securities(canonical, warnings)
+    bills, bonds = securities.bills, securities.bonds
+    loan_positions = [loan.row for loan in loan_rows]
+    loans_gross = sum((amount for _, amount in _stated(loan_positions)), _ZERO)
+    # Interbank: ONE source per leg, and the same source for both. The borrowing
+    # leg has always come from the sub-ledger; the placement leg was counted in
+    # neither the GL (the GL rows were the residual) nor the positions, so the
+    # liability leg stood alone. Both legs are now the sub-ledger where it
+    # exists, and ``_classify_gl_assets`` skips the GL placement block under the
+    # same coverage gate so nothing is counted twice.
+    placements = canonical.by_type("INTERBANK_PLACEMENT")
+    interbank_placements = sum((amount for _, amount in _stated(placements)), _ZERO)
 
     secured_funding = _ZERO
     term_borrowings = _ZERO
     one_year_out = canonical.as_of + timedelta(days=365)
-    for row in canonical.by_type("INTERBANK_BORROWING"):
+    borrowings = canonical.by_type("INTERBANK_BORROWING")
+    for row, amount in _stated(borrowings):
         if row.contractual_maturity is not None and row.contractual_maturity > one_year_out:
-            term_borrowings += row.balance_ghs
+            term_borrowings += amount
         else:
-            secured_funding += row.balance_ghs
-
-    capital_total = sum(
-        (
-            _dec(payload.get("amount_ghs"), _ZERO)
-            for payload in canonical.refs.get("capital_structure", ())
-        ),
-        _ZERO,
-    )
-    if capital_total == _ZERO:
+            secured_funding += amount
+    # Every balance-sheet asset and liability line above is a total over STATED
+    # amounts only. Whatever it left out is named here rather than silently
+    # absorbed, because the identity control downstream measures assets against
+    # liabilities and an unexplained gap is indistinguishable from a bad book.
+    for subject, rows in (
+        ("LOAN positions", loan_positions),
+        ("INTERBANK_PLACEMENT positions", placements),
+        ("INTERBANK_BORROWING positions", borrowings),
+    ):
+        unconverted = _Unconverted.over(rows)
+        if unconverted:
+            warnings.append(unconverted.note(subject, canonical.base_currency))
+    secured_funding_note = "INTERBANK_BORROWING ≤ 1y"
+    if uncovered_borrowings != _ZERO:
+        # A GL borrowing block with no sub-ledger behind it. The AMOUNT is the
+        # ledger's, not invented; only the tenor bucket is assigned, and it is
+        # assigned by the rule this very function already applies to a borrowing
+        # position with no contractual maturity — the ≤ 1y bucket, which is the
+        # conservative side for NSFR available stable funding.
+        secured_funding += uncovered_borrowings
+        secured_funding_note += "; GL borrowings with no sub-ledger, bucketed ≤ 1y (no tenor)"
         warnings.append(
-            "No capital_structure reference rows were found; capital_total is zero and "
-            "capital-dependent modules will fail until capital data is ingested."
+            f"{money(uncovered_borrowings)} {canonical.base_currency} of GL borrowings carry no "
+            "matching sub-ledger positions and no tenor; they are carried in secured_funding_l1 "
+            "(the ≤ 1y bucket applied to any borrowing without a contractual maturity). Ingest "
+            "the borrowing sub-ledger to bucket them by their real maturity."
         )
 
-    other_assets = gl_other_assets
+    capital_rows = list(canonical.refs.get("capital_structure", ()))
+    capital_amounts = [_dec_or_none(payload.get("amount_ghs")) for payload in capital_rows]
+    capital_register_total = sum(
+        (amount for amount in capital_amounts if amount is not None), _ZERO
+    )
+    missing_capital_amounts = sum(1 for amount in capital_amounts if amount is None)
+    if missing_capital_amounts:
+        # A capital_structure row with no amount contributes nothing here and is
+        # already skipped by _derive_capital_components. Say so: it is a real
+        # shortfall in equity, and the balance-sheet identity control below is
+        # what stops it from being plugged away in silence.
+        warnings.append(
+            f"{missing_capital_amounts} capital_structure row(s) carry no amount_ghs and "
+            "contribute nothing to the capital components. Regulatory capital is understated "
+            "by whatever they hold."
+        )
+    # ``capital_total`` is the balance sheet's EQUITY line, so it is the ledger's
+    # equity. ``capital_structure`` is the REGULATORY CAPITAL register — it
+    # carries Tier 2 subordinated debt (a liability) and regulatory deductions
+    # (goodwill, DTA), which is why it was the wrong source: the identity was
+    # measuring accounting assets against regulatory capital. The register keeps
+    # its real job, the ``capital_component`` facts, untouched.
+    has_gl_equity = any(
+        account.account_class == "EQUITY" and account.balance is not None
+        for account in canonical.gl_accounts
+    )
+    if has_gl_equity:
+        capital_total = gl_equity
+        capital_note = "GL equity accounts"
+    else:
+        capital_total = capital_register_total
+        capital_note = "capital_structure Σ signed amounts (no GL equity accounts ingested)"
+        if capital_rows:
+            warnings.append(
+                "No GL equity accounts were ingested, so the balance sheet's equity line falls "
+                "back to the regulatory capital register, which includes Tier 2 instruments and "
+                "regulatory deductions. Ingest the GL equity block for an accounting equity."
+            )
+    if capital_total == _ZERO:
+        warnings.append(
+            "Neither GL equity accounts nor capital_structure reference rows were found; "
+            "capital_total is zero and capital-dependent modules will fail until capital data "
+            "is ingested."
+        )
+
+    other_assets = gl_other_assets + non_sovereign_securities + interbank_placements
     assets_total = sum(cash.values(), _ZERO) + bills + bonds + loans_gross + other_assets
     funding_total = (
         deposit_split.retail_stable
@@ -1061,31 +1960,64 @@ def _derive_balance_sheet_block(
         + term_borrowings
         + capital_total
     )
-    gap = funding_total - assets_total
+    # The governed balance-sheet identity control (audit P0-10). The gap is no
+    # longer plugged unconditionally: it is plugged only within the governed
+    # tolerance or under an approved, effective-dated exception, and the plug is
+    # always recorded in provenance. Anything else refuses to derive.
+    identity, plug, plug_target = canonical.reconciliation.evaluate_balance_identity(
+        assets_total, funding_total, plug_when_blocked=live
+    )
+    gap = identity.gap
     plug_note: str | None = None
-    if gap > 0:
-        other_assets += gap
-        plug_note = f"balance plug +{money(gap)} {canonical.base_currency} added to other_assets"
-    elif gap < 0:
-        term_borrowings += -gap
+    if plug != _ZERO and plug_target == "other_assets":
+        other_assets += plug
+        plug_note = f"balance plug +{money(plug)} {canonical.base_currency} added to other_assets"
+    elif plug != _ZERO and plug_target == "term_borrowings_gt_1y":
+        term_borrowings += plug
         plug_note = (
-            f"balance plug +{money(-gap)} {canonical.base_currency} added to term_borrowings_gt_1y"
+            f"balance plug +{money(plug)} {canonical.base_currency} added to term_borrowings_gt_1y"
         )
-    if assets_total > 0 and abs(gap) > assets_total * BALANCE_GAP_WARN_FRACTION:
-        warnings.append(
+    if plug_note is not None:
+        # Every plug is reported, at ANY size. The pre-audit code warned only
+        # above 0.5% of assets, so a sub-threshold plug was entirely invisible.
+        gap_pct = (identity.gap_fraction * _HUNDRED).quantize(Decimal("0.0001"))
+        head = (
             f"Balance-sheet identity gap of {money(abs(gap))} {canonical.base_currency} "
-            f"({(abs(gap) / assets_total * _HUNDRED).quantize(Decimal('0.01'))}% of assets) "
-            f"was plugged ({plug_note}). Uploaded GL and sub-ledgers do not fully "
-            "reconcile — review the reconciliation report."
+            f"({gap_pct}% of assets) was plugged ({plug_note})"
         )
+        if identity.within_tolerance:
+            warnings.append(
+                f"{head}; within the governed tolerance of "
+                f"{identity.tolerance.percent}% ({identity.tolerance.source})."
+            )
+        elif identity.exception_applied and identity.exception is not None:
+            warnings.append(
+                f"{head}. It EXCEEDS the governed tolerance of "
+                f"{identity.tolerance.percent}% ({identity.tolerance.source}) and is "
+                "permitted only by approved reconciliation exception "
+                f"{identity.exception.exception_id}. The general ledger and sub-ledgers "
+                "do not reconcile."
+            )
+        else:
+            # Live plane only: the official plane never reaches here — it raises.
+            warnings.append(
+                f"{head} FOR THE LIVE VIEW ONLY. The gap exceeds the governed tolerance "
+                f"of {identity.tolerance.percent}% ({identity.tolerance.source}) with no "
+                "approved exception, so nothing derived from this book may be filed."
+            )
 
     def bs(category: str, amount: Decimal, side: str, derived_from: str) -> _FactSpec:
+        attributes: dict[str, Any] = {"side": side}
+        if plug_target == category and plug != _ZERO:
+            # The plug is never invisible: the receiving line carries the full
+            # control record (gap, tolerance, tolerance source, exception).
+            attributes["reconciliation"] = identity.provenance()
         return _FactSpec(
             fact_group="balance_sheet",
             category=category,
             amount=amount,
             derived_from=derived_from,
-            attributes={"side": side},
+            attributes=attributes,
         )
 
     specs = [
@@ -1101,8 +2033,8 @@ def _derive_balance_sheet_block(
             "other_assets",
             other_assets,
             "asset",
-            "GL asset residual (placements, fixed and sundry assets)"
-            + (f"; {plug_note}" if plug_note and gap > 0 else ""),
+            "GL asset residual (fixed and sundry assets, impairment contra) + "
+            "INTERBANK_PLACEMENT positions" + (f"; {plug_note}" if plug_note and gap > 0 else ""),
         ),
         bs(
             "retail_deposits_stable",
@@ -1134,19 +2066,291 @@ def _derive_balance_sheet_block(
             "liability",
             "wholesale term DEPOSIT positions",
         ),
-        bs("secured_funding_l1", secured_funding, "liability", "INTERBANK_BORROWING ≤ 1y"),
+        bs("secured_funding_l1", secured_funding, "liability", secured_funding_note),
         bs(
             "term_borrowings_gt_1y",
             term_borrowings,
             "liability",
             "INTERBANK_BORROWING > 1y" + (f"; {plug_note}" if plug_note and gap < 0 else ""),
         ),
-        bs("capital_total", capital_total, "equity", "capital_structure Σ signed amounts"),
+        bs("capital_total", capital_total, "equity", capital_note),
     ]
+    if identity.blocks_filing:
+        warnings.append(identity.message(canonical.base_currency))
+    # The diagnosis follows the verdict: the identity control can only say the
+    # book is out by x%, and the commonest reason it is out by a LOT is that two
+    # source systems each pushed a complete book. Reported at any identity
+    # verdict — a duplicated book that happens to balance is still double
+    # counted — and it never changes a figure or a gate.
+    if canonical.source_overlap is not None:
+        overlap_message = canonical.source_overlap.message(canonical.base_currency)
+        if overlap_message is not None:
+            warnings.append(overlap_message)
     groups.append(
         GroupResult(group="balance_sheet", status="derived", rows=len(specs), warnings=warnings)
     )
-    return specs, loan_rows, cash, (bills, bonds)
+    return specs, loan_rows, cash, securities, identity
+
+
+#: Counterparty types whose paper is sovereign / central-bank issuance, i.e. the
+#: only ``SECURITY_HOLDING`` rows the derivation may emit as Level-1 HQLA at a
+#: 0% risk weight. (Audit §3: every security was emitted L1/RW0 with no issuer
+#: or rating test, so a corporate bond financed the LCR and carried no RWA.)
+_SOVEREIGN_COUNTERPARTY_TYPES = frozenset(
+    {"SOVEREIGN", "CENTRAL_BANK", "GOVERNMENT_ENTITY", "MULTILATERAL_DEV_BANK"}
+)
+#: Documented ``attributes.instrument`` values (docs/API_INTEGRATION.md §3.4)
+#: that name sovereign or central-bank paper.
+_SOVEREIGN_INSTRUMENTS = frozenset(
+    {
+        "tbill",
+        "tbill_other",
+        "gog_bond",
+        "gog_bond_other",
+        "gog_stock",
+        "ggilb",
+        "bog_bill",
+        "bog_bond",
+        "bog_bond_other",
+        "bog_other",
+        "tor_bond",
+        "finsap_bond",
+        "cocoa_bill",
+        "grains_bill",
+        "cotton_bill",
+    }
+)
+#: Product-code tokens that name sovereign / central-bank paper directly. The
+#: pre-audit ``_is_bill`` split already keyed on this vocabulary to decide
+#: ``securities_bog_bills`` vs ``securities_gog_bonds``.
+_SOVEREIGN_PRODUCT_TOKENS = (
+    "TBILL",
+    "T-BILL",
+    "GOG",
+    "GOVT",
+    "GOVERNMENT",
+    "TREASURY",
+    "SOVEREIGN",
+)
+
+
+def _is_sovereign_security(row: _PositionRow, sovereign_names: tuple[str, ...]) -> bool:
+    """Positive evidence that this holding is sovereign / central-bank paper.
+
+    Fail-closed by construction: absence of every signal below means the paper
+    is NOT recognised as Level-1 HQLA and NOT risk-weighted at 0%. Each signal
+    is ingested data, never an inference from a missing field:
+
+    * the typed ``counterparty_type`` (SOVEREIGN / CENTRAL_BANK / …);
+    * ``attributes.instrument`` from the documented BoG instrument vocabulary;
+    * ``attributes.issuer_class``, documented as GOVERNMENT_ENTITY-only;
+    * a product code naming sovereign paper (TBILL / GOG / TREASURY / …);
+    * an ``attributes.issuer`` naming the jurisdiction's sovereign or central
+      bank, resolved from the jurisdictions registry — never a literal country.
+    """
+    if (row.counterparty_type or "").upper() in _SOVEREIGN_COUNTERPARTY_TYPES:
+        return True
+    attributes = row.attributes or {}
+    if str(attributes.get("instrument") or "").strip().lower() in _SOVEREIGN_INSTRUMENTS:
+        return True
+    if attributes.get("issuer_class"):
+        return True
+    code = f"{row.product_code or ''} {row.regulatory_category or ''}".upper()
+    if any(token in code for token in _SOVEREIGN_PRODUCT_TOKENS):
+        return True
+    issuer = str(attributes.get("issuer") or "").strip().lower()
+    if not issuer:
+        return False
+    return any(name in issuer for name in sovereign_names)
+
+
+#: The Basel HQLA levels this derivation may emit. Mirrors
+#: ``app.domain.liquidity.engine.HQLA_LEVELS``; a value outside it raises
+#: ``UnclassifiedHqlaError`` there rather than being counted at face value.
+_HQLA_LEVELS = ("L1", "L2A", "L2B")
+
+#: Issuers whose paper is public-sector or multilateral rather than the
+#: sovereign/central bank itself. BCBS 238 makes their tier turn ENTIRELY on the
+#: Basel II standardised risk weight of the claim — 0% is Level 1 (¶50(c)), 20%
+#: is Level 2A (¶52(a)) — and the canonical book carries no per-issuer risk
+#: weight for a security. Neither tier can therefore be established from the
+#: data, so these are excluded from HQLA unless the bank ingests its own
+#: determination in ``attributes.hqla_level``.
+_PUBLIC_SECTOR_COUNTERPARTY_TYPES = frozenset({"GOVERNMENT_ENTITY", "MULTILATERAL_DEV_BANK"})
+
+
+@dataclass(frozen=True)
+class _SecuritiesSplit:
+    """The SECURITY_HOLDING book split for the balance sheet AND for HQLA.
+
+    ``bills``/``bonds`` are the balance-sheet lines and keep their historical
+    meaning (every sovereign holding, whatever its liquidity tier). The
+    remaining fields partition that same total by established Basel HQLA level,
+    so ``l1_bills + l1_bonds + level2a + level2b + unclassified == bills + bonds``
+    by construction — the securities fact group still ties to the balance-sheet
+    securities lines.
+    """
+
+    bills: Decimal
+    bonds: Decimal
+    l1_bills: Decimal
+    l1_bonds: Decimal
+    level2a: Decimal
+    level2b: Decimal
+    unclassified: Decimal
+    #: (reason, amount, example source references) for every excluded bucket.
+    exclusions: tuple[tuple[str, Decimal, tuple[str, ...]], ...] = ()
+
+
+def _classify_security_hqla(row: _PositionRow, canonical: _Canonical) -> tuple[str | None, str]:
+    """The Basel HQLA level of one sovereign-bucket holding, or why there is none.
+
+    Fail-closed by construction (forensic re-audit 2026-08-22 D-6). Until then
+    every one of the four emission sites in ``_derive_securities`` stamped a
+    literal ``"L1"``, so no Level-2 fact could exist: the haircut schedule, the
+    40% Level-2 cap and the 15% Level-2B sub-cap built for enterprise audit P0-8
+    were unreachable code, and their governed parameters never entered
+    ``input_hash``. L1 is also the most favourable tier there is (0% haircut, no
+    cap), so the literal was a silent grant, not a neutral default.
+
+    Evidence, in order. Every branch is READ, never inferred:
+
+    1. ``attributes.hqla_level`` — the bank's OWN Basel determination, the same
+       thing it maintains for its LCR return. Documented in
+       docs/API_INTEGRATION.md §3.4. Validated against the Basel taxonomy: a
+       value outside it excludes the holding rather than defaulting to L1.
+    2. Public-sector / multilateral issuance → excluded. See
+       :data:`_PUBLIC_SECTOR_COUNTERPARTY_TYPES` for why neither tier is
+       establishable.
+    3. Sovereign or central-bank paper in a currency OTHER than the bank's own →
+       excluded. BCBS 238 ¶50(c) admits it at Level 1 only on a 0% risk weight,
+       and ¶50(e) only up to the bank's stressed net outflows in that same
+       currency. The book carries neither the risk weight nor a per-currency
+       outflow attribution, so the tier cannot be established.
+    4. Sovereign or central-bank paper in the bank's own reporting currency →
+       Level 1 (BCBS 238 ¶50(d)-(e)). This is the domestic-sovereign case, and
+       the only one the data settles on its own.
+
+    What this deliberately does NOT do is infer Level 2A/2B from an issuer
+    rating. BCBS 238 ¶52(b)/¶54(a) require, beyond the rating, that the paper is
+    not issued by a financial institution AND has a proven record as a reliable
+    source of liquidity in deep, active markets. The canonical book establishes
+    the first and not the second, so a rating-driven tier would be a modelling
+    claim wearing a citation. Non-sovereign paper therefore keeps its existing
+    treatment (``other_assets``, no HQLA credit) until the bank classifies it.
+    """
+    attributes = row.attributes or {}
+    declared = str(attributes.get("hqla_level") or "").strip().upper()
+    if declared:
+        if declared in _HQLA_LEVELS:
+            return declared, "ingested attributes.hqla_level"
+        return None, (
+            f"attributes.hqla_level {declared!r} is not one of {_HQLA_LEVELS}; an "
+            "unrecognised level is not Level 1"
+        )
+    if (row.counterparty_type or "").upper() in _PUBLIC_SECTOR_COUNTERPARTY_TYPES or attributes.get(
+        "issuer_class"
+    ):
+        return None, (
+            "public-sector or multilateral issuance whose Basel risk weight the book "
+            "does not carry, so BCBS 238 ¶50(c) Level 1 and ¶52(a) Level 2A cannot be "
+            "told apart (send attributes.hqla_level to classify it)"
+        )
+    if (row.currency or "").upper() != (canonical.base_currency or "").upper():
+        return None, (
+            f"sovereign or central-bank paper denominated in {row.currency}, not the "
+            f"bank's own {canonical.base_currency}; BCBS 238 ¶50(c) needs the issuer's "
+            "0% risk weight and ¶50(e) needs the stressed net outflow in that same "
+            "currency, neither of which the book carries (send attributes.hqla_level "
+            "to classify it)"
+        )
+    return "L1", "domestic sovereign / central-bank paper in the reporting currency"
+
+
+def _split_securities(
+    canonical: _Canonical, warnings: list[str]
+) -> tuple[_SecuritiesSplit, Decimal]:
+    """The SECURITY_HOLDING book split for the balance sheet and for HQLA.
+
+    Two independent tests, in this order:
+
+    1. **Is it sovereign paper?** ``_is_sovereign_security``. Non-sovereign
+       holdings leave the ``securities_bog_bills`` / ``securities_gog_bonds``
+       lines — which the capital engine zero-weights — and land in
+       ``other_assets`` (RW100, no HQLA credit) with a warning naming them. The
+       balance-sheet total is unchanged; only the claim about what the paper IS
+       changes.
+    2. **What HQLA level is it?** ``_classify_security_hqla``, applied only
+       WITHIN the sovereign bucket, so this test can demote a holding out of
+       Level 1 but can never promote non-sovereign paper into HQLA. The
+       balance sheet, the risk weights and therefore capital are untouched by
+       it: it decides only which securities fact carries which
+       ``hqla_level``.
+    """
+    bills = _ZERO
+    bonds = _ZERO
+    non_sovereign = _ZERO
+    unsourced: list[str] = []
+    l1_bills = _ZERO
+    l1_bonds = _ZERO
+    by_level: dict[str, Decimal] = {"L2A": _ZERO, "L2B": _ZERO}
+    excluded: dict[str, tuple[Decimal, list[str]]] = {}
+    holdings = canonical.by_type("SECURITY_HOLDING")
+    for row, balance in _stated(holdings):
+        if not _is_sovereign_security(row, canonical.sovereign_issuer_names):
+            non_sovereign += balance
+            unsourced.append(row.source_reference)
+            continue
+        is_bill = _is_bill(row, canonical.as_of)
+        if is_bill:
+            bills += balance
+        else:
+            bonds += balance
+        level, basis = _classify_security_hqla(row, canonical)
+        if level == "L1":
+            if is_bill:
+                l1_bills += balance
+            else:
+                l1_bonds += balance
+        elif level is not None:
+            by_level[level] += balance
+        else:
+            amount, refs = excluded.get(basis, (_ZERO, []))
+            excluded[basis] = (amount + balance, [*refs, row.source_reference])
+    securities_unconverted = _Unconverted.over(holdings)
+    if securities_unconverted:
+        warnings.append(
+            securities_unconverted.note("SECURITY_HOLDING positions", canonical.base_currency)
+        )
+    if unsourced:
+        warnings.append(
+            f"{money(non_sovereign)} {canonical.base_currency} of SECURITY_HOLDING positions "
+            "carry no evidence of sovereign or central-bank issuance (counterparty_type, "
+            "attributes.instrument, attributes.issuer_class, a sovereign product code or a "
+            "named sovereign issuer). They are NOT counted as Level-1 HQLA and NOT "
+            f"zero-risk-weighted; they are carried in other_assets: {_shown(unsourced)}."
+        )
+    split = _SecuritiesSplit(
+        bills=bills,
+        bonds=bonds,
+        l1_bills=l1_bills,
+        l1_bonds=l1_bonds,
+        level2a=by_level["L2A"],
+        level2b=by_level["L2B"],
+        unclassified=sum((amount for amount, _ in excluded.values()), _ZERO),
+        exclusions=tuple(
+            (reason, amount, tuple(sorted(refs)))
+            for reason, (amount, refs) in sorted(excluded.items())
+        ),
+    )
+    return split, non_sovereign
+
+
+def _shown(references: Sequence[str], limit: int = 10) -> str:
+    """The first ``limit`` source references, with a count of the rest."""
+    listed = ", ".join(sorted(references)[:limit])
+    more = "" if len(references) <= limit else f" (+{len(references) - limit} more)"
+    return f"{listed}{more}"
 
 
 def _is_bill(row: _PositionRow, as_of: date) -> bool:
@@ -1166,10 +2370,13 @@ def _is_bill(row: _PositionRow, as_of: date) -> bool:
 
 
 def _derive_loan_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -> list[_FactSpec]:
-    totals: dict[str, tuple[Decimal, str]] = {}
+    totals: dict[str, tuple[Decimal, str | None]] = {}
     for loan in loan_rows:
+        balance = loan.row.balance_ghs
+        if balance is None:
+            continue  # no reporting-currency amount to expose; counted upstream
         amount, code = totals.get(loan.category, (_ZERO, loan.risk_weight_code))
-        totals[loan.category] = (amount + loan.row.balance_ghs, code)
+        totals[loan.category] = (amount + balance, code)
     specs = [
         _FactSpec(
             fact_group="loan_exposure",
@@ -1194,10 +2401,11 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
     totals: dict[str, Decimal] = {}
     for loan in loan_rows:
         stage = loan.row.ifrs9_stage
-        if stage is None:
+        balance = loan.row.balance_ghs
+        if stage is None or balance is None:
             continue
         key = f"{loan.category}:stage{stage}"
-        totals[key] = totals.get(key, _ZERO) + loan.row.balance_ghs
+        totals[key] = totals.get(key, _ZERO) + balance
     specs = [
         _FactSpec(
             fact_group="ecl_exposure",
@@ -1209,6 +2417,21 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
     ]
     if specs:
         groups.append(GroupResult(group="ecl_exposure", status="derived", rows=len(specs)))
+    else:
+        # Audit §3 / P0-10 companion: the empty case used to append NO group at
+        # all, so a capital run with no IFRS 9 ECL looked complete. It is now an
+        # explicit NOT_COMPUTABLE state naming what is missing and what the
+        # capital engine falls back to.
+        groups.append(
+            GroupResult(
+                group="ecl_exposure",
+                status="skipped",
+                note="Not computable: no LOAN position carries an ingested IFRS 9 stage, so "
+                "no staged EAD buckets exist. The capital run uses INGESTED provisions "
+                "instead of a modelled ECL — the impairment figure is the bank's own, not "
+                "this platform's.",
+            )
+        )
     return specs
 
 
@@ -1247,31 +2470,52 @@ def _derive_crm_collateral(
     ]
     if specs:
         groups.append(GroupResult(group="crm_collateral", status="derived", rows=len(specs)))
+    else:
+        groups.append(
+            GroupResult(
+                group="crm_collateral",
+                status="skipped",
+                note="Not computable: no LOAN position carries the documented "
+                "crm_collateral_*/crm_guarantee_* attributes, so no credit-risk mitigation "
+                "is recognised. Credit exposures are risk-weighted GROSS of collateral — "
+                "conservative, and never a modelled reduction.",
+            )
+        )
     return specs
 
 
 def _derive_securities(
-    securities_split: tuple[Decimal, Decimal],
+    securities: _SecuritiesSplit,
     cash_amounts: dict[str, Decimal],
     groups: list[GroupResult],
 ) -> list[_FactSpec]:
-    bills, bonds = securities_split
+    """The HQLA stock, one fact per established Basel level.
+
+    Every fact in this group carries the level ``_classify_security_hqla``
+    established from the canonical evidence, and a holding whose level could
+    NOT be established carries ``hqla_level=None`` — which
+    ``liquidity.engine.compute_lcr`` filters out of the HQLA stock entirely
+    (``fact.hqla_level is not None``). It is still emitted, at the same amount
+    and the same risk-weight code, so the group continues to tie to the
+    balance-sheet securities lines and no capital, NSFR or stress figure moves;
+    only the LCR numerator does, and only downwards.
+    """
     specs = [
         _FactSpec(
             fact_group="securities",
             category="bog_bills",
-            amount=bills,
+            amount=securities.l1_bills,
             hqla_level="L1",
             risk_weight_code="RW0",
-            derived_from="SECURITY_HOLDING positions (bills)",
+            derived_from="SECURITY_HOLDING positions (bills), Basel HQLA Level 1",
         ),
         _FactSpec(
             fact_group="securities",
             category="gog_bonds",
-            amount=bonds,
+            amount=securities.l1_bonds,
             hqla_level="L1",
             risk_weight_code="RW0",
-            derived_from="SECURITY_HOLDING positions (bonds)",
+            derived_from="SECURITY_HOLDING positions (bonds), Basel HQLA Level 1",
         ),
         # Cash-derived HQLA mirrors: the liquidity engine recognizes these via
         # attributes.source == "cash" (stress haircuts skip them), so the
@@ -1295,7 +2539,42 @@ def _derive_securities(
             source_tag="cash",
         ),
     ]
-    groups.append(GroupResult(group="securities", status="derived", rows=len(specs)))
+    for level, amount in (("L2A", securities.level2a), ("L2B", securities.level2b)):
+        if amount > _ZERO:
+            specs.append(
+                _FactSpec(
+                    fact_group="securities",
+                    category=f"hqla_level{level[1:].lower()}",
+                    amount=amount,
+                    hqla_level=level,
+                    risk_weight_code="RW0",
+                    derived_from=(
+                        f"SECURITY_HOLDING positions classified Basel HQLA {level} "
+                        "(attributes.hqla_level)"
+                    ),
+                )
+            )
+    warnings: list[str] = []
+    if securities.unclassified > _ZERO:
+        specs.append(
+            _FactSpec(
+                fact_group="securities",
+                category="hqla_unclassified",
+                amount=securities.unclassified,
+                hqla_level=None,
+                risk_weight_code="RW0",
+                derived_from="SECURITY_HOLDING positions with no establishable Basel HQLA level",
+            )
+        )
+    for reason, amount, references in securities.exclusions:
+        warnings.append(
+            f"{money(amount)} of SECURITY_HOLDING positions are EXCLUDED from HQLA: "
+            f"{reason}. They are carried at full value on the balance sheet and are "
+            f"unchanged for capital; they earn no LCR credit: {_shown(references)}."
+        )
+    groups.append(
+        GroupResult(group="securities", status="derived", rows=len(specs), warnings=warnings)
+    )
     return specs
 
 
@@ -1303,8 +2582,17 @@ def _derive_off_balance(canonical: _Canonical, groups: list[GroupResult]) -> lis
     warnings: list[str] = []
     totals: dict[str, tuple[Decimal, Decimal]] = {}  # category -> (Σ notional, Σ notional×ccf)
     missing_ccf = 0
-    for row in canonical.by_type("LC_GUARANTEE"):
+    guarantees = canonical.by_type("LC_GUARANTEE")
+    unstated_notional: list[str] = []
+    for row in guarantees:
         notional = row.notional_ghs if row.notional_ghs > _ZERO else row.balance_ghs
+        if notional is None:
+            # A foreign-currency commitment with neither a reporting-currency
+            # notional nor a reporting-currency balance. Its exposure at default
+            # is unknown; a zero EAD would UNDERSTATE risk-weighted assets, which
+            # is the unsafe direction, so it is excluded and named.
+            unstated_notional.append(row.source_reference)
+            continue
         category = (
             "committed_retail"
             if row.counterparty_type == "RETAIL_INDIVIDUAL"
@@ -1316,6 +2604,14 @@ def _derive_off_balance(canonical: _Canonical, groups: list[GroupResult]) -> lis
             ccf_pct = _DEFAULT_CCF_PCT
         amount, weighted = totals.get(category, (_ZERO, _ZERO))
         totals[category] = (amount + notional, weighted + notional * ccf_pct)
+    if unstated_notional:
+        warnings.append(
+            f"{len(unstated_notional)} off-balance positions carry neither a "
+            f"{canonical.base_currency} notional nor a {canonical.base_currency} balance, so "
+            "their exposure at default cannot be established; they are EXCLUDED from the "
+            "off-balance book rather than counted at zero, which would understate "
+            f"risk-weighted assets: {_shown(unstated_notional)}."
+        )
     if missing_ccf:
         warnings.append(
             f"{missing_ccf} off-balance positions carried no credit_conversion_factor; "
@@ -1360,26 +2656,30 @@ def _derive_lcr_inflows(  # noqa: PLR0912
     if any_loan_maturity:
         for loan in loan_rows:
             maturity = loan.row.contractual_maturity
-            if maturity is None or maturity > window_end:
+            balance = loan.row.balance_ghs
+            if maturity is None or maturity > window_end or balance is None:
                 continue
             if loan.category in _RETAIL_LOAN_CATEGORIES:
-                retail += loan.row.balance_ghs
+                retail += balance
             else:
-                corporate += loan.row.balance_ghs
+                corporate += balance
         derived_from = "LOAN positions maturing within 30 days"
     else:
-        for loan in loan_rows:
-            if loan.category in _RETAIL_LOAN_CATEGORIES:
-                retail += loan.row.balance_ghs * _LCR_FALLBACK_FRACTION
-            else:
-                corporate += loan.row.balance_ghs * _LCR_FALLBACK_FRACTION
+        # Audit §3: this branch booked 2% of GROSS LOANS as a 30-day LCR inflow
+        # on a book with no maturities at all. Inflows reduce net cash outflows,
+        # so an invented inflow RAISES the LCR — the least safe direction for a
+        # substitution. Absence of evidence of a repayment is not a repayment:
+        # the segments book zero and the shortfall is named.
         derived_from = (
-            f"documented fallback: {_LCR_FALLBACK_FRACTION * _HUNDRED}% of gross loan "
-            "balances (no contractual maturities available)"
+            "not computable: no LOAN position carries a contractual maturity, so no "
+            "30-day repayment inflow is evidenced (missing_required_input; booked at "
+            "zero rather than assumed)"
         )
         warnings.append(
-            "No loan positions carry contractual maturities; 30-day loan repayment "
-            f"inflows use the documented {_LCR_FALLBACK_FRACTION * _HUNDRED}% fallback."
+            "No loan positions carry contractual maturities, so 30-day loan repayment "
+            "inflows are NOT COMPUTABLE and are booked at zero. The LCR is understated "
+            "until contractual maturities are ingested — it is never overstated by an "
+            "assumed inflow."
         )
 
     # Expected 30-day prepaid principal (loan-prepayment ML model). Folded into
@@ -1391,9 +2691,10 @@ def _derive_lcr_inflows(  # noqa: PLR0912
     if prepay_rates:
         for loan in loan_rows:
             cpr = prepay_rates.get(loan.row.product_code or "")
-            if cpr is None:
+            balance = loan.row.balance_ghs
+            if cpr is None or balance is None:
                 continue
-            expected = _expected_prepaid_30d(loan.row.balance_ghs, cpr)
+            expected = _expected_prepaid_30d(balance, cpr)
             prepaid_total += expected
             if loan.category in _RETAIL_LOAN_CATEGORIES:
                 retail += expected
@@ -1407,8 +2708,8 @@ def _derive_lcr_inflows(  # noqa: PLR0912
 
     interbank = sum(
         (
-            row.balance_ghs
-            for row in canonical.by_type("INTERBANK_PLACEMENT")
+            amount
+            for row, amount in _stated(canonical.by_type("INTERBANK_PLACEMENT"))
             if row.contractual_maturity is not None and row.contractual_maturity <= window_end
         ),
         _ZERO,
@@ -1503,6 +2804,70 @@ def _fx_hedge_deltas(canonical: _Canonical, warnings: list[str]) -> dict[str, De
     return deltas
 
 
+@dataclass
+class _FxLeg:
+    """One currency's on-balance FX book, measured on two different legs.
+
+    The legs are built from DIFFERENT evidence and must not be conflated. The
+    currency leg is each position's own ingested balance in its own currency —
+    always present, never converted, so every position counts. The
+    reporting-currency leg exists only for positions carrying an ingested
+    conversion; the rest are EXCLUDED and COUNTED in ``unconverted``, exactly as
+    ``sdi_capital._exposure_by_bucket`` excludes and counts them.
+
+    The asymmetry is deliberate and is the whole point of D-21. Before this,
+    ``_position_row`` handed the reporting-currency leg a fabricated ZERO for an
+    unconverted position while the currency leg took it in full, so a book short
+    USD 144.7m was filed LONG 21.0m cedis — one position, measured twice,
+    disagreeing about its own direction. Nothing here decides what to do about
+    that: ``regulatory_fx._unstatable_position`` refuses on the contradiction,
+    and this module's job is only to stop manufacturing it.
+    """
+
+    assets_ccy: Decimal = _ZERO
+    liabilities_ccy: Decimal = _ZERO
+    assets_reporting: Decimal = _ZERO
+    liabilities_reporting: Decimal = _ZERO
+    unconverted: int = 0
+
+    @property
+    def net_ccy(self) -> Decimal:
+        return self.assets_ccy - self.liabilities_ccy
+
+    @property
+    def net_reporting(self) -> Decimal:
+        """The net over the positions that carry a conversion — a PARTIAL net
+        whenever ``unconverted`` is non-zero, never a complete one."""
+        return self.assets_reporting - self.liabilities_reporting
+
+    @property
+    def leg_complete(self) -> bool:
+        return self.unconverted == 0
+
+
+def _fx_legs(canonical: _Canonical) -> dict[str, _FxLeg]:
+    """The on-balance FX book per foreign currency. See :class:`_FxLeg`."""
+    legs: dict[str, _FxLeg] = {}
+    for row in canonical.positions:
+        if row.currency == canonical.base_currency or row.position_type == "LC_GUARANTEE":
+            continue
+        is_asset = row.position_type in _FX_ASSET_TYPES
+        if not is_asset and row.position_type not in _FX_LIABILITY_TYPES:
+            continue
+        leg = legs.setdefault(row.currency, _FxLeg())
+        if is_asset:
+            leg.assets_ccy += row.balance
+        else:
+            leg.liabilities_ccy += row.balance
+        if row.balance_ghs is None:
+            leg.unconverted += 1
+        elif is_asset:
+            leg.assets_reporting += row.balance_ghs
+        else:
+            leg.liabilities_reporting += row.balance_ghs
+    return legs
+
+
 def _derive_fx_positions(
     canonical: _Canonical, groups: list[GroupResult]
 ) -> tuple[list[_FactSpec], set[str]]:
@@ -1510,48 +2875,85 @@ def _derive_fx_positions(
     spots = _spot_rates(canonical)
     with_history = _historical_currencies(canonical)
 
-    assets_ccy: dict[str, Decimal] = {}
-    liabilities_ccy: dict[str, Decimal] = {}
-    assets_ghs: dict[str, Decimal] = {}
-    liabilities_ghs: dict[str, Decimal] = {}
-    for row in canonical.positions:
-        if row.currency == canonical.base_currency or row.position_type == "LC_GUARANTEE":
-            continue
-        if row.position_type in _FX_ASSET_TYPES:
-            assets_ccy[row.currency] = assets_ccy.get(row.currency, _ZERO) + row.balance
-            assets_ghs[row.currency] = assets_ghs.get(row.currency, _ZERO) + row.balance_ghs
-        elif row.position_type in _FX_LIABILITY_TYPES:
-            liabilities_ccy[row.currency] = liabilities_ccy.get(row.currency, _ZERO) + row.balance
-            liabilities_ghs[row.currency] = (
-                liabilities_ghs.get(row.currency, _ZERO) + row.balance_ghs
-            )
+    legs = _fx_legs(canonical)
     hedge_deltas = _fx_hedge_deltas(canonical, warnings)
 
-    currencies = sorted(set(assets_ccy) | set(liabilities_ccy) | set(hedge_deltas))
+    currencies = sorted(set(legs) | set(hedge_deltas))
     specs: list[_FactSpec] = []
     included: set[str] = set()
     net_long = _ZERO
     net_short = _ZERO
     for currency in currencies:
-        if currency not in with_history:
+        leg = legs.get(currency, _FxLeg())
+        base_ccy = leg.net_ccy
+        base_ghs = leg.net_reporting
+        delta = hedge_deltas.get(currency, _ZERO)
+        unconverted = leg.unconverted
+        if unconverted:
             warnings.append(
-                f"{currency} positions were excluded from the FX book: no daily return "
-                "history was ingested for this currency (VaR requires one)."
+                f"{unconverted} {currency} positions carry no ingested "
+                f"{canonical.base_currency} balance, so the {currency} net open position is "
+                f"stated in {currency} over the whole book but in {canonical.base_currency} "
+                "over only part of it. The two legs therefore describe different books and "
+                "the position cannot be filed as it stands. Ingest attributes.balance_ghs on "
+                f"those positions, or the {currency} rate behind it."
             )
-            continue
-        base_ccy = assets_ccy.get(currency, _ZERO) - liabilities_ccy.get(currency, _ZERO)
-        base_ghs = assets_ghs.get(currency, _ZERO) - liabilities_ghs.get(currency, _ZERO)
         # The spot resolves from the on-balance book before hedge deltas apply,
         # so an implied fallback rate stays consistent with the position data.
-        spot = _resolve_spot(currency, spots.get(currency), base_ccy, base_ghs, warnings)
-        delta = hedge_deltas.get(currency, _ZERO)
+        # It is REQUIRED only to convert a hedge delta; without a delta the net
+        # is already in base currency and needs no rate.
+        resolved = _resolve_spot(currency, spots.get(currency), leg, warnings)
+        if resolved is None and delta != _ZERO:
+            # Audit §3: this branch used to substitute a 1.0 spot, valuing the
+            # hedge leg at par with the base currency. Nothing is invented now.
+            warnings.append(
+                f"{currency} was excluded from the FX book: its FX_HEDGE legs cannot be "
+                "converted because no spot rate was ingested and none is implied by the "
+                "position book (missing_required_input). Ingest an fx_rates_current row "
+                f"for {currency}."
+            )
+            continue
+        spot = resolved[0] if resolved is not None else None
+        spot_source = resolved[1] if resolved is not None else "not_required"
         net_ccy = base_ccy + delta
-        net_ghs = base_ghs + delta * spot
-        included.add(currency)
+        net_ghs = base_ghs + (delta * spot if (delta != _ZERO and spot is not None) else _ZERO)
+        # The open position drives the FX capital charge and the NOP limits, so
+        # it covers EVERY currency the bank holds. Only the per-currency VaR row
+        # needs a return history (audit §3: a currency with no history used to
+        # vanish from the book entirely, understating the capital charge).
         if net_ghs >= _ZERO:
             net_long += net_ghs
         else:
             net_short += -net_ghs
+        if currency not in with_history:
+            warnings.append(
+                f"{currency} carries no ingested daily return history, so it has no VaR "
+                f"row; its net of {money(net_ghs)} {canonical.base_currency} IS included "
+                "in the net open position and therefore in the FX capital charge."
+            )
+            continue
+        included.add(currency)
+        attributes = {
+            "currency": currency,
+            "side": "long" if net_ghs >= _ZERO else "short",
+            "spot_ghs": str(spot) if spot is not None else "",
+            "net_ccy": str(money(net_ccy)),
+            "assets_ccy": str(money(leg.assets_ccy)),
+            "liabilities_ccy": str(money(leg.liabilities_ccy)),
+            "net_derivatives_ccy": str(money(delta)),
+            "net_ghs": str(money(net_ghs)),
+        }
+        if spot_source != "ingested":
+            # Only stamped when the rate did NOT come straight from ingested
+            # data, so a book with proper spots hashes byte-identically.
+            attributes["spot_source"] = spot_source
+        if unconverted:
+            # Stamped ONLY on an incomplete book, for the same reason
+            # ``spot_source`` is: a book whose every position carries a
+            # conversion hashes byte-identically to before, so ``input_hash``
+            # moves for exactly the books whose reporting-currency leg is
+            # partial — which is the fact worth recording in a sealed run.
+            attributes["unconverted_position_count"] = str(unconverted)
         specs.append(
             _FactSpec(
                 fact_group="fx_position",
@@ -1560,16 +2962,7 @@ def _derive_fx_positions(
                 derived_from="per-currency net of position balance_ghs "
                 "(assets − liabilities + signed FX_HEDGE notional deltas; "
                 "LC/guarantees excluded as off-balance)",
-                attributes={
-                    "currency": currency,
-                    "side": "long" if net_ghs >= _ZERO else "short",
-                    "spot_ghs": str(spot),
-                    "net_ccy": str(money(net_ccy)),
-                    "assets_ccy": str(money(assets_ccy.get(currency, _ZERO))),
-                    "liabilities_ccy": str(money(liabilities_ccy.get(currency, _ZERO))),
-                    "net_derivatives_ccy": str(money(delta)),
-                    "net_ghs": str(money(net_ghs)),
-                },
+                attributes=attributes,
             )
         )
 
@@ -1608,20 +3001,45 @@ def _derive_fx_positions(
 def _resolve_spot(
     currency: str,
     spot: Decimal | None,
-    net_ccy: Decimal,
-    net_ghs: Decimal,
+    leg: _FxLeg,
     warnings: list[str],
-) -> Decimal:
+) -> tuple[Decimal, str] | None:
+    """(rate, source) for one currency, or ``None`` when no rate is knowable.
+
+    Audit §3: the pre-audit form returned ``1.0`` when neither an ingested spot
+    nor an implied rate existed, and that 1.0 then converted hedge deltas — a
+    foreign-currency exposure silently valued at par with the base currency.
+    A rate is never invented now: absence returns ``None`` and the caller
+    excludes the currency from the FX book with a MISSING_REQUIRED_INPUT
+    warning.
+
+    ``leg.leg_complete`` says whether EVERY position in this currency carried an
+    ingested reporting-currency balance. When it did not, the implied fallback is
+    withdrawn (audit D-21): ``net_reporting / net_ccy`` divides a PARTIAL
+    reporting-currency numerator by a complete currency denominator, so the
+    "rate" it produces is an artefact of how much of the book was converted — on
+    the measured book it came out NEGATIVE. A number that is not an exchange rate
+    must not be published as one. An ingested rate is unaffected.
+    """
     if spot is not None:
-        return spot
-    if net_ccy != _ZERO:
-        implied = (net_ghs / net_ccy).quantize(Decimal("0.000001"))
+        return spot, "ingested"
+    if not leg.leg_complete:
+        warnings.append(
+            f"No spot rate was ingested for {currency} and none was implied from its "
+            f"position book, because part of that book carries no reporting-currency "
+            "balance: an implied rate over an incomplete leg measures the conversion "
+            "gap, not the exchange rate. Ingest an fx_rates_current row for "
+            f"{currency}."
+        )
+        return None
+    if leg.net_ccy != _ZERO:
+        implied = (leg.net_reporting / leg.net_ccy).quantize(Decimal("0.000001"))
         warnings.append(
             f"No current spot rate was ingested for {currency}; the implied rate "
             f"{implied} from the position book was used."
         )
-        return implied
-    return _ONE
+        return implied, "implied_from_position_book"
+    return None
 
 
 def _derive_fx_returns(
@@ -1983,12 +3401,21 @@ class _IrrCell:
     balance: Decimal = _ZERO
     weighted_rate: Decimal = _ZERO
     fixed_balance: Decimal = _ZERO
+    #: Balance placed in this bucket by a DEFAULT rather than by an ingested
+    #: repricing horizon (audit §3: the defaults were asymmetric — a horizonless
+    #: asset went to "5y+", a horizonless interbank line to "overnight" — and
+    #: nothing said so. The amount is now counted, warned and stamped.)
+    defaulted_balance: Decimal = _ZERO
 
-    def add(self, balance: Decimal, rate: Decimal, is_fixed: bool) -> None:
+    def add(
+        self, balance: Decimal, rate: Decimal, is_fixed: bool, *, defaulted: bool = False
+    ) -> None:
         self.balance += balance
         self.weighted_rate += balance * rate
         if is_fixed:
             self.fixed_balance += balance
+        if defaulted:
+            self.defaulted_balance += balance
 
 
 def _derive_irr_positions(
@@ -2000,54 +3427,77 @@ def _derive_irr_positions(
     durations = _nmd_duration_months(canonical)
     cells: dict[tuple[str, str, str], _IrrCell] = {}
     excluded_core = _ZERO
+    irr_unconverted: list[_PositionRow] = []
 
-    def add(side: str, family: str, bucket: str, row: _PositionRow) -> None:
+    defaulted_by_reason: dict[str, Decimal] = {}
+
+    def add(
+        side: str, family: str, bucket: str, row: _PositionRow, *, defaulted_reason: str | None
+    ) -> None:
+        balance = row.balance_ghs
+        if balance is None:
+            # The repricing gap is measured in the reporting currency. A position
+            # with no reporting-currency amount belongs to no cell; it is counted
+            # in ``irr_unconverted`` and named, never bucketed at zero.
+            irr_unconverted.append(row)
+            return
         rate = (row.interest_rate or _ZERO) * _HUNDRED
         is_fixed = row.rate_type != "FLOATING"
-        cells.setdefault((side, family, bucket), _IrrCell()).add(row.balance_ghs, rate, is_fixed)
+        cells.setdefault((side, family, bucket), _IrrCell()).add(
+            balance, rate, is_fixed, defaulted=defaulted_reason is not None
+        )
+        if defaulted_reason is not None:
+            defaulted_by_reason[defaulted_reason] = (
+                defaulted_by_reason.get(defaulted_reason, _ZERO) + balance
+            )
+
+    def bucket_or_default(row: _PositionRow, fallback: str, label: str) -> tuple[str, str | None]:
+        bucket = _repricing_bucket(row, canonical.as_of)
+        if bucket is not None:
+            return bucket, None
+        return fallback, f"{label} with no repricing horizon or maturity → '{fallback}'"
 
     for loan in loan_rows:
-        bucket = _repricing_bucket(loan.row, canonical.as_of) or _IRR_BUCKETS[-1][0]
-        add("asset", _LOAN_FAMILY[loan.category], bucket, loan.row)
+        bucket, reason = bucket_or_default(loan.row, _IRR_BUCKETS[-1][0], "loans")
+        add("asset", _loan_family(loan.category), bucket, loan.row, defaulted_reason=reason)
     for row in canonical.by_type("SECURITY_HOLDING"):
-        bucket = _repricing_bucket(row, canonical.as_of) or _IRR_BUCKETS[-1][0]
-        add("asset", "securities", bucket, row)
+        bucket, reason = bucket_or_default(row, _IRR_BUCKETS[-1][0], "securities")
+        add("asset", "securities", bucket, row, defaulted_reason=reason)
     for row in canonical.by_type("INTERBANK_PLACEMENT"):
-        bucket = _repricing_bucket(row, canonical.as_of) or "overnight"
-        add("asset", "interbank_placements", bucket, row)
+        bucket, reason = bucket_or_default(row, "overnight", "interbank placements")
+        add("asset", "interbank_placements", bucket, row, defaulted_reason=reason)
 
     for row in canonical.by_type("DEPOSIT"):
         placement = _deposit_irr_placement(row, canonical.as_of, durations)
         if placement is None:
+            if row.balance_ghs is None:
+                irr_unconverted.append(row)
+                continue
             excluded_core += row.balance_ghs  # zero-rate NMD core: non-rate-sensitive
             continue
-        family, bucket = placement
-        add("liability", family, bucket, row)
+        family, bucket, reason = placement
+        add("liability", family, bucket, row, defaulted_reason=reason)
     for row in canonical.by_type("INTERBANK_BORROWING"):
-        bucket = _repricing_bucket(row, canonical.as_of) or "overnight"
-        add("liability", "interbank_borrowings", bucket, row)
+        bucket, reason = bucket_or_default(row, "overnight", "interbank borrowings")
+        add("liability", "interbank_borrowings", bucket, row, defaulted_reason=reason)
 
-    # Subordinated debt prices as a long fixed liability at the ingested curve's
-    # long end (the canonical model carries no instrument-level terms for it).
-    sub_debt = sum(
-        (
-            _dec(payload.get("amount_ghs"), _ZERO)
-            for payload in canonical.refs.get("capital_structure", ())
-            if "SUBORDINATED" in str(payload.get("capital_component", "")).upper()
-        ),
-        _ZERO,
-    )
+    sub_debt = _subordinated_debt(canonical)
     if sub_debt > _ZERO:
         long_rate = _long_curve_rate(canonical)
         cells.setdefault(("liability", "subordinated_debt", "5y+"), _IrrCell()).add(
             sub_debt, long_rate, True
         )
-    if excluded_core > _ZERO:
-        warnings.append(
-            f"{money(excluded_core)} {canonical.base_currency} of zero-rate non-maturity "
-            "deposits were excluded from the rate-sensitive book as the behavioral core."
-        )
+    warnings.extend(_irr_warnings(canonical, excluded_core, irr_unconverted, defaulted_by_reason))
 
+    specs = _irr_specs(cells)
+    groups.append(
+        GroupResult(group="irr_position", status="derived", rows=len(specs), warnings=warnings)
+    )
+    return specs
+
+
+def _irr_specs(cells: Mapping[tuple[str, str, str], _IrrCell]) -> list[_FactSpec]:
+    """One ``irr_position`` fact per non-empty (side, family, repricing bucket)."""
     specs: list[_FactSpec] = []
     for (side, family, bucket), cell in sorted(cells.items()):
         if cell.balance <= _ZERO:
@@ -2055,6 +3505,17 @@ def _derive_irr_positions(
         rate_pct = (cell.weighted_rate / cell.balance).quantize(RATE)
         fixed_or_float = "fixed" if cell.fixed_balance * 2 >= cell.balance else "float"
         slug = bucket.replace("-", "_").replace("+", "plus")
+        attributes = {
+            "side": side,
+            "bucket": bucket,
+            "fixed_or_float": fixed_or_float,
+            "rate_pct": str(rate_pct),
+            "midpoint_years": _BUCKET_MIDPOINT[bucket],
+        }
+        if cell.defaulted_balance > _ZERO:
+            # Only stamped where a default actually placed balance, so a fully
+            # dated book derives (and hashes) exactly as before.
+            attributes["defaulted_balance"] = str(money(cell.defaulted_balance))
         specs.append(
             _FactSpec(
                 fact_group="irr_position",
@@ -2062,42 +3523,90 @@ def _derive_irr_positions(
                 amount=cell.balance,
                 derived_from="positions aggregated by repricing bucket "
                 "(float → next repricing, fixed → maturity, NMD → behavioral)",
-                attributes={
-                    "side": side,
-                    "bucket": bucket,
-                    "fixed_or_float": fixed_or_float,
-                    "rate_pct": str(rate_pct),
-                    "midpoint_years": _BUCKET_MIDPOINT[bucket],
-                },
+                attributes=attributes,
             )
         )
-    groups.append(
-        GroupResult(group="irr_position", status="derived", rows=len(specs), warnings=warnings)
-    )
     return specs
+
+
+def _subordinated_debt(canonical: _Canonical) -> Decimal:
+    """Subordinated debt from the ingested capital structure.
+
+    It prices as a long fixed liability at the ingested curve's long end: the
+    canonical model carries no instrument-level terms for it.
+    """
+    return sum(
+        (
+            _dec(payload.get("amount_ghs"), _ZERO)
+            for payload in canonical.refs.get("capital_structure", ())
+            if "SUBORDINATED" in str(payload.get("capital_component", "")).upper()
+        ),
+        _ZERO,
+    )
+
+
+def _irr_warnings(
+    canonical: _Canonical,
+    excluded_core: Decimal,
+    unconverted_rows: list[_PositionRow],
+    defaulted_by_reason: dict[str, Decimal],
+) -> list[str]:
+    """Everything the repricing book left out or assumed, stated in one place."""
+    warnings: list[str] = []
+    if excluded_core > _ZERO:
+        warnings.append(
+            f"{money(excluded_core)} {canonical.base_currency} of zero-rate non-maturity "
+            "deposits were excluded from the rate-sensitive book as the behavioral core."
+        )
+    unconverted = _Unconverted.over(unconverted_rows)
+    if unconverted:
+        warnings.append(unconverted.note("rate-sensitive positions", canonical.base_currency))
+    for reason, amount in sorted(defaulted_by_reason.items()):
+        warnings.append(
+            f"{money(amount)} {canonical.base_currency} was bucketed by a DEFAULT, not by "
+            f"an ingested repricing horizon: {reason}. IRRBB duration and EVE sensitivity "
+            "for that balance are an assumption, not a measurement."
+        )
+    return warnings
 
 
 def _deposit_irr_placement(
     row: _PositionRow, as_of: date, durations: dict[str, Decimal]
-) -> tuple[str, str] | None:
-    """(family, bucket) for one deposit, or None for the non-rate-sensitive core."""
+) -> tuple[str, str, str | None] | None:
+    """(family, bucket, defaulted-reason) for one deposit.
+
+    ``None`` marks the non-rate-sensitive behavioural core. The third element is
+    ``None`` when the bucket came from ingested data and a short reason when a
+    default placed it.
+    """
     bucket = _repricing_bucket(row, as_of)
     if bucket is not None:
         family = (
             "term_deposits_retail" if _is_retail_deposit_product(row) else "term_deposits_wholesale"
         )
-        return family, bucket
+        return family, bucket, None
     if (row.interest_rate or _ZERO) <= _ZERO:
         return None
     if _is_retail_deposit_product(row):
-        return "savings_repricing", _SAVINGS_REPRICING_BUCKET
+        return (
+            "savings_repricing",
+            _SAVINGS_REPRICING_BUCKET,
+            "retail non-maturity deposits with no repricing horizon → "
+            f"'{_SAVINGS_REPRICING_BUCKET}' (documented savings-repricing assumption)",
+        )
     months = durations.get(row.product_code or "")
-    bucket = _bucket_for_days(int(months * Decimal("30.44"))) if months is not None else "overnight"
-    return "wholesale_call", bucket
+    if months is None:
+        return (
+            "wholesale_call",
+            "overnight",
+            "wholesale call deposits with no NMD_DURATION assumption → 'overnight'",
+        )
+    return "wholesale_call", _bucket_for_days(int(months * Decimal("30.44"))), None
 
 
 _INDEX_RESET = re.compile(r"^(\d+)\s*([dmy])")
 _DEFAULT_INDEX_RESET_DAYS = 91  # the 91-day T-Bill, Ghana's standard floating index
+_DEFAULT_RECEIVE_INDEX = "91d_tbill"
 _DAYS_PER_MONTH = Decimal("30.44")
 
 
@@ -2119,7 +3628,9 @@ def _index_reset_days(receive_index: str) -> int:
     return value
 
 
-def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[_FactSpec]:
+def _derive_irr_swaps(  # noqa: PLR0912, PLR0915 - one linear swap decomposition
+    canonical: _Canonical, groups: list[GroupResult]
+) -> list[_FactSpec]:
     rows = canonical.by_type("INTEREST_RATE_SWAP")
     if not rows:
         groups.append(
@@ -2138,7 +3649,17 @@ def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[
     for row in sorted(rows, key=lambda item: item.source_reference):
         attributes = row.attributes
         swap_id = str(attributes.get("swap_id") or row.source_reference)
-        direction = str(attributes.get("direction") or "pay_fixed").strip().lower()
+        raw_direction = attributes.get("direction")
+        if raw_direction is None or not str(raw_direction).strip():
+            # Audit §3: a swap with no stated direction used to be assumed
+            # pay-fixed, which flips the sign of its entire rate sensitivity.
+            warnings.append(
+                f"Swap {swap_id}: no direction was ingested (pay_fixed | receive_fixed). "
+                "The leg decomposition reverses with the direction, so the swap was "
+                "excluded rather than assumed; IRR runs on the unhedged book for it."
+            )
+            continue
+        direction = str(raw_direction).strip().lower()
         if direction not in ("pay_fixed", "receive_fixed"):
             warnings.append(
                 f"Swap {swap_id}: direction {direction!r} is not supported (the IRR "
@@ -2147,7 +3668,7 @@ def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[
             )
             continue
         notional = row.notional_ghs if row.notional_ghs > _ZERO else row.balance_ghs
-        if notional <= _ZERO:
+        if notional is None or notional <= _ZERO:
             warnings.append(
                 f"Swap {swap_id}: no positive {canonical.base_currency} notional; "
                 "the swap was excluded."
@@ -2159,7 +3680,20 @@ def _derive_irr_swaps(canonical: _Canonical, groups: list[GroupResult]) -> list[
         if pay_rate is None:
             warnings.append(f"Swap {swap_id}: no pay_rate_pct; the swap was excluded.")
             continue
-        receive_index = str(attributes.get("receive_index") or "91d_tbill").strip().lower()
+        raw_index = attributes.get("receive_index")
+        receive_index = str(raw_index or _DEFAULT_RECEIVE_INDEX).strip().lower()
+        if not raw_index or not str(raw_index).strip():
+            warnings.append(
+                f"Swap {swap_id}: no receive_index was ingested; the floating leg is "
+                f"bucketed on the documented {_DEFAULT_RECEIVE_INDEX} reset "
+                f"({_DEFAULT_INDEX_RESET_DAYS} days)."
+            )
+        elif _INDEX_RESET.match(receive_index) is None:
+            warnings.append(
+                f"Swap {swap_id}: receive_index {receive_index!r} carries no parseable "
+                f"reset tenor; the documented {_DEFAULT_INDEX_RESET_DAYS}-day reset was "
+                "used to bucket the floating leg."
+            )
         floating_bucket = _bucket_for_days(_index_reset_days(receive_index))
         if row.contractual_maturity is not None:
             remaining_days = max((row.contractual_maturity - canonical.as_of).days, 0)
@@ -2370,6 +3904,19 @@ def _derive_ftp_curve(
     return specs, curve
 
 
+def _ftp_unconverted_warnings(
+    books: Mapping[tuple[str, str], _FtpBook], base_currency: str
+) -> list[str]:
+    """What the priced books left out for want of a reporting-currency amount."""
+    counts: dict[str, int] = {}
+    for book in books.values():
+        for currency in book.unconverted:
+            counts[currency] = counts.get(currency, 0) + 1
+    if not counts:
+        return []
+    return [_Unconverted(counts=counts).note("priced positions", base_currency)]
+
+
 @dataclass
 class _FtpBook:
     balance: Decimal = _ZERO
@@ -2378,13 +3925,22 @@ class _FtpBook:
     tenor_weight: Decimal = _ZERO
     ecl: Decimal = _ZERO
 
+    #: Positions this book could not take in, because they carry no
+    #: reporting-currency amount. Counted, never absorbed at zero — a zero-weight
+    #: observation would silently thin the balance-weighted rate and tenor.
+    unconverted: list[str] = field(default_factory=list)
+
     def add(self, row: _PositionRow, as_of: date) -> None:
-        self.balance += row.balance_ghs
-        self.weighted_rate += row.balance_ghs * (row.interest_rate or _ZERO) * _HUNDRED
+        balance = row.balance_ghs
+        if balance is None:
+            self.unconverted.append(row.currency)
+            return
+        self.balance += balance
+        self.weighted_rate += balance * (row.interest_rate or _ZERO) * _HUNDRED
         if row.contractual_maturity is not None:
             days = Decimal(max((row.contractual_maturity - as_of).days, 0))
-            self.weighted_tenor_days += row.balance_ghs * days
-            self.tenor_weight += row.balance_ghs
+            self.weighted_tenor_days += balance * days
+            self.tenor_weight += balance
         self.ecl += row.ecl_ghs
 
 
@@ -2419,7 +3975,7 @@ def _derive_ftp_products(
     books: dict[tuple[str, str], _FtpBook] = {}  # (category, product) -> book
 
     for loan in loan_rows:
-        books.setdefault(("asset", _LOAN_FAMILY[loan.category]), _FtpBook()).add(
+        books.setdefault(("asset", _loan_family(loan.category)), _FtpBook()).add(
             loan.row, canonical.as_of
         )
     for row in canonical.by_type("SECURITY_HOLDING"):
@@ -2490,7 +4046,14 @@ def _derive_ftp_products(
                 },
             )
         )
-    groups.append(GroupResult(group="ftp_product", status="derived", rows=len(specs)))
+    groups.append(
+        GroupResult(
+            group="ftp_product",
+            status="derived",
+            rows=len(specs),
+            warnings=_ftp_unconverted_warnings(books, canonical.base_currency),
+        )
+    )
     return specs
 
 
@@ -2508,14 +4071,14 @@ def _derive_ftp_branches(canonical: _Canonical, groups: list[GroupResult]) -> li
     names = _business_unit_names(canonical)
     deposits: dict[str, Decimal] = {}
     loans: dict[str, Decimal] = {}
-    for row in canonical.positions:
+    for row, amount in _stated(canonical.positions):
         if row.branch_id is None:
             continue
         branch = names.get(row.branch_id, row.branch_id.lower().replace("-", "_"))
         if row.position_type == "DEPOSIT":
-            deposits[branch] = deposits.get(branch, _ZERO) + row.balance_ghs
+            deposits[branch] = deposits.get(branch, _ZERO) + amount
         elif row.position_type == "LOAN":
-            loans[branch] = loans.get(branch, _ZERO) + row.balance_ghs
+            loans[branch] = loans.get(branch, _ZERO) + amount
     branches = sorted(set(deposits) | set(loans))
     if not branches:
         groups.append(
@@ -2557,9 +4120,14 @@ def _derive_ftp_nmd(canonical: _Canonical, groups: list[GroupResult]) -> list[_F
         defaulted: bool = False
 
     segments: dict[str, _Segment] = {}
-    for row in canonical.by_type("DEPOSIT"):
-        if row.contractual_maturity is not None:
-            continue  # term deposits are not NMDs
+    # Term deposits are not NMDs, so the population is filtered BEFORE the
+    # unconverted count is taken — the count must measure what this book tried
+    # to price, not the whole deposit ledger.
+    nmd_rows = [row for row in canonical.by_type("DEPOSIT") if row.contractual_maturity is None]
+    unconverted = _Unconverted.over(nmd_rows)
+    if unconverted:
+        warnings.append(unconverted.note("non-maturity deposits", canonical.base_currency))
+    for row, balance in _stated(nmd_rows):
         segment_name = _deposit_ftp_segment(row)
         segment = segments.setdefault(segment_name, _Segment())
         share = stability.get(row.product_code or "")
@@ -2570,9 +4138,9 @@ def _derive_ftp_nmd(canonical: _Canonical, groups: list[GroupResult]) -> list[_F
         if months is None:
             months = _DEFAULT_NMD_DURATION_MONTHS
             segment.defaulted = True
-        segment.balance += row.balance_ghs
-        segment.weighted_core += row.balance_ghs * share * _HUNDRED
-        segment.weighted_duration += row.balance_ghs * months / _TWELVE
+        segment.balance += balance
+        segment.weighted_core += balance * share * _HUNDRED
+        segment.weighted_duration += balance * months / _TWELVE
 
     specs: list[_FactSpec] = []
     for name, segment in sorted(segments.items()):

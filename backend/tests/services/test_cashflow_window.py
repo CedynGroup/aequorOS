@@ -34,14 +34,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
 from app.services import cashflow_window
+from tests.api.helpers import headers
+from tests.factories.canonical import seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.api.helpers import headers
-from tests.factories.canonical import seed_canonical_fixture
 
 TENANT = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 NO_MATURITY_COUNT = 4  # DEP/1, DEP/2, DEP/3, DEP/USD

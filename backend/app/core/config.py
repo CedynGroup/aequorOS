@@ -334,10 +334,24 @@ class CorsSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     origins_raw: str = Field(default="", alias="CORS_ORIGINS")
+    methods_raw: str = Field(
+        default="GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS", alias="CORS_METHODS"
+    )
+    headers_raw: str = Field(
+        default="Accept,Authorization,Content-Type,X-Request-ID", alias="CORS_HEADERS"
+    )
 
     @property
     def origins(self) -> list[str]:
         return [origin.strip() for origin in self.origins_raw.split(",") if origin.strip()]
+
+    @property
+    def methods(self) -> list[str]:
+        return [method.strip().upper() for method in self.methods_raw.split(",") if method.strip()]
+
+    @property
+    def headers(self) -> list[str]:
+        return [header.strip() for header in self.headers_raw.split(",") if header.strip()]
 
 
 class StorageSettings(BaseSettings):
@@ -517,10 +531,29 @@ class WorkerSettings(BaseSettings):
     worker_id: str | None = Field(default=None, max_length=160, alias="WORKER_ID")
     pipeline_debounce_seconds: int = Field(default=15, alias="PIPELINE_DEBOUNCE_SECONDS")
     worker_poll_seconds: float = Field(default=2.0, alias="WORKER_POLL_SECONDS")
+    # Operations treats a worker as unavailable only after this many seconds
+    # without a durable heartbeat. Keep the threshold deploy-configured rather
+    # than coupling it to the poll interval: deployment pauses and long hosts
+    # need an explicit, reviewable operational decision.
+    worker_heartbeat_stale_seconds: float = Field(
+        default=120.0, gt=0, alias="WORKER_HEARTBEAT_STALE_SECONDS"
+    )
     # A job stuck in ``running`` longer than this is treated as orphaned by a
-    # dead worker and reclaimed (see job_queue.reclaim_stale). Must exceed the
-    # slowest handler's real runtime (etl_dedup / pipeline_refresh over a full
-    # book run in minutes) so a slow-but-alive job is never reclaimed twice.
+    # dead worker and reclaimed (see job_queue.reclaim_stale).
+    #
+    # 900s is the FLEET DEFAULT, and setting it asserts that every job type NOT
+    # listed in ``job_queue.STALE_AFTER_OVERRIDES_SECONDS`` completes inside 15
+    # minutes: pipeline_refresh, official_run, market_data_pull, temenos_pull,
+    # scheduled_tick, reporting_deadline_scan, notification_email_mirror,
+    # database_direct_health and desk_capture. A handler that outgrows that gets
+    # its own entry in the override map — NOT a bigger global number, because
+    # this value also governs how fast a genuinely dead worker's jobs come back,
+    # so widening it fleet-wide to suit one long handler slows recovery for the
+    # nine short ones.
+    #
+    # ``etl_dedup`` is the one that outgrew it: measured 2h02m on a 168k-record
+    # batch, reclaimed as "worker presumed dead" at 900s while still running, and
+    # requeued into concurrent copies of itself. It is now on a 4h override.
     worker_stale_job_seconds: float = Field(default=900.0, alias="WORKER_STALE_JOB_SECONDS")
     official_run_hour: int = Field(default=2, alias="OFFICIAL_RUN_HOUR")
     official_run_enabled: bool = Field(default=False, alias="OFFICIAL_RUN_ENABLED")
@@ -572,6 +605,15 @@ class AuthSettings(BaseSettings):
     refresh_token_ttl_seconds: int = Field(
         default=60 * 60 * 24 * 14, alias="AUTH_REFRESH_TOKEN_TTL"
     )
+    #: How long after a refresh token is rotated re-presenting it still counts as
+    #: a benign concurrent retry rather than theft. The dashboard's API client
+    #: falls back to ``getSession()`` on every request once the cached access
+    #: token is within 30s of expiry (dashboard/lib/api/token.ts), so several
+    #: NextAuth refreshes can genuinely race with the SAME stored refresh token;
+    #: without a window each of those would trip reuse detection and sign the
+    #: user out. Outside the window a re-presented token revokes its whole
+    #: family. Set to 0 for strict single-use rotation.
+    refresh_rotation_grace_seconds: int = Field(default=30, alias="AUTH_REFRESH_ROTATION_GRACE")
     max_failed_logins: int = Field(default=5, alias="AUTH_MAX_FAILED_LOGINS")
     lockout_seconds: int = Field(default=900, alias="AUTH_LOCKOUT_SECONDS")
     # SSO (own OIDC relying party — no third-party broker): connections live in
@@ -663,6 +705,33 @@ def get_settings() -> Settings:
     return Settings()
 
 
+#: Environments where a developer's own machine IS the deployment. Everything
+#: else — ``staging`` included — runs the same containers on a host somebody
+#: else can reach.
+#:
+#: This is an ALLOW-LIST on purpose. Every guard that used to ask
+#: ``app_env == "production"`` silently opened itself on ``staging`` and on any
+#: environment name added later, because "not production" is an unbounded set
+#: and the dangerous branch was the default. Asking "is this one of the two
+#: environments that are definitionally undeployed?" inverts that: an
+#: unrecognised value is treated as deployed, so a new environment name is safe
+#: by construction and must be admitted here deliberately.
+UNDEPLOYED_ENVS: frozenset[str] = frozenset({"local", "test"})
+
+
+def is_undeployed_environment(app_env: str | None = None) -> bool:
+    """True only on ``local``/``test`` — the environments a developer runs.
+
+    The single authority for "may a never-in-production convenience apply
+    here?". ``app.core.security._is_loopback_issuer_allowed`` (plain-http OIDC
+    discovery), the operator dev-token bearer and the operator app's boot
+    refusal all read it, and ``dashboard/lib/outbound.ts`` mirrors it for the
+    Next.js runtime.
+    """
+    env = app_env if app_env is not None else get_settings().app.app_env
+    return env in UNDEPLOYED_ENVS
+
+
 class OperatorSettings(BaseSettings):
     """Operator control-plane API settings (docs/internal/developer.md §4).
 
@@ -680,6 +749,12 @@ class OperatorSettings(BaseSettings):
     operator_port: int = Field(default=8100, alias="OPERATOR_PORT")
     #: Comma-separated allowed origins for the staff console frontend.
     operator_cors_origins_raw: str = Field(default="", alias="OPERATOR_CORS_ORIGINS")
+    operator_cors_methods_raw: str = Field(
+        default="GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS", alias="OPERATOR_CORS_METHODS"
+    )
+    operator_cors_headers_raw: str = Field(
+        default="Accept,Authorization,Content-Type,X-Request-ID", alias="OPERATOR_CORS_HEADERS"
+    )
     #: Dedicated DB URL for the operator role. Cross-tenant reads on the
     #: RLS-forced primary need a BYPASSRLS role (the worker precedent) — the
     #: use site falls back to WORKER_DATABASE_URL then DATABASE_URL, so a
@@ -742,6 +817,22 @@ class OperatorSettings(BaseSettings):
             origin.strip()
             for origin in self.operator_cors_origins_raw.split(",")
             if origin.strip()
+        ]
+
+    @property
+    def cors_methods(self) -> list[str]:
+        return [
+            method.strip().upper()
+            for method in self.operator_cors_methods_raw.split(",")
+            if method.strip()
+        ]
+
+    @property
+    def cors_headers(self) -> list[str]:
+        return [
+            header.strip()
+            for header in self.operator_cors_headers_raw.split(",")
+            if header.strip()
         ]
 
 

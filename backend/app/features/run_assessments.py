@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
-from app.api.deps import DbSession, Tenant
+from app.api.deps import DbSession, MutationTenant, Tenant
 from app.models import RiskAssessment, RiskAssessmentRun
 from app.schemas.assessments import (
     AssessmentCreate,
@@ -18,7 +18,9 @@ router = APIRouter(tags=["assessments"])
 
 
 @router.post("/assessments", response_model=AssessmentRead, status_code=status.HTTP_201_CREATED)
-def create_assessment(payload: AssessmentCreate, db: DbSession, ctx: Tenant) -> RiskAssessment:
+def create_assessment(
+    payload: AssessmentCreate, db: DbSession, ctx: MutationTenant
+) -> RiskAssessment:
     return assessments_service.create_assessment(db, ctx, payload)
 
 
@@ -35,7 +37,7 @@ def get_assessment(assessment_id: UUID, db: DbSession, ctx: Tenant) -> RiskAsses
 
 
 @router.post("/assessments/{assessment_id}/run", response_model=RunResponse)
-def run_assessment(assessment_id: UUID, db: DbSession, ctx: Tenant) -> RunResponse:
+def run_assessment(assessment_id: UUID, db: DbSession, ctx: MutationTenant) -> RunResponse:
     result = assessments_service.run_assessment(db, ctx, assessment_id)
     return RunResponse(**result.__dict__)
 

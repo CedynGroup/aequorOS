@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.api.deps import DbSession, Storage, Tenant
+from app.api.deps import DbSession, MutationTenant, Storage, Tenant
 from app.core.config import get_settings
 from app.models import Document
 from app.schemas.documents import (
@@ -25,7 +25,7 @@ router = APIRouter(tags=["documents"])
 def request_upload(
     payload: UploadRequest,
     db: DbSession,
-    ctx: Tenant,
+    ctx: MutationTenant,
     storage_client: Storage,
 ) -> UploadRequestResponse:
     result = documents_service.request_upload(
@@ -42,7 +42,7 @@ def request_upload(
 def complete_upload(
     document_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: MutationTenant,
     storage_client: Storage,
 ) -> CompleteUploadResponse:
     document = documents_service.complete_upload(
@@ -83,7 +83,7 @@ def download_url(
 
 
 @router.post("/documents/{document_id}/parse", response_model=ParseResponse)
-def parse_document(document_id: UUID, db: DbSession, ctx: Tenant) -> ParseResponse:
+def parse_document(document_id: UUID, db: DbSession, ctx: MutationTenant) -> ParseResponse:
     result = documents_service.request_parse(db, ctx, document_id)
     return ParseResponse(**result.__dict__)
 
@@ -102,7 +102,7 @@ def parse_status(document_id: UUID, db: DbSession, ctx: Tenant) -> ParseStatusRe
 def delete_document(
     document_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: MutationTenant,
     storage_client: Storage,
 ) -> Document:
     return documents_service.delete_document(

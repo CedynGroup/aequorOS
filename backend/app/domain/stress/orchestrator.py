@@ -40,6 +40,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.domain.capital.ecl import (
     BASE_SCENARIO,
     EclAssumption,
@@ -103,9 +104,12 @@ from app.domain.stress.operational import (
     compute_operational,
 )
 from app.domain.stress.translation import (
+    ADVERSE_DOWN,
+    ADVERSE_UP,
     MacroPathPoint,
     ShockMapping,
     frac_change,
+    require_macro_variables,
     signed_peak_delta,
     translate,
 )
@@ -145,6 +149,20 @@ INCOME_COMPRESSION_PER_GDP = Decimal("2.0")
 FX_RWA_MULT_PER_FX_FRAC = Decimal("1")
 
 _QUARTERS_PER_YEAR = Decimal("4")
+
+#: The macro drivers :func:`compose_capital_shocks` reads DIRECTLY — outside the
+#: ``capital`` elasticity register, which emits only the ECL PD/LGD multipliers.
+#: ``translate`` therefore never checks them, and ``frac_change`` /
+#: ``signed_peak_delta`` answer ``0`` for an absent variable: a scenario carrying
+#: no ``fx_usd_ghs`` path produced ``fx_rwa_multiplier = 1.0`` and no FX-driven
+#: RWA growth, and one carrying no ``interest_rate`` path produced no income
+#: compression — a complete, benign capital path from an incomplete scenario
+#: (audit 2026-08-22 D-8). They are this composition's own input contract.
+COMPOSITION_MACRO_VARIABLES: tuple[str, ...] = (
+    "fx_usd_ghs",
+    "gdp_growth",
+    "interest_rate",
+)
 
 
 def money(value: Decimal) -> Decimal:
@@ -217,6 +235,45 @@ def _stress_ecl(
     return base.total_ecl, stressed.total_ecl
 
 
+def _after_tax_income(
+    preprovision: Decimal, income_stress_factor: Decimal, tax_factor: Decimal
+) -> tuple[Decimal, Decimal]:
+    """(baseline, stressed) after-tax income the capital path accretes each year.
+
+    A pre-provision **profit** is compressed by the macro income-stress factor and
+    taxed — unchanged, and byte-identical to the pre-2026-08-22 arithmetic for
+    every institution whose pre-provision income is positive.
+
+    A pre-provision **loss** used to be clamped to zero
+    (``max(preprovision, 0)``), so a loss-making bank entered the stress as if it
+    had broken even and its operating loss never eroded capital through this
+    channel (audit 2026-08-22 D-8, WS-A3 open item 3). That is fail-open: the
+    stressed capital path came out ABOVE the truth, and the more distressed the
+    institution the larger the flattery.
+
+    The clamp was not gratuitous — it stood in for two real asymmetries the
+    formula never resolved, and both are resolved here in the conservative
+    direction rather than by deleting the floor:
+
+    * **No tax shield on a loss.** ``x * (1 - tax_rate)`` applied to a negative
+      number assumes the institution immediately realises a tax credit at the
+      full rate. A loss-making bank under stress may not be able to recognise
+      that deferred tax asset at all, so the loss enters at its **pre-tax**
+      magnitude.
+    * **Compression must not shrink a loss.** ``income_stress_factor`` is in
+      ``[0, 1]`` and multiplying a negative by it makes the loss *smaller*, so a
+      more severe scenario would improve a loss-making bank's income line. It is
+      therefore not applied downward: the stressed leg carries at least the
+      baseline loss.
+    """
+    if preprovision >= _ZERO:
+        return (
+            money(preprovision * tax_factor),
+            money(preprovision * income_stress_factor * tax_factor),
+        )
+    return money(preprovision), money(preprovision)
+
+
 def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full input set
     *,
     scenario_paths: Sequence[MacroPathPoint],
@@ -247,12 +304,28 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
     All four are neutral under a base scenario, so ``baseline`` == ``stressed``.
     """
     pd_mult, lgd_mult = _capital_multipliers(scenario_paths, overrides)
-    fx_frac = frac_change(scenario_paths, "fx_usd_ghs")
-    rate_delta = signed_peak_delta(scenario_paths, "interest_rate")
-    gdp_delta = signed_peak_delta(scenario_paths, "gdp_growth")
+    # The three drivers this composition reads outside the elasticity register
+    # must actually be in the scenario (audit 2026-08-22 D-8) — see
+    # ``COMPOSITION_MACRO_VARIABLES``.
+    require_macro_variables(
+        scenario_paths,
+        COMPOSITION_MACRO_VARIABLES,
+        metric_id="capital_stress_path",
+        context={"stage": "compose_capital_shocks"},
+    )
+    # Each driver's peak is taken in its ADVERSE direction (enterprise audit
+    # P0-9). These three feed shocks that floor at neutral, so the previous
+    # largest-magnitude-either-sign selection let a benign year in the path
+    # cancel a stressed one: a scenario with year-1 depreciation and a larger
+    # year-3 appreciation produced zero FX RWA growth and zero revaluation.
+    fx_frac = frac_change(scenario_paths, "fx_usd_ghs", adverse=ADVERSE_UP)
+    rate_delta = signed_peak_delta(scenario_paths, "interest_rate", adverse=ADVERSE_UP)
+    gdp_delta = signed_peak_delta(scenario_paths, "gdp_growth", adverse=ADVERSE_DOWN)
 
     # Cedi depreciation and rating migration only ever ADD RWA growth; a benign
-    # move floors the growth at zero (never a negative stress).
+    # move floors the growth at zero (never a negative stress). The floors are
+    # kept as a belt-and-braces invariant — the adverse-direction peaks above
+    # already cannot be the wrong sign.
     fx_uplift = max(fx_frac, _ZERO)
     pd_uplift = max(pd_mult - _ONE, _ZERO)
     quarterly_rwa_growth_pct = money(
@@ -272,15 +345,40 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
         _ZERO,
     )
     tax_factor = (_HUNDRED - tax_rate_pct) / _HUNDRED
-    baseline_after_tax = money(max(baseline_annual_preprovision_income, _ZERO) * tax_factor)
-    stressed_after_tax = money(
-        max(baseline_annual_preprovision_income, _ZERO) * income_stress_factor * tax_factor
+    baseline_after_tax, stressed_after_tax = _after_tax_income(
+        baseline_annual_preprovision_income, income_stress_factor, tax_factor
     )
 
     if ecl_exposures and ecl_assumptions:
         ecl_base, ecl_stress = _stress_ecl(ecl_exposures, ecl_assumptions, pd_mult, lgd_mult)
         ecl_source = "ecl_engine"
     else:
+        # The allowance proxy needs an allowance. With neither staged ECL data nor
+        # a credit allowance the proxy evaluated ``0 x pd x lgd`` and reported a
+        # stress with NO incremental impairment at all — the single most
+        # reassuring figure a credit stress can manufacture, and indistinguishable
+        # from a bank whose book genuinely does not deteriorate (audit
+        # 2026-08-22 D-8).
+        if baseline_credit_allowance <= _ZERO:
+            raise NotComputable(
+                outcome(
+                    OutcomeState.MISSING_REQUIRED_INPUT,
+                    metric_id="stressed_credit_loss",
+                    reason=(
+                        "The stressed credit loss cannot be established: the run carries "
+                        "no staged IFRS 9 exposures and assumptions, and no credit "
+                        "allowance to condition as a proxy. Ingest the ECL exposure "
+                        "staging with its assumptions register, or the general "
+                        "provisions / credit allowance the proxy scales."
+                    ),
+                    items=(
+                        "fact:ecl_exposure",
+                        "register:ecl-assumptions",
+                        "fact:credit_allowance",
+                    ),
+                    context={"stage": "compose_capital_shocks"},
+                )
+            )
         ecl_base = money(baseline_credit_allowance)
         ecl_stress = money(baseline_credit_allowance * pd_mult * lgd_mult)
         ecl_source = "allowance_proxy"
@@ -652,7 +750,25 @@ def _run_irr(inputs: EnterpriseStressInputs) -> IrrOutcome:
     )
     stressed_eve = compute_eve(irr.positions, irr.curve, shifts)
     delta_eve = money(stressed_eve - base_eve)
-    pct = ratio_pct(delta_eve / irr.tier1 * _HUNDRED) if irr.tier1 > _ZERO else _ZERO
+    # ΔEVE as a share of Tier 1 has no denominator without Tier 1. Reporting 0%
+    # said "the rate shock costs this bank nothing relative to its capital" —
+    # a manufactured supervisory figure, and the most benign one available
+    # (audit 2026-08-22 D-8).
+    if irr.tier1 <= _ZERO:
+        raise NotComputable(
+            outcome(
+                OutcomeState.NOT_COMPUTABLE,
+                metric_id="delta_eve_pct_tier1",
+                reason=(
+                    "The IRRBB economic-value impact is expressed against Tier 1 "
+                    "capital, and this run carries no positive Tier 1, so the ratio "
+                    "has no denominator and is not a number."
+                ),
+                items=("input:tier1_capital",),
+                context={"scenario_code": inputs.scenario_code},
+            )
+        )
+    pct = ratio_pct(delta_eve / irr.tier1 * _HUNDRED)
     delta_nii = compute_ear(gap, parallel_bp)
     return IrrOutcome(
         base_eve=base_eve,
@@ -768,6 +884,26 @@ def _serialize_liquidity(liquidity: LiquidityOutcome) -> dict[str, object]:
             if liquidity.stressed_fx_funding_gap is None
             else str(liquidity.stressed_fx_funding_gap)
         ),
+        # The stock of HQLA after the Basel haircuts and Level-2 caps, baseline
+        # and stressed (enterprise audit P0-8). Reported so a reviewer can see
+        # WHY the LCR is what it is rather than only that it fell.
+        "baseline_hqla": _serialize_hqla(liquidity.baseline_lcr),
+        "stressed_hqla": _serialize_hqla(liquidity.stressed_lcr),
+    }
+
+
+def _serialize_hqla(lcr: LcrResult) -> dict[str, object]:
+    composition = lcr.hqla_composition
+    return {
+        "total": str(composition.total),
+        "level1": str(composition.level1),
+        "level2a": str(composition.level2a),
+        "level2b": str(composition.level2b),
+        "level2_cap_adjustment": str(composition.level2_cap_adjustment),
+        "level2b_cap_adjustment": str(composition.level2b_cap_adjustment),
+        "level2_cap_applied": composition.level2_cap_applied,
+        "level2b_cap_applied": composition.level2b_cap_applied,
+        "all_level1": lcr.all_hqla_level1,
     }
 
 

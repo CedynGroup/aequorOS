@@ -5,8 +5,10 @@ future SDI scoping keys off. These hermetic tests pin:
 
 - the seeded ``institution_types`` registry and its institution_type -> class
   derivation map (savings_and_loans -> sdi, universal_bank -> bank, ...);
-- the resolver's fail-loud discipline (mirror of ``jurisdictions.base_currency``)
-  and its named ``universal_bank`` fallback;
+- the resolver's FAIL-CLOSED discipline (P0-12, enterprise audit 2026-08-20):
+  an unknown or blank licence class raises instead of resolving to the bank
+  regime, because that substitution used to pick the CAR floor, provisioning
+  grid, DPD boundaries and LMTD floors AND make the API module gate fail open;
 - the resolved discriminator riding on ``BankRead`` exactly as jurisdiction does.
 
 No capital/liquidity/return behaviour is asserted here — Phase A changes none.
@@ -14,7 +16,10 @@ No capital/liquidity/return behaviour is asserted here — Phase A changes none.
 
 from __future__ import annotations
 
+import importlib.util
 from decimal import Decimal
+from pathlib import Path
+from types import ModuleType
 
 import pytest
 from sqlalchemy import delete, select
@@ -108,9 +113,14 @@ def test_resolver_returns_the_banks_own_type(db_session: Session) -> None:
     assert institution_types.liquidity_binding(db_session, bank) is True
 
 
-def test_resolver_falls_back_to_universal_bank_for_an_unknown_code(db_session: Session) -> None:
-    # A detached bank carrying a code with no registry row: the resolver falls
-    # back to the named universal_bank row rather than inventing a regime.
+def test_resolver_fails_closed_for_an_unknown_code(db_session: Session) -> None:
+    """P0-12: an unknown licence class must NOT resolve to ``universal_bank``.
+
+    This assertion was inverted on 2026-08-21. Until then the resolver fell back
+    to the named universal-bank row, which silently selected the entire bank
+    regime for a typo — and, because ``universal_bank.default_modules`` is the
+    full module set, made ``require_module_access`` grant rather than deny.
+    """
     bank = Bank(
         organization_id=ORG_1,
         name="Ghost",
@@ -120,14 +130,29 @@ def test_resolver_falls_back_to_universal_bank_for_an_unknown_code(db_session: S
         license_type="universal",
         institution_type="not_a_real_licence_class",
     )
-    row = institution_types.get_type(db_session, bank)
-    assert row.type_code == institution_types.FALLBACK_TYPE_CODE == "universal_bank"
-    assert institution_types.institution_class(db_session, bank) == "bank"
+    with pytest.raises(institution_types.InstitutionTypeUnresolved) as excinfo:
+        institution_types.get_type(db_session, bank)
+    assert "not in the institution_types registry" in str(excinfo.value)
+    assert institution_types.try_get_type(db_session, bank) is None
+
+
+def test_resolver_fails_closed_for_a_blank_code(db_session: Session) -> None:
+    bank = Bank(
+        organization_id=ORG_1,
+        name="Blank",
+        short_name="Blank",
+        currency="GHS",
+        jurisdiction_code="GH",
+        license_type="universal",
+        institution_type="",
+    )
+    with pytest.raises(institution_types.InstitutionTypeUnresolved) as excinfo:
+        institution_types.institution_class(db_session, bank)
+    assert "has no institution_type" in str(excinfo.value)
 
 
 def test_resolver_fails_loud_when_the_registry_is_unseeded(db_session: Session) -> None:
-    # Mirror of base_currency: with neither the bank's type nor the fallback
-    # present, resolving raises rather than silently defaulting a regime.
+    # With the registry empty, resolving raises rather than defaulting a regime.
     db_session.execute(delete(InstitutionType))
     db_session.flush()
     bank = Bank(
@@ -139,8 +164,9 @@ def test_resolver_fails_loud_when_the_registry_is_unseeded(db_session: Session) 
         license_type="universal",
         institution_type="universal_bank",
     )
-    with pytest.raises(ValueError, match="institution_types registry"):
+    with pytest.raises(institution_types.InstitutionTypeUnresolved) as excinfo:
         institution_types.get_type(db_session, bank)
+    assert "institution_types registry is empty" in str(excinfo.value)
 
 
 def test_bank_read_rides_the_resolved_discriminator(db_session: Session) -> None:
@@ -160,3 +186,57 @@ def test_bank_read_rides_the_resolved_discriminator(db_session: Session) -> None
     detail = banks_service.get_bank(db_session, ctx, read.id)
     assert detail.institution_type == "finance_house"
     assert detail.institution_type_detail == read.institution_type_detail
+
+
+def _load_migration(filename: str) -> ModuleType:
+    """Import an alembic revision file by path (``alembic/versions`` is not a package)."""
+    path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / filename
+    spec = importlib.util.spec_from_file_location(f"_migration_{filename[:12]}", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_seed_catalogue_matches_the_migration_chain_end_state() -> None:
+    """``institution_types.SEED_TYPES`` is the single catalogue the hermetic
+    conftest seed and the e2e bootstrap build the registry from; a deployed
+    database gets the same rows from the migration chain. Nothing imports across
+    that boundary — a migration must keep the historical snapshot of the change
+    it made — so this test is what keeps the two in step. If it fails, either the
+    catalogue changed without a migration, or a migration landed without the
+    catalogue.
+    """
+    created = _load_migration("202608190018_institution_types_registry.py")
+    widened = _load_migration("202608210026_sdi_module_set_expand.py")
+
+    # Replay the chain: 202608190018 inserts, 202608210026 rewrites the SDI
+    # module set on every 'sdi'-class row.
+    replayed = {}
+    for (
+        code,
+        display_name,
+        institution_class_,
+        return_family_,
+        capital_regime_,
+        large_exposure,
+        single_obligor,
+        liquidity_binding_,
+        modules,
+    ) in created.SEED_ROWS:
+        replayed[code] = {
+            "type_code": code,
+            "display_name": display_name,
+            "institution_class": institution_class_,
+            "return_family": return_family_,
+            "capital_regime": capital_regime_,
+            "large_exposure_limit_pct": Decimal(large_exposure),
+            "single_obligor_limit_pct": Decimal(single_obligor),
+            "liquidity_binding": liquidity_binding_,
+            "default_modules": (
+                list(widened._SDI_MODULES) if institution_class_ == "sdi" else list(modules)
+            ),
+        }
+
+    catalogue = {row["type_code"]: row for row in institution_types.seed_rows()}
+    assert catalogue == replayed

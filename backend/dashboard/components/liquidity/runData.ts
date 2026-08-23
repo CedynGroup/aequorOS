@@ -27,7 +27,21 @@ export function runMetricStatus(
   );
 }
 
-/** threshold_min of a named metric result (e.g. lcr_pct → 100). */
+/**
+ * threshold_min of a named metric result (e.g. lcr_pct → 100).
+ *
+ * THE HISTORICAL FLOOR, NOT THE CURRENT ONE (NEW-53). This is what the engine
+ * applied when that run executed — evidence about a filing, correct for
+ * "what did this run measure against". It is NOT the requirement in force now,
+ * and `null` here means "this run recorded no threshold", never "this
+ * institution has no floor": a bank with no official capital run yet returns
+ * `null` for every metric. Reading it as the live floor is what made the Basel
+ * overview print a green Tier 1 KPI, "no Tier 1 minimum · NOT ASSESSED" and a
+ * passing Tier 1 validation on one screen. For the floor a ratio is judged
+ * against today, read the governed parameter set off the module payload
+ * (`buffers.*MinPct`, the SDI s.29 summary, the run's §59(f) coupling) and
+ * compare with `assessAgainstFloor`.
+ */
 export function runMetricThreshold(
   run: RegulatoryRunRead | undefined,
   metricCode: string

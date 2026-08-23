@@ -32,6 +32,13 @@ import {
   ReportingPeriodIdToJSON,
   ReportingPeriodIdToJSONTyped,
 } from "./ReportingPeriodId";
+import type { LiveSummaryReadReconciliation } from "./LiveSummaryReadReconciliation";
+import {
+  LiveSummaryReadReconciliationFromJSON,
+  LiveSummaryReadReconciliationFromJSONTyped,
+  LiveSummaryReadReconciliationToJSON,
+  LiveSummaryReadReconciliationToJSONTyped,
+} from "./LiveSummaryReadReconciliation";
 import type { LiveModuleView } from "./LiveModuleView";
 import {
   LiveModuleViewFromJSON,
@@ -83,6 +90,12 @@ export interface LiveSummaryRead {
    * @memberof LiveSummaryRead
    */
   periodLabel: PeriodLabel;
+  /**
+   *
+   * @type {LiveSummaryReadReconciliation}
+   * @memberof LiveSummaryRead
+   */
+  reconciliation?: LiveSummaryReadReconciliation;
   /**
    *
    * @type {ReportingPeriodId}
@@ -138,6 +151,10 @@ export function LiveSummaryReadFromJSONTyped(
     isStale: json["is_stale"],
     modules: (json["modules"] as Array<any>).map(LiveModuleViewFromJSON),
     periodLabel: PeriodLabelFromJSON(json["period_label"]),
+    reconciliation:
+      json["reconciliation"] == null
+        ? undefined
+        : LiveSummaryReadReconciliationFromJSON(json["reconciliation"]),
     reportingPeriodId: ReportingPeriodIdFromJSON(json["reporting_period_id"]),
     sourceAsOfDate: SourceAsOfDateFromJSON(json["source_as_of_date"]),
   };
@@ -161,6 +178,9 @@ export function LiveSummaryReadToJSONTyped(
     is_stale: value["isStale"],
     modules: (value["modules"] as Array<any>).map(LiveModuleViewToJSON),
     period_label: PeriodLabelToJSON(value["periodLabel"]),
+    reconciliation: LiveSummaryReadReconciliationToJSON(
+      value["reconciliation"],
+    ),
     reporting_period_id: ReportingPeriodIdToJSON(value["reportingPeriodId"]),
     source_as_of_date: SourceAsOfDateToJSON(value["sourceAsOfDate"]),
   };

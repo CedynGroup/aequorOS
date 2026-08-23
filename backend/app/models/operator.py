@@ -12,7 +12,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Index, String
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+)
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -102,6 +111,19 @@ class OperatorUser(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Brute-force throttling — the SAME two columns tenant ``users`` carry, read
+    # and written by the SAME primitive (``app/services/auth_throttle.py``).
+    # Until migration 202608230041 the staff plane had none: its only control
+    # was a per-process ``(email, ip)`` dict, so rotating source addresses gave
+    # an unbounded budget against the account that yields a cross-tenant
+    # BYPASSRLS session (audit finding D-25). Durable state is the point — it
+    # is shared by every worker and replica and survives a deploy.
+    failed_login_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -6,32 +6,48 @@ The service is built with FastAPI, Pydantic settings, SQLAlchemy, Alembic, and P
 
 ## Current Surface
 
-The service currently provides the backend foundation, financial-data APIs,
-case scenario management, deterministic balance-sheet forecasts, and the first
-capital projection workflow:
+The service owns the server-side contracts and persistence for the six
+regulatory modules, the Data Engine, the regulatory-reporting spine, and the
+attestation/e-signature ceremony. It has three entrypoints: the tenant API
+(`app.main:app`, :8000), the background worker (`python -m app.worker`), and the
+staff operator control plane (`app.operator.main:app`, :8100 — never mounted on
+the tenant API).
 
-- Health and readiness endpoints under `/api/health`
-- Password/OIDC authentication and tenant-scoped current-user profile reads and updates
-- Centralized environment-based settings
-- Request ID propagation through `X-Request-ID`
-- Loguru JSON structured logging
-- Consistent API error envelopes
-- SQLAlchemy models and Alembic migrations for tenant-owned risk and financial records
-- Canonical financial-workspace mapping, validation, manual entry, and correction
-- Covenant persistence, mapping, deterministic compliance validation, and correction
-- Tenant-scoped baseline, downside, and custom scenarios with structured assumptions
-- Scenario creation, editing, copying, archiving, review, validation, and calculation readiness
-- Tenant-scoped calculation runs with immutable input snapshots, version metadata, and audit events
-- Deterministic annual balance-sheet forecasts, persisted failures, reruns, and paginated history
-- Tenant-scoped capital projection attempts with period pressure indicators and persisted diagnostics
-- Latest capital summaries, baseline-versus-downside comparisons, and generated findings with evidence
-- Versioned liquidity metrics and severity-ranked findings generated from successful forecasts
-- Liquidity finding evidence, acknowledge/dismiss review actions, and audit events
+- Health and readiness under `/api/health`; readiness reports database, storage,
+  worker and signing subsystems independently
+- Password and OIDC SSO authentication (AequorOS is its own relying party — no
+  third-party broker), integration-key service accounts, RLS-forced tenancy
+- Data Engine: Excel/CSV upload, push API, market-data adapters, and the
+  database-direct adapter (see the deployment note below)
+- Six calculation modules — liquidity (LCR/NSFR/stress/LMT), Basel capital
+  (RWA/CAR/stress), IRRBB, FX, FTP, and balance-sheet forecasting — each a pure
+  Decimal engine under `app/domain/` behind an immutable `RegulatoryRun`
+- Live engine: debounced `pipeline_refresh` jobs re-derive facts and update
+  `live_metrics`/`live_findings`; `official_run` jobs mint the immutable filing runs
+- Regulatory reporting: BoG BSD returns generated from the official workbook
+  templates, with the templates' own formulas evaluated; PDF/XLSX artifacts
+- Attestation: maker-checker plus PDF e-signature with step-up re-authentication
+- Cash-flow LSTM (`app/ml`) and per-tenant behavioral GBMs; everything else is
+  deterministic
 - Audit events, per-field manual edit history, and source-record traceability
 
-Regulatory LCR/NSFR and Basel regulatory-capital scoring, full ingestion pipelines,
-background workers, advanced forecast configuration, and report generation are
-intentionally not implemented yet.
+### Deployment note — database-direct drivers
+
+`Dockerfile` runs `uv sync --locked --no-dev`, which does **not** install the
+`db-direct` extra. The Oracle thin driver (`oracledb`) is a core dependency and
+therefore ships; **`pyodbc` (SQL Server/ODBC), `jaydebeapi`/`JPype1` (generic
+JDBC) and `snowflake-connector-python` do not.** Those backends are implemented
+and covered by tests, and they fail closed at runtime with a classified
+`DRIVER_UNAVAILABLE`, but they cannot connect from the default image. `pyodbc`
+additionally needs `unixodbc-dev` plus a vendor ODBC driver, and the JDBC path
+needs a JRE — enabling them is an image and licensing decision, not a flag.
+
+### Not implemented
+
+Transmission of returns to the Bank of Ghana (ORASS) is not built; the platform
+generates, validates, certifies and exports, and a human files. Live vendor
+market-data transports (Bloomberg, LSEG) are fixture-driven only. See
+`docs/audit/15_known_limitations.md`.
 
 ## Requirements
 
@@ -98,8 +114,8 @@ export DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@local
 runtime, runs Alembic migrations, and grants the runtime role data privileges.
 The migration role can bypass RLS for migrations and backfills; the app runtime
 role is still created with `NOBYPASSRLS`.
-It also seeds two demo tenants so audit foreign keys and header-based tenant
-context work in local demos:
+For local test and sample-demo workflows only, it seeds two demo tenants so
+audit foreign keys and header-based tenant context work:
 
 ```bash
 X-Org-Id: 11111111-1111-4111-8111-111111111111
@@ -304,15 +320,34 @@ LOG_LEVEL=INFO
 # Primary database (shared remote; real credentials only in the untracked .env).
 # DATABASE_URL=postgresql+psycopg://<user>:<password>@<postgres-host>:<port>/<database>
 
-RISK_STORAGE_BACKEND=s3
-RISK_S3_BUCKET=risk-local
-RISK_S3_REGION=us-east-1
-RISK_S3_ENDPOINT_URL=http://localhost:9000
-RISK_S3_ACCESS_KEY_ID=minioadmin
-RISK_S3_SECRET_ACCESS_KEY=minioadmin
-RISK_S3_FORCE_PATH_STYLE=true
-RISK_S3_PRESIGN_EXPIRES_SECONDS=900
+# Object storage. Document upload, presigned URLs and the storage-health probe
+# share ONE credential set with the Data Engine — there is no separate RISK_S3_*
+# set. The values below are the LOCAL compose stack (backend/docker-compose.yml);
+# deployed environments point S3_ENDPOINT at the real object store.
+STORAGE_BACKEND=minio
+STORAGE_ENV=mvp
+S3_ENDPOINT=http://localhost:9000
+S3_REGION=us-east-1
+S3_BUCKET=risk-local
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_FORCE_PATH_STYLE=true
+STORAGE_PRESIGN_EXPIRES_SECONDS=900
 RISK_MAX_UPLOAD_BYTES=25000000
 ```
+
+`RISK_MAX_UPLOAD_BYTES` is the only surviving `RISK_*` variable, and it is a size limit
+(25 MB), not a credential. The eight `RISK_S3_*` / `RISK_STORAGE_BACKEND` names this
+section used to list set **nothing** — the `settings.risk_*` symbols still in the code
+(`risk_storage_backend`, `risk_s3_bucket`, …) are read-only properties over the
+variables above, never environment variables.
+
+Storage settings are declared in **two** places and only one of them runs: the live
+engine is `app/storage/config.py::StorageEngineSettings` (backend `minio | s3 | gcs`,
+default `minio`, and every `S3_*` alias above), used by `storage/factory.py`,
+`storage/s3_compatible.py` and `storage/provisioning.py`. The parallel
+`app/core/config.py::StorageSettings` redeclares the same aliases with backend pinned to
+`Literal["s3"]` and no `STORAGE_BACKEND` alias. Change the former when changing storage
+behaviour; the duplication is a known wart.
 
 `psycopg[binary]` is used for MVP setup convenience. Revisit production packaging before hardening deployment images.

@@ -52,13 +52,13 @@ from app.services import regulatory_irr
 from app.services.fact_derivation import derive_facts
 from app.services.market_data import get_discount_curve
 from app.services.regulatory_irr import discount_curve_midpoints_pct
+from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 
 CTX = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 REPORTING_DATE = date(2026, 3, 31)

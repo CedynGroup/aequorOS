@@ -153,15 +153,15 @@ export function FidelityPill({ fidelity }: { fidelity: FidelityGrade }) {
 // ---------------------------------------------------------------------------
 
 export const DEADLINE_RULE_TEXT: Record<string, string> = {
-  BSD3: 'Monthly — due within 9 days after month end (LMTD Part II ¶7). The LCR deadline is assumed to match until the LCR Directive is published (research gap G1).',
-  LMT: 'Monthly — due within 9 days after month end (LMTD Part II ¶7).',
+  BSD3: 'Monthly — due within 9 days after month end (LMTD Part II ¶7 — exposure draft, Feb 2026, stated effective 1 Jan 2027). The LCR deadline is assumed to match until the LCR Directive is published (research gap G1).',
+  LMT: 'Monthly — due within 9 days after month end (LMTD Part II ¶7 — exposure draft, Feb 2026, stated effective 1 Jan 2027).',
   BSD2: 'Monthly — day 14 of the following month is a placeholder: the official CAR return deadline is UNKNOWN in the public record (research §2 row 7).',
   'IRRBB-PILOT':
-    'Quarterly pilot — due within 9 days after quarter end (IRRBB Guideline ¶11, ¶55).',
+    'Quarterly pilot — due within 9 days after quarter end (IRRBB Guideline ¶11, ¶55 — Feb 2026 exposure draft, stated effective 1 Jan 2027).',
   'FX-NOP':
     'Monthly summary registered by AequorOS — day 10 of the following month (placeholder). The confirmed BoG obligation is DAILY Bank Returns (DBK) by 10:00 a.m. the next business day via ORASS.',
   'ICAAP-STRESS':
-    'Annual — due by 31 March of the ensuing year (ICAAP Guideline ¶72; Stress Testing Guideline ¶67).',
+    'Annual — due by 31 March of the ensuing year (ICAAP Guideline ¶72; Stress Testing Guideline ¶67). Both are Feb 2026 exposure drafts stated effective 1 Jan 2027, not yet in force.',
 };
 
 /** Section sheet titles per template id (display list for the Templates tab). */

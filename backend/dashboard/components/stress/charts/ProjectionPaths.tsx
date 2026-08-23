@@ -5,13 +5,17 @@
  * §4 item 3 — "ratio-vs-threshold paths ... base vs stress"). Reuses the shared
  * multi-series `ScenarioLinesChart`; reads the immutable run's per-year
  * projection (`projection.{current,base[],stress[]}`).
+ *
+ * A year the engine did not compute is plotted as a GAP, never as 0%. Under
+ * `num()` a null CAR/LCR year became a 0% point on the line — a ratio at zero
+ * is the worst reading the chart can show, and it is not a reading at all.
  */
 
 import ScenarioLinesChart, {
   type ScenarioPoint,
   type ScenarioSeries,
 } from '@/components/forecasting/charts/ScenarioLinesChart';
-import { num } from '@/lib/api/values';
+import { numOrNull } from '@/lib/api/values';
 import type { EnterpriseProjection, ProjectionYear } from '../types';
 
 export type RatioMetricKey =
@@ -35,19 +39,29 @@ export default function ProjectionPaths({
 }: {
   projection: EnterpriseProjection;
   metricKey: RatioMetricKey;
-  threshold?: number;
+  /**
+   * The regulatory floor, from the run payload. A non-positive or non-finite
+   * value means "not configured" and draws NO floor line: a reference line at
+   * 0% is not a floor, it is a picture of unlimited headroom.
+   */
+  threshold?: number | null;
   thresholdLabel?: string;
   height?: number;
 }) {
+  const floor =
+    typeof threshold === 'number' && Number.isFinite(threshold) && threshold > 0
+      ? threshold
+      : undefined;
   const current = projection.current;
+  const currentValue = numOrNull(current[metricKey]);
   const data: ScenarioPoint[] = [
-    { label: 'Now', base: num(current[metricKey]), stress: num(current[metricKey]) },
+    { label: 'Now', base: currentValue, stress: currentValue },
     ...projection.base.map((b, i) => {
       const s = projection.stress[i];
       return {
         label: yearLabel(b),
-        base: num(b[metricKey]),
-        stress: s ? num(s[metricKey]) : null,
+        base: numOrNull(b[metricKey]),
+        stress: s ? numOrNull(s[metricKey]) : null,
       } as ScenarioPoint;
     }),
   ];
@@ -63,8 +77,8 @@ export default function ProjectionPaths({
       series={series}
       valueFormatter={(v) => `${v.toFixed(2)}%`}
       tickFormatter={(v) => `${v.toFixed(0)}%`}
-      threshold={threshold}
-      thresholdLabel={thresholdLabel}
+      threshold={floor}
+      thresholdLabel={floor === undefined ? undefined : thresholdLabel}
       height={height}
     />
   );

@@ -50,6 +50,72 @@ run = "uv run pytest tests/db/test_postgres_migrations.py"
 description = "Run the Postgres-only concurrency tests; requires TEST_DATABASE_URL"
 run = "uv run pytest tests/api/test_liquidity.py tests/api/test_scenarios.py tests/api/test_calculations.py"
 
+# The architecture guards: CI task wiring (P0-15), the RLS-blind data-migration
+# scanner (P0-18) and the case/regulatory dependency boundary (ARCH-5). Fast,
+# hermetic, and deliberately its own gate so a boundary breach is reported as a
+# boundary breach rather than buried in a 3,000-test run.
+[tasks."risk-service:test-architecture"]
+description = "Run the architecture, dependency-boundary and migration-guard tests"
+run = "uv run pytest tests/architecture tests/db/test_bog_return_recode_migration.py"
+
+# Schema-level truth: the migration chain, the RLS policies it installs, and the
+# server defaults. RLS exists ONLY in migrations (the hermetic suite builds its
+# schema with Base.metadata.create_all), so this is the only place row-level
+# security is exercised at all. Requires TEST_DATABASE_URL.
+[tasks."risk-service:test-postgres-schema"]
+description = "Run the Postgres schema, migration and RLS suites; requires TEST_DATABASE_URL"
+run = "uv run pytest tests/db"
+
+# The whole suite against the real engine. The hermetic default runs on SQLite
+# with row-level security switched off, so "3,237 passed" is not evidence about
+# Postgres: Boolean server defaults, String-vs-UUID comparisons, row locks and
+# advisory locks all behave differently there. Requires TEST_DATABASE_URL.
+[tasks."risk-service:test-postgres-suite"]
+description = "Run the full pytest suite against Postgres; requires TEST_DATABASE_URL"
+run = "uv run pytest"
+
+# The DB-backed regulatory/attestation/auth/vendor API surface. It is gated on
+# REAL_DATA_DATABASE_URL pointing at the PRIMARY database (it asserts against
+# real tenant identities), so it cannot run on an ephemeral CI Postgres; without
+# that URL every one of these tests skips.
+#
+# The path list omitted tests/adapters and tests/equivalence until 2026-08-22,
+# so three modules — including the regulatory report/forecast run-parity suites
+# — were unreachable even WITH the URL set, and their 23 tests could never run
+# anywhere. `tests/architecture/test_ci_task_wiring.py` now derives the required
+# paths from the `requires_real_data` marker, so the list cannot fall behind a
+# new module again.
+#
+# `-m 'not slow'` was removed in the same change: the repository defines no
+# `slow` marker and nothing is marked with one, so the filter selected
+# everything while implying a tier that does not exist.
+[tasks."risk-service:test-real-data"]
+description = "Run the opt-in real-data API suite; requires REAL_DATA_DATABASE_URL"
+run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features tests/services"
+
+# The live S3-compatible backend contract: SSE-KMS at rest, the hash-chained
+# access log, and provisioning/deprovisioning of a per-institution bucket. The
+# suite self-skips when S3_* is unconfigured, which is EVERY CI job today —
+# measured with the credentials blanked: `27 passed, 18 skipped`. So the only
+# storage tests CI has ever run are the pure-config ones; nothing has ever
+# exercised the real object store.
+#
+# A MinIO container with its BUILT-IN KMS satisfies all 18 — no KES sidecar is
+# needed, which is what made this look unreachable. Measured against
+# `MINIO_KMS_SECRET_KEY=aequoros-key:<base64-32>`: `45 passed`.
+#
+# Two sharp edges, both found by running it:
+#   * the KMS key MUST be named `aequoros-key` — the SSE-KMS assertion pins that
+#     literal against the returned `SSEKMSKeyId`;
+#   * do NOT export STORAGE_RETIRE_AFTER. StorageEngineSettings reads the process
+#     environment, so setting it makes `test_mvp_requires_a_retirement_date` fail
+#     with DID NOT RAISE — the env var defeats the very refusal that test asserts.
+#
+# Requires S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY and STORAGE_KMS_KEY_ID.
+[tasks."risk-service:test-storage"]
+description = "Run the S3-compatible storage contract suite; requires S3_* credentials"
+run = "uv run pytest tests/storage"
+
 [tasks."risk-service:lint"]
 description = "Run Ruff checks"
 run = "uv run ruff check ."

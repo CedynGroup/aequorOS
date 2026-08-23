@@ -18,6 +18,7 @@ from app.core.config import get_operator_settings
 from app.db.base import utc_now
 from app.models import OperatorAuditLog, OperatorUser
 from app.operator.services import operator_auth
+from app.services import auth_throttle
 from tests.operator.conftest import OPERATOR_JWT_SECRET, operator_headers
 
 PASSWORD = "correct horse battery staple"
@@ -142,6 +143,146 @@ class TestLogin:
         for _ in range(4):
             assert login(operator_client, "ama@aequoros.com", "wrong").status_code == 401
         assert login(operator_client, "ama@aequoros.com", PASSWORD).status_code == 200
+        # …durably, too: the row's own counter is back to zero.
+        operator_db.expire_all()
+        row = operator_db.scalar(
+            select(OperatorUser).where(OperatorUser.email == "ama@aequoros.com")
+        )
+        assert row is not None
+        assert row.failed_login_attempts == 0
+        assert row.locked_until is None
+
+
+# -- D-25: the lockout is DURABLE, per account, and blind to the source IP ---------
+class TestDurableLockout:
+    """The staff plane mints cross-tenant BYPASSRLS sessions, so its login
+    throttle must be at least the tenant plane's: durable columns on the account
+    row, not a per-process ``(email, ip)`` dict that a rotating source address
+    resets, more than one worker multiplies and a deploy erases."""
+
+    def test_failures_land_on_the_operator_row_not_only_in_process(
+        self, operator_client: TestClient, operator_db: Session
+    ) -> None:
+        make_operator(operator_db)
+        for _ in range(3):
+            assert login(operator_client, "ama@aequoros.com", "wrong").status_code == 401
+        operator_db.expire_all()
+        row = operator_db.scalar(
+            select(OperatorUser).where(OperatorUser.email == "ama@aequoros.com")
+        )
+        assert row is not None
+        assert row.failed_login_attempts == 3
+        assert row.locked_until is None
+
+    def test_lockout_survives_a_process_restart(
+        self, operator_client: TestClient, operator_db: Session
+    ) -> None:
+        # Losing the process-local layer is exactly what a deploy (or a second
+        # uvicorn worker) does. The durable columns must still refuse.
+        make_operator(operator_db)
+        for _ in range(5):
+            login(operator_client, "ama@aequoros.com", "wrong")
+        operator_auth.reset_login_throttle()
+        locked = login(operator_client, "ama@aequoros.com", PASSWORD)
+        assert locked.status_code == 429
+        assert "Try again in" in locked.json()["error"]["message"]
+
+    def test_rotating_the_source_ip_does_not_reset_the_budget(
+        self, operator_client: TestClient, operator_db: Session
+    ) -> None:
+        """The old key included the client IP, so an attacker rotating
+        addresses got five fresh guesses per address — an unbounded budget."""
+        make_operator(operator_db)
+        for _ in range(5):
+            login(operator_client, "ama@aequoros.com", "wrong")
+        # Simulate a request arriving from a brand-new source address: the
+        # process-local layer knows nothing about it either way now, and the
+        # durable lock is what refuses.
+        operator_auth.reset_login_throttle()
+        for _ in range(3):
+            assert login(operator_client, "ama@aequoros.com", "wrong").status_code == 429
+        assert login(operator_client, "ama@aequoros.com", PASSWORD).status_code == 429
+
+    def test_lockout_is_progressive_and_capped(
+        self, operator_client: TestClient, operator_db: Session
+    ) -> None:
+        # Same curve as the tenant plane: each lockout beyond the threshold
+        # doubles, bounded so an attacker cannot deny a staff account forever.
+        make_operator(operator_db)
+        for _ in range(5):
+            login(operator_client, "ama@aequoros.com", "wrong")
+        operator_db.expire_all()
+        row = operator_db.scalar(
+            select(OperatorUser).where(OperatorUser.email == "ama@aequoros.com")
+        )
+        assert row is not None and row.locked_until is not None
+        first = row.locked_until
+
+        operator_auth.reset_login_throttle()
+        # Rewind the lock so the next attempt is served, then earn another one.
+        row.locked_until = utc_now() - dt.timedelta(seconds=1)
+        operator_db.commit()
+        assert login(operator_client, "ama@aequoros.com", "wrong").status_code == 401
+        operator_db.expire_all()
+        row = operator_db.scalar(
+            select(OperatorUser).where(OperatorUser.email == "ama@aequoros.com")
+        )
+        assert row is not None and row.locked_until is not None
+        assert row.failed_login_attempts == 6
+        settings = operator_auth.throttle_settings()
+        assert auth_throttle._backoff_seconds(6, settings) == 2 * auth_throttle._backoff_seconds(  # noqa: SLF001 - the policy under test
+            5, settings
+        )
+        assert (
+            auth_throttle._backoff_seconds(99, settings)  # noqa: SLF001
+            == auth_throttle.MAX_LOCKOUT_SECONDS
+        )
+        assert first is not None
+
+    def test_lockout_is_reported_as_an_auth_anomaly_without_the_email(
+        self,
+        operator_client: TestClient,
+        operator_db: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Operator credential-stuffing used to be invisible: no signal at all
+        left the staff plane. The tenant plane reports it; so does this one."""
+        seen: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            auth_throttle,
+            "auth_anomaly",
+            lambda **fields: seen.append(fields),
+        )
+        row = make_operator(operator_db)
+        for _ in range(5):
+            login(operator_client, "ama@aequoros.com", "wrong")
+        assert len(seen) == 1
+        emitted = seen[0]
+        assert emitted["reason"] == "account_locked_after_repeated_failures"
+        assert emitted["plane"] == "operator"
+        assert emitted["operator_user_id"] == str(row.id)
+        assert emitted["failed_attempts"] == 5
+        assert "ama@aequoros.com" not in json.dumps(emitted)
+
+    def test_an_unknown_email_is_throttled_identically(
+        self, operator_client: TestClient, operator_db: Session
+    ) -> None:
+        """No enumeration oracle: an address with no row has nowhere durable to
+        record failures, so the process-local layer must still answer 429 —
+        exactly as it does for a real account."""
+        make_operator(operator_db)
+        for _ in range(5):
+            assert login(operator_client, "ghost@aequoros.com", "wrong").status_code == 401
+        ghost = login(operator_client, "ghost@aequoros.com", "wrong")
+        real = login(operator_client, "ama@aequoros.com", PASSWORD)
+        assert ghost.status_code == 429
+        assert real.status_code == 200
+        for _ in range(5):
+            login(operator_client, "ama@aequoros.com", "wrong")
+        assert (
+            login(operator_client, "ama@aequoros.com", "wrong").json()["error"]["code"]
+            == ghost.json()["error"]["code"]
+        )
 
 
 # -- operator-JWT branch of get_operator_context ----------------------------------

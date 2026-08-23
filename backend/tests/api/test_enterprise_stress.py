@@ -9,6 +9,7 @@ tenant isolation — against the deterministic canonical seeded book.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -321,3 +322,76 @@ def test_enterprise_stress_run_registry_lists_and_reopens(db_client: TestClient)
         headers=headers(ORG_2),
     )
     assert foreign_get.status_code == 404
+
+
+def test_the_car_target_defaults_to_the_governed_floor_not_a_literal(
+    db_client: TestClient,
+) -> None:
+    """D-15: one run, one capital floor.
+
+    ``car_target_pct`` defaulted to the literal ``13`` on the request schema, so
+    an enterprise-stress run carried TWO capital floors: the governed,
+    effective-dated ``car_min`` the engines check every projected ratio against,
+    and this API default, from which Appendix II Table 1's "capital required",
+    Table 5's Pillar-1 requirement and the management-action RWA-relief valuation
+    were computed. They are the same regulatory quantity, and the literal could
+    not track it — BoG has moved the minimum with the CRD ¶75 conservation
+    buffer, and an SDI's Act 930 s.29 floor is 10%, not 13%.
+    """
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    checker = _seed_checker(db_client)
+    scenario_id = _create_scenario(db_client, code="car_target_default")
+    _approve_scenario(db_client, scenario_id, checker)
+    body = {
+        "scenario_id": scenario_id,
+        "reporting_period_id": period_id,
+        "reason": "CAR target resolves from the control plane.",
+    }
+
+    omitted = db_client.post(RUNS_URL.format(bank_id=bank_id), headers=headers(), json=body)
+    assert omitted.status_code == 201, omitted.text
+    run = omitted.json()
+    # The governed bank floor: CRD ¶71's 10% plus the ¶75 conservation buffer,
+    # seeded in the regulatory-parameter control plane as ``car_min`` = 13.
+    target = Decimal(run["appendix_ii"]["table1_summary"]["car_target_pct"])
+    assert target == Decimal("13")
+    assert Decimal(run["appendix_ii"]["table5_rwa"]["car_target_pct"]) == target
+
+    # Stating the same floor explicitly is the same run, hash included — the two
+    # paths resolve to ONE number rather than two that happen to agree.
+    explicit = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={**body, "car_target_pct": "13"},
+    )
+    assert explicit.status_code == 201, explicit.text
+    assert explicit.json()["input_hash"] == run["input_hash"]
+
+
+def test_a_car_target_below_the_governed_floor_is_refused(db_client: TestClient) -> None:
+    """An internal target may sit ABOVE the regulatory minimum, never below it.
+
+    Appendix II's "capital required" line computed against a target weaker than
+    the binding minimum understates what the institution must hold.
+    """
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    checker = _seed_checker(db_client)
+    scenario_id = _create_scenario(db_client, code="car_target_too_low")
+    _approve_scenario(db_client, scenario_id, checker)
+
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": scenario_id,
+            "reporting_period_id": period_id,
+            "reason": "A target below the regulatory floor.",
+            "car_target_pct": "9",
+        },
+    )
+    assert response.status_code == 409, response.text
+    details = response.json()["error"]["details"]
+    assert details["error_code"] == "car_target_below_regulatory_minimum"
+    assert details["details"]["governed_car_min_pct"] == "13"

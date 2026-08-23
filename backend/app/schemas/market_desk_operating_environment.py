@@ -56,7 +56,11 @@ class DeskOperatingEnvironmentInputs(ClosedModel):
 class DeskOperatingEnvironmentComputeRequest(ClosedModel):
     """Compute-preview / stage-draft request body."""
 
-    jurisdiction_code: str = Field(default="GH", min_length=2, max_length=8)
+    # REQUIRED, no default (enterprise audit 2026-08-20 §6) — an operating-
+    # environment assessment is ABOUT a jurisdiction; defaulting it to GH made a
+    # missing field indistinguishable from a Ghana assessment. The console desk
+    # page already sends it explicitly.
+    jurisdiction_code: str = Field(min_length=2, max_length=8)
     cob_date: date
     inputs: DeskOperatingEnvironmentInputs
 

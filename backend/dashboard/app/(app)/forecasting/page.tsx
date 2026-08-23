@@ -491,26 +491,26 @@ function RunDashboard({
         </ChartFrame>
         <ChartFrame
           title="LCR path"
-          subtitle={`${regShort()} minimum ${fmtPct(lcrThreshold, 0)}`}
+          subtitle={`Basel minimum ${fmtPct(lcrThreshold, 0)}`}
           height={240}
         >
           <RatioPathChart
             data={path.map((p) => ({ label: yearLabel(p), value: num(p.lcrPct) }))}
             threshold={lcrThreshold}
-            thresholdLabel={`${regShort()} min ${fmtPct(lcrThreshold, 0)}`}
+            thresholdLabel={`Basel min ${fmtPct(lcrThreshold, 0)}`}
             color={seriesColor(1)}
             label="LCR"
           />
         </ChartFrame>
         <ChartFrame
           title="NSFR path"
-          subtitle={`${regShort()} minimum ${fmtPct(nsfrThreshold, 0)}`}
+          subtitle={`Basel minimum ${fmtPct(nsfrThreshold, 0)}`}
           height={240}
         >
           <RatioPathChart
             data={path.map((p) => ({ label: yearLabel(p), value: num(p.nsfrPct) }))}
             threshold={nsfrThreshold}
-            thresholdLabel={`${regShort()} min ${fmtPct(nsfrThreshold, 0)}`}
+            thresholdLabel={`Basel min ${fmtPct(nsfrThreshold, 0)}`}
             color={seriesColor(2)}
             label="NSFR"
           />

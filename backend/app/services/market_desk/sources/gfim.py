@@ -227,7 +227,9 @@ _STAT_ROWS: tuple[tuple[str, str, str], ...] = (
 def _status_report_text(raw: bytes) -> str:
     """Decode a GFIM monthly status artifact: PDF (live captures) or plain text (fixtures)."""
     if raw[:4] == b"%PDF":
-        from app.services.market_desk.sources.pdf_text import page_lines
+        # Deferred on purpose: PDF extraction is an optional dependency and the
+        # fixture path (plain text) must import and run without it.
+        from app.services.market_desk.sources.pdf_text import page_lines  # noqa: PLC0415
 
         pages = page_lines(raw)
         return "\n".join(line for page in pages for line in page)

@@ -15,13 +15,15 @@
  * @export
  * @interface CarTargetPct
  */
-export type CarTargetPct = number | string;
+export type CarTargetPct = number | string | null;
 
 /**
  * Check if a given object implements the CarTargetPct interface.
  */
 export function instanceOfCarTargetPct(value: unknown): value is CarTargetPct {
-  return typeof value === "number" || typeof value === "string";
+  return (
+    typeof value === "number" || typeof value === "string" || value === null
+  );
 }
 
 export function CarTargetPctFromJSON(json: any): CarTargetPct {

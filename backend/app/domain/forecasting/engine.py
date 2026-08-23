@@ -15,6 +15,18 @@ from ``app.domain.capital.engine`` on it, with the unshocked baseline
 parameters. Year 0 of every projection is the as-of fact set itself, so a
 projection's year-0 ratios equal the standalone engines' baseline outputs.
 
+That last sentence used to be false for CAR (forensic audit 2026-08-21, the
+"High" row of the Confirmed Duplicate / Divergence Register). The projected
+fact set omitted the two capital fact groups that carry no balance-sheet
+amount of their own — ``ecl_exposure`` (IFRS 9 staged EADs) and
+``crm_collateral`` (credit-risk-mitigation collateral) — so the forecast fed
+the authoritative capital engine a NARROWER input set than the capital run
+did, and the same bank/period reported two different CARs. The forecast now
+carries both groups end to end and applies the identical IFRS 9 general-ECL
+Tier 2 override, so year-0 CAR/Tier 1/CET1 reconcile with the capital run by
+construction. ``tests/equivalence/`` is the executable proof. If you ever
+need to narrow this fact scope again, you are re-opening that finding.
+
 Year ``t`` mechanics (t = 1..years, year 0 = as-of facts):
 
 - Loans: every ``loan_exposure`` category, ``off_balance`` commitment, and
@@ -28,6 +40,10 @@ Year ``t`` mechanics (t = 1..years, year 0 = as-of facts):
   ``1 + (deposit_growth_pct + securities_shift_pp)/100``; the cash-derived
   HQLA rows and the balance-sheet cash/reserve rows scale with deposits.
 - ``other_assets`` (and any unrecognized balance-sheet row) stays constant.
+- ``ecl_exposure`` staged EADs and ``crm_collateral`` values scale with the
+  loan factor: both qualify the loan book rather than standing beside it, so
+  freezing them while loans grow would quietly thin IFRS 9 coverage and
+  collateral recognition year on year. Neither enters assets or the plug.
 - P&L: ``earning_assets = loans + securities``;
   ``nii = nim_pct/100 x avg(earning_assets_{t-1}, earning_assets_t)``;
   ``fees = fee_income_pct_assets/100 x avg total assets``;
@@ -52,10 +68,23 @@ Year ``t`` mechanics (t = 1..years, year 0 = as-of facts):
   per-year LCR/NSFR this projection computes; a cash-ratio early-warning
   indicator belongs to the Phase-2 EWI framework (product.md), not to a
   projection-refusal guard.
-- Operational income roll-forward for the BIA charge: the gross-income
-  history seeds from the as-of ``operational_income`` facts; each projected
-  year appends ``GI_t = total_income_t`` and the capital engine consumes the
-  trailing three years.
+- Operational income roll-forward for the BIA charge: the history seeds from
+  the as-of ``operational_income`` facts, CATEGORIES INTACT, and each
+  projected year appends ``GI_t = total_income_t`` (net interest income plus
+  fee income — Basel II ¶650 gross income exactly) named
+  ``gross_income_<year>``, while retiring the oldest row. The evidence base
+  therefore stays exactly as wide as the as-of book's, and year 0 hands the
+  capital engine that book's rows unchanged — which is what makes its
+  operational RWA the capital run's.
+  The ¶649 SELECTION is not this engine's job and must not be re-implemented
+  here: ``compute_rwa`` picks the ``gross_income_*`` series and the three most
+  recent years out of whatever ``operational_income`` rows it is handed
+  (2026-08-21 — before that it averaged every positive row in the group, which
+  understated operational RWA and so OVERSTATED CAR in both engines at once).
+  Because each projected year appends exactly one gross-income year and
+  retirement takes the OLDEST row first, the number of gross-income years the
+  projection carries never falls below the as-of book's — so the ¶649 window
+  the capital engine sees advances with the projection.
 - ``fx_depreciation_pct`` revalues the ``market_risk`` open FX positions once
   at t=1 by ``1 + fx/100`` (FX-denominated position revaluation);
   ``securities_mtm_haircut_pct`` (what-if only) marks the marketable
@@ -67,8 +96,17 @@ from __future__ import annotations
 import itertools
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from dataclasses import field as dataclass_field
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.domain.capital.ecl import (
+    BASE_SCENARIO as ECL_BASE_SCENARIO,
+)
+from app.domain.capital.ecl import (
+    EclAssumption,
+    EclExposure,
+    compute_ecl,
+)
 from app.domain.capital.engine import (
     CapitalFact,
     CapitalParams,
@@ -98,6 +136,16 @@ FACT_GROUP_LCR_INFLOW = "lcr_inflow"
 FACT_GROUP_MARKET_RISK = "market_risk"
 FACT_GROUP_OPERATIONAL_INCOME = "operational_income"
 FACT_GROUP_CAPITAL_COMPONENT = "capital_component"
+# The two capital fact groups that carry no balance-sheet amount of their own.
+# They are projected (both scale with the loan book) purely so the capital
+# engine sees the SAME input set the capital run gives it — see the module
+# docstring and tests/equivalence/.
+FACT_GROUP_ECL_EXPOSURE = "ecl_exposure"
+FACT_GROUP_CRM_COLLATERAL = "crm_collateral"
+#: ``ecl_exposure`` categories are ``"<segment>:stage<N>"``. This split MUST
+#: stay identical to ``regulatory_capital._modeled_ecl``; the equivalence suite
+#: is what holds the two in lockstep.
+ECL_STAGE_TOKEN = ":stage"
 
 CASH_CATEGORIES = ("cash_vault", "bog_required_reserves", "bog_excess_reserves")
 SECURITIES_BS_CATEGORIES = ("securities_bog_bills", "securities_gog_bonds")
@@ -114,7 +162,16 @@ CASH_HQLA_MIRRORS = {
 }
 TIER_CET1 = "CET1"
 
-GI_TRAILING_YEARS = 3
+# Retired 2026-08-21. The projection used to slice the last THREE
+# ``operational_income`` ROWS before handing them to the capital engine. That
+# is not the ¶649 window — on a book whose group carries more than the
+# ``gross_income_*`` series (the live one carries five series across three
+# years) three rows is barely one year, so the projection's operational-RWA
+# base was a different book's than the capital run's and year-0 CAR diverged.
+# The projection now carries the as-of income evidence at its own width
+# (``_Meta.gi_window``) and ``compute_rwa`` owns the ¶649 selection — three
+# most recent years of the ``gross_income_*`` series, positive years only.
+# Do not re-add a window constant here; one selection rule, in one engine.
 
 DEFAULT_FEE_INCOME_PCT_ASSETS = Decimal("1.2")
 DEFAULT_TAX_RATE_PCT = Decimal("25")
@@ -218,6 +275,12 @@ class ForecastParams:
 
     liquidity: LiquidityParams
     capital: CapitalParams
+    #: Board-approved IFRS 9 PD/LGD register. Supplied, it drives the SAME
+    #: general-provisions Tier 2 override the capital run applies (Phase 2
+    #: item 8). Empty — the default, and the state of every book with no
+    #: configured register — leaves the ingested-provisions path untouched and
+    #: every projected figure byte-identical.
+    ecl_assumptions: tuple[EclAssumption, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -365,7 +428,18 @@ class _State:
     securities_group: dict[str, Decimal]
     market: dict[str, Decimal]
     components: dict[str, Decimal]
-    gi_history: list[tuple[int, Decimal]]
+    # (income_year, category, amount). The CATEGORY is carried because the
+    # capital engine selects the BIA base BY NAME (the ``gross_income_*``
+    # series, Basel II ¶649) out of an ``operational_income`` group that also
+    # holds net-interest-income / net-income / opex / provisions series — so a
+    # row that lost or renamed its category would silently leave, or wrongly
+    # join, the BIA base. Year 0 hands these back verbatim.
+    gi_history: list[tuple[int, str, Decimal]]
+    # Loan-book-linked capital inputs. Neither is an asset in its own right —
+    # they qualify exposures the loan rows already carry — so they scale with
+    # the loan factor and never enter assets_total()/the funding plug.
+    ecl_exposures: dict[str, Decimal] = dataclass_field(default_factory=dict)
+    crm_collateral: dict[str, Decimal] = dataclass_field(default_factory=dict)
 
     def loans_total(self) -> Decimal:
         return sum(self.loans.values(), _ZERO)
@@ -407,6 +481,15 @@ class _Meta:
     securities_group_cash_derived: Mapping[str, bool]
     component_tiers: Mapping[str, str | None]
     component_deductions: Mapping[str, bool]
+    #: How many ``operational_income`` rows the as-of book carried. The
+    #: projection keeps the income evidence base that WIDE for every year: each
+    #: projected year appends one row and retires the oldest, so the base does
+    #: not silently change shape mid-projection. This is NOT the BIA window —
+    #: ``compute_rwa`` takes the ¶649 three most recent ``gross_income_*``
+    #: years out of whatever this emits. Retirement is oldest-first and each
+    #: year appends exactly one gross-income year, so the count of
+    #: gross-income years carried never decreases.
+    gi_window: int = 1
 
 
 def project(  # noqa: PLR0913, PLR0915
@@ -448,6 +531,11 @@ def project(  # noqa: PLR0913, PLR0915
         _scale_in_place(state.loans, loan_factor)
         _scale_in_place(state.off_balance, loan_factor)
         _scale_in_place(state.inflows, loan_factor)
+        # Staged ECL EADs and CRM collateral qualify the loan book, so they
+        # track it. Holding them flat while loans grow would silently shrink
+        # both IFRS 9 coverage and collateral recognition year on year.
+        _scale_in_place(state.ecl_exposures, loan_factor)
+        _scale_in_place(state.crm_collateral, loan_factor)
         _scale_in_place(state.deposits, deposit_factor)
         _scale_in_place(state.securities, securities_factor)
         _scale_in_place(state.cash, deposit_factor)
@@ -497,7 +585,10 @@ def project(  # noqa: PLR0913, PLR0915
                 f"Year {year}: projected assets do not equal liabilities plus equity.",
             )
 
-        state.gi_history.append((state.gi_history[-1][0] + 1, total_income))
+        next_income_year = state.gi_history[-1][0] + 1
+        state.gi_history.append(
+            (next_income_year, f"gross_income_{next_income_year}", total_income)
+        )
 
         ratios = _regulatory_ratios(state, meta, params)
         average_equity = (equity_prev + state.equity) / _TWO
@@ -783,7 +874,9 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
     securities_group: dict[str, Decimal] = {}
     market: dict[str, Decimal] = {}
     components: dict[str, Decimal] = {}
-    income_facts: list[tuple[int, Decimal]] = []
+    ecl_exposures: dict[str, Decimal] = {}
+    crm_collateral: dict[str, Decimal] = {}
+    income_facts: list[tuple[int, str, Decimal]] = []
 
     loan_risk_weights: dict[str, str | None] = {}
     off_balance_ccf: dict[str, Decimal | None] = {}
@@ -834,11 +927,15 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
             market[fact.category] = amount
         elif fact.fact_group == FACT_GROUP_OPERATIONAL_INCOME:
             if fact.income_year is not None:
-                income_facts.append((fact.income_year, amount))
+                income_facts.append((fact.income_year, fact.category, amount))
         elif fact.fact_group == FACT_GROUP_CAPITAL_COMPONENT:
             components[fact.category] = amount
             component_tiers[fact.category] = fact.capital_tier
             component_deductions[fact.category] = fact.is_deduction
+        elif fact.fact_group == FACT_GROUP_ECL_EXPOSURE:
+            ecl_exposures[fact.category] = amount
+        elif fact.fact_group == FACT_GROUP_CRM_COLLATERAL:
+            crm_collateral[fact.category] = amount
 
     if RETAINED_EARNINGS_CATEGORY not in components:
         components[RETAINED_EARNINGS_CATEGORY] = _ZERO
@@ -861,12 +958,15 @@ def _parse_facts(facts: Sequence[ForecastFact]) -> tuple[_State, _Meta]:  # noqa
         market=market,
         components=components,
         gi_history=sorted(income_facts),
+        ecl_exposures=ecl_exposures,
+        crm_collateral=crm_collateral,
     )
     if not state.gi_history:
         # The capital engine requires at least one positive gross-income year;
         # give the roll-forward a year to append onto so it fails loudly there.
-        state.gi_history = [(0, _ZERO)]
+        state.gi_history = [(0, "gross_income_0", _ZERO)]
     meta = _Meta(
+        gi_window=max(len(state.gi_history), 1),
         loan_risk_weights=loan_risk_weights,
         off_balance_ccf=off_balance_ccf,
         off_balance_risk_weights=off_balance_risk_weights,
@@ -933,11 +1033,19 @@ def _state_facts(state: _State, meta: _Meta) -> list[ForecastFact]:  # noqa: PLR
         rows.append(
             ForecastFact(fact_group=FACT_GROUP_MARKET_RISK, category=category, amount=amount)
         )
-    for income_year, amount in state.gi_history[-GI_TRAILING_YEARS:]:
+    for category, amount in sorted(state.ecl_exposures.items()):
+        rows.append(
+            ForecastFact(fact_group=FACT_GROUP_ECL_EXPOSURE, category=category, amount=amount)
+        )
+    for category, amount in sorted(state.crm_collateral.items()):
+        rows.append(
+            ForecastFact(fact_group=FACT_GROUP_CRM_COLLATERAL, category=category, amount=amount)
+        )
+    for income_year, category, amount in state.gi_history[-meta.gi_window :]:
         rows.append(
             ForecastFact(
                 fact_group=FACT_GROUP_OPERATIONAL_INCOME,
-                category=f"gross_income_{income_year}",
+                category=category,
                 amount=amount,
                 income_year=income_year,
             )
@@ -984,13 +1092,18 @@ def _to_liquidity_facts(rows: Sequence[ForecastFact]) -> tuple[LiquidityFact, ..
 
 
 def _to_capital_facts(rows: Sequence[ForecastFact]) -> tuple[CapitalFact, ...]:
+    # This tuple must stay equal to ``regulatory_capital._CAPITAL_FACT_GROUPS``:
+    # the whole point of the year-0 reconciliation is that the capital engine
+    # receives the same input set from both callers.
     relevant = (
         FACT_GROUP_BALANCE_SHEET,
-        FACT_GROUP_LOAN_EXPOSURE,
-        FACT_GROUP_OFF_BALANCE,
-        FACT_GROUP_MARKET_RISK,
-        FACT_GROUP_OPERATIONAL_INCOME,
         FACT_GROUP_CAPITAL_COMPONENT,
+        FACT_GROUP_CRM_COLLATERAL,
+        FACT_GROUP_ECL_EXPOSURE,
+        FACT_GROUP_LOAN_EXPOSURE,
+        FACT_GROUP_MARKET_RISK,
+        FACT_GROUP_OFF_BALANCE,
+        FACT_GROUP_OPERATIONAL_INCOME,
     )
     return tuple(
         CapitalFact(
@@ -1009,6 +1122,43 @@ def _to_capital_facts(rows: Sequence[ForecastFact]) -> tuple[CapitalFact, ...]:
     )
 
 
+def _ecl_exposures(facts: Sequence[CapitalFact]) -> tuple[EclExposure, ...]:
+    """Parse ``ecl_exposure`` facts into staged exposures.
+
+    Byte-for-byte the split ``regulatory_capital._modeled_ecl`` performs: a
+    category is ``"<segment>:stage<N>"``, and anything that does not parse is
+    skipped rather than guessed at.
+    """
+    exposures: list[EclExposure] = []
+    for fact in facts:
+        if fact.fact_group != FACT_GROUP_ECL_EXPOSURE:
+            continue
+        segment, _, stage_token = fact.category.rpartition(ECL_STAGE_TOKEN)
+        if not segment or not stage_token.isdigit():
+            continue
+        exposures.append(EclExposure(segment=segment, stage=int(stage_token), ead=fact.amount))
+    return tuple(exposures)
+
+
+def _general_provisions_override(
+    capital_facts: Sequence[CapitalFact], params: ForecastParams
+) -> Decimal | None:
+    """The IFRS 9 modeled general ECL that replaces ingested general provisions.
+
+    The gate is the capital run's gate (Phase 2 item 8): active only when BOTH
+    staged exposures and a Board-approved assumption register exist, otherwise
+    ``None`` and the ingested-provisions path stands untouched. The baseline
+    projection is unshocked, so it uses the unconditioned base scenario — the
+    same one ``_modeled_ecl`` uses when no ECL conditioning shock is supplied.
+    """
+    if not params.ecl_assumptions:
+        return None
+    exposures = _ecl_exposures(capital_facts)
+    if not exposures:
+        return None
+    return compute_ecl(exposures, params.ecl_assumptions, (ECL_BASE_SCENARIO,)).general_ecl
+
+
 def _regulatory_ratios(
     state: _State, meta: _Meta, params: ForecastParams
 ) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
@@ -1019,7 +1169,9 @@ def _regulatory_ratios(
     lcr = compute_lcr(liquidity_facts, params.liquidity)
     nsfr = compute_nsfr(liquidity_facts, params.liquidity)
     rwa = compute_rwa(capital_facts, params.capital)
-    ratios = compute_capital_ratios(capital_facts, rwa, params.capital)
+    ratios = compute_capital_ratios(
+        capital_facts, rwa, params.capital, _general_provisions_override(capital_facts, params)
+    )
     return (
         ratios.car_pct,
         ratios.tier1_ratio_pct,

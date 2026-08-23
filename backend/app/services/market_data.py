@@ -235,6 +235,7 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
             CanonicalYieldCurve.currency == currency.upper(),
             CanonicalYieldCurve.as_of_date <= as_of,
             CanonicalYieldCurve.superseded_by.is_(None),
+            CanonicalYieldCurve.withdrawn_at.is_(None),
             CanonicalYieldCurve.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .order_by(
@@ -260,6 +261,7 @@ def get_yield_curve(  # noqa: PLR0913 - scope + tenant + as-of is the request ke
                 CanonicalYieldCurvePoint.organization_id == organization_id,
                 CanonicalYieldCurvePoint.yield_curve_id == curve.id,
                 CanonicalYieldCurvePoint.superseded_by.is_(None),
+                CanonicalYieldCurvePoint.withdrawn_at.is_(None),
                 CanonicalYieldCurvePoint.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
             )
             .order_by(CanonicalYieldCurvePoint.tenor_months)
@@ -371,6 +373,7 @@ def list_yield_curves(  # noqa: PLR0913 - scope + tenant + as-of is the request 
             CanonicalYieldCurve.bank_id == bank_id,
             CanonicalYieldCurve.as_of_date <= as_of,
             CanonicalYieldCurve.superseded_by.is_(None),
+            CanonicalYieldCurve.withdrawn_at.is_(None),
             CanonicalYieldCurve.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .distinct()
@@ -524,6 +527,7 @@ def get_fx_forward(  # noqa: PLR0913 - scope + tenant + pair/tenor/as-of request
         CanonicalFxRate.tenor_months == tenor_months,
         CanonicalFxRate.as_of_date <= as_of,
         CanonicalFxRate.superseded_by.is_(None),
+        CanonicalFxRate.withdrawn_at.is_(None),
         CanonicalFxRate.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
     )
     if source_systems is not None:
@@ -567,6 +571,7 @@ def _fx_spot_query(
         CanonicalFxRate.rate_type == "spot",
         CanonicalFxRate.as_of_date <= as_of,
         CanonicalFxRate.superseded_by.is_(None),
+        CanonicalFxRate.withdrawn_at.is_(None),
         CanonicalFxRate.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
     )
 
@@ -593,6 +598,7 @@ def list_fx_base_currencies(
             CanonicalFxRate.rate_type == "spot",
             CanonicalFxRate.as_of_date <= as_of,
             CanonicalFxRate.superseded_by.is_(None),
+            CanonicalFxRate.withdrawn_at.is_(None),
             CanonicalFxRate.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .distinct()
@@ -622,6 +628,7 @@ def list_curve_currencies(
             CanonicalYieldCurve.bank_id == bank_id,
             CanonicalYieldCurve.as_of_date <= as_of,
             CanonicalYieldCurve.superseded_by.is_(None),
+            CanonicalYieldCurve.withdrawn_at.is_(None),
             CanonicalYieldCurve.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .distinct()
@@ -644,6 +651,7 @@ def list_fx_pairs(
             CanonicalFxRate.rate_type == "spot",
             CanonicalFxRate.as_of_date <= as_of,
             CanonicalFxRate.superseded_by.is_(None),
+            CanonicalFxRate.withdrawn_at.is_(None),
             CanonicalFxRate.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .distinct()
@@ -670,6 +678,7 @@ def list_fx_forward_scopes(
             CanonicalFxRate.tenor_months.is_not(None),
             CanonicalFxRate.as_of_date <= as_of,
             CanonicalFxRate.superseded_by.is_(None),
+            CanonicalFxRate.withdrawn_at.is_(None),
             CanonicalFxRate.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         ).distinct()
     ).all()
@@ -690,6 +699,7 @@ def list_rating_issuers(
             CanonicalCounterpartyRating.bank_id == bank_id,
             CanonicalCounterpartyRating.as_of_date <= as_of,
             CanonicalCounterpartyRating.superseded_by.is_(None),
+            CanonicalCounterpartyRating.withdrawn_at.is_(None),
             CanonicalCounterpartyRating.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .distinct()
@@ -711,6 +721,7 @@ def list_index_scopes(
             CanonicalMarketIndex.bank_id == bank_id,
             CanonicalMarketIndex.as_of_date <= as_of,
             CanonicalMarketIndex.superseded_by.is_(None),
+            CanonicalMarketIndex.withdrawn_at.is_(None),
             CanonicalMarketIndex.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .distinct()
@@ -737,6 +748,7 @@ def get_rating(  # noqa: PLR0913 - scope + tenant + as-of is the request key
             CanonicalCounterpartyRating.issuer == issuer,
             CanonicalCounterpartyRating.as_of_date <= as_of,
             CanonicalCounterpartyRating.superseded_by.is_(None),
+            CanonicalCounterpartyRating.withdrawn_at.is_(None),
             CanonicalCounterpartyRating.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .order_by(
@@ -799,6 +811,7 @@ def get_index(  # noqa: PLR0913 - scope + tenant + as-of is the request key
             CanonicalMarketIndex.scenario == scenario,
             CanonicalMarketIndex.as_of_date <= as_of,
             CanonicalMarketIndex.superseded_by.is_(None),
+            CanonicalMarketIndex.withdrawn_at.is_(None),
             CanonicalMarketIndex.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .order_by(

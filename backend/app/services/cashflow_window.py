@@ -192,9 +192,11 @@ def _current_book(
             CanonicalPositionSnapshot.organization_id == ctx.organization_id,
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPosition.organization_id == ctx.organization_id,
             CanonicalPosition.bank_id == bank.id,
             CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
             CanonicalPosition.position_type.in_((*_ASSET_TYPES, *_LIABILITY_TYPES)),
         )
         .group_by(CanonicalPositionSnapshot.position_id)
@@ -211,6 +213,7 @@ def _current_book(
         .where(
             CanonicalPositionSnapshot.organization_id == ctx.organization_id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_STATUSES),
         )
     ).all()

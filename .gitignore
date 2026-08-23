@@ -22,6 +22,7 @@ data/
 
 # Next.js build output (any app)
 .next/
+.next-dev/
 
 # --- public-repo hygiene backstop (2026-07) ---
 .claude/
@@ -39,7 +40,62 @@ coverage/
 .turbo/
 .vercel
 # Local documentation and client collateral.
-/docs/
+# --- Documentation: private by default, published by explicit allow-list ------
+# `/docs/` holds the evidence package, internal specs and operator runbooks. This
+# repository is PUBLIC, and those files carry real tenant identifiers, real
+# balances, production hostnames and an inventory of open security weaknesses —
+# so the default is ignore, and each publishable file is re-included by name.
+#
+# Adding a file here PUBLISHES it. Before adding one, confirm it names no tenant
+# (BK-/OR- codes other than the BK-SAMP0001 / OR-DEM00001 test fixtures), no
+# balance, no hostname or role name, and no unremediated security gap.
+# Classification and per-file reasoning: docs/audit/ (private).
+/docs/**
+!/docs/**/
+
+# Public contracts and integration guides
+!/docs/API_INTEGRATION.md
+!/docs/BOG_ONBOARDING.md
+!/docs/DASHBOARD_DESIGN_SYSTEM.md
+!/docs/sso-onboarding.md
+!/docs/sdi_onboarding_runbook.md
+
+# Domain specifications
+!/docs/ai_engine.md
+!/docs/data_engine.md
+!/docs/market_data_adapter.md
+!/docs/rbac.md
+!/docs/regulatory_reporting.md
+!/docs/stress.md
+!/docs/attestation_esignature.md
+
+# BoG return framework: the committed layouts ARE the official structures, and
+# the line maps are how a reviewer checks a filed figure against BoG's own form.
+!/docs/bog_returns/*_line_map.md
+!/docs/bog_returns/00_full_return_registry.md
+!/docs/bog_returns/99_coverage_matrix.md
+!/docs/bog_returns/CONTRIBUTING_line_maps.md
+!/docs/bog_returns/CONTRIBUTING_real_db_tests.md
+
+# Methodology notes
+!/docs/internal/credit_ratings_PD.md
+!/docs/internal/forward_curve_construction.md
+!/docs/research/*.md
+
+# Audit package: only the sections carrying no tenant data, no infrastructure
+# detail and no open-weakness inventory.
+!/docs/audit/00_evidence_package_index.md
+!/docs/audit/01_system_architecture.md
+!/docs/audit/02_calculation_authority_registry.md
+!/docs/audit/04_policy_governance.md
+!/docs/audit/16_external_verification_schedule.md
+
+# backend/docs/ is NOT covered by the rule above and is public by default. These
+# carry real tenant identifiers, balances and open findings; ignore them here.
+/backend/docs/INDEPENDENT_FORENSIC_REAUDIT_2026-08-22.md
+/backend/docs/forensic_calculation_audit_2026-08-21.md
+/backend/docs/P0_1_TO_P0_7_REMEDIATION_REPORT_2026-08-21.md
+/backend/docs/bog_parameter_sources.md
 /exports/
 start.md
 

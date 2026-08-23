@@ -48,6 +48,23 @@ def weekly_reporting_dates(
     ]
 
 
+#: Where an official BSD form computes a metric the platform's engines ALSO
+#: compute, the form's own methodology is named here so the filed package states
+#: which figure it reports (forensic audit §8 / WS-A metric authority registry).
+#:
+#: BSD5A is the worked case and the ONLY one established today: BoG's template
+#: ratio ``E70 = E25/E69`` uses 50% of the net open position and 100% of the
+#: three-year average gross income, where the capital engine applies an FX
+#: charge × RWA multiplier and a BIA charge × RWA multiplier. The two are
+#: DIFFERENT BY CONSTRUCTION and their inequality is pinned by
+#: ``tests/services/bog_forms/test_bsd5.py``. Nothing else is declared, because
+#: nothing else is established — a guessed methodology id would be worse than
+#: an absent one.
+_DECLARED_METHODOLOGIES: dict[str, tuple[tuple[str, str], ...]] = {
+    "BSD5A": (("car_pct", "bog_bsd5a_form_ratio"),),
+}
+
+
 def build_definitions(return_definition_cls: type[Any]) -> list[Any]:
     """One ReturnDefinition per catalogue form (constructed with the caller's
     class to avoid an import cycle with registry.py)."""
@@ -69,6 +86,16 @@ def build_definitions(return_definition_cls: type[Any]) -> list[Any]:
                 template_id=template_id_for(spec.code),
                 fidelity="CONFIRMED",
                 default_channel="email",
+                # Declared, not inherited (forensic audit ARCH-8). The BSD set is
+                # the Banking Supervision Department's prudential return pack for
+                # licensed BANKS in Ghana; the SDI return family is a separate
+                # pack BoG has not published (docs/sdi.md §2.3 — obtain it, never
+                # infer it). Stating both here means the eligibility authority is
+                # reading a reviewed declaration, not a dataclass default.
+                institution_classes=("bank",),
+                jurisdictions=("GH",),
+                required_data=("bank_financial_facts", "canonical_positions"),
+                declared_methodologies=_DECLARED_METHODOLOGIES.get(spec.code, ()),
             )
         )
     return definitions

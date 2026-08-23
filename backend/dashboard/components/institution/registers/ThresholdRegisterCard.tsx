@@ -123,7 +123,7 @@ export default function ThresholdRegisterCard({ bankId }: { bankId: string }) {
   return (
     <SectionCard
       title="Board threshold register"
-      subtitle="Liquidity thresholds — the Board's adopted levels over the directive's published minimums (LMTD ¶11(b)–(e))"
+      subtitle="Liquidity thresholds — the Board's adopted levels over the exposure draft's stated minimums (LMTD ¶11(b)–(e), Feb 2026 draft, not yet in force). The Board's own levels are what bind today."
       noPadding
       actions={
         query.data && (

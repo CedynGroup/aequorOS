@@ -37,6 +37,7 @@ from app.models.database_connection import DatabaseDirectConnection
 from app.schemas.database_connection import DatabaseConnectionCreate
 from app.services import database_connections, database_direct_jobs, job_queue, scheduler
 from tests.api.helpers import ORG_1, USER_1
+from tests.factories.outbound import stub_public_dns
 
 MASTER_KEY = "db-direct-jobs-test-master-key"
 CREDENTIALS = {"username": "AEQUOROS_RO", "password": "probe-password"}
@@ -54,6 +55,13 @@ def health_enabled(monkeypatch: pytest.MonkeyPatch):
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _resolvable_core(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A probe is a live connect, so the egress guard resolves the host: stub
+    DNS so the suite stays offline and deterministic."""
+    stub_public_dns(monkeypatch, "core-db.internal")
 
 
 @pytest.fixture

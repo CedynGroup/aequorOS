@@ -58,6 +58,37 @@ JOB_TYPES = (
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).
 _BACKOFF_BASE_SECONDS = 5
 
+#: Per-job-type stale-job windows, in seconds, overriding the deployment-wide
+#: ``WORKER_STALE_JOB_SECONDS`` for handlers whose legitimate runtime is far
+#: longer than the fleet default.
+#:
+#: ``reclaim_stale`` requires its window to EXCEED the longest legitimate handler
+#: runtime, or a slow-but-alive job is reclaimed and run twice. The default
+#: window is 900s; ``etl_dedup`` measurably ran **2h02m** on a 168k-record batch
+#: on the primary, so three of its jobs were reclaimed as "worker presumed dead"
+#: while still working, one of them twice — three concurrent copies of the same
+#: handler. The fix is per-type, not a bigger global number: the global default
+#: also governs how quickly a genuinely dead worker's jobs come back, so raising
+#: it fleet-wide to accommodate one long handler would slow recovery for the nine
+#: short ones.
+#:
+#: ``etl_dedup``'s 4h is ~2x its worst measured run, with the pairwise
+#: counterparty pass now bounded (``etl_dedup_jobs._DEFERRED_COUNTERPARTY_MAX_RECORDS``)
+#: so the measured 2h02m is an upper bound, not a typical case. A deployment that
+#: raises that bound to get the full pass must raise this window with it.
+#:
+#: Everything NOT listed here is on the deployment default and therefore asserts
+#: that it completes well inside it — see ``WorkerSettings.worker_stale_job_seconds``.
+STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
+    "etl_dedup": 4 * 60 * 60,
+}
+
+
+def stale_after_for(job_type: str, default: timedelta) -> timedelta:
+    """The reclaim window for ``job_type``: its override, else the deployment default."""
+    override = STALE_AFTER_OVERRIDES_SECONDS.get(job_type)
+    return timedelta(seconds=override) if override is not None else default
+
 
 class UnknownJobTypeError(ValueError):
     """A job_type outside the app-level allow-list was requested."""
@@ -206,6 +237,43 @@ def fail_with_retry(db: Session, job: Job, error: str, *, now: datetime | None =
     return job
 
 
+def is_exhausted(job: Job) -> bool:
+    """Whether the queue will never touch this job again.
+
+    Terminal (``failed``) with every attempt used. A ``failed`` job with retries
+    left does not exist — ``fail_with_retry`` requeues until ``max_attempts`` —
+    so this is the precise "needs a human" state, distinct from "will retry
+    shortly", which is what made four stranded batches on the primary
+    indistinguishable from four pending ones.
+    """
+    return job.status == "failed" and job.attempts >= job.max_attempts
+
+
+def latest_for_entity(
+    db: Session,
+    *,
+    organization_id: str,
+    job_type: str,
+    entity_id: UUID | str,
+) -> Job | None:
+    """The most recently queued job of ``job_type`` for one entity, org-scoped.
+
+    Explicitly organization-scoped: callers include the operator control plane,
+    whose session bypasses RLS, so the filter here is the isolation.
+    """
+    _validate_job_type(job_type)
+    return db.scalar(
+        select(Job)
+        .where(
+            Job.organization_id == organization_id,
+            Job.job_type == job_type,
+            Job.entity_id == str(entity_id),
+        )
+        .order_by(Job.queued_at.desc())
+        .limit(1)
+    )
+
+
 def reclaim_stale(db: Session, now: datetime, *, stale_after: timedelta) -> int:
     """Reclaim jobs stuck in ``running`` past ``stale_after`` and return the count.
 
@@ -218,20 +286,28 @@ def reclaim_stale(db: Session, now: datetime, *, stale_after: timedelta) -> int:
     This reaper treats such a row as a used attempt (so a job that reliably kills
     its worker eventually lands in ``failed`` for investigation instead of being
     reclaimed forever) and otherwise requeues it for immediate re-dispatch.
+
     ``stale_after`` must exceed the longest legitimate handler runtime, or a
-    slow-but-alive job will be reclaimed and run twice.
+    slow-but-alive job will be reclaimed and run twice. That requirement is now
+    met PER JOB TYPE: ``stale_after`` is the deployment-wide default and
+    :data:`STALE_AFTER_OVERRIDES_SECONDS` widens it for the handlers that
+    genuinely run for hours. Before that, ``etl_dedup`` (measured 2h02m) was
+    reclaimed against the 900s default while still running — the reaper requeued
+    one job twice, so three copies of the same handler ran concurrently, and the
+    batch ended ``failed`` with "worker presumed dead" despite nothing having
+    died.
     """
-    cutoff = now - stale_after
     running = db.scalars(
         select(Job).where(Job.status == "running", Job.completed_at.is_(None))
     ).all()
     reclaimed = 0
     for job in running:
+        window = stale_after_for(job.job_type, stale_after)
         started = _as_aware(job.started_at)
-        if started is None or started >= cutoff:
+        if started is None or started >= now - window:
             continue
         job.error = (
-            f"reclaimed: running since {started.isoformat()} exceeded {stale_after} "
+            f"reclaimed: running since {started.isoformat()} exceeded {window} "
             "without completing (worker presumed dead)"
         )
         if job.attempts < job.max_attempts:

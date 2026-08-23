@@ -28,6 +28,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
+
 MONEY = Decimal("0.0001")
 RATIO_PCT = Decimal("0.000001")
 _HUNDRED = Decimal("100")
@@ -141,16 +143,30 @@ def compute_contingent_leverage(
     )
     stressed_exposure = money(inputs.base_leverage_exposure + total_uplift)
 
-    base_ratio = (
-        ratio_pct(inputs.tier1 / inputs.base_leverage_exposure * _HUNDRED)
-        if inputs.base_leverage_exposure > _ZERO
-        else _ZERO
-    )
-    stressed_ratio = (
-        ratio_pct(inputs.tier1 / stressed_exposure * _HUNDRED)
-        if stressed_exposure > _ZERO
-        else _ZERO
-    )
+    # The leverage ratio is Tier 1 over the exposure measure. With no exposure
+    # measure it has no denominator: reporting 0.000000% said the bank's leverage
+    # ratio is zero — a breach-looking number that is in fact the ABSENCE of the
+    # exposure input, and one the contingent-leverage impact (stressed − base)
+    # then nets to a reassuring zero (audit 2026-08-22 D-8).
+    if inputs.base_leverage_exposure <= _ZERO or stressed_exposure <= _ZERO:
+        raise NotComputable(
+            outcome(
+                OutcomeState.NOT_COMPUTABLE,
+                metric_id="contingent_leverage_ratio_pct",
+                reason=(
+                    "The contingent-leverage stress carries no leverage exposure "
+                    "measure, so the base and stressed leverage ratios have no "
+                    "denominator and are not numbers."
+                ),
+                items=("input:base_leverage_exposure",),
+                context={
+                    "base_leverage_exposure": str(inputs.base_leverage_exposure),
+                    "stressed_leverage_exposure": str(stressed_exposure),
+                },
+            )
+        )
+    base_ratio = ratio_pct(inputs.tier1 / inputs.base_leverage_exposure * _HUNDRED)
+    stressed_ratio = ratio_pct(inputs.tier1 / stressed_exposure * _HUNDRED)
     has_positions = bool(
         inputs.derivatives
         or inputs.sfts

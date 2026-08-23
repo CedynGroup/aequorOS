@@ -40,14 +40,13 @@ from typing import Any
 
 from sqlalchemy import func, or_, select
 
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import BankReportingPeriod
 from app.models.canonical import CanonicalGlAccount
 from app.models.regulatory import BankFinancialFact
 
 from ..sources import ResolveContext, reference_rows, resolver
 
-#: Ledger rows the platform's own derivation admits (fact_derivation._INCLUDED_VALIDATION_STATUSES).
-_ACCEPTED = ("accepted", "warning")
 #: Attribute key on a P&L GL account naming the official BSD7A/BSD7B item it feeds.
 LINE_ATTRIBUTE = "bsd7_line"
 #: Reference dataset carrying the bank's CoA → BSD7 item mapping as data.
@@ -210,7 +209,8 @@ def _selected_generations(
         CanonicalGlAccount.organization_id == rc.ctx.organization_id,
         CanonicalGlAccount.bank_id == rc.bank.id,
         CanonicalGlAccount.superseded_by.is_(None),
-        CanonicalGlAccount.validation_status.in_(_ACCEPTED),
+        CanonicalGlAccount.withdrawn_at.is_(None),
+        CanonicalGlAccount.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         CanonicalGlAccount.balance.is_not(None),
         CanonicalGlAccount.as_of_date >= lower,
         CanonicalGlAccount.as_of_date <= upper,

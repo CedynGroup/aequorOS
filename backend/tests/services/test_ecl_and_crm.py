@@ -38,6 +38,7 @@ from app.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import credit_params, regulatory_capital
 from app.services.fact_derivation import derive_facts
+from tests.factories.reconciliation import allow_fixture_balance_gap
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -165,6 +166,20 @@ def test_general_provisions_override_replaces_ingested_component() -> None:
 
 def test_fact_derivation_emits_staged_ead_and_crm_buckets(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
+    # This unit fixture seeds THREE loans and nothing else: no deposits, no
+    # capital rows, so liabilities + equity is zero against 80m of assets — the
+    # pre-audit derivation plugged 100% of the funding side in silence. The
+    # fail-closed balance-sheet control (audit P0-10) refuses that book, so the
+    # test records the governed exception that makes the defect explicit. It
+    # changes no asserted value; it states, on the record, that this book's
+    # entire funding side is manufactured.
+    allow_fixture_balance_gap(
+        db_session,
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        actor_user_id=DEMO_USER_ID,
+        max_gap_fraction=Decimal("1"),
+    )
     seeder = _CanonicalSeeder(db_session)
     product = seeder.product("LN.COMM", "CORPORATE_UNRATED")
     seeder.position(

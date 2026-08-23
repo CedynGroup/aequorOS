@@ -33,6 +33,7 @@ from app.models import (
     RegulatoryPackage,
     SignerKey,
 )
+from app.services import filing_reconciliation
 from app.services.attestation import appearance, digests, routing, stepup, workflow
 from app.services.attestation.identity import require_signer_identity, resolve_signer_display
 from app.services.attestation.policy import SigningPolicy
@@ -320,6 +321,13 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
     # to named people: the policy decides whether a signature is acceptable, the
     # routing decides whose turn it is.
     routing.ensure_routed_signer(db, ctx, package, role=role, user_id=actor_user_id)
+    # Data-integrity gate (audit 2026-08-22 D-2): an officer certifies that the
+    # figures are true, so the platform must not accept that certification over
+    # a book its own control says does not balance. Placed before the step-up
+    # authorization is consumed, so a refusal does not burn the one-shot token.
+    filing_reconciliation.assert_package_reconciled(
+        db, ctx, package, purpose="package_certification"
+    )
 
     authorization = stepup.consume_authorization(
         db,

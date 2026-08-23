@@ -54,12 +54,58 @@ SHOCK_FX_DEPRECIATION = "fx_depreciation_pct"
 # via the apply-as-assumptions seam) — the engine never invents lives.
 SHOCK_NMD_RUNOFF_PREFIX = "nmd_runoff:"
 
+# --- HQLA composition (Basel III LCR, BCBS 238 §II.A "Stock of HQLA") --------
+# The HQLA *taxonomy* — which tiers exist — is structural vocabulary, the same
+# kind of thing as a capital tier code, and lives here. The *rates and caps*
+# attached to each tier are regulatory numbers and are NEVER written here: they
+# arrive on ``LiquidityParams`` from the regulatory-parameter layer, and a tier
+# present in the book with no resolved rate fails the calculation closed.
+HQLA_LEVEL_1 = "L1"
+HQLA_LEVEL_2A = "L2A"
+HQLA_LEVEL_2B = "L2B"
+#: Every level the engine will accept on a fact. A security flagged as HQLA
+#: under anything else is a classification failure, not a Level-1 asset.
+HQLA_LEVELS: tuple[str, ...] = (HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B)
+HQLA_LEVEL_2_LEVELS: tuple[str, ...] = (HQLA_LEVEL_2A, HQLA_LEVEL_2B)
+
+#: Parameter keys, used in the fail-closed messages so an operator is told the
+#: exact control-plane code to configure.
+#:
+#: Forensic re-audit 2026-08-22 **NEW-A1-2**: the per-level haircut key used to
+#: be built from a ``"hqla_haircut:"`` prefix, so an unresolved Level-2A rate
+#: refused with *"No active liquidity parameter covers category
+#: 'hqla_haircut:L2A'"* — a code that exists nowhere in the control plane. The
+#: stored codes are ``hqla_l1_haircut_pct`` / ``hqla_l2a_haircut_pct`` /
+#: ``hqla_l2b_haircut_pct`` (``services.regulatory_parameters.HQLA_HAIRCUT_CODES``,
+#: seeded by alembic ``202608220034``). That is the worst possible moment to be
+#: wrong: the message fires exactly when an operator is trying to fix the
+#: configuration it names. The template below is a naming convention, not a
+#: regulatory number, so it belongs here alongside the two cap codes, which
+#: already match their stored codes exactly. ``tests/domain/
+#: test_liquidity_hqla_haircuts_and_caps.py`` pins it against
+#: ``HQLA_HAIRCUT_CODES`` so the two can never drift apart again.
+PARAM_HQLA_HAIRCUT_TEMPLATE = "hqla_{level}_haircut_pct"
+PARAM_HQLA_LEVEL2_CAP = "hqla_level2_cap_pct"
+PARAM_HQLA_LEVEL2B_CAP = "hqla_level2b_cap_pct"
+
+
+def hqla_haircut_param_code(level: str) -> str:
+    """The control-plane parameter code carrying one Basel level's haircut."""
+    return PARAM_HQLA_HAIRCUT_TEMPLATE.format(level=level.strip().lower())
+
+#: Synthetic HQLA line codes carrying the cap deductions, so the stock of HQLA
+#: is always the sum of its own line items and the deduction is auditable.
+LINE_CODE_LEVEL2_CAP = "hqla_level2_cap_adjustment"
+LINE_CODE_LEVEL2B_CAP = "hqla_level2b_cap_adjustment"
+
 
 class MissingParameterError(Exception):
     """A category with a non-zero balance has no active rate/weight parameter."""
 
-    def __init__(self, category: str) -> None:
-        super().__init__(f"No active liquidity parameter covers category '{category}'.")
+    def __init__(self, category: str, message: str | None = None) -> None:
+        super().__init__(
+            message or f"No active liquidity parameter covers category '{category}'."
+        )
         self.category = category
 
 
@@ -72,6 +118,25 @@ class UnsupportedShockError(Exception):
         )
         self.scenario_code = scenario_code
         self.shock_key = shock_key
+
+
+class UnclassifiedHqlaError(Exception):
+    """A security is flagged as HQLA under a level the Basel taxonomy does not define.
+
+    Fail-closed replacement for the pre-2026-08-21 behaviour, where any non-null
+    ``hqla_level`` was counted at face value and therefore treated as Level 1
+    (enterprise audit P0-8). An asset whose liquidity tier cannot be established
+    is not a Level-1 asset; it is an unclassified asset, and the LCR cannot be
+    computed from it.
+    """
+
+    def __init__(self, category: str, level: str | None) -> None:
+        super().__init__(
+            f"Security '{category}' carries HQLA level {level!r}, which is not one of "
+            f"{HQLA_LEVELS}. Classify it before computing the LCR."
+        )
+        self.category = category
+        self.level = level
 
 
 class LiquidityComputationError(Exception):
@@ -103,6 +168,17 @@ class LiquidityParams:
     lcr_amber_floor_pct: Decimal
     nsfr_min_pct: Decimal
     nsfr_amber_floor_pct: Decimal
+    #: HQLA haircut percentage per Basel HQLA level (``"L1"``/``"L2A"``/``"L2B"``),
+    #: resolved from the regulatory-parameter layer. REQUIRED and carrying no
+    #: default: a level that appears in the book with no resolved haircut raises
+    #: ``MissingParameterError`` rather than being weighted at face value.
+    hqla_haircut_pct: Mapping[str, Decimal]
+    #: Level-2 (2A+2B) cap as a percentage of the stock of HQLA. ``None`` is
+    #: permitted only for a book that holds no Level-2 asset at all; a Level-2
+    #: holding with an unresolved cap raises ``MissingParameterError``.
+    hqla_level2_cap_pct: Decimal | None
+    #: Level-2B sub-cap as a percentage of the stock of HQLA. Same rule.
+    hqla_level2b_cap_pct: Decimal | None
 
 
 @dataclass(frozen=True)
@@ -116,8 +192,34 @@ class LiquidityLineItem:
 
 
 @dataclass(frozen=True)
+class HqlaComposition:
+    """The stock of HQLA decomposed by Basel level, after haircuts and caps.
+
+    ``total`` is the filed stock: post-haircut Level 1 + 2A + 2B less the two cap
+    adjustments. Every component is reported so a reviewer can see WHY the stock
+    is what it is — the pre-2026-08-21 engine reported only a face-value sum.
+    """
+
+    level1: Decimal
+    level2a: Decimal
+    level2b: Decimal
+    level2_cap_adjustment: Decimal
+    level2b_cap_adjustment: Decimal
+    total: Decimal
+
+    @property
+    def level2_cap_applied(self) -> bool:
+        return self.level2_cap_adjustment > _ZERO
+
+    @property
+    def level2b_cap_applied(self) -> bool:
+        return self.level2b_cap_adjustment > _ZERO
+
+
+@dataclass(frozen=True)
 class LcrResult:
     hqla_total: Decimal
+    hqla_composition: HqlaComposition
     outflows_total: Decimal
     gross_inflows_total: Decimal
     inflow_cap_amount: Decimal
@@ -164,18 +266,8 @@ def compute_lcr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> LcrR
         for fact in facts
         if fact.fact_group == FACT_GROUP_SECURITIES and fact.hqla_level is not None
     )
-    hqla_items = tuple(
-        LiquidityLineItem(
-            section="hqla",
-            line_code=fact.category,
-            description=_describe(fact.category),
-            exposure_amount=money(fact.amount),
-            rate_pct=None,
-            weighted_amount=money(fact.amount),
-        )
-        for fact in hqla_facts
-    )
-    hqla_total = money(sum((item.weighted_amount for item in hqla_items), _ZERO))
+    hqla_items, hqla_composition = _hqla_stock(hqla_facts, params)
+    hqla_total = hqla_composition.total
 
     outflow_facts = _sorted(
         fact
@@ -203,6 +295,7 @@ def compute_lcr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> LcrR
     status = classify_ratio(lcr_pct, params.lcr_min_pct, params.lcr_amber_floor_pct)
     return LcrResult(
         hqla_total=hqla_total,
+        hqla_composition=hqla_composition,
         outflows_total=outflows_total,
         gross_inflows_total=gross_inflows_total,
         inflow_cap_amount=inflow_cap_amount,
@@ -211,7 +304,7 @@ def compute_lcr(facts: Sequence[LiquidityFact], params: LiquidityParams) -> LcrR
         net_outflows_total=net_outflows_total,
         lcr_pct=lcr_pct,
         status=status,
-        all_hqla_level1=all(fact.hqla_level == "L1" for fact in hqla_facts),
+        all_hqla_level1=all(_hqla_level(fact) == HQLA_LEVEL_1 for fact in hqla_facts),
         line_items=(*hqla_items, *outflow_items, *inflow_items),
     )
 
@@ -340,6 +433,219 @@ def apply_liquidity_stress(
         rsf_weights=rsf_weights,
     )
     return stressed_facts, stressed_params
+
+
+def consumed_hqla_levels(facts: Sequence[LiquidityFact]) -> set[str]:
+    """The Basel levels :func:`compute_lcr` will actually charge a haircut for.
+
+    The engine's OWN HQLA filter, exposed so a caller sealing a reproducibility
+    snapshot records exactly the governed rates the arithmetic will read —
+    neither wider nor narrower (forensic re-audit 2026-08-22 D-7 / NEW-A1-1).
+
+    A holding whose level could not be established carries ``hqla_level=None``,
+    is filtered out of the stock here and by :func:`_hqla_stock`, and therefore
+    consumes no rate. A level outside the Basel taxonomy consumes none either:
+    :func:`_hqla_level` raises ``UnclassifiedHqlaError`` on it, so no run — and
+    no hash — exists to record one.
+    """
+    levels = {
+        (fact.hqla_level or "").strip().upper()
+        for fact in facts
+        if fact.fact_group == FACT_GROUP_SECURITIES and fact.hqla_level is not None
+    }
+    return levels & set(HQLA_LEVELS)
+
+
+def _hqla_level(fact: LiquidityFact) -> str:
+    """The fact's Basel HQLA level, or fail closed.
+
+    Normalised (trim + upper) so ``"l2a"`` is the same tier as ``"L2A"``; anything
+    outside :data:`HQLA_LEVELS` raises. Before 2026-08-21 an unrecognised level was
+    counted at face value, i.e. silently as Level 1 (enterprise audit P0-8).
+    """
+    level = (fact.hqla_level or "").strip().upper()
+    if level not in HQLA_LEVELS:
+        raise UnclassifiedHqlaError(fact.category, fact.hqla_level)
+    return level
+
+
+def _hqla_haircut(params: LiquidityParams, level: str) -> Decimal:
+    rate = params.hqla_haircut_pct.get(level)
+    if rate is None:
+        code = hqla_haircut_param_code(level)
+        raise MissingParameterError(code, _hqla_parameter_message(code, level=level))
+    return rate
+
+
+def _required_cap(value: Decimal | None, param_code: str) -> Decimal:
+    """A cap percentage that must exist, and must leave head-room to cap against.
+
+    A cap of 100% (or more) would make the Basel Annex-1 ratio form divide by
+    zero; that is a mis-configured control plane, not a bank with unlimited
+    Level-2 capacity, so it fails closed too.
+    """
+    if value is None:
+        raise MissingParameterError(param_code, _hqla_parameter_message(param_code))
+    if value < _ZERO or value >= _HUNDRED:
+        raise MissingParameterError(
+            param_code,
+            f"The HQLA cap {param_code!r} resolved to {value}%, which is outside the "
+            "0-100% range the Basel Annex-1 cap arithmetic is defined over. Correct it "
+            "in the regulatory-parameter control plane.",
+        )
+    return value
+
+
+def _hqla_parameter_message(param_code: str, *, level: str | None = None) -> str:
+    """A fail-closed message an operator can act on without reading the source.
+
+    The generic 'no parameter covers category X' text is opaque for the HQLA
+    codes, which live in the GLOBAL regulatory-parameter control plane rather
+    than a tenant register, and whose most likely cause is a deployment whose
+    seed migration has not run yet.
+    """
+    held = f" The book holds a {level} asset, so this rate is required." if level else ""
+    return (
+        f"The Basel HQLA parameter {param_code!r} did not resolve, so the LCR cannot be "
+        f"computed.{held} An unresolved haircut is NOT treated as zero — that would count "
+        "the asset at face value and overstate the LCR. Seed it in the regulatory-parameter "
+        "control plane (alembic revision 202608220034 seeds the Basel defaults for the bank "
+        "institution class; the operator console manages later generations)."
+    )
+
+
+def _hqla_stock(
+    hqla_facts: Sequence[LiquidityFact], params: LiquidityParams
+) -> tuple[tuple[LiquidityLineItem, ...], HqlaComposition]:
+    """The stock of HQLA: per-level haircuts, then the Level-2 caps (BCBS 238).
+
+    Two controls, both absent before 2026-08-21 (enterprise audit P0-8):
+
+    1. **Haircuts.** Every HQLA holding is weighted at ``1 - haircut(level)``.
+       Level 1 is customarily un-haircut, but even the 0% is a *resolved
+       parameter*, never an assumption: a level with no resolved rate raises.
+    2. **Caps.** Level 2 in aggregate, and Level 2B on its own, may not exceed
+       their governed share of the stock. The Annex-1 form is used, expressed in
+       terms of the two governed caps so no ratio is written as a literal::
+
+           r_2b_a = cap2b / (100 - cap2b)          # the 15/85 leg
+           r_2b_b = cap2b / (100 - cap2)           # the 15/60 leg
+           r_2    = cap2  / (100 - cap2)           # the 2/3 leg
+
+           adj_2b = max(L2B - r_2b_a x (L1 + L2A), L2B - r_2b_b x L1, 0)
+           adj_2  = max((L2A + L2B - adj_2b) - r_2 x L1, 0)
+           stock  = L1 + L2A + L2B - adj_2b - adj_2
+
+       With the Basel caps (40 / 15) those ratios are exactly 15/85, 15/60 and
+       2/3.
+
+    **Declared deviation — OPEN, bounded, and currently inert.** Annex 1 applies
+    the caps to the *adjusted* amounts: what each pool would be if short-term
+    secured funding, secured lending and collateral-swap transactions maturing
+    within 30 calendar days were unwound first. This engine applies them to the
+    ACTUAL post-haircut amounts.
+
+    *What is missing, precisely.* The unwind needs, per transaction: the leg
+    direction (secured funding / secured lending / collateral swap), the Basel
+    level of the HQLA on each leg, and a maturity inside 30 days. The canonical
+    book carries none of that pairing. Its only secured-financing signals are the
+    booleans ``encumbered`` / ``pledged_as_collateral`` and the free-text
+    ``encumbrance_reason`` on a position, and ``PositionType`` has no ``REPO`` /
+    ``REVERSE_REPO`` / ``SECURITIES_LENDING`` / ``COLLATERAL_SWAP`` member at
+    all. Closing this needs a secured-transaction dimension on the securities
+    facts — it cannot be inferred from what is ingested today, and inferring it
+    would be a modelling claim wearing a citation.
+
+    *What it costs.* For a bank running no 30-day secured book the adjusted and
+    actual amounts are identical and the deviation is arithmetically absent. For
+    one that does, the cap can bind at a different point than Basel intends, in
+    either direction. **Measured read-only against the primary on 2026-08-22:
+    zero positions of ANY type carry ``encumbered``, ``pledged_as_collateral``
+    or an ``encumbrance_reason``, across all 80,874 current-generation
+    SECURITY_HOLDING snapshots and every other position type — so there is
+    nothing to unwind, and no filed figure differs.** It is a stated limitation
+    ahead of the data, not a silent assumption behind it.
+
+    A book holding no Level-2 asset needs no cap: both adjustments are provably
+    zero, so the cap parameters are not required in that case and a Level-1-only
+    bank is never blocked on a parameter that cannot bind.
+    """
+    items: list[LiquidityLineItem] = []
+    by_level: dict[str, Decimal] = dict.fromkeys(HQLA_LEVELS, _ZERO)
+    for fact in hqla_facts:
+        level = _hqla_level(fact)
+        haircut = _hqla_haircut(params, level)
+        weighted = money(fact.amount * (_HUNDRED - haircut) / _HUNDRED)
+        by_level[level] += weighted
+        items.append(
+            LiquidityLineItem(
+                section="hqla",
+                line_code=fact.category,
+                description=_describe(fact.category),
+                exposure_amount=money(fact.amount),
+                # An un-haircut line keeps the historic ``None`` (no rate was
+                # charged), so every Level-1-only book's persisted line items are
+                # byte-identical to before this control landed.
+                rate_pct=None if haircut == _ZERO else haircut,
+                weighted_amount=weighted,
+            )
+        )
+
+    level1 = money(by_level[HQLA_LEVEL_1])
+    level2a = money(by_level[HQLA_LEVEL_2A])
+    level2b = money(by_level[HQLA_LEVEL_2B])
+    adjustment_2b = _ZERO
+    adjustment_2 = _ZERO
+    if level2a + level2b > _ZERO:
+        cap2 = _required_cap(params.hqla_level2_cap_pct, PARAM_HQLA_LEVEL2_CAP)
+        cap2b = _required_cap(params.hqla_level2b_cap_pct, PARAM_HQLA_LEVEL2B_CAP)
+        ratio_2b_a = cap2b / (_HUNDRED - cap2b)
+        ratio_2b_b = cap2b / (_HUNDRED - cap2)
+        ratio_2 = cap2 / (_HUNDRED - cap2)
+        adjustment_2b = money(
+            max(
+                level2b - ratio_2b_a * (level1 + level2a),
+                level2b - ratio_2b_b * level1,
+                _ZERO,
+            )
+        )
+        adjustment_2 = money(
+            max((level2a + level2b - adjustment_2b) - ratio_2 * level1, _ZERO)
+        )
+
+    if adjustment_2b > _ZERO:
+        items.append(
+            LiquidityLineItem(
+                section="hqla",
+                line_code=LINE_CODE_LEVEL2B_CAP,
+                description="Level 2B cap adjustment",
+                exposure_amount=level2b,
+                rate_pct=params.hqla_level2b_cap_pct,
+                weighted_amount=money(-adjustment_2b),
+            )
+        )
+    if adjustment_2 > _ZERO:
+        items.append(
+            LiquidityLineItem(
+                section="hqla",
+                line_code=LINE_CODE_LEVEL2_CAP,
+                description="Level 2 cap adjustment",
+                exposure_amount=money(level2a + level2b),
+                rate_pct=params.hqla_level2_cap_pct,
+                weighted_amount=money(-adjustment_2),
+            )
+        )
+
+    total = money(level1 + level2a + level2b - adjustment_2b - adjustment_2)
+    composition = HqlaComposition(
+        level1=level1,
+        level2a=level2a,
+        level2b=level2b,
+        level2_cap_adjustment=adjustment_2,
+        level2b_cap_adjustment=adjustment_2b,
+        total=total,
+    )
+    return tuple(items), composition
 
 
 def _weighted_items(

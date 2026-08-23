@@ -1,35 +1,358 @@
 name: Risk Service CI
 
+# Gate inventory (audit §1.4 / §5; D-32 re-measured 2026-08-22). Every job below
+# fails the run when it fails — but read the BRANCH PROTECTION note at the bottom
+# before reading "blocking" as "cannot merge".
+#
+# READ FIRST, because it reframes everything under it: backend CI on `main` ran
+# NO test between 2026-08-03 and 2026-08-22, and it was TWO unrelated failures,
+# not one. Measured from the run logs, not inferred:
+#
+#   2026-08-09  31342018468  failed at "Typecheck risk service"   (basedpyright)
+#   2026-08-10  31346758336  failed at "Typecheck risk service"
+#   2026-08-15  31852491835  failed at "Lint risk service"        (ruff)
+#   2026-08-15  31901483657  failed at "Lint risk service"
+#   2026-08-17  32023511387  failed at "Lint risk service"        (29 errors)
+#   2026-08-21  32436868839  failed at "Install risk service dependencies"
+#
+# The first five are genuine source-quality failures: sync and lint ran, the
+# gate worked, and each red run correctly stopped everything after it. Those are
+# fixed in the tree, not here.
+#
+# The sixth is different in kind and is what this file now defends against.
+# Commit `f33e869` moved `backend/mise.toml` to `backend/docs/mise.toml`. Every
+# root task is a proxy into that file; with it gone each proxy re-resolved to
+# itself and recursed 440 times in ~1 minute before the step failed. Nothing in
+# the output said "missing file" — it read like a hang. Two additions close it:
+# the `preflight` job below (stdlib Python, no mise, no uv, every other job
+# needs it) and `backend/tests/architecture/test_ci_task_wiring.py`. The
+# preflight is the one that matters, because the test is only reachable THROUGH
+# a proxy — a guard that runs only when the thing it guards is healthy is not a
+# guard.
+#
+#   preflight   — the mise task wiring, checked in stdlib Python with no mise
+#                 and no uv, plus the change detection that replaced this
+#                 workflow's `paths:` filter. Every other job needs it.
+#   static      — ruff, basedpyright, production image build
+#   architecture— CI task wiring, RLS-blind migration scanner, case/regulatory
+#                 dependency boundaries
+#   unit        — the hermetic suite + OpenBao signing. `risk-service:test` is a
+#                 bare `pytest` and pyproject sets `testpaths = ["tests"]`, so
+#                 this job COLLECTS the WHOLE backend tree — re-measured
+#                 2026-08-22 17:20 with `pytest --collect-only -q`: 390 files on
+#                 disk, 390 collected, ZERO collection errors, and a full run of
+#                 `mise run risk-service:test` from the repository root gave
+#                 `4492 passed, 342 skipped in 1482.96s`. That 4,492 is what the
+#                 `--min-executed 3000` floor on this job is measured against.
+#                 (The
+#                 count moves as siblings land; what must stay true is
+#                 files-on-disk == files-collected. A file that collects nowhere
+#                 is the D-32 defect in its purest form, and the equality is the
+#                 cheapest way to see it.) Included by construction: tests/domain
+#                 incl. tests/domain/authority (138) and tests/domain/policy (31),
+#                 tests/architecture (64), tests/equivalence (38),
+#                 tests/operator (221), tests/core (148), tests/etl (99),
+#                 tests/scripts (39), tests/ml (15), tests/db (105),
+#                 tests/services/bog_forms (133), the engine golden suites in
+#                 tests/domain, test_phase2_full_report_proof.py (1),
+#                 test_bog_forms_framework.py (129),
+#                 test_input_hash_determinism.py (2) and
+#                 test_jurisdiction_neutrality.py (25). What it does not run, it
+#                 SKIPS at runtime, and the skip set is the whole of D-32; the
+#                 excluded set is enumerated below and in
+#                 docs/audit/remediation_master_register.md.
+#                 (There is no tests/security directory — that name in the D-32
+#                 brief does not correspond to anything in the tree.)
+#   postgres    — migration chain, RLS policies, schema defaults, row/advisory
+#                 locks. `risk-service:test-postgres-schema` runs ALL of tests/db,
+#                 which is the only job that reaches
+#                 tests/db/test_tenant_rls_completeness.py — the single structural
+#                 guard on tenant isolation. main currently runs
+#                 test-postgres-migrations instead, i.e. one file of tests/db, so
+#                 that guard is gated NOWHERE until this file is merged.
+#   postgres-suite — the SAME suite against Postgres. The hermetic run builds its
+#                 schema with Base.metadata.create_all and therefore has NO
+#                 row-level security at all, so SQLite alone is not production
+#                 confidence.
+#   storage     — the S3-compatible object-store contract: SSE-KMS at rest, the
+#                 hash-chained access log, per-institution provisioning. Added
+#                 2026-08-22. It self-skips without S3_*, and no job had ever
+#                 configured them, so 18 of its 45 tests ran nowhere (measured
+#                 `27 passed, 18 skipped` with the credentials blanked; `45
+#                 passed` against the MinIO below). MinIO's BUILT-IN KMS is
+#                 enough — the KES sidecar this appeared to need is not.
+#   gate        — aggregates every job above into ONE always-reported context,
+#                 so the suite can be made a required check. See BRANCH
+#                 PROTECTION below.
+#   api-fresh   — the generated TypeScript client matches the OpenAPI schema.
+#                 Previously a local pre-push hook only, so a stale client could
+#                 (and did) reach main.
+#   real-data   — the DB-backed regulatory/attestation/auth/vendor API surface,
+#                 plus BOTH run-parity proofs (tests/equivalence). 25 modules
+#                 import `requires_real_data` (measured by AST import, not
+#                 substring). It cannot run here and this is not a scheduling
+#                 problem: tests/real_data.py pins REAL_ORG_ID/REAL_BANK_ID to
+#                 identities that exist only on the primary database, so an
+#                 ephemeral CI Postgres cannot satisfy it whatever secret is set.
+#                 Neither the `REAL_DATA_CI_ENABLED` variable nor the
+#                 `REAL_DATA_DATABASE_URL` secret exists on this repository
+#                 (checked via the API), so the job is skipped by `if:` AND would
+#                 skip every test if the `if:` passed. Closing it needs a network
+#                 path from the runner to the primary and a read-only role —
+#                 a founder/infra decision, deliberately not faked here.
+#
+# EVERY TEST JOB ALSO PROVES IT RAN. pytest exits 0 when everything it collected
+# skipped itself, which is how the storage contract sat at `27 passed, 18
+# skipped` for months and how the concurrency tests ran in no environment at
+# all. Each suite now writes a JUnit report via PYTEST_ADDOPTS — no task command
+# changes — and a following step asserts a floor of tests actually executed
+# (.github/scripts/assert_pytest_ran.py). The storage job additionally allows
+# ZERO skips, because the MinIO it starts is supposed to satisfy the whole
+# suite; the Postgres full-suite job sets no skip ceiling, because the opt-in
+# tiers below legitimately skip there.
+#
+# EXCLUDED from every job, with the reason — the honest complement of the list
+# above. None of these is a scheduling oversight:
+#   tests/live_data          — opt-in BY DESIGN. It reads the ACTUAL primary
+#                              through a server-side read-only session, and
+#                              pointing CI at production is the one thing this
+#                              programme must not do. Skips cleanly with
+#                              LIVE_DATA_DATABASE_URL unset (module-level
+#                              skipif), so it costs the hermetic run nothing.
+#   25 `requires_real_data`  — see the real-data job above.
+#     modules
+#   tests/etl/test_training_on_data.py — needs the untracked Sample Bank CSVs
+#                              under backend/data/, deliberately not in the repo.
+#   tests/scripts/test_dr_tooling.py DR-drill cases — need DR_DRILL_CLUSTER_URL,
+#                              i.e. a disposable cluster the drill may destroy.
+#   backend/dashboard/e2e    — 7 Playwright specs, in NO workflow. Needs a booted
+#                              backend, scripts/e2e_bootstrap.py standing in for
+#                              BOTH the migrations and the worker, object storage
+#                              and browser binaries. The storage half is now
+#                              demonstrably solvable (see the `storage` job).
+#   `ruff format --check .`  — not a gate anywhere; a tree-wide format pass has
+#                              to land first. Named so a future format gate is
+#                              not a surprise.
+#
+# MISE VERSION. `jdx/mise-action` installs the LATEST mise release when no
+# `version:` is given (confirmed against the action's own input description), so
+# the toolchain that resolves this repository's tasks could differ between two
+# runs of the same commit. That is an unwanted variable underneath the only
+# backend gate, and ruling it out cost real time while the 2026-08-21 outage was
+# being diagnosed. Every job below pins 2026.7.7 — the version every task in
+# this file was verified against locally, published 2026-07-15 with linux-x64
+# assets. Bump it deliberately, in one commit, not by drift.
+#
+# BRANCH PROTECTION — the part that decides whether any of this stops a merge.
+# `main` required exactly ONE status check as of 2026-08-22 (`GET
+# /repos/CedynGroup/aequorOS/branches/main/protection` -> `"contexts":
+# ["gitleaks"]`, `enforce_admins: false`), which made every job here ADVISORY: a
+# red run did not block a merge, and claude-review.yml's `gh pr merge --auto`
+# hands the pull request to GitHub native auto-merge, which waits only on the
+# REQUIRED checks.
+#
+# The reason the real gates could not simply be marked required is the trap this
+# file used to sit in. A required check whose workflow is `paths:`-filtered NEVER
+# REPORTS on a pull request touching none of those paths, and GitHub holds such a
+# pull request at "Expected — waiting for status" forever: one docs-only or
+# console-only pull request and the branch is unmergeable.
+#
+# THE REMEDY IMPLEMENTED HERE (2026-08-22): the `paths:` filter is gone from the
+# trigger, so this workflow reports on every pull request, and the filtering
+# moved one level down into `if:` conditions fed by the `preflight` job. Two
+# short jobs — `preflight` and `gate` — therefore run on EVERY pull request; the
+# seven expensive jobs still run only when backend-relevant paths change, and
+# report `skipped` otherwise. `gate` aggregates all of them with `if: always()`
+# and fails if any needed job failed or was cancelled, so it is a single,
+# always-reported, honest context.
+#
+# THE TRADE-OFF, stated rather than buried: every pull request in the repository
+# now pays for two ~30-second jobs it may not need, and a change-detection bug
+# could in principle mis-skip a gate. That second risk is why
+# .github/scripts/changed_area.sh answers "true" for anything it cannot
+# determine — a non-pull_request event, an uncomputable diff, an empty change
+# set. It can over-run gates; it must never silently under-run them. The
+# alternative (a same-named companion job under the inverse condition) keeps the
+# filters but needs the condition duplicated per workflow and inverted correctly
+# by hand, which is a second thing to get wrong.
+#
+# CONTEXTS TO MARK REQUIRED once this lands — the aggregates, NOT the individual
+# jobs (an individual job legitimately reports `skipped`, and a skipped required
+# check is not a passing one):
+#
+#     gitleaks              (secret-scan.yml — already required)
+#     Risk service gate     (this file)
+#     Dashboard gate        (dashboard.yml)
+#     Web gate              (web.yml)
+#
+# Those are the literal context strings. A status check's context is the JOB's
+# name, not "Workflow / job" — the existing `gitleaks` entry is the job id of
+# secret-scan.yml's only job, which is why it reads the way it does.
+# Changing branch protection is a repository-settings change and deliberately
+# not made here.
+
 on:
+  # No `paths:` filter, on purpose — see BRANCH PROTECTION above. The filtering
+  # lives in the `if:` conditions on the expensive jobs, so that this workflow
+  # always reports a status and can therefore be made a required check.
   pull_request:
-    paths:
-      - "backend/**"
-      - "packages/risk-service-api/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "package.json"
-      - ".github/workflows/risk-service.yml"
   push:
     branches:
       - main
 
+permissions:
+  contents: read
+
+# A gate that never gets a runner is as unenforced as a gate nobody wrote. This
+# file went from one job to ten, three of which stand up Postgres and run for
+# tens of minutes, and the repository is worked by many concurrent branches — so
+# without this every intermediate push kept a full matrix alive and the queue,
+# not the tests, decided what ran. Superseded PR runs are cancelled; runs on
+# `main` are never cancelled, because that is the history being recorded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  POSTGRES_ADMIN_URL: postgresql+psycopg://postgres:postgres@localhost:5432/risk_service
+  POSTGRES_TEST_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
+
 jobs:
-  risk-service:
+  # Runs on EVERY pull request, needs nothing, installs nothing, and every other
+  # job depends on it. Two responsibilities, both cheap:
+  #
+  #   1. Prove the mise task wiring is intact. Backend CI is driven entirely
+  #      through root tasks that proxy into backend/mise.toml; when that file
+  #      moved in `f33e869` the proxies recursed 440 deep and the run failed
+  #      having executed nothing, with no message naming the cause. The check is
+  #      stdlib Python with no mise and no uv precisely so it still works when
+  #      the thing it checks does not.
+  #   2. Decide whether the expensive jobs are relevant to this pull request.
+  #      This replaces the `paths:` filter that used to sit on the trigger and
+  #      made every gate here impossible to require. See BRANCH PROTECTION above.
+  preflight:
+    name: Preflight
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
+    timeout-minutes: 10
+    outputs:
+      backend: ${{ steps.areas.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The change detector diffs against the base branch tip; a shallow
+          # clone cannot see it.
+          fetch-depth: 0
+      - name: Verify the mise task wiring
+        run: python3 .github/scripts/mise_wiring_preflight.py
+      - name: Detect whether this pull request touches the risk service
+        id: areas
         env:
-          POSTGRES_DB: risk_service
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        ports:
-          - "5432:5432"
-        options: >-
-          --health-cmd "pg_isready -U postgres -d risk_service"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          .github/scripts/changed_area.sh backend
+          '^(backend/|packages/risk-service-api/|mise\.toml$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/risk-service\.yml$|\.github/scripts/)'
+
+  static:
+    name: Lint and typecheck
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    # No job may outlive this. P0-15's outage was a task that recursed instead of
+    # running anything; unbounded, GitHub would have let it burn the 360-minute
+    # default. Values are ~3x the measured local wall clock, not tight.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          # Pinned — see MISE VERSION in the header. Bump deliberately.
+          version: 2026.7.7
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      - name: Lint risk service
+        run: mise run risk-service:lint
+      - name: Typecheck risk service
+        run: mise run risk-service:typecheck
+      - name: Build production risk-service image
+        run: docker build --tag aequoros/risk-service:ci ./backend
+
+
+  architecture:
+    name: Architecture and CI guards
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          # Pinned — see MISE VERSION in the header. Bump deliberately.
+          version: 2026.7.7
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      # Cheap, hermetic, and first to fail: this is the job that notices when
+      # the task delegation breaks, when a data migration writes to a FORCE-RLS
+      # tenant table it cannot see, and when a filed regulatory number grows a
+      # dependency on the advisory case plane.
+      #
+      # `tests/architecture/test_ci_task_wiring.py` lives here: it pins the
+      # delegation contract that `f33e869` broke, and it is the SECOND of the
+      # two guards. The first is the `preflight` job, which asserts the same
+      # invariant without mise — necessary because reaching this file at all
+      # requires the very proxy that recurses when backend/mise.toml goes
+      # missing.
+      - name: Architecture and CI guards
+        run: mise run risk-service:test-architecture
+      # D-32's own recurrence guard, and the only one that is about CI rather
+      # than about code. Everything else in this workflow answers "does the
+      # command pass?"; this answers "did the command SEE every test?" — the
+      # question nobody was asking, and the one whose answer was no.
+      #
+      # It catches three real, silent failure modes at once:
+      #   * a test module that collects nowhere (imported by nothing, excluded
+      #     by a path list, or shadowed by a duplicate basename);
+      #   * a collection ERROR, which pytest reports on stderr while a piped
+      #     invocation shows a cheerful tail — the exit code is the only honest
+      #     signal, so `set -euo pipefail` is load-bearing here;
+      #   * a pytest path argument that no longer exists. pytest treats that as
+      #     a USAGE error (exit 4) and runs ZERO tests; a task whose path list
+      #     has drifted therefore reports "nothing failed" while testing
+      #     nothing. Fail-closed by construction, but only if someone reads the
+      #     exit code.
+      #
+      # The assertion is an equality, not a floor, so it neither goes stale as
+      # the suite grows nor can be satisfied by adding tests elsewhere. A
+      # `test_*.py` holding no tests also trips it — that is a finding too.
+      - name: Every test module is collected by the hermetic run
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          # Both halves of pytest's DEFAULT `python_files` discovery. The tree
+          # holds only `test_*.py` today, but matching just that pattern would
+          # report a future `*_test.py` as "collected but not on disk" — a
+          # false alarm, which is the fastest way to get a guard disabled.
+          find tests \( -name 'test_*.py' -o -name '*_test.py' \) \
+            -not -path '*/__pycache__/*' | sort > /tmp/on_disk.txt
+          uv run pytest --collect-only -q | grep '::' | cut -d: -f1 | sort -u > /tmp/collected.txt
+          echo "test modules on disk:   $(wc -l < /tmp/on_disk.txt)"
+          echo "test modules collected: $(wc -l < /tmp/collected.txt)"
+          if ! diff -u /tmp/on_disk.txt /tmp/collected.txt; then
+            echo "::error::A test module on disk is not collected by \`pytest\` (or vice versa)."
+            echo "Lines prefixed '-' exist on disk and run NOWHERE. See D-32."
+            exit 1
+          fi
+          echo "Every test module on disk is collected."
+
+  unit:
+    name: Hermetic suite
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    timeout-minutes: 90
+    services:
       # The attestation signing backend. Without a real server the OpenBao tests
       # skip themselves, and "written but never executed" is exactly the state
       # the PKCS#11 backend is in — so CI runs one. Dev mode is unsealed with a
@@ -59,17 +382,66 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v3
         with:
+          # Pinned — see MISE VERSION in the header. Bump deliberately.
+          version: 2026.7.7
           install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
-      - name: Install workspace dependencies
-        run: mise exec -- pnpm install --frozen-lockfile
-      - name: Lint risk service
-        run: mise run risk-service:lint
-      - name: Typecheck risk service
-        run: mise run risk-service:typecheck
       - name: Test risk service
+        # pytest reads PYTEST_ADDOPTS itself, so the report is produced without
+        # changing the task command. `runner` is only available in STEP env, not
+        # job env, which is why this sits here rather than above.
+        env:
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/hermetic.xml
         run: mise run risk-service:test
+      - name: The hermetic suite must have executed, not skipped
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/hermetic.xml" --min-executed 3000
+
+  postgres:
+    name: Postgres schema, RLS and locks
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: risk_service
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d risk_service"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          # Pinned — see MISE VERSION in the header. Bump deliberately.
+          version: 2026.7.7
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      # NOBYPASSRLS on purpose, and this is a HARD REQUIREMENT, not hygiene: the
+      # migration chain and the RLS policies must be correct for the
+      # tenant-scoped role production actually deploys with. A superuser here
+      # hides exactly the class of defect audit finding P0-18 is about — and it
+      # does not hide it quietly in one direction only. Measured 2026-08-22, the
+      # same `tests/db` against two roles:
+      #   * as the `postgres` SUPERUSER — 5 failures, every one an RLS-isolation
+      #     assertion, because the superuser bypasses the policy and the "other
+      #     tenant's rows are invisible" checks see them;
+      #   * as this NOBYPASSRLS role — 0 RLS failures; all of
+      #     tests/db/test_tenant_rls_completeness.py and
+      #     tests/db/test_governance_append_only.py pass.
+      # So a superuser does not merely weaken the gate, it INVERTS it: the tests
+      # that exist to prove tenant isolation are the ones that go red, which
+      # invites "fix" by relaxing the assertion. Never point this job at a
+      # superuser connection, and never at the primary.
       - name: Create restricted migration test role
         env:
           PGPASSWORD: postgres
@@ -80,17 +452,231 @@ jobs:
             NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
           GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
           SQL
-      - name: Test Postgres migrations
+      - name: Migration chain, RLS policies and schema defaults
         env:
-          TEST_DATABASE_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
-        run: mise run risk-service:test-postgres-migrations
-
+          TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-schema.xml
+        run: mise run risk-service:test-postgres-schema
+      # tests/db self-skips wholesale when TEST_DATABASE_URL is unset, so a
+      # typo in the URL above would produce a green job that never touched a
+      # migration or an RLS policy. It is the only place row-level security is
+      # exercised at all; it does not get to pass by abstention.
+      - name: The schema and RLS suite must have executed, not skipped
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-schema.xml" --min-executed 80
       # Row-lock and advisory-lock coverage. Without this step the tests run
       # nowhere: SQLite skips them on the hermetic run above, and CI previously
       # gave a Postgres URL only to the migrations step.
       - name: Test Postgres concurrency locks
         env:
-          TEST_DATABASE_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
+          TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-locks.xml
         run: mise run risk-service:test-postgres-locks
-      - name: Typecheck generated API client
-        run: mise run risk-service:api-typecheck
+      - name: The concurrency tests must have executed, not skipped
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks.xml" --min-executed 20
+
+  postgres-suite:
+    name: Full suite on Postgres
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: risk_service
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d risk_service"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          # Pinned — see MISE VERSION in the header. Bump deliberately.
+          version: 2026.7.7
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      - name: Create restricted test role
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host localhost --username postgres --dbname risk_service --set ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE risk_service_test
+            LOGIN PASSWORD 'risk_service_test'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
+          SQL
+      - name: Full suite against Postgres
+        env:
+          TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-suite.xml
+        run: mise run risk-service:test-postgres-suite
+      # No skip ceiling here: this run legitimately skips the opt-in tiers
+      # (real-data, live-data, storage). What it must not do is skip everything.
+      - name: The Postgres run must have executed, not skipped
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-suite.xml" --min-executed 3000
+
+  storage:
+    name: Storage contract
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          # Pinned — see MISE VERSION in the header. Bump deliberately.
+          version: 2026.7.7
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      # Started as a step rather than a `services:` entry on purpose: a service
+      # container cannot supply the `server /data` COMMAND the MinIO image needs
+      # (GitHub only forwards `options`, which are `docker create` flags), so as a
+      # service it starts, prints its help text and exits.
+      #
+      # MINIO_KMS_SECRET_KEY turns on MinIO's built-in KMS, which is what makes
+      # this suite reachable at all — without it every write fails
+      # `PutBucketEncryption ... Server side encryption specified but KMS is not
+      # configured`. The key NAME is load-bearing: the at-rest assertion pins the
+      # literal `aequoros-key` against the returned SSEKMSKeyId. The key MATERIAL
+      # is a throwaway generated per run and encrypts nothing that outlives the job.
+      - name: Start MinIO with built-in KMS
+        run: |
+          set -euo pipefail
+          docker run -d --name aequoros-ci-minio \
+            -e MINIO_ROOT_USER=ciminio \
+            -e MINIO_ROOT_PASSWORD=ciminio123 \
+            -e "MINIO_KMS_SECRET_KEY=aequoros-key:$(head -c 32 /dev/urandom | base64 -w0)" \
+            -p 9000:9000 \
+            quay.io/minio/minio:latest server /data
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO is live"; exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO did not become live"; docker logs aequoros-ci-minio; exit 1
+      # STORAGE_RETIRE_AFTER is deliberately ABSENT. StorageEngineSettings reads
+      # the process environment, so exporting it makes
+      # test_mvp_requires_a_retirement_date fail with DID NOT RAISE — the variable
+      # defeats the refusal that test exists to assert.
+      - name: Storage contract suite
+        env:
+          S3_ENDPOINT: http://127.0.0.1:9000
+          S3_ACCESS_KEY: ciminio
+          S3_SECRET_KEY: ciminio123
+          S3_REGION: us-east-1
+          STORAGE_BACKEND: minio
+          STORAGE_ENV: mvp
+          STORAGE_KMS_KEY_ID: aequoros-key
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/storage.xml
+        run: mise run risk-service:test-storage
+      # `--max-skipped 0` because this job exists to end the skipping. With S3_*
+      # unset the suite reports `27 passed, 18 skipped` and exits 0 — green, and
+      # blind to SSE-KMS at rest, the hash-chained access log and per-institution
+      # provisioning. Against the MinIO started above it is `45 passed`, so any
+      # skip here means the container or the credentials stopped working and the
+      # job is asserting nothing.
+      - name: The storage contract must have executed, not skipped
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/storage.xml" --max-skipped 0
+      - name: Stop MinIO
+        if: always()
+        run: docker rm -f aequoros-ci-minio || true
+
+  api-fresh:
+    name: Generated API client freshness
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          # Pinned — see MISE VERSION in the header. Bump deliberately.
+          version: 2026.7.7
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      - name: Install workspace dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+      # Regenerates the schema and the TypeScript client and fails if either
+      # moves. This existed only as a local pre-push hook, so a schema change
+      # merged with a stale client whenever the hook was skipped.
+      - name: Regenerate and verify the API client
+        run: mise run risk-service:api-fresh
+
+  real-data:
+    name: Real-data API surface
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Skipped until a reachable primary-database URL is configured. Documented
+    # rather than deleted: this is the only gate that covers the regulatory
+    # return, attestation workspace, authentication and vendor-connection APIs.
+    needs: preflight
+    if: ${{ vars.REAL_DATA_CI_ENABLED == 'true' && needs.preflight.outputs.backend == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          # Pinned — see MISE VERSION in the header. Bump deliberately.
+          version: 2026.7.7
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      - name: Real-data API suite
+        env:
+          REAL_DATA_DATABASE_URL: ${{ secrets.REAL_DATA_DATABASE_URL }}
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/real-data.xml
+        run: mise run risk-service:test-real-data
+      # Every test in this tier self-skips when REAL_DATA_DATABASE_URL does not
+      # resolve, so switching `REAL_DATA_CI_ENABLED` on with a URL that cannot
+      # reach the primary would produce a green job covering nothing — the exact
+      # illusion this gate is supposed to dispel. It has to execute or say so.
+      - name: The real-data suite must have executed, not skipped
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/real-data.xml"
+
+  # The single context to mark required. Every job above can legitimately report
+  # `skipped` — because this pull request does not touch the backend, or because
+  # `REAL_DATA_CI_ENABLED` is unset — and a skipped required check is NOT a
+  # passing one: GitHub waits on it forever. This job always runs, always
+  # reports, and is red if and only if something it depends on actually failed
+  # or was cancelled.
+  gate:
+    name: Risk service gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - preflight
+      - static
+      - architecture
+      - unit
+      - postgres
+      - postgres-suite
+      - storage
+      - api-fresh
+      - real-data
+    steps:
+      - name: Require every risk service gate to have passed or been skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RESULTS" | jq -r 'to_entries[] | "  \(.key): \(.value.result)"'
+          FAILED="$(printf '%s\n' "$RESULTS" \
+            | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key')"
+          if [ -n "$FAILED" ]; then
+            echo "::error::These risk service gates did not pass: $(printf '%s' "$FAILED" | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "Every risk service gate passed or was skipped."

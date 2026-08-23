@@ -77,6 +77,7 @@ def available_as_of_dates(db: Session, ctx: TenantContext, bank_id: str) -> list
             CanonicalPositionSnapshot.organization_id == ctx.organization_id,
             CanonicalPositionSnapshot.bank_id == bank_id,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .distinct()
@@ -102,6 +103,7 @@ def load_deposit_month_aggregates(  # noqa: PLR0913
         CanonicalPositionSnapshot.as_of_date <= as_of,
         CanonicalPositionSnapshot.as_of_date >= start,
         CanonicalPositionSnapshot.superseded_by.is_(None),
+        CanonicalPositionSnapshot.withdrawn_at.is_(None),
         CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         CanonicalPosition.position_type == "DEPOSIT",
     ]
@@ -185,6 +187,7 @@ def load_loan_month_rows(
             CanonicalPositionSnapshot.as_of_date <= as_of,
             CanonicalPositionSnapshot.as_of_date >= start,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == "LOAN",
         )

@@ -296,23 +296,31 @@ def export_package_version(
 
     extension = kind
     if kind == "xlsx_working":
-        # ALM/Finance working copy: only defined for the official BoG BSD forms
-        # (the generic tabular templates carry no formulas to keep live).
-        if not is_bog_official_template(definition.template_id):
+        # Official BSD forms preserve the regulator's own workbook formulas.
+        # SDI packets use a separately-labelled working calculation sheet whose
+        # formula plan is explicit and derived from the sealed snapshot.
+        if is_bog_official_template(definition.template_id):
+            payload = render_bog_form_xlsx(
+                definition.code, snapshot, bank, package.generated_at, mode="working"
+            )
+        elif definition.supports_working_copy:
+            payload = render_xlsx(
+                rendered,
+                generated_at=package.generated_at,
+                working_copy=True,
+                snapshot=snapshot,
+            )
+        else:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "error_code": "working_copy_unavailable",
                     "message": (
-                        f"'{package.return_code}' is not an official BoG BSD form; the "
-                        "working copy (live formulas) exists only for BSD returns. Use "
-                        "'xlsx' for the sealed export."
+                        f"'{package.return_code}' does not declare a working-formula export. "
+                        "Use 'xlsx' for the sealed export."
                     ),
                 },
             )
-        payload = render_bog_form_xlsx(
-            definition.code, snapshot, bank, package.generated_at, mode="working"
-        )
         extension = "xlsx"
     elif kind == "xlsx" and is_bog_official_template(definition.template_id):
         # Official BoG BSD form: rebuild the OFFICIAL workbook from the committed

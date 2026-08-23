@@ -30,6 +30,7 @@ from app.api.v1.database_connections import get_database_direct_storage
 from app.core.config import get_settings
 from app.services import database_connections as database_connections_service
 from app.services.database_connections import _reconcile_as_of
+from tests.factories.outbound import stub_public_dns
 from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
 from tests.storage.inmemory import InMemoryStorageClient
 
@@ -59,6 +60,13 @@ def dd_client(real_client: TestClient, storage_engine: InMemoryStorageClient) ->
     assert isinstance(app, FastAPI)
     app.dependency_overrides[get_database_direct_storage] = lambda: storage_engine
     return real_client
+
+
+@pytest.fixture(autouse=True)
+def _resolvable_core(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The egress guard resolves the host before every live connect; stub DNS
+    so the suite stays offline and deterministic."""
+    stub_public_dns(monkeypatch, "core-db.internal")
 
 
 @pytest.fixture(autouse=True)

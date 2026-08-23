@@ -278,7 +278,23 @@ def sso_client_config(
 
 @router.post("/refresh", response_model=TokenResponse, operation_id="authRefresh")
 def refresh(payload: TokenRefreshRequest, db: SystemDb) -> TokenResponse:
+    """Rotate a refresh token: the presented one is retired and a new pair issued.
+
+    The old token stops working immediately. Replaying it after the concurrency
+    grace window is treated as theft and revokes the whole session lineage.
+    """
     return _tokens(authentication.refresh_tokens(db, refresh_token=payload.refresh_token))
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, operation_id="authLogout")
+def logout(payload: TokenRefreshRequest, db: SystemDb) -> None:
+    """Sign out: revoke the refresh token's whole session lineage.
+
+    Unauthenticated by design — the refresh token IS the credential, and signing
+    out has to work after the access token has already expired. Always 204, even
+    for an unknown or expired token, so it never reports whether one was valid.
+    """
+    authentication.logout(db, refresh_token=payload.refresh_token)
 
 
 @router.get("/me", response_model=MeResponse, operation_id="authMe")

@@ -1,0 +1,65 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Every step below drives the build through a root mise task that proxies
+      # into backend/mise.toml. When that file moved in `f33e869` the proxies
+      # recursed instead of running anything; this check is stdlib Python with
+      # no mise and no uv, so it still reports when the toolchain cannot.
+      - name: Verify the mise task wiring
+        run: python3 .github/scripts/mise_wiring_preflight.py
+      - uses: jdx/mise-action@v3
+        with:
+          # Pinned: a release must be reproducible, and mise-action installs a
+          # floating version by default. Keep in step with risk-service.yml.
+          version: 2026.7.7
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify source quality
+        run: mise run risk-service:lint && mise run risk-service:typecheck
+      - name: Verify hermetic test suite
+        run: mise run risk-service:test
+      - name: Verify generated API client freshness
+        run: mise run risk-service:api-fresh
+
+  publish-risk-service:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish immutable image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/aequoros-risk-service:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/aequoros-risk-service:latest
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag

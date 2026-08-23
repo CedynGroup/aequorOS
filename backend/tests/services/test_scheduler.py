@@ -10,8 +10,8 @@ from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import BankReportingPeriod, Job, LiveMetric
 from app.services import job_queue, scheduler
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.api.helpers import ORG_1
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 
 def _tick_job(db_session: Session) -> Job:

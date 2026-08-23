@@ -1,3 +1,10 @@
+"""Case balance-sheet forecast endpoints (advisory, never filed).
+
+Case-scoped routes over `app.services.calculations`. Outputs are internal
+credit analysis for one case; the bank's official forecast runs are under
+`/banks/{bank_id}/forecast/runs`. See `app.services.case_plane`.
+"""
+
 from __future__ import annotations
 
 from typing import Annotated

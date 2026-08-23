@@ -3,7 +3,7 @@
 /**
  * Active market data source cards (§9.3): one card per configured connection
  * with the §10.2 status chip, last pull time, this-month quota consumption,
- * scope count, and the per-connection lifecycle actions — Test, Validate,
+ * scope count, and the per-connection lifecycle actions — configuration check, Validate,
  * Rotate credentials (§10.4), Disable/Enable, and Revoke (§10.5, with
  * confirm). Rotation shows a fresh credential form; stored values are never
  * displayed — only the fingerprint identifies what is on file.
@@ -17,20 +17,16 @@ import {
   PauseCircle,
   PlayCircle,
   ShieldAlert,
-  XCircle,
-  Zap,
 } from 'lucide-react';
 import type {
   MarketDataConnectionRead,
   QuotaSummaryRead,
-  TestPullRead,
 } from '@aequoros/risk-service-api';
 import { isApiError } from '@/lib/api/client';
 import {
   useDisableMarketDataConnection,
   useEnableMarketDataConnection,
   useRevokeMarketDataConnection,
-  useTestMarketDataConnection,
   useUpdateMarketDataConnection,
   useValidateMarketDataConnection,
 } from '@/lib/api/hooks';
@@ -89,13 +85,11 @@ export default function SourceCard({
   quota: QuotaSummaryRead | undefined;
 }) {
   const validate = useValidateMarketDataConnection(bankId);
-  const test = useTestMarketDataConnection(bankId);
   const update = useUpdateMarketDataConnection(bankId);
   const disable = useDisableMarketDataConnection(bankId);
   const enable = useEnableMarketDataConnection(bankId);
   const revoke = useRevokeMarketDataConnection(bankId);
 
-  const [testResult, setTestResult] = useState<TestPullRead | null>(null);
   const [rotating, setRotating] = useState(false);
   const [rotateValues, setRotateValues] = useState<Record<string, string>>({});
   const [actionError, setActionError] = useState<string | null>(null);
@@ -106,7 +100,6 @@ export default function SourceCard({
   const isDisabled = connection.status === 'DISABLED';
   const busy =
     validate.isPending ||
-    test.isPending ||
     update.isPending ||
     disable.isPending ||
     enable.isPending ||
@@ -131,7 +124,7 @@ export default function SourceCard({
       });
       setRotating(false);
       setRotateValues({});
-    }, 'Credentials rotated. The stored set was swapped atomically after vendor validation.');
+    }, 'Credentials rotated. The stored set was swapped atomically after configuration validation.');
 
   return (
     <section className="card p-5 space-y-4">
@@ -207,33 +200,24 @@ export default function SourceCard({
         </div>
       )}
 
+      {isVendor && (
+        <div className="rounded border border-warning/30 bg-warning-light/50 px-4 py-3">
+          <p className="text-body font-medium text-navy">Live vendor transport unavailable</p>
+          <p className="mt-1 text-caption text-slate">
+            Credentials and scopes are retained for onboarding, but this deployment does not send
+            requests to {vendorName(connection.vendor)}. Use manual upload for current market data.
+          </p>
+        </div>
+      )}
+
       {!isRevoked && (
         <div className="flex flex-wrap gap-2">
           {isVendor && (
             <ActionButton
               onClick={() =>
-                run(async () => {
-                  setTestResult(await test.mutateAsync(connection.id));
-                })
-              }
-              disabled={busy || isDisabled}
-              icon={
-                test.isPending ? (
-                  <Loader2 size={13} className="animate-spin" aria-hidden />
-                ) : (
-                  <Zap size={13} aria-hidden />
-                )
-              }
-            >
-              Test
-            </ActionButton>
-          )}
-          {isVendor && (
-            <ActionButton
-              onClick={() =>
                 run(
                   () => validate.mutateAsync(connection.id),
-                  'Credential health check completed.'
+                  'Credential configuration check completed.'
                 )
               }
               disabled={busy || isDisabled}
@@ -306,9 +290,9 @@ export default function SourceCard({
       {rotating && isVendor && !isRevoked && (
         <div className="rounded border border-border p-4 space-y-4 bg-surface-alt">
           <p className="text-body text-slate">
-            Enter the new credentials generated at {vendorName(connection.vendor)}. They are
-            validated against the vendor first; only on success is the stored set swapped —
-            on failure nothing changes.
+            Enter replacement credentials from {vendorName(connection.vendor)}. They are checked
+            for configuration validity before the stored set is swapped; no vendor request is sent
+            in this deployment.
           </p>
           <CredentialFields
             vendor={connection.vendor as Exclude<VendorKey, 'manual_upload'>}
@@ -329,47 +313,8 @@ export default function SourceCard({
             ) : (
               <KeyRound size={15} aria-hidden />
             )}
-            Validate & swap credentials
+            Check & swap credentials
           </button>
-        </div>
-      )}
-
-      {testResult && (
-        <div
-          className={`rounded border px-4 py-3 space-y-2 ${
-            testResult.success
-              ? 'border-success/30 bg-success-light/50'
-              : 'border-critical/30 bg-critical-light/40'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {testResult.success ? (
-              <CheckCircle2 size={15} className="text-success" aria-hidden />
-            ) : (
-              <XCircle size={15} className="text-critical" aria-hidden />
-            )}
-            <p className="text-body font-medium text-navy">
-              {testResult.success ? 'Test pull succeeded' : 'Test pull failed'}
-            </p>
-            <button
-              type="button"
-              onClick={() => setTestResult(null)}
-              className="ml-auto text-caption text-slate hover:text-navy"
-            >
-              Dismiss
-            </button>
-          </div>
-          {testResult.success ? (
-            <ul className="space-y-1">
-              {Object.entries(testResult.sampleValues).map(([label, value]) => (
-                <li key={label} className="text-body text-navy font-mono">
-                  {label}: {value}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-body text-navy">{testResult.error}</p>
-          )}
         </div>
       )}
 

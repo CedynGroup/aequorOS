@@ -18,6 +18,13 @@ import {
   RiskWeightBandReadToJSON,
   RiskWeightBandReadToJSONTyped,
 } from "./RiskWeightBandRead";
+import type { SdiRwaRiskClassRead } from "./SdiRwaRiskClassRead";
+import {
+  SdiRwaRiskClassReadFromJSON,
+  SdiRwaRiskClassReadFromJSONTyped,
+  SdiRwaRiskClassReadToJSON,
+  SdiRwaRiskClassReadToJSONTyped,
+} from "./SdiRwaRiskClassRead";
 import type { CarPct } from "./CarPct";
 import {
   CarPctFromJSON,
@@ -64,6 +71,12 @@ export interface SdiCapitalSummaryRead {
   carPct: CarPct;
   /**
    *
+   * @type {string}
+   * @memberof SdiCapitalSummaryRead
+   */
+  compositionSource: string;
+  /**
+   *
    * @type {boolean}
    * @memberof SdiCapitalSummaryRead
    */
@@ -80,6 +93,18 @@ export interface SdiCapitalSummaryRead {
    * @memberof SdiCapitalSummaryRead
    */
   pendingParameters: Array<string>;
+  /**
+   *
+   * @type {Array<SdiRwaRiskClassRead>}
+   * @memberof SdiCapitalSummaryRead
+   */
+  riskClasses: Array<SdiRwaRiskClassRead>;
+  /**
+   *
+   * @type {string}
+   * @memberof SdiCapitalSummaryRead
+   */
+  rwaScopeNote: string;
   /**
    *
    * @type {string}
@@ -109,6 +134,11 @@ export function instanceOfSdiCapitalSummaryRead(
     return false;
   if (!("carMinPct" in value) || value["carMinPct"] === undefined) return false;
   if (!("carPct" in value) || value["carPct"] === undefined) return false;
+  if (
+    !("compositionSource" in value) ||
+    value["compositionSource"] === undefined
+  )
+    return false;
   if (!("computable" in value) || value["computable"] === undefined)
     return false;
   if (!("netOwnFundsGhs" in value) || value["netOwnFundsGhs"] === undefined)
@@ -117,6 +147,10 @@ export function instanceOfSdiCapitalSummaryRead(
     !("pendingParameters" in value) ||
     value["pendingParameters"] === undefined
   )
+    return false;
+  if (!("riskClasses" in value) || value["riskClasses"] === undefined)
+    return false;
+  if (!("rwaScopeNote" in value) || value["rwaScopeNote"] === undefined)
     return false;
   if (!("status" in value) || value["status"] === undefined) return false;
   if (!("totalRwaGhs" in value) || value["totalRwaGhs"] === undefined)
@@ -144,9 +178,14 @@ export function SdiCapitalSummaryReadFromJSONTyped(
     carMinConfirmation: json["car_min_confirmation"],
     carMinPct: json["car_min_pct"],
     carPct: CarPctFromJSON(json["car_pct"]),
+    compositionSource: json["composition_source"],
     computable: json["computable"],
     netOwnFundsGhs: json["net_own_funds_ghs"],
     pendingParameters: json["pending_parameters"],
+    riskClasses: (json["risk_classes"] as Array<any>).map(
+      SdiRwaRiskClassReadFromJSON,
+    ),
+    rwaScopeNote: json["rwa_scope_note"],
     status: json["status"],
     totalRwaGhs: json["total_rwa_ghs"],
   };
@@ -170,9 +209,14 @@ export function SdiCapitalSummaryReadToJSONTyped(
     car_min_confirmation: value["carMinConfirmation"],
     car_min_pct: value["carMinPct"],
     car_pct: CarPctToJSON(value["carPct"]),
+    composition_source: value["compositionSource"],
     computable: value["computable"],
     net_own_funds_ghs: value["netOwnFundsGhs"],
     pending_parameters: value["pendingParameters"],
+    risk_classes: (value["riskClasses"] as Array<any>).map(
+      SdiRwaRiskClassReadToJSON,
+    ),
+    rwa_scope_note: value["rwaScopeNote"],
     status: value["status"],
     total_rwa_ghs: value["totalRwaGhs"],
   };

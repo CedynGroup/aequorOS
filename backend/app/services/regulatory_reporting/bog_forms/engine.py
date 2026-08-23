@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank, BankReportingPeriod
+from app.services.regulatory_reporting.common import unvalidated_book_detail, unvalidated_book_rows
 
 from . import sources_ext  # noqa: F401 — registers per-form resolvers
 from .formulas import UnsupportedFormulaError, WorkbookEvaluator, workbook_units
@@ -43,6 +44,15 @@ class FormResult:
     #: dependency forms that were unavailable
     missing_dependencies: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    #: current-generation canonical rows at the reporting date that did NOT pass
+    #: validation and are therefore excluded from every line above, per entity
+    #: per status (forensic re-audit D-4). Empty means the book is validated.
+    unvalidated_rows: dict[str, dict[str, int]] = field(default_factory=dict)
+    #: the disclosure sentence for :attr:`unvalidated_rows`, composed ONCE at
+    #: generation so the validation report, the sealed export and the working
+    #: copy cannot word the same exclusion three different ways. Empty when the
+    #: book is fully validated.
+    unvalidated_note: str = ""
     #: formula cells whose precedents are ALL unscaled cells (counts, percents)
     #: — exported without the sheet divisor, like their inputs
     unscaled_formulas: set[tuple[str, str]] = field(default_factory=set)
@@ -126,6 +136,11 @@ class FormResult:
             unscaled_formulas={
                 (str(sheet), str(ref)) for sheet, ref in payload.get("unscaled_formulas", [])
             },
+            unvalidated_rows={
+                str(table): {str(k): int(v) for k, v in (statuses or {}).items()}
+                for table, statuses in (payload.get("unvalidated_rows") or {}).items()
+            },
+            unvalidated_note=str(payload.get("unvalidated_note") or ""),
         )
 
 
@@ -262,6 +277,7 @@ def compute_form(  # noqa: PLR0912, PLR0913, PLR0915
     unscaled_formulas = workbook_units(
         formulas, {(lv.sheet, lv.cell) for lv in lines if lv.unscaled}, spec.depends_on
     )
+    unvalidated = unvalidated_book_rows(db, ctx, bank, as_of=period.period_end)
     return FormResult(
         spec=spec,
         layout=layout,
@@ -273,6 +289,13 @@ def compute_form(  # noqa: PLR0912, PLR0913, PLR0915
         missing_dependencies=missing_dependencies,
         errors=errors,
         unscaled_formulas=unscaled_formulas,
+        # What the resolvers above REFUSED to read, measured once per form. The
+        # exclusion itself is D-4's fix; recording it is the other half — a
+        # return compiled off a partly unvalidated book must say so on its own
+        # face, not leave an examiner to infer it from a figure that is simply
+        # smaller than it should be.
+        unvalidated_rows=unvalidated,
+        unvalidated_note=unvalidated_book_detail(unvalidated, as_of=period.period_end) or "",
     )
 
 

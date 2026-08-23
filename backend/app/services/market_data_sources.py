@@ -437,6 +437,7 @@ def _present_sources(
             model.bank_id == bank_id,
             model.as_of_date <= as_of,
             model.superseded_by.is_(None),
+            model.withdrawn_at.is_(None),
             model.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
         .distinct()

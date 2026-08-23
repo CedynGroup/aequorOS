@@ -66,11 +66,14 @@ def test_access_token_roundtrips_with_identity_claims() -> None:
 
 def test_refresh_token_type_is_enforced() -> None:
     org, user = _org_user()
+    # A refresh token must carry a jti (202608220028): it is the key to the
+    # server-side rotation/revocation row, so create_token refuses without one.
     refresh = create_token(
         subject=user,
         organization_id=org,
         roles=["viewer"],
         token_type="refresh",
+        jti=str(uuid4()),
         settings=_SETTINGS,
     )
     assert decode_token(refresh, expected_type="refresh", settings=_SETTINGS)["type"] == "refresh"

@@ -61,6 +61,12 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
+from app.domain.authority.outcomes import (
+    NotComputable,
+    OutcomeDetail,
+    OutcomeState,
+    outcome,
+)
 from app.domain.capital.engine import CapitalParams
 from app.domain.stress.projection import (
     EnterpriseProjection,
@@ -97,7 +103,26 @@ CapitalTierTarget = Literal["cet1", "at1", "tier2"]
 SizingMode = Literal["fixed", "fill_residual"]
 TriggerKind = Literal["always", "on_breach", "on_severity"]
 
+#: The runtime vocabularies. ``ActionKind`` and friends are typing-only Literals,
+#: erased at runtime, and a governed plan arrives from the database as plain
+#: strings — so a kind outside this set used to produce an action that fired,
+#: reported a trigger reason, and applied NOTHING (audit 2026-08-22 D-8).
+ACTION_KINDS: frozenset[str] = frozenset(
+    {"raise_capital", "revise_dividend", "reduce_risk", "sell_assets", "change_strategy", "other"}
+)
+CAPITAL_TIER_TARGETS: frozenset[str] = frozenset({"cet1", "at1", "tier2"})
+SIZING_MODES: frozenset[str] = frozenset({"fixed", "fill_residual"})
+TRIGGER_KINDS: frozenset[str] = frozenset({"always", "on_breach", "on_severity"})
+#: The minima an ``on_breach`` trigger may watch (mirrors ``MinimaCheck.binding``).
+WATCHABLE_MINIMA: frozenset[str] = frozenset({"car", "cet1", "tier1", "leverage", "paid_up"})
+#: The action kinds that carry an RWA relief. A ``rwa_reduction_ghs`` on any
+#: other kind was silently dropped by ``_apply_rwa``.
+RWA_RELIEF_KINDS: frozenset[str] = frozenset(
+    {"reduce_risk", "sell_assets", "change_strategy", "other"}
+)
+
 _SEVERITY_RANK: dict[str, int] = {"mild": 1, "moderate": 2, "severe": 3}
+SEVERITIES: frozenset[str] = frozenset(_SEVERITY_RANK)
 
 
 def _default_severity_factors() -> dict[str, Decimal]:
@@ -122,6 +147,43 @@ class ManagementActionError(Exception):
         self.message = message
 
 
+class ManagementActionNotComputable(ManagementActionError, NotComputable):
+    """A management-action figure cannot be established from this plan.
+
+    Doubly typed on the ``capital.engine.BiaGrossIncomeUnavailable`` pattern:
+    ``ManagementActionError`` so every boundary that already refuses an invalid
+    plan refuses this one identically, and ``NotComputable`` so the typed
+    fail-closed detail travels with it.
+    """
+
+    def __init__(self, code: str, detail: OutcomeDetail) -> None:
+        NotComputable.__init__(self, detail)
+        self._code = code
+        self.message = detail.message
+
+    # ``NotComputable.code`` is a read-only property (``<state>:<metric_id>``),
+    # so the plain attribute assignment ``ManagementActionError`` uses raises
+    # ``AttributeError`` on this doubly-typed class. Overriding it keeps
+    # ``exc.code`` the management-action code every existing boundary reads.
+    @property
+    def code(self) -> str:  # type: ignore[override]
+        return self._code
+
+
+class PostActionPositionNotComputable(ManagementActionNotComputable):
+    """The post-action position has no denominator, so its ratios are not numbers.
+
+    The overlay used to emit ``0`` for each of the four ratios whenever the
+    post-action RWA or leverage exposure reached zero — an action plan that shrank
+    the balance sheet to nothing produced a complete Appendix II
+    "Post-capitalisation" block reading 0.00% CAR, which is a manufactured
+    regulatory figure and not the absence of one (audit 2026-08-22 D-8b). The
+    registered authority ``capital.engine.compute_capital_ratios`` raises
+    ``CapitalComputationError`` on exactly this input; there is now one behaviour,
+    not two.
+    """
+
+
 # --- Triggers ---------------------------------------------------------------
 
 
@@ -139,6 +201,28 @@ class ActionTrigger:
     kind: TriggerKind
     watch_minima: tuple[str, ...] = ()
     min_severity: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in TRIGGER_KINDS:
+            raise ManagementActionError(
+                "invalid_trigger_kind",
+                f"Trigger kind '{self.kind}' is not one of {sorted(TRIGGER_KINDS)}.",
+            )
+        unknown = tuple(name for name in self.watch_minima if name not in WATCHABLE_MINIMA)
+        if unknown:
+            raise ManagementActionError(
+                "invalid_watch_minima",
+                f"Trigger watches unknown minima {sorted(unknown)}; expected a subset of "
+                f"{sorted(WATCHABLE_MINIMA)}. An unknown name never matches a breach, so "
+                "the action would never fire.",
+            )
+        if self.kind == "on_severity" and self.min_severity not in SEVERITIES:
+            raise ManagementActionError(
+                "invalid_min_severity",
+                f"An 'on_severity' trigger needs a severity threshold from "
+                f"{sorted(SEVERITIES)} (got {self.min_severity!r}). An unrecognised "
+                "threshold ranked zero, so the trigger fired in every scenario.",
+            )
 
 
 # --- Actions ----------------------------------------------------------------
@@ -179,6 +263,68 @@ class ManagementAction:
                 "invalid_effective_year",
                 f"Action '{self.action_id}' effective_year must be >= 1 "
                 f"(got {self.effective_year}).",
+            )
+        self._validate_vocabularies()
+        self._validate_effects()
+
+    def _validate_vocabularies(self) -> None:
+        """Every enumerated field must be a value this module acts on.
+
+        The Literals are erased at runtime and a governed plan arrives as plain
+        strings, so an unrecognised value used to be accepted and then silently
+        ignored by the effect appliers — a documented, approved, board-committed
+        action that did nothing (audit 2026-08-22 D-8).
+        """
+        for field_name, value, allowed in (
+            ("kind", self.kind, ACTION_KINDS),
+            ("capital_raise_tier", self.capital_raise_tier, CAPITAL_TIER_TARGETS),
+            ("sizing", self.sizing, SIZING_MODES),
+        ):
+            if value not in allowed:
+                raise ManagementActionError(
+                    f"invalid_action_{field_name}",
+                    f"Action '{self.action_id}' has {field_name} '{value}', which is not "
+                    f"one of {sorted(allowed)}.",
+                )
+        unknown_severities = tuple(
+            name for name in self.severity_factors if name not in SEVERITIES
+        )
+        if unknown_severities:
+            raise ManagementActionError(
+                "invalid_severity_factors",
+                f"Action '{self.action_id}' declares severity factors for "
+                f"{sorted(unknown_severities)}, which are not scenario severities "
+                f"({sorted(SEVERITIES)}).",
+            )
+
+    def _validate_effects(self) -> None:
+        """A declared effect must belong to the action's kind.
+
+        ``_apply_rwa`` and ``_apply_dividend`` filter on ``kind``, so an RWA
+        relief on a ``raise_capital`` row (or a dividend reduction on an asset
+        sale) was accepted, stored, snapshotted into the run's ``input_hash`` —
+        and then dropped without a word.
+        """
+        if self.rwa_reduction_ghs > _ZERO and self.kind not in RWA_RELIEF_KINDS:
+            raise ManagementActionError(
+                "effect_not_supported_by_kind",
+                f"Action '{self.action_id}' declares an RWA relief but its kind "
+                f"'{self.kind}' does not carry one; RWA relief belongs to "
+                f"{sorted(RWA_RELIEF_KINDS)}.",
+            )
+        if self.dividend_reduction_pct > _ZERO and self.kind != "revise_dividend":
+            raise ManagementActionError(
+                "effect_not_supported_by_kind",
+                f"Action '{self.action_id}' declares a dividend reduction but its kind "
+                f"is '{self.kind}', not 'revise_dividend'.",
+            )
+        if (
+            self.capital_raise_ghs > _ZERO or self.sizing == "fill_residual"
+        ) and self.kind != "raise_capital":
+            raise ManagementActionError(
+                "effect_not_supported_by_kind",
+                f"Action '{self.action_id}' declares a capital raise but its kind is "
+                f"'{self.kind}', not 'raise_capital'.",
             )
 
 
@@ -360,6 +506,22 @@ def _evaluate_trigger(
 # --- Position + shortfall arithmetic -----------------------------------------
 
 
+def _no_denominator(
+    code: str, year: int, *, metric_id: str, reason: str, items: tuple[str, ...]
+) -> PostActionPositionNotComputable:
+    """Refuse a post-action ratio whose denominator the plan drove to zero."""
+    return PostActionPositionNotComputable(
+        code,
+        outcome(
+            OutcomeState.NOT_COMPUTABLE,
+            metric_id=metric_id,
+            reason=reason,
+            items=items,
+            context={"projection_year": year},
+        ),
+    )
+
+
 def _position(year: ProjectedYear, bucket: _YearBucket) -> _Position:
     ratios = year.ratios
     non_credit_rwa = year.rwa.market_rwa + year.rwa.operational_rwa
@@ -378,12 +540,41 @@ def _position(year: ProjectedYear, bucket: _YearBucket) -> _Position:
     leverage_exposure = money(max(ratios.leverage_exposure - bucket.lev_reduction, _ZERO))
     paid_up = money(year.paid_up + bucket.paid_up)
 
-    car = ratio_pct(total / rwa * _HUNDRED) if rwa > _ZERO else _ZERO
-    cet1_ratio = ratio_pct(cet1 / rwa * _HUNDRED) if rwa > _ZERO else _ZERO
-    tier1_ratio = ratio_pct(tier1 / rwa * _HUNDRED) if rwa > _ZERO else _ZERO
-    leverage = (
-        ratio_pct(tier1 / leverage_exposure * _HUNDRED) if leverage_exposure > _ZERO else _ZERO
-    )
+    # Fail closed on a zero denominator, exactly as the registered authority
+    # ``capital.engine.compute_capital_ratios`` does (audit 2026-08-22 D-8b).
+    # Reachable: an RWA-reduction action larger than credit RWA at an institution
+    # with no market or operational charge, or a balance-sheet-shrinking action
+    # whose leverage relief exceeds the exposure.
+    if rwa <= _ZERO:
+        raise _no_denominator(
+            "post_action_rwa_not_positive",
+            year.year,
+            metric_id="post_action_car_pct",
+            reason=(
+                f"The management-action plan reduces year {year.year}'s risk-weighted "
+                "assets to zero, so the post-action capital ratios have no denominator "
+                "and are not numbers. Reduce the modelled RWA relief to a credible "
+                "amount, or remove the action."
+            ),
+            items=("input:post_action_total_rwa",),
+        )
+    if leverage_exposure <= _ZERO:
+        raise _no_denominator(
+            "post_action_leverage_exposure_not_positive",
+            year.year,
+            metric_id="post_action_leverage_ratio_pct",
+            reason=(
+                f"The management-action plan reduces year {year.year}'s leverage "
+                "exposure to zero, so the post-action leverage ratio has no denominator "
+                "and is not a number. Reduce the modelled balance-sheet reduction to a "
+                "credible amount, or remove the action."
+            ),
+            items=("input:post_action_leverage_exposure",),
+        )
+    car = ratio_pct(total / rwa * _HUNDRED)
+    cet1_ratio = ratio_pct(cet1 / rwa * _HUNDRED)
+    tier1_ratio = ratio_pct(tier1 / rwa * _HUNDRED)
+    leverage = ratio_pct(tier1 / leverage_exposure * _HUNDRED)
     return _Position(
         cet1=cet1,
         at1=at1,
@@ -454,6 +645,13 @@ def _minima(pos: _Position, params: CapitalParams, paid_up_min: Decimal) -> Mini
         paid_up=pos.paid_up,
         paid_up_min=paid_up_min,
         paid_up_ok=pos.paid_up >= paid_up_min,
+        # Carry the institution's regime (enterprise audit P0-9 companion): this
+        # was omitted, so the field defaulted True and the post-management-action
+        # leg re-imposed the Basel CET1/Tier1/leverage minima on an SDI that the
+        # projection leg had deliberately excluded (docs/sdi.md §4.6). An SDI's
+        # "with actions" verdict could therefore be a breach of minima that do
+        # not apply to it.
+        basel_applicable=params.basel_applicable,
     )
 
 
@@ -477,6 +675,31 @@ def apply_management_actions(  # noqa: PLR0913 - names the full overlay input se
     """
     stress_years = projection.stress
     horizon = projection.horizon_years
+    # Every effect applier walks ``range(effective_year, horizon + 1)`` and reads
+    # its year out of a dict, substituting a zero (dividends) or skipping the year
+    # (RWA relief, capital stock) when the projection does not carry it. A
+    # projection whose stress leg does not cover its own declared horizon would
+    # therefore drop part of an approved plan silently (audit 2026-08-22 D-8).
+    uncovered = tuple(
+        str(year)
+        for year in range(1, horizon + 1)
+        if year not in {stress_year.year for stress_year in stress_years}
+    )
+    if uncovered:
+        raise ManagementActionNotComputable(
+            "projection_horizon_not_covered",
+            outcome(
+                OutcomeState.MISSING_REQUIRED_INPUT,
+                metric_id="management_actions.post_action_position",
+                reason=(
+                    "The stress projection does not carry every year of its declared "
+                    f"{horizon}-year horizon, so the plan's effects in the uncovered "
+                    "years cannot be applied or reported."
+                ),
+                items=tuple(f"projection_year:{year}" for year in uncovered),
+                context={"horizon_years": horizon, "uncovered": list(uncovered)},
+            ),
+        )
     buckets: dict[int, _YearBucket] = {year.year: _YearBucket() for year in stress_years}
     dividends_by_year: dict[int, Decimal] = {y.year: y.pnl.dividends for y in stress_years}
 
@@ -577,11 +800,141 @@ def apply_management_actions(  # noqa: PLR0913 - names the full overlay input se
     )
 
 
+def severity_pricing_binds(factors: Mapping[str, Decimal]) -> bool:
+    """True when a set of ¶81 factors makes the band change the magnitude.
+
+    The lowest form of the rule, taking the mapping rather than an action so a
+    caller holding STORED pricing can ask it without first constructing a
+    :class:`ManagementAction` — construction validates vocabularies and refuses,
+    which is right for a run and wrong for reading back a draft someone is still
+    writing.
+
+    Fewer than two distinct factors means the band cannot change anything.
+    """
+    return len(set(factors.values())) > 1
+
+
+def default_severity_factors() -> dict[str, Decimal]:
+    """The register an action inherits when it prices no bands of its own.
+
+    Exported because it is NOT neutral — it is ``{mild, moderate, severe}`` with
+    three distinct factors, so an action that stores no pricing still has its
+    magnitude bound to the band. A caller that treated absent pricing as "no
+    band needed" would be wrong in the direction that hurts.
+    """
+    return _default_severity_factors()
+
+
+def is_severity_priced(action: ManagementAction) -> bool:
+    """True when the scenario's severity band changes this action's magnitude.
+
+    The single predicate behind both halves of the ¶81 severity rule: the
+    run-time refusal in :func:`_severity_factor`, and the build-time readiness
+    signal :func:`severity_priced_action_ids`. Stating it once is the point — a
+    readiness surface that disagreed with the gate it advertises would send an
+    analyst to a screen that says the plan is fine and a run that refuses it.
+
+    Pure and total: it raises nothing and reads no database, so a caller may ask
+    it of a draft plan the run would never accept.
+    """
+    return severity_pricing_binds(action.severity_factors)
+
+
+def severity_priced_action_ids(plan: ManagementActionPlan) -> tuple[str, ...]:
+    """The ids of actions in ``plan`` whose magnitude depends on the band.
+
+    A plan holding any of these can only be run against a scenario that declares
+    a severity band; against one that does not, :func:`_severity_factor` refuses
+    (``scenario_severity_undeclared``). Surfacing the requirement on the PLAN —
+    where it is a property of how the actions were priced, and knowable before a
+    scenario is chosen — lets that be discovered while the plan is being written
+    rather than at the moment someone tries to run it.
+
+    Empty means the plan runs against any scenario, declared band or not.
+    """
+    return tuple(action.action_id for action in plan.actions if is_severity_priced(action))
+
+
 def _severity_factor(action: ManagementAction, severity: str | None) -> Decimal:
-    """The action's severity-scaling factor (1.0 when the severity is unmapped)."""
+    """The action's ¶81 severity-scaling factor.
+
+    A severity the plan does not price REFUSES (audit 2026-08-22 D-8). The
+    fallback used to be ``1.0`` — which in the default register is the SEVERE
+    factor, the fullest lever the bank ever pulls — so a plan that priced only
+    ``mild`` and ``moderate`` silently applied its largest possible action in a
+    severe scenario, the most flattering assumption available.
+
+    ``severity is None`` — the scenario declares no band, which the scenario
+    register permits (``ck_macro_scenarios_severity`` allows NULL) — used to
+    return ``_ONE`` on the reasoning that "there is no band to differentiate on".
+    That reasoning is wrong, and this is the second half of the same defect
+    (audit 2026-08-22 D-8, WS-A3 open item 2). ``_ONE`` is not a neutral value
+    here: in the default register ``{mild: 0.5, moderate: 0.75, severe: 1}`` it
+    IS the severe factor. An undeclared band therefore pulled every action to its
+    full authored magnitude — the largest capital raise, the deepest RWA relief,
+    the biggest dividend cut — and produced the most flattering post-action
+    capital position the plan can produce, from the ABSENCE of a severity
+    declaration rather than from a declared severe scenario.
+
+    It now refuses, with one exception that is an explicit zero rather than an
+    absent one: when every band the action prices carries the SAME factor (or it
+    prices none at all), the undeclared band cannot change the magnitude, so
+    there is nothing to resolve and that unambiguous factor stands.
+    """
     if severity is None:
-        return _ONE
-    return action.severity_factors.get(severity, _ONE)
+        if not is_severity_priced(action):
+            # Every priced band carries the same factor, or none is priced: the
+            # absent band cannot change the magnitude. Shares its predicate with
+            # ``severity_priced_action_ids`` so the readiness surface and this
+            # gate can never disagree about which actions need a band.
+            return next(iter(set(action.severity_factors.values())), _ONE)
+        raise ManagementActionNotComputable(
+            "scenario_severity_undeclared",
+            outcome(
+                OutcomeState.POLICY_UNRESOLVED,
+                metric_id="management_action.severity_factor",
+                reason=(
+                    f"Action '{action.action_id}' is priced differently by scenario "
+                    "severity (Stress Testing Guideline paragraph 81), but the scenario "
+                    "declares no severity band, so the magnitude the action would be "
+                    "pulled to cannot be established. An undeclared band used to apply "
+                    "the action at full magnitude, which is the plan's most favourable "
+                    "assumption. Declare the scenario's severity, or price the action "
+                    "identically across the bands so the band does not change it."
+                ),
+                items=(f"action:{action.action_id}", "scenario:severity"),
+                context={
+                    "action_id": action.action_id,
+                    "severity": None,
+                    "priced": {
+                        name: str(value) for name, value in sorted(action.severity_factors.items())
+                    },
+                },
+            ),
+        )
+    factor = action.severity_factors.get(severity)
+    if factor is None:
+        raise ManagementActionNotComputable(
+            "severity_factor_unresolved",
+            outcome(
+                OutcomeState.POLICY_UNRESOLVED,
+                metric_id="management_action.severity_factor",
+                reason=(
+                    f"Action '{action.action_id}' declares no severity factor for a "
+                    f"'{severity}' scenario, so the magnitude it would be pulled to "
+                    "cannot be established (Stress Testing Guideline paragraph 81 "
+                    "severity differentiation). Price the action for every severity "
+                    "the plan may be run against."
+                ),
+                items=(f"action:{action.action_id}", f"severity:{severity}"),
+                context={
+                    "action_id": action.action_id,
+                    "severity": severity,
+                    "priced": sorted(action.severity_factors),
+                },
+            ),
+        )
+    return factor
 
 
 def _apply_dividend(

@@ -22,7 +22,16 @@ import {
   useForecastRun,
   useForecastRuns,
 } from '@/lib/api/hooks';
-import { fmtDateUTC, labelize, num } from '@/lib/api/values';
+import FloorNotAssessed from '@/components/basel/FloorNotAssessed';
+import {
+  assessAgainstFloor,
+  floorStatus,
+  fmtDateUTC,
+  fmtFloorPct,
+  labelize,
+  num,
+  numOrNull,
+} from '@/lib/api/values';
 import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
 
 import { SCENARIO_LABELS } from '@/components/forecasting/lib';
@@ -107,8 +116,15 @@ export default function CapitalPlanning() {
   const forecastRun = useForecastRun(bankId, activeRunId);
 
   const data = dashboard.data;
-  const carMin = num(data?.buffers.carMinPct ?? '10');
-  const carEarlyWarning = num(data?.buffers.carEarlyWarningPct ?? '10.5');
+  // NEW-51. Same rule as the Basel overview: the CAR ladder is the tenant's
+  // configured regulatory parameter set, and the capital dashboard refuses
+  // (409 `missing_parameter`) rather than guessing. A literal here would be a
+  // fabricated floor drawn across a five-year plan and printed on the what-if
+  // planner — the Bank of Ghana minimum is CRD ¶71's 10% plus the ¶75
+  // conservation buffer (13% today), so `10` understates it and `10.5`
+  // corresponds to no published instrument. Unresolved stays unresolved.
+  const carMin = numOrNull(data?.buffers.carMinPct);
+  const carEarlyWarning = numOrNull(data?.buffers.carEarlyWarningPct);
 
   // ----- Real base position (latest stored capital figures) -----
   const totalRwa = num(data?.metrics.totalRwaGhs);
@@ -132,9 +148,25 @@ export default function CapitalPlanning() {
   const proCet1 = cet1 + retained;
   const proTier1 = proCet1 + at1 + at1New;
   const proTotal = proTier1 + tier2 + tier2New;
-  const proCar = proRwa > 0 ? (proTotal / proRwa) * 100 : 0;
-  const proCet1Ratio = proRwa > 0 ? (proCet1 / proRwa) * 100 : 0;
-  const proTier1Ratio = proRwa > 0 ? (proTier1 / proRwa) * 100 : 0;
+  // No pro-forma RWA ⇒ no pro-forma ratio. A `0` here would put a 0.00% CAR on
+  // a capital-planning screen — a fabricated, catastrophic-looking measurement
+  // that also compares below every floor and would light the tile red.
+  const proCar = proRwa > 0 ? (proTotal / proRwa) * 100 : null;
+  const proCet1Ratio = proRwa > 0 ? (proCet1 / proRwa) * 100 : null;
+  const proTier1Ratio = proRwa > 0 ? (proTier1 / proRwa) * 100 : null;
+
+  // The pro-forma tile's edge. `floorStatus` covers ok / breach / not-assessed;
+  // the early-warning step is layered on top and only where that buffer itself
+  // resolved. With no floor the tile is amber — an unassessed pro-forma ratio
+  // must not wear the green edge that reads as "still above the minimum".
+  const proCarFloorStatus = floorStatus(assessAgainstFloor(proCar, carMin));
+  const proCarStatus =
+    proCarFloorStatus === 'ok' &&
+    proCar !== null &&
+    carEarlyWarning !== null &&
+    proCar < carEarlyWarning
+      ? 'warn'
+      : proCarFloorStatus;
 
   const path = forecastRun.data?.path ?? [];
   const chartData = path.map((y) => ({
@@ -207,14 +239,26 @@ export default function CapitalPlanning() {
                   <KpiStat
                     label="Year-5 CAR"
                     value={fmtPct(num(summary.year5CarPct), 2)}
-                    status={num(summary.year5CarPct) >= carMin ? 'ok' : 'crit'}
-                    hint={`${regShort()} minimum ${carMin.toFixed(1)}%`}
+                    status={floorStatus(
+                      assessAgainstFloor(numOrNull(summary.year5CarPct), carMin)
+                    )}
+                    hint={
+                      carMin === null
+                        ? 'No capital adequacy minimum on file — compliance not assessed'
+                        : `${regShort()} minimum ${fmtFloorPct(carMin)}`
+                    }
                   />
                   <KpiStat
                     label="Minimum CAR on path"
                     value={fmtPct(num(summary.minCarPct), 2)}
-                    status={num(summary.minCarPct) >= carMin ? 'ok' : 'crit'}
-                    hint="Worst projected year"
+                    status={floorStatus(
+                      assessAgainstFloor(numOrNull(summary.minCarPct), carMin)
+                    )}
+                    hint={
+                      carMin === null
+                        ? 'Worst projected year — no minimum on file to assess it against'
+                        : 'Worst projected year'
+                    }
                   />
                   <KpiStat
                     label="Average ROE"
@@ -237,12 +281,23 @@ export default function CapitalPlanning() {
                 height={300}
                 loading={forecastRun.isLoading}
                 footer={
-                  forecastRun.data ? (
-                    <span>
-                      Forecast run {forecastRun.data.scenarioCode} · engine{' '}
-                      {forecastRun.data.engineVersion} · created{' '}
-                      {fmtDateUTC(forecastRun.data.createdAt)}
-                    </span>
+                  forecastRun.data || carMin === null ? (
+                    <>
+                      {forecastRun.data && (
+                        <span>
+                          Forecast run {forecastRun.data.scenarioCode} · engine{' '}
+                          {forecastRun.data.engineVersion} · created{' '}
+                          {fmtDateUTC(forecastRun.data.createdAt)}
+                        </span>
+                      )}
+                      {carMin === null && (
+                        <span>
+                          {forecastRun.data ? ' · ' : ''}
+                          No capital adequacy minimum resolved for this
+                          institution, so no floor line is drawn.
+                        </span>
+                      )}
+                    </>
                   ) : undefined
                 }
               >
@@ -343,42 +398,64 @@ export default function CapitalPlanning() {
                 <div className="grid grid-cols-3 gap-4">
                   <KpiStat
                     label="Pro-forma CAR"
-                    value={proCar.toFixed(2)}
-                    unit="%"
-                    delta={proCar - currentCar}
-                    status={
-                      proCar < carMin
-                        ? 'crit'
-                        : proCar < carEarlyWarning
-                        ? 'warn'
-                        : 'ok'
+                    value={proCar === null ? 'Not computable' : proCar.toFixed(2)}
+                    unit={proCar === null ? undefined : '%'}
+                    delta={proCar === null ? undefined : proCar - currentCar}
+                    status={proCarStatus}
+                    hint={
+                      proCar === null
+                        ? 'No risk-weighted assets in the base position'
+                        : carMin === null
+                        ? `Now ${fmtPct(currentCar, 2)} · no minimum on file to assess against`
+                        : `Now ${fmtPct(currentCar, 2)}`
                     }
-                    hint={`Now ${fmtPct(currentCar, 2)}`}
                   />
                   <KpiStat
                     label="Pro-forma Tier 1"
-                    value={proTier1Ratio.toFixed(2)}
-                    unit="%"
+                    value={
+                      proTier1Ratio === null
+                        ? 'Not computable'
+                        : proTier1Ratio.toFixed(2)
+                    }
+                    unit={proTier1Ratio === null ? undefined : '%'}
                     hint={`Now ${fmtPct(num(data?.metrics.tier1RatioPct), 2)}`}
                   />
                   <KpiStat
                     label="Pro-forma CET1"
-                    value={proCet1Ratio.toFixed(2)}
-                    unit="%"
+                    value={
+                      proCet1Ratio === null
+                        ? 'Not computable'
+                        : proCet1Ratio.toFixed(2)
+                    }
+                    unit={proCet1Ratio === null ? undefined : '%'}
                     hint={`Now ${fmtPct(num(data?.metrics.cet1RatioPct), 2)}`}
                   />
                 </div>
-                <LimitBar
-                  label={`Pro-forma CAR vs ${regShort()} floors`}
-                  value={proCar}
-                  limit={carMin}
-                  warnAt={carEarlyWarning}
-                  direction="above"
-                  unit="%"
-                  limitLabel={`${regShort()} minimum`}
-                  warnLabel={data?.buffers.carEarlyWarningLabel || 'Early warning'}
-                  format={(v) => v.toFixed(1)}
-                />
+                {proCar === null ? (
+                  <p className="text-caption text-slate leading-relaxed">
+                    The base position carries no risk-weighted assets, so no
+                    pro-forma capital ratio can be worked out and none is shown
+                    against the {regShort()} floors.
+                  </p>
+                ) : carMin === null ? (
+                  <FloorNotAssessed
+                    label="Pro-forma CAR"
+                    value={proCar}
+                    reason="No capital adequacy minimum on file for this institution"
+                  />
+                ) : (
+                  <LimitBar
+                    label={`Pro-forma CAR vs ${regShort()} floors`}
+                    value={proCar}
+                    limit={carMin}
+                    warnAt={carEarlyWarning ?? undefined}
+                    direction="above"
+                    unit="%"
+                    limitLabel={`${regShort()} minimum`}
+                    warnLabel={data?.buffers.carEarlyWarningLabel || 'Early warning'}
+                    format={(v) => v.toFixed(1)}
+                  />
+                )}
                 <p className="text-caption text-slate leading-relaxed">
                   Pro-forma capital = CET1 {fmtCurrency(proCet1)} + AT1{' '}
                   {fmtCurrency(at1 + at1New)} + Tier 2{' '}

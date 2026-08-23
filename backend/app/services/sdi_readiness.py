@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
-from app.services import sdi_capital_checks
+from app.services import sdi_capital, sdi_capital_checks
+from app.services.jurisdictions import base_currency
 
 _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 _EXPOSURE_TYPES = frozenset({"LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING"})
@@ -46,6 +47,11 @@ class _BookSummary:
     deposits_missing_counterparty: int
     loans: int
     loans_missing_dpd_and_stage: int
+    #: Risk-weighted asset positions held in another currency with no converted
+    #: balance. They are LEFT OUT of risk-weighted assets rather than counted at
+    #: face value, so capital adequacy reads better than it is.
+    unconverted_fx_assets: int
+    unconverted_fx_currencies: tuple[str, ...]
 
 
 def _summarize(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> _BookSummary:
@@ -57,6 +63,7 @@ def _summarize(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> _Boo
             CanonicalPositionSnapshot.bank_id == bank.id,
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
     ).all()
@@ -70,11 +77,22 @@ def _summarize(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> _Boo
         "loans": 0,
         "loans_missing_dpd_and_stage": 0,
     }
+    base = base_currency(bank)
+    bucket_map, _ = sdi_capital.resolve_bucket_map(db, bank, as_of)
+    unconverted_currencies: set[str] = set()
+    unconverted_fx_assets = 0
     for snap, pos in rows:
         by_type[pos.position_type] = by_type.get(pos.position_type, 0) + 1
         attrs = snap.attributes or {}
-        if attrs.get("balance_ghs") is None:
+        raw_balance_ghs = attrs.get("balance_ghs")
+        if raw_balance_ghs is None:
             counters["missing_balance_ghs"] += 1
+        currency = (pos.currency or "").strip().upper()
+        # Exactly the rule the risk-weighting reader applies, so what readiness
+        # reports and what the ratio leaves out are the same set of positions.
+        if raw_balance_ghs in (None, "") and currency != base and pos.position_type in bucket_map:
+            unconverted_fx_assets += 1
+            unconverted_currencies.add(currency)
         if snap.contractual_maturity is None:
             counters["missing_maturity"] += 1
         if pos.position_type == "DEPOSIT":
@@ -87,7 +105,13 @@ def _summarize(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> _Boo
             counters["loans"] += 1
             if attrs.get("days_past_due") is None and snap.ifrs9_stage is None:
                 counters["loans_missing_dpd_and_stage"] += 1
-    return _BookSummary(total=len(rows), by_type=by_type, **counters)
+    return _BookSummary(
+        total=len(rows),
+        by_type=by_type,
+        unconverted_fx_assets=unconverted_fx_assets,
+        unconverted_fx_currencies=tuple(sorted(unconverted_currencies)),
+        **counters,
+    )
 
 
 def assess_sdi_readiness(  # noqa: PLR0912, PLR0915 - one linear per-module readiness pass
@@ -150,6 +174,17 @@ def assess_sdi_readiness(  # noqa: PLR0912, PLR0915 - one linear per-module read
         cap.reasons.append(
             "The capital_structure reference dataset has not been ingested — capital "
             "adequacy and the paid-up-capital check cannot compute."
+        )
+    elif s.unconverted_fx_assets:
+        # Never converted at an invented rate, so they are left out entirely —
+        # which understates risk-weighted assets and flatters the ratio.
+        cap.status = PARTIAL
+        cap.reasons.append(
+            f"{s.unconverted_fx_assets} asset position(s) in "
+            + ", ".join(s.unconverted_fx_currencies)
+            + " have no converted balance and are left out of risk-weighted assets, "
+            "so capital adequacy reads higher than it is. Supply the converted "
+            "balances on those positions."
         )
     modules.append(cap)
 

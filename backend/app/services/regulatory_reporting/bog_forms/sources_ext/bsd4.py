@@ -54,6 +54,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models.canonical import (
     CanonicalCounterparty,
     CanonicalPosition,
@@ -377,6 +378,8 @@ def load_loans(rc: ResolveContext) -> list[Loan]:
             snap.bank_id == rc.bank.id,
             snap.as_of_date <= rc.period.period_end,
             snap.superseded_by.is_(None),
+            snap.withdrawn_at.is_(None),
+            snap.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
         .group_by(snap.position_id)
         .subquery()
@@ -394,7 +397,10 @@ def load_loans(rc: ResolveContext) -> list[Loan]:
             snap.organization_id == rc.ctx.organization_id,
             snap.bank_id == rc.bank.id,
             snap.superseded_by.is_(None),
+            snap.withdrawn_at.is_(None),
+            snap.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
             CanonicalPosition.position_type == "LOAN",
         )
     )

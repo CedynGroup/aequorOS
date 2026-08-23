@@ -37,7 +37,7 @@ export interface RegulatoryRunCreate {
    * @type {RegulatoryModule}
    * @memberof RegulatoryRunCreate
    */
-  module: RegulatoryModule | null;
+  module: RegulatoryModule;
   /**
    *
    * @type {string}

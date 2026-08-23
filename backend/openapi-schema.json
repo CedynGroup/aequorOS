@@ -4166,8 +4166,391 @@
         "title": "CanonicalPositionRead",
         "type": "object"
       },
+      "CanonicalWithdrawalApproveRequest": {
+        "properties": {
+          "approved_by": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Approved By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved_by"
+        ],
+        "title": "CanonicalWithdrawalApproveRequest",
+        "type": "object"
+      },
+      "CanonicalWithdrawalCreate": {
+        "description": "Request the retirement of one source system's book for one date.\n\nNothing is retired by this call: it records a PENDING request that a second\nofficer must approve.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "declaration_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Id"
+          },
+          "entity": {
+            "enum": [
+              "position",
+              "gl_account",
+              "counterparty",
+              "product"
+            ],
+            "title": "Entity",
+            "type": "string"
+          },
+          "position_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "LOAN",
+                  "DEPOSIT",
+                  "SECURITY_HOLDING",
+                  "DERIVATIVE",
+                  "FX_HEDGE",
+                  "INTEREST_RATE_SWAP",
+                  "CASH",
+                  "INTERBANK_PLACEMENT",
+                  "INTERBANK_BORROWING",
+                  "LC_GUARANTEE",
+                  "COMMITMENT_UNDRAWN",
+                  "OTHER_ASSET",
+                  "OTHER_LIABILITY"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Type"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_by": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Requested By",
+            "type": "string"
+          },
+          "source_system": {
+            "enum": [
+              "EXCEL_CSV",
+              "T24",
+              "FINACLE",
+              "FLEXCUBE",
+              "DB_DIRECT",
+              "SFTP_DROP",
+              "API_GENERIC",
+              "API_PUSH",
+              "BLOOMBERG",
+              "REFINITIV",
+              "MANUAL_UPLOAD",
+              "MANUAL",
+              "AEQUOR_DESK"
+            ],
+            "title": "Source System",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity",
+          "source_system",
+          "as_of_date",
+          "reason",
+          "requested_by"
+        ],
+        "title": "CanonicalWithdrawalCreate",
+        "type": "object"
+      },
+      "CanonicalWithdrawalListRead": {
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "withdrawals": {
+            "items": {
+              "$ref": "#/components/schemas/CanonicalWithdrawalRead"
+            },
+            "title": "Withdrawals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "withdrawals"
+        ],
+        "title": "CanonicalWithdrawalListRead",
+        "type": "object"
+      },
+      "CanonicalWithdrawalRead": {
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "declaration_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Id"
+          },
+          "entity": {
+            "title": "Entity",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "position_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Type"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "requested_by": {
+            "title": "Requested By",
+            "type": "string"
+          },
+          "reversal_batch_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reversal Batch Id"
+          },
+          "reversal_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reversal Reason"
+          },
+          "reversed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reversed At"
+          },
+          "reversed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reversed By"
+          },
+          "rows_restored": {
+            "title": "Rows Restored",
+            "type": "integer"
+          },
+          "rows_withdrawn": {
+            "title": "Rows Withdrawn",
+            "type": "integer"
+          },
+          "source_system": {
+            "title": "Source System",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "withdrawal_batch_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawal Batch Id"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "entity",
+          "source_system",
+          "as_of_date",
+          "position_type",
+          "reason",
+          "declaration_id",
+          "status",
+          "requested_by",
+          "requested_at",
+          "approved_by",
+          "approved_at",
+          "withdrawal_batch_id",
+          "rows_withdrawn",
+          "reversed_at",
+          "reversed_by",
+          "reversal_reason",
+          "reversal_batch_id",
+          "rows_restored"
+        ],
+        "title": "CanonicalWithdrawalRead",
+        "type": "object"
+      },
+      "CanonicalWithdrawalReverseRequest": {
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "reversed_by": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Reversed By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reversed_by",
+          "reason"
+        ],
+        "title": "CanonicalWithdrawalReverseRequest",
+        "type": "object"
+      },
+      "CanonicalWithdrawalScopeRead": {
+        "description": "How many current records a proposed withdrawal would retire.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "entity": {
+            "title": "Entity",
+            "type": "string"
+          },
+          "position_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Type"
+          },
+          "rows_in_scope": {
+            "title": "Rows In Scope",
+            "type": "integer"
+          },
+          "source_system": {
+            "title": "Source System",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "entity",
+          "source_system",
+          "as_of_date",
+          "position_type",
+          "rows_in_scope"
+        ],
+        "title": "CanonicalWithdrawalScopeRead",
+        "type": "object"
+      },
       "CapitalBuffersRead": {
         "additionalProperties": false,
+        "description": "The floors a capital ratio is judged against, from the ONE authority.\n\nEvery value here is resolved from the institution's active regulatory\nparameter set (board register, clamped tighten-only against the control\nplane) \u2014 the same dict :func:`_engine_params` hands the engine, so the KPI\ntraffic light, the validation rules and this block cannot disagree. A run's\n``threshold_min`` is the historical record of what was applied when that run\nexecuted; it is NOT the current requirement and its absence is not evidence\nof compliance, so no consumer may substitute it for these fields.\n\nThe three Basel sub-tier floors are nullable because they are structurally\nabsent under the SDI s.29 regime (Act 930 s.29 has no CET1/Tier 1 or\nleverage minimum \u2014 the same ``basel_applicable`` gate that omits their\nvalidation rules) and because a bank register may simply not carry one.\nAbsence renders as absence: a consumer must show \"not assessed\", never a\nsubstituted floor.",
         "properties": {
           "car_critical_pct": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -4188,6 +4571,18 @@
             "title": "Car Min Pct",
             "type": "string"
           },
+          "cet1_min_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Buffers Cet1 Min Pct"
+          },
           "current_car_pct": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Current Car Pct",
@@ -4197,6 +4592,30 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Headroom Pp",
             "type": "string"
+          },
+          "leverage_min_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Buffers Leverage Min Pct"
+          },
+          "tier1_min_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Buffers Tier1 Min Pct"
           }
         },
         "required": [
@@ -8667,6 +9086,37 @@
         "title": "CompleteUploadResponse",
         "type": "object"
       },
+      "ComponentHealth": {
+        "description": "One subsystem's verdict, with the reason it reached it.\n\n``detail`` is always populated for anything other than a plain ``ok`` so an\noperator reading a probe response is told what to change, not merely that\nsomething is wrong.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "degraded",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ComponentHealth",
+        "type": "object"
+      },
       "ConnectionMode": {
         "enum": [
           "OFS",
@@ -9615,7 +10065,7 @@
       },
       "DatabaseConnectionUpdate": {
         "additionalProperties": false,
-        "description": "Post-onboarding management and credential rotation.\n\nWhen ``credentials`` is present the new set is validated FIRST; only on\nsuccess are the stored ciphertext, fingerprint, and expiry swapped in one\ntransaction. On failure nothing changes and the error is returned as a 422.",
+        "description": "Post-onboarding management and credential rotation.\n\nWhen ``credentials`` is present the new set is validated FIRST; only on\nsuccess are the stored ciphertext, fingerprint, and expiry swapped in one\ntransaction. On failure nothing changes and the error is returned as a 422.\n\n``host``/``read_replicas`` are re-screened on every edit: an ACTIVE\nconnection may not be re-pointed at a blocked destination.",
         "properties": {
           "connection_options": {
             "anyOf": [
@@ -9803,6 +10253,116 @@
           }
         },
         "title": "DatabaseConnectionUpdate",
+        "type": "object"
+      },
+      "DeclaredMethodologyRead": {
+        "additionalProperties": false,
+        "description": "One \"which figure does this return mean?\" disclosure, typed.\n\nCF-1's answer to the audit's LCR question: BSD3's LCR and LMT Table 11's LCR\nare different methodologies by design, and forcing them to agree would break\na correct engine. The registry has recorded that since ARCH-4 and the\ngenerator has written it into ``snapshot[\"provenance\"]`` \u2014 where, until\n2026-08-22, nothing read it (audit D-20). ``snapshot`` is typed\n``dict[str, Any]``, so an untyped blob is not a contract; this is.",
+        "properties": {
+          "advisory_designation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advisory Designation"
+          },
+          "alternate_methodologies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Alternate Methodologies",
+            "type": "array"
+          },
+          "authority_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authority Reference"
+          },
+          "calculation_engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Engine"
+          },
+          "calculation_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Version"
+          },
+          "divergence": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Divergence"
+          },
+          "expected_tolerance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Tolerance"
+          },
+          "methodology_id": {
+            "title": "Methodology Id",
+            "type": "string"
+          },
+          "metric_id": {
+            "title": "Metric Id",
+            "type": "string"
+          },
+          "regime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regime"
+          },
+          "registry_status": {
+            "title": "Registry Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric_id",
+          "methodology_id",
+          "registry_status"
+        ],
+        "title": "DeclaredMethodologyRead",
         "type": "object"
       },
       "DelinquencyBucketRead": {
@@ -10393,6 +10953,11 @@
             "title": "Outcome",
             "type": "object"
           },
+          "plan_provenance": {
+            "additionalProperties": true,
+            "title": "Plan Provenance",
+            "type": "object"
+          },
           "projection": {
             "additionalProperties": true,
             "title": "Projection",
@@ -10451,9 +11016,11 @@
               {
                 "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
+              },
+              {
+                "type": "null"
               }
             ],
-            "default": "13",
             "title": "Car Target Pct"
           },
           "horizon_years": {
@@ -10714,6 +11281,11 @@
               }
             ],
             "title": "Management Action Plan Code"
+          },
+          "plan_fully_supplied_by_institution": {
+            "default": false,
+            "title": "Plan Fully Supplied By Institution",
+            "type": "boolean"
           },
           "residual_capital_required_after_actions": {
             "anyOf": [
@@ -20681,6 +21253,7 @@
           "pipeline_state": {
             "enum": [
               "ready",
+              "blocked",
               "failed"
             ],
             "title": "Pipeline State",
@@ -20721,6 +21294,90 @@
           "pipeline_error"
         ],
         "title": "LiveModuleView",
+        "type": "object"
+      },
+      "LiveReconciliationRead": {
+        "additionalProperties": false,
+        "description": "The balance-sheet identity control's verdict on the live book.\n\nPresent only when the control has something to say \u2014 a plug was applied, an\napproved exception is carrying the book, or the identity FAILS. Its absence\nmeans the ingested book balanced exactly, because a plug of any size is\nrecorded (``app/services/reconciliation.py``).\n\nAmounts are strings: they are exact decimals, and JSON floats are not.",
+        "properties": {
+          "assets": {
+            "title": "Assets",
+            "type": "string"
+          },
+          "blocks_filing": {
+            "title": "Blocks Filing",
+            "type": "boolean"
+          },
+          "control": {
+            "title": "Control",
+            "type": "string"
+          },
+          "exception_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exception Id"
+          },
+          "funding": {
+            "title": "Funding",
+            "type": "string"
+          },
+          "gap": {
+            "title": "Gap",
+            "type": "string"
+          },
+          "gap_fraction": {
+            "title": "Gap Fraction",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "status": {
+            "enum": [
+              "within_tolerance",
+              "exception_applied",
+              "blocked"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tolerance_pct": {
+            "title": "Tolerance Pct",
+            "type": "string"
+          },
+          "tolerance_source": {
+            "title": "Tolerance Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "control",
+          "status",
+          "blocks_filing",
+          "assets",
+          "funding",
+          "gap",
+          "gap_fraction",
+          "tolerance_pct",
+          "tolerance_source",
+          "exception_id",
+          "message"
+        ],
+        "title": "LiveReconciliationRead",
         "type": "object"
       },
       "LiveSnapshotListRead": {
@@ -20843,6 +21500,16 @@
               }
             ],
             "title": "Period Label"
+          },
+          "reconciliation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveReconciliationRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reporting_period_id": {
             "anyOf": [
@@ -21869,6 +22536,17 @@
             "title": "Organization Id",
             "type": "string"
           },
+          "requires_declared_severity": {
+            "title": "Requires Declared Severity",
+            "type": "boolean"
+          },
+          "severity_priced_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Severity Priced Actions",
+            "type": "array"
+          },
           "status": {
             "$ref": "#/components/schemas/PlanStatus"
           },
@@ -21895,6 +22573,8 @@
           "approved_by",
           "approval_timestamp",
           "actions",
+          "severity_priced_actions",
+          "requires_declared_severity",
           "created_at",
           "updated_at"
         ],
@@ -24753,11 +25433,13 @@
       },
       "PlanAssumptionsIn": {
         "additionalProperties": false,
-        "description": "The bank's base-case business plan (the base-leg forecast assumptions).\n\nEvery field is optional; unset fields fall back to the service defaults\n(documented in ``app/services/enterprise_stress.py``). All values are Decimal\npercentages (pp for the securities shift).",
+        "description": "The bank's base-case business plan (the base-leg forecast assumptions).\n\nEvery field is optional; an unset field falls back to a macro-derived value\nwhere the scenario supports one, otherwise to a documented PLATFORM DEFAULT\n(``app/services/enterprise_stress.py``). Which of the three supplied each\nnumber is reported on the run as ``plan_provenance`` \u2014 a Board-attested ICAAP\nmust be able to show which assumptions were the institution's own\n(enterprise audit P0-13).\n\nAll values are Decimal percentages (pp for the securities shift). **Every\nfield is bounded.** Before 2026-08-21 all ten were unbounded ``Decimal |\nNone``, so ``tax_rate_pct = -9999`` was accepted and projected. The bounds\nbelow are structural domain limits \u2014 a payout ratio is a share of profit, a\ntax rate is a share of income \u2014 not regulatory numbers, so they belong in the\ncontract rather than the control plane.",
         "properties": {
           "cost_to_income_pct": {
             "anyOf": [
               {
+                "maximum": 500.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -24773,6 +25455,8 @@
           "credit_loss_rate_pct": {
             "anyOf": [
               {
+                "maximum": 100.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -24788,6 +25472,8 @@
           "deposit_growth_pct": {
             "anyOf": [
               {
+                "maximum": 200.0,
+                "minimum": -100.0,
                 "type": "number"
               },
               {
@@ -24803,6 +25489,8 @@
           "dividend_payout_pct": {
             "anyOf": [
               {
+                "maximum": 100.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -24818,6 +25506,8 @@
           "fee_income_pct_assets": {
             "anyOf": [
               {
+                "maximum": 100.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -24833,6 +25523,8 @@
           "fx_depreciation_pct": {
             "anyOf": [
               {
+                "maximum": 1000.0,
+                "minimum": -100.0,
                 "type": "number"
               },
               {
@@ -24848,6 +25540,8 @@
           "loan_growth_pct": {
             "anyOf": [
               {
+                "maximum": 200.0,
+                "minimum": -100.0,
                 "type": "number"
               },
               {
@@ -24863,6 +25557,8 @@
           "nim_pct": {
             "anyOf": [
               {
+                "maximum": 100.0,
+                "minimum": -50.0,
                 "type": "number"
               },
               {
@@ -24878,6 +25574,8 @@
           "securities_shift_pp": {
             "anyOf": [
               {
+                "maximum": 100.0,
+                "minimum": -100.0,
                 "type": "number"
               },
               {
@@ -24893,6 +25591,8 @@
           "tax_rate_pct": {
             "anyOf": [
               {
+                "maximum": 100.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -26413,12 +27113,13 @@
         "type": "object"
       },
       "ReadinessResponse": {
+        "description": "Per-subsystem readiness.\n\nDeliberately NOT a ``HealthResponse`` subclass with subsystems nested under\n``database``: until 2026-08-21 storage health was reported as\n``database.storage``, which read as a property of the database and made a\nstorage outage look like a database one (audit finding P0-17). Each\nsubsystem is now its own entry under ``checks`` so a consumer can tell them\napart, and ``status`` can say \"serving, but something is wrong\" without\neither lying or failing the probe.",
         "properties": {
-          "database": {
+          "checks": {
             "additionalProperties": {
-              "type": "string"
+              "$ref": "#/components/schemas/ComponentHealth"
             },
-            "title": "Database",
+            "title": "Checks",
             "type": "object"
           },
           "environment": {
@@ -26436,7 +27137,10 @@
             "type": "string"
           },
           "status": {
-            "const": "ok",
+            "enum": [
+              "ok",
+              "degraded"
+            ],
             "title": "Status",
             "type": "string"
           }
@@ -26445,7 +27149,7 @@
           "service",
           "environment",
           "status",
-          "database"
+          "checks"
         ],
         "title": "ReadinessResponse",
         "type": "object"
@@ -26456,6 +27160,268 @@
           "signed"
         ],
         "type": "string"
+      },
+      "ReconciliationExceptionCreate": {
+        "additionalProperties": false,
+        "description": "Record an approved exception to a fail-closed reconciliation control.\n\nFour-eyes is enforced in the service (``grant_exception``): the officer who\nrequested the exception may not be the approver. ``approved_by_user_id`` is\nwhat makes that check possible, so supplying it is how a caller proves the\nsecond pair of eyes exists rather than asserting it.",
+        "properties": {
+          "approved_by": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Approved By",
+            "type": "string"
+          },
+          "approved_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By User Id"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "max_gap_fraction": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Max Gap Fraction"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "approved_by",
+          "max_gap_fraction",
+          "effective_from"
+        ],
+        "title": "ReconciliationExceptionCreate",
+        "type": "object"
+      },
+      "ReconciliationExceptionListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "active_exception_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Exception Id"
+          },
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "control": {
+            "title": "Control",
+            "type": "string"
+          },
+          "exceptions": {
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationExceptionRead"
+            },
+            "title": "Exceptions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "control",
+          "active_exception_id",
+          "as_of",
+          "exceptions"
+        ],
+        "title": "ReconciliationExceptionListRead",
+        "type": "object"
+      },
+      "ReconciliationExceptionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_timestamp": {
+            "format": "date-time",
+            "title": "Approval Timestamp",
+            "type": "string"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "approved_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By User Id"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "control": {
+            "title": "Control",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "max_gap_fraction": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max Gap Fraction",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "requested_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "revoked_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "control",
+          "max_gap_fraction",
+          "effective_from",
+          "effective_to",
+          "reason",
+          "requested_by",
+          "requested_at",
+          "approved_by",
+          "approved_by_user_id",
+          "approval_timestamp",
+          "revoked_at",
+          "revoked_by"
+        ],
+        "title": "ReconciliationExceptionRead",
+        "type": "object"
+      },
+      "ReconciliationExceptionRevoke": {
+        "additionalProperties": false,
+        "description": "Close a live exception. The record is never deleted.",
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "revoked_by": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Revoked By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "revoked_by",
+          "reason"
+        ],
+        "title": "ReconciliationExceptionRevoke",
+        "type": "object"
       },
       "ReferenceMapping": {
         "description": "How one reference dataset is captured from one source table.\n\nReference rows are not translated field-by-field: the mapped table's rows\nare preserved as payload dicts (values stringified, dates ISO) under\n``dataset_kind``. ``fields`` optionally restricts which source columns are\nkept; empty keeps every column.",
@@ -26979,6 +27945,13 @@
             "title": "Created At",
             "type": "string"
           },
+          "declared_methodologies": {
+            "items": {
+              "$ref": "#/components/schemas/DeclaredMethodologyRead"
+            },
+            "title": "Declared Methodologies",
+            "type": "array"
+          },
           "frequency": {
             "$ref": "#/components/schemas/ReturnFrequency"
           },
@@ -27463,6 +28436,9 @@
           "error": {
             "$ref": "#/components/schemas/RegulatoryRunError"
           },
+          "evidence": {
+            "$ref": "#/components/schemas/RunEvidenceRead"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -27501,7 +28477,8 @@
             "type": "object"
           },
           "module": {
-            "$ref": "#/components/schemas/RegulatoryModule"
+            "title": "Module",
+            "type": "string"
           },
           "organization_id": {
             "title": "Organization Id",
@@ -27517,7 +28494,8 @@
             "type": "string"
           },
           "scenario_code": {
-            "$ref": "#/components/schemas/RegulatoryScenarioCode"
+            "title": "Scenario Code",
+            "type": "string"
           },
           "started_at": {
             "anyOf": [
@@ -27567,6 +28545,7 @@
           "metric_results",
           "line_items",
           "validations",
+          "evidence",
           "created_by",
           "created_at",
           "updated_at"
@@ -27598,6 +28577,9 @@
           "error": {
             "$ref": "#/components/schemas/RegulatoryRunError"
           },
+          "evidence": {
+            "$ref": "#/components/schemas/RunEvidenceRead"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -27613,7 +28595,8 @@
             "type": "object"
           },
           "module": {
-            "$ref": "#/components/schemas/RegulatoryModule"
+            "title": "Module",
+            "type": "string"
           },
           "period_label": {
             "title": "Period Label",
@@ -27625,7 +28608,8 @@
             "type": "string"
           },
           "scenario_code": {
-            "$ref": "#/components/schemas/RegulatoryScenarioCode"
+            "title": "Scenario Code",
+            "type": "string"
           },
           "status": {
             "$ref": "#/components/schemas/RegulatoryRunStatus"
@@ -27642,6 +28626,7 @@
           "input_hash",
           "metrics",
           "error",
+          "evidence",
           "created_at"
         ],
         "title": "RegulatoryRunSummaryRead",
@@ -28625,6 +29610,17 @@
             "title": "Bank Id",
             "type": "string"
           },
+          "coverage_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Note"
+          },
           "horizon_months": {
             "title": "Horizon Months",
             "type": "integer"
@@ -29014,7 +30010,8 @@
           "large_exposures",
           "dbk",
           "stress",
-          "bsd"
+          "bsd",
+          "sdi"
         ],
         "type": "string"
       },
@@ -29077,6 +30074,10 @@
             "title": "Regulator",
             "type": "string"
           },
+          "supports_working_copy": {
+            "title": "Supports Working Copy",
+            "type": "boolean"
+          },
           "template_id": {
             "title": "Template Id",
             "type": "string"
@@ -29096,7 +30097,8 @@
           "generator",
           "template_id",
           "fidelity",
-          "default_channel"
+          "default_channel",
+          "supports_working_copy"
         ],
         "title": "ReturnTemplateRead",
         "type": "object"
@@ -29279,6 +30281,60 @@
           "confirmation_status"
         ],
         "title": "RiskWeightBandRead",
+        "type": "object"
+      },
+      "RunEvidenceRead": {
+        "additionalProperties": false,
+        "description": "Whether a sealed run's inputs are still the institution's current book.\n\nDERIVED on every read from the append-only withdrawal register \u2014 never a\ncolumn, because stamping one would rewrite the immutable run this block\nexists to characterise, and a withdrawal is reversible. ``status`` is\n``current`` or ``inputs_withdrawn``; a run in the second state is retained\nunchanged as evidence and must not be filed.",
+        "properties": {
+          "blocks_filing": {
+            "title": "Blocks Filing",
+            "type": "boolean"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "rows_withdrawn": {
+            "title": "Rows Withdrawn",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "current",
+              "inputs_withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "withdrawals": {
+            "items": {
+              "$ref": "#/components/schemas/WithdrawalImpactRead"
+            },
+            "title": "Withdrawals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "is_current",
+          "blocks_filing",
+          "reason",
+          "rows_withdrawn",
+          "withdrawals"
+        ],
+        "title": "RunEvidenceRead",
         "type": "object"
       },
       "RunReproductionRead": {
@@ -30888,6 +31944,10 @@
             ],
             "title": "Car Pct"
           },
+          "composition_source": {
+            "title": "Composition Source",
+            "type": "string"
+          },
           "computable": {
             "title": "Computable",
             "type": "boolean"
@@ -30903,6 +31963,17 @@
             },
             "title": "Pending Parameters",
             "type": "array"
+          },
+          "risk_classes": {
+            "items": {
+              "$ref": "#/components/schemas/SdiRwaRiskClassRead"
+            },
+            "title": "Risk Classes",
+            "type": "array"
+          },
+          "rwa_scope_note": {
+            "title": "Rwa Scope Note",
+            "type": "string"
           },
           "status": {
             "title": "Status",
@@ -30924,7 +31995,10 @@
           "car_min_confirmation",
           "computable",
           "bands",
-          "pending_parameters"
+          "pending_parameters",
+          "composition_source",
+          "risk_classes",
+          "rwa_scope_note"
         ],
         "title": "SdiCapitalSummaryRead",
         "type": "object"
@@ -31457,6 +32531,49 @@
           "modules"
         ],
         "title": "SdiReadinessRead",
+        "type": "object"
+      },
+      "SdiRwaRiskClassRead": {
+        "additionalProperties": false,
+        "description": "One risk class of the declared RWA composition \u2014 in scope or not.\n\nOut-of-scope classes are returned deliberately: a capital ratio computed on\ncredit risk alone has to say so on the surface that presents it.",
+        "properties": {
+          "in_scope": {
+            "title": "In Scope",
+            "type": "boolean"
+          },
+          "measurement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measurement"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "risk_class": {
+            "title": "Risk Class",
+            "type": "string"
+          },
+          "rwa_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rwa Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "risk_class",
+          "in_scope",
+          "measurement",
+          "rwa_ghs",
+          "note"
+        ],
+        "title": "SdiRwaRiskClassRead",
         "type": "object"
       },
       "SendBackForCorrectionsRequest": {
@@ -32470,6 +33587,30 @@
         ],
         "type": "string"
       },
+      "SourceBookRead": {
+        "properties": {
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "source_system": {
+            "title": "Source System",
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_system",
+          "rows",
+          "total"
+        ],
+        "title": "SourceBookRead",
+        "type": "object"
+      },
       "SourcePreferencesRead": {
         "additionalProperties": false,
         "description": "The bank's resolved preference (defaults synthesised when no row).",
@@ -32809,11 +33950,13 @@
       },
       "StepUpRequest": {
         "additionalProperties": false,
-        "description": "Re-authentication before signing.\n\nExactly one proof is required. Password re-entry serves password accounts;\nan OIDC id_token (obtained with prompt=login) serves SSO accounts.",
+        "description": "Re-authentication before signing.\n\nExactly one proof is required. Password re-entry serves password accounts;\nan OIDC id_token (obtained with prompt=login) serves SSO accounts.\n\nBoth proofs are length-bounded at the contract boundary. Verifying a\npassword costs an Argon2id hash (~64 MiB, ~100 ms) and verifying an\nid_token costs a JWKS-backed signature check, so an unbounded field is a\ncheap way to make the signing endpoint expensive. The ceilings are far above\nanything a real credential or a real IdP token reaches.",
         "properties": {
           "id_token": {
             "anyOf": [
               {
+                "maxLength": 8192,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -32825,6 +33968,8 @@
           "password": {
             "anyOf": [
               {
+                "maxLength": 1024,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -33647,6 +34792,341 @@
         "title": "SubmissionPollRead",
         "type": "object"
       },
+      "SystemOfRecordApproveRequest": {
+        "description": "Checker step. The approver must not be the proposer.",
+        "properties": {
+          "approved_by": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Approved By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved_by"
+        ],
+        "title": "SystemOfRecordApproveRequest",
+        "type": "object"
+      },
+      "SystemOfRecordAssessmentRead": {
+        "description": "What the register decides about the bank's book at one date.\n\n``clean`` is true for a bank with one source system, and for one whose\nsystems partition the book properly. Neither is asked to declare anything \u2014\nthe register is consulted only for CONTESTED types.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "clean": {
+            "title": "Clean",
+            "type": "boolean"
+          },
+          "contested_types": {
+            "title": "Contested Types",
+            "type": "integer"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/TypeFindingRead"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "required": [
+          "bank_id",
+          "as_of_date",
+          "clean",
+          "contested_types",
+          "findings",
+          "message"
+        ],
+        "title": "SystemOfRecordAssessmentRead",
+        "type": "object"
+      },
+      "SystemOfRecordDeclarationCreate": {
+        "description": "Propose which source system owns a position type from a date.\n\n``source_citation`` is mandatory for the same reason it is on a regulatory\nparameter: a governed declaration with no cited authority is an opinion.",
+        "properties": {
+          "confirmation_status": {
+            "default": "pending",
+            "enum": [
+              "confirmed",
+              "pending"
+            ],
+            "title": "Confirmation Status",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "position_type": {
+            "enum": [
+              "LOAN",
+              "DEPOSIT",
+              "SECURITY_HOLDING",
+              "DERIVATIVE",
+              "FX_HEDGE",
+              "INTEREST_RATE_SWAP",
+              "CASH",
+              "INTERBANK_PLACEMENT",
+              "INTERBANK_BORROWING",
+              "LC_GUARANTEE",
+              "COMMITMENT_UNDRAWN",
+              "OTHER_ASSET",
+              "OTHER_LIABILITY"
+            ],
+            "title": "Position Type",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "rationale": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Rationale",
+            "type": "string"
+          },
+          "source_citation": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Source Citation",
+            "type": "string"
+          },
+          "source_system": {
+            "enum": [
+              "EXCEL_CSV",
+              "T24",
+              "FINACLE",
+              "FLEXCUBE",
+              "DB_DIRECT",
+              "SFTP_DROP",
+              "API_GENERIC",
+              "API_PUSH",
+              "BLOOMBERG",
+              "REFINITIV",
+              "MANUAL_UPLOAD",
+              "MANUAL",
+              "AEQUOR_DESK"
+            ],
+            "title": "Source System",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position_type",
+          "source_system",
+          "effective_from",
+          "source_citation",
+          "rationale",
+          "proposed_by"
+        ],
+        "title": "SystemOfRecordDeclarationCreate",
+        "type": "object"
+      },
+      "SystemOfRecordDeclarationRead": {
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "confirmation_status": {
+            "title": "Confirmation Status",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "position_type": {
+            "title": "Position Type",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "revocation_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revocation Reason"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "revoked_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By"
+          },
+          "source_citation": {
+            "title": "Source Citation",
+            "type": "string"
+          },
+          "source_system": {
+            "title": "Source System",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "position_type",
+          "source_system",
+          "effective_from",
+          "effective_to",
+          "source_citation",
+          "rationale",
+          "confirmation_status",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "approved_by",
+          "approved_at",
+          "revoked_at",
+          "revoked_by",
+          "revocation_reason"
+        ],
+        "title": "SystemOfRecordDeclarationRead",
+        "type": "object"
+      },
+      "SystemOfRecordRegisterRead": {
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "declarations": {
+            "items": {
+              "$ref": "#/components/schemas/SystemOfRecordDeclarationRead"
+            },
+            "title": "Declarations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "declarations"
+        ],
+        "title": "SystemOfRecordRegisterRead",
+        "type": "object"
+      },
+      "SystemOfRecordRevokeRequest": {
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "revoked_by": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Revoked By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "revoked_by",
+          "reason"
+        ],
+        "title": "SystemOfRecordRevokeRequest",
+        "type": "object"
+      },
       "TemenosBackfillRequest": {
         "additionalProperties": false,
         "description": "Historical backfill: one pull per as-of date in the inclusive range.",
@@ -33724,7 +35204,6 @@
             "title": "Connection Credentials"
           },
           "default_currency": {
-            "default": "GHS",
             "maxLength": 3,
             "minLength": 3,
             "title": "Default Currency",
@@ -33767,7 +35246,8 @@
         "required": [
           "connection_mode",
           "display_name",
-          "endpoint"
+          "endpoint",
+          "default_currency"
         ],
         "title": "TemenosConnectionCreate",
         "type": "object"
@@ -33950,7 +35430,7 @@
       },
       "TemenosConnectionUpdate": {
         "additionalProperties": false,
-        "description": "Post-onboarding management and credential rotation.\n\nWhen ``credentials`` is present the new set is validated FIRST; only on\nsuccess are the stored ciphertext, fingerprint, and expiry swapped in one\ntransaction. On failure nothing changes and the error is returned as a 422.",
+        "description": "Post-onboarding management and credential rotation.\n\nWhen ``credentials`` is present the new set is validated FIRST; only on\nsuccess are the stored ciphertext, fingerprint, and expiry swapped in one\ntransaction. On failure nothing changes and the error is returned as a 422.\n\n``endpoint`` is re-screened on every edit: an ACTIVE connection may not be\nre-pointed at a blocked destination.",
         "properties": {
           "catalog_overrides": {
             "anyOf": [
@@ -34355,6 +35835,84 @@
           "on_severity"
         ],
         "type": "string"
+      },
+      "TypeFindingRead": {
+        "properties": {
+          "books": {
+            "items": {
+              "$ref": "#/components/schemas/SourceBookRead"
+            },
+            "title": "Books",
+            "type": "array"
+          },
+          "declaration_confirmation_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Confirmation Status"
+          },
+          "declaration_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declaration Id"
+          },
+          "declared_source_system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Source System"
+          },
+          "finding": {
+            "enum": [
+              "undeclared",
+              "violated"
+            ],
+            "title": "Finding",
+            "type": "string"
+          },
+          "offending_rows": {
+            "title": "Offending Rows",
+            "type": "integer"
+          },
+          "offending_total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Offending Total",
+            "type": "string"
+          },
+          "position_type": {
+            "title": "Position Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position_type",
+          "finding",
+          "declared_source_system",
+          "declaration_id",
+          "declaration_confirmation_status",
+          "offending_rows",
+          "offending_total",
+          "books"
+        ],
+        "title": "TypeFindingRead",
+        "type": "object"
       },
       "TypedSignatureFont": {
         "enum": [
@@ -35093,6 +36651,72 @@
           "max"
         ],
         "title": "WindowRatioStatRead",
+        "type": "object"
+      },
+      "WithdrawalImpactRead": {
+        "additionalProperties": false,
+        "description": "One governed withdrawal that retired rows a sealed run computed on.",
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "entity": {
+            "title": "Entity",
+            "type": "string"
+          },
+          "position_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Type"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "rows_withdrawn": {
+            "title": "Rows Withdrawn",
+            "type": "integer"
+          },
+          "source_system": {
+            "title": "Source System",
+            "type": "string"
+          },
+          "withdrawal_id": {
+            "title": "Withdrawal Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "withdrawal_id",
+          "entity",
+          "source_system",
+          "as_of_date",
+          "position_type",
+          "rows_withdrawn",
+          "approved_at",
+          "reason"
+        ],
+        "title": "WithdrawalImpactRead",
         "type": "object"
       },
       "WorkbenchModule": {
@@ -36998,6 +38622,91 @@
         ]
       }
     },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "Sign out: revoke the refresh token's whole session lineage.\n\nUnauthenticated by design \u2014 the refresh token IS the credential, and signing\nout has to work after the access token has already expired. Always 204, even\nfor an unknown or expired token, so it never reports whether one was valid.",
+        "operationId": "authLogout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "operationId": "authMe",
@@ -37180,6 +38889,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
+        "description": "Rotate a refresh token: the presented one is retired and a new pair issued.\n\nThe old token stops working immediately. Replaying it after the concurrency\ngrace window is treated as theft and revokes the whole session lineage.",
         "operationId": "authRefresh",
         "requestBody": {
           "content": {
@@ -39178,6 +40888,650 @@
         "summary": "List Canonical Position Facets",
         "tags": [
           "ingestion"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/canonical-withdrawal-scope": {
+      "get": {
+        "description": "How many current records a withdrawal would retire \u2014 before requesting it.",
+        "operationId": "getCanonicalWithdrawalScope",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entity",
+            "required": true,
+            "schema": {
+              "title": "Entity",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_system",
+            "required": true,
+            "schema": {
+              "enum": [
+                "EXCEL_CSV",
+                "T24",
+                "FINACLE",
+                "FLEXCUBE",
+                "DB_DIRECT",
+                "SFTP_DROP",
+                "API_GENERIC",
+                "API_PUSH",
+                "BLOOMBERG",
+                "REFINITIV",
+                "MANUAL_UPLOAD",
+                "MANUAL",
+                "AEQUOR_DESK"
+              ],
+              "title": "Source System",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "position_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "LOAN",
+                    "DEPOSIT",
+                    "SECURITY_HOLDING",
+                    "DERIVATIVE",
+                    "FX_HEDGE",
+                    "INTEREST_RATE_SWAP",
+                    "CASH",
+                    "INTERBANK_PLACEMENT",
+                    "INTERBANK_BORROWING",
+                    "LC_GUARANTEE",
+                    "COMMITMENT_UNDRAWN",
+                    "OTHER_ASSET",
+                    "OTHER_LIABILITY"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Position Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanonicalWithdrawalScopeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Canonical Withdrawal Scope",
+        "tags": [
+          "system-of-record"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/canonical-withdrawals": {
+      "get": {
+        "operationId": "listCanonicalWithdrawals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "withdrawal_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Withdrawal Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanonicalWithdrawalListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Canonical Withdrawals",
+        "tags": [
+          "system-of-record"
+        ]
+      },
+      "post": {
+        "description": "Record a PENDING withdrawal request. Retires nothing.",
+        "operationId": "requestCanonicalWithdrawal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanonicalWithdrawalCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanonicalWithdrawalRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Request Canonical Withdrawal",
+        "tags": [
+          "system-of-record"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/canonical-withdrawals/{withdrawal_id}/approve": {
+      "post": {
+        "description": "Apply a pending withdrawal. The approver must not be the requester.",
+        "operationId": "approveCanonicalWithdrawal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "withdrawal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Withdrawal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanonicalWithdrawalApproveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanonicalWithdrawalRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Canonical Withdrawal",
+        "tags": [
+          "system-of-record"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/canonical-withdrawals/{withdrawal_id}/reverse": {
+      "post": {
+        "description": "Restore a withdrawn book, with its own reason and its own audit trail.",
+        "operationId": "reverseCanonicalWithdrawal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "withdrawal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Withdrawal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanonicalWithdrawalReverseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanonicalWithdrawalRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reverse Canonical Withdrawal",
+        "tags": [
+          "system-of-record"
         ]
       }
     },
@@ -52231,6 +54585,352 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/reconciliation/exceptions": {
+      "get": {
+        "operationId": "listReconciliationExceptions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "control",
+            "required": false,
+            "schema": {
+              "default": "balance_sheet_identity",
+              "title": "Control",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationExceptionListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Reconciliation Exceptions",
+        "tags": [
+          "reconciliation"
+        ]
+      },
+      "post": {
+        "operationId": "grantReconciliationException",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconciliationExceptionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationExceptionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Grant Reconciliation Exception",
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/reconciliation/exceptions/{exception_id}/revoke": {
+      "post": {
+        "operationId": "revokeReconciliationException",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "exception_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exception Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconciliationExceptionRevoke"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationExceptionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Reconciliation Exception",
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/refresh": {
       "post": {
         "operationId": "refreshBankData",
@@ -60296,6 +62996,581 @@
         "summary": "Get Bsd3 Preview",
         "tags": [
           "regulatory-liquidity"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/system-of-record": {
+      "get": {
+        "operationId": "listSystemOfRecordDeclarations",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "position_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "LOAN",
+                    "DEPOSIT",
+                    "SECURITY_HOLDING",
+                    "DERIVATIVE",
+                    "FX_HEDGE",
+                    "INTEREST_RATE_SWAP",
+                    "CASH",
+                    "INTERBANK_PLACEMENT",
+                    "INTERBANK_BORROWING",
+                    "LC_GUARANTEE",
+                    "COMMITMENT_UNDRAWN",
+                    "OTHER_ASSET",
+                    "OTHER_LIABILITY"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Position Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOfRecordRegisterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List System Of Record Declarations",
+        "tags": [
+          "system-of-record"
+        ]
+      },
+      "post": {
+        "operationId": "proposeSystemOfRecordDeclaration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOfRecordDeclarationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOfRecordDeclarationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Propose System Of Record Declaration",
+        "tags": [
+          "system-of-record"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/system-of-record-assessment": {
+      "get": {
+        "description": "Resolve the register against the duplicated-book diagnosis for a date.\n\nRead-only and side-effect free. A single-source bank comes back ``clean``\nwith no findings \u2014 it is never asked for a declaration.",
+        "operationId": "getSystemOfRecordAssessment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "As Of",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOfRecordAssessmentRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get System Of Record Assessment",
+        "tags": [
+          "system-of-record"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/system-of-record/{declaration_id}/approve": {
+      "post": {
+        "operationId": "approveSystemOfRecordDeclaration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "declaration_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Declaration Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOfRecordApproveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOfRecordDeclarationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve System Of Record Declaration",
+        "tags": [
+          "system-of-record"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/system-of-record/{declaration_id}/revoke": {
+      "post": {
+        "operationId": "revokeSystemOfRecordDeclaration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "declaration_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Declaration Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOfRecordRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOfRecordDeclarationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke System Of Record Declaration",
+        "tags": [
+          "system-of-record"
         ]
       }
     },

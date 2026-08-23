@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
+from dataclasses import field as dataclass_field
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -28,6 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.domain.capital.ecl import EclAssumption
 from app.domain.capital.engine import (
     CapitalComputationError,
     CapitalParams,
@@ -61,6 +64,9 @@ from app.domain.forecasting.engine import (
     run_whatif,
 )
 from app.domain.liquidity.engine import (
+    FACT_GROUP_SECURITIES,
+    HQLA_LEVEL_1,
+    HQLA_LEVELS,
     LiquidityComputationError,
     LiquidityParams,
     classify_ratio,
@@ -72,7 +78,10 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
+    FinancialFactRow,
     ParamCapitalThreshold,
+    ParamCrmHaircut,
+    ParamEclAssumption,
     ParamLcrRunoffRate,
     ParamNsfrWeight,
     ParamRiskWeight,
@@ -109,10 +118,12 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunErrorRead,
     RegulatoryValidationRead,
 )
+from app.services import regulatory_parameters, sdi_regime
 from app.services.audit import record_event
 from app.services.live_state import current_snapshot, load_current_facts
 from app.services.live_types import LiveModuleResult, findings_from_validations, worst_status
 from app.services.params import get_active_params
+from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
 ENGINE_VERSION = "regulatory-forecasting-v1.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
@@ -155,6 +166,15 @@ _REQUIRED_CAPITAL_THRESHOLDS = (
 _FORECAST_FACT_GROUPS = (
     "balance_sheet",
     "capital_component",
+    # ``crm_collateral`` and ``ecl_exposure`` carry no balance-sheet amount of
+    # their own, but the CAPITAL engine reads both — collateral nets down credit
+    # RWA and the staged EADs drive the IFRS 9 general-provisions Tier 2
+    # override. Omitting them handed the same engine a narrower input set than
+    # ``regulatory_capital`` does, so year-0 CAR could differ from the capital
+    # run's CAR for the same bank and period (forensic audit 2026-08-21, the
+    # High divergence). They are inputs; they belong in the hashed snapshot.
+    "crm_collateral",
+    "ecl_exposure",
     "lcr_inflow",
     "loan_exposure",
     "market_risk",
@@ -210,12 +230,27 @@ class _ActiveForecastParams:
     rsf_weights: dict[str, Decimal]
     risk_weights: dict[str, Decimal]
     thresholds: dict[str, Decimal]
+    # Phase 2 items 8/9, resolved exactly as ``regulatory_capital`` resolves
+    # them so the projection's capital arithmetic is the capital run's.
+    crm_haircuts: dict[str, Decimal] = dataclass_field(default_factory=dict)
+    ecl_assumptions: tuple[EclAssumption, ...] = ()
+    #: Basel HQLA haircuts + Level-2 caps (enterprise audit P0-8). Defaulted to
+    #: the empty set so the dataclass stays constructible in the same shape; the
+    #: loader always supplies the resolved values, and the pure engine fails
+    #: closed on anything it is actually asked to weight without a rate.
+    hqla: regulatory_parameters.HqlaParameters = dataclass_field(
+        default_factory=lambda: regulatory_parameters.HqlaParameters({}, None, None)
+    )
 
 
 def list_forecast_scenarios(
     db: Session, ctx: TenantContext, bank_id: str
 ) -> ForecastScenarioListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    # The scenario list is the entry screen for the projection; refusing it here
+    # is what stops an SDI operator from filling in assumptions for a projection
+    # that will not be produced.
+    sdi_regime.require_bank_forecast_regime(db, bank)
     as_of = _latest_period_end(db, ctx, bank) or date.today()
     presets = _load_presets(db, ctx, bank, as_of)
     scenarios = [
@@ -236,6 +271,11 @@ def create_forecast_run(
 ) -> ForecastRunRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
+    # Regime gate BEFORE anything is computed or persisted (forensic architecture
+    # audit sections 6 + 10): this projection's compliance outputs are Basel
+    # ratios, which are not the regime an SDI is supervised under. No run row is
+    # created, so no Basel number for an SDI ever exists to be read back.
+    sdi_regime.require_bank_forecast_regime(db, bank)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     facts = _load_facts(db, ctx, bank, period)
     active = _load_active_params(db, ctx, bank, period.period_end)
@@ -263,7 +303,7 @@ def create_forecast_run(
     else:
         try:
             engine_facts = _engine_facts_or_error(facts, period)
-            params = _engine_params(active)
+            params = _forecast_engine_params(active)
             projection = project(
                 engine_facts,
                 params,
@@ -287,7 +327,13 @@ def compute_live(
 
     Saved scenarios and official forecasts remain immutable runs. This function
     is intentionally the live plane's only forecast entry point.
+
+    Defence in depth: ``pipeline._scoped_modules`` already leaves this module out
+    for a class with no registered forecast authority, so the gate below never
+    fires from the live tier — but no caller may reach a Basel projection for an
+    SDI through any other route either.
     """
+    sdi_regime.require_bank_forecast_regime(db, bank)
     current = load_current_facts(db, ctx, bank, _FORECAST_FACT_GROUPS)
     facts = current.facts
     active = _load_active_params(db, ctx, bank, current.source_as_of_date)
@@ -295,7 +341,7 @@ def compute_live(
     assumptions, resolution_error = _resolve_or_defer(presets, BASE_SCENARIO, None)
     if assumptions is None:
         raise resolution_error or _missing_assumptions_error()
-    params = _engine_params(active)
+    params = _forecast_engine_params(active)
     projection = project(
         _engine_facts_or_error(facts, period),
         params,
@@ -304,7 +350,7 @@ def compute_live(
         period_labels=_live_period_labels(current.source_as_of_date, 5),
     )
     summary = projection.summary
-    validations = _validation_rows(summary, params)
+    validations = _validation_rows(summary, params, projection.years)
     statuses = (
         classify_capital_ratio(summary.year5_car_pct, params.capital.car_min_pct),
         classify_ratio(
@@ -398,6 +444,7 @@ def run_strategic_optimizer(
 ) -> OptimizerResultRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
+    sdi_regime.require_bank_forecast_regime(db, bank)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     facts = _load_facts(db, ctx, bank, period)
     active = _load_active_params(db, ctx, bank, period.period_end)
@@ -421,7 +468,7 @@ def run_strategic_optimizer(
     else:
         try:
             engine_facts = _engine_facts_or_error(facts, period)
-            params = _engine_params(active)
+            params = _forecast_engine_params(active)
             constraints = OptimizerConstraints(
                 car_min_pct=active.thresholds["car_min"],
                 lcr_min_pct=active.thresholds["lcr_min"],
@@ -443,6 +490,7 @@ def run_whatif_analysis(
 ) -> WhatIfResultRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
+    sdi_regime.require_bank_forecast_regime(db, bank)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     facts = _load_facts(db, ctx, bank, period)
     active = _load_active_params(db, ctx, bank, period.period_end)
@@ -467,7 +515,7 @@ def run_whatif_analysis(
     else:
         try:
             engine_facts = _engine_facts_or_error(facts, period)
-            params = _engine_params(active)
+            params = _forecast_engine_params(active)
             result = run_whatif(
                 payload.shock_code,
                 engine_facts,
@@ -545,6 +593,11 @@ def _create_run_row(  # noqa: PLR0913
         input_hash=_snapshot_hash(snapshot),
         inputs=snapshot,
         metrics={},
+        # Audit D-18: WHICH governed control-plane rows produced the values in
+        # ``inputs["parameters"]``. Beside the snapshot, never inside it — row
+        # ids and timestamps are identity, not values, and the ``input_hash`` is
+        # value-based by contract.
+        parameter_provenance=regulatory_parameters.consume_parameter_provenance(db),
         created_by=ctx.actor_user_id,
     )
     db.add(run)
@@ -629,7 +682,7 @@ def _persist_forecast_success(
             )
         )
     for position, (rule_code, passed, severity, message) in enumerate(
-        _validation_rows(summary, params), start=1
+        _validation_rows(summary, params, projection.years), start=1
     ):
         db.add(
             RegulatoryValidation(
@@ -778,8 +831,77 @@ def _persist_failure(
     db.commit()
 
 
+#: Absolute cedi tolerance for the balance-identity check. The projection
+#: rounds every scaled amount to the money quantum, so the residual between the
+#: two sides is a rounding artefact, not an untied balance sheet.
+_BALANCE_TOLERANCE = Decimal("0.01")
+
+
+def _balance_ties_row(years: Sequence[ProjectionYear]) -> tuple[str, bool, str, str]:
+    """Actually test the balance identity across the projected years (P0-14).
+
+    This row previously hard-coded ``True`` and the sentence "Projected assets
+    equal liabilities plus equity in every forecast year." Nothing was checked.
+    It read as an assurance and was only ever "true" because the projection
+    carries a funding plug that forces it — an assurance that a plug did its job
+    is worth nothing to the reader, and worth less than nothing if the plug ever
+    fails.
+
+    What IS testable from the emitted rows, and what this now checks: the part
+    of the balance sheet the projection does not restate. A ``ProjectionYear``
+    exposes ``total_assets`` against ``loans + securities + cash`` on the asset
+    side and ``deposits + borrowings_plug + equity`` on the funding side; the
+    difference on each side is the non-scaling constant block, which is
+    identical in every year by construction. So if either residual MOVES
+    between years, the balance sheet has come untied — and if the year-0
+    residuals disagree with the projected years', the OPENING balance sheet the
+    projection was handed does not tie, which the engine never checks (its own
+    guard covers years 1..N only).
+
+    Failing here is a real finding about real data, not a restatement of a plug.
+    """
+    if len(years) < 2:  # noqa: PLR2004 — a single row has nothing to compare against
+        return (
+            "projection_balance_ties",
+            True,
+            "error",
+            "The projection has fewer than two periods, so the balance identity has "
+            "nothing to compare across years.",
+        )
+    asset_residuals = [
+        (row, row.total_assets - (row.loans + row.securities + row.cash)) for row in years
+    ]
+    funding_residuals = [
+        (row, row.total_assets - (row.deposits + row.borrowings_plug + row.equity))
+        for row in years
+    ]
+    for label, residuals in (("asset", asset_residuals), ("funding", funding_residuals)):
+        baseline_row, baseline = residuals[0]
+        for row, residual in residuals[1:]:
+            if abs(residual - baseline) > _BALANCE_TOLERANCE:
+                return (
+                    "projection_balance_ties",
+                    False,
+                    "error",
+                    f"The {label} side of the balance sheet does not tie: the unexplained "
+                    f"balance is {baseline} in {baseline_row.period_label} but {residual} in "
+                    f"{row.period_label}. Total assets, and the components the projection "
+                    "restates, must move together in every forecast year.",
+                )
+    return (
+        "projection_balance_ties",
+        True,
+        "error",
+        f"Checked across {len(years)} projected periods "
+        f"({years[0].period_label} to {years[-1].period_label}): total assets stay tied to "
+        "both the asset components and to deposits, borrowings and equity in every year.",
+    )
+
+
 def _validation_rows(
-    summary: ProjectionSummary, params: ForecastParams
+    summary: ProjectionSummary,
+    params: ForecastParams,
+    years: Sequence[ProjectionYear] = (),
 ) -> tuple[tuple[str, bool, str, str], ...]:
     checks = (
         ("year5_car_above_minimum", "CAR", summary.year5_car_pct, params.capital.car_min_pct),
@@ -791,14 +913,7 @@ def _validation_rows(
             params.liquidity.nsfr_min_pct,
         ),
     )
-    rows: list[tuple[str, bool, str, str]] = [
-        (
-            "projection_balance_ties",
-            True,
-            "error",
-            "Projected assets equal liabilities plus equity in every forecast year.",
-        )
-    ]
+    rows: list[tuple[str, bool, str, str]] = [_balance_ties_row(years)]
     for rule_code, label, value, minimum in checks:
         passed = value >= minimum
         rows.append(
@@ -851,7 +966,7 @@ def _resolve_assumptions(
 
 
 def _engine_facts_or_error(
-    facts: list[BankFinancialFact], period: BankReportingPeriod
+    facts: Sequence[FinancialFactRow], period: BankReportingPeriod
 ) -> tuple[ForecastFact, ...]:
     if not facts:
         raise ForecastRunError(
@@ -862,7 +977,7 @@ def _engine_facts_or_error(
     return tuple(_to_engine_fact(fact) for fact in facts)
 
 
-def _to_engine_fact(fact: BankFinancialFact) -> ForecastFact:
+def _to_engine_fact(fact: FinancialFactRow) -> ForecastFact:
     return ForecastFact(
         fact_group=fact.fact_group,
         category=fact.category,
@@ -910,6 +1025,18 @@ def _load_active_params(
     threshold_rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
     )
+    # Same two registers ``regulatory_capital._load_active_params`` reads, same
+    # precedence (code defaults overlaid by the effective-dated register for CRM;
+    # register-only for ECL). Resolving them differently here would be the
+    # divergence in another form.
+    crm_rows = get_active_params(
+        db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, as_of
+    )
+    ecl_rows = get_active_params(
+        db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, as_of
+    )
+    crm_haircuts = dict(DEFAULT_CRM_HAIRCUTS)
+    crm_haircuts.update({row.collateral_class: Decimal(str(row.haircut_pct)) for row in crm_rows})
     outflow_rates: dict[str, Decimal] = {}
     inflow_rates: dict[str, Decimal] = {}
     for row in runoff_rows:
@@ -920,13 +1047,36 @@ def _load_active_params(
     for row in nsfr_rows:
         target = asf_weights if row.side == "asf" else rsf_weights
         target[row.category] = Decimal(str(row.weight_pct))
+    # Tighten-only guard (QA audit 2026-08-20 P1-5). Forecasting reads the SAME
+    # board register as ``regulatory_capital``, which has clamped ``car_min``
+    # against the control-plane regulatory floor since Phase E — this loader did
+    # not, so one module projected against the regulatory minimum and the other
+    # against a weaker board value for the same code. Both now go through the one
+    # generalised clamp; codes with no seeded control-plane row are untouched.
+    thresholds = regulatory_parameters.clamp_overrides(
+        db,
+        bank,
+        {row.threshold_code: Decimal(str(row.value_pct)) for row in threshold_rows},
+        as_of=as_of,
+    ).values
     return _ActiveForecastParams(
+        hqla=regulatory_parameters.resolve_hqla_parameters(db, bank, as_of=as_of),
         outflow_rates=outflow_rates,
         inflow_rates=inflow_rates,
         asf_weights=asf_weights,
         rsf_weights=rsf_weights,
         risk_weights={row.risk_weight_code: Decimal(str(row.weight_pct)) for row in weight_rows},
-        thresholds={row.threshold_code: Decimal(str(row.value_pct)) for row in threshold_rows},
+        thresholds=thresholds,
+        crm_haircuts=crm_haircuts,
+        ecl_assumptions=tuple(
+            EclAssumption(
+                segment=row.segment,
+                stage=row.stage,
+                pd_pct=Decimal(str(row.pd_pct)),
+                lgd_pct=Decimal(str(row.lgd_pct)),
+            )
+            for row in ecl_rows
+        ),
     )
 
 
@@ -969,6 +1119,9 @@ def _engine_params(active: _ActiveForecastParams) -> ForecastParams:
         lcr_amber_floor_pct=amber_floor,
         nsfr_min_pct=thresholds["nsfr_min"],
         nsfr_amber_floor_pct=amber_floor,
+        hqla_haircut_pct=active.hqla.haircut_pct,
+        hqla_level2_cap_pct=active.hqla.level2_cap_pct,
+        hqla_level2b_cap_pct=active.hqla.level2b_cap_pct,
     )
     capital = CapitalParams(
         risk_weights=active.risk_weights,
@@ -984,6 +1137,33 @@ def _engine_params(active: _ActiveForecastParams) -> ForecastParams:
         car_critical_pct=thresholds["car_critical"],
     )
     return ForecastParams(liquidity=liquidity, capital=capital)
+
+
+def _forecast_engine_params(active: _ActiveForecastParams) -> ForecastParams:
+    """The parameter set the projection actually runs on.
+
+    ``_engine_params`` resolves the threshold/weight registers. This layer adds
+    the two Phase-2 capital inputs that make the projection's capital arithmetic
+    identical to the capital run's: the CRM haircut schedule (credit RWA) and
+    the IFRS 9 assumption register (the general-provisions Tier 2 override).
+    ``crm_haircuts`` always carries the Basel code defaults, so this normally
+    layers; the early return covers a caller that supplies neither register.
+    Either way the figures only move for a book that actually holds
+    ``crm_collateral`` facts or a configured IFRS 9 register — the capital run
+    behaves identically.
+
+    It is a separate function rather than extra lines inside ``_engine_params``
+    so the threshold-resolution contract stays in one place and this parity
+    layer stays reviewable on its own.
+    """
+    params = _engine_params(active)
+    if not active.crm_haircuts and not active.ecl_assumptions:
+        return params
+    return replace(
+        params,
+        capital=replace(params.capital, crm_haircuts=active.crm_haircuts),
+        ecl_assumptions=active.ecl_assumptions,
+    )
 
 
 def _period_labels(period: BankReportingPeriod, years: int = PROJECTION_YEARS) -> list[str]:
@@ -1006,7 +1186,7 @@ def _build_snapshot(  # noqa: PLR0913
     *,
     module: str,
     scenario_code: str,
-    facts: list[BankFinancialFact],
+    facts: Sequence[FinancialFactRow],
     active: _ActiveForecastParams,
     assumptions: ForecastAssumptions | None,
     overrides: ForecastAssumptionsUpdate | None,
@@ -1046,14 +1226,9 @@ def _build_snapshot(  # noqa: PLR0913
             ),
             key=lambda entry: json.dumps(entry, sort_keys=True),
         ),
-        "parameters": {
-            "outflow_runoff_rates_pct": _stringified(active.outflow_rates),
-            "inflow_rates_pct": _stringified(active.inflow_rates),
-            "asf_weights_pct": _stringified(active.asf_weights),
-            "rsf_weights_pct": _stringified(active.rsf_weights),
-            "risk_weights_pct": _stringified(active.risk_weights),
-            "thresholds_pct": _stringified(active.thresholds),
-        },
+        "parameters": _snapshot_parameters(
+            active, consumed_hqla_levels=_consumed_hqla_levels(facts)
+        ),
         "assumption_overrides": (
             _stringified(
                 {
@@ -1343,6 +1518,89 @@ def _error_read(run: RegulatoryRun) -> RegulatoryRunErrorRead | None:
     return RegulatoryRunErrorRead(
         code=run.error_code, message=run.error_message, details=run.error_details
     )
+
+
+def _consumed_hqla_levels(facts: Sequence[FinancialFactRow]) -> set[str]:
+    """The Basel levels the projected LCR will actually charge a haircut for.
+
+    The forecast engine projects each securities fact forward carrying the level
+    its base fact was derived with and hands the result to the SAME
+    ``compute_lcr``, so the levels consumed downstream are the levels present
+    here. Kept deliberately identical to
+    ``regulatory_liquidity._consumed_hqla_levels`` — see that docstring for why
+    the L1 rate counts as consumed (forensic re-audit 2026-08-22 D-7).
+    """
+    levels = {
+        (fact.hqla_level or "").strip().upper()
+        for fact in facts
+        if fact.fact_group == FACT_GROUP_SECURITIES and fact.hqla_level is not None
+    }
+    return levels & set(HQLA_LEVELS)
+
+
+def _snapshot_parameters(
+    active: _ActiveForecastParams, *, consumed_hqla_levels: set[str] | None = None
+) -> dict[str, Any]:
+    """Governed inputs recorded in the hashed snapshot.
+
+    Mirrors ``regulatory_capital._snapshot_parameters``: the CRM and ECL blocks
+    join only when a register actually changes the arithmetic, so a book that has
+    configured neither hashes exactly as it did before they became forecast
+    inputs (value-based discipline — the hash tracks what was consumed, not what
+    the loader happened to query).
+    """
+    parameters: dict[str, Any] = {
+        "outflow_runoff_rates_pct": _stringified(active.outflow_rates),
+        "inflow_rates_pct": _stringified(active.inflow_rates),
+        "asf_weights_pct": _stringified(active.asf_weights),
+        "rsf_weights_pct": _stringified(active.rsf_weights),
+        "risk_weights_pct": _stringified(active.risk_weights),
+        "thresholds_pct": _stringified(active.thresholds),
+    }
+    # Same join-only-when-consumed rule for the Basel HQLA haircuts and Level-2
+    # caps (enterprise audit P0-8). Forensic re-audit 2026-08-22 D-7: the
+    # projected LCR calls ``_hqla_haircut(params, "L1")`` for every Level-1
+    # asset and refuses when it is unresolved, so the governed L1 rate is
+    # CONSUMED by every book holding any HQLA — it belongs in the hash. The
+    # Level-2 caps remain conditional because only a Level-2 holding resolves
+    # them.
+    consumed = consumed_hqla_levels or set()
+    if consumed:
+        parameters["hqla_haircuts_pct"] = _stringified(
+            {level: rate for level, rate in active.hqla.haircut_pct.items() if level in consumed}
+        )
+    if consumed - {HQLA_LEVEL_1}:
+        parameters["hqla_caps_pct"] = _stringified(
+            {
+                code: value
+                for code, value in (
+                    (regulatory_parameters.HQLA_LEVEL2_CAP_CODE, active.hqla.level2_cap_pct),
+                    (regulatory_parameters.HQLA_LEVEL2B_CAP_CODE, active.hqla.level2b_cap_pct),
+                )
+                if value is not None
+            }
+        )
+    configured_crm = {
+        key: value
+        for key, value in active.crm_haircuts.items()
+        if DEFAULT_CRM_HAIRCUTS.get(key) != value
+    }
+    if configured_crm:
+        parameters["crm_haircuts_pct"] = _stringified(configured_crm)
+    if active.ecl_assumptions:
+        parameters["ecl_assumptions"] = sorted(
+            (
+                {
+                    "segment": row.segment,
+                    "stage": row.stage,
+                    "pd_pct": str(row.pd_pct),
+                    "lgd_pct": str(row.lgd_pct),
+                }
+                for row in active.ecl_assumptions
+            ),
+            key=lambda entry: (entry["segment"], entry["stage"]),
+        )
+    return parameters
 
 
 def _stringified(values: dict[str, Decimal]) -> dict[str, str]:

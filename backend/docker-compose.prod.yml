@@ -41,12 +41,21 @@ services:
         condition: service_completed_successfully
     expose:
       - "8000"
+    # /health/ready, NOT /health/live: liveness answers "is the process
+    # responding", which stays true of an API whose object store rejects every
+    # key and whose worker cannot claim a single job — the deploy went green on
+    # exactly that (audit findings P0-16, P0-17). Readiness probes the database,
+    # performs a real object-store round trip, and reports whether the worker can
+    # see the job queue. Timeouts are generous because it now does real I/O.
+    # Compose healthchecks gate deploys and report status; they do not restart
+    # containers, so a dependency outage marks this unhealthy without putting it
+    # into a restart loop.
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=4).status==200 else 1)\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=8).status==200 else 1)\""]
       interval: 30s
-      timeout: 6s
-      retries: 3
-      start_period: 20s
+      timeout: 12s
+      retries: 5
+      start_period: 45s
     env_file:
       - .env
     environment:
@@ -64,6 +73,19 @@ services:
     depends_on:
       risk-migrate:
         condition: service_completed_successfully
+    # The worker had no healthcheck at all, and its worst failure is silent:
+    # `jobs` is FORCE-RLS and the claim query runs with no tenant set, so a role
+    # without BYPASSRLS matches zero rows for every tenant forever — no error, no
+    # log, and a process that looks perfectly alive while every scheduled
+    # refresh, official run and vendor pull stops (audit finding P0-16). This
+    # asserts the role can claim AND that the poll loop wrote a heartbeat within
+    # WORKER_STALE_JOB_SECONDS.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"from app.worker import healthcheck; healthcheck()\""]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
     env_file:
       - .env
 

@@ -11,6 +11,14 @@ The ``connection_options`` and ``extraction_spec`` blocks are validated against
 the adapter's own typed models (:class:`ConnectionConfig` / :class:`ExtractionSpec`)
 by the service before persistence, so a malformed onboarding payload is rejected
 with a bank-safe 400 rather than surfacing at pull time.
+
+``host`` and ``read_replicas`` are outbound destinations an ``analyst`` chooses,
+so both are screened here by :mod:`app.core.outbound` — the non-resolving half,
+which turns ``127.0.0.1`` / ``169.254.169.254`` / ``localhost`` into an
+immediate 422. It is fast feedback, NOT the security boundary: the resolving
+check that actually gates egress runs in the service immediately before the
+driver opens its socket (``_guard_outbound_targets``), and covers create,
+update, and every stored value already in the table.
 """
 
 from __future__ import annotations
@@ -19,7 +27,9 @@ from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.core.outbound import check_host_port_syntax, check_host_syntax
 
 type Backend = Literal["oracle", "sqlserver", "jdbc", "odbc", "snowflake"]
 
@@ -28,7 +38,32 @@ class ClosedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class DatabaseConnectionCreate(ClosedModel):
+class _OutboundHostFields:
+    """Shared egress screening for the create/update payloads.
+
+    ``host`` may legitimately be empty (a JDBC url-template or a pre-registered
+    ODBC DSN supplies the endpoint instead); an empty value is not a
+    destination, so it passes here and is screened at the pre-connect check.
+    """
+
+    @field_validator("host")
+    @classmethod
+    def _screen_host(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return check_host_syntax(value, field="host", allow_empty=True)
+
+    @field_validator("read_replicas")
+    @classmethod
+    def _screen_read_replicas(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        for replica in value:
+            check_host_port_syntax(replica, field="read replica")
+        return value
+
+
+class DatabaseConnectionCreate(_OutboundHostFields, ClosedModel):
     """Onboard one direct core-database connection.
 
     ``credentials`` is required (``username`` plus, for password auth,
@@ -60,12 +95,15 @@ class DatabaseConnectionCreate(ClosedModel):
     )
 
 
-class DatabaseConnectionUpdate(ClosedModel):
+class DatabaseConnectionUpdate(_OutboundHostFields, ClosedModel):
     """Post-onboarding management and credential rotation.
 
     When ``credentials`` is present the new set is validated FIRST; only on
     success are the stored ciphertext, fingerprint, and expiry swapped in one
     transaction. On failure nothing changes and the error is returned as a 422.
+
+    ``host``/``read_replicas`` are re-screened on every edit: an ACTIVE
+    connection may not be re-pointed at a blocked destination.
     """
 
     display_name: str | None = Field(default=None, min_length=1, max_length=120)

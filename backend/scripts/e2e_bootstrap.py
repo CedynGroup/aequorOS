@@ -1,10 +1,12 @@
 """Bootstrap the hermetic e2e database (plan W7.5).
 
-Creates the schema plus the tenant scaffolding the API's zero-trust layer
-requires before any request can succeed: the demo organization, the GH
-jurisdiction row, and one user per role. Everything else (bank, periods,
-facts) flows through the API in the Playwright global setup — the same
-paths the product uses.
+Creates the schema, the GLOBAL reference registries a deployment gets from
+its migrations (jurisdictions, institution types, the regulatory-parameter
+control plane — ``tests/fixtures/reference_data.py``, shared with the
+hermetic pytest suite), and the tenant scaffolding the API's zero-trust layer
+requires before any request can succeed: the demo organization and one user
+per role. Everything else (bank, periods, facts) flows through the API in the
+Playwright global setup — the same paths the product uses.
 
 It also enrols a **software signing key** per human role so the attestation
 ceremony can be driven end to end in a browser. Self-signed and disposable:
@@ -35,10 +37,15 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.security import hash_password
 from app.db.base import Base
-from app.models import Jurisdiction, Organization, User
+from app.models import Organization, User
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
-from tests.fixtures.canonical_bank_fixture import materialize_canonical_test_book
+from tests.fixtures.canonical_bank_fixture import (
+    SAMPLE_BANK_ID,
+    materialize_canonical_test_book,
+)
+from tests.fixtures.live_plane import materialize_live_plane
+from tests.fixtures.reference_data import seed_global_reference_data
 
 # The platform tenant ID used by the hermetic E2E fixture.
 DEMO_ORG_ID = "OR-DEM00001"
@@ -63,20 +70,13 @@ def main() -> None:
     engine = create_engine(database_url)
     Base.metadata.create_all(engine)
     with Session(engine) as session:
-        if session.get(Jurisdiction, "GH") is None:
-            session.add(
-                Jurisdiction(
-                    code="GH",
-                    country_name="Ghana",
-                    currency_code="GHS",
-                    currency_name="Ghana Cedi",
-                    locale="en-GH",
-                    central_bank_name="Bank of Ghana",
-                    regulator_short="BoG",
-                    submission_portal="ORASS",
-                    timezone="Africa/Accra",
-                )
-            )
+        # Every GLOBAL registry a migration would have seeded. create_all builds
+        # the schema only, so without this the stack boots and then fails on the
+        # first request that resolves a regulatory regime — the institution-type
+        # resolver is fail-closed by design (P0-12) and a 409 naming the seed
+        # migration is the correct answer to an empty registry, not a bug to
+        # relax. Shared with the hermetic pytest suite so the two cannot drift.
+        seed_global_reference_data(session)
         if session.get(Organization, DEMO_ORG_ID) is None:
             session.add(Organization(id=DEMO_ORG_ID, name="E2E Tenant"))
         # One hash for every user rather than one per user: Argon2id is
@@ -99,7 +99,24 @@ def main() -> None:
         _enrol_signing_keys(session)
         materialize_canonical_test_book(session)
         session.commit()
+        _materialize_live_plane(session)
     print("e2e database bootstrapped")
+
+
+def _materialize_live_plane(session: Session) -> None:
+    """Stand in for the worker's pipeline refresh.
+
+    Every Treasury/ALM cockpit reads the live fact plane, which only the
+    background worker writes — and the e2e stack runs no worker. Without this
+    the whole live half of the dashboard opens on "no computed data yet".
+    """
+    facts, modules_ok, modules_failed = materialize_live_plane(
+        session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID
+    )
+    session.commit()
+    print(f"live plane: {facts} current facts, modules ok: {', '.join(modules_ok) or 'none'}")
+    for module, error in sorted(modules_failed.items()):
+        print(f"live plane: module {module} failed: {error}")
 
 
 def _enrol_signing_keys(session: Session) -> None:

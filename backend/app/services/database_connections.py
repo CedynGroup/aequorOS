@@ -18,10 +18,22 @@ Both are validated on create so a malformed onboarding payload is rejected up
 front rather than at pull time. A live database is never required by the tests:
 the driver is resolved through the module-level :func:`driver_for` seam, which
 the offline fixture driver stands in for.
+
+**Egress (SSRF) guard.** ``host``, ``read_replicas``, and the backend option
+blocks name a destination the tenant chooses, so every path that can open a
+socket — the live ``/test``, ``/schema`` discovery, ``/sync``, and the scheduled
+health probe (which runs ``test_connection``) — funnels through
+:func:`_build_connection_config`, which resolves and validates EVERY resulting
+destination via :mod:`app.core.outbound` before the driver is handed the config.
+That is the authoritative check; the schema-level screen on the create/update
+payloads is fast feedback only. Residual risk is documented on
+:func:`_guard_outbound_targets`.
 """
 
 from __future__ import annotations
 
+import logging
+import re
 import time
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -53,6 +65,7 @@ from app.adapters.database_direct.extraction import StagedBundle, StagedTableErr
 from app.adapters.database_direct.pull import stage_pull
 from app.adapters.database_direct.query_builder import build_count_select, build_sample_select
 from app.adapters.market_data.credential_manager import derive_status
+from app.core.outbound import OutboundTargetBlocked, check_host_port
 from app.db.base import utc_now
 from app.models import Bank
 from app.models.database_connection import DatabaseDirectConnection
@@ -86,6 +99,8 @@ _STATUS_BY_ERROR_CODE: dict[str, str] = {
     "CREDENTIAL_REVOKED": "REVOKED",
     "CONFIGURATION_ERROR": "INVALID",
 }
+
+logger = logging.getLogger(__name__)
 
 _adapter = DatabaseDirectAdapter()
 
@@ -812,11 +827,131 @@ def _backend_option_blocks(options: dict[str, Any] | None) -> dict[str, Any]:
     return blocks
 
 
+# A JDBC url template or an ODBC keyword block can name a destination of its
+# own, entirely bypassing ``host`` — ``jdbc:sqlserver://169.254.169.254:1433``
+# needs no ``{host}`` placeholder at all. These extract the authority tokens so
+# the same guard sees them.
+_URL_AUTHORITY = re.compile(r"(?://|@)(\[[0-9A-Fa-f:.]+\]|[^/\\;?,\s@]+)")
+_ODBC_SERVER_KEYS = frozenset(
+    {
+        "server",
+        "servername",
+        "server name",
+        "host",
+        "hostname",
+        "address",
+        "addr",
+        "network address",
+    }
+)
+_ODBC_PROTOCOL_PREFIXES = ("tcp:", "np:", "lpc:", "admin:")
+
+
+def _url_authority_hosts(text: str) -> list[str]:
+    """Host tokens embedded in a driver URL/template (``//host:port``, ``@host``)."""
+    hosts: list[str] = []
+    for match in _URL_AUTHORITY.finditer(text or ""):
+        token = match.group(1)
+        host = token if token.startswith("[") else token.split(":", 1)[0]
+        if host:
+            hosts.append(host)
+    return hosts
+
+
+def _odbc_keyword_hosts(options: dict[str, str]) -> list[str]:
+    """Destinations named by ODBC ``SERVER=``-style connection keywords.
+
+    The ``dsn`` field is deliberately not screened: a DSN is a *name* the ODBC
+    driver manager resolves from operator-owned configuration on the worker
+    host, so its destination is not tenant-supplied. Registering a DSN is an
+    operator action and stays the control for that path.
+    """
+    hosts: list[str] = []
+    for key, value in (options or {}).items():
+        if str(key).strip().lower() not in _ODBC_SERVER_KEYS:
+            continue
+        token = str(value).strip()
+        lowered = token.lower()
+        for prefix in _ODBC_PROTOCOL_PREFIXES:
+            if lowered.startswith(prefix):
+                token = token[len(prefix) :]
+                break
+        token = token.split(",", 1)[0].strip()  # SQL Server "host,port"
+        if token:
+            hosts.append(token)
+    return hosts
+
+
+def _outbound_targets(config: ConnectionConfig) -> list[tuple[str, str]]:
+    """Every ``(field, host token)`` a live connect with this config could reach."""
+    targets: list[tuple[str, str]] = []
+    for replica in config.read_replicas:
+        token = str(replica).strip()
+        if token:
+            targets.append(("read replica", token))
+    if config.host.strip():
+        targets.append(("host", config.host.strip()))
+    if config.jdbc is not None and "{host}" not in config.jdbc.url_template:
+        # With a ``{host}`` placeholder the destination IS ``host`` (screened
+        # above); without one the template hardcodes its own.
+        targets.extend(
+            ("JDBC url", host) for host in _url_authority_hosts(config.jdbc.url_template)
+        )
+    if config.odbc is not None:
+        targets.extend(
+            ("ODBC connection keyword", host)
+            for host in _odbc_keyword_hosts(config.odbc.extra_keywords)
+        )
+    return targets
+
+
+def _guard_outbound_targets(config: ConnectionConfig) -> None:
+    """Resolve and validate every destination before a driver opens a socket.
+
+    This is the authoritative SSRF control for the Database-Direct connector.
+    Every path that opens a socket builds its config through
+    :func:`_build_connection_config` — the live ``/test``, ``/schema``
+    discovery, ``/sync``, and the scheduled health probe — so all four are
+    covered, whatever the stored host was when it was written. Create and
+    update do not resolve (they are screened by the payload validators
+    instead): DNS at config time is both a weaker signal, because the answer
+    can change, and a needless outbound lookup driven by request data.
+
+    **Residual risk — TOCTOU / DNS rebinding.** The guard resolves the name and
+    validates every answer, then hands the *hostname* to the driver, which
+    resolves it again inside the vendor client. A resolver that returns a public
+    address to us and a loopback address to the driver moments later is not
+    stopped by this check. Pinning the socket to the validated address is not
+    available here: Oracle/SQL Server/JDBC clients derive TLS hostname
+    verification (``SSL_SERVER_DN_MATCH``, certificate CN/SAN) from the name in
+    the DSN, so substituting an IP would silently weaken transport security —
+    a worse trade. The mitigations that do apply are in place: the window is
+    one DNS TTL wide, every answer is checked (not just the first), and the
+    check is repeated immediately before each connect rather than cached from
+    onboarding.
+    """
+    for field, token in _outbound_targets(config):
+        try:
+            check_host_port(token, field=field)
+        except OutboundTargetBlocked as exc:
+            logger.warning(
+                "database-direct connection blocked by the egress guard (%s): %s",
+                exc.reason,
+                exc.internal_detail,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message
+            ) from exc
+
+
 def _build_connection_config(connection: DatabaseDirectConnection) -> ConnectionConfig:
     config = _validate_connection_config(_connection_to_config_dict(connection))
     if not connection.prefer_read_replica:
         # Honor the operator's preference to read the primary directly.
-        return config.model_copy(update={"read_replicas": ()})
+        config = config.model_copy(update={"read_replicas": ()})
+    # Authoritative, pre-connect: every caller of this function is about to hand
+    # the config to a driver.
+    _guard_outbound_targets(config)
     return config
 
 

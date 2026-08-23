@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
+from app.domain.authority.outcomes import NotComputable
 from app.domain.stress.translation import MacroPathPoint, translate
 from app.models import Bank, MacroScenario, MacroScenarioPath
 from app.schemas.stress import (
@@ -453,7 +454,17 @@ def translate_scenario(
     official run goes through ``resolve_for_official_run``.
     """
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
-    shocks = translate(_to_points(_load_paths(db, scenario.id)), module)
+    try:
+        shocks = translate(_to_points(_load_paths(db, scenario.id)), module)
+    except NotComputable as exc:
+        # A draft scenario that does not yet carry every macro variable the
+        # module reads translates to nothing at all — the preview says so
+        # instead of rendering an empty (and therefore reassuring) shock set
+        # (enterprise audit P0-9).
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error_code": "scenario_incomplete_paths", **exc.to_dict()},
+        ) from exc
     return ScenarioTranslationRead(
         scenario_id=scenario.id,
         code=scenario.code,

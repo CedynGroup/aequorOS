@@ -15,7 +15,7 @@ import {
   useRegulatoryRun,
 } from '@/lib/api/hooks';
 import { num, statusTone } from '@/lib/api/values';
-import { fmtCurrency, regShort } from '@/lib/format';
+import { centralBankName, fmtCurrency } from '@/lib/format';
 
 type WeightedRow = {
   item: string;
@@ -90,7 +90,7 @@ export default function NSFRDashboard() {
           { label: 'NSFR' },
         ]}
         title="Net Stable Funding Ratio"
-        subtitle={`Basel III NSFR per ${regShort()} CRD · 1-year stable funding horizon`}
+        subtitle={`Basel III NSFR · 1-year stable funding horizon · ${centralBankName()} has issued no NSFR requirement, so the Basel standard applies`}
       />
 
       <QueryBoundary
@@ -127,7 +127,7 @@ export default function NSFRDashboard() {
 
             <SectionCard
               title="Regulatory floor"
-              subtitle={`NSFR is a floor limit — compliant while the ratio stays above the ${regShort()} minimum`}
+              subtitle="NSFR is a floor limit — compliant while the ratio stays above the Basel minimum"
               computedAt={computedAt}
             >
               <LimitBar
@@ -137,8 +137,8 @@ export default function NSFRDashboard() {
                 warnAt={nsfrMin}
                 direction="above"
                 unit="%"
-                limitLabel={nsfrRedFloor === nsfrMin ? `${regShort()} minimum` : 'Red floor'}
-                warnLabel={`${regShort()} minimum`}
+                limitLabel={nsfrRedFloor === nsfrMin ? 'Basel minimum' : 'Red floor'}
+                warnLabel="Basel minimum"
                 format={(v) => v.toFixed(1)}
               />
             </SectionCard>
@@ -217,7 +217,7 @@ export default function NSFRDashboard() {
                   <span className="font-mono font-medium text-success">
                     {num(data.metrics.nsfrPct).toFixed(2)}%
                   </span>
-                  . {regShort()} minimum {nsfrMin.toFixed(0)}%.{' '}
+                  . Basel minimum {nsfrMin.toFixed(0)}%.{' '}
                   {bank?.name ?? 'The bank'} holds{' '}
                   <span className="font-mono text-navy">
                     {(num(data.metrics.nsfrPct) - nsfrMin).toFixed(2)} pts

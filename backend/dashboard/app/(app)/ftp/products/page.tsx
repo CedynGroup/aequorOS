@@ -220,10 +220,18 @@ function ProductsBody({ ctx }: { ctx: FtpFrameContext }) {
           </StatusPill>
         }
       >
+        {/*
+          Ten columns do not fit a 1280px card, so "Contribution" was cut
+          mid-word at the card border with nothing saying more existed. This
+          table is already full-width — there is no layout to reclaim — so it
+          takes `DataTable`'s measured overflow affordance: an edge fade, a
+          focusable scroll region and a caption naming the gesture.
+        */}
         <DataTable
           columns={columns}
           rows={sorted}
           density="compact"
+          scrollLabel="Product margin detail"
           totalsRowMatcher={(r) => r.belowMinMargin}
         />
       </SectionCard>

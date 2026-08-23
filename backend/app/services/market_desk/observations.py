@@ -102,7 +102,7 @@ def _observation_filters(
     return clauses
 
 
-def list_observations(
+def list_observations(  # noqa: PLR0913 - one keyword per ledger filter / page bound
     db: Session,
     *,
     series_code: str | None = None,

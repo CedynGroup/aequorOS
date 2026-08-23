@@ -140,6 +140,7 @@ def _resolve_sovereign(
             CanonicalCounterpartyRating.issuer == issuer,
             CanonicalCounterpartyRating.as_of_date <= cob_date,
             CanonicalCounterpartyRating.superseded_by.is_(None),
+            CanonicalCounterpartyRating.withdrawn_at.is_(None),
             CanonicalCounterpartyRating.validation_status.in_(_ACCEPTED_VALIDATION),
         )
         .order_by(
@@ -182,6 +183,7 @@ def _resolve_policy_rate(
             CanonicalMarketIndex.scenario == "base",
             CanonicalMarketIndex.as_of_date <= cob_date,
             CanonicalMarketIndex.superseded_by.is_(None),
+            CanonicalMarketIndex.withdrawn_at.is_(None),
             CanonicalMarketIndex.validation_status.in_(_ACCEPTED_VALIDATION),
         )
         .order_by(

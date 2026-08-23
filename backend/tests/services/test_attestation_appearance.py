@@ -27,7 +27,11 @@ from app.services.attestation.appearance import (
     SignatureMarkRejected,
     normalise_drawn_signature,
 )
-from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, DEMO_USER_ID, materialize_canonical_test_book
+from tests.fixtures.canonical_bank_fixture import (
+    DEMO_ORG_ID,
+    DEMO_USER_ID,
+    materialize_canonical_test_book,
+)
 
 CTX = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 SIGNER_ID = "SGN-7K4M9PQR2VWX3YZ8"

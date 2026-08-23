@@ -107,6 +107,9 @@ def list_return_templates() -> ReturnTemplateListRead:
                 template_id=definition.template_id,
                 fidelity=definition.fidelity,
                 default_channel=definition.default_channel,
+                supports_working_copy=(
+                    definition.generator == "bog_form" or definition.supports_working_copy
+                ),
             )
             for definition in REGISTRY.values()
         ]

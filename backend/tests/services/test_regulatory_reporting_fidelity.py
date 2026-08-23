@@ -42,6 +42,7 @@ from app.services.regulatory_reporting.channels.errors import (
 )
 from app.services.regulatory_reporting.channels.orass_api import OrassApiChannel
 from tests.factories.attestation import relax_signing
+from tests.factories.outbound import stub_dns, stub_public_dns
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -318,6 +319,13 @@ def test_snapshot_sha256_is_sealed_and_value_based(db_session: Session) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _resolvable_orass(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``api_base_url`` is tenant-supplied, so the channel resolves it through
+    the egress guard before every request; stub DNS to stay offline."""
+    stub_public_dns(monkeypatch, "orass.example.test")
+
+
 def _api_channel(handler, *, config=None, credentials=None) -> OrassApiChannel:
     return OrassApiChannel(
         config={"api_base_url": "https://orass.example.test", **(config or {})},
@@ -439,3 +447,65 @@ def test_orass_api_resubmission_request_flow() -> None:
     status, detail = _api_channel(handler).request_resubmission("LCRN01390", "Wrong attachment")
     assert status == "granted"
     assert detail["provisional_contract"] is True
+
+
+# --- ORASS egress guard (audit P0-6) ---------------------------------------
+
+BLOCKED_ORASS_BASE_URLS = [
+    "https://127.0.0.1",
+    "https://localhost",
+    "https://[::1]",
+    "https://169.254.169.254",
+    "https://metadata.google.internal",
+    "https://10.0.0.5",
+    "https://192.168.1.1",
+    "https://172.16.0.1",
+    "https://100.64.0.1",
+    "https://0.0.0.0",
+    "https://[::ffff:127.0.0.1]",
+    "http://orass.example.test",  # scheme allow-list: TLS only
+]
+
+
+@pytest.mark.parametrize("base_url", BLOCKED_ORASS_BASE_URLS)
+def test_orass_api_refuses_a_blocked_base_url(db_session: Session, base_url: str) -> None:
+    """A tenant-set ``api_base_url`` must not become an internal socket, and a
+    blocked target is a configuration fault — never regulator downtime (which
+    would route the operator into the email fallback)."""
+    package = _approved_stub_package(db_session)
+
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError("the guard must refuse before any request is made")
+
+    channel = _api_channel(handler, config={"api_base_url": base_url})
+    with pytest.raises(ChannelPreconditionError) as blocked:
+        channel.submit(package, [_stub_artifact(package)])
+    assert not isinstance(blocked.value, ChannelDowntimeError)
+
+
+def test_orass_api_refuses_a_base_url_that_resolves_internally(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A public-looking name whose DNS answer is the metadata service."""
+    package = _approved_stub_package(db_session)
+    stub_dns(monkeypatch, {"orass.example.test": ("169.254.169.254",)})
+
+    def handler(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError("the guard must refuse before any request is made")
+
+    with pytest.raises(ChannelPreconditionError) as blocked:
+        _api_channel(handler).submit(package, [_stub_artifact(package)])
+    assert "169.254.169.254" not in str(blocked.value)
+
+
+def test_orass_api_rejects_a_redirect_to_a_blocked_destination(db_session: Session) -> None:
+    """The transport does not follow redirects, and the hook refuses one that
+    points at a blocked destination rather than letting it through."""
+    package = _approved_stub_package(db_session)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"location": "https://169.254.169.254/latest/"})
+
+    with pytest.raises(ChannelPreconditionError) as blocked:
+        _api_channel(handler).submit(package, [_stub_artifact(package)])
+    assert "redirected" in str(blocked.value)

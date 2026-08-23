@@ -164,11 +164,21 @@ class StepUpRequest(ClosedModel):
 
     Exactly one proof is required. Password re-entry serves password accounts;
     an OIDC id_token (obtained with prompt=login) serves SSO accounts.
+
+    Both proofs are length-bounded at the contract boundary. Verifying a
+    password costs an Argon2id hash (~64 MiB, ~100 ms) and verifying an
+    id_token costs a JWKS-backed signature check, so an unbounded field is a
+    cheap way to make the signing endpoint expensive. The ceilings are far above
+    anything a real credential or a real IdP token reaches.
     """
 
     signing_role: SigningRole
-    id_token: str | None = None
-    password: str | None = None
+    #: Comfortably above any conforming id_token; a JWT carrying more than this
+    #: is not a credential, it is a payload.
+    id_token: str | None = Field(default=None, min_length=1, max_length=8192)
+    #: The signing dialog already refuses an empty box, so ``min_length`` only
+    #: rejects a hand-crafted request that could never have succeeded anyway.
+    password: str | None = Field(default=None, min_length=1, max_length=1024)
 
 
 class StepUpGrantedRead(ClosedModel):

@@ -1,3 +1,25 @@
+"""Solvency-pressure analysis for a risk case (advisory, never filed).
+
+This is the CASE plane. It reads the `CalculationForecastPeriod` rows of one
+`CalculationRun` and classifies pressure from unweighted book values —
+equity over total assets, liabilities over total assets, and the change in
+equity — against fixed MVP review thresholds.
+
+It is not regulatory capital. Basel CAR, CET1, Tier 1 and leverage are
+computed by `app.domain.capital.engine` from `BankFinancialFact` over
+risk-weighted assets, sealed into a `RegulatoryRun`, and filed. An SDI's s.29
+CAR is `app.services.sdi_capital`. Nothing here reads a bank fact, calls a
+regulatory engine, or reaches a return — see `app.services.case_plane` for the
+boundary rule and `tests/architecture/test_case_plane_boundary.py` for the
+guard.
+
+The outputs are therefore labelled "solvency pressure" rather than "capital".
+Stored identifiers (`capital_projections`, `capital_indicators`, the
+`capital_*` rule ids, the `leverage_risk` risk type, the route paths) keep
+their historical spelling because they are storage and wire contracts; only
+the wording a person reads changed. No formula or threshold moved.
+"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -36,6 +58,7 @@ from app.schemas.capital import (
 )
 from app.schemas.findings import EvidenceRead, FindingRead
 from app.services.audit import record_event
+from app.services.case_plane import SOLVENCY_PRESSURE, with_advisory_note
 from app.services.cases import (
     ensure_case_is_not_archived,
     get_case_for_update_or_404,
@@ -132,7 +155,7 @@ def create_projection(
         if invalid:
             raise CapitalInputError(
                 "non_positive_projected_assets",
-                "Capital ratios require positive projected total assets.",
+                f"{SOLVENCY_PRESSURE.capitalize()} requires positive projected total assets.",
                 {
                     "forecast_periods": invalid,
                     "corrective_action": (
@@ -469,7 +492,7 @@ def _persist_findings(
         candidates.append(
             (
                 "capital_thin_buffer",
-                "Projected capital buffer is thin",
+                "Projected equity buffer is thin",
                 "high",
                 "The minimum equity-to-assets ratio is "
                 f"{worst.equity_to_assets_ratio:.2%} in period {worst.period_number}.",
@@ -480,7 +503,7 @@ def _persist_findings(
         candidates.append(
             (
                 "capital_erosion",
-                "Projected capital erosion",
+                "Projected equity erosion",
                 "medium",
                 f"Equity declines by {abs(final.equity_change)} by period {final.period_number}.",
                 final,
@@ -501,7 +524,9 @@ def _persist_findings(
             risk_type="leverage_risk",
             title=title,
             summary=summary,
-            rationale="Deterministic capital projection rule based on immutable forecast outputs.",
+            rationale=with_advisory_note(
+                f"Deterministic {SOLVENCY_PRESSURE} rule based on immutable forecast outputs."
+            ),
             severity=severity,
             status="needs_review",
             source="deterministic_rule",

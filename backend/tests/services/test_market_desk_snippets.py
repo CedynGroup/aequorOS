@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 from datetime import date
 
-import pytest
 from sqlalchemy.orm import Session
 
 from app.models import DeskSourceCapture
