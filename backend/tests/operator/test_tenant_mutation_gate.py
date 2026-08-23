@@ -5,9 +5,10 @@ the Tenant Inspector gate (``app.operator.inspection.require_active_inspection``
 and lands in append-only ``operator_audit_log`` with ``target_org`` naming the
 tenant. Until 2026-08-23 the desk entitlement routes did neither: they took the
 organization from the client, gated on the base ``Operator`` dependency (which
-admits the lowest ``developer`` tier — the role a domain-allow-listed workforce
-identity receives with *no* ``operator_users`` row at all), and the read left no
-audit row whatsoever (audit finding D-26).
+admits the lowest explicitly provisioned ``developer`` tier), and the read left
+no audit row whatsoever (audit finding D-26). Workforce OIDC now requires an
+active ``operator_users`` row, so domain membership alone cannot reach even
+that base dependency.
 
 Patching those four routes would have fixed those four routes. This module
 fixes the CLASS instead: it DERIVES the set of tenant-naming operator routes

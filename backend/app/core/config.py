@@ -772,7 +772,9 @@ class OperatorSettings(BaseSettings):
     jwt_secret: str | None = Field(default=None, alias="OPERATOR_JWT_SECRET")
     #: Workforce OIDC (Google Workspace / Okta issuer). Verified with the same
     #: zero-trust machinery as customer SSO (`verify_oidc_id_token`); tokens
-    #: must carry a verified email under the allowed domain.
+    #: must carry a verified email under the allowed domain, and that email
+    #: must identify an active, explicitly provisioned ``operator_users`` row.
+    #: Domain membership alone grants no operator role.
     oidc_issuer: str | None = Field(default=None, alias="OPERATOR_OIDC_ISSUER")
     oidc_client_id: str | None = Field(default=None, alias="OPERATOR_OIDC_CLIENT_ID")
     oidc_allowed_domain: str = Field(default="aequoros.com", alias="OPERATOR_OIDC_ALLOWED_DOMAIN")

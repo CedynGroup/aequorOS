@@ -37,7 +37,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   from tenant identity by design; `operator_admin` = super admin, founder seeded),
   OIDC SSO secondary, dev bearer token non-production-only. Tenant onboarding runs as
   a saga through `provision_institution`; every operator mutation lands in append-only
-  `operator_audit_log`.
+  `operator_audit_log`. Workforce domain membership is identity evidence, not
+  authorization: OIDC authentication requires a matching active `operator_users` row
+  and always takes its explicit role from that row; unknown or inactive identities get
+  the same generic 401 as any other invalid operator credential.
 - **Market research desk (built 2026-08-09..11; spec docs/internal/
   AequorOS_Market_Data_and_Curve_Platform.md — its as-built header + calibration
   deviation are authoritative).** Desk-as-vendor: approved determinations publish into

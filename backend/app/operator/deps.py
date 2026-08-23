@@ -13,6 +13,9 @@ token remains for local work. There is still NO overlap with tenant identity
 Bearer resolution order: dev token, operator JWT, OIDC id_token. A token that
 VERIFIES as an operator JWT but fails the row check (missing, deactivated,
 stale role claim) is rejected outright — it never falls through to OIDC.
+An OIDC identity likewise authenticates only when its verified, normalized
+email matches an active ``operator_users`` row; the workforce domain check is
+necessary identity evidence but grants no role by itself.
 
 The DB session here is CROSS-TENANT: it deliberately sets no
 ``organization_id`` on the session, so on the RLS-forced primary it must run
@@ -51,7 +54,8 @@ _bearer_scheme = HTTPBearer(
     auto_error=False,
     description=(
         "Operator credential: operator session JWT (password sign-in), "
-        "workforce OIDC id_token, or the dev token outside production"
+        "workforce OIDC id_token for an active provisioned operator, or the "
+        "dev token outside production"
     ),
 )
 
@@ -72,7 +76,7 @@ class OperatorContext:
     auth_mode: Literal["dev", "oidc", "password"]
     #: Staff authorization role. Password/JWT sessions carry it as a claim
     #: verified against the ``operator_users`` row; OIDC sessions take the
-    #: active provisioned row's role;
+    #: active provisioned row's role.
     #: dev sessions are ``super_admin`` — the local root session IS the
     #: documented bootstrap path for creating the first operator account,
     #: and dev auth cannot exist in production (boot refusal + request-level

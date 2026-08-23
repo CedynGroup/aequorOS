@@ -11,7 +11,9 @@
  *    cookie and is attached to operator API calls by the /api/op proxy.
  * 2. The console does NOT claim to verify the token cryptographically — the
  *    operator API independently verifies signature/issuer/audience/expiry on
- *    EVERY request (zero-trust, app/core/security.verify_oidc_id_token).
+ *    EVERY request (zero-trust, app/core/security.verify_oidc_id_token), then
+ *    requires the verified email to match an active provisioned operator_users
+ *    row and takes authorization from that row.
  *    The callback checks only what the relying party must: state, nonce,
  *    expiry, and that an email claim exists.
  *

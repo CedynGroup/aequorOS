@@ -3,7 +3,9 @@
 Staff accounts follow the client model's provisioning shape: an admin creates
 the account and hands over a generated ONE-TIME password (shown exactly once,
 the tenant provisioning-saga idiom — only the Argon2id hash is stored), the
-operator signs in with it. No self-serve signup, no committed seed.
+operator signs in with it. The same active row is mandatory for workforce OIDC
+and supplies its explicit role; membership in the configured email domain is
+not authorization. No self-serve signup, no committed seed.
 
 Bootstrap: locally, dev-token sessions carry ``operator_admin`` (dev auth is
 hard-refused in production), so the first operator is created straight from
