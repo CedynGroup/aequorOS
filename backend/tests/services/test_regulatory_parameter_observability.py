@@ -14,10 +14,8 @@ would drown the signal. These logs are the runtime counterpart to the persistent
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import date
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import delete
@@ -28,29 +26,6 @@ from app.services import regulatory_parameters as rp
 from tests.api.helpers import ORG_1
 
 AS_OF = date(2026, 6, 30)
-
-
-@contextmanager
-def _capture_parameter_logs(level: int) -> Iterator[list[logging.LogRecord]]:
-    records: list[logging.LogRecord] = []
-
-    class Capture(logging.Handler):
-        def emit(self, record: logging.LogRecord) -> None:
-            records.append(record)
-
-    target = logging.getLogger("app.services.regulatory_parameters")
-    handler = Capture(level)
-    previous_level = target.level
-    previous_propagate = target.propagate
-    target.setLevel(level)
-    target.propagate = False
-    target.addHandler(handler)
-    try:
-        yield records
-    finally:
-        target.removeHandler(handler)
-        target.setLevel(previous_level)
-        target.propagate = previous_propagate
 
 
 def _make_bank(db: Session, *, institution_type: str) -> Bank:
@@ -71,13 +46,13 @@ def _make_bank(db: Session, *, institution_type: str) -> Bank:
 def test_pending_value_use_logs_a_warning(db_session: Session) -> None:
     bank = _make_bank(db_session, institution_type="savings_and_loans")
     # `related_party_limit_pct` ships 'pending' (value awaiting BoG confirmation).
-    with _capture_parameter_logs(logging.WARNING) as captured:
+    with patch.object(rp.logger, "warning", wraps=rp.logger.warning) as warning:
         resolved = rp.resolve(db_session, bank, "related_party_limit_pct", as_of=AS_OF)
     assert resolved.is_pending
-    records = [r for r in captured if "pending_value_used" in r.getMessage()]
-    assert len(records) == 1
-    assert records[0].levelno == logging.WARNING
-    message = records[0].getMessage()
+    warning.assert_called_once()
+    template, *values = warning.call_args.args
+    message = template % tuple(values)
+    assert "pending_value_used" in message
     assert "related_party_limit_pct" in message
     assert bank.id in message
 
@@ -85,10 +60,10 @@ def test_pending_value_use_logs_a_warning(db_session: Session) -> None:
 def test_confirmed_value_use_is_silent(db_session: Session) -> None:
     bank = _make_bank(db_session, institution_type="savings_and_loans")
     # `car_min` for an SDI is confirmed (Act 930 s.29) — no observability noise.
-    with _capture_parameter_logs(logging.WARNING) as captured:
+    with patch.object(rp.logger, "warning", wraps=rp.logger.warning) as warning:
         resolved = rp.resolve(db_session, bank, "car_min", as_of=AS_OF)
     assert not resolved.is_pending
-    assert [r for r in captured if "pending_value_used" in r.getMessage()] == []
+    warning.assert_not_called()
 
 
 def test_unseeded_mandatory_parameter_logs_an_error_and_fails_loud(
@@ -102,11 +77,12 @@ def test_unseeded_mandatory_parameter_logs_an_error_and_fails_loud(
     )
     db_session.flush()
     with (
-        _capture_parameter_logs(logging.ERROR) as captured,
+        patch.object(rp.logger, "error", wraps=rp.logger.error) as error,
         pytest.raises(rp.RegulatoryParameterError),
     ):
         rp.resolve(db_session, bank, "car_min", as_of=AS_OF)
-    records = [r for r in captured if "regulatory_parameter.unseeded" in r.getMessage()]
-    assert len(records) == 1
-    assert records[0].levelno == logging.ERROR
-    assert "car_min" in records[0].getMessage()
+    error.assert_called_once()
+    template, *values = error.call_args.args
+    message = template % tuple(values)
+    assert "regulatory_parameter.unseeded" in message
+    assert "car_min" in message
