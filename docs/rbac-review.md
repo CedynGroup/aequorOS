@@ -39,7 +39,7 @@ These are critical/high defects, not optional refinements.
 | Critical | Mapping legacy `admin` to account-only Org Admin while retaining rank compatibility (`rbac.md:260-276`) leaves Org Admin above analyst and approver (`backend/app/core/security.py:34-40,81-87`), including on submission gates (`backend/app/api/deps.py:245-288,364-385`; `backend/app/features/manage_regulatory_reporting.py:442-457`). | Introduce `org_admin` outside the operational ladder and atomically cut routes to explicit permissions before assigning it. Coarse operational gates may remain only as defense in depth. |
 | Critical | Grant mutation precedes `session_epoch` in the proposed phases (`rbac.md:854-900`). Stateless access tokens carry role claims but no authorization version (`backend/app/core/security.py:98-147`), and tenant validation checks active membership, not current grants (`backend/app/api/deps.py:313-358`). Demotion can therefore remain effective until expiry. | Ship authorization-version checks and refresh-family revocation with the first grant mutation. Atomically invalidate sessions on role, scope, status, or security changes; explicitly invalidate any short-lived permission cache. |
 | Critical | A verified but unprovisioned workforce-domain identity currently receives `developer` (`backend/app/operator/deps.py:140-172`), exposing cross-tenant operator surfaces contrary to least privilege (`rbac.md:344-349,601-602`). | This fail-open defect is being addressed in a separate staff-plane change. `operator_users` must remain authoritative and unknown identities must be denied; add explicit operator permissions rather than a second staff store. This document does not close the defect. |
-| High | The universal rule says submitter differs from every maker (`rbac.md:103-105,406-409`), but the reporting persona prepares and submits (`rbac.md:176,519`) and current code permits post-approval transmission (`backend/app/services/regulatory_reporting/workflow.py:896-929`). Contradiction makes controls and staffing requirements indeterminate. | Apply the accepted default: a maker may mechanically transmit only an immutable, independently approved and attested payload; the maker may never approve or attest it. |
+| High | The universal rule says submitter differs from every maker (`rbac.md:103-105,406-409`), but the reporting persona prepares and submits (`rbac.md:176,519`) and current code permits post-approval transmission (`backend/app/services/regulatory_reporting/workflow.py:896-929`). Contradiction makes controls and staffing requirements indeterminate. | Apply the accepted default: a maker may certify the filing as its preparer and may mechanically transmit it only after a distinct checker has certified it as approver. The maker may never approve it or certify an approver/checker slot. |
 | High | Proposed approvals identify only a mutable object and event (`rbac.md:763-765`), so approval can survive edits or race a transition. | Bind every decision to an immutable subject revision, value-based digest, policy version, evaluated scope, approval tier/metric, and transition sequence. Editing creates a revision or invalidates pending decisions. Preserve stronger attestation controls. |
 | High | Organization RLS is presented as sufficient for narrower query scopes (`rbac.md:380-393`), but it cannot enforce institution, desk, portfolio, currency, section, or sensitivity boundaries. A static dependency cannot authorize an unloaded resource. | Keep RLS as the outer tenant wall, then resolve a canonical resource and evaluate policy after load. Inventory every scoped read and write and retain explicit organization/institution predicates and tenant-consistent foreign keys (`backend/app/api/deps.py:394-419`). |
 | High | One `external_id` and one global provider/subject pair (`rbac.md:739-743`; `backend/app/models/user.py:44-52,71-77`) cannot safely represent multiple OIDC/SCIM sources. `is_active` also conflates JIT requests, deactivated humans, and service principals (`backend/app/models/user.py:66,84-90`). | Add source/connection-scoped linked identities, separate membership and request lifecycle, normalize email before invitations/discovery, and model machine principals with fixed narrow authority. |
@@ -123,8 +123,9 @@ not claims of implementation:
 
 1. Organization is the security/account tenant; institution/bank is a scoped
    legal entity beneath it.
-2. A maker may transmit only an immutable, independently approved and attested
-   filing, and may not approve or attest it.
+2. A maker may certify a filing as its preparer and may mechanically transmit it
+   only after a distinct checker has certified it as approver. The maker may not
+   approve it or certify an approver/checker slot.
 3. Existing Org Owners require explicit designation; auto-selection is allowed
    only when exactly one eligible active human admin exists and that migration
    rule is approved.
@@ -164,7 +165,8 @@ review.
    assignment, delegation ceilings, owner safeguards, seat accounting, and an
    RLS-scoped view over existing immutable audit evidence.
 6. **Generalize approval/SoD.** Reuse immutable revisions and value-based digests;
-   enforce maker/attester separation and the accepted mechanical-submit rule.
+   enforce maker/approver separation while retaining preparer certification and
+   the accepted mechanical-submit rule.
 7. **Add enterprise identity in dependency order.** Normalize email, verify
    domains, add linked identities and discovery, then multi-connection SSO, SCIM,
    enforced SSO, and governed break glass.
