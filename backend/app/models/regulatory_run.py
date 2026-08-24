@@ -31,8 +31,8 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     ``module`` selects the engine: ``liquidity``, ``capital``, ``forecast``
     (5-year balance-sheet projection), ``optimizer`` (constrained strategic
     search), ``whatif`` (single-shock forecast comparison), ``irr`` (interest
-    rate risk in the banking book), ``fx`` (foreign-exchange risk), or ``ftp``
-    (funds transfer pricing).
+    rate risk in the banking book), ``fx`` (foreign-exchange risk), ``ftp``
+    (funds transfer pricing), ``reverse_stress``, or ``enterprise_stress``.
     """
 
     __tablename__ = "regulatory_runs"

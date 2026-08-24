@@ -223,7 +223,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
 
 class RegulatoryPackageArtifact(UuidV7PrimaryKeyMixin, Base):
-    """One exported file (xlsx/csv/pdf) minted from a package snapshot."""
+    """One exported file (xlsx/csv/pdf/xlsx_working) minted from a package snapshot."""
 
     __tablename__ = "regulatory_package_artifacts"
     __table_args__ = (
