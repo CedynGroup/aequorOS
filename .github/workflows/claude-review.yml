@@ -66,6 +66,10 @@ jobs:
           fetch-depth: 0
 
       - name: Claude review
+        # Provider or account outages must not make the repository's CI red.
+        # Auto-merge below still requires an APPROVED review, so this cannot
+        # authorize a merge without Claude's formal approval.
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
