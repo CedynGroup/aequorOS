@@ -133,9 +133,31 @@ semantics follow the plane, never the other way round:
    read this ladder ("vs prior close"); daily sparklines too. Value-based
    hashing guarantees figures cannot drift between refreshes, so "Live"
    without a clock is truthful.
-3. **Regulatory plane (governance)** — the monthly reporting-period spine and
-   immutable `regulatory_runs`. Month-over-month trends, filings, and
+3. **Regulatory plane (governance)** — the **regulator's** reporting dates and
+   immutable `regulatory_runs`. Period-over-period trends, filings, and
    freshness-vs-last-official-run live here exclusively.
+
+   **The reporting date is BoG's, never ours (corrected 2026-08-23).** A return's
+   reporting dates come from its `ReturnDefinition` — cadence plus the BoG
+   anchor conventions — through the one authority
+   `services/regulatory_reporting/anchors.py`, which touches no tenant data. The
+   dependency runs one way:
+
+   ```
+   ReturnDefinition ──▶ reporting date ──▶ snapshot lookup (exact, may miss)
+   ```
+
+   `bank_reporting_periods` sits on plane 1, not here: a row is the key for one
+   computed fact snapshot, created because a book arrived with an as-of date. It
+   is **not** a filing calendar and must never again be offered as the user's
+   reporting-date list — doing so made BoG's calendar a function of ingestion
+   cadence, which cost the 6 weekly BSD forms 96% of their filing dates (the
+   reference tenant had 19 Friday period-ends against 517 Fridays) and gave a
+   tenant that had ingested nothing an empty reporting calendar. The snapshot
+   match is **exact for every cadence**: a Friday-close return is never
+   assembled from a month-end book, and a missing snapshot is refused
+   (`no_computed_position`, 409) with the nearest earlier date named for the
+   message only.
 
 Growth path: denser ingestion (daily/streaming) makes plane 2 denser and the
 live edge fresher without any architectural change — QRM-cadence to
