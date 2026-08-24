@@ -5,8 +5,10 @@
 This companion records the completed security and architecture review of
 [`rbac.md`](rbac.md). Code wins over proposal text where they differ. The review
 and its exact file/line citations are anchored to commit `c80a89e`. The accepted
-defaults below constrain future implementation; this documentation does not
-implement RBAC, change runtime behavior, or by itself close any vulnerability.
+defaults below constrain future implementation. This status records the design
+review's disposition, not CI approval or runtime validation; this documentation
+does not implement RBAC, change runtime behavior, or by itself close any
+vulnerability.
 
 ## 1. Stale as-built claims
 
