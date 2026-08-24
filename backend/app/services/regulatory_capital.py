@@ -1289,6 +1289,20 @@ def compute_live(
     current = load_current_facts(db, ctx, bank, _CAPITAL_FACT_GROUPS)
     facts = current.facts
     active = _load_active_params(db, ctx, bank, current.source_as_of_date)
+    # Branch by REGIME before any Basel arithmetic runs. ``compute_rwa`` below
+    # resolves CRD exposure-class weights (RW0…RW150), which an SDI's control
+    # plane does not carry — it carries the simplified s.29 bucket weights
+    # (``risk_weight_cash``/``_interbank``/``_other_loans``/…). So for an SDI the
+    # CRD engine raised ``No governed risk weight resolves for code 'RW150'`` and
+    # the whole module failed before reaching the SDI findings branch further
+    # down, which is additive and never got the chance to run.
+    #
+    # The metrics that path emits are CRD constructs besides — CET1, Tier 1 and
+    # leverage ratios — which docs/sdi.md lists as EXCLUDE: "Basel CRD
+    # constructs; SDIs are outside the CRD". Publishing them for an SDI would be
+    # the bank scorecard problem again, one layer down.
+    if active.institution_class == "sdi":
+        return _sdi_compute_live(db, ctx, bank, period, current, active, facts)
     params = _engine_params(active)
     engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
     rwa = compute_rwa(engine_facts, params)
@@ -1327,6 +1341,60 @@ def compute_live(
         input_hash=_snapshot_hash(snapshot),
         findings=findings,
         source_as_of_date=current.source_as_of_date,
+    )
+
+
+def _sdi_compute_live(  # noqa: PLR0913 - the live context, spelled out
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    current: Any,
+    active: Any,
+    facts: Any,
+) -> LiveModuleResult:
+    """The s.29 live capital view: NOF ÷ simplified-bucket RWA, no CRD ratios.
+
+    Uses the same authority the official SDI run uses
+    (``sdi_capital.compute_sdi_capital_summary``), so the live tile and the
+    filing figure cannot disagree about an institution's capital adequacy.
+
+    Emits no CET1, Tier 1 or leverage ratio: an SDI has none, and a zero would
+    read as a breach rather than an absence.
+    """
+    as_of = current.source_as_of_date
+    summary = sdi_capital.compute_sdi_capital_summary(db, ctx, bank, as_of)
+    metrics: dict[str, str] = {
+        "car_pct": "" if summary.car_pct is None else str(summary.car_pct),
+        "car_min_pct": str(summary.car_min_pct),
+        "total_rwa_ghs": str(summary.total_rwa_ghs),
+        "net_own_funds_ghs": str(summary.net_own_funds_ghs),
+        "capital_regime": "s29",
+        # Provenance the s.29 page already shows, carried onto the live tile so
+        # an operator sees WHY a figure is pending without leaving Markets.
+        "rwa_composition_source": summary.composition_source,
+        "bucket_map_source": summary.bucket_map_source,
+    }
+    if summary.pending_parameters:
+        metrics["pending_parameters"] = ", ".join(summary.pending_parameters)
+    findings, status = _sdi_capital_live_findings(db, ctx, bank, as_of)
+    if not summary.computable:
+        # Not computable is ``na``, never green: an unresolved governed input is
+        # an absence of a verdict, not a passing one.
+        status = worst_status(status, "na")
+    else:
+        status = worst_status(status, summary.status)
+    return LiveModuleResult(
+        metrics=metrics,
+        status=status,
+        input_hash=_snapshot_hash(
+            current_snapshot(
+                _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active, {}),
+                as_of,
+            )
+        ),
+        findings=findings,
+        source_as_of_date=as_of,
     )
 
 

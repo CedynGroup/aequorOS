@@ -278,6 +278,7 @@ from app.services.market_data import (
     desk_projection_curve_name,
     list_fx_base_currencies,
 )
+from app.services.reporting_periods import new_snapshot_period
 
 MONEY = Decimal("0.0001")
 RATE = Decimal("0.0001")
@@ -1256,13 +1257,8 @@ def _ensure_period(
     )
     if period is not None:
         return period, False
-    period = BankReportingPeriod(
-        organization_id=ctx.organization_id,
-        bank_id=bank.id,
-        period_start=as_of.replace(day=1),
-        period_end=as_of,
-        label=f"{as_of.year:04d}-{as_of.month:02d}",
-        status="open",
+    period = new_snapshot_period(
+        organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of
     )
     db.add(period)
     db.flush()

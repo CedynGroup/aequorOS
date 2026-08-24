@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.base import utc_now
-from app.domain.authority.registry import InstitutionClass, MetricFamily
+from app.domain.authority.registry import MetricFamily
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -39,18 +39,18 @@ from app.services import (
     data_activation,
     filing_reconciliation,
     implied_rating,
-    institution_types,
+    module_scope,
     regulatory_capital,
     regulatory_forecasting,
     regulatory_ftp,
     regulatory_fx,
     regulatory_irr,
     regulatory_liquidity,
-    sdi_regime,
 )
 from app.services.audit import record_event
 from app.services.fact_derivation import DerivationError, derive_current_facts, derive_facts
 from app.services.live_types import LiveFindingSpec, LiveModuleResult
+from app.services.reporting_periods import new_snapshot_period
 
 REFRESH_EVENT = "bank_data.refreshed"
 OFFICIAL_EVENT = "official_run.completed"
@@ -106,29 +106,18 @@ _MODULE_METRIC_FAMILY: dict[str, MetricFamily] = {
 def _scoped_modules(
     db: Session, bank: Bank
 ) -> tuple[tuple[str, _ComputeLive], ...]:
-    """The cheap-tier modules the tenant's institution type is entitled to run."""
-    institution_type = institution_types.get_type(db, bank)
-    allowed = set(institution_type.default_modules)
-    klass = InstitutionClass(institution_type.institution_class)
+    """The cheap-tier modules the tenant's institution type is entitled to run.
 
-    def in_regime(module: str) -> bool:
-        # The projection measures a bank against Basel CET1/Tier 1/CAR/leverage
-        # and LCR/NSFR. No projection method is registered for the s.29 regime,
-        # so an SDI's live summary and Alerts must not carry those ratios as its
-        # position (architecture audit sections 6 + 10). Registry-driven, so the
-        # boundary follows the declaration rather than a second opinion here.
-        family = _MODULE_METRIC_FAMILY.get(module)
-        return family is None or sdi_regime.family_has_authority(klass, family)
-
+    Delegates to ``module_scope`` — the ONE authority, shared with the official
+    filing tier (``data_activation``), so the two tiers cannot disagree about
+    which modules an institution runs. The entitlement, metric-authority and
+    engine-substitution rules that used to live inline here now live there,
+    unchanged in behaviour and pinned by ``tests/services/test_module_scope.py``.
+    """
     return tuple(
         (module, compute)
         for module, compute in _CHEAP_MODULES
-        if _MODULE_SCOPE_KEY.get(module, module) in allowed
-        # SDI liquidity is the canonical LMTD/Reserve view, not Basel LCR/NSFR.
-        # Its control signals are read directly from the position book until a
-        # BoG-approved SDI stress/live methodology is configured.
-        and not (module == "liquidity" and institution_type.institution_class == "sdi")
-        and in_regime(module)
+        if module_scope.runs_module(db, bank, module)
     )
 
 
@@ -245,6 +234,20 @@ def recompute_live(
     )
 
     period = _ensure_live_period(session, ctx, bank, as_of)
+    # COMMIT the snapshot row before any module runs. ``_ensure_live_period``
+    # only flushes, and ``recompute_modules`` calls ``session.rollback()`` on the
+    # first module that fails — which discarded the pending period along with the
+    # failed module's work. The row is PROVENANCE (the key the derived facts are
+    # addressed by), not a module output, so a module failing must not erase it.
+    #
+    # Measured on 2026-08-23: the SDI had 777 ingested dates, 79 current facts and
+    # ZERO reporting periods, because ``capital`` failed first on every refresh
+    # and took the period with it. Every surface that resolves a date through
+    # ``bank_reporting_periods`` then reported "no data yet" — including the
+    # Returns workspace, which showed a fully-loaded tenant as having nothing to
+    # file. Sample Bank was unaffected only because its official runs
+    # (``derive_facts``) create periods on a path that commits.
+    session.commit()
     modules_ok, modules_failed = recompute_modules(
         session, ctx, bank, period, reconciliation_block=reconciliation_block
     )
@@ -265,6 +268,13 @@ def run_refresh(session: Session, job: Job) -> None:
 
     outcome = recompute_live(session, ctx, bank, as_of)
     if outcome.skipped_reason is not None or outcome.period is None:
+        _mark_prior_live_metrics_unavailable(
+            session,
+            ctx,
+            bank,
+            as_of,
+            outcome.skipped_reason or "no_period",
+        )
         job.progress = {
             "status": "skipped",
             "reason": outcome.skipped_reason or "no_period",
@@ -293,6 +303,37 @@ def run_refresh(session: Session, job: Job) -> None:
         "modules_failed": outcome.modules_failed,
         "reconciliation_blocked": outcome.reconciliation_block is not None,
     }
+
+
+def _mark_prior_live_metrics_unavailable(
+    session: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    reason: str,
+) -> None:
+    """Invalidate prior live rows when a newer refresh cannot derive a book.
+
+    An empty first refresh has no row to update and remains a benign no-op. If
+    rows already exist, retaining them as ``ready`` would present a result from
+    an older financial book after the latest refresh refused to derive one.
+    ``live_view`` retries failed modules automatically using the latest actual
+    reporting period, so this creates no manual-refresh workflow.
+    """
+    message = (
+        f"Live recomputation found no canonical financial book for {as_of.isoformat()} "
+        f"({reason}). The prior live result is not current."
+    )
+    rows = session.scalars(
+        select(LiveMetric).where(
+            LiveMetric.organization_id == ctx.organization_id,
+            LiveMetric.bank_id == bank.id,
+        )
+    )
+    for row in rows:
+        row.pipeline_state = "failed"
+        row.pipeline_error = message
+    session.commit()
 
 
 def run_official(session: Session, job: Job) -> None:
@@ -635,13 +676,8 @@ def _ensure_live_period(
     period = _find_period(session, ctx, bank, as_of)
     if period is not None:
         return period
-    period = BankReportingPeriod(
-        organization_id=ctx.organization_id,
-        bank_id=bank.id,
-        period_start=as_of.replace(day=1),
-        period_end=as_of,
-        label=f"{as_of.year:04d}-{as_of.month:02d}",
-        status="open",
+    period = new_snapshot_period(
+        organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of
     )
     session.add(period)
     session.flush()

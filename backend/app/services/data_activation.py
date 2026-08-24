@@ -44,6 +44,7 @@ from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.services import (
     implied_rating,
+    module_scope,
     regulatory_capital,
     regulatory_forecasting,
     regulatory_ftp,
@@ -145,8 +146,29 @@ def run_official_modules(
     activation.
     """
     runs = _run_all_modules(db, ctx, bank_id, period_id)
-    runs.append(_implied_rating_outcome(db, ctx, bank_id, period_id))
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    if module_scope.runs_module(db, bank, "implied_rating"):
+        runs.append(_implied_rating_outcome(db, ctx, bank_id, period_id))
     return runs
+
+
+def official_module_scope(
+    db: Session, ctx: TenantContext, bank_id: str
+) -> tuple[list[str], list[str]]:
+    """``(in_scope, out_of_scope)`` official module names for this institution.
+
+    Read-only. Lets the caller record WHY a run carries fewer modules than the
+    full set instead of leaving the omission silent.
+    """
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    every = (*OFFICIAL_MODULES, "implied_rating")
+    in_scope = [m for m in every if module_scope.runs_module(db, bank, m)]
+    return in_scope, [m for m in every if m not in in_scope]
+
+
+#: Every module the official filing tier knows how to run, in run order. The
+#: subset an institution actually runs is decided by ``module_scope``.
+OFFICIAL_MODULES: tuple[str, ...] = ("liquidity", "capital", "irr", "fx", "ftp", "forecast")
 
 
 def _run_all_modules(
@@ -209,6 +231,21 @@ def _run_all_modules(
             ),
         ),
         ("forecast", lambda: _forecast_outcome(db, ctx, bank_id, period_id)),
+    )
+
+    # Regime scoping through the SAME authority the live tier uses
+    # (``module_scope``), so the two computation tiers cannot disagree about
+    # which modules an institution runs. Before this, the official tier ran all
+    # seven for every licence class: an SDI attempted the Basel LCR/NSFR engine,
+    # the bank-only FX and FTP modules, and the Basel-ratio projection, and all
+    # four came back ``failed`` on parameter/policy refusals. The run then had
+    # zero succeeded modules, so nothing could be published and no return could
+    # be generated — which read as a broken tenant rather than as modules that
+    # do not apply to it. Out-of-regime modules are OMITTED, exactly as the live
+    # tier omits them, and named on the audit event by ``pipeline.run_official``.
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    modules = tuple(
+        (module, run) for module, run in modules if module_scope.runs_module(db, bank, module)
     )
 
     outcomes: list[ActivationRunRead] = []

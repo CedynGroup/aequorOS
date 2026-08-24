@@ -28,6 +28,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -46,9 +47,10 @@ from app.models import (
     CanonicalYieldCurvePoint,
     IngestionBatch,
     LineageRecord,
+    ParamStressShock,
 )
 from app.schemas.regulatory_irr import IrrScenarioBatchCreate
-from app.services import regulatory_irr
+from app.services import market_data_sources, regulatory_irr
 from app.services.fact_derivation import derive_facts
 from app.services.market_data import get_discount_curve
 from app.services.regulatory_irr import discount_curve_midpoints_pct
@@ -506,3 +508,42 @@ def test_ftp_curve_prefers_the_desk_sovereign_zero(db_session: Session) -> None:
     derived_from = one_year.attributes["derived_from"]
     assert "AEQ.GHS.SOV.ZERO (AEQUOR_DESK)" in derived_from
     assert "desk-published sovereign zero preferred" in derived_from
+
+
+def test_base_curve_falls_back_to_the_published_projection_curve(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The base curve is market data, resolved through the Markets-tab preference.
+
+    Until 2026-08-23 an IRRBB run refused outright unless a curve snapshot had
+    been seeded into ``param_stress_shock`` — which no provisioned tenant ever
+    had, so an institution with a published desk curve still could not run
+    IRRBB. Governed param rows keep precedence (the hermetic book seeds them, so
+    every golden reproduces byte-identically); the market plane fills in only
+    where they are absent.
+    """
+    materialize_canonical_test_book(db_session)
+    bank = db_session.scalar(select(Bank).where(Bank.id == SAMPLE_BANK_ID))
+    assert bank is not None
+
+    seeded = regulatory_irr._load_irr_params_or_none(db_session, CTX, bank, REPORTING_DATE)
+    assert seeded is not None and seeded.curve, "the fixture seeds a governed base curve"
+
+    calls: list[str] = []
+
+    def _spy(*args: object, **kwargs: object) -> None:
+        calls.append("projection")
+
+    monkeypatch.setattr(market_data_sources, "preferred_projection_curve", _spy)
+    again = regulatory_irr._load_irr_params_or_none(db_session, CTX, bank, REPORTING_DATE)
+    assert again is not None and again.curve == seeded.curve
+    assert calls == [], "a governed base curve is never overridden by the market plane"
+
+    # With the governed rows gone, the market plane is consulted.
+    db_session.query(ParamStressShock).filter(
+        ParamStressShock.organization_id == DEMO_ORG_ID,
+        ParamStressShock.scenario_code == "base_curve",
+    ).delete(synchronize_session=False)
+    db_session.flush()
+    assert regulatory_irr._load_irr_params_or_none(db_session, CTX, bank, REPORTING_DATE) is None
+    assert calls == ["projection"], "the preference seam is the fallback, and it was asked"
