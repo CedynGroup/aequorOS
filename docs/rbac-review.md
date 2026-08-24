@@ -8,7 +8,8 @@ and its exact file/line citations are anchored to commit `c80a89e`. The accepted
 defaults below constrain future implementation. This status records the design
 review's disposition, not CI approval or runtime validation; this documentation
 does not implement RBAC, change runtime behavior, or by itself close any
-vulnerability.
+vulnerability. Merge remains contingent on independent formal review and green
+repository checks.
 
 ## 1. Stale as-built claims
 
