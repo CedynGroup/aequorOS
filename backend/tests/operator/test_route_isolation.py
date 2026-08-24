@@ -79,6 +79,9 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/desk/methodologies/ensure-default",
         "/operator/v1/desk/methodologies/{methodology_code}/versions",
         "/operator/v1/desk/methodologies/{methodology_code}/versions/{version}/approve",
+        # The approved version as a signed-off methodology document. Read-only,
+        # and operator-side on purpose: it renders the register's own parameter
+        # rows, which are cross-tenant and never exposed on the tenant app.
         "/operator/v1/desk/methodologies/{methodology_code}/versions/{version}/pdf",
         "/operator/v1/desk/observations",
         "/operator/v1/desk/observations",

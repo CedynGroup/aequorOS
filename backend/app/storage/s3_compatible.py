@@ -79,10 +79,16 @@ class S3CompatibleStorageClient(StorageClient):
         access_log: AccessLogHook | None = None,
         client_factory: Callable[..., Any] | None = None,
     ) -> None:
-        enforce_retirement(settings)
+        # Order matters. A deployment that does not exist cannot be past its
+        # retirement date, so "not configured" is the accurate answer and has to
+        # come first. Retiring first told a caller with NO storage at all that
+        # its nonexistent MinIO lacked a retirement date — which is how a test
+        # missing its in-memory fixture surfaced as a retirement-policy failure
+        # in CI instead of the plain misconfiguration it was.
         if not settings.configured:
             msg = "Storage endpoint and credentials are not configured."
             raise StorageValidationError(msg)
+        enforce_retirement(settings)
         self._settings = settings
         self._env: StorageEnv = settings.env
         self._log = access_log or null_access_log
