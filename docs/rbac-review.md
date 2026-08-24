@@ -1,12 +1,12 @@
 # RBAC proposal review
 
-**Reviewed:** 2026-08-23 | **Status:** accepted design corrections; implementation pending
+**Reviewed:** 2026-08-23 | **Code evidence:** `c80a89e` | **Status:** accepted design corrections; implementation pending
 
 This companion records the completed security and architecture review of
 [`rbac.md`](rbac.md). Code wins over proposal text where they differ. The review
-and accepted defaults below constrain future implementation; this documentation
-does not implement RBAC, change runtime behavior, or by itself close any
-vulnerability.
+and its exact file/line citations are anchored to commit `c80a89e`. The accepted
+defaults below constrain future implementation; this documentation does not
+implement RBAC, change runtime behavior, or by itself close any vulnerability.
 
 ## 1. Stale as-built claims
 
