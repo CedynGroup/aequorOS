@@ -31,8 +31,9 @@ building:
 - Need the **data model / API** → [§13](#13-data-model), [§14](#14-api-surface).
 - Sequencing the work → [§15 roadmap](#15-phased-roadmap).
 
-Terminology: **tenant = organization = one bank**. **Maker** = the person who
-creates/edits/runs. **Checker** = the independent person who reviews/approves.
+Terminology: **tenant = organization**; an **institution/bank** is a legal
+entity beneath that organization. **Maker** = the person who creates/edits/runs.
+**Checker** = the independent person who reviews/approves.
 Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX**,
 **FTP**, **FCST** (Forecasting), **BEH** (Behavioral), **DATA** (Data Engine),
 **REG** (Regulatory Reporting).
