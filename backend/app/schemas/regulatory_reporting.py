@@ -48,6 +48,11 @@ type ApprovalDecision = Literal["approved", "rejected"]
 type ValidationSeverity = Literal["INFO", "WARNING", "ERROR"]
 type FidelityGrade = Literal["CONFIRMED", "PARTIAL", "REPRESENTATIVE"]
 type ObligationRag = Literal["overdue", "due_soon", "on_track"]
+#: Whether the bank has a computed position AS OF a reporting date. The
+#: reporting date itself is the REGULATOR's (see ``regulatory_reporting.anchors``)
+#: and exists whether or not data has been ingested for it, so this is reported
+#: alongside every anchor rather than the anchor being hidden.
+type AnchorDataStatus = Literal["computed", "awaiting_data"]
 
 
 class ClosedModel(BaseModel):
@@ -227,6 +232,10 @@ class ReportingObligationRead(ClosedModel):
     package_id: UUID | None
     package_status: PackageStatus | None
     package_version: int | None
+    # Whether figures exist as of ``reporting_date``. ``awaiting_data`` is a
+    # normal state for a future anchor and an actionable one for a past anchor;
+    # either way the obligation is real and the deadline still runs.
+    data_status: AnchorDataStatus = "awaiting_data"
     rag: ObligationRag
 
 
@@ -241,6 +250,41 @@ class ReportingObligationListRead(ClosedModel):
     # with no explanation — the exact silence the eligibility authority was built
     # to end. Always ``None`` when the institution has obligations.
     coverage_note: str | None = None
+
+
+class ReturnAnchorRead(ClosedModel):
+    """One reporting date a return reports on, with what exists for it.
+
+    ``reporting_date`` comes from the return definition — BoG's cadence — not
+    from the bank's ingestion history, so this list is identical for two banks
+    filing the same return and is never empty for an eligible return.
+    """
+
+    reporting_date: date
+    due_date: date
+    due_time: str | None = None
+    data_status: AnchorDataStatus
+    # The most recent computed position BEFORE this anchor, when this anchor has
+    # none. Reported so a screen can say what the bank does have; it is never
+    # used as a substitute for the missing snapshot.
+    nearest_computed_before: date | None = None
+    package_id: UUID | None = None
+    package_status: PackageStatus | None = None
+    package_version: int | None = None
+    rag: ObligationRag
+
+
+class ReturnAnchorListRead(ClosedModel):
+    bank_id: str
+    return_code: str
+    frequency: ReturnFrequency
+    as_of: date
+    horizon_months: int
+    anchors: list[ReturnAnchorRead]
+    # Set when the institution may not file this return at all (class,
+    # jurisdiction, regulator, or a not-yet-commenced instrument), in the words
+    # the eligibility authority uses everywhere else. ``anchors`` is empty then.
+    ineligible_reason: str | None = None
 
 
 class ReturnTemplateRead(ClosedModel):

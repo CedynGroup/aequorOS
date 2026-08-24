@@ -14,9 +14,9 @@ satisfy its obligation for RAG purposes.
 
 from __future__ import annotations
 
-from calendar import monthrange
-from datetime import date, timedelta
+from datetime import date
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,78 +25,25 @@ from app.models import RegulatoryPackage, RegulatoryReportingSettings
 from app.schemas.regulatory_reporting import (
     ReportingObligationListRead,
     ReportingObligationRead,
+    ReturnAnchorListRead,
+    ReturnAnchorRead,
+)
+from app.services.regulatory_reporting.anchors import (
+    anchor_dates,
+    horizon_end_for,
+    snapshot_coverage,
 )
 from app.services.regulatory_reporting.common import get_bank_or_404
 from app.services.regulatory_reporting.eligibility import resolve_eligibility
-from app.services.regulatory_reporting.registry import ReturnDefinition, monthly_day
+from app.services.regulatory_reporting.registry import (
+    ReturnDefinition,
+    get_definition,
+    monthly_day,
+)
 from app.services.regulatory_reporting.workflow import has_pending_orass_reupload
 
 DUE_SOON_DAYS = 7
 _COMPLETED_STATUSES = ("submitted", "acknowledged")
-_FREQUENCY_MONTHS = {"monthly": 1, "quarterly": 3, "semiannual": 6, "annual": 12}
-# Daily obligations enumerate only the most recent business days (a full year of
-# daily rows would swamp the calendar); the window ends at ``as_of``.
-_DAILY_WINDOW_BUSINESS_DAYS = 5
-
-
-def _month_end(year: int, month: int) -> date:
-    return date(year, month, monthrange(year, month)[1])
-
-
-def _daily_reporting_dates(as_of: date) -> list[date]:
-    """The most recent ``_DAILY_WINDOW_BUSINESS_DAYS`` business days ending on
-    or before ``as_of`` (weekends skipped), oldest first.
-
-    Daily returns do not expand across the horizon like periodic returns — a
-    small trailing window keeps the calendar bounded while still surfacing any
-    recently-missed daily filings.
-    """
-    dates: list[date] = []
-    cursor = as_of
-    while len(dates) < _DAILY_WINDOW_BUSINESS_DAYS:
-        if cursor.weekday() < 5:  # noqa: PLR2004 — Mon..Fri
-            dates.append(cursor)
-        cursor -= timedelta(days=1)
-    return sorted(dates)
-
-
-_WEEKLY_TRAILING_WEEKS = 8
-
-
-def _weekly_reporting_dates(as_of: date, horizon_end: date) -> list[date]:
-    """The last ``_WEEKLY_TRAILING_WEEKS`` weekly anchor dates before ``as_of``
-    plus every anchor up to ``horizon_end`` (Friday close by default)."""
-    from app.services.regulatory_reporting.bog_forms.catalog import (  # noqa: PLC0415
-        WEEKLY_ANCHOR_WEEKDAY,
-    )
-
-    delta = (as_of.weekday() - WEEKLY_ANCHOR_WEEKDAY) % 7
-    last_anchor = as_of - timedelta(days=delta)
-    dates = [last_anchor - timedelta(weeks=w) for w in range(_WEEKLY_TRAILING_WEEKS, 0, -1)]
-    cursor = last_anchor
-    while cursor <= horizon_end:
-        dates.append(cursor)
-        cursor += timedelta(weeks=1)
-    return dates
-
-
-def _period_end_months(frequency: str) -> tuple[int, ...]:
-    step = _FREQUENCY_MONTHS[frequency]
-    return tuple(month for month in range(1, 13) if month % step == 0)
-
-
-def _reporting_dates(definition: ReturnDefinition, as_of: date, horizon_end: date) -> list[date]:
-    """The most recent elapsed period end plus every period end in the horizon."""
-    months = _period_end_months(definition.frequency)
-    candidates = [
-        _month_end(year, month)
-        for year in range(as_of.year - 2, horizon_end.year + 1)
-        for month in months
-    ]
-    elapsed = [candidate for candidate in candidates if candidate < as_of]
-    upcoming = [candidate for candidate in candidates if as_of <= candidate <= horizon_end]
-    selected = ([elapsed[-1]] if elapsed else []) + upcoming
-    return selected
 
 
 def _rag(
@@ -158,8 +105,7 @@ def list_obligations(
 ) -> ReportingObligationListRead:
     bank = get_bank_or_404(db, ctx, bank_id)
     today = as_of or date.today()
-    total_months = today.year * 12 + (today.month - 1) + horizon_months
-    horizon_end = _month_end(total_months // 12, total_months % 12 + 1)
+    horizon_end = horizon_end_for(today, horizon_months)
     overrides = _deadline_overrides(db, ctx, bank.id)
     # Return eligibility resolves through the SINGLE authority (audit ARCH-8,
     # ``eligibility.py``) — the same object ``generation.generate_package``
@@ -172,24 +118,24 @@ def list_obligations(
     eligibility = resolve_eligibility(db, ctx, bank, as_of=today)
 
     obligations: list[ReportingObligationRead] = []
+    # Anchors come from the registry through the SINGLE authority the Returns
+    # workspace also consumes (``anchors.anchor_dates``), so the calendar and
+    # the generate screen cannot offer different reporting dates — the same
+    # one-authority rule eligibility follows. Event-driven returns yield no
+    # anchors there; their packages still appear in the package list/history.
+    schedule = {
+        definition.code: anchor_dates(definition, today, horizon_end)
+        for definition in eligibility.eligible_definitions()
+    }
+    # Whether the bank has a computed position AS OF each anchor, resolved in ONE
+    # pass across every return rather than per definition (33 returns for a
+    # universal bank). An anchor with no snapshot is still a real obligation —
+    # it is BoG's date, not ours — so it is listed and marked, never hidden.
+    coverage = snapshot_coverage(
+        db, ctx, bank, sorted({date_ for dates in schedule.values() for date_ in dates})
+    )
     for definition in eligibility.eligible_definitions():
-        # Event-driven returns (plan W5: the LRT corporate packs) have no
-        # periodic reporting cycle — expanding their nominal frequency would
-        # fabricate obligations that do not exist. Their packages still
-        # appear in the package list/history like any other package.
-        if definition.event_driven:
-            continue
-        if definition.frequency == "daily":
-            reporting_dates = _daily_reporting_dates(today)
-        elif definition.frequency == "weekly":
-            # Weekly BoG returns (BSD1/1A/1B/14/15A/15B): Friday-close reporting
-            # dates — a bounded trailing window plus the horizon's Fridays. The
-            # Guide fixes the cadence and the 9-day limit, not the weekday
-            # (documented convention in bog_forms.catalog).
-            reporting_dates = _weekly_reporting_dates(today, horizon_end)
-        else:
-            reporting_dates = _reporting_dates(definition, today, horizon_end)
-        for reporting_date in reporting_dates:
+        for reporting_date in schedule[definition.code]:
             due_date = _due_date(definition, reporting_date, overrides)
             package = db.scalar(
                 select(RegulatoryPackage).where(
@@ -218,6 +164,9 @@ def list_obligations(
                         package.status if package is not None else None  # type: ignore[arg-type]
                     ),
                     package_version=package.version if package is not None else None,
+                    data_status=(
+                        "computed" if coverage[reporting_date].covered else "awaiting_data"
+                    ),
                     rag=_rag(  # type: ignore[arg-type]
                         due_date,
                         today,
@@ -237,4 +186,98 @@ def list_obligations(
         # institution has an eligible return set, so this adds a sentence exactly
         # where a reader would otherwise see an unexplained empty calendar.
         coverage_note=eligibility.coverage_note(),
+    )
+
+
+def list_return_anchors(  # noqa: PLR0913 - tenant + return + horizon + injectable clock
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    return_code: str,
+    horizon_months: int = 3,
+    *,
+    as_of: date | None = None,
+) -> ReturnAnchorListRead:
+    """The reporting dates ONE return reports on, with data + package state.
+
+    This is what the Returns workspace selects a reporting date from. It used to
+    select from ``bank_reporting_periods`` — the snapshots ingestion happens to
+    have produced — which made a BoG deadline invisible whenever the bank had
+    not yet ingested a book for it, and made the weekly returns effectively
+    unfileable (``anchors`` module docstring has the measurement).
+
+    An anchor with ``data_status='awaiting_data'`` is still listed. That is the
+    point: the obligation is BoG's and its deadline runs regardless, so the
+    honest surface shows the date and says nothing has been computed for it —
+    it does not omit the date and it does not silently offer an earlier book.
+    """
+    bank = get_bank_or_404(db, ctx, bank_id)
+    today = as_of or date.today()
+    definition = get_definition(return_code)
+    if definition is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Return {return_code!r} is not registered.",
+        )
+
+    eligibility = resolve_eligibility(db, ctx, bank, as_of=today)
+    decision = eligibility.decide(definition, reporting_date=today)
+    if not decision.eligible:
+        return ReturnAnchorListRead(
+            bank_id=bank.id,
+            return_code=definition.code,
+            frequency=definition.frequency,
+            as_of=today,
+            horizon_months=horizon_months,
+            anchors=[],
+            ineligible_reason=" ".join(decision.blocking_reasons),
+        )
+
+    horizon_end = horizon_end_for(today, horizon_months)
+    reporting_dates = anchor_dates(definition, today, horizon_end)
+    coverage = snapshot_coverage(db, ctx, bank, reporting_dates)
+    overrides = _deadline_overrides(db, ctx, bank.id)
+
+    anchors: list[ReturnAnchorRead] = []
+    for reporting_date in reporting_dates:
+        due_date = _due_date(definition, reporting_date, overrides)
+        package = db.scalar(
+            select(RegulatoryPackage).where(
+                RegulatoryPackage.organization_id == ctx.organization_id,
+                RegulatoryPackage.bank_id == bank.id,
+                RegulatoryPackage.return_code == definition.code,
+                RegulatoryPackage.reporting_date == reporting_date,
+                RegulatoryPackage.status != "superseded",
+            )
+        )
+        pending_reupload = package is not None and has_pending_orass_reupload(db, package)
+        covered = coverage[reporting_date]
+        anchors.append(
+            ReturnAnchorRead(
+                reporting_date=reporting_date,
+                due_date=due_date,
+                due_time=definition.due_time,
+                data_status="computed" if covered.covered else "awaiting_data",
+                nearest_computed_before=None if covered.covered else covered.nearest_before,
+                package_id=package.id if package is not None else None,
+                package_status=(
+                    package.status if package is not None else None  # type: ignore[arg-type]
+                ),
+                package_version=package.version if package is not None else None,
+                rag=_rag(  # type: ignore[arg-type]
+                    due_date,
+                    today,
+                    package.status if package is not None else None,
+                    pending_orass_reupload=pending_reupload,
+                ),
+            )
+        )
+    anchors.sort(key=lambda item: item.reporting_date, reverse=True)
+    return ReturnAnchorListRead(
+        bank_id=bank.id,
+        return_code=definition.code,
+        frequency=definition.frequency,
+        as_of=today,
+        horizon_months=horizon_months,
+        anchors=anchors,
     )

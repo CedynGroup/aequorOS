@@ -84,6 +84,13 @@ superseded by this delta where they differ.
    interface.
 6. **Maker–checker.** No package reaches a submission channel without approval by a different
    user than its generator. All transitions audit-logged.
+7. **The reporting date is the regulator's** (added 2026-08-23). A return's reporting dates come
+   from its registry entry — cadence plus the BoG anchor conventions — through the one authority
+   `anchors.py`, and exist whether or not the bank has ingested anything. They are NOT the
+   `bank_reporting_periods.period_end` values, which are snapshots created by the data path.
+   The figures are then resolved **exactly** as of the selected date for every cadence; a missing
+   snapshot is refused (`no_computed_position`, 409), never filled from the nearest earlier book.
+   See §5a.
 
 ## 2. Package lifecycle
 
@@ -151,11 +158,49 @@ distinct artifact kind that is never filed and never signed), `csv`. Rendering:
   `channels/email_fallback.py` (builds the send-ready package: artifact bundle + guided
   instructions with the research-confirmed addresses; records the event; no actual SMTP in MVP).
 - `workflow.py` — state machine + maker-checker + audit events (`record_event`).
-- `calendar.py` — obligations for the next N months per registry + bank config; RAG staleness.
+- `anchors.py` — the reporting dates a return reports on, from the registry alone (no DB, no
+  tenant), plus `snapshot_coverage` (which of those dates the bank has computed figures for).
+- `calendar.py` — obligations for the next N months per registry + bank config; RAG staleness;
+  `list_return_anchors` (the per-return picker the Returns workspace binds to).
+
+### 5a. Reporting date vs data arrival (corrected 2026-08-23)
+
+Supervisory reporting separates the **reporting reference date** (the as-of date the figures
+describe, fixed by the regulator) from the **remittance date** (the deadline to submit). BoG works
+this way — returns are daily, weekly, monthly, quarterly, semi-annual and annual, each anchored on
+a period end with a time limit counted from it — and so does every reference architecture in the
+category: an as-of date is a property of the DATA a bank supplies, never something a load event
+invents.
+
+The platform modelled the regulator's half correctly from the start (`frequency`, `deadline_rule`,
+`WEEKLY_ANCHOR_WEEKDAY`). What was wrong was the Returns workspace, which selected its reporting
+date from `bank_reporting_periods` — rows the ingestion path creates as a side effect of a book
+arriving. That made the filing calendar a function of data arrival, with two measured consequences
+on the primary:
+
+- 6 of the 22 BSD forms are weekly (Friday close). Generation matched `period_end` exactly, and the
+  reference tenant had **19 Friday period-ends against 517 Fridays** in its 10-year span — 17 of
+  those 19 only because the month happened to end on a Friday. 96% of weekly filing dates could not
+  be selected.
+- A tenant that had ingested nothing had an **empty** reporting calendar rather than a full one with
+  nothing computed yet.
+
+Corrected direction, now pinned by `tests/services/test_reporting_anchors.py`:
+
+```
+ReturnDefinition ──▶ reporting date ──▶ snapshot lookup (exact, may miss)
+```
+
+An anchor with no snapshot is listed and marked `awaiting_data`, because the obligation is BoG's and
+its deadline runs regardless. Generation resolves the snapshot **exactly** for every cadence — the
+daily "latest period ending on or before" fallback was removed with it, since it would have filed a
+month-old book as a business day's position — and refuses with `no_computed_position` naming the
+date required, the nearest earlier computed date, and the remedy.
 
 ## 6. API (`app/features/manage_regulatory_reporting.py`)
 
-listReportingObligations (calendar), listRegulatoryPackages, createRegulatoryPackage (generate),
+listReportingObligations (calendar), listReturnAnchors (per-return reporting dates + data
+coverage), listRegulatoryPackages, createRegulatoryPackage (generate),
 getRegulatoryPackage, validateRegulatoryPackage, requestPackageApproval, decidePackageApproval,
 exportRegulatoryPackage (kind → artifact download), submitRegulatoryPackage (channel),
 listSubmissionEvents, listReturnTemplates (registry + fidelity), get/putChannelConfig

@@ -27,6 +27,7 @@
  */
 
 import { Fragment, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
@@ -55,6 +56,7 @@ import type {
   RegulatoryPackageRead,
   RegulatoryPackageSummaryRead,
   ResubmissionRequestRead,
+  ReturnAnchorRead,
   ReturnTemplateRead,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
@@ -79,6 +81,7 @@ import {
   useRequestPackageApproval,
   useRequestResubmission,
   useResubmissionRequests,
+  useReturnAnchors,
   useReturnTemplates,
   useSubmissionEvents,
   useSubmitRegulatoryPackage,
@@ -197,7 +200,7 @@ function ReturnsWorkspace() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { bank, periods, moduleScope } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const isSdi = moduleScope.institutionClass === 'sdi';
 
@@ -210,21 +213,45 @@ function ReturnsWorkspace() {
     [isSdi, templatesQuery.data]
   );
 
-  const periodDates = useMemo(
-    () => periods.map((p) => isoDate(p.periodEnd)),
-    [periods]
-  );
-
   const codeParam = searchParams.get('code');
   const dateParam = searchParams.get('date');
   const code =
     codeParam && templates.some((tpl) => tpl.code === codeParam)
       ? codeParam
       : templates[0]?.code;
+
+  // The reporting dates come from the RETURN — BoG's cadence — not from the
+  // bank's ingested reporting periods. Selecting from the latter made the
+  // filing calendar a function of data arrival: a weekly return could only be
+  // filed on a Friday that happened to also be a month end.
+  const anchorsQuery = useReturnAnchors(bankId, code);
+  const anchors = useMemo<ReturnAnchorRead[]>(
+    () => anchorsQuery.data?.anchors ?? [],
+    [anchorsQuery.data]
+  );
+  const anchorDates = useMemo(
+    () => anchors.map((anchor) => isoDate(anchor.reportingDate)),
+    [anchors]
+  );
+  // Default to the most recent ELAPSED anchor — the return actually due now —
+  // rather than the newest anchor (which is a future period end nobody files
+  // yet) or the newest anchor WITH data (which would quietly skip past an
+  // overdue reporting date the bank has not ingested a book for).
+  const defaultDate = useMemo(() => {
+    const today = anchorsQuery.data?.asOf
+      ? isoDate(anchorsQuery.data.asOf)
+      : undefined;
+    if (!today) return anchorDates[0];
+    return anchorDates.find((d) => d <= today) ?? anchorDates[0];
+  }, [anchorDates, anchorsQuery.data]);
   const date =
     dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
       ? dateParam
-      : periodDates[0];
+      : defaultDate;
+  const selectedAnchor = anchors.find(
+    (anchor) => isoDate(anchor.reportingDate) === date
+  );
+  const awaitingData = selectedAnchor?.dataStatus === 'awaiting_data';
 
   const setParams = (nextCode: string, nextDate: string | undefined) => {
     const params = new URLSearchParams();
@@ -286,14 +313,21 @@ function ReturnsWorkspace() {
               <select
                 value={date ?? ''}
                 onChange={(e) => code && setParams(code, e.target.value)}
-                className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
+                disabled={anchorsQuery.isLoading || anchorDates.length === 0}
+                className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy disabled:opacity-60"
               >
-                {periodDates.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-                {date && !periodDates.includes(date) && (
+                {anchors.map((anchor) => {
+                  const value = isoDate(anchor.reportingDate);
+                  return (
+                    <option key={value} value={value}>
+                      {value}
+                      {anchor.dataStatus === 'awaiting_data'
+                        ? ' — no data yet'
+                        : ''}
+                    </option>
+                  );
+                })}
+                {date && !anchorDates.includes(date) && (
                   <option value={date}>{date}</option>
                 )}
               </select>
@@ -318,10 +352,17 @@ function ReturnsWorkspace() {
         )}
 
         <QueryBoundary
-          isLoading={templatesQuery.isLoading || packagesQuery.isLoading}
-          error={templatesQuery.error ?? packagesQuery.error}
+          isLoading={
+            templatesQuery.isLoading ||
+            anchorsQuery.isLoading ||
+            packagesQuery.isLoading
+          }
+          error={
+            templatesQuery.error ?? anchorsQuery.error ?? packagesQuery.error
+          }
           onRetry={() => {
             void templatesQuery.refetch();
+            void anchorsQuery.refetch();
             void packagesQuery.refetch();
           }}
           skeleton={
@@ -331,12 +372,45 @@ function ReturnsWorkspace() {
             </div>
           }
         >
-          {!ready ? (
+          {anchorsQuery.data?.ineligibleReason ? (
+            <EmptyState
+              Icon={FileCheck2}
+              title="This return does not apply to your institution"
+              description={anchorsQuery.data.ineligibleReason}
+            />
+          ) : !ready ? (
             <EmptyState
               Icon={FileCheck2}
               title="Select a return and reporting date"
-              description="Choose a registered return family and one of the bank's reporting periods to open its package workspace."
+              description="Choose a registered return, then the reporting date it covers, to open its package workspace."
             />
+          ) : awaitingData && !current ? (
+            <SectionCard
+              title={`${code} · ${date}`}
+              subtitle="No position has been computed as of this reporting date"
+            >
+              <p className="text-body text-slate leading-relaxed max-w-2xl">
+                {code} reports your position on {date}, so it is built from your
+                book as of that date. Nothing has been computed for it yet.
+                {selectedAnchor?.nearestComputedBefore
+                  ? ` Your most recent computed position is ${selectedAnchor.nearestComputedBefore} — an earlier book is not this date's position, so it is not used in its place.`
+                  : ''}
+              </p>
+              <p className="mt-3 text-body text-slate leading-relaxed max-w-2xl">
+                Upload or push the book as of {date} through the Data Engine,
+                then generate the return.
+              </p>
+              <div className="mt-4">
+                <Link
+                  href="/data-engine"
+                  data-testid="awaiting-data-ingest"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                >
+                  <UploadCloud size={13} aria-hidden />
+                  Go to Data Engine
+                </Link>
+              </div>
+            </SectionCard>
           ) : !current ? (
             <SectionCard
               title={`${code} · ${date}`}

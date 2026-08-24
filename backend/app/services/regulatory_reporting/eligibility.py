@@ -98,9 +98,16 @@ BLOCKING_CRITERIA: frozenset[str] = frozenset(
 #: obligation arises — which is why the calendar enumerates anchors and mints
 #: obligations only on them — not WHETHER the institution is subject to the
 #: return. Banks legitimately generate off-anchor: a dry run before the first
-#: live filing, a re-generation against a corrected period, and daily returns
-#: which by design draw on the latest effective period rather than a period end.
-#: Refusing those would be a new restriction dressed up as a correctness fix.
+#: live filing, or a re-generation against a corrected period. Refusing those
+#: would be a new restriction dressed up as a correctness fix.
+#:
+#: A third case used to be listed here — "daily returns which by design draw on
+#: the latest effective period rather than a period end" — and it is gone
+#: (2026-08-23). That fallback was removed: every cadence now resolves its
+#: figures EXACTLY as of the reporting date
+#: (``common.get_snapshot_for_reporting_date``), because a daily return built
+#: from last month's book is not that day's position. Off-anchor generation
+#: stays permitted; borrowing another date's figures does not.
 ADVISORY_CRITERIA: frozenset[str] = frozenset(CRITERIA) - BLOCKING_CRITERIA
 
 _FREQUENCY_MONTHS: dict[str, int] = {"monthly": 1, "quarterly": 3, "semiannual": 6, "annual": 12}
