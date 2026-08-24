@@ -2,6 +2,10 @@
 
 **Status:** implementation spec · **Audience:** dashboard + platform engineers · **Owner:** Eric
 
+> **Required companion:** read the dated [RBAC proposal review](rbac-review.md)
+> before implementing this proposal. It records stale as-built claims, accepted
+> defaults, security corrections, and the safe implementation order.
+
 This document specifies how AequorOS grants access to bank users, what each user
 type can see and do, how the three settings surfaces (personal / org-admin /
 vendor-platform) are structured, and how banks invite and onboard their people.
