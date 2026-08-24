@@ -27,6 +27,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from app.services.regulatory_reporting.templates import (
+    ColumnSpec,
     RenderedCell,
     RenderedReturn,
     RenderedRow,
@@ -84,10 +85,26 @@ def _write_cell(sheet: Worksheet, row_idx: int, col_idx: int, cell: RenderedCell
 
 
 def _write_table_row(
-    sheet: Worksheet, row_idx: int, rendered_row: RenderedRow, *, bold: bool = False
+    sheet: Worksheet,
+    row_idx: int,
+    rendered_row: RenderedRow,
+    columns: tuple[ColumnSpec, ...],
+    *,
+    bold: bool = False,
 ) -> None:
-    for col_idx, cell in enumerate(rendered_row.cells, start=1):
-        _write_cell(sheet, row_idx, col_idx, cell)
+    """One grid row on the human-facing sheet.
+
+    A section total carries a snapshot key as its ``code``
+    (``on_balance_mismatch_total_ghs``) because the ``equals_sum_of_rows``
+    validation and ``_snapshot_total`` bind to it. Written into LMTD Table 2's
+    "#" column, beneath BoG's own row numbers 1 to 17, it reads as an internal
+    variable on a return — so it is left out here exactly as it is on the PDF,
+    which this workbook is the audit twin of. The key itself is untouched in the
+    snapshot and in the CSV, the machine interchange format.
+    """
+    for col_idx, (spec, cell) in enumerate(zip(columns, rendered_row.cells, strict=True), start=1):
+        if not (rendered_row.is_total and spec.key == "code"):
+            _write_cell(sheet, row_idx, col_idx, cell)
         styled = sheet.cell(row=row_idx, column=col_idx)
         if bold:
             styled.font = Font(bold=True)
@@ -153,7 +170,7 @@ def _section_sheets(
             header.border = _THIN_BORDER
         row_idx = header_row + 1
         for rendered_row in section.rows:
-            _write_table_row(sheet, row_idx, rendered_row)
+            _write_table_row(sheet, row_idx, rendered_row, section.layout.columns)
             row_idx += 1
         locations[section.layout.section_code] = _SectionLocation(
             sheet_title=sheet_title,
@@ -165,7 +182,7 @@ def _section_sheets(
             },
         )
         if section.total_row is not None:
-            _write_table_row(sheet, row_idx, section.total_row, bold=True)
+            _write_table_row(sheet, row_idx, section.total_row, section.layout.columns, bold=True)
             row_idx += 1
         if section.layout.notes:
             row_idx += 1
