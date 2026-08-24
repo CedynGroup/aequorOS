@@ -181,3 +181,64 @@ def test_approve_unknown_parameter_is_404(operator_client: TestClient) -> None:
         f"{BASE}/{uuid.uuid4()}/approve", headers=operator_headers(), json={}
     )
     assert resp.status_code == 404
+
+
+def test_propose_accepts_a_structural_value_json_parameter(
+    operator_client: TestClient,
+) -> None:
+    """A governed parameter may carry a MAPPING, not only a scalar.
+
+    ``sdi_rwa_composition`` (risk class -> measurement) is the live example: the
+    s.29 capital ratio refuses until it is declared, and until 2026-08-23 the
+    console could read such a row but never write one — ``propose`` hardcoded
+    ``value_json=None``, so the only declaration SDI capital waits on was
+    unreachable from the control plane its own refusal names.
+    """
+    composition = {
+        "credit": "bucket_weighted_exposure",
+        "market": "pct_of_credit_rwa",
+        "operational": "pct_of_credit_rwa",
+    }
+    resp = operator_client.post(
+        BASE,
+        headers=operator_headers(),
+        json=_propose_body(
+            param_code="sdi_rwa_composition",
+            scope_key="sdi",
+            value_numeric=None,
+            value_json=composition,
+            unit="mapping",
+            confirmation_status="pending",
+            effective_from="2027-06-01",
+            change_rationale="declare the s.29 risk-class scope",
+        ),
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["value_json"] == composition
+    assert body["value_numeric"] is None
+    assert body["confirmation_status"] == "pending"
+    assert body["status"] == "draft"
+
+
+def test_propose_requires_exactly_one_of_scalar_or_structural(
+    operator_client: TestClient,
+) -> None:
+    """Both would leave the resolver a choice it has no rule for; neither would
+    create a governed row that resolves to nothing."""
+    both = operator_client.post(
+        BASE,
+        headers=operator_headers(),
+        json=_propose_body(
+            value_numeric="12", value_json={"credit": "bucket_weighted_exposure"},
+            effective_from="2027-07-01",
+        ),
+    )
+    assert both.status_code == 422, both.text
+
+    neither = operator_client.post(
+        BASE,
+        headers=operator_headers(),
+        json=_propose_body(value_numeric=None, effective_from="2027-08-01"),
+    )
+    assert neither.status_code == 422, neither.text

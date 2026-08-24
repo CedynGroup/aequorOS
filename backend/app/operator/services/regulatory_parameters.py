@@ -112,7 +112,7 @@ def propose(
         param_code=payload.param_code,
         jurisdiction_code=payload.jurisdiction_code,
         value_numeric=payload.value_numeric,
-        value_json=None,
+        value_json=payload.value_json,
         unit=payload.unit,
         source_citation=payload.source_citation,
         confirmation_status=payload.confirmation_status,

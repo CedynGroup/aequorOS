@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertTriangle, GitCompare, Plus, ScrollText, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Download, Eye, GitCompare, Plus, ScrollText, ShieldCheck } from 'lucide-react';
 import {
   approveDeskMethodologyVersion,
   ensureDefaultDeskMethodology,
@@ -17,7 +17,6 @@ import {
   EmptyState,
   ErrorPanel,
   Field,
-  FieldRow,
   Input,
   Modal,
   PageHeader,
@@ -45,231 +44,6 @@ import { NewMethodologyDialog } from '@/components/deskdata/NewMethodologyDialog
  */
 
 // ---------------------------------------------------------------------------
-// Parameter rendering: a readable grouped tree, never a raw JSON dump.
-// Groups mirror the §5 step structure; unknown keys land in "Other
-// parameters" so nothing the register holds is ever hidden.
-// ---------------------------------------------------------------------------
-
-const PARAM_GROUPS: { title: string; keys: string[] }[] = [
-  {
-    title: 'Data quality (steps 1–2)',
-    keys: [
-      'parameter_status',
-      'min_trade_count',
-      'max_staleness_days',
-      'outlier_zscore_bound',
-      'weighting_scheme',
-      'aggregation_window_days',
-    ],
-  },
-  {
-    title: 'Curve construction (steps 3–6)',
-    keys: [
-      'target_day_count',
-      'target_compounding',
-      'interpolation_method',
-      'nss_fallback_min_liquid_points',
-      'nss_bounds',
-      'extrapolation_rule',
-      'extrapolation_anchor_tenor_y',
-      'oscillation_tolerance',
-      'enforce_positive_forwards',
-      'forward_qa_grid',
-    ],
-  },
-  {
-    title: 'Discounting — AGD (step 7)',
-    keys: [
-      'mpc_meeting_dates',
-      'overnight_spread_window_bdays',
-      'overnight_spread_bps',
-      'expected_policy_moves_bps',
-      'discount_basis',
-      'agd_node_grid_months',
-      'fwd_node_grid_months',
-    ],
-  },
-  { title: 'Cointegration diagnostic', keys: ['cointegration'] },
-  {
-    title: 'GRR & derived values (step 8)',
-    keys: ['grr_formula', 'grr_check_tolerance_pp', 'liquidity_premium_bps_by_tenor'],
-  },
-];
-
-const GROUPED_KEYS = new Set([...PARAM_GROUPS.flatMap((g) => g.keys), 'series_methodologies']);
-
-function isPrimitive(v: unknown): v is string | number | boolean | null {
-  return v === null || ['string', 'number', 'boolean'].includes(typeof v);
-}
-
-/** Recursive readable value: primitives inline, arrays listed, objects nested. */
-function ParamValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
-  if (value === null || value === undefined) {
-    return <span className="text-slate-light">not set</span>;
-  }
-  if (isPrimitive(value)) {
-    return <span className="break-words font-mono text-caption text-ink">{String(value)}</span>;
-  }
-  if (Array.isArray(value)) {
-    if (value.every(isPrimitive)) {
-      return (
-        <span className="break-words font-mono text-caption text-ink">
-          {value.map(String).join(', ')}
-        </span>
-      );
-    }
-    // Array of objects (e.g. mpc_meeting_dates) — compact rows.
-    return (
-      <div className="space-y-0.5">
-        {value.map((item, i) => (
-          <div key={i} className="font-mono text-caption text-ink">
-            {isPrimitive(item) ? (
-              String(item)
-            ) : (
-              Object.entries(item as Record<string, unknown>)
-                .map(([k, v]) => `${k}=${isPrimitive(v) ? String(v) : JSON.stringify(v)}`)
-                .join(' · ')
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  }
-  // Object — nested key/value rows; 'verdict' keys get a chip for visibility
-  // (the cointegration local_evidence verdict is a governance datum).
-  const entries = Object.entries(value as Record<string, unknown>);
-  return (
-    <div className={depth > 0 ? 'border-l border-border-light pl-3' : ''}>
-      {entries.map(([k, v]) => (
-        <div key={k} className="flex items-baseline justify-between gap-3 py-0.5">
-          <span className="shrink-0 text-caption text-slate">{k.replace(/_/g, ' ')}</span>
-          <span className="min-w-0 text-right">
-            {k === 'verdict' && typeof v === 'string' ? (
-              <Chip tone={/reject|not_/.test(v) ? 'warn' : 'ok'}>{v.replace(/_/g, ' ')}</Chip>
-            ) : (
-              <ParamValue value={v} depth={depth + 1} />
-            )}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SeriesTreatmentsTable({ table }: { table: Record<string, unknown> }) {
-  const rows = Object.entries(table);
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-body">
-        <thead>
-          <tr className="border-b border-border-light text-left text-micro uppercase tracking-wide text-slate">
-            <th className="py-1.5 pr-3 font-medium">Series / pattern</th>
-            <th className="py-1.5 pr-3 font-medium">Treatment</th>
-            <th className="py-1.5 pr-3 font-medium">Unit</th>
-            <th className="py-1.5 pr-3 font-medium">Max staleness</th>
-            <th className="py-1.5 font-medium">Detail</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([code, spec]) => {
-            const s = (spec ?? {}) as Record<string, unknown>;
-            const rest = Object.entries(s).filter(
-              ([k]) => !['treatment', 'unit', 'max_staleness_days'].includes(k),
-            );
-            return (
-              <tr key={code} className="border-b border-border-light last:border-b-0">
-                <td className="py-1.5 pr-3 font-mono text-caption text-ink">{code}</td>
-                <td className="py-1.5 pr-3">
-                  {typeof s.treatment === 'string' ? (
-                    <Chip mono>{s.treatment}</Chip>
-                  ) : (
-                    <span className="text-slate-light">{DASH}</span>
-                  )}
-                </td>
-                <td className="py-1.5 pr-3 text-caption text-slate">
-                  {typeof s.unit === 'string' ? s.unit : DASH}
-                </td>
-                <td className="num py-1.5 pr-3 text-left text-caption text-slate">
-                  {s.max_staleness_days !== undefined ? `${String(s.max_staleness_days)}d` : DASH}
-                </td>
-                <td className="py-1.5 text-micro text-slate">
-                  {rest.length === 0
-                    ? DASH
-                    : rest
-                        .map(([k, v]) => `${k}=${isPrimitive(v) ? String(v) : JSON.stringify(v)}`)
-                        .join(' · ')}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ParameterTree({ parameters }: { parameters: Record<string, unknown> }) {
-  const otherKeys = Object.keys(parameters).filter((k) => !GROUPED_KEYS.has(k));
-  const rawTreatments = parameters.series_methodologies;
-  const treatments =
-    rawTreatments && typeof rawTreatments === 'object' && !Array.isArray(rawTreatments)
-      ? (rawTreatments as Record<string, unknown>)
-      : null;
-  return (
-    <div className="space-y-4">
-      {PARAM_GROUPS.map((group) => {
-        const present = group.keys.filter((k) => k in parameters);
-        if (present.length === 0) return null;
-        return (
-          <div key={group.title} className="rounded border border-border-light bg-surface p-3">
-            <h4 className="mb-1 text-micro font-medium uppercase tracking-wide text-slate">
-              {group.title}
-            </h4>
-            <div className="divide-y divide-border-light">
-              {present.map((key) => (
-                <div key={key} className="flex items-baseline justify-between gap-4 py-1.5">
-                  <span className="shrink-0 text-caption text-slate">{key.replace(/_/g, ' ')}</span>
-                  <span className="min-w-0 text-right">
-                    <ParamValue value={parameters[key]} />
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-
-      {treatments && (
-        <div className="rounded border border-border-light bg-surface p-3">
-          <h4 className="mb-1 text-micro font-medium uppercase tracking-wide text-slate">
-            Series treatments (declared per series — undeclared series are refused)
-          </h4>
-          <SeriesTreatmentsTable table={treatments} />
-        </div>
-      )}
-
-      {otherKeys.length > 0 && (
-        <div className="rounded border border-border-light bg-surface p-3">
-          <h4 className="mb-1 text-micro font-medium uppercase tracking-wide text-slate">
-            Other parameters
-          </h4>
-          <div className="divide-y divide-border-light">
-            {otherKeys.map((key) => (
-              <div key={key} className="flex items-baseline justify-between gap-4 py-1.5">
-                <span className="shrink-0 text-caption text-slate">{key.replace(/_/g, ' ')}</span>
-                <span className="min-w-0 text-right">
-                  <ParamValue value={parameters[key]} />
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // The page.
 // ---------------------------------------------------------------------------
 
@@ -287,16 +61,14 @@ export default function MethodologyPage() {
     return map;
   }, [data]);
 
-  // Selected version per code; default = current approved, else latest.
-  const [selected, setSelected] = useState<Record<string, number>>({});
+  // The current approved version is the proposal base; document content is
+  // deliberately read through its PDF preview, not expanded in the register.
   function currentApproved(versions: DeskMethodology[]): DeskMethodology | null {
     const approved = versions.filter((v) => v.status === 'approved');
     return approved.length > 0 ? approved[approved.length - 1] : null;
   }
   function selectedVersion(code: string, versions: DeskMethodology[]): DeskMethodology {
-    const pick = selected[code];
-    const found = versions.find((v) => v.version === pick);
-    return found ?? currentApproved(versions) ?? versions[versions.length - 1];
+    return currentApproved(versions) ?? versions[versions.length - 1];
   }
 
   // ---- create a new methodology code (Track-2 register write) --------------
@@ -386,6 +158,12 @@ export default function MethodologyPage() {
     void approve.mutate(approveFor.code, approveFor.version, { effective_from: effectiveFrom });
   }
 
+  const [preview, setPreview] = useState<DeskMethodology | null>(null);
+  function pdfPath(methodology: DeskMethodology, download = false): string {
+    const suffix = download ? '?download=1' : '';
+    return `/api/op/operator/v1/desk/methodologies/${encodeURIComponent(methodology.methodology_code)}/versions/${methodology.version}/pdf${suffix}`;
+  }
+
   return (
     <div>
       <PageHeader
@@ -422,7 +200,6 @@ export default function MethodologyPage() {
       {data &&
         [...byCode.entries()].map(([code, versions]) => {
           const active = currentApproved(versions);
-          const shown = selectedVersion(code, versions);
           return (
             <section key={code} className="card mb-6">
               {/* -------------------------------------------- code header */}
@@ -467,14 +244,12 @@ export default function MethodologyPage() {
                   <tbody>
                     {versions.map((v) => {
                       const isActive = active?.version === v.version;
-                      const isShown = shown.version === v.version;
                       return (
                         <tr
                           key={v.id}
-                          onClick={() => setSelected((s) => ({ ...s, [code]: v.version }))}
                           className={`cursor-pointer border-b border-border-light last:border-b-0 ${
                             isActive ? 'bg-success-light/40' : ''
-                          } ${isShown ? 'outline outline-1 -outline-offset-1 outline-action/40' : ''} hover:bg-surface`}
+                          } hover:bg-surface`}
                         >
                           <td className="px-5 py-2 font-mono text-ink">v{v.version}</td>
                           <td className="px-3 py-2">
@@ -500,6 +275,26 @@ export default function MethodologyPage() {
                             {v.change_rationale}
                           </td>
                           <td className="px-5 py-2 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                icon={<Eye size={13} />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreview(v);
+                                }}
+                              >
+                                Preview PDF
+                              </Button>
+                              <a
+                                href={pdfPath(v, true)}
+                                download={`${v.methodology_code}-v${v.version}-methodology.pdf`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-caption font-medium text-slate transition-colors hover:bg-surface hover:text-ink"
+                              >
+                                <Download size={13} aria-hidden /> Download
+                              </a>
                             {v.status === 'draft' && (
                               <Button
                                 size="sm"
@@ -514,6 +309,7 @@ export default function MethodologyPage() {
                                 Approve…
                               </Button>
                             )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -534,36 +330,6 @@ export default function MethodologyPage() {
                 </details>
               )}
 
-              {/* --------------------------------------- parameter set view */}
-              <div className="px-5 py-4">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <h3 className="text-body font-medium text-navy">
-                    Parameter set — v{shown.version}
-                  </h3>
-                  <StatusChip value={shown.status} />
-                  {active?.version === shown.version && <Chip tone="ok">governing version</Chip>}
-                </div>
-                <div className="mb-3 grid gap-x-10 sm:grid-cols-2">
-                  <FieldRow label="Proposed by">
-                    <span className="font-mono text-caption">{shown.proposed_by}</span>
-                  </FieldRow>
-                  <FieldRow label="Approved by">
-                    {shown.approved_by ? (
-                      <span className="font-mono text-caption" title={fmtTs(shown.approved_at)}>
-                        {shown.approved_by}
-                      </span>
-                    ) : (
-                      DASH
-                    )}
-                  </FieldRow>
-                  <FieldRow label="Effective from">{fmtDate(shown.effective_from)}</FieldRow>
-                  <FieldRow label="Created">{fmtDate(shown.created_at)}</FieldRow>
-                </div>
-                <p className="mb-4 rounded border border-border-light bg-surface p-3 text-caption text-slate">
-                  <span className="font-medium text-ink">Rationale:</span> {shown.change_rationale}
-                </p>
-                <ParameterTree parameters={shown.parameters} />
-              </div>
             </section>
           );
         })}
@@ -719,6 +485,40 @@ export default function MethodologyPage() {
         onClose={() => setNewCodeOpen(false)}
         onCreated={() => reload()}
       />
+
+      <Modal
+        open={preview !== null}
+        onClose={() => setPreview(null)}
+        size="xl"
+        title={preview ? `${preview.methodology_code} v${preview.version}` : 'Methodology PDF'}
+        description="Read-only governed methodology export."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPreview(null)}>
+              Close
+            </Button>
+            {preview && (
+              <a
+                href={pdfPath(preview, true)}
+                download={`${preview.methodology_code}-v${preview.version}-methodology.pdf`}
+                className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium text-white"
+              >
+                <Download size={15} aria-hidden /> Download PDF
+              </a>
+            )}
+          </>
+        }
+      >
+        {preview && (
+          <div className="overflow-hidden border border-border-light bg-surface" style={{ height: '70vh' }}>
+            <iframe
+              title={`${preview.methodology_code} v${preview.version} methodology PDF`}
+              src={pdfPath(preview)}
+              className="h-full w-full"
+            />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

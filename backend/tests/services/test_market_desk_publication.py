@@ -30,6 +30,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
     MarketDataQuotaUsage,
+    Organization,
 )
 from app.services.market_desk import determinations, observations, publication, register
 from app.storage.client import StorageLocation
@@ -392,3 +393,28 @@ def test_publish_guards_status_and_content(
     with pytest.raises(HTTPException) as excinfo:
         publication.publish(db_session, draft.id, actor=LEAD)
     assert excinfo.value.status_code == 409
+
+
+def test_backfill_latest_published_determination_to_later_created_bank(
+    db_session: Session, banks: tuple[Bank, Bank], storage: InMemoryStorageClient
+) -> None:
+    determination = _approved_determination(db_session)
+    initial = publication.publish(db_session, determination.id, actor=LEAD)
+    assert {entry["bank_id"] for entry in initial.results} == {bank.id for bank in banks}
+
+    db_session.add(Organization(id="OR-LATE0001", name="Desk Pub Later Organization"))
+    db_session.commit()
+    later_bank = _make_bank(db_session, "OR-LATE0001", "Desk Pub Later Bank")
+    assert _current_curves(db_session, later_bank, "AEQ.GHS.SOV.ZERO") == []
+
+    catch_up = publication.backfill_latest_to_bank(
+        db_session, later_bank, actor="tenant_provisioning:test"
+    )
+
+    assert catch_up is not None
+    assert catch_up.status == "complete"
+    assert catch_up.results[0]["bank_id"] == later_bank.id
+    assert catch_up.results[0]["status"] == "complete"
+    assert len(_current_curves(db_session, later_bank, "AEQ.GHS.SOV.ZERO")) == 1
+    # The targeted delivery creates no second generation for already-published banks.
+    assert len(_current_curves(db_session, banks[0], "AEQ.GHS.SOV.ZERO")) == 1

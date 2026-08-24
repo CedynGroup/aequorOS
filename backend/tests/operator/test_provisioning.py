@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +22,7 @@ from app.models import (
 )
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.services.tenant_provisioning import ProvisioningClients
-from app.services import institution_types
+from app.services import institution_types, parameter_register
 from tests.operator.conftest import (
     FakeKmsClient,
     FakeS3Client,
@@ -57,6 +58,7 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert steps["sso_stub"]["status"] == "succeeded"
     assert steps["first_admin"]["status"] == "succeeded"
     assert steps["readiness"]["status"] == "succeeded"
+    assert steps["desk_market_data"]["status"] == "skipped"
     assert "empty-but-wired" in steps["readiness"]["detail"]
 
     organization_id = body["organization_id"]
@@ -354,3 +356,49 @@ def test_unconfigured_storage_fails_the_saga_honestly(
     assert steps["storage"]["status"] == "failed"
     assert "not configured" in steps["storage"]["detail"]
     assert operator_db.scalar(select(Organization)) is None
+
+
+def test_parameters_step_seeds_the_board_register(operator_client: TestClient) -> None:
+    """A provisioned tenant must be able to COMPUTE, not merely exist.
+
+    Before this step a tenant passed provisioning, ingested its whole book, and
+    still produced zero successful runs because every engine refused for want of
+    a parameter (founder review 2026-08-23).
+    """
+    response = operator_client.post(
+        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["succeeded"] is True, body
+    steps = {step["step"]: step for step in body["steps"]}
+    assert steps["parameters"]["status"] == "succeeded", steps["parameters"]
+    assert "board register" in steps["parameters"]["detail"]
+    # The readiness step now certifies on evidence, naming what it counted.
+    assert "board register carries" in steps["readiness"]["detail"]
+
+
+def test_readiness_refuses_a_tenant_whose_board_register_is_empty(
+    operator_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gate that was missing.
+
+    ``_step_readiness`` used to certify "empty-but-wired" without ever asking
+    whether the calculation engines had anything to compute with, so a tenant
+    that could never produce a number was reported as ready.
+    """
+    monkeypatch.setattr(
+        parameter_register,
+        "seed_tenant_register",
+        lambda *args, **kwargs: parameter_register.SeedResult(created={}, skipped_existing={}),
+    )
+    response = operator_client.post(
+        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["succeeded"] is False, body
+    readiness = next(step for step in body["steps"] if step["step"] == "readiness")
+    assert readiness["status"] == "failed"
+    assert "board register is empty" in readiness["detail"]
+    assert "no return could ever be generated" in readiness["detail"]

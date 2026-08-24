@@ -55,6 +55,8 @@ from app.schemas.operator import (
     ProvisioningStepRead,
     TenantProvisionCreate,
 )
+from app.services import institution_types, parameter_register
+from app.services.market_desk import publication as desk_publication
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings
 from app.storage.provisioning import provision_institution
@@ -318,6 +320,38 @@ def _step_first_admin(
     )
 
 
+def _step_parameters(
+    db: Session,
+    bank: Bank,
+    organization_id: str,
+    operator: OperatorContext,
+    state: _SagaState,
+) -> None:
+    """Seed the institution's own board register (``param_*``).
+
+    Without this a tenant is provisioned, ingests its whole book, derives a
+    balancing set of facts — and then every calculation module refuses for want
+    of a parameter, so nothing can be published and no return can be generated.
+    That is not hypothetical: it is what an SDI tenant with 490k ingested
+    position rows looked like on 2026-08-23, and it presented to the founder as
+    "we have data but cannot report".
+
+    Regime-scoped by construction: a licence class receives only the parameters
+    its own entitled modules read, so an SDI is never given a Basel LCR floor
+    BoG does not impose on it (``services/parameter_register.py``).
+    """
+    institution_class = institution_types.get_type(db, bank).institution_class
+    result = parameter_register.seed_tenant_register(
+        db,
+        organization_id=organization_id,
+        jurisdiction_code=bank.jurisdiction_code,
+        institution_class=institution_class,
+        approved_by=f"tenant_provisioning:{operator.email}",
+        approved_at=utc_now(),
+    )
+    state.record("parameters", "succeeded", f"{institution_class}: {result.summary()}")
+
+
 def _step_readiness(db: Session, organization_id: str, bank_id: str, state: _SagaState) -> None:
     org_ok = (
         db.scalar(select(Organization.id).where(Organization.id == organization_id)) is not None
@@ -348,11 +382,25 @@ def _step_readiness(db: Session, organization_id: str, bank_id: str, state: _Sag
             f"expected zero reporting periods on a fresh tenant, found {period_count} — "
             "refusing to certify (no seeding path may exist).",
         )
+    # The gate this step was missing (founder review 2026-08-23). "Empty-but-wired"
+    # was certified without ever asking whether the engines had anything to
+    # compute WITH, so a tenant could pass provisioning and still be unable to
+    # produce a single number. A tenant with an empty board register is not
+    # ready, and saying so here is the whole point of a readiness step.
+    register_rows = parameter_register.register_row_count(db, organization_id)
+    if register_rows == 0:
+        raise state.fail(
+            "readiness",
+            "the institution's board register is empty, so every calculation module "
+            "would refuse for want of a parameter and no return could ever be "
+            "generated — refusing to certify this tenant as ready.",
+        )
     state.record(
         "readiness",
         "succeeded",
-        "org/bank readable; storage probe OK; 0 reporting periods, 0 facts — "
-        "empty-but-wired. The bank goes live on its first ingestion.",
+        f"org/bank readable; storage probe OK; board register carries {register_rows} "
+        "parameter rows; 0 reporting periods, 0 facts — empty-but-wired. "
+        "The bank goes live on its first ingestion.",
     )
 
 
@@ -398,7 +446,9 @@ def _mark_rolled_back(state: _SagaState) -> None:
     state.steps = rolled
 
 
-def provision_tenant(
+def provision_tenant(  # noqa: PLR0915 - one linear saga; each step is named and
+    # recorded in order, and splitting it would hide the sequence the audit
+    # record and the rollback path both follow
     db: Session,
     operator: OperatorContext,
     payload: TenantProvisionCreate,
@@ -440,11 +490,12 @@ def provision_tenant(
             f"{payload.license_type}, institution_type={payload.institution_type})",
         )
 
-        # c. storage  d. kms  e. sso stub  f. first admin  g. readiness
+        # c. storage  d. kms  e. sso stub  f. first admin  g. parameters  h. readiness
         registry = _step_storage(db, bank, organization.id, clients, state)
         _step_kms(registry, organization.id, clients, operator_settings, state)
         _step_sso_stub(db, organization.id, state)
         _step_first_admin(db, payload, organization.id, state)
+        _step_parameters(db, bank, organization.id, operator, state)
         _step_readiness(db, organization.id, bank.id, state)
     except _SagaAbort:
         db.rollback()
@@ -462,12 +513,54 @@ def provision_tenant(
         _audit(db, operator, payload, state, succeeded=False)
         return _result(payload, state, succeeded=False)
 
+    db.commit()
+    try:
+        publication = desk_publication.backfill_latest_to_bank(
+            db, bank, actor=f"tenant_provisioning:{operator.email}"
+        )
+        if publication is None:
+            state.record(
+                "desk_market_data",
+                "skipped",
+                "no published desk determination exists yet; market data will arrive "
+                "on first publication",
+            )
+        else:
+            delivery = publication.results[0]
+            state.record(
+                "desk_market_data",
+                delivery["status"],
+                f"latest desk determination delivery {delivery['status']} for bank {bank.id}",
+            )
+            if delivery["status"] != "complete":
+                state.warnings.append(
+                    "latest desk market-data backfill did not complete; retry from the Market Desk"
+                )
+    except Exception:
+        logger.exception("latest desk market-data backfill failed for bank %s", bank.id)
+        state.record(
+            "desk_market_data",
+            "failed",
+            "latest desk market-data backfill failed; retry from the Market Desk",
+        )
+        state.warnings.append(
+            "latest desk market-data backfill failed; retry from the Market Desk"
+        )
     _audit(db, operator, payload, state, succeeded=True)
     db.commit()
     return _result(payload, state, succeeded=True)
 
 
-_STEP_ORDER = ("organization", "bank", "storage", "kms", "sso_stub", "first_admin", "readiness")
+_STEP_ORDER = (
+    "organization",
+    "bank",
+    "storage",
+    "kms",
+    "sso_stub",
+    "first_admin",
+    "readiness",
+    "desk_market_data",
+)
 
 
 def _next_step_name(state: _SagaState) -> str:
