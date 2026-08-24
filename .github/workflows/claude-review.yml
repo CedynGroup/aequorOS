@@ -87,7 +87,7 @@ jobs:
           # turns for Claude to inspect each layer and submit its formal review.
           claude_args: |
             --max-turns 40
-            --model claude-opus-4-1-20250805
+            --model claude-sonnet-4-5
 
       - name: Enable auto-merge when approved and guardrails hold
         if: vars.AGENT_AUTOMERGE == 'on'
