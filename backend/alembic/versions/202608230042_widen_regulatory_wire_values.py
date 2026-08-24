@@ -1,7 +1,7 @@
 """Widen columns for admitted regulatory wire values.
 
 Revision ID: 202608230042
-Revises: 202608230040
+Revises: 202608230043
 
 ``enterprise_stress`` is an admitted regulatory-run module (17 characters),
 and ``xlsx_working`` is an admitted package artifact kind (12 characters).
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "202608230042"
-down_revision = "202608230040"
+down_revision = "202608230043"
 branch_labels = None
 depends_on = None
 

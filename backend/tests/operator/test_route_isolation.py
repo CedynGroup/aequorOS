@@ -79,6 +79,7 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/desk/methodologies/ensure-default",
         "/operator/v1/desk/methodologies/{methodology_code}/versions",
         "/operator/v1/desk/methodologies/{methodology_code}/versions/{version}/approve",
+        "/operator/v1/desk/methodologies/{methodology_code}/versions/{version}/pdf",
         "/operator/v1/desk/observations",
         "/operator/v1/desk/observations",
         "/operator/v1/desk/publications",
