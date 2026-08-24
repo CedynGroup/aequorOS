@@ -207,8 +207,27 @@ jobs:
             exit 0
           fi
 
+          DIAGNOSTIC="execution_file=<missing>"
+          if [[ -n "$EXECUTION_FILE" && -f "$EXECUTION_FILE" ]]; then
+            IFS=$'\t' read -r TERMINAL_REASON API_ERROR_STATUS ERROR_STATUS NUM_TURNS INPUT_TOKENS OUTPUT_TOKENS MODEL_COUNT < <(
+              jq -r '
+                def shown: if . == null then "<missing>" else tostring end;
+                ([.[] | select(.type == "result")] | last // {}) as $result
+                | [
+                    ($result.terminal_reason | shown),
+                    ($result.api_error_status | shown),
+                    ($result.error_status | shown),
+                    ($result.num_turns | shown),
+                    ($result.usage.input_tokens | shown),
+                    ($result.usage.output_tokens | shown),
+                    (($result.modelUsage // {}) | length | tostring)
+                  ] | @tsv
+              ' "$EXECUTION_FILE"
+            )
+            DIAGNOSTIC="terminal_reason=$TERMINAL_REASON; api_error_status=$API_ERROR_STATUS; error_status=$ERROR_STATUS; num_turns=$NUM_TURNS; usage.input_tokens=$INPUT_TOKENS; usage.output_tokens=$OUTPUT_TOKENS; modelUsage.size=$MODEL_COUNT"
+          fi
           publish_verdict failure "Review execution failed" \
-            "Claude did not complete a formal review, and the failure was not a proven pre-inference provider or account outage."
+            "Claude did not complete a formal review, and the failure was not a proven pre-inference provider or account outage. Observed: $DIAGNOSTIC"
           echo "::error::Claude review failed without a trustworthy pre-inference outage signal."
           exit 1
 
