@@ -1,6 +1,6 @@
 # AequorOS — RBAC, User Management & Role-Aware Dashboards
 
-**Status:** implementation spec · **Audience:** dashboard + platform engineers · **Owner:** Eric
+**Status:** proposal; reviewed corrections required before implementation · **Audience:** dashboard + platform engineers · **Owner:** Eric
 
 > **Required companion:** read the dated [RBAC proposal review](rbac-review.md)
 > before implementing this proposal. It records stale as-built claims, accepted
