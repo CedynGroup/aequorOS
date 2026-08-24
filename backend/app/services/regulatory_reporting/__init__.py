@@ -6,12 +6,15 @@
   computed state (§5).
 - ``validation`` — completeness / consistency / prior-period movement rules.
 - ``workflow`` — the §2 lifecycle state machine with maker-checker + audit.
-- ``calendar`` — upcoming obligations with due dates and RAG grades.
+- ``anchors`` — the regulator's own reporting dates for a return (the ONE
+  authority; never derived from ingestion).
+- ``calendar`` — upcoming obligations with due dates and RAG grades, plus the
+  per-return anchor list the Returns workspace selects a reporting date from.
 - ``channels`` — the submission-channel protocol (concrete channels ship in
   the export/submission wave).
 """
 
-from app.services.regulatory_reporting.calendar import list_obligations
+from app.services.regulatory_reporting.calendar import list_obligations, list_return_anchors
 from app.services.regulatory_reporting.channel_config import (
     get_channel_config,
     put_channel_config,
@@ -54,6 +57,7 @@ __all__ = [
     "get_reporting_settings",
     "list_obligations",
     "list_packages",
+    "list_return_anchors",
     "list_return_templates",
     "list_submission_events",
     "put_channel_config",

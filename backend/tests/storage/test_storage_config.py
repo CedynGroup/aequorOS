@@ -13,6 +13,14 @@ def isolate_from_local_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     # Run from an empty directory so the developer's .env (which carries a
     # real STORAGE_RETIRE_AFTER) cannot shadow the values under test.
     monkeypatch.chdir(tmp_path)
+    # …and clear the same names from the PROCESS environment, which chdir does
+    # not touch. Without this the refusal tests below depend on the ambient
+    # shell: CI could not export STORAGE_RETIRE_AFTER for the storage contract
+    # job (which needs a real client, so a real date) without making
+    # test_mvp_requires_a_retirement_date fail DID NOT RAISE. A unit test of a
+    # refusal must state its own inputs, not inherit them.
+    for name in ("STORAGE_RETIRE_AFTER", "STORAGE_ENV", "STORAGE_BACKEND"):
+        monkeypatch.delenv(name, raising=False)
 
 
 def settings(**overrides: object) -> StorageEngineSettings:

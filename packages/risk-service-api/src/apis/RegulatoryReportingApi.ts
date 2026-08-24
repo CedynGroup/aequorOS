@@ -37,6 +37,7 @@ import type {
   ResubmissionRequestCreate,
   ResubmissionRequestListRead,
   ResubmissionRequestRead,
+  ReturnAnchorListRead,
   ReturnTemplateListRead,
   SubmissionEventListRead,
   SubmissionPollRead,
@@ -92,6 +93,8 @@ import {
   ResubmissionRequestListReadToJSON,
   ResubmissionRequestReadFromJSON,
   ResubmissionRequestReadToJSON,
+  ReturnAnchorListReadFromJSON,
+  ReturnAnchorListReadToJSON,
   ReturnTemplateListReadFromJSON,
   ReturnTemplateListReadToJSON,
   SubmissionEventListReadFromJSON,
@@ -210,6 +213,12 @@ export interface ListReportingObligationsRequest {
 export interface ListResubmissionRequestsRequest {
   bankId: string;
   packageId: string;
+}
+
+export interface ListReturnAnchorsRequest {
+  bankId: string;
+  returnCode: string;
+  horizonMonths?: number;
 }
 
 export interface ListSubmissionEventsRequest {
@@ -1707,6 +1716,81 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<ResubmissionRequestListRead> {
     const response = await this.listResubmissionRequestsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).
+   * List Return Anchors
+   */
+  async listReturnAnchorsRaw(
+    requestParameters: ListReturnAnchorsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ReturnAnchorListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listReturnAnchors().',
+      );
+    }
+
+    if (requestParameters["returnCode"] == null) {
+      throw new runtime.RequiredError(
+        "returnCode",
+        'Required parameter "returnCode" was null or undefined when calling listReturnAnchors().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["returnCode"] != null) {
+      queryParameters["return_code"] = requestParameters["returnCode"];
+    }
+
+    if (requestParameters["horizonMonths"] != null) {
+      queryParameters["horizon_months"] = requestParameters["horizonMonths"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/return-anchors`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ReturnAnchorListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).
+   * List Return Anchors
+   */
+  async listReturnAnchors(
+    requestParameters: ListReturnAnchorsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ReturnAnchorListRead> {
+    const response = await this.listReturnAnchorsRaw(
       requestParameters,
       initOverrides,
     );

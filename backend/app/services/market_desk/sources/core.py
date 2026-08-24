@@ -136,6 +136,15 @@ class SourceSpec:
     entry forms for ``series_codes`` via ``observations.record_manual_observation``.
     ``unsupported`` names what this source publishes that the parser
     deliberately does NOT extract — honesty over coverage.
+
+    ``nightly`` is whether the scheduled capture walks this source on an
+    ordinary night. It is NOT the cadence: cadence describes how often the
+    PUBLISHER updates the source (and therefore drives staleness flagging in
+    ``apply_staleness``), while ``nightly`` describes whether the desk needs
+    to go and get it. The two differ when a cheaper sibling already serves
+    the same series every night — BoG table 40 publishes daily, but table 31
+    publishes the same six columns for the latest day in one page instead of
+    145, so table 40 is a backfill path with a daily cadence.
     """
 
     source_key: str
@@ -148,6 +157,7 @@ class SourceSpec:
     manual_fallback: bool = True
     unsupported: tuple[str, ...] = ()
     notes: str = ""
+    nightly: bool = True
 
 
 @dataclass(frozen=True)

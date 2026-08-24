@@ -52,7 +52,15 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
   const profileQuery = useQuery({
     queryKey: profileQueryKey,
     queryFn: () => apiCall(() => authApi.authMe()),
-    enabled: status === 'authenticated',
+    // Both conditions, not just the status. NextAuth reports 'authenticated'
+    // from the session COOKIE, which outlives the backend access token it
+    // carries — and on a stale session TokenSync sets that token to null (or a
+    // failed silent refresh leaves session.error set). Gating on status alone
+    // fires authMe() with no bearer, which the API correctly answers 401 and
+    // which surfaces as a red console error on the sign-in page while the
+    // sign-out redirect is still in flight. There is nothing to ask the API
+    // until we hold a token to ask it with.
+    enabled: status === 'authenticated' && Boolean(session?.accessToken) && !session?.error,
     staleTime: 5 * 60_000,
   });
   const updateMutation = useMutation({

@@ -2084,6 +2084,32 @@ export function useEmailFallbackInstructions(
 }
 
 /** The return-template registry (citations, fidelity grades, default channels). */
+/**
+ * The reporting dates one return reports on — BoG's own anchors, from the
+ * return definition. NOT the bank's ingested reporting periods: those are a
+ * consequence of when data arrived, and selecting from them made every weekly
+ * BoG deadline invisible unless a month happened to end on that Friday.
+ * Each anchor carries whether a position has been computed for it.
+ */
+export function useReturnAnchors(
+  bankId: string | undefined,
+  returnCode: string | undefined,
+  horizonMonths = 3
+) {
+  return useQuery({
+    queryKey: ['rr-anchors', bankId, returnCode, horizonMonths],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.listReturnAnchors({
+          bankId: bankId!,
+          returnCode: returnCode!,
+          horizonMonths,
+        })
+      ),
+    enabled: Boolean(bankId && returnCode),
+  });
+}
+
 export function useReturnTemplates() {
   return useQuery({
     queryKey: ['rr-templates'],

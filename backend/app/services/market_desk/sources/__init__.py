@@ -118,6 +118,21 @@ SOURCE_REGISTRY: dict[str, SourceSpec] = {
             parser=bog_wdt.parse_fx_pairs,
             parser_version="bog_wdt/1",
             series_codes=("GHS.FX.{pair}.BUY", "GHS.FX.{pair}.SELL", "GHS.FX.{pair}.MID"),
+            nightly=False,
+            notes=(
+                "The FX ARCHIVE, not the daily read. Table 40 is every rate BoG "
+                "has published since 1996 — 144,647 rows, 145 pages of 1,000 at "
+                "the mandatory 2s pacing — and it grows with history, not with "
+                "news. Table 31 serves the SAME six columns for the latest day "
+                "in a single page and is parsed by this same parser as "
+                "bog_fx_daily, so that is the nightly source. Table 40 runs on a "
+                "cold start (no observations captured from it yet) and whenever "
+                "a run asks for it by name in the job payload's "
+                "backfill_sources; the fetch is watermark-bounded either way. "
+                "Cadence stays daily because the PUBLISHER is daily — staleness "
+                "flagging must not change just because the desk stopped "
+                "re-downloading the archive nightly."
+            ),
         ),
         SourceSpec(
             source_key="bog_fx_reference",

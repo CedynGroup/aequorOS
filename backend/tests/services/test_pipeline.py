@@ -234,6 +234,36 @@ def test_run_refresh_missing_canonical_is_a_noop(db_session: Session) -> None:
     assert db_session.scalar(select(func.count()).select_from(LiveMetric)) == 0
 
 
+def test_missing_canonical_refresh_invalidates_prior_live_rows(db_session: Session) -> None:
+    _seed(db_session)
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    prior = _live_rows(db_session)["rating"]
+    prior_computed_at = prior.computed_at
+    job = job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "pipeline_refresh",
+        bank_id=SAMPLE_BANK_ID,
+        payload={"as_of_date": "2030-01-01"},
+    )
+    db_session.commit()
+
+    pipeline.run_refresh(db_session, job)
+
+    rating = _live_rows(db_session)["rating"]
+    assert job.progress == {
+        "status": "skipped",
+        "reason": "no_canonical_data",
+        "as_of_date": "2030-01-01",
+    }
+    assert rating.pipeline_state == "failed"
+    assert rating.computed_at == prior_computed_at
+    assert rating.pipeline_error == (
+        "Live recomputation found no canonical financial book for 2030-01-01 "
+        "(no_canonical_data). The prior live result is not current."
+    )
+
+
 def test_run_official_mints_immutable_reproducible_runs(db_session: Session) -> None:
     _seed(db_session)
     # A refresh first derives + stamps the live view but no immutable runs.
@@ -414,3 +444,52 @@ def test_live_snapshot_ladder_reads_back_through_the_service(db_session: Session
     assert len(out.snapshots) == 1
     assert out.snapshots[0].module == "liquidity"
     assert Decimal(str(out.snapshots[0].metrics["lcr_pct"])) > 0
+
+
+def test_a_failing_module_does_not_erase_the_reporting_period(db_session: Session) -> None:
+    """The snapshot row is provenance, not a module output.
+
+    ``_ensure_live_period`` only flushes, and ``recompute_modules`` rolls back on
+    the first module that fails — which used to discard the pending period with
+    it. Measured on the primary 2026-08-23: a tenant with 777 ingested dates and
+    79 current facts had ZERO reporting periods, because one module failed on
+    every refresh and took the period every time. Every surface that resolves a
+    date through ``bank_reporting_periods`` then reported "no data yet" on a
+    fully-loaded book — including the Returns workspace.
+
+    The failure is INDUCED here rather than waited for: the fixture bank's
+    modules all succeed, so without forcing one to raise this test would pass on
+    the broken code and prove nothing.
+    """
+    _seed(db_session)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    bank = db_session.scalar(select(Bank).where(Bank.id == SAMPLE_BANK_ID))
+    assert bank is not None
+    as_of = FIXTURE_AS_OF
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("induced module failure")
+
+    original = pipeline._CHEAP_MODULES
+    pipeline._CHEAP_MODULES = tuple(
+        (module, _boom if module == "liquidity" else compute)
+        for module, compute in original
+    )
+    try:
+        outcome = pipeline.recompute_live(db_session, ctx, bank, as_of)
+    finally:
+        pipeline._CHEAP_MODULES = original
+
+    assert "liquidity" in outcome.modules_failed, "the induced failure must actually fire"
+    persisted = db_session.scalar(
+        select(func.count())
+        .select_from(BankReportingPeriod)
+        .where(
+            BankReportingPeriod.bank_id == bank.id,
+            BankReportingPeriod.period_end == as_of,
+        )
+    )
+    assert persisted == 1, (
+        "the reporting period must survive a module failure — it is the key the "
+        "derived facts are addressed by, not one module's output"
+    )

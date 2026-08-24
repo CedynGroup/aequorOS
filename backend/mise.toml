@@ -15,10 +15,18 @@ description = "Run pre-commit hooks against all files"
 run = "uv run pre-commit run --all-files --config ../../.pre-commit-config.yaml"
 
 [tasks."risk-service:dev"]
-description = "Run FastAPI dev server"
+description = "Run FastAPI and the live-engine worker for local development"
 run = '''
 #!/usr/bin/env bash
-uv run fastapi dev app/main.py --host "${HOST:-127.0.0.1}" --port "${PORT:-8001}" --reload-dir app
+set -euo pipefail
+
+# Development must exercise the same API-plus-worker topology as deployment.
+# Do not rely on a developer's .env value to create an in-process worker.
+RUN_INPROCESS_WORKER=0 uv run python -m app.worker &
+worker_pid=$!
+trap 'kill "$worker_pid" 2>/dev/null || true' EXIT INT TERM
+
+RUN_INPROCESS_WORKER=0 uv run fastapi dev app/main.py --host "${HOST:-127.0.0.1}" --port "${PORT:-8001}" --reload-dir app
 '''
 
 [tasks."risk-service:worker"]

@@ -229,21 +229,22 @@ def assert_package_reconciled(
 
     from app.services.regulatory_reporting.common import (  # noqa: PLC0415 - breaks an import cycle
         get_bank_or_404,
-        get_effective_period_or_404,
-        get_period_for_reporting_date_or_404,
+        get_snapshot_for_reporting_date,
     )
     from app.services.regulatory_reporting.registry import (  # noqa: PLC0415 - same cycle
         get_definition,
     )
 
     definition = get_definition(package.return_code)
-    daily = definition is not None and definition.frequency == "daily"
     try:
         bank = get_bank_or_404(db, ctx, package.bank_id)
-        period = (
-            get_effective_period_or_404(db, ctx, bank, package.reporting_date)
-            if daily
-            else get_period_for_reporting_date_or_404(db, ctx, bank, package.reporting_date)
+        period = get_snapshot_for_reporting_date(
+            db,
+            ctx,
+            bank,
+            package.reporting_date,
+            return_code=package.return_code,
+            frequency=definition.frequency if definition is not None else None,
         )
     except HTTPException:
         observability.emit(

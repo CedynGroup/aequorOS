@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.common import JsonObject
 from app.schemas.market_desk import DeskEntitlementRead
@@ -30,7 +30,12 @@ type ProvisioningStepName = Literal[
     "kms",
     "sso_stub",
     "first_admin",
+    # The institution's own board register (``param_*``). Without it a tenant is
+    # provisioned, ingests its whole book, and still cannot produce a single
+    # successful calculation run (founder review 2026-08-23).
+    "parameters",
     "readiness",
+    "desk_market_data",
     "cleanup",
 ]
 
@@ -805,12 +810,40 @@ class RegulatoryParameterProposeRequest(ClosedModel):
     jurisdiction_code: str = Field(min_length=1, max_length=8)
     # Regulatory floors/limits/rates/amounts are non-negative; a negative value
     # would silently disable a prudential floor for every tenant of the scope.
-    value_numeric: Decimal = Field(ge=0, description="The scalar value (e.g. a percentage).")
+    value_numeric: Decimal | None = Field(
+        default=None, ge=0, description="The scalar value (e.g. a percentage)."
+    )
+    # STRUCTURAL governed parameters carry a mapping, not a scalar — the s.29
+    # ``sdi_rwa_composition`` (risk class -> measurement) and ``sdi_rwa_bucket_map``
+    # are the live examples. The console could READ these from the day they
+    # existed but had no way to WRITE one (``propose`` hardcoded ``value_json=None``),
+    # so the only governed declaration an SDI's capital ratio waits on was
+    # unreachable from the control plane it names (founder review 2026-08-23).
+    value_json: JsonObject | None = Field(
+        default=None, description="The structural value, for parameters that carry a mapping."
+    )
     unit: str = Field(min_length=1, max_length=24)
     source_citation: str = Field(min_length=1, max_length=240)
     confirmation_status: Literal["confirmed", "pending"] = "pending"
     effective_from: date
     change_rationale: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def _exactly_one_value(self) -> RegulatoryParameterProposeRequest:
+        """A parameter carries a scalar OR a mapping — never both, never neither.
+
+        Both would leave the resolver a choice it has no rule for; neither would
+        create a governed row that resolves to nothing.
+        """
+        has_numeric = self.value_numeric is not None
+        has_json = self.value_json is not None
+        if has_numeric == has_json:
+            msg = (
+                "Provide exactly one of value_numeric (a scalar floor/limit/rate) or "
+                "value_json (a structural mapping such as sdi_rwa_composition)."
+            )
+            raise ValueError(msg)
+        return self
 
 
 class RegulatoryParameterApproveRequest(ClosedModel):

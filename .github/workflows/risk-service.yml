@@ -565,10 +565,14 @@ jobs:
             sleep 1
           done
           echo "MinIO did not become live"; docker logs aequoros-ci-minio; exit 1
-      # STORAGE_RETIRE_AFTER is deliberately ABSENT. StorageEngineSettings reads
-      # the process environment, so exporting it makes
-      # test_mvp_requires_a_retirement_date fail with DID NOT RAISE — the variable
-      # defeats the refusal that test exists to assert.
+      # STORAGE_RETIRE_AFTER is REQUIRED: enforce_retirement refuses to build a
+      # client for env=mvp without one, so every contract test errors in its
+      # fixture without it. It used to be omitted because the process env leaked
+      # into tests/storage/test_storage_config.py and defeated the refusal that
+      # file asserts; that test now clears the name itself, so setting it here is
+      # safe. The date is CI-local and deliberately far out — this job proves the
+      # storage contract, not the retirement policy, which
+      # test_mvp_past_retirement_refuses_to_initialize covers on its own inputs.
       - name: Storage contract suite
         env:
           S3_ENDPOINT: http://127.0.0.1:9000
@@ -577,6 +581,7 @@ jobs:
           S3_REGION: us-east-1
           STORAGE_BACKEND: minio
           STORAGE_ENV: mvp
+          STORAGE_RETIRE_AFTER: "2099-01-01"
           STORAGE_KMS_KEY_ID: aequoros-key
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/storage.xml
         run: mise run risk-service:test-storage

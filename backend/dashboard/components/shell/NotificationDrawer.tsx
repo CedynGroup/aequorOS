@@ -40,7 +40,10 @@ const SEVERITY_STYLES: Record<
 
 /** Deep-link target for a notification, when its entity supports one. */
 export function notificationHref(notification: NotificationRead): string | null {
-  if (notification.type.startsWith('reporting.deadline.')) return '/submissions';
+  // The calendar, explicitly: /submissions now redirects to the Returns
+  // workspace, and a deadline notification is asking the reader to look at
+  // the deadline board.
+  if (notification.type.startsWith('reporting.deadline.')) return '/submissions/calendar';
   if (notification.entityType === 'regulatory_package') {
     return '/submissions/history';
   }

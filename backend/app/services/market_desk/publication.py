@@ -112,6 +112,80 @@ def _entitled_extraction(
     return ScopeExtraction(raw_payload=extraction.raw_payload, bundle=filtered)
 
 
+def backfill_latest_to_bank(
+    db: Session, bank: Bank, *, actor: str
+) -> DeskPublication | None:
+    """Deliver the latest published desk determination to one later-created bank.
+
+    Normal publication can reach only the banks that exist at its fan-out time.
+    This catch-up closes the otherwise silent gap for a tenant provisioned
+    between scheduled desk publications. The adapter's natural-key
+    supersession makes a repeated delivery safe.
+    """
+    determination = db.scalar(
+        select(DeskDetermination)
+        .where(DeskDetermination.status == "published")
+        .order_by(DeskDetermination.published_at.desc(), DeskDetermination.id.desc())
+        .limit(1)
+    )
+    if determination is None:
+        return None
+
+    datasets = entitlements.active_datasets(
+        db, bank.organization_id, as_of=determination.cob_date
+    )
+    scopes = entitlements.filter_scopes(determination_scopes(determination), datasets)
+    if not scopes:
+        result: dict[str, Any] = {
+            "bank_id": bank.id,
+            "status": "skipped",
+            "error": "no entitled desk datasets for this institution",
+        }
+    else:
+        try:
+            pull = execute_pull(
+                db,
+                organization_id=bank.organization_id,
+                bank=bank,
+                bank_slug=bank_slug(db, bank),
+                vendor=VENDOR,
+                adapter_version=ADAPTER_VERSION,
+                scopes=scopes,
+                as_of_date=determination.cob_date,
+                extract=lambda scope, ds=datasets: _entitled_extraction(determination, scope, ds),
+                quota_units=0,
+                actor_user_id=None,
+            )
+        except MarketDataError as exc:
+            db.rollback()
+            logger.warning("Desk backfill failed for bank %s: %s", bank.id, exc.internal_detail)
+            result = {"bank_id": bank.id, "status": "failed", "error": exc.bank_facing.message}
+        except Exception:
+            db.rollback()
+            logger.exception("Desk backfill failed for bank %s", bank.id)
+            result = {"bank_id": bank.id, "status": "failed", "error": _GENERIC_ERROR}
+        else:
+            failed = bool(pull.errors) and pull.canonical_records_produced == 0
+            outcome = "failed" if failed else "complete"
+            result = {
+                "bank_id": bank.id,
+                "ingestion_batch_id": pull.batch_id,
+                "status": outcome,
+            }
+            if pull.errors:
+                result["error"] = "; ".join(pull.errors)
+
+    publication = DeskPublication(
+        determination_id=determination.id,
+        published_by=actor,
+        results=[result],
+        status="complete" if result["status"] == "complete" else "failed",
+    )
+    db.add(publication)
+    db.commit()
+    return publication
+
+
 def publish(db: Session, determination_id: Any, *, actor: str) -> DeskPublication:
     """Publish one determination into EVERY bank's canonical store.
 

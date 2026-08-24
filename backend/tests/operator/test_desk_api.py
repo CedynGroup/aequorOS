@@ -176,6 +176,32 @@ def test_methodology_lifecycle_with_dual_control_and_audit(
     assert "desk.methodology.propose_version" in actions
 
 
+def test_methodology_pdf_is_authenticated_and_rendered(operator_client: TestClient) -> None:
+    _bootstrap_methodology(operator_client)
+
+    response = operator_client.get(
+        f"{BASE}/methodologies/AEQ-GHS-CURVES/versions/1/pdf",
+        headers=operator_headers(),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert response.headers["content-disposition"] == (
+        'inline; filename="AEQ-GHS-CURVES-v1-methodology.pdf"'
+    )
+    assert response.content.startswith(b"%PDF-")
+    assert b"AEQ-GHS-CURVES" in response.content
+
+    download = operator_client.get(
+        f"{BASE}/methodologies/AEQ-GHS-CURVES/versions/1/pdf?download=true",
+        headers=operator_headers(),
+    )
+    assert download.headers["content-disposition"] == (
+        'attachment; filename="AEQ-GHS-CURVES-v1-methodology.pdf"'
+    )
+    assert download.content == response.content
+
+
 # -- observations ------------------------------------------------------------------------
 
 

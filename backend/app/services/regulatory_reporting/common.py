@@ -41,9 +41,48 @@ def get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     return bank
 
 
-def get_period_for_reporting_date_or_404(
-    db: Session, ctx: TenantContext, bank: Bank, reporting_date: date
+#: Human wording for each cadence, used in the refusal below so the message
+#: explains WHY a particular date is required rather than only that it is.
+_CADENCE_WORDING = {
+    "daily": "reports the position at the close of one business day",
+    "weekly": "reports the position at the weekly close",
+    "monthly": "reports the position at month end",
+    "quarterly": "reports the position at quarter end",
+    "semiannual": "reports the position at the half-year end",
+    "annual": "reports the position at year end",
+}
+
+
+def get_snapshot_for_reporting_date(  # noqa: PLR0913 - lookup keys plus the two
+    # descriptors the refusal message needs to explain WHY this date is required
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    reporting_date: date,
+    *,
+    return_code: str | None = None,
+    frequency: str | None = None,
 ) -> BankReportingPeriod:
+    """The computed fact snapshot AS OF ``reporting_date`` — exact, or refuse.
+
+    A return reports the institution's position on the regulator's reporting
+    date. The figures must therefore be the figures as of THAT date: a
+    Friday-close weekly return cannot be assembled from a month-end book, and a
+    daily return cannot be assembled from last month's. So the match is exact
+    for every cadence, and a missing snapshot is refused by name rather than
+    filled from the nearest earlier one.
+
+    Until 2026-08-23 the daily cadence took the "latest period ending on or
+    before" branch instead. Nothing surfaced the substitution, so a daily return
+    generated against a bank on a monthly ingestion cadence would have carried a
+    month-old book as that day's position, with the stale date visible only
+    inside the snapshot. That is the fail-open shape this codebase rejects
+    everywhere else; the refusal below replaces it.
+
+    Raises 409 (not 404): the return is registered and the reporting date is a
+    real BoG anchor — what is absent is computed state, which is the same
+    conflict ``no_baseline_run`` reports one step later.
+    """
     period = db.scalar(
         select(BankReportingPeriod).where(
             BankReportingPeriod.organization_id == ctx.organization_id,
@@ -51,47 +90,40 @@ def get_period_for_reporting_date_or_404(
             BankReportingPeriod.period_end == reporting_date,
         )
     )
-    if period is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"No reporting period ends on {reporting_date.isoformat()} for this bank. "
-                "Create the reporting period and compute its regulatory inputs before "
-                "generating the return."
-            ),
-        )
-    return period
+    if period is not None:
+        return period
 
-
-def get_effective_period_or_404(
-    db: Session, ctx: TenantContext, bank: Bank, reporting_date: date
-) -> BankReportingPeriod:
-    """The latest reporting period ending on or before ``reporting_date``.
-
-    Daily returns file on business days that rarely coincide with a monthly
-    reporting-period end, so their snapshot draws on the most recent effective
-    period's canonical data (mirrors the forecast as-of convention).
-    """
-    period = db.scalar(
-        select(BankReportingPeriod)
+    nearest = db.scalar(
+        select(BankReportingPeriod.period_end)
         .where(
             BankReportingPeriod.organization_id == ctx.organization_id,
             BankReportingPeriod.bank_id == bank.id,
-            BankReportingPeriod.period_end <= reporting_date,
+            BankReportingPeriod.period_end < reporting_date,
         )
         .order_by(BankReportingPeriod.period_end.desc())
         .limit(1)
     )
-    if period is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"No reporting period ends on or before {reporting_date.isoformat()} for "
-                "this bank. Ingest financial data and compute its regulatory inputs "
-                "before generating the return."
-            ),
+    subject = f"{return_code} " if return_code else "This return "
+    cadence = _CADENCE_WORDING.get(frequency or "", "reports the position at the reporting date")
+    if nearest is None:
+        context = "No financial data has been ingested for this institution yet."
+    else:
+        context = (
+            f"The most recent computed position is {nearest.isoformat()}, which is not a "
+            "substitute — an earlier book is not this reporting date's position."
         )
-    return period
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error_code": "no_computed_position",
+            "message": (
+                f"{subject}{cadence}, so it needs the institution's position as of "
+                f"{reporting_date.isoformat()}. Nothing has been computed for that date. "
+                f"{context} Ingest the book as of {reporting_date.isoformat()} through the "
+                "Data Engine, then generate the return."
+            ),
+        },
+    )
 
 
 def get_package_or_404(

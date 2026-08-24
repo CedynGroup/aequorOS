@@ -41,12 +41,10 @@ import re
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from datetime import date, datetime
+from typing import Any
 
 import httpx
-
-if TYPE_CHECKING:
-    from datetime import date
 
 BOG_HOSTS = ("www.bog.gov.gh", "bog.gov.gh")
 BROWSER_USER_AGENT = (
@@ -55,6 +53,11 @@ BROWSER_USER_AGENT = (
 )
 MIN_REQUEST_INTERVAL_SECONDS = 2.0
 WDT_PAGE_LENGTH = 1000
+
+#: How every BoG wpDataTables view renders a date cell. A wire contract, not
+#: a parser detail — ``bog_wdt`` imports it from here so the watermark and the
+#: parser can never drift to two different readings of the same cell.
+BOG_DATE_FORMAT = "%d %b %Y"
 
 BOG_ADMIN_AJAX = "https://www.bog.gov.gh/wp-admin/admin-ajax.php"
 
@@ -203,6 +206,38 @@ def extract_wpdatatable_ids(page_html: str) -> list[int]:
     return [int(m) for m in _WPDATATABLE_ID_RE.findall(page_html)]
 
 
+def _row_date(row: Any, column: int) -> date | None:
+    """The published date in one wpDataTables row cell.
+
+    ``None`` when the cell is missing, non-textual, empty or unparseable —
+    BoG really does ship empty date cells (table 62 has two), and an
+    unreadable cell must never be allowed to shorten a walk.
+    """
+    if not isinstance(row, list) or column >= len(row):
+        return None
+    cell = row[column]
+    if not isinstance(cell, str) or not cell.strip():
+        return None
+    try:
+        return datetime.strptime(cell.strip(), BOG_DATE_FORMAT).date()
+    except ValueError:
+        return None
+
+
+def _page_reaches_watermark(rows: list[Any], *, date_column: int, since: date) -> bool:
+    """True when this page already carries a row at or before ``since``.
+
+    Only ever asked of tables the walk orders newest-first by their own date
+    column (``WdtSource.date_column``), so such a page is the last one that
+    can hold anything new: every later page is older still, and those rows
+    were fetched — and stored — on an earlier run.
+    """
+    return any(
+        (row_date := _row_date(row, date_column)) is not None and row_date <= since
+        for row in rows
+    )
+
+
 def _wdt_form(
     *,
     nonce: str,
@@ -238,11 +273,23 @@ def fetch_wdt_table(  # noqa: PLR0913 - the wpDataTables protocol has this many 
     column_search: dict[int, str] | None = None,
     page_length: int = WDT_PAGE_LENGTH,
     max_pages: int = 200,
+    since: date | None = None,
+    date_column: int | None = None,
 ) -> list[RawFetch]:
-    """Full wpDataTables pull: host page (nonce) + every data page.
+    """wpDataTables pull: host page (nonce) + data pages up to the watermark.
 
     Paging is driven by ``recordsFiltered`` — the real row count of the
     view; ``recordsTotal`` is the shared underlying table and lies.
+
+    ``since`` is the newest date already captured from this view and bounds
+    the walk to what is actually new: the request order is column 0
+    descending, so on a table whose column 0 IS the date (``date_column``)
+    the first page that reaches back to ``since`` is the last page that can
+    hold anything unseen. Without both arguments the walk is unbounded and
+    pages the whole archive — which is exactly right for a cold start, and
+    exactly wrong every night after it. The bound never trims a page: the
+    page that crosses the watermark is fetched and ingested whole, so the
+    bytes handed to the parser are the bytes the site served.
     """
     page_response = session.get(page_url)
     nonce = extract_wdt_nonce(page_response.text, table_id)
@@ -281,6 +328,12 @@ def fetch_wdt_table(  # noqa: PLR0913 - the wpDataTables protocol has this many 
         start += len(rows)
         draw += 1
         if not rows or start >= records_filtered:
+            break
+        if (
+            since is not None
+            and date_column is not None
+            and _page_reaches_watermark(rows, date_column=date_column, since=since)
+        ):
             break
     return fetches
 
@@ -491,34 +544,42 @@ def fetch_pxweb_table(
 # Dispatch
 # ---------------------------------------------------------------------------
 
-_WDT_SOURCES: dict[str, tuple[int, str]] = {
-    "bog_tbill_rates": (2, "https://www.bog.gov.gh/treasury-and-the-markets/treasury-bill-rates/"),
-    "bog_bill_rates": (
-        3,
-        "https://www.bog.gov.gh/treasury-and-the-markets/bank-of-ghana-bill-rates/",
+@dataclass(frozen=True)
+class WdtSource:
+    """One registered wpDataTables view: which table, which host page, and —
+    only when it is sound — which column a watermark may be read from.
+
+    ``date_column`` is set ONLY where column 0 IS the published date, because
+    ``_wdt_form`` orders every request by column 0 descending: on those views
+    the walk is newest-first and a page that reaches back past a watermark
+    proves every later page is older still. Tables 62/69/70 sort on their ID
+    column (their dates track it, but "tracks" is not a contract) and tables
+    21/32 carry no date column at all — a page-level date bound is unsound on
+    all five, so they keep the unbounded walk. That costs nothing: none of
+    them exceeds two pages of 1,000 rows.
+    """
+
+    table_id: int
+    page_url: str
+    date_column: int | None = None
+
+
+_TREASURY = "https://www.bog.gov.gh/treasury-and-the-markets/"
+
+_WDT_SOURCES: dict[str, WdtSource] = {
+    "bog_tbill_rates": WdtSource(2, f"{_TREASURY}treasury-bill-rates/", date_column=0),
+    "bog_bill_rates": WdtSource(3, f"{_TREASURY}bank-of-ghana-bill-rates/", date_column=0),
+    "bog_interbank_daily": WdtSource(69, f"{_TREASURY}interbank-interest-rates/"),
+    "bog_interbank_weekly": WdtSource(70, f"{_TREASURY}interbank-interest-rates/"),
+    "bog_mpr": WdtSource(62, f"{_TREASURY}interbank-interest-rates/"),
+    "bog_fx_daily": WdtSource(31, f"{_TREASURY}daily-interbank-fx-rates/", date_column=0),
+    "bog_fx_reference": WdtSource(32, f"{_TREASURY}daily-interbank-fx-rates/"),
+    "bog_fx_historical": WdtSource(
+        40, f"{_TREASURY}historical-interbank-fx-rates/", date_column=0
     ),
-    "bog_interbank_daily": (
-        69,
-        "https://www.bog.gov.gh/treasury-and-the-markets/interbank-interest-rates/",
+    "bog_econ_interest_monthly": WdtSource(
+        21, "https://www.bog.gov.gh/economic-data/interest-rates/"
     ),
-    "bog_interbank_weekly": (
-        70,
-        "https://www.bog.gov.gh/treasury-and-the-markets/interbank-interest-rates/",
-    ),
-    "bog_mpr": (62, "https://www.bog.gov.gh/treasury-and-the-markets/interbank-interest-rates/"),
-    "bog_fx_daily": (
-        31,
-        "https://www.bog.gov.gh/treasury-and-the-markets/daily-interbank-fx-rates/",
-    ),
-    "bog_fx_reference": (
-        32,
-        "https://www.bog.gov.gh/treasury-and-the-markets/daily-interbank-fx-rates/",
-    ),
-    "bog_fx_historical": (
-        40,
-        "https://www.bog.gov.gh/treasury-and-the-markets/historical-interbank-fx-rates/",
-    ),
-    "bog_econ_interest_monthly": (21, "https://www.bog.gov.gh/economic-data/interest-rates/"),
 }
 
 GOG_AUCTION_INDEX_URL = "https://www.bog.gov.gh/gog_auction_results/"
@@ -546,20 +607,29 @@ def fetch_source(  # noqa: PLR0911, PLR0913 - one dispatch arm/knob per protocol
     fx_pair: str | None = None,
     year: str | None = None,
     limit: int = 1,
+    since: date | None = None,
 ) -> list[RawFetch]:
     """Run the proven capture mechanics for one source.
 
     ``period`` selects the edition for monthly publications (APR, SEFD);
     ``fx_pair`` narrows table 40 with the working per-column search;
-    ``year``/``limit`` steer the GFIM FileBird folder and file count.
+    ``year``/``limit`` steer the GFIM FileBird folder and file count;
+    ``since`` is the caller's watermark and bounds a wpDataTables walk to
+    what is new (ignored by the sources that fetch a single document —
+    a PDF edition or an XLSX has no pages to bound).
     """
     if source_key in _WDT_SOURCES:
-        table_id, page_url = _WDT_SOURCES[source_key]
+        source = _WDT_SOURCES[source_key]
         column_search: dict[int, str] | None = None
         if source_key == "bog_fx_historical" and fx_pair is not None:
             column_search = {2: fx_pair}  # Currency Pair column
         return fetch_wdt_table(
-            session, table_id=table_id, page_url=page_url, column_search=column_search
+            session,
+            table_id=source.table_id,
+            page_url=source.page_url,
+            column_search=column_search,
+            since=since,
+            date_column=source.date_column,
         )
     if source_key == "bog_gog_auction_pdf":
         return fetch_auction_results(session, index_url=GOG_AUCTION_INDEX_URL, limit=limit)

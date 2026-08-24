@@ -438,12 +438,20 @@ def test_generate_requires_computed_data_and_registered_return(
     assert "not registered" in unknown.json()["error"]["message"]
 
     # A date no real period ends on (the spine is monthly month-ends from the
-    # first ingested history; a pre-history month-end can never be one).
+    # first ingested history; a pre-history month-end can never be one). The
+    # reporting date is BoG's and the return is registered — what is missing is
+    # a computed position as of that date, so this is the same 409 conflict
+    # ``no_baseline_run`` reports one step later, not a 404.
     absent = "1990-01-31"
     assert absent not in {item["period_end"] for item in _periods(real_client)}
     no_period = _generate(real_client, absent)
-    assert no_period.status_code == 404
-    assert f"No reporting period ends on {absent}" in no_period.json()["error"]["message"]
+    assert no_period.status_code == 409, no_period.text
+    body = no_period.json()["error"]
+    assert body["details"]["error_code"] == "no_computed_position"
+    # The refusal names the date required, and never offers an earlier book as
+    # a substitute for it.
+    assert absent in body["message"]
+    assert "not a substitute" in body["message"]
 
 
 def test_validate_package_reports_findings_and_flips_status(real_client: TestClient) -> None:

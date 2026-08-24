@@ -12,7 +12,7 @@ const tabs = [
   { href: '/submissions/compare', label: 'Compare' },
   { href: '/submissions/history', label: 'History' },
   { href: '/submissions/templates', label: 'Templates' },
-  { href: '/submissions', label: 'Calendar' },
+  { href: '/submissions/calendar', label: 'Calendar' },
   { href: '/submissions/settings', label: 'Settings' },
 ];
 

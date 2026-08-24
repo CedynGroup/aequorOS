@@ -35,6 +35,7 @@ from app.models import (
     User,
 )
 from app.models.regulatory import RegulatoryParameterMixin
+from app.services import parameter_register
 from tests.factories.reconciliation import allow_fixture_balance_gap
 
 # Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
@@ -278,14 +279,6 @@ _FX_CRISIS_END = 110
 # FX position sums are checked against their scaled canonical totals within this
 # tolerance to absorb 4-dp rounding of the individually scaled per-currency rows.
 _FX_TIE_TOLERANCE = Decimal("1")
-_FX_CAPITAL_THRESHOLDS: dict[str, str] = {
-    "fx_nop_single_limit_pct": "10",
-    "fx_nop_aggregate_limit_pct": "20",
-    "fx_var_confidence_pct": "99",
-    "hedge_r2_min_pct": "80",
-    "hedge_offset_low_pct": "80",
-    "hedge_offset_high_pct": "125",
-}
 _FX_STRESS: dict[str, dict[str, str]] = {
     "mild_depreciation": {"ghs_usd_shock_pct": "10"},
     "severe_depreciation": {"ghs_usd_shock_pct": "20"},
@@ -365,87 +358,11 @@ _FTP_SOURCE_FACTOR: dict[str, str] = {
 # FTP balances are checked against their scaled canonical totals within this
 # tolerance to absorb 4-dp rounding of the individually scaled rows.
 _FTP_TIE_TOLERANCE = Decimal("1")
-_FTP_CAPITAL_THRESHOLDS: dict[str, str] = {
-    "ftp_target_roe_pct": "15",
-    "ftp_min_product_margin_pct": "0",
-    "ftp_liquidity_premium_max_bps": "50",
-    "ftp_funding_spread_max_bps": "200",
-    "nmd_core_min_pct": "60",
-    "nmd_core_max_pct": "70",
-}
 _FTP_STRESS: dict[str, dict[str, str]] = {
     "rates_up_200": {"curve_shift_bp": "200"},
     "funding_stress": {"funding_spread_add_bps": "100"},
 }
 
-_LCR_OUTFLOW_RATES: dict[str, str] = {
-    "retail_deposits_stable": "5",
-    "retail_deposits_less_stable": "10",
-    "wholesale_operational": "25",
-    "wholesale_non_op_sme": "40",
-    "wholesale_non_op_corporate": "100",
-    "secured_funding_l1": "0",
-    "term_borrowings_gt_1y": "0",
-    "committed_retail": "10",
-    "committed_corporate": "30",
-}
-_LCR_INFLOW_RATES: dict[str, str] = {
-    "retail_loan_repayments": "50",
-    "corporate_sme_repayments": "50",
-    "interbank_maturing": "100",
-}
-_NSFR_ASF_WEIGHTS: dict[str, str] = {
-    "capital_total": "100",
-    "retail_deposits_stable": "95",
-    "retail_deposits_less_stable": "90",
-    "wholesale_operational": "50",
-    "wholesale_non_op_sme": "90",
-    "wholesale_non_op_corporate": "50",
-    "secured_funding_l1": "0",
-    "term_borrowings_gt_1y": "100",
-}
-_NSFR_RSF_WEIGHTS: dict[str, str] = {
-    "cash_vault": "0",
-    "bog_required_reserves": "0",
-    "bog_excess_reserves": "0",
-    "securities_bog_bills": "5",
-    "securities_gog_bonds": "5",
-    "corporate_unrated": "85",
-    "sme_retail": "85",
-    "retail_other": "85",
-    "residential_mortgage": "65",
-    "commercial_real_estate": "85",
-    "past_due_90": "100",
-    "other_assets": "100",
-    "off_balance_commitments": "5",
-}
-_RISK_WEIGHTS: dict[str, str] = {
-    "RW0": "0",
-    "RW20": "20",
-    "RW35": "35",
-    "RW50": "50",
-    "RW75": "75",
-    "RW100": "100",
-    "RW150": "150",
-}
-_CAPITAL_THRESHOLDS: dict[str, str] = {
-    "car_min": "10",
-    "car_early_warning": "10.5",
-    "car_critical": "9",
-    "cet1_min": "6.5",
-    "tier1_min": "8",
-    "leverage_min": "3",
-    "lcr_min": "100",
-    "lcr_amber_floor": "90",
-    "nsfr_min": "100",
-    "lcr_inflow_cap_pct": "75",
-    "bia_alpha_pct": "15",
-    "fx_charge_pct": "8",
-    "rwa_multiplier": "1250",
-    "tier2_gp_cap_pct_credit_rwa": "1.25",
-    "eve_tier1_limit_pct": "15",
-    "irr_nii_limit_pct": "10",
-}
 _LIQUIDITY_IDIOSYNCRATIC: dict[str, str] = {
     "runoff:retail_deposits_stable": "15",
     "runoff:retail_deposits_less_stable": "20",
@@ -563,6 +480,22 @@ _STRESS_SHOCKS: dict[str, dict[str, dict[str, str]]] = {
     },
     "irr": _IRR_STRESS,
 }
+# The tenant parameter catalogue is defined ONCE, in the application
+# (``services/parameter_register.py``), and imported here. It used to be copied
+# into this fixture, so the hermetic book and what tenant provisioning actually
+# writes were two catalogues that could silently diverge — the exact duplication
+# the ``institution_types.seed_rows`` / ``regulatory_parameters.seed_rows``
+# convention exists to prevent. Aliased to the historical private names so the
+# seeding code below is unchanged.
+_CAPITAL_THRESHOLDS = parameter_register.BANK_CAPITAL_THRESHOLDS
+_FX_CAPITAL_THRESHOLDS = parameter_register.BANK_FX_THRESHOLDS
+_FTP_CAPITAL_THRESHOLDS = parameter_register.BANK_FTP_THRESHOLDS
+_RISK_WEIGHTS = parameter_register.BANK_RISK_WEIGHTS
+_LCR_OUTFLOW_RATES = parameter_register.BANK_LCR_OUTFLOWS
+_LCR_INFLOW_RATES = parameter_register.BANK_LCR_INFLOWS
+_NSFR_ASF_WEIGHTS = parameter_register.BANK_NSFR_ASF
+_NSFR_RSF_WEIGHTS = parameter_register.BANK_NSFR_RSF
+
 _PARAMETER_MODELS: tuple[type[RegulatoryParameterMixin], ...] = (
     ParamLcrRunoffRate,
     ParamNsfrWeight,

@@ -177,6 +177,42 @@ class TestFxTables:
         )
 
 
+    def test_table31_and_table40_agree_exactly_on_the_shared_day(self) -> None:
+        """The nightly FX read may use table 31 because table 31 carries the
+        SAME six columns table 40 does.
+
+        Both captured pages (2026-08-09 harvest) carry 07 Aug 2026, and the
+        one parser reads both: for that day the two tables yield an identical
+        observation set — same codes, dates, values, units, attributes and
+        flags — including the Leone row, which table 40 prints with thousands
+        separators ("2,006.8666") and table 31 without. So a daily job has no
+        reason to page 145 pages of archive to learn one day's rates; table
+        40 is the BACKFILL path, and this is why swapping to table 31 for the
+        nightly read cannot move a number.
+        """
+        shared_day = date(2026, 8, 7)
+
+        def fingerprint(fixture: str) -> set[tuple[object, ...]]:
+            result = bog_wdt.parse_fx_pairs(read_fixture(fixture), context=CTX)
+            return {
+                (
+                    o.series_code,
+                    o.as_of_date,
+                    str(o.value),
+                    o.unit,
+                    tuple(sorted(o.attributes.items())),
+                    tuple(o.quality_flags),
+                )
+                for o in result.observations
+                if o.as_of_date == shared_day
+            }
+
+        latest_day = fingerprint("bog_wdt_table31_daily_fx_latest_day_page.json")
+        archive = fingerprint("bog_wdt_table40_historical_fx_page.json")
+        assert latest_day == archive
+        assert len(latest_day) == 58  # 19 pairs x 3 legs + the USDGHS.MID alias
+
+
 class TestTable32ReferenceBanner:
     def test_banner_parsed_with_regex_and_capture_as_of(self) -> None:
         # README: 'Day's Weighted Median Rate:   11.7615' — a text banner,

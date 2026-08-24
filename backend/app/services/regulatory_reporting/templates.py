@@ -26,7 +26,7 @@ three writers show exactly the same numbers.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Literal
 
 from fastapi import HTTPException, status
@@ -2459,6 +2459,11 @@ def _resolve_total_row(layout: SectionLayout, section: dict[str, Any]) -> Render
     return RenderedRow(cells=tuple(cells), is_total=True)
 
 
+#: Display quantum for money cells. Two decimals, matching the ``pct`` cells
+#: above and the convention of every printed financial return.
+_MONEY_DP = Decimal("0.01")
+
+
 def format_cell(cell: RenderedCell) -> str:
     """Display formatting shared by the CSV metadata rows and the PDF tables:
     thousands separators, parenthesised negatives (research §11 sign
@@ -2470,12 +2475,22 @@ def format_cell(cell: RenderedCell) -> str:
     if isinstance(cell.value, Decimal):
         if cell.kind == "pct":
             return f"{cell.value:,.2f}"
-        number = cell.value
-        if number == number.to_integral_value():
-            number = number.quantize(Decimal("1"))
+        # Money prints at TWO decimals, always. It used to quantize only when the
+        # value happened to be whole and otherwise print whatever precision the
+        # Decimal carried, so a filed LMTD return showed
+        # ``119,578.70687`` — five decimals of a GHS '000 figure, i.e. a claim of
+        # precision to the hundredth of a cedi that the book does not support.
+        # It also broke the layout: the over-long string wrapped mid-number
+        # (``111,023.1839`` / ``7``) and read as a column-width fault rather than
+        # a rounding one.
+        #
+        # Uniform 2 dp also aligns the decimal points down a column, which is the
+        # convention every printed financial return follows — a zero renders
+        # ``0.00``, not ``0``.
+        number = cell.value.quantize(_MONEY_DP, rounding=ROUND_HALF_UP)
         if number < 0:
-            return f"({-number:,})"
-        return f"{number:,}"
+            return f"({-number:,.2f})"
+        return f"{number:,.2f}"
     return str(cell.value)
 
 

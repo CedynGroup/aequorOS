@@ -65,12 +65,17 @@ async function forward(req: NextRequest, path: string[]) {
     );
   }
 
-  const body = await upstream.text();
+  const body = await upstream.arrayBuffer();
+  const responseHeaders: Record<string, string> = {
+    'Content-Type': upstream.headers.get('content-type') ?? 'application/json',
+  };
+  const contentDisposition = upstream.headers.get('content-disposition');
+  if (contentDisposition) responseHeaders['Content-Disposition'] = contentDisposition;
+  const cacheControl = upstream.headers.get('cache-control');
+  if (cacheControl) responseHeaders['Cache-Control'] = cacheControl;
   return new NextResponse(body, {
     status: upstream.status,
-    headers: {
-      'Content-Type': upstream.headers.get('content-type') ?? 'application/json',
-    },
+    headers: responseHeaders,
   });
 }
 

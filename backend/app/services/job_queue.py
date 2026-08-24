@@ -81,6 +81,17 @@ _BACKOFF_BASE_SECONDS = 5
 #: that it completes well inside it — see ``WorkerSettings.worker_stale_job_seconds``.
 STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
     "etl_dedup": 4 * 60 * 60,
+    # ``desk_capture`` walks the Bank of Ghana's published tables over HTTP, so
+    # its runtime is set by a THIRD PARTY's site and cannot be asserted to fit
+    # the fleet default. On 2026-08-23 it did not: the capture ran past the
+    # 3600 s window, `reclaim_stale` declared its worker dead, and the retry
+    # restarted the walk from the top — three times, for eleven hours, POSTing
+    # bog.gov.gh roughly every two seconds. Nothing was wrong with the handler;
+    # the reclaim window was simply shorter than the work, which is the exact
+    # failure ``etl_dedup`` above records. A reclaim that fires on a live job
+    # does not recover it, it duplicates it — and here the duplicate was
+    # abusive traffic to the regulator this platform reports to.
+    "desk_capture": 6 * 60 * 60,
 }
 
 

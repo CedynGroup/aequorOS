@@ -61,8 +61,10 @@ test.describe('submission pipeline', () => {
   test('journey 2: calendar deadline board loads with obligations', async ({
     page,
   }) => {
-    await page.goto('/submissions');
-    await expect(page).toHaveURL(/\/submissions/);
+    // The deadline board moved to its own route when /submissions became a
+    // redirect to the Returns workspace; the obligation table lives here.
+    await page.goto('/submissions/calendar');
+    await expect(page).toHaveURL(/\/submissions\/calendar/);
     // The obligation table is populated from listReportingObligations for the
     // seeded bank — LCR-NSFR (monthly liquidity return; the legacy 'BSD3' code was recoded — official BSD3 is Large Exposures) must appear.
     await expect(page.getByText('LCR-NSFR').first()).toBeVisible();

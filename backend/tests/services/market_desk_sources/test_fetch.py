@@ -5,7 +5,7 @@ REAL captured host pages, and the wire protocols against mocked transports
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 from urllib.parse import parse_qs
 
 import httpx
@@ -135,6 +135,158 @@ class TestWdtPaging:
         assert form["columns[2][search][value]"] == ["USDGHS"]
         assert form["columns[2][search][regex]"] == ["false"]
         assert form["columns[2][data]"] == ["2"]
+
+
+class TestWdtWatermark:
+    """A walk is bounded by what the desk already holds.
+
+    Table 40 (historical interbank FX) is the whole published archive —
+    144,647 rows on 2026-08-19, 145 pages of 1,000 — and it grows with
+    HISTORY, not with news. An unbounded nightly walk therefore costs more
+    every night forever while learning one new day. The bound is the newest
+    date already captured; the pacing is untouched (the defect is request
+    COUNT, not request rate).
+    """
+
+    NEWEST = date(2026, 8, 19)
+
+    def _fx_rows(self, days: int) -> list[list[str]]:
+        """Table 40's shape, newest first — the order the request asks for
+        (``order[0][column]=0``, ``dir=desc``, and column 0 IS the date)."""
+        rows: list[list[str]] = []
+        for offset in range(days):
+            label = (self.NEWEST - timedelta(days=offset)).strftime("%d %b %Y")
+            rows.append([label, "US Dollar", "USDGHS", "11.7556", "11.7674", "11.7615"])
+            rows.append([label, "Euro", "EURGHS", "13.5945", "13.6080", "13.6013"])
+        return rows
+
+    def _handler(self, rows: list[list[str]], *, page_length: int, table_id: int):
+        posts: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    text=f'name="wdtNonceFrontendServerSide_{table_id}" value="c2041d81bf"',
+                )
+            form = parse_qs(request.content.decode())
+            start = int(form["start"][0])
+            posts.append(start)
+            return httpx.Response(
+                200,
+                json={
+                    "draw": int(form["draw"][0]),
+                    "recordsTotal": 144647,
+                    "recordsFiltered": len(rows),
+                    "data": rows[start : start + page_length],
+                },
+            )
+
+        return handler, posts
+
+    def _walk(  # noqa: PLR0913 - mirrors fetch_wdt_table's own knobs
+        self,
+        rows: list[list[str]],
+        *,
+        page_length: int,
+        since: date | None,
+        date_column: int | None = 0,
+        table_id: int = 40,
+    ) -> tuple[list[fetch.RawFetch], list[int]]:
+        handler, posts = self._handler(rows, page_length=page_length, table_id=table_id)
+        fetches = fetch.fetch_wdt_table(
+            _session(handler),
+            table_id=table_id,
+            page_url="https://www.bog.gov.gh/treasury-and-the-markets/"
+            "historical-interbank-fx-rates/",
+            page_length=page_length,
+            since=since,
+            date_column=date_column,
+        )
+        return fetches, posts
+
+    def test_no_watermark_walks_the_whole_archive(self) -> None:
+        """A cold start has nothing to bound the walk with, so it pages in
+        full — deliberately. A watermark invented to avoid a first backfill
+        would silently truncate the history it claims to hold."""
+        rows = self._fx_rows(days=40)  # 80 rows
+        _, posts = self._walk(rows, page_length=10, since=None)
+        assert len(posts) == 8
+        assert posts == [0, 10, 20, 30, 40, 50, 60, 70]
+
+    def test_watermark_stops_at_the_first_page_that_reaches_back(self) -> None:
+        """Newest-first paging means the first page carrying a row at or
+        before the watermark is the last page that can hold anything new."""
+        rows = self._fx_rows(days=40)
+        # 10 rows/page = 5 published days/page. Page 1 covers 19..15 Aug (all
+        # newer than the watermark); page 2 covers 14..10 Aug and contains it.
+        fetches, posts = self._walk(rows, page_length=10, since=date(2026, 8, 14))
+        assert posts == [0, 10]
+        assert len(fetches) == 2
+
+    def test_the_page_that_crosses_the_watermark_is_kept_whole(self) -> None:
+        """The bound narrows the FETCH, never the bytes: the crossing page is
+        stored and parsed exactly as the site served it, so the ingest path
+        sees identical input to an unbounded walk."""
+        rows = self._fx_rows(days=40)
+        bounded, _ = self._walk(rows, page_length=10, since=date(2026, 8, 14))
+        unbounded, _ = self._walk(rows, page_length=10, since=None)
+        assert [f.sha256 for f in bounded] == [f.sha256 for f in unbounded[:2]]
+        assert bounded[1].meta["rows"] == 10
+
+    def test_todays_watermark_costs_exactly_one_page(self) -> None:
+        """The nightly case: yesterday is already held, so one page answers
+        the whole question — 1 POST where the archive walk takes 145."""
+        rows = self._fx_rows(days=400)  # 800 rows
+        _, posts = self._walk(rows, page_length=1000, since=date(2026, 8, 18))
+        assert posts == [0]
+
+    def test_watermark_is_ignored_when_the_table_has_no_date_column(self) -> None:
+        """Tables 62/69/70 order by an ID column and tables 21/32 have no date
+        at all, so a page-level date bound is not sound there — they keep the
+        unbounded walk rather than guess. None exceeds two pages of 1,000."""
+        rows = self._fx_rows(days=40)
+        _, posts = self._walk(rows, page_length=10, since=date(2026, 8, 14), date_column=None)
+        assert len(posts) == 8
+
+    def test_unreadable_date_cells_never_shorten_a_walk(self) -> None:
+        """BoG really does ship empty date cells (table 62 has two). An
+        unparseable cell must not be read as 'old enough to stop'."""
+        rows = [["", "US Dollar", "USDGHS", "11.75", "11.77", "11.76"] for _ in range(20)]
+        rows += self._fx_rows(days=5)
+        _, posts = self._walk(rows, page_length=10, since=date(2026, 8, 14))
+        assert len(posts) == 3  # 30 rows / 10, no early stop from the blank pages
+
+    def test_dispatch_bounds_table_40_and_leaves_table_69_unbounded(self) -> None:
+        """``fetch_source`` carries the watermark to the registered view; the
+        registry decides whether that view can honour it.
+
+        Same rows, same watermark, at the production page length of 1,000:
+        table 40's date IS its ordered column, so one page answers the night;
+        table 69 orders by an ID column, so it pages in full.
+        """
+        rows = self._fx_rows(days=1500)  # 3,000 rows = 3 pages of 1,000
+        watermark = self.NEWEST - timedelta(days=400)
+        results: dict[str, list[int]] = {}
+        for source_key, table_id in (("bog_fx_historical", 40), ("bog_interbank_daily", 69)):
+            handler, posts = self._handler(
+                rows, page_length=fetch.WDT_PAGE_LENGTH, table_id=table_id
+            )
+            fetch.fetch_source(source_key, _session(handler), since=watermark)
+            results[source_key] = posts
+        assert results["bog_fx_historical"] == [0]
+        assert results["bog_interbank_daily"] == [0, 1000, 2000]
+
+    def test_registry_marks_only_date_ordered_views_as_watermarkable(self) -> None:
+        """``date_column`` is a claim about SOUNDNESS, not a convenience: it
+        is set only where column 0 — the column every request orders by —
+        is the published date."""
+        for bounded in ("bog_fx_historical", "bog_fx_daily", "bog_tbill_rates",
+                        "bog_bill_rates"):
+            assert fetch._WDT_SOURCES[bounded].date_column == 0, bounded
+        for unbounded in ("bog_interbank_daily", "bog_interbank_weekly", "bog_mpr",
+                          "bog_fx_reference", "bog_econ_interest_monthly"):
+            assert fetch._WDT_SOURCES[unbounded].date_column is None, unbounded
 
 
 class TestPacing:

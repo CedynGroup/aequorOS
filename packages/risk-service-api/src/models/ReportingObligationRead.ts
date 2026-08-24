@@ -39,6 +39,13 @@ import {
   ReturnFamilyToJSON,
   ReturnFamilyToJSONTyped,
 } from "./ReturnFamily";
+import type { AnchorDataStatus } from "./AnchorDataStatus";
+import {
+  AnchorDataStatusFromJSON,
+  AnchorDataStatusFromJSONTyped,
+  AnchorDataStatusToJSON,
+  AnchorDataStatusToJSONTyped,
+} from "./AnchorDataStatus";
 import type { ChannelCode } from "./ChannelCode";
 import {
   ChannelCodeFromJSON,
@@ -94,6 +101,12 @@ export interface ReportingObligationRead {
    * @memberof ReportingObligationRead
    */
   basis?: ReturnBasis;
+  /**
+   *
+   * @type {AnchorDataStatus}
+   * @memberof ReportingObligationRead
+   */
+  dataStatus?: AnchorDataStatus;
   /**
    *
    * @type {ChannelCode}
@@ -218,6 +231,10 @@ export function ReportingObligationReadFromJSONTyped(
     ...json,
     basis:
       json["basis"] == null ? undefined : ReturnBasisFromJSON(json["basis"]),
+    dataStatus:
+      json["data_status"] == null
+        ? undefined
+        : AnchorDataStatusFromJSON(json["data_status"]),
     defaultChannel: ChannelCodeFromJSON(json["default_channel"]),
     dueDate: new Date(json["due_date"]),
     dueTime:
@@ -253,6 +270,7 @@ export function ReportingObligationReadToJSONTyped(
 
   return {
     basis: ReturnBasisToJSON(value["basis"]),
+    data_status: AnchorDataStatusToJSON(value["dataStatus"]),
     default_channel: ChannelCodeToJSON(value["defaultChannel"]),
     due_date: value["dueDate"].toISOString().substring(0, 10),
     due_time: DueTimeToJSON(value["dueTime"]),

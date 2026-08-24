@@ -1250,6 +1250,25 @@ def _load_irr_params_or_none(
             db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
         )
     }
+    if not curve:
+        # The base curve is MARKET DATA, not board policy, so when no governed
+        # base-curve override exists it resolves through the bank's own
+        # Markets-tab source preference — the same seam FTP consumes and the
+        # same one the discount curve below already uses. Before this an IRRBB
+        # run refused outright unless someone had seeded a curve snapshot into
+        # ``param_stress_shock``, which no production tenant ever had: a
+        # provisioned institution with a published desk curve still could not
+        # run IRRBB (founder review 2026-08-23).
+        #
+        # Param rows keep PRECEDENCE deliberately. They are an explicit governed
+        # override, and the hermetic book seeds them, so every IRRBB golden
+        # reproduces byte-identically; the market plane fills in only where
+        # they are absent, which in production is everywhere.
+        projection = market_data_sources.preferred_projection_curve(
+            db, ctx.organization_id, bank.id, jurisdictions.base_currency(bank), as_of
+        )
+        if projection is not None:
+            curve = discount_curve_midpoints_pct(projection.points)
     if (
         not curve
         or not scenario_shocks

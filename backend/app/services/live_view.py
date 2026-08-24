@@ -9,6 +9,8 @@ immediately and return the job id to poll via ``GET /jobs/{id}``.
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -71,8 +73,9 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
     is_stale = False
-    if period is not None:
-        is_stale = _ensure_live_current(db, ctx, bank, period)
+    refresh_as_of = period.period_end if period is not None else _current_fact_as_of(db, ctx, bank)
+    if refresh_as_of is not None:
+        is_stale = _ensure_live_current(db, ctx, bank, refresh_as_of)
 
     rows = list(
         db.scalars(
@@ -149,9 +152,7 @@ def _reconciliation_view(
     )
 
 
-def _ensure_live_current(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
-) -> bool:
+def _ensure_live_current(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> bool:
     """Keep the live cache current WITHOUT blocking the read.
 
     A read never recomputes inline — the module engines are seconds each, far too
@@ -183,12 +184,24 @@ def _ensure_live_current(
         ctx.organization_id,
         "pipeline_refresh",
         bank_id=bank.id,
-        payload={"as_of_date": period.period_end.isoformat(), "reason": "live-read auto-refresh"},
+        payload={"as_of_date": as_of.isoformat(), "reason": "live-read auto-refresh"},
         run_after=utc_now(),
-        coalesce_key=f"refresh:{bank.id}:{period.period_end.isoformat()}",
+        coalesce_key=f"refresh:{bank.id}:{as_of.isoformat()}",
     )
     db.commit()
     return behind
+
+
+def _current_fact_as_of(
+    db: Session, ctx: TenantContext, bank: Bank
+) -> date | None:
+    """Current live facts are a valid refresh anchor without a filing period."""
+    return db.scalar(
+        select(func.max(CurrentFinancialFact.source_as_of_date)).where(
+            CurrentFinancialFact.organization_id == ctx.organization_id,
+            CurrentFinancialFact.bank_id == bank.id,
+        )
+    )
 
 
 def _refresh_needed(

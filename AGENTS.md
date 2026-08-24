@@ -111,6 +111,28 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   no handler for any role or tenant. Never add seeding paths to the UI, and never
   re-add seed CLI scripts.
 
+- **The reporting date is the REGULATOR's — never derived from ingestion (corrected
+  2026-08-23).** A return's reporting dates come from its `ReturnDefinition` (cadence +
+  BoG anchor conventions) through the ONE authority
+  `app/services/regulatory_reporting/anchors.py`, which touches no tenant data; the
+  calendar and the Returns workspace both bind to it, so they cannot disagree.
+  `bank_reporting_periods` is the KEY FOR ONE COMPUTED FACT SNAPSHOT — created by the
+  data path when a book arrives with an as-of date — and must never again be offered as
+  the user's reporting-date list. It was, and that made BoG's calendar a function of
+  ingestion cadence: 6 of the 22 BSD forms are weekly (Friday close), generation matched
+  `period_end` exactly, and the reference tenant had **19 Friday period-ends against 517
+  Fridays** in its span (17 of them only because the month ended on a Friday) — 96% of
+  weekly filing dates unselectable, and a tenant that had ingested nothing showed an
+  EMPTY calendar. Direction, pinned by `tests/services/test_reporting_anchors.py`:
+  `ReturnDefinition -> reporting date -> snapshot lookup`. The snapshot match is **exact
+  for every cadence** (`common.get_snapshot_for_reporting_date`) — the daily
+  "latest period ending on or before" fallback was a fail-open that would file a
+  month-old book as a business day's position; a miss is `no_computed_position` (409)
+  naming the date required and the nearest earlier one, which is reported and NEVER
+  substituted. An anchor with no data is still listed (`data_status='awaiting_data'`) —
+  the deadline is BoG's and runs regardless. `period_start` stays day-1-of-month: it is
+  the fiscal month-to-date window BSD7 (YTD), BSD8 (opening balance) and
+  `implied_rating` read, not filler.
 - **Official BoG BSD returns are generated from the templates themselves (built 2026-08-15;
   registry `docs/bog_returns/00_full_return_registry.md`).** Every workbook under
   `docs/reporting/` (BSD1…BSD17, 24 files / 76 sheets) is a registered return (family `bsd`,
@@ -197,6 +219,47 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   zero `RegulatoryRun` writes, while scheduled/on-demand `official_run` jobs mint the immutable
   filing runs. Endpoints: `GET /banks/{id}/live-summary|freshness|alerts`,
   `POST /banks/{id}/refresh|official-runs`.
+- **To assess a tenant's health, read what the PLATFORM computed — never call
+  `derive_facts` yourself (2026-08-23).** The two tiers behave differently by
+  design when a book does not reconcile: `derive_current_facts` (live) plugs the
+  gap, stamps the fact `status="blocked"` and KEEPS SERVING, because an operator
+  has to see a broken book to fix it; `derive_facts` (official) REFUSES, because
+  a date that cannot produce a filable book must produce nothing. **A refusal
+  from the official path is therefore not a fault signal** — it is the
+  fail-closed design working, and a date with e.g. positions but no same-date GL
+  is genuinely not filable. Reading it as breakage cost a full session: gaps of
+  "86% of assets" were reported on two tenants and a data withdrawal was
+  recommended for the reference tenant, while `live_metrics` said `ready`
+  throughout and nothing was wrong. Health checks read `live_metrics` /
+  `GET /banks/{id}/live-summary|freshness|alerts`, or the module's own service
+  (`sdi_readiness`, `sdi_views`). `tests/architecture/test_derivation_plane_boundary.py`
+  pins the caller allow-list; only `pipeline.run_official`,
+  `data_activation.activate_bank_data` and `history_loader` may call the filing
+  derivation.
+- **Long-lived local processes serve STALE CODE and the port check will not save
+  you (2026-08-23).** Four backend processes were running from one checkout —
+  one a week old on `:8011`, one from three hours earlier — all against the
+  primary. Port binding was never violated (uvicorn `--reload` shares one socket
+  between supervisor and child), because the stale instance was on a DIFFERENT
+  port. And a port conflict would not have helped: the damage is done by the
+  **in-process live-engine worker thread**, which needs no port, polls the shared
+  `jobs` table and writes `live_metrics` with whatever code its process holds. A
+  new feature can therefore be verified green in a fresh process while the app
+  serves the old behaviour from an old one. Same hazard as the shared prod/local
+  `jobs` table below, entirely local.
+  **The standalone worker is the one that bites, and it has NO `--reload`.**
+  `python -m app.worker` is a separate process from `fastapi dev`; it never
+  reloads on a code change, and it is what writes `live_metrics`. A cleanup that
+  greps only `fastapi dev|uvicorn|app.main` MISSES it — that exact grep was used
+  on 2026-08-23 to declare the environment clean while a worker from two hours
+  earlier kept serving stale results for another half hour. Use the full pattern
+  and check `lstart` against your edits:
+  ```
+  ps -eo pid,lstart,command | grep -E "fastapi dev|uvicorn|app\.main|app\.worker|app\.operator" | grep -v grep
+  ```
+  Restart the worker after ANY change to a service it dispatches
+  (`fact_derivation`, `implied_rating`, the module engines) or its output is a
+  lie about your code.
 - The background worker claims jobs **across tenants**, so on RLS-forced Postgres it must run with
   a BYPASSRLS role — set `WORKER_DATABASE_URL` (the tenant-scoped app role sees zero queued rows).
   Falls back to `DATABASE_URL` for SQLite tests.

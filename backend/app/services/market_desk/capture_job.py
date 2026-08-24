@@ -11,6 +11,17 @@ Scrape BoG/GFIM/GSS after Ghana publication hours every day and stage a
    ``DeskSourceCapture``, and ingest to observations. A source that fails is
    recorded as a ``failed`` capture and NEVER aborts the other sources — the
    morning desk sees exactly which series need the manual fallback (spec §3).
+
+   The fetch is **watermarked**: the same stored history that decides whether
+   a source is due also bounds how far back it is pulled. A nightly run asks
+   the publisher for what happened since the newest date the desk already
+   holds from that source, and no further — so a night's cost tracks the
+   news, not the archive. With no stored observations there is no watermark
+   and the walk is deliberately unbounded: a cold start must backfill in
+   full, and a bound invented to avoid one is worse than no bound at all.
+   Sources marked ``nightly=False`` sit out the ordinary walk entirely (a
+   cheaper sibling serves their series) and run on a cold start or when the
+   job payload names them in ``backfill_sources``.
 2. **Stage** — when (and only when) an APPROVED methodology is effective for
    the COB date, open the day's draft determination and pre-compute proposed
    rates/curves so the Analyst opens a package with numbers ready. Success
@@ -47,9 +58,9 @@ from sqlalchemy import func, select
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
-from app.models import DeskSourceCapture, Job
+from app.models import DeskObservation, DeskSourceCapture, Job
 from app.services import job_queue
-from app.services.market_desk import calculation, determinations, register
+from app.services.market_desk import calculation, determinations, register, snippets
 from app.services.market_desk.sources import SOURCE_REGISTRY, ingest_capture
 from app.services.market_desk.sources.fetch import (
     DeskSession,
@@ -161,6 +172,11 @@ def run_desk_capture(session: Session, job: Job) -> None:
     raw_cob = job.payload.get("cob_date")
     cob = date.fromisoformat(str(raw_cob)) if raw_cob else utc_now().date()
     auction_pass = bool(job.payload.get("auction_pass"))
+    # An operator asks for an archive walk by naming sources here; nothing
+    # else re-reads a backfill source, and the allow-list still gates it.
+    backfill_sources = frozenset(
+        str(key) for key in (job.payload.get("backfill_sources") or ())
+    )
     allowlist = settings.capture_source_allowlist
 
     sources_summary: dict[str, dict[str, Any]] = {}
@@ -168,9 +184,11 @@ def run_desk_capture(session: Session, job: Job) -> None:
         if allowlist is not None and source_key not in allowlist:
             sources_summary[source_key] = {"status": "skipped_not_allowed"}
             continue
-        due, due_reason = _is_due(session, spec, cob, auction_pass=auction_pass)
+        due, due_reason = _is_due(
+            session, spec, cob, auction_pass=auction_pass, backfill_sources=backfill_sources
+        )
         if not due:
-            sources_summary[source_key] = {"status": "skipped_not_due", "reason": due_reason}
+            sources_summary[source_key] = _skipped_summary(session, spec, due_reason)
             continue
         sources_summary[source_key] = _capture_source(session, spec, cob, due_reason)
         # Commit per source: a crash (or an operator watching the console)
@@ -184,6 +202,7 @@ def run_desk_capture(session: Session, job: Job) -> None:
     job.progress = {
         "cob_date": cob.isoformat(),
         "auction_pass": auction_pass,
+        "backfill_sources": sorted(backfill_sources),
         "sources": sources_summary,
         "determination": determination_summary,
     }
@@ -194,24 +213,75 @@ def run_desk_capture(session: Session, job: Job) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _is_due(db: Session, spec: SourceSpec, cob: date, *, auction_pass: bool) -> tuple[bool, str]:
-    """Cadence-aware due-ness from the latest PARSED capture per source.
-
-    Daily sources run every night. The Friday ``auction_pass`` forces the
-    auction sources due. Everything else is due when never captured or when
-    the last parsed capture has aged past its cadence window — failed
-    captures deliberately don't count, so a failing source retries nightly.
-    """
-    if spec.cadence == "daily":
-        return True, "daily"
-    if auction_pass and spec.source_key in AUCTION_PASS_SOURCE_KEYS:
-        return True, "auction_pass"
-    last_parsed = db.scalar(
+def _last_parsed_at(db: Session, spec: SourceSpec) -> datetime | None:
+    """When this source last PARSED cleanly. Failed captures deliberately do
+    not count, so a failing source stays due tomorrow night."""
+    return db.scalar(
         select(func.max(DeskSourceCapture.captured_at)).where(
             DeskSourceCapture.source_key == spec.source_key,
             DeskSourceCapture.status == "parsed",
         )
     )
+
+
+def _source_watermark(db: Session, spec: SourceSpec) -> date | None:
+    """The newest as-of date the desk already holds FROM THIS SOURCE.
+
+    Read from the observations' own lineage (``capture_id`` -> capture
+    ``source_key``), never from the captures' ``as_of_date``: a capture is
+    stamped with the COB it ran on, while an observation carries the date the
+    publisher printed — and it is publisher dates a fetch must be bounded by.
+
+    Superseded generations are counted on purpose. The question is not "is
+    this value still current" but "have we already downloaded this date",
+    and a row that was later corrected still proves the bytes were fetched.
+
+    ``None`` means this source has produced nothing yet — a cold start, where
+    the only honest bound is no bound at all.
+    """
+    return db.scalar(
+        select(func.max(DeskObservation.as_of_date))
+        .join(DeskSourceCapture, DeskSourceCapture.id == DeskObservation.capture_id)
+        .where(DeskSourceCapture.source_key == spec.source_key)
+    )
+
+
+def _is_due(
+    db: Session,
+    spec: SourceSpec,
+    cob: date,
+    *,
+    auction_pass: bool,
+    backfill_sources: frozenset[str] = frozenset(),
+) -> tuple[bool, str]:
+    """Cadence-aware due-ness from the latest PARSED capture per source.
+
+    An explicit ``backfill_sources`` request wins over everything below it.
+    A ``nightly=False`` source is otherwise skipped: a cheaper sibling covers
+    its series every night, so walking it again buys nothing. It still runs
+    once when it has never been captured — a source that is never allowed to
+    backfill has no history to be cheap about.
+
+    Daily sources run every night. The Friday ``auction_pass`` forces the
+    auction sources due. Everything else is due when never captured or when
+    the last parsed capture has aged past its cadence window.
+    """
+    if spec.source_key in backfill_sources:
+        return True, "backfill_requested"
+    if not spec.nightly:
+        cold_start = _last_parsed_at(db, spec) is None
+        return (True, "never_captured") if cold_start else (False, "backfill_only")
+    if spec.cadence == "daily":
+        return True, "daily"
+    if auction_pass and spec.source_key in AUCTION_PASS_SOURCE_KEYS:
+        return True, "auction_pass"
+    return _cadence_due(db, spec, cob)
+
+
+def _cadence_due(db: Session, spec: SourceSpec, cob: date) -> tuple[bool, str]:
+    """Due-ness for a non-daily source: never captured, or aged past its
+    cadence window."""
+    last_parsed = _last_parsed_at(db, spec)
     if last_parsed is None:
         return True, "never_captured"
     age_days = (cob - last_parsed.date()).days
@@ -219,6 +289,20 @@ def _is_due(db: Session, spec: SourceSpec, cob: date, *, auction_pass: bool) -> 
     if age_days >= limit:
         return True, f"stale_{age_days}d"
     return False, f"fresh_{age_days}d"
+
+
+def _skipped_summary(db: Session, spec: SourceSpec, due_reason: str) -> dict[str, Any]:
+    """What a skipped source reports to the morning desk.
+
+    A backfill-only source also reports how far its history reaches, because
+    "we did not fetch the archive tonight" is only reassuring next to the
+    date the archive currently runs to.
+    """
+    summary: dict[str, Any] = {"status": "skipped_not_due", "reason": due_reason}
+    if due_reason == "backfill_only":
+        covered = _source_watermark(db, spec)
+        summary["covered_through"] = covered.isoformat() if covered else None
+    return summary
 
 
 def _capture_source(db: Session, spec: SourceSpec, cob: date, due_reason: str) -> dict[str, Any]:
@@ -231,8 +315,9 @@ def _capture_source(db: Session, spec: SourceSpec, cob: date, due_reason: str) -
     ``pending`` in the summary and leaves NO capture row, so the source stays
     due tomorrow (identical to a not-yet-due source) instead of paging the
     morning desk for a normal BoG/GFIM publication lag."""
+    watermark = _source_watermark(db, spec)
     try:
-        fetches = _fetch(spec, cob)
+        fetches = _fetch(spec, cob, since=watermark)
         data_fetches = _data_fetches(fetches)
         if not data_fetches:
             raise FetchError("fetch returned no data artifact")
@@ -248,6 +333,7 @@ def _capture_source(db: Session, spec: SourceSpec, cob: date, due_reason: str) -
         return {
             "status": "failed",
             "due": due_reason,
+            "since": watermark.isoformat() if watermark else None,
             "error": f"{type(exc).__name__}: {exc}",
         }
     observations = 0
@@ -262,6 +348,10 @@ def _capture_source(db: Session, spec: SourceSpec, cob: date, due_reason: str) -
     summary: dict[str, Any] = {
         "status": "captured",
         "due": due_reason,
+        # ``since`` is the watermark the fetch was bounded by and ``captures``
+        # is how many pages that bound cost — together, the night's answer to
+        # "how much did we ask the publisher for".
+        "since": watermark.isoformat() if watermark else None,
         "captures": len(data_fetches),
         "observations": observations,
         "warnings": warnings,
@@ -279,8 +369,12 @@ def _host_for(source_key: str) -> str:
     return "statsbank.statsghana.gov.gh"
 
 
-def _fetch(spec: SourceSpec, cob: date) -> list[RawFetch]:
+def _fetch(spec: SourceSpec, cob: date, *, since: date | None = None) -> list[RawFetch]:
     """Run the proven capture mechanics for one source (real network).
+
+    ``since`` is the desk's watermark for this source and bounds a paged
+    walk to what is new; the single-document sources (a PDF edition, an XLSX
+    report) have nothing to bound and ignore it.
 
     Tests monkeypatch module-level ``fetch_source`` (or inject an
     ``httpx.MockTransport`` client); the per-host client honors
@@ -295,7 +389,7 @@ def _fetch(spec: SourceSpec, cob: date) -> list[RawFetch]:
             return _fetch_monthly_edition(spec.source_key, desk_session, cob)
         if spec.source_key.startswith("gfim_"):
             return fetch_source(spec.source_key, desk_session, year=str(cob.year))
-        return fetch_source(spec.source_key, desk_session)
+        return fetch_source(spec.source_key, desk_session, since=since)
 
 
 def _previous_month(day: date) -> date:
@@ -354,20 +448,45 @@ def _data_fetches(fetches: list[RawFetch]) -> list[RawFetch]:
     return [fetch for fetch in fetches if "kind" not in fetch.meta]
 
 
+def _capture_payload(db: Session, spec: SourceSpec, raw_fetch: RawFetch) -> dict[str, Any]:
+    """Where this artifact's bytes go — the three payload shapes of ``snippets``.
+
+    A source re-fetched nightly hands back the same bytes night after night,
+    and every copy cost a full base64 inline payload. When an earlier capture
+    of the SAME source already holds these exact bytes, this row keeps its
+    lineage and defers the payload to that row instead of storing a second
+    copy; readers resolve the hop, so the artifact is unchanged for everyone
+    who reads it. The saving is in storage only — nothing about what is
+    captured, or which row an observation hangs off, changes.
+    """
+    anchor_id = snippets.find_payload_anchor(
+        db,
+        source_key=spec.source_key,
+        content=raw_fetch.content,
+        content_sha256=raw_fetch.sha256,
+    )
+    if anchor_id is not None:
+        return snippets.deferred_payload(anchor_id=anchor_id, meta=raw_fetch.meta)
+    if len(raw_fetch.content) <= _INLINE_PAYLOAD_MAX_BYTES:
+        return {
+            snippets.CONTENT_BASE64: base64.b64encode(raw_fetch.content).decode("ascii"),
+            "meta": raw_fetch.meta,
+        }
+    return {
+        "meta": raw_fetch.meta,
+        snippets.CONTENT_OMITTED: "exceeds inline cap; sha256 retained",
+    }
+
+
 def _persist_capture(
     db: Session, spec: SourceSpec, cob: date, raw_fetch: RawFetch
 ) -> DeskSourceCapture:
-    """Persist one raw artifact as the lineage root of its observations."""
-    if len(raw_fetch.content) <= _INLINE_PAYLOAD_MAX_BYTES:
-        payload: dict[str, Any] = {
-            "content_base64": base64.b64encode(raw_fetch.content).decode("ascii"),
-            "meta": raw_fetch.meta,
-        }
-    else:
-        payload = {
-            "meta": raw_fetch.meta,
-            "content_omitted": "exceeds inline cap; sha256 retained",
-        }
+    """Persist one raw artifact as the lineage root of its observations.
+
+    EVERY artifact gets a row, always — de-duplication skips duplicated
+    bytes, never the lineage row an observation points back to.
+    """
+    payload = _capture_payload(db, spec, raw_fetch)
     capture = DeskSourceCapture(
         id=new_uuid7(),
         source_key=spec.source_key,

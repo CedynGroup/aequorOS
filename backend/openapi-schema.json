@@ -752,6 +752,13 @@
         "title": "AnalysisValidationRead",
         "type": "object"
       },
+      "AnchorDataStatus": {
+        "enum": [
+          "computed",
+          "awaiting_data"
+        ],
+        "type": "string"
+      },
       "AppearanceKind": {
         "enum": [
           "drawn",
@@ -29649,6 +29656,10 @@
             "$ref": "#/components/schemas/ReturnBasis",
             "default": "solo"
           },
+          "data_status": {
+            "$ref": "#/components/schemas/AnchorDataStatus",
+            "default": "awaiting_data"
+          },
           "default_channel": {
             "$ref": "#/components/schemas/ChannelCode"
           },
@@ -29991,6 +30002,145 @@
           "denied"
         ],
         "type": "string"
+      },
+      "ReturnAnchorListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "anchors": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnAnchorRead"
+            },
+            "title": "Anchors",
+            "type": "array"
+          },
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "frequency": {
+            "$ref": "#/components/schemas/ReturnFrequency"
+          },
+          "horizon_months": {
+            "title": "Horizon Months",
+            "type": "integer"
+          },
+          "ineligible_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ineligible Reason"
+          },
+          "return_code": {
+            "title": "Return Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_id",
+          "return_code",
+          "frequency",
+          "as_of",
+          "horizon_months",
+          "anchors"
+        ],
+        "title": "ReturnAnchorListRead",
+        "type": "object"
+      },
+      "ReturnAnchorRead": {
+        "additionalProperties": false,
+        "description": "One reporting date a return reports on, with what exists for it.\n\n``reporting_date`` comes from the return definition \u2014 BoG's cadence \u2014 not\nfrom the bank's ingestion history, so this list is identical for two banks\nfiling the same return and is never empty for an eligible return.",
+        "properties": {
+          "data_status": {
+            "$ref": "#/components/schemas/AnchorDataStatus"
+          },
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "due_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Time"
+          },
+          "nearest_computed_before": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nearest Computed Before"
+          },
+          "package_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Id"
+          },
+          "package_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PackageStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "package_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Version"
+          },
+          "rag": {
+            "$ref": "#/components/schemas/ObligationRag"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reporting_date",
+          "due_date",
+          "data_status",
+          "rag"
+        ],
+        "title": "ReturnAnchorRead",
+        "type": "object"
       },
       "ReturnBasis": {
         "enum": [
@@ -60605,6 +60755,125 @@
           }
         ],
         "summary": "Compare Reports",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/return-anchors": {
+      "get": {
+        "description": "The reporting dates this return reports on, and what exists for each.\n\nThe dates are the REGULATOR's, derived from the return definition, so this\nis the list a preparer picks a reporting date from \u2014 not the bank's ingested\nreporting periods, which are a consequence of data arrival rather than a\nfiling calendar (``services/regulatory_reporting/anchors.py``).",
+        "operationId": "listReturnAnchors",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "return_code",
+            "required": true,
+            "schema": {
+              "title": "Return Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "horizon_months",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 24,
+              "minimum": 1,
+              "title": "Horizon Months",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnAnchorListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Return Anchors",
         "tags": [
           "regulatory-reporting"
         ]

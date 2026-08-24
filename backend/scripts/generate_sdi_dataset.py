@@ -31,6 +31,7 @@ import argparse
 import csv
 import math
 import random
+import zlib
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -72,8 +73,28 @@ def _business_days(start: date, end: date) -> list[date]:
     return out
 
 
+#: The institution's fixed history anchor. The month-end spine starts here and
+#: NEVER moves — a bank's past does not change when you ask for more of its
+#: present. Before this was fixed, ``start`` was derived as ``end.year - years``,
+#: so extending ``--end`` by two months shifted the anchor, rebuilt the account
+#: roster from a different RNG stream, and silently rewrote the value of every
+#: historical date. That produced a series which no longer tied to the one
+#: already ingested, and mixing the two broke the balance-sheet identity
+#: (2026-08-23).
+HISTORY_ANCHOR = date(2016, 8, 1)
+
+#: The roster (which accounts exist, when they opened, their base size and growth)
+#: is drawn over a FIXED horizon from :data:`HISTORY_ANCHOR`, independent of
+#: ``--end``, for the same reason: extending the series must APPEND dates, never
+#: re-draw the book those dates value.
+ROSTER_HORIZON_YEARS = 10
+
+
 def build_calendar(end: date, years: int, weekly_years: int, daily_days: int) -> list[date]:
-    start = date(end.year - years, end.month, 1)
+    # ``years`` is retained for the CLI contract but the anchor is fixed; a
+    # shorter history is a slice of the same series, not a different one.
+    start = max(HISTORY_ANCHOR, date(end.year - years, end.month, 1))
+    start = HISTORY_ANCHOR if years >= ROSTER_HORIZON_YEARS else start
     dates = set(_month_ends(start, end))
     dates |= set(_fridays(date(end.year - weekly_years, end.month, min(end.day, 28)), end))
     dates |= set(_business_days(end - timedelta(days=daily_days), end))
@@ -169,7 +190,20 @@ class LoanFacility:
 
 
 def _seeded(ref: str, d: date, lo: float, hi: float) -> float:
-    h = hash((ref, d.toordinal())) & 0xFFFFFFFF
+    """A per-(reference, date) draw that is STABLE across processes.
+
+    This used the built-in ``hash()``, which for a tuple containing a string is
+    salted by ``PYTHONHASHSEED`` — randomised per interpreter unless pinned. The
+    generator therefore produced a DIFFERENT book on every run despite the seeded
+    ``RNG``, so no re-run could reproduce an already-ingested series and any
+    partial re-push mixed two incompatible books. That is what broke the
+    balance-sheet identity on 2026-08-23; the ``--end`` shift compounded it but
+    was not the root cause.
+
+    ``crc32`` over the encoded key is stable across processes, platforms and
+    Python versions.
+    """
+    h = zlib.crc32(f"{ref}|{d.toordinal()}".encode()) & 0xFFFFFFFF
     return lo + (h / 0xFFFFFFFF) * (hi - lo)
 
 
@@ -337,6 +371,17 @@ def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa:
     gl_fh, gl_w = _open(out / "gl_accounts.csv",
                         ["as_of_date", "source_reference", "account_code", "name",
                          "account_class", "currency", "balance"])
+    # Monthly income statement. Without it ``fact_derivation._derive_operational_income``
+    # finds no ``historical_financials`` reference records, so the operational_income
+    # fact group is skipped entirely — which zeroes the earnings component of the
+    # SDI financial-strength scorecard and, because a component with no usable
+    # ratio is omitted rather than scored at a neutral value, blocks the whole
+    # assessment. A deposit-taking institution obviously HAS a P&L; the generator
+    # simply never emitted one (found 2026-08-23).
+    fin_fh, fin_w = _open(out / "historical_financials.csv",
+        ["period_end", "net_interest_income_ghs", "non_interest_income_ghs",
+         "operating_expenses_ghs", "provisions_ghs", "net_income_ghs"])
+    prev_prov: dict[str, float | None] = {"v": None}
     cs_fh, cs_w = _open(out / "capital_structure.csv",
                         ["as_of_date", "capital_component", "amount_ghs", "tier"])
     cal_fh, cal_w = _open(out / "as_of_calendar.csv", ["as_of_date", "cadence"])
@@ -391,50 +436,83 @@ def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa:
         for i, wt in enumerate(weights):
             is_bill = i < 6
             code = "SEC-TBILL" if is_bill else "SEC-BOND"
-            tenor = RNG.choice([91, 182, 364]) if is_bill else RNG.choice([730, 1095, 1825])
+            # Date-keyed, not RNG.choice: a stream draw here makes a date's tenor
+            # depend on how many dates precede it, so appending history changes
+            # the past.
+            _tenors = [91, 182, 364] if is_bill else [730, 1095, 1825]
+            tenor = _tenors[int(_seeded(f"tenor{i}", d, 0, len(_tenors) - 0.001))]
             sec_w.writerow([iso, f"{code}-{i:02d}", "SECURITY_HOLDING", GHS, _m(wt * scale),
                             "CP-GOG", code, "GL-1200",
                             (d + timedelta(days=tenor)).isoformat(),
                             f"{_seeded('secr', d, 0.20, 0.28):.4f}", _m(wt * scale), "true"])
 
-        # GL + capital (identity closes; other assets is the plug); only on reporting
-        # dates (month-ends + Fridays) — daily GL reconciliation rides the positions.
-        if cad in ("monthly", "weekly"):
-            months_since = (d - calendar[0]).days / 30.44
-            paid_up = 22_000_000.0
-            statutory = 8_000_000.0 + months_since * 180_000.0
-            retained = 6_500_000.0 + months_since * 210_000.0
-            equity = paid_up + statutory + retained
-            net_loans = loan_total - prov_total
-            hard = vault + bog + sec_total + net_loans
-            borrowings = dep_total * 0.03
-            other = max(dep_total * 0.02, dep_total + borrowings + equity - hard)
-            for code, name, cls, bal in [
-                ("GL-1010", "Cash on hand (vault)", "ASSET", vault),
-                ("GL-1020", "Balances with Bank of Ghana", "ASSET", bog),
-                ("GL-1200", "Investments — GoG securities", "ASSET", sec_total),
-                ("GL-1300", "Loans & advances (gross)", "ASSET", loan_total),
-                ("GL-1390", "Less: impairment allowance", "ASSET", -prov_total),
-                ("GL-1900", "Other assets", "ASSET", other),
-                ("GL-2100", "Customer deposits", "LIABILITY", dep_total),
-                ("GL-2400", "Borrowings", "LIABILITY", borrowings),
-                ("GL-3100", "Stated / paid-up capital", "EQUITY", paid_up),
-                ("GL-3200", "Statutory reserve fund", "EQUITY", statutory),
-                ("GL-3300", "Retained earnings", "EQUITY", retained),
-            ]:
-                gl_w.writerow([iso, code, code, name, cls, GHS, _s(bal)])
-            for comp, amt, tier in [
-                ("paid_up_capital", paid_up, "CET1"), ("statutory_reserves", statutory, "CET1"),
-                ("retained_earnings", retained, "CET1"),
-                ("credit_risk_reserve", prov_total * 0.15, "CET1"),
-                ("intangible_assets", -1_200_000.0, "CET1_DEDUCTION"),
-            ]:
-                cs_w.writerow([iso, comp, _s(amt), tier])
+        # GL + capital, struck on EVERY as-of date (identity closes; other assets
+        # is the plug).
+        #
+        # This used to be written only on month-ends and Fridays, on the reasoning
+        # that "daily GL reconciliation rides the positions". It does not. A real
+        # core-banking feed strikes a general ledger every business day, and a date
+        # with positions but no GL cannot satisfy the balance-sheet identity at
+        # all — so the live plane, which anchors on the FRESHEST ingested date,
+        # lands on a GL-less day and reports the tenant as unreconciled. On
+        # 2026-08-23 that is exactly what the SDI showed: a 1.03% identity gap on
+        # 2026-07-02, a daily-only date, against a 0.1% governed tolerance.
+        #
+        # It was invisible while the daily window happened to END on a month-end.
+        # Extending the series past the last GL strike exposed it. 376 of the
+        # tenant's 513 position dates had no same-date GL.
+        months_since = (d - calendar[0]).days / 30.44
+        paid_up = 22_000_000.0
+        statutory = 8_000_000.0 + months_since * 180_000.0
+        retained = 6_500_000.0 + months_since * 210_000.0
+        equity = paid_up + statutory + retained
+        net_loans = loan_total - prov_total
+        hard = vault + bog + sec_total + net_loans
+        borrowings = dep_total * 0.03
+        other = max(dep_total * 0.02, dep_total + borrowings + equity - hard)
+        for code, name, cls, bal in [
+            ("GL-1010", "Cash on hand (vault)", "ASSET", vault),
+            ("GL-1020", "Balances with Bank of Ghana", "ASSET", bog),
+            ("GL-1200", "Investments — GoG securities", "ASSET", sec_total),
+            ("GL-1300", "Loans & advances (gross)", "ASSET", loan_total),
+            ("GL-1390", "Less: impairment allowance", "ASSET", -prov_total),
+            ("GL-1900", "Other assets", "ASSET", other),
+            ("GL-2100", "Customer deposits", "LIABILITY", dep_total),
+            ("GL-2400", "Borrowings", "LIABILITY", borrowings),
+            ("GL-3100", "Stated / paid-up capital", "EQUITY", paid_up),
+            ("GL-3200", "Statutory reserve fund", "EQUITY", statutory),
+            ("GL-3300", "Retained earnings", "EQUITY", retained),
+        ]:
+            gl_w.writerow([iso, code, code, name, cls, GHS, _s(bal)])
+        for comp, amt, tier in [
+            ("paid_up_capital", paid_up, "CET1"), ("statutory_reserves", statutory, "CET1"),
+            ("retained_earnings", retained, "CET1"),
+            ("credit_risk_reserve", prov_total * 0.15, "CET1"),
+            ("intangible_assets", -1_200_000.0, "CET1_DEDUCTION"),
+        ]:
+            cs_w.writerow([iso, comp, _s(amt), tier])
 
         if d in month_ends:
             trend.append((iso, dep_total, loan_total, npl_total, prov_total))
+            # The P&L is DERIVED from the same book the balance sheet is struck
+            # from, so the two tie: retained earnings grow by exactly the month's
+            # net income (the GL block above advances `retained` by 210k/month).
+            loan_yield = _seeded("ylds", d, 0.26, 0.31)
+            deposit_cost = _seeded("cost", d, 0.09, 0.13)
+            interest_income = (loan_total - prov_total) * loan_yield / 12.0
+            interest_expense = dep_total * deposit_cost / 12.0
+            nii = interest_income - interest_expense
+            fees = dep_total * _seeded("fees", d, 0.004, 0.007) / 12.0
+            # The impairment CHARGE is the movement in the allowance, not its
+            # stock — a stock would double-count every prior month's provisioning.
+            prior = prev_prov["v"] if prev_prov["v"] is not None else prov_total
+            charge = max(0.0, prov_total - prior)
+            prev_prov["v"] = prov_total
+            opex = (nii + fees) * _seeded("cti", d, 0.52, 0.63)
+            net_income = nii + fees - opex - charge
+            fin_w.writerow([iso, _s(nii), _s(fees), _s(opex), _s(charge), _s(net_income)])
 
-    for fh in (dep_fh, ln_fh, cash_fh, sec_fh, gl_fh, cs_fh, cal_fh):
+    for fh in (dep_fh, ln_fh, cash_fh, sec_fh, gl_fh, cs_fh, cal_fh, fin_fh):
         fh.close()
 
     # daily cash-flows for the full span (the 90-day view + reconciliation)
@@ -522,11 +600,37 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cadence", choices=["monthly","weekly","daily","all"], default="monthly")
     ap.add_argument("--reverse", action="store_true", help="push latest dates first")
+    # Extending an already-loaded tenant: push only the dates it does not have.
+    # Without this the only way to add a month was to re-push the whole series
+    # (504 batches on the reference SDI), so a two-month extension cost a full
+    # reload. The generator is seeded, so re-running it reproduces the existing
+    # dates byte-identically and --since selects exactly the new tail.
+    ap.add_argument("--since", help="only push as-of dates AFTER this ISO date")
+    ap.add_argument("--until", help="only push as-of dates up to and including this ISO date")
+    # Backfilling ONE book across dates that already carry the others. The GL
+    # used to be struck only on month-ends and Fridays, so 376 of this tenant's
+    # 513 position dates had no same-date general ledger and could not satisfy
+    # the balance-sheet identity — which the live plane, anchored on the freshest
+    # ingested date, surfaced as an unreconciled tenant. Re-pushing every book
+    # for every date to fix that costs hours; pushing just the missing book does
+    # not.
+    ap.add_argument("--books", help="comma-separated book list, e.g. gl_accounts,capital_structure")
+    # A date already ingested is SKIPPED by idempotency key (``sdiload-<date>``),
+    # which is what makes this script resumable. Backfilling a book onto such a
+    # date therefore needs its own key — and should have one regardless: a
+    # backfill is a distinct ingestion event and deserves its own batch in the
+    # lineage rather than masquerading as the original load.
+    ap.add_argument("--key-suffix", default="", help="batch idempotency-key suffix for a backfill")
     a = ap.parse_args()
     cal = {r["as_of_date"]: r["cadence"] for r in _rows("as_of_calendar.csv")}
     want = {"monthly": {"monthly"}, "weekly": {"monthly","weekly"},
             "daily": {"monthly","weekly","daily"}, "all": {"monthly","weekly","daily"}}[a.cadence]
     dates = sorted((d for d, c in cal.items() if c in want), reverse=a.reverse)
+    if a.since: dates = [d for d in dates if d > a.since]
+    if a.until: dates = [d for d in dates if d <= a.until]
+    if not dates:
+        print("no as-of dates match the selected cadence/window"); return
+    print(f"pushing {len(dates)} as-of dates: {min(dates)} .. {max(dates)}")
     latest = max(dates)
     # entities pushed once (counterparties/products) on a DISTINCT batch key, so the
     # first date's positions batch is not the already-committed entities batch.
@@ -535,12 +639,23 @@ def main():
                        "product": _record_all("products.csv")},
                {"behavioral_assumptions": _record_all("behavioral_assumptions.csv")},
                key=f"sdiload-ent-{first}")
-    by = {f: _group(f) for f in ["positions_deposits.csv","positions_loans.csv",
+    all_books = ["positions_deposits.csv","positions_loans.csv",
+          "positions_cash.csv","positions_securities.csv","gl_accounts.csv"]
+    if a.books:
+        want_books = {b if b.endswith(".csv") else f"{b}.csv" for b in a.books.split(",")}
+        all_books = [b for b in all_books if b in want_books]
+        print(f"books: {', '.join(all_books) or '(none)'}")
+    by = {f: _group(f) for f in all_books}
+    # A filtered-out book contributes nothing rather than raising, so
+    # ``--books gl_accounts`` backfills one ledger without touching positions.
+    by = {f: by.get(f, {}) for f in ["positions_deposits.csv","positions_loans.csv",
           "positions_cash.csv","positions_securities.csv","gl_accounts.csv"]}
     cs = _group("capital_structure.csv")
     # historical_cashflows: the whole daily series, kept with its `date` column
     # (the consumer reads the latest batch's full rows), pushed once on the last date.
     cf_all = [_record(r, set()) for r in _rows("daily_cashflows.csv")]
+    fin_all = sorted((_record(r, set()) for r in _rows("historical_financials.csv")),
+                     key=lambda r: r["period_end"])
     for i, as_of in enumerate(dates, 1):
         ent = {"position": sum((by[f].get(as_of, []) for f in
                ["positions_deposits.csv","positions_loans.csv","positions_cash.csv",
@@ -548,8 +663,13 @@ def main():
                "gl_account": by["gl_accounts.csv"].get(as_of, [])}
         ref = {}
         if cs.get(as_of): ref["capital_structure"] = cs[as_of]
+        # Trailing 36 months of P&L ending at this as-of date: the derivation
+        # builds up to three annual windows and needs 12 months minimum.
+        fin_win = [r for r in fin_all if r["period_end"] <= as_of][-36:]
+        if fin_win: ref["historical_financials"] = fin_win
         if as_of == latest: ref["historical_cashflows"] = cf_all
-        skipped = _push_date(as_of, ent, ref)
+        skipped = _push_date(as_of, ent, ref,
+                             key=f"sdiload-{as_of}{a.key_suffix}" if a.key_suffix else None)
         print(f"[{i}/{len(dates)}] {'skip' if skipped else 'pushed'} {as_of}", flush=True)
     print(f"Done — {len(dates)} dates ({a.cadence}) for {BANK}.")
 
@@ -581,7 +701,12 @@ def main() -> None:
     end = date.fromisoformat(args.end)
     calendar = build_calendar(end, args.years, args.weekly_years, args.daily_days)
     start = calendar[0]
-    deposits, loans, depositors, borrowers = build_rosters(start, end)
+    # The roster is drawn over the FIXED horizon, not to ``end``, so extending the
+    # series appends dates without re-drawing the book (see HISTORY_ANCHOR).
+    roster_end = date(
+        HISTORY_ANCHOR.year + ROSTER_HORIZON_YEARS, HISTORY_ANCHOR.month, HISTORY_ANCHOR.day
+    )
+    deposits, loans, depositors, borrowers = build_rosters(HISTORY_ANCHOR, roster_end)
     depositors["CP-BOG"] = Party("CP-BOG", "Bank of Ghana", "CENTRAL_BANK")
     depositors["CP-GOG"] = Party("CP-GOG", "Government of Ghana", "SOVEREIGN")
 

@@ -24,7 +24,12 @@ import QueryBoundary from '@/components/ui/QueryBoundary';
 import SubTabs from '@/components/ui/SubTabs';
 import { useBankContext } from '@/components/shell/BankContext';
 import SdiModuleContext from '@/components/sdi/SdiModuleContext';
-import { useLiveSummary, useMarketDataSourcePreferences, useMarketDataViews } from '@/lib/api/hooks';
+import {
+  useLiveSnapshots,
+  useLiveSummary,
+  useMarketDataSourcePreferences,
+  useMarketDataViews,
+} from '@/lib/api/hooks';
 import { fmtDateUTC, fmtTimestamp, isoDate } from '@/lib/api/values';
 import CurveBoard from '@/components/markets/CurveBoard';
 import CurveThumbnails from '@/components/markets/CurveThumbnails';
@@ -33,6 +38,8 @@ import ForwardTab from '@/components/markets/ForwardTab';
 import FxBoard from '@/components/markets/FxBoard';
 import FxForwardsBoard from '@/components/markets/FxForwardsBoard';
 import ImpliedRatingCard from '@/components/markets/ImpliedRatingCard';
+import SdiFinancialStrengthCard from '@/components/markets/SdiFinancialStrengthCard';
+import SdiFinancialStrengthTrend from '@/components/markets/SdiFinancialStrengthTrend';
 import RatingsStrip from '@/components/markets/RatingsStrip';
 import IndicesStrip from '@/components/markets/IndicesStrip';
 import RatesBoard, { isReferenceRateCode } from '@/components/markets/RatesBoard';
@@ -163,6 +170,30 @@ export default function MarketsPage() {
   const liveRating = isReproduction
     ? undefined
     : liveSummary.data?.modules.find((module) => module.module === 'rating');
+  const sdiFinancialStrength =
+    liveRating?.metrics.assessment_kind === 'sdi_financial_strength';
+  // The plane-2 daily ladder for the rating module. Already exposed by
+  // ``GET /banks/{id}/live-snapshots`` — the trend is a read of what was
+  // recorded each day, not a recomputation of history.
+  const ratingLadder = useLiveSnapshots(bank?.id, 'rating', 45);
+  // The SDI scorecard has THREE unavailable states and they mean different
+  // things to an operator. Rendering one message for all of them told a reader
+  // the methodology was awaiting approval when it had already been approved and
+  // the real gap was missing evidence at the anchored date.
+  //   methodology_pending — no approved AEQ-GH-SDI-FS version exists yet
+  //   not_computable      — approved, but a mandatory component has no evidence
+  //                         AT THIS as-of date (omitted, never scored neutral)
+  const sdiAssessmentState =
+    typeof liveRating?.metrics.assessment_state === 'string'
+      ? liveRating.metrics.assessment_state
+      : undefined;
+  const sdiMethodologyPending =
+    sdiFinancialStrength && sdiAssessmentState === 'methodology_pending';
+  const sdiNotComputable =
+    sdiFinancialStrength && sdiAssessmentState === 'not_computable';
+  const sdiReason =
+    typeof liveRating?.metrics.reason === 'string' ? liveRating.metrics.reason : undefined;
+
 
   const referenceRates =
     data?.indices.filter((index) => isReferenceRateCode(index.indexCode)) ?? [];
@@ -210,15 +241,65 @@ export default function MarketsPage() {
                 title="Credit monitor"
                 subtitle="Live internal assessment derived from Treasury and ALM inputs"
               >
-                {liveRating && liveRating.metrics.availability !== 'unavailable' ? (
-                  <ImpliedRatingCard rating={liveRating} />
+                {liveRating &&
+                liveRating.metrics.availability !== 'unavailable' ? (
+                  // An SDI gets its OWN card: AEQ-GH-SDI-FS releases component
+                  // scores, not the bank scorecard's grade / PD / sovereign
+                  // ceiling, so ImpliedRatingCard would render an empty grade
+                  // block and read as a broken rating.
+                  sdiFinancialStrength ? (
+                    <div className="space-y-4">
+                      <SdiFinancialStrengthCard rating={liveRating} />
+                      {ratingLadder.data?.snapshots?.length ? (
+                        <SdiFinancialStrengthTrend
+                          snapshots={ratingLadder.data.snapshots}
+                        />
+                      ) : null}
+                    </div>
+                  ) : (
+                    <ImpliedRatingCard rating={liveRating} />
+                  )
                 ) : (
                   <div className="border border-border bg-surface-raised px-5 py-4 text-body text-slate rounded-lg">
                     <p>
-                      No live assessment is available yet. The next canonical-data refresh will
-                      calculate the rating after Capital, Liquidity, IRRBB, and FX live metrics are
-                      available.
+                      {liveRating?.pipelineState === 'failed'
+                        ? 'The prior live assessment is no longer current.'
+                        : sdiMethodologyPending
+                          ? 'SDI financial-strength methodology pending approval.'
+                        : sdiNotComputable
+                          ? 'SDI financial-strength assessment not computable at this date.'
+                        : sdiFinancialStrength
+                          ? 'SDI financial-strength assessment unavailable.'
+                        : 'No live assessment is available yet.'}
                     </p>
+                    {sdiMethodologyPending ? (
+                      <p className="mt-2 text-caption text-navy/85 leading-relaxed">
+                        No credit grade or probability of default is issued until the
+                        `AEQ-GH-SDI-FS` methodology is calibrated, independently validated, and
+                        approved.
+                      </p>
+                    ) : sdiNotComputable ? null : sdiFinancialStrength ? (
+                      <p className="mt-2 text-caption text-navy/85 leading-relaxed">
+                        {sdiReason ??
+                          'The SDI financial-strength assessment is unavailable at this date.'}
+                      </p>
+                    ) : liveRating?.pipelineState === 'failed' ? (
+                      <p className="mt-2 text-caption text-navy/85 leading-relaxed">
+                        A current canonical financial book is required before the assessment can
+                        be recomputed. The live pipeline retries automatically at the latest
+                        available reporting date.
+                      </p>
+                    ) : typeof liveRating?.metrics.reason === 'string' &&
+                    liveRating.metrics.reason ? (
+                      <p className="mt-2 text-caption text-navy/85 leading-relaxed">
+                        Missing prerequisite: {liveRating.metrics.reason}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-caption text-slate leading-relaxed">
+                        A canonical-data refresh will calculate the assessment once its required
+                        market and live-engine inputs are available.
+                      </p>
+                    )}
                     {liveRating && (
                       <p className="mt-2 text-caption text-slate">
                         {liveRating.pipelineState === 'failed'

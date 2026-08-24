@@ -50,6 +50,7 @@ from app.schemas.regulatory_reporting import (
     ResubmissionRequestCreate,
     ResubmissionRequestListRead,
     ResubmissionRequestRead,
+    ReturnAnchorListRead,
     ReturnTemplateListRead,
     SubmissionEventListRead,
     SubmissionPollRead,
@@ -97,6 +98,30 @@ def list_reporting_obligations(
     horizon_months: Annotated[int, Query(ge=1, le=24)] = 3,
 ) -> ReportingObligationListRead:
     return regulatory_reporting.list_obligations(db, ctx, bank_id, horizon_months)
+
+
+@router.get(
+    "/banks/{bank_id}/return-anchors",
+    response_model=ReturnAnchorListRead,
+    operation_id="listReturnAnchors",
+)
+def list_return_anchors(
+    bank_id: str,
+    return_code: str,
+    db: DbSession,
+    ctx: Tenant,
+    horizon_months: Annotated[int, Query(ge=1, le=24)] = 3,
+) -> ReturnAnchorListRead:
+    """The reporting dates this return reports on, and what exists for each.
+
+    The dates are the REGULATOR's, derived from the return definition, so this
+    is the list a preparer picks a reporting date from — not the bank's ingested
+    reporting periods, which are a consequence of data arrival rather than a
+    filing calendar (``services/regulatory_reporting/anchors.py``).
+    """
+    return regulatory_reporting.list_return_anchors(
+        db, ctx, bank_id, return_code, horizon_months
+    )
 
 
 @router.get(

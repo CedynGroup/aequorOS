@@ -18,7 +18,7 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.models import (
     DeskDetermination,
@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.operator.deps import Operator, OperatorDb, record_operator_action
 from app.operator.inspection import require_active_inspection
+from app.operator.services.methodology_pdf import render_methodology_pdf
 from app.schemas.market_desk import (
     DeskCaptureContentView,
     DeskCaptureListRead,
@@ -265,6 +266,28 @@ def approve_methodology_version(
     )
     db.commit()
     return _methodology_read(row)
+
+
+@router.get("/methodologies/{methodology_code}/versions/{version}/pdf")
+def get_methodology_pdf(
+    methodology_code: str,
+    version: int,
+    db: OperatorDb,
+    _operator: Operator,
+    download: bool = Query(default=False),
+) -> Response:
+    """Render one governed methodology version for in-console review or download."""
+    row = register.get_version(db, methodology_code, version)
+    filename = f"{row.methodology_code}-v{row.version}-methodology.pdf"
+    disposition = "attachment" if download else "inline"
+    return Response(
+        content=render_methodology_pdf(row),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 # -- observations / captures ----------------------------------------------------------

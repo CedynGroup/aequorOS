@@ -55,8 +55,7 @@ from app.services.attestation import digests, register_state
 from app.services.audit import record_event
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
-    get_effective_period_or_404,
-    get_period_for_reporting_date_or_404,
+    get_snapshot_for_reporting_date,
     read_package,
     require_actor,
 )
@@ -230,12 +229,17 @@ def _generate_package(
     eligibility = resolve_eligibility(db, ctx, bank, as_of=payload.reporting_date)
     bank_class = eligibility.institution_class
     eligibility.require(definition, reporting_date=payload.reporting_date)
-    # Daily returns file on business days that seldom coincide with a monthly
-    # reporting-period end, so they draw on the latest effective period.
-    if definition.frequency == "daily":
-        period = get_effective_period_or_404(db, ctx, bank, payload.reporting_date)
-    else:
-        period = get_period_for_reporting_date_or_404(db, ctx, bank, payload.reporting_date)
+    # The figures are the figures AS OF the regulator's reporting date, for every
+    # cadence — no "nearest earlier book" fallback (see the resolver's docstring
+    # for the daily-return fail-open it replaces).
+    period = get_snapshot_for_reporting_date(
+        db,
+        ctx,
+        bank,
+        payload.reporting_date,
+        return_code=definition.code,
+        frequency=definition.frequency,
+    )
 
     # The data-integrity gate (audit P0-10 / 2026-08-22 D-2), evaluated HERE for
     # the same reason eligibility is: this is the only package-mint site, so a

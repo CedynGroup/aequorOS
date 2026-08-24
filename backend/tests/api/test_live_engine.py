@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.db.session import get_sessionmaker
-from app.models import Job
+from app.models import BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric
 from app.services import job_queue, pipeline
 from tests.adapters.excel_csv import fixtures
 from tests.api.helpers import ORG_1, ORG_2, headers
@@ -92,6 +94,57 @@ def test_get_live_summary_shape(db_client: TestClient) -> None:
     # last official filing is a governance concept, surfaced by GET /freshness, not
     # a liveness flag on the treasury view.
     assert body["is_stale"] is False
+
+
+def test_live_summary_queues_refresh_from_current_facts_without_reporting_period(
+    db_client: TestClient,
+) -> None:
+    _ = db_client
+    session = get_sessionmaker()()
+    try:
+        materialize_canonical_test_book(session)
+        session.execute(
+            delete(BankReportingPeriod).where(BankReportingPeriod.bank_id == SAMPLE_BANK_ID)
+        )
+        session.add(
+            CurrentFinancialFact(
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                source_as_of_date=FIXTURE_AS_OF,
+                source_generation=1,
+                fact_group="balance_sheet",
+                category="cash_vault",
+                amount=Decimal("1"),
+                currency="GHS",
+            )
+        )
+        session.add(
+            LiveMetric(
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                source_as_of_date=FIXTURE_AS_OF,
+                module="rating",
+                metrics={"availability": "unavailable"},
+                status="na",
+                computed_at=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+        )
+        session.commit()
+
+        response = db_client.get(f"{_BASE}/live-summary", headers=headers())
+
+        assert response.status_code == 200, response.text
+        job = session.scalar(
+            select(Job).where(
+                Job.job_type == "pipeline_refresh",
+                Job.bank_id == SAMPLE_BANK_ID,
+            )
+        )
+        assert job is not None
+        assert job.payload["as_of_date"] == AS_OF
+        assert job.payload["reason"] == "live-read auto-refresh"
+    finally:
+        session.close()
 
 
 def test_get_freshness_shape(db_client: TestClient) -> None:
