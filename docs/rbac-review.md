@@ -85,6 +85,12 @@ applicable", or "not supplied". Database constraints and composite tenant foreig
 keys must prevent a principal or scope target from one organization being bound
 to another.
 
+Broad scope is an explicit, audited grant, not a default or an inference from an
+omitted child scope. It must be visibly labelled, remain within the grantor's
+delegation ceiling, and never expand automatically when a new institution, desk,
+or portfolio is added unless the stored binding explicitly names the matching
+`all_*` scope.
+
 Roll out only organization + institution + module + sensitivity first. Add desk,
 portfolio, currency, and pack section only after affected resources carry
 canonical attributes and structural/integration tests enforce each dimension.
@@ -96,6 +102,17 @@ organization, institution, module, sensitivity, and any narrower attributes.
 Load with explicit tenant predicates under organization RLS, then evaluate policy
 against the loaded canonical attributes. Organization RLS remains the outer
 tenant wall, not enforcement for within-tenant scope (`backend/app/api/deps.py:291-358,394-419`).
+
+Tenant bindings never confer cross-organization access. Cross-tenant reads and
+writes remain confined to the separate operator identity, entrypoint, and
+BYPASSRLS session; database bypass is a capability, not an authorization
+decision. Every named-tenant query on that session must carry an explicit
+`organization_id` predicate, while intentionally fleet-wide operations require a
+separately gated operator permission and audit event
+(`backend/app/operator/deps.py:1-23,211-256`;
+`backend/app/operator/services/operator_views.py:1-10,90-112`). Never open a
+BYPASSRLS session from a tenant token or treat an organization-wide binding as a
+cross-tenant grant.
 
 Decision behavior is part of the contract:
 
