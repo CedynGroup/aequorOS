@@ -45,10 +45,12 @@ from app.models import (
     LiveMetric,
     RegulatoryRun,
 )
+from app.services import institution_types, sdi_readiness
 from app.services.audit import record_event
 from app.services.live_types import LiveFindingSpec, LiveModuleResult
 
 METHODOLOGY_CODE = "AEQ-GHS-BANK-PD"
+SDI_METHODOLOGY_CODE = "AEQ-GH-SDI-FS"
 ENGINE_VERSION = "rating-scorecard/1.0"
 _BOOTSTRAP_PROPOSER = "rating-bootstrap@aequoros.system"
 GRADE_ORDER = (
@@ -95,6 +97,108 @@ _DEPOSIT_PREFIXES = ("retail_deposits", "wholesale_")
 _LIVE_DEPENDENCIES = ("capital", "liquidity", "irr", "fx")
 _LIVE_PD_AMBER_PCT = Decimal("5")
 _LIVE_PD_RED_PCT = Decimal("15")
+
+
+def _sdi_methodology_pending(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> LiveModuleResult:
+    """An SDI must never receive the Basel-bank scorecard under another name.
+
+    ``AEQ-GHS-BANK-PD`` consumes CET1/leverage, LCR/NSFR and FX NOP inputs.
+    Savings-and-loans institutions are governed on s.29 capital and LMTD
+    liquidity instead, so substituting neutral values would create an
+    unvalidated credit assessment. The dedicated methodology dossier defines
+    the governed release gate; until it passes, no grade or PD is emitted.
+    """
+    from app.services import sdi_rating  # noqa: PLC0415 - breaks an import cycle
+
+    evidence = sdi_readiness.assess_sdi_readiness(db, ctx, bank, period.period_end)
+    blocked = any(item.status == sdi_readiness.BLOCKED for item in evidence)
+    partial = any(item.status == sdi_readiness.PARTIAL for item in evidence)
+    coverage_status = "blocked" if blocked else "partial" if partial else "ready"
+    # The scorecard's own state machine is the authority on WHICH of the
+    # dossier's §4 states this institution is in and why. The data-readiness
+    # ledger above stays: it answers a different question (is the BOOK ready)
+    # from the one the scorecard answers (is the MODEL approved), and the
+    # founder-visible confusion this whole module exists to prevent is exactly
+    # the two being conflated.
+    assessment = sdi_rating.assessment_state(db, ctx, bank, period.period_end)
+    metrics: dict[str, Any] = {
+        "availability": "unavailable" if not assessment.components else "advisory",
+        "reason": assessment.reason
+        or (
+            f"{SDI_METHODOLOGY_CODE} is pending calibration, independent model validation, "
+            "and approval. The bank-only AEQ-GHS-BANK-PD scorecard is not applicable "
+            "to an SDI because it requires Basel LCR/NSFR, FX NOP, and Tier-1 inputs."
+        ),
+        "methodology_code": SDI_METHODOLOGY_CODE,
+        "methodology_version": assessment.methodology_version,
+        "assessment_kind": "sdi_financial_strength",
+        "assessment_state": assessment.state,
+        # Never a grade, never a PD — dossier §4 states 4 and 5 are closed for v1,
+        # and the scorecard computes neither.
+        "releases_grade": assessment.releases_grade,
+        "releases_pd": assessment.releases_pd,
+        "evidence_as_of": period.period_end.isoformat(),
+        "evidence_coverage_status": coverage_status,
+        "evidence_readiness": [
+            {"module": item.module, "status": item.status, "reasons": item.reasons}
+            for item in evidence
+        ],
+        # Every candidate ratio, with its value or the reason there is none.
+        # Nothing is imputed (§2).
+        "scorecard_evidence": [
+            {
+                "code": item.code,
+                "value": None if item.value is None else str(item.value),
+                "source": item.source,
+                "note": item.note,
+            }
+            for item in assessment.evidence
+        ],
+        "omitted_components": list(assessment.omitted_components),
+        "limitations": list(assessment.limitations),
+    }
+    if assessment.issued_grade is not None:
+        metrics.update(
+            {
+                "composite_score": str(assessment.composite_score),
+                "standalone_grade": assessment.standalone_grade,
+                "rating_grade": assessment.issued_grade,
+                "sovereign_ceiling": assessment.sovereign_ceiling,
+                "ceiling_applied": assessment.ceiling_applied,
+            }
+        )
+    if assessment.components:
+        metrics["component_scores"] = [
+            {
+                "code": component.code,
+                "score": str(component.score),
+                "weight": str(component.weight),
+                "contribution": str(component.contribution),
+            }
+            for component in assessment.components
+        ]
+    return LiveModuleResult(
+        metrics=metrics,
+        # ``live_metrics.status`` is a RAG verdict and the column CHECKs it:
+        # green | amber | red | na. "ready" is not a member — returning it made
+        # the INSERT violate ``ck_live_metrics_status``, roll the whole module
+        # back, and surface as a FAILED rating even though the scorecard had
+        # computed successfully (the failing row carried
+        # ``availability='advisory'``).
+        #
+        # It stays ``na`` even WITH component scores, and that is the honest
+        # value rather than a placeholder: a RAG verdict is a judgement about the
+        # institution's strength, which is precisely what v1 does not issue —
+        # ``AEQ-GH-SDI-FS`` releases advisory component scores and no grade
+        # (dossier §4 states 4 and 5). Colouring the tile would be a grade by
+        # another name. The scores render from ``metrics``; the verdict stays
+        # unissued until an approved score-to-grade mapping exists.
+        status="na",
+        input_hash=None,
+        source_as_of_date=period.period_end,
+    )
 _MOODYS_GRADES = {
     "aaa": "aaa",
     "aa1": "aa+",
@@ -1229,6 +1333,8 @@ def compute_live(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> LiveModuleResult:
     """Live Treasury/ALM rating view; never writes an immutable rating run."""
+    if institution_types.institution_class(db, bank) == "sdi":
+        return _sdi_methodology_pending(db, ctx, bank, period)
     try:
         pit, ttc, stress, snapshot, _, _ = _live_calculation(db, ctx, bank, period)
     except HTTPException as exc:
@@ -1321,6 +1427,14 @@ def run(
     )
     if bank is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    if institution_types.institution_class(db, bank) == "sdi":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{SDI_METHODOLOGY_CODE} is pending calibration, independent model validation, "
+                "and approval; the bank-only implied rating run cannot be used for an SDI."
+            ),
+        )
     period = db.scalar(
         select(BankReportingPeriod).where(
             BankReportingPeriod.id == reporting_period_id,

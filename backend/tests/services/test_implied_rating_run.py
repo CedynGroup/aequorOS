@@ -297,3 +297,63 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_se
     assert live.metrics["key_driver_down"]
     assert live.input_hash is not None
     assert db_session.query(ImpliedRatingRun).count() == 1
+
+
+def test_sdi_live_rating_refuses_the_bank_scorecard_until_its_methodology_is_approved(
+    db_session,
+) -> None:
+    db_session.add_all(
+        [
+            Organization(id="OR-SDIFSA01", name="SDI financial-strength tenant"),
+            Bank(
+                id="BK-SDIFSA01",
+                organization_id="OR-SDIFSA01",
+                name="SDI Financial Strength Ltd",
+                short_name="SDI FS",
+                currency="GHS",
+                jurisdiction_code="GH",
+                license_type="savings_and_loans",
+                institution_type="savings_and_loans",
+            ),
+        ]
+    )
+    db_session.flush()
+    bank = db_session.get(Bank, "BK-SDIFSA01")
+    assert bank is not None
+    ctx = TenantContext(organization_id="OR-SDIFSA01", actor_user_id=USER_ID)
+    period = BankReportingPeriod(
+        organization_id=bank.organization_id,
+        bank_id=bank.id,
+        period_start=date(2026, 1, 1),
+        period_end=PERIOD_END,
+        label="2026-Q1",
+        status="closed",
+    )
+
+    live = implied_rating.compute_live(db_session, ctx, bank, period)
+
+    assert live.status == "na"
+    assert live.metrics["availability"] == "unavailable"
+    assert live.metrics["methodology_code"] == implied_rating.SDI_METHODOLOGY_CODE
+    assert "LCR/NSFR" in live.metrics["reason"]
+    assert live.metrics["evidence_as_of"] == PERIOD_END.isoformat()
+    assert live.metrics["evidence_coverage_status"] == "blocked"
+    readiness = live.metrics["evidence_readiness"]
+    assert {item["module"] for item in readiness} == {
+        "liquidity_table1",
+        "maturity_ladder",
+        "funding_concentration",
+        "capital",
+        "exposures",
+        "provisioning",
+    }
+    assert all(item["status"] == "blocked" for item in readiness)
+    # The scorecard MAY release an internal grade (founder decision 2026-08-23),
+    # but not here: no AEQ-GH-SDI-FS version is approved in this fixture, so the
+    # gate holds and no grade value is emitted. PD stays closed unconditionally —
+    # it needs outcome data no SDI population has (dossier §4 state 5).
+    assert live.metrics["releases_pd"] is False
+    forbidden = {"rating_grade", "pd_band", "pd_pct", "probability_of_default", "implied_grade"}
+    assert not (forbidden & set(live.metrics)), (
+        "an unapproved methodology must emit no grade, whatever releases_grade permits"
+    )
