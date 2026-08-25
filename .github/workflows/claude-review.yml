@@ -205,7 +205,7 @@ jobs:
                 and ($result.modelUsage | length == 0)
                 and (($result.api_error_status // $result.error_status) as $status
                   | ($status | type == "number")
-                    and ($status == 401 or $status == 403 or $status == 404
+                    and ($status == 400 or $status == 401 or $status == 403 or $status == 404
                       or $status == 408 or $status == 429
                       or ($status >= 500 and $status <= 599))))
           ' "$EXECUTION_FILE" >/dev/null; then
