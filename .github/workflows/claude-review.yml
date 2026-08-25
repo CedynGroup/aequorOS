@@ -110,6 +110,7 @@ jobs:
           claude_args: "--max-turns 40 --model claude-sonnet-4-6"
 
       - name: Publish Claude review verdict
+        id: verdict
         if: always()
         env:
           ACTION_OUTCOME: ${{ steps.claude.outcome }}
@@ -164,6 +165,7 @@ jobs:
               APPROVED)
                 publish_verdict success "Review approved" \
                   "Claude completed the review and submitted a formal approval for this commit."
+                echo "approved=true" >> "$GITHUB_OUTPUT"
                 exit 0
                 ;;
               CHANGES_REQUESTED)
@@ -189,14 +191,23 @@ jobs:
             and (([.[] | select(.type == "result")] | last) as $result
               | $result.is_error == true
                 and $result.terminal_reason == "api_error"
+                and ($result.num_turns | type == "number")
                 and $result.num_turns == 1
-                and (($result.usage.input_tokens // 0) == 0)
-                and (($result.usage.output_tokens // 0) == 0)
-                and (($result.modelUsage // {}) | length == 0)
+                and ($result.usage | type == "object")
+                and ($result.usage | has("input_tokens"))
+                and ($result.usage.input_tokens | type == "number")
+                and $result.usage.input_tokens == 0
+                and ($result.usage | has("output_tokens"))
+                and ($result.usage.output_tokens | type == "number")
+                and $result.usage.output_tokens == 0
+                and ($result | has("modelUsage"))
+                and ($result.modelUsage | type == "object")
+                and ($result.modelUsage | length == 0)
                 and (($result.api_error_status // $result.error_status) as $status
-                  | ($status == 401 or $status == 403 or $status == 404
-                    or $status == 408 or $status == 429
-                    or ($status >= 500 and $status <= 599))))
+                  | ($status | type == "number")
+                    and ($status == 401 or $status == 403 or $status == 404
+                      or $status == 408 or $status == 429
+                      or ($status >= 500 and $status <= 599))))
           ' "$EXECUTION_FILE" >/dev/null; then
             STATUS=$(jq -r \
               '[.[] | select(.type == "result")] | last
@@ -232,7 +243,9 @@ jobs:
           exit 1
 
       - name: Enable auto-merge when approved and guardrails hold
-        if: vars.AGENT_AUTOMERGE == 'on'
+        if: >-
+          vars.AGENT_AUTOMERGE == 'on'
+          && steps.verdict.outputs.approved == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
