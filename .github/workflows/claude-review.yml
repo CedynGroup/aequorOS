@@ -187,8 +187,7 @@ jobs:
           # an API rejection happened before inference. Ambiguous failures,
           # local/action errors, and failures after any model work stay red.
           if [[ -n "$EXECUTION_FILE" && -f "$EXECUTION_FILE" ]] && jq -e '
-            ([.[] | select(.type == "assistant")] | length) == 0
-            and (([.[] | select(.type == "result")] | last) as $result
+            (([.[] | select(.type == "result")] | last) as $result
               | $result.is_error == true
                 and $result.terminal_reason == "api_error"
                 and ($result.num_turns | type == "number")
