@@ -66,10 +66,6 @@ jobs:
           fetch-depth: 0
 
       - name: Claude review
-        # Provider or account outages must not make the repository's CI red.
-        # Auto-merge below still requires an APPROVED review, so failing open
-        # here cannot authorize a merge without Claude's formal approval.
-        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -89,9 +85,7 @@ jobs:
           # Profile and other cross-stack changes can span migrations, API
           # contracts, generated clients, and dashboard code. Leave enough
           # turns for Claude to inspect each layer and submit its formal review.
-          # Pin the model so a Claude Code upgrade cannot silently select a new
-          # model that the repository's API key is not provisioned to use.
-          claude_args: "--max-turns 40 --model claude-sonnet-4-6"
+          claude_args: "--max-turns 40"
 
       - name: Enable auto-merge when approved and guardrails hold
         if: vars.AGENT_AUTOMERGE == 'on'
