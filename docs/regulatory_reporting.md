@@ -104,14 +104,19 @@ any regeneration for the same (family, reporting_date) ⇒ new version, prior �
 
 ## 3. Data model (migration 202607170009, all RLS + tenant-scoped)
 
+Migration `202608230042` widens admitted wire-value storage: `regulatory_runs.module` is
+`VARCHAR(32)` (including `enterprise_stress`) and `regulatory_package_artifacts.kind` is
+`VARCHAR(16)` (including `xlsx_working`).
+
 - `regulatory_packages`: organization_id, bank_id, return_family, return_code, reporting_date,
   frequency, status (CHECK per lifecycle), version, supersedes_id, snapshot JSON (the full
   generated return content — rows, totals, metadata), source_runs JSON
   ([{module, run_id, input_hash, engine_version}]), validation_report JSON, generated_by,
   generated_at, notes. Unique current-version per (org, bank, return_code, reporting_date)
   WHERE status != 'superseded'.
-- `regulatory_package_artifacts`: package_id, kind (xlsx|csv|pdf), object_path (outputs tier:
-  `bog_returns/{reporting_date}/{package_id}/{return_code}.{ext}`), checksum_sha256, size_bytes.
+- `regulatory_package_artifacts`: package_id, kind (xlsx|csv|pdf|xlsx_working), object_path
+  (outputs tier: `bog_returns/{reporting_date}/{package_id}/{return_code}.{ext}`), checksum_sha256,
+  size_bytes.
 - `regulatory_package_approvals`: package_id, action (requested|approved|rejected), actor_user_id,
   reason, occurred_at. Checker ≠ maker enforced in service.
 - `regulatory_submission_events`: package_id, channel (orass_sandbox|email|manual),

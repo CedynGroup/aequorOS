@@ -31,8 +31,8 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     ``module`` selects the engine: ``liquidity``, ``capital``, ``forecast``
     (5-year balance-sheet projection), ``optimizer`` (constrained strategic
     search), ``whatif`` (single-shock forecast comparison), ``irr`` (interest
-    rate risk in the banking book), ``fx`` (foreign-exchange risk), or ``ftp``
-    (funds transfer pricing).
+    rate risk in the banking book), ``fx`` (foreign-exchange risk), ``ftp``
+    (funds transfer pricing), ``reverse_stress``, or ``enterprise_stress``.
     """
 
     __tablename__ = "regulatory_runs"
@@ -72,7 +72,7 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     reporting_period_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    module: Mapped[str] = mapped_column(String(16), nullable=False)
+    module: Mapped[str] = mapped_column(String(32), nullable=False)
     scenario_code: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     engine_version: Mapped[str] = mapped_column(String(80), nullable=False)

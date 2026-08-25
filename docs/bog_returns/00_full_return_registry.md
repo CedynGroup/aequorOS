@@ -141,9 +141,10 @@ backend/app/services/regulatory_reporting/bog_forms/
   | `xlsx` / `xlsx_official` | the OFFICIAL workbook layout with every cell as an evaluated NUMBER, sheets protected, run metadata + Completion notes | the immutable, hashed, maker-checked Excel twin of the PDF — governance/audit, not the filing format |
   | `xlsx_working` | the same official layout with the template's **live formulas** (SUM, Domestic+Foreign→Total, cross-sheet annex links) and inputs as values; cross-WORKBOOK links (BSD8→[1]BSD2) written as evaluated values; labelled *WORKING COPY — FOR INTERNAL REVIEW* (workbook title, print header, Completion notes) | ALM/Finance review and challenge; a distinct artifact kind that is **never filed and never signed** (`workflow` filters it out of every filing; only official BoG BSD forms have it — 409 `working_copy_unavailable` elsewhere) |
 
-  Migration `202608160015` admits the kind. The historical sealed kind stays `xlsx`
-  (`xlsx_official` is the explicit alias) so existing artifacts, signatures and the
-  dashboard keep working.
+  Migration `202608160015` admits the kind and widens its append-only version storage;
+  migration `202608230042` widens the current artifact storage to `VARCHAR(16)`. The
+  historical sealed kind stays `xlsx` (`xlsx_official` is the explicit alias) so existing
+  artifacts, signatures and the dashboard keep working.
 - **Unmapped handling:** a line whose source data does not exist yet is emitted at its
   official cell as blank with status `input_required` (or `unmapped` if the mapping is
   bank-specific CoA), listed in the Completion-notes sheet and in the snapshot — the

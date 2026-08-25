@@ -115,8 +115,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_regulatory_packages_frequency",
         ),
         CheckConstraint(
-            "attestation_state IN ('unsigned', 'preparer_certified', "
-            "'fully_certified', 'void')",
+            "attestation_state IN ('unsigned', 'preparer_certified', 'fully_certified', 'void')",
             name="ck_regulatory_packages_attestation_state",
         ),
         CheckConstraint(
@@ -223,7 +222,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
 
 class RegulatoryPackageArtifact(UuidV7PrimaryKeyMixin, Base):
-    """One exported file (xlsx/csv/pdf) minted from a package snapshot."""
+    """One exported file (xlsx/csv/pdf/xlsx_working) minted from a package snapshot."""
 
     __tablename__ = "regulatory_package_artifacts"
     __table_args__ = (
@@ -254,7 +253,7 @@ class RegulatoryPackageArtifact(UuidV7PrimaryKeyMixin, Base):
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
     object_path: Mapped[str] = mapped_column(String(512), nullable=False)
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
