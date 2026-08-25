@@ -598,7 +598,7 @@ def test_every_export_appends_an_artifact_version_with_storage_version(
     assert version.checksum_sha256 == artifact.checksum_sha256
     assert version.size_bytes == artifact.size_bytes
     assert version.created_by == DEMO_USER_ID
-        # The backend reports an object-store version id, so "the artifact as
+    # The backend reports an object-store version id, so "the artifact as
     # filed" is resolvable from the database rather than only from the bucket.
     assert version.storage_version_id
     stored = next(
@@ -632,7 +632,7 @@ def test_a_signature_pinning_a_version_blocks_re_export(
     export_package(db_session, MAKER, package, "pdf")
     db_session.commit()
     version = _artifact_versions(db_session, package.id)[0]
-    
+
     db_session.add(_signature_over(package, version))
     db_session.commit()
 
