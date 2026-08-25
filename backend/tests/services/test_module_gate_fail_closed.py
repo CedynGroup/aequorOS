@@ -27,33 +27,6 @@ from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_ca
 GATED_ENDPOINT = "/api/v1/banks/{bank_id}/fx/dashboard"
 
 
-def _create_bank_with_unresolvable_type() -> str:
-    """A tenant whose discriminator does not resolve.
-
-    Written with the FK check relaxed because the point of the test is the
-    application-level control: the resolver must not substitute a regime even
-    when a bad value reaches the column (an unseeded registry, a pre-FK row, or
-    any deployment where the constraint is not enforced).
-    """
-    session = get_sessionmaker()()
-    try:
-        session.connection().exec_driver_sql("PRAGMA foreign_keys=OFF")
-        bank = Bank(
-            organization_id=ORG_1,
-            name="Unresolvable Type Bank",
-            short_name="UTB",
-            currency="GHS",
-            jurisdiction_code="GH",
-            license_type="universal",
-            institution_type="not_a_real_licence_class",
-        )
-        session.add(bank)
-        session.commit()
-        return bank.id
-    finally:
-        session.close()
-
-
 def test_default_modules_refuses_rather_than_returning_the_bank_superset(
     db_session: Session,
 ) -> None:
@@ -72,6 +45,7 @@ def test_default_modules_refuses_rather_than_returning_the_bank_superset(
 
 def test_module_gate_denies_a_tenant_whose_licence_class_does_not_resolve(
     db_client,  # noqa: ANN001
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session = get_sessionmaker()()
     try:
@@ -81,8 +55,14 @@ def test_module_gate_denies_a_tenant_whose_licence_class_does_not_resolve(
         session.close()
     assert SAMPLE_BANK_ID  # the app engine + reference rows are initialised
 
-    bank_id = _create_bank_with_unresolvable_type()
-    response = db_client.get(GATED_ENDPOINT.format(bank_id=bank_id), headers=headers())
+    def unresolved(_db: Session, bank: Bank):  # noqa: ANN202
+        bank.institution_type = "not_a_real_licence_class"
+        raise institution_types._unresolved(bank, registry_empty=False)  # noqa: SLF001
+
+    # Exercise the API boundary without disabling database constraints. The old
+    # harness used SQLite's PRAGMA and could not run on the Postgres CI tier.
+    monkeypatch.setattr(institution_types, "get_type", unresolved)
+    response = db_client.get(GATED_ENDPOINT.format(bank_id=SAMPLE_BANK_ID), headers=headers())
 
     # Denied, and denied with a precise reason — not granted, and not a bare 500.
     assert response.status_code == 409, f"{response.status_code}: {response.text}"
