@@ -76,8 +76,8 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          MAX_ID=$(gh api --paginate --slurp "repos/$REPO/pulls/$PR/reviews" \
-            --jq '[.[][] | .id] | max // 0')
+          MAX_ID=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
+            | jq -s '[.[][] | .id] | max // 0')
           echo "max_id=$MAX_ID" >> "$GITHUB_OUTPUT"
 
       - name: Claude review
@@ -153,7 +153,7 @@ jobs:
           if [[ "$ACTION_OUTCOME" == "success" && -f "$EXECUTION_FILE" ]]; then
             # Only a new bot review submitted by this action run can satisfy
             # the verdict. Human or stale approvals are deliberately ignored.
-            STATE=$(gh api --paginate --slurp "repos/$REPO/pulls/$PR/reviews" | jq -r \
+            STATE=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" | jq -sr \
               --arg head_sha "$HEAD_SHA" \
               --argjson before "${REVIEWS_BEFORE:-0}" \
               '[.[][] | select(
