@@ -105,9 +105,9 @@ jobs:
           # Profile and other cross-stack changes can span migrations, API
           # contracts, generated clients, and dashboard code. Leave enough
           # turns for Claude to inspect each layer and submit its formal review.
-          # Pin the model so a Claude Code upgrade cannot silently select a new
-          # model that the repository's API key is not provisioned to use.
-          claude_args: "--max-turns 40 --model claude-sonnet-4-6"
+          # Pin the model so a Claude Code default-model rollout cannot break
+          # every PR review before the reviewer takes its first turn.
+          claude_args: "--model claude-opus-4-8 --max-turns 40"
 
       - name: Publish Claude review verdict
         id: verdict
