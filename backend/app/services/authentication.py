@@ -495,9 +495,7 @@ def _provision_signer_identity(db: Session, user: User) -> None:
     )
 
     try:
-        ensure_signer_identity(
-            db, TenantContext(organization_id=user.organization_id), user.id
-        )
+        ensure_signer_identity(db, TenantContext(organization_id=user.organization_id), user.id)
     except SignerIdentityError as exc:
         logger.warning("signer identity not provisioned for {}: {}", user.id, exc)
 

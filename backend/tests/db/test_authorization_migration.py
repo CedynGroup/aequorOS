@@ -19,9 +19,7 @@ __all__ = ["migrated_postgres_schema"]
 def test_authorization_migration_creates_constraints_and_forced_rls(
     migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    assert migrated_postgres_schema.tables({"authorization_bindings"}) == {
-        "authorization_bindings"
-    }
+    assert migrated_postgres_schema.tables({"authorization_bindings"}) == {"authorization_bindings"}
     expected_constraints = {
         "ck_users_authorization_version_positive",
         "fk_authorization_bindings_principal_tenant",

@@ -135,8 +135,7 @@ def upgrade() -> None:
             name="ck_authorization_bindings_module_scope",
         ),
         sa.CheckConstraint(
-            "sensitivity_scope IN "
-            "('all', 'published', 'aggregated', 'confidential', 'restricted')",
+            "sensitivity_scope IN ('all', 'published', 'aggregated', 'confidential', 'restricted')",
             name="ck_authorization_bindings_sensitivity_scope",
         ),
         sa.CheckConstraint(

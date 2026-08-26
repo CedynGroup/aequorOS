@@ -146,9 +146,7 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True), default=utc_now, nullable=False
     )
 
-    status: Mapped[str] = mapped_column(
-        String(16), default=BindingStatus.ACTIVE, nullable=False
-    )
+    status: Mapped[str] = mapped_column(String(16), default=BindingStatus.ACTIVE, nullable=False)
     valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )

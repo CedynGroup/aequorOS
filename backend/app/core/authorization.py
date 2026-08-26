@@ -136,9 +136,7 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
                 Permission.EXPORT,
             }
         ),
-        RoleBundle.APPROVER: frozenset(
-            {Permission.VIEW, Permission.REVIEW, Permission.APPROVE}
-        ),
+        RoleBundle.APPROVER: frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
         # Account administration is intentionally outside operational bundles.
         RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
         # Machine principals do not inherit a human Analyst preset or seat.

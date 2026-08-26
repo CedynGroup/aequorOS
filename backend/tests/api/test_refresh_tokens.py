@@ -376,10 +376,13 @@ def test_authorization_change_rejects_stale_access_and_revokes_refresh_family(
         replacement["access_token"], options={"verify_signature": False}
     )
     assert replacement_claims["authv"] == 2
-    assert password_user.get(
-        "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {replacement['access_token']}"},
-    ).status_code == 200
+    assert (
+        password_user.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {replacement['access_token']}"},
+        ).status_code
+        == 200
+    )
 
 
 # -- malformed / expired / pre-migration -------------------------------------

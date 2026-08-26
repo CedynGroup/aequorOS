@@ -90,9 +90,7 @@ def test_existing_users_start_versioned_without_implicit_new_authority(
     assert user.authorization_version == 1
     assert not list(
         db_session.scalars(
-            select(AuthorizationBinding).where(
-                AuthorizationBinding.principal_user_id == user.id
-            )
+            select(AuthorizationBinding).where(AuthorizationBinding.principal_user_id == user.id)
         )
     )
 
