@@ -14,7 +14,9 @@ token is retired and a new one issued into the same family. Presenting a retired
 token outside ``AuthSettings.refresh_rotation_grace_seconds`` is treated as theft
 and revokes the whole family. Logout, ``set_password`` and deactivation revoke
 outright. A refresh token with no ``jti`` — anything minted before migration
-``202608220028`` — is refused, so those sessions re-authenticate once.
+``202608220028`` — is refused. Every app token also carries the user's
+``authorization_version``; tokens predating ``202608250044`` and tokens whose
+version is stale are refused, so affected sessions re-authenticate once.
 
 **Concurrency (audit finding D-30).** Every write to ``refresh_tokens`` — the
 INSERT in :func:`issue_tokens` and the revoking UPDATE in :func:`_revoke_where` —
@@ -133,6 +135,7 @@ def issue_tokens(
         "subject": user.id,
         "organization_id": user.organization_id,
         "roles": [user.role],
+        "authorization_version": user.authorization_version,
         "email": user.email,
         "name": user.display_name,
         "now": now,
@@ -647,6 +650,14 @@ def refresh_tokens(
         # than leaving live rows behind a door that is already shut.
         revoke_refresh_family(
             db, record.family_id, owner_id=record.user_id, reason="user_deactivated"
+        )
+        raise _INVALID_REFRESH
+    if int(claims["authv"]) != user.authorization_version:
+        revoke_refresh_family(
+            db,
+            record.family_id,
+            owner_id=record.user_id,
+            reason="authorization_changed",
         )
         raise _INVALID_REFRESH
     return issue_tokens(db, user, settings, family_id=record.family_id, rotated_from=record)

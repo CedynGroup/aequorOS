@@ -2,6 +2,15 @@
 
 **Status:** implementation spec · **Audience:** dashboard + platform engineers · **Owner:** Eric
 
+> **As-built foundation (2026-08-25):** The first additive authorization slice
+> is recorded in the backend
+> [`authorization_foundation.md`](../backend/docs/authorization_foundation.md).
+> It corrects the proposed independent `user_roles`/`user_scopes` shape to
+> indivisible scoped bindings, adds exact resource evaluation and authorization
+> version invalidation, and remains shadow-only except for stale-session denial.
+> This proposal's later UI, role-administration, lifecycle, and broad endpoint
+> rollout sections are not claims that those features are built.
+
 This document specifies how AequorOS grants access to bank users, what each user
 type can see and do, how the three settings surfaces (personal / org-admin /
 vendor-platform) are structured, and how banks invite and onboard their people.

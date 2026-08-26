@@ -37,6 +37,9 @@ class User(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("id", "organization_id", name="uq_users_id_organization_id"),
         CheckConstraint(f"role IN ({_values(USER_ROLES)})", name="ck_users_role"),
         CheckConstraint(
+            "authorization_version > 0", name="ck_users_authorization_version_positive"
+        ),
+        CheckConstraint(
             f"auth_provider IN ({_values(AUTH_PROVIDERS)})", name="ck_users_auth_provider"
         ),
         CheckConstraint(f"theme IN ({_values(USER_THEMES)})", name="ck_users_theme"),
@@ -88,4 +91,10 @@ class User(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     # same email clears the stamp (a fresh request) — migration 202608160016.
     access_rejected_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    # Authoritative authorization generation. Every newly issued access and
+    # refresh token carries this value; a role/scope/status/security change
+    # advances it and revokes refresh families in one transaction.
+    authorization_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=sql_text("1"), nullable=False
     )

@@ -18,6 +18,7 @@ def headers(
     org_id: str = ORG_1,
     user_id: UUID | None = None,
     roles: Sequence[str] = ("admin",),
+    authorization_version: int = 1,
 ) -> dict[str, str]:
     """Auth headers for a request: a signed bearer access token for the tenant.
 
@@ -30,6 +31,7 @@ def headers(
         subject=user_id,
         organization_id=org_id,
         roles=list(roles),
+        authorization_version=authorization_version,
         token_type="access",
         email="test@aequoros.example",
         settings=get_settings().auth,

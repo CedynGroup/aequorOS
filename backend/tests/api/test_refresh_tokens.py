@@ -30,7 +30,7 @@ from app.core.config import get_settings
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.models import RefreshToken, User
-from app.services import authentication
+from app.services import authentication, authorization
 from tests.api.helpers import ORG_1, USER_1
 
 _EMAIL = "demo.user.one@example.test"  # conftest._seed_demo_tenants
@@ -130,13 +130,14 @@ def test_login_records_refresh_token_state_as_a_hash(password_user: TestClient) 
     assert tokens["refresh_token"] not in row.token_hash
 
 
-def test_access_token_carries_no_jti_and_still_authenticates(
+def test_access_token_carries_authorization_version_but_no_refresh_jti(
     password_user: TestClient,
 ) -> None:
-    """Access-token behaviour is deliberately unchanged: stateless, no jti."""
+    """Access tokens use the user version while refresh state remains jti-keyed."""
     tokens = _login(password_user)
     claims = jwt.decode(tokens["access_token"], options={"verify_signature": False})
     assert "jti" not in claims
+    assert claims["authv"] == 1
     assert claims["type"] == "access"
     response = password_user.get(
         "/api/v1/auth/me", headers={"Authorization": f"Bearer {tokens['access_token']}"}
@@ -341,6 +342,46 @@ def test_a_bare_is_active_flip_still_blocks_refresh_and_revokes_the_family(
     assert {row.revoked_reason for row in _rows()} == {"user_deactivated"}
 
 
+def test_authorization_change_rejects_stale_access_and_revokes_refresh_family(
+    password_user: TestClient,
+) -> None:
+    tokens = _login(password_user)
+
+    with _session() as session:
+        assert (
+            authorization.invalidate_user_authorization(
+                session,
+                organization_id=ORG_1,
+                user_id=USER_1,
+                reason="test role/scope change",
+            )
+            == 2
+        )
+
+    stale_access = password_user.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert stale_access.status_code == 401
+    assert stale_access.json()["error"]["message"] == (
+        "Session authorization is stale. Sign in again."
+    )
+    assert _refresh(password_user, tokens["refresh_token"]).status_code == 401
+    assert {row.revoked_reason for row in _rows()} == {"authorization_changed"}
+
+    # Existing membership remains usable: re-authentication reads the current
+    # version and issues a fresh family at that version.
+    replacement = _login(password_user)
+    replacement_claims = jwt.decode(
+        replacement["access_token"], options={"verify_signature": False}
+    )
+    assert replacement_claims["authv"] == 2
+    assert password_user.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {replacement['access_token']}"},
+    ).status_code == 200
+
+
 # -- malformed / expired / pre-migration -------------------------------------
 def test_an_expired_refresh_token_is_rejected(password_user: TestClient) -> None:
     tokens = _login(password_user)
@@ -349,6 +390,7 @@ def test_an_expired_refresh_token_is_rejected(password_user: TestClient) -> None
         subject=USER_1,
         organization_id=ORG_1,
         roles=["admin"],
+        authorization_version=1,
         token_type="refresh",
         jti=str(_jti(tokens["refresh_token"])),  # a real, live server-side row
         now=utc_now() - dt.timedelta(seconds=settings.refresh_token_ttl_seconds + 60),
@@ -417,6 +459,7 @@ def test_a_pre_migration_refresh_token_without_a_jti_is_refused(
             "sub": str(USER_1),
             "org": ORG_1,
             "roles": ["admin"],
+            "authv": 1,
             "type": "refresh",
             "iss": settings.jwt_issuer,
             "aud": settings.jwt_audience,
@@ -438,6 +481,46 @@ def test_a_pre_migration_refresh_token_without_a_jti_is_refused(
     assert _refresh(password_user, legacy).status_code == 401
 
 
+def test_pre_authorization_version_access_and_refresh_tokens_fail_closed(
+    password_user: TestClient,
+) -> None:
+    """The deployment transition is a deliberate one-time re-authentication.
+
+    Tokens from before migration 202608250044 have valid signatures and may even
+    carry a refresh jti, but they have no authoritative generation to compare.
+    Neither token type is accepted and their old role claims grant nothing.
+    """
+
+    settings = get_settings().auth
+    secret = settings.jwt_secret
+    assert secret is not None
+    now = utc_now()
+
+    def legacy(token_type: str) -> str:
+        claims: dict[str, object] = {
+            "sub": str(USER_1),
+            "org": ORG_1,
+            "roles": ["admin"],
+            "type": token_type,
+            "iss": settings.jwt_issuer,
+            "aud": settings.jwt_audience,
+            "iat": int(now.timestamp()),
+            "exp": int((now + dt.timedelta(hours=1)).timestamp()),
+        }
+        if token_type == "refresh":
+            claims["jti"] = str(UUID("11111111-1111-4111-8111-111111111111"))
+        return jwt.encode(claims, secret, algorithm=settings.jwt_algorithm)
+
+    access = password_user.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {legacy('access')}"},
+    )
+    refresh = _refresh(password_user, legacy("refresh"))
+
+    assert access.status_code == 401
+    assert refresh.status_code == 401
+
+
 def test_a_jti_with_the_wrong_token_bytes_is_refused(password_user: TestClient) -> None:
     """The stored digest binds the row to the exact token: knowing a ``jti`` (it
     is not secret — it rides in a token the client already holds) buys nothing."""
@@ -447,6 +530,7 @@ def test_a_jti_with_the_wrong_token_bytes_is_refused(password_user: TestClient) 
         subject=USER_1,
         organization_id=ORG_1,
         roles=["admin"],
+        authorization_version=1,
         token_type="refresh",
         jti=str(_jti(tokens["refresh_token"])),
         email="someone.else@example.test",  # different bytes, same jti
@@ -462,6 +546,7 @@ def test_create_token_refuses_to_mint_a_refresh_token_without_a_jti() -> None:
             subject=USER_1,
             organization_id=ORG_1,
             roles=["admin"],
+            authorization_version=1,
             token_type="refresh",
             settings=get_settings().auth,
         )

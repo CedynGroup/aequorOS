@@ -104,6 +104,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   deliberately NOT RLS-forced (pre-auth global hash lookup; hashes+metadata only —
   keep it that way and keep endpoints org-filtered). Public contract:
   docs/API_INTEGRATION.md §1.
+- **Authorization foundation (built 2026-08-25; `backend/docs/authorization_foundation.md`).**
+  New policy authority is an indivisible `authorization_bindings` row: principal/type +
+  static bundle + explicit organization/institution/module/sensitivity scope + provenance
+  and lifecycle. Rows OR only after every dimension within a row ANDs; explicit `all`
+  values provide broad module/sensitivity scope, and institution-wide scope is named.
+  The evaluator is deny-by-default, ignores scalar role/token permission claims, returns an
+  audit-ready trace, and accepts global condition vetoes. This is shadow-only: migration
+  `202608250044` backfills no bindings or Owner/Admin authority. Token `authv` enforcement is
+  live: pre-migration/stale tokens 401; every future role/scope/status/security mutation must
+  call `authorization.invalidate_user_authorization` in-transaction to bump the user version
+  and revoke refresh families.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).

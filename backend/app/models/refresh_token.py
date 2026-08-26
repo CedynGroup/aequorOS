@@ -46,6 +46,7 @@ REVOCATION_REASONS: tuple[str, ...] = (
     "user_deactivated",
     "reuse_detected",
     "admin_revoked",
+    "authorization_changed",
 )
 
 
