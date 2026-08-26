@@ -17,6 +17,11 @@ the tenant API).
   worker and signing subsystems independently
 - Password and OIDC SSO authentication (AequorOS is its own relying party — no
   third-party broker), integration-key service accounts, RLS-forced tenancy
+- Shadow-only scoped authorization bindings with deny-by-default, explainable
+  evaluation; endpoint enforcement still uses the legacy role hierarchy. App
+  access and refresh tokens carry `authv`, so migration `202608250044` causes a
+  deliberate one-time re-authentication and later authorization changes can
+  invalidate every session immediately. See `docs/authorization_foundation.md`.
 - Data Engine: Excel/CSV upload, push API, market-data adapters, and the
   database-direct adapter (see the deployment note below)
 - Six calculation modules — liquidity (LCR/NSFR/stress/LMT), Basel capital

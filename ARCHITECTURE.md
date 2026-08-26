@@ -36,20 +36,27 @@ App connection string comes from `backend/.env` (remote:
 Verified in `backend/app/api/deps.py`, `app/db/session.py`, and migration
 `alembic/versions/202605250002_enable_tenant_rls.py`.
 
-1. **Headers → context.** Every business request carries `X-Org-Id` (required) and `X-User-Id`
-   (required for mutations). `get_tenant_context` parses them into a frozen
-   `TenantContext(organization_id, actor_user_id)`; invalid/missing headers → `401` before any
-   service code runs. `get_mutation_tenant_context` is the same but makes `X-User-Id` mandatory.
+1. **Verified credential → context.** Every authenticated business request carries
+   an HTTP bearer credential. Normal app access tokens are HS256 JWTs whose verified `org`, `sub`,
+   legacy `roles`, and `authv` claims form a frozen `TenantContext`; missing,
+   malformed, expired, pre-authorization-version, or wrongly typed tokens return
+   `401` before service code runs. Integration keys and operator impersonation
+   tokens are separate bearer credential types with their own validation and
+   lifecycle rules; caller-supplied tenant/user headers never establish identity.
 2. **Dependency aliases** (use these, never raw `Depends(...)` in feature modules):
    - `DbSession` — tenant-validated SQLAlchemy session (`get_tenant_db_session`). It stores
      `session.info["organization_id"]` and validates that the org exists and, when present, that
-     the actor is an **active user in the same org**.
-   - `Tenant` — read context. `MutationTenant` — mutation context (X-User-Id required).
+     the actor is an **active user in the same org** whose current
+     `authorization_version` matches `authv`.
+   - `Tenant` — read context. `MutationTenant` — legacy-role mutation context
+     (`analyst` or higher, with demo-mode and impersonation write refusal).
    - `Storage` — the `ObjectStorage` protocol (S3/MinIO), from `app/integrations/storage`.
 3. **Postgres RLS as the hard safety net.** A `Session` `after_begin` event in `app/db/session.py`
    runs `SELECT set_config('app.organization_id', :org, true)` on every transaction (Postgres
    only; a no-op on SQLite). Migrations `ENABLE`/`FORCE ROW LEVEL SECURITY` on every tenant table
-   and create a policy `USING (organization_id = nullif(current_setting('app.organization_id', true), '')::uuid)`.
+   and create a policy comparing `organization_id` with
+   `nullif(current_setting('app.organization_id', true), '')`. Organization IDs
+   are `OR-*` platform strings, not UUIDs.
    **Every new tenant-owned table must get the same RLS treatment in its migration.**
 4. **Explicit filters are still mandatory.** Service queries always filter by
    `organization_id` (and `case_id` where applicable) even though RLS exists — for readability,
@@ -60,6 +67,28 @@ Verified in `backend/app/api/deps.py`, `app/db/session.py`, and migration
    in another tenant. Exact example in
    [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md#composite-fk-tenant-pattern), taken from
    `app/models/calculation.py`.
+
+### 2.1 Authorization transition
+
+Migration `202608250044` adds an initially empty, FORCE-RLS
+`authorization_bindings` table and `users.authorization_version`. Each binding
+is one indivisible principal/type + static bundle + organization/institution +
+module + sensitivity + provenance + lifecycle tuple. Dimensions inside a row
+AND; independently complete rows OR. The pure evaluator starts denied, accepts
+only exact active persisted bindings, ignores scalar role and token-permission
+claims, and applies demo-mode, maker-checker, step-up, and limit conditions as
+global vetoes. Its decision includes an audit-ready trace.
+
+This kernel is shadow-only: no endpoint uses it as a gate, no grant API exists,
+and the migration backfills no binding or implicit Admin/Owner authority.
+Existing endpoint behavior still comes from the legacy role hierarchy. Token
+version enforcement is live: every app access/refresh token requires positive
+`authv`; pre-migration or stale tokens return `401`. Every future role, scope,
+status, or security mutation must call
+`services.authorization.invalidate_user_authorization()` in its transaction to
+advance the version and revoke all refresh families. Full semantics and the
+deployment transition are in
+[`backend/docs/authorization_foundation.md`](backend/docs/authorization_foundation.md).
 
 ---
 

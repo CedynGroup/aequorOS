@@ -15,8 +15,9 @@ This document specifies how AequorOS grants access to bank users, what each user
 type can see and do, how the three settings surfaces (personal / org-admin /
 vendor-platform) are structured, and how banks invite and onboard their people.
 It is written to be **built incrementally on the auth layer that already exists**
-(JWT sessions, `organization_id` RLS, the `admin > approver > analyst > viewer`
-roles, and the regulatory-reporting maker-checker trail).
+(JWT sessions, `organization_id` RLS, the legacy
+`admin > approver > analyst > examiner > viewer` hierarchy, and the
+regulatory-reporting maker-checker trail).
 
 Everything here is grounded in how real treasury/ALM systems (Kyriba, ION, FIS,
 Murex, Adenza/ControllerView, OneSumX, the Regnology-powered **Bank of Ghana
@@ -36,7 +37,8 @@ building:
 - Need the **data model / API** → [§13](#13-data-model), [§14](#14-api-surface).
 - Sequencing the work → [§15 roadmap](#15-phased-roadmap).
 
-Terminology: **tenant = organization = one bank**. **Maker** = the person who
+Terminology: **security tenant = organization (`OR-*`)**; an organization owns
+one or more **institutions/banks (`BK-*`)**. **Maker** = the person who
 creates/edits/runs. **Checker** = the independent person who reviews/approves.
 Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX**,
 **FTP**, **FCST** (Forecasting), **BEH** (Behavioral), **DATA** (Data Engine),
@@ -53,23 +55,32 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 | Auth | Zero-trust JWT (HS256), Argon2id passwords, **own-OIDC SSO** (no third-party broker; built 2026-07-20), refresh rotation | `app/core/security.py`, `dashboard/auth.ts` |
 | SSO self-service (single connection) | **BUILT.** Per-org `sso_connections` row: issuer + client id + AES-256-GCM-sealed secret (write-only), allowed email domains, enable toggle — managed by an `admin` in **Settings → Authentication**. Backend verifies id_tokens against the connection issuer's JWKS (discovery-based, RS256/ES256, `email_verified` + domain enforcement); dashboard NextAuth loads the client config through an `SSO_INTERNAL_KEY`-gated internal endpoint. Pre-provisioned users by default; **request-access JIT is BUILT as a per-connection opt-in** (`jit_enabled`): first sign-in from an allowed domain records a **deactivated** stub and returns 403 "awaiting administrator approval" — zero access until an admin approves it with an explicit role via `/auth/sso/access-requests` (list/approve/reject; Settings → Authentication card). Refused at config AND login time without a non-empty domain list. One connection per org / one enabled per deployment — Phase 2 lifts this. | `app/models/sso_connection.py`, `app/services/sso_config.py`, `app/services/authentication.py`, `app/api/v1/auth.py`, `dashboard/components/settings/AuthenticationPanel.tsx`, `docs/sso-onboarding.md` |
 | Connection health (bank-IT surface) | **BUILT** (read-only): Data Engine → Overview aggregates every configured source connection (DB-direct, T24, market-data) with live status, last sync, credential expiry, and plain-language remediation hints | `dashboard/components/data-engine/ConnectionHealthPanel.tsx` |
-| Roles | `admin > approver > analyst > viewer` (linear rank), single role per user | `app/core/security.py:ROLES`, `app/models/user.py:USER_ROLES` |
-| Enforcement | Only the **viewer↔analyst write boundary** is wired (`get_mutation_tenant_context` requires `analyst`+). `require_role(minimum)` factory exists but gates nothing else. | `app/api/deps.py` |
+| Legacy roles | `admin > approver > analyst > examiner > viewer` (linear rank), one scalar role per user; still the endpoint authority during shadow rollout | `app/core/security.py:ROLES`, `app/models/user.py:USER_ROLES` |
+| Endpoint enforcement | Coarse legacy dependencies enforce viewer/analyst mutation separation and selected approver/admin gates. The new binding evaluator is not an endpoint gate yet. | `app/api/deps.py` |
 | Tenancy | Postgres RLS forced on `app.organization_id`; cross-tenant work runs on the BYPASSRLS `WORKER_DATABASE_URL` role | `app/db/session.py`, CLAUDE.md |
 | Maker-checker | **Regulatory reporting already has it**: `draft→generated→validated→pending_approval→approved→submitted→acknowledged→…` with an append-only approval trail where **checker ≠ maker is enforced in the service** | `app/models/regulatory_reporting.py` (`PACKAGE_STATUSES`, `APPROVAL_ACTIONS`, `RegulatoryPackageApproval`) |
-| Token claims | `sub`, `org`, `roles[]`, `email`, `name` | `app/core/security.py:create_token` |
+| Authorization foundation | **BUILT, SHADOW-ONLY.** Deny-by-default evaluation over indivisible `authorization_bindings`; exact organization/institution, module, sensitivity, lifecycle, principal-type, and runtime-condition matching. No binding CRUD API and no endpoint gate yet. | `app/core/authorization.py`, `app/services/authorization.py`, `backend/docs/authorization_foundation.md` |
+| Token claims | App access and refresh tokens carry `sub`, `org`, legacy `roles[]`, authoritative `authv`, `email`, and `name`; refresh tokens also require `jti`. Pre-`202608250044` and stale-version sessions fail closed. | `app/core/security.py:create_token`, `app/api/deps.py:validate_tenant_context` |
 | Identity in UI | Header + settings read the real session (name/role); route gate redirects unauthenticated → `/login` | `dashboard/components/shell/Header.tsx`, `dashboard/middleware.ts` |
 
 ### The gap this spec closes
 
-1. `approver` and `admin` roles exist but **enforce nothing distinct** — no approval gate, no admin gate.
-2. **No user management**: no invitations, no user CRUD, no role assignment UI, no org-admin console, no vendor platform console.
+1. Selected `approver` and `admin` gates exist, but remain coarse legacy-rank
+   checks rather than exact module/resource binding decisions.
+2. **No tenant grant administration**: no invitations, general user CRUD, role
+   assignment UI, or org-admin grant console. The separate staff operator
+   console is built but is not a tenant authorization surface.
 3. **`Organization` is bare** (`{id, name}`) — no domain, plan, SSO config, or settings.
-4. **One flat role per user**, no module/entity/desk scoping — a Liquidity Manager and a CFO get the same surface.
+4. Endpoint enforcement still uses **one flat legacy role per user**. Exact
+   institution/module/sensitivity bindings now exist and are evaluable, but are
+   shadow-only and have no administration surface; desk/currency scope is not
+   represented yet.
 5. **No SoD engine** beyond the one hand-rolled REG check; no generalized maker-checker on calculation/official runs.
-6. **No audit log**, no SCIM, no impersonation, no seat/plan concept. (SSO
-   self-service exists in single-connection form — see §2 above; Phase 2 grows
-   it to multi-connection + home-realm discovery, it is NOT rebuilt.)
+6. Audit events and read-only operator impersonation exist, but there is no
+   generalized authorization-decision audit envelope, SCIM, or seat/plan
+   concept. (SSO self-service exists in single-connection form — see §2 above;
+   Phase 2 grows it to multi-connection + home-realm discovery, it is NOT
+   rebuilt.)
 
 ### Target model in one sentence
 
@@ -274,20 +285,23 @@ deliberately capped to avoid role explosion.
 
 **Migration note:** today's single `admin` conflates account-admin with
 operational-super — a segregation-of-duties smell (Snowflake's rule: never mix
-account-management privileges with entity privileges in one role). Split it:
-existing `admin` users become **Org Admin**; designate one **Org Owner** per
-tenant. Keep the `admin>approver>analyst>viewer` rank in `security.py` for
-backward compatibility during migration, but move real decisions to the
-permission check in [§7](#7-permission-model).
+account-management privileges with entity privileges in one role). The
+foundation adds Account Admin as a static binding bundle, but migration
+`202608250044` deliberately creates no bindings and converts no existing
+`admin`. Org Owner is not a foundation bundle. Keep the legacy hierarchy for
+backward compatibility during shadow rollout; a later governed migration must
+make any Admin/Owner mapping explicit.
 
-### 6.2 A user can hold more than one role
+### 6.2 A user can hold more than one scoped bundle
 
-The token already carries `roles[]` (a list). Use it: a person can be **Analyst
-on LIQ and Approver on REG** simultaneously — effective permissions are the
-union, and **maker≠checker is enforced per object at action time** (§7.4), not by
-forbidding the combination. This is exactly how the existing
-`RegulatoryPackageApproval` works ("checker ≠ maker enforced in service") —
-generalize that mechanism.
+Do not derive this authority from token `roles[]`: that claim is legacy rollout
+state and the new evaluator ignores it. Persist one complete
+`authorization_bindings` row per bundle/scope combination. A person can be
+**Analyst on LIQ and Approver on REG** simultaneously because independently
+matching rows union; their dimensions never form a Cartesian product. Thus the
+same rows do not grant Analyst on REG or Approver on LIQ. **Maker≠checker** is a
+non-bypassable per-object condition (§7.4), not a reason to forbid holding both
+bundles.
 
 ### 6.3 Custom roles — later, gated
 
@@ -299,6 +313,14 @@ count (Okta caps at 100/org) to prevent proliferation.
 ---
 
 ## 7. Permission model
+
+> **Foundation boundary:** `app/core/authorization.py` stores a small action
+> enum separately from the resource's concrete module. Its v1 bundles grant:
+> Viewer/Auditor = `view`; Analyst = `view|create|edit|run|validate|export`;
+> Approver = `view|review|approve`; Account Admin = `administer`; and the
+> machine-only Integration Writer = `ingest`. `configure`, `sign_off`, and
+> `submit` are reserved but are not in any v1 bundle. The richer namespaces and
+> matrices below remain target design, not as-built authority.
 
 ### 7.1 Permission namespace (`resource:action`)
 
@@ -388,12 +410,12 @@ Every grant is evaluated within a scope. Default-deny outside it.
 
 | Scope | Meaning | Enforcement |
 |---|---|---|
-| **Tenant** | the bank | already: RLS on `organization_id` |
-| **Legal entity** | subsidiary within a banking group | `user_scopes.entity_id[]`; filter queries |
-| **Module** | LIQ/CAP/… | encoded in which `{module}:*` perms the role holds |
-| **Desk / portfolio / currency** | a dealer acts only on their book (Bloomberg TOMS precedent: user/desk/asset-class/region/firm) | `user_scopes.desk[]` |
-| **Data sensitivity** | customer-level BEH inputs vs aggregated outputs | gate raw `view`/`export` separately from dashboard `view` |
-| **Environment** | live vs **demo** | condition, not role — block writes in demo |
+| **Organization** | the security tenant/account (`OR-*`) | binding `organization_id` + forced RLS |
+| **Institution** | one bank/legal entity (`BK-*`) beneath the organization | exact `institution_id`, or explicit `institution_scope=organization` |
+| **Module** | LIQ/CAP/… | exact `module_scope`, or explicit `all` |
+| **Desk / portfolio / currency** | a dealer acts only on their book (Bloomberg TOMS precedent: user/desk/asset-class/region/firm) | future scoped extension; absent from rollout v1 |
+| **Data sensitivity** | published, aggregated, confidential, or restricted | exact `sensitivity_scope`, or explicit `all` |
+| **Environment** | live vs **demo** | global condition veto, not a role or binding dimension |
 | **Approval tier** | numeric ceiling on `approve` (deal size / exception magnitude); above → escalate | attach to the `approve` grant per preset |
 | **Pack section** | a contributor acts only on the committee-pack section(s) their unit owns (§5.1 Flow A) | `pack_sections.owner` (role preset or named users); `pack:contribute`/`signoff_section` evaluated per section |
 
@@ -437,37 +459,26 @@ who *could* violate SoD and who *did*.
 
 ### 8.1 Backend (extend `app/api/deps.py`)
 
-The plumbing is 80% there. Add:
+The persistence-neutral vocabulary, `ResourceLocator`, static bundle map, exact
+evaluator, database service, and transactional invalidation seam are built.
+`evaluate_permission()` starts denied, loads only the principal's persisted
+bindings, requires every dimension within one row to match, unions complete
+rows, verifies the active principal and institution ownership, then applies all
+workflow-supplied conditions as global vetoes. It returns an audit-ready trace.
 
-```python
-# app/api/deps.py  (sketch)
+What remains is endpoint integration. Add a narrow dependency for each migrated
+vertical that constructs the canonical resource locator and calls the service
+evaluator; do not resolve authority from `roles[]`, route names, HTTP verbs, or
+UI state. Keep `get_mutation_tenant_context` only as the legacy coarse gate
+during measured shadow rollout. Demo-mode, maker-checker, step-up, and approval
+limits remain owned by their workflows and enter the evaluator as typed
+conditions, so another allow binding cannot bypass them.
 
-def require_permission(perm: str, *, scope: ScopeSpec | None = None):
-    """FastAPI dependency: 403 unless the principal holds `perm` within `scope`."""
-    def _dep(ctx: Annotated[TenantContext, Depends(get_current_principal)]) -> TenantContext:
-        if not authz.has_permission(ctx, perm, scope):
-            raise HTTPException(403, f"Requires '{perm}'.")
-        return ctx
-    return _dep
-
-def require_maker_checker(object_type: str):
-    """For approve/sign_off/submit endpoints: 409 if actor is a prior maker."""
-    ...
-```
-
-- Resolve a principal's **effective permissions** from `roles[] + user_scopes`
-  via a static `ROLE_PERMISSIONS` map (mostly constant) — cache per (org,user)
-  with a short TTL (reuse the tenant-validation cache seam) so it's not a
-  per-request DB hit.
-- Keep `get_mutation_tenant_context` as the coarse "is a writer" gate; layer
-  `require_permission("liq:run", …)` on the specific endpoints.
-- **Environment condition:** the existing demo-mode write block becomes a
-  condition inside `has_permission` (writes denied when `env == demo`).
-- **Reason + audit:** every `run/approve/sign_off/submit/configure/admin` action
-  writes an immutable audit row (§13) with the already-required non-empty reason.
-- **Token/session revocation on role change:** on role/scope/deactivation change,
-  bump a per-user `session_epoch`; reject tokens with a stale epoch (don't wait
-  for the 15-min expiry).
+`users.authorization_version` is already live. Every app token carries `authv`;
+tenant validation and refresh reject a stale version. Any future role, scope,
+status, or security mutation must call
+`invalidate_user_authorization()` in the same transaction, which increments the
+version and revokes every refresh family with `authorization_changed`.
 
 ### 8.2 Frontend (dashboard)
 
@@ -480,9 +491,10 @@ def require_maker_checker(object_type: str):
   render disabled-with-tooltip or hidden based on permissions in the session.
   Never rely on hiding alone — the backend is the boundary; the UI just avoids
   dead ends.
-- **Session claims:** extend the JWT/session to carry `roles[]` + a compact
-  `perms`/`scopes` summary (or fetch `/auth/me` once and cache) so the UI can
-  gate without a call per button. Refresh on role change (§8.1 epoch).
+- **Session state:** do not make token `roles[]`, `perms`, or `scopes` an
+  authority source. Expose an effective, display-only capability summary from a
+  server-evaluated `/auth/me` contract when endpoint rollout begins. A version
+  change invalidates the app session through `authv` (§8.1).
 
 ### 8.3 Default landing per role
 
@@ -665,7 +677,8 @@ NextAuth v5's per-request lazy config is the mechanism, already in use in
 ### 11.5 Offboarding (deprovision order)
 
 SSO cutoff alone does **not** kill live sessions or app-native entitlements. In order:
-1. Disable account + **terminate all active sessions** (bump `session_epoch`).
+1. Disable account + **terminate all active sessions** (active-user validation
+   rejects access tokens; revoke every refresh family).
 2. **Revoke API keys, refresh/OAuth tokens, connected-app grants.**
 3. Remove app-native roles/scopes.
 4. **Transfer ownership** of cases/scenarios/reports/connections to a named custodian *before* deactivating.
@@ -744,14 +757,18 @@ status (active|suspended), sso_enforced (bool), created_by`.
 **`users`** (extend `app/models/user.py`):
 add `status (invited|active|suspended|deactivated)`, `job_title`,
 `external_id` (stable IdP id for SCIM), `invited_by`, `invited_at`,
-`activated_at`, `deactivated_at`, `session_epoch (int)`, `mfa_enrolled (bool)`.
-Keep `role` for back-compat but treat `user_roles` as the source of truth.
+`activated_at`, `deactivated_at`, `mfa_enrolled (bool)`. Keep `role` for legacy
+endpoint compatibility. `authorization_version` is already built; use it rather
+than adding a second session-generation field.
 
-**`user_roles`** *(new — many-to-many, replaces single `role`)*:
-`user_id, org_id, role (base role), preset (nullable), granted_by, granted_at`.
-
-**`user_scopes`** *(new)*:
-`user_id, org_id, entity_id[] , desk[] , module[] , approval_tier (int), environment`.
+**`authorization_bindings`** *(BUILT, shadow-only)*: one indivisible row holds
+`organization_id, principal_user_id, principal_type, role_bundle,
+institution_scope, institution_id, module_scope, sensitivity_scope,
+granted_by_type, granted_by_id, grant_reason, granted_at, status, valid_from,
+valid_until, revoked_at, revoked_reason`. Composite principal/institution tenant
+foreign keys, checks, and FORCE RLS enforce the shape. This table supersedes the
+independent `user_roles`/`user_scopes` proposal, whose arrays could accidentally
+create cross-product authority.
 
 **`invitations`** *(new)*:
 `id, org_id, email, role_presets[], scope, token_hash, invited_by, expires_at,
@@ -856,10 +873,14 @@ The generated TS client (`packages/risk-service-api`) must be regenerated
 
 Ship value early; don't block the dashboards on SSO/SCIM.
 
-**Phase 0 — role plumbing (unblocks role-aware dashboards).**
-`ROLE_PERMISSIONS` map + `require_permission` + `/auth/me` returning effective
-perms; split `admin`→ Org Admin/Owner; nav filtering + action gating + default
-landings ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)). No new tables except `user_roles`/`user_scopes`.
+**Phase 0 — authorization foundation and first endpoint slice.**
+The static `ROLE_PERMISSIONS` map, scoped binding table, exact evaluator, and
+`authv` invalidation seam are **BUILT**. Remaining Phase-0 work is one measured
+endpoint vertical, governed pilot binding creation, `/auth/me` display
+capabilities, nav/action gating, and default landings
+([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).
+Do not add independent `user_roles`/`user_scopes` tables or implicitly split
+legacy `admin` into Org Admin/Owner.
 
 **Phase 1 — org admin console + invites.**
 `organizations`/`users` fields, `invitations`, Members table, invite modal, role
@@ -901,8 +922,8 @@ Build in this phase:
    allow-list only mitigates.
 3. **JIT + SCIM 2.0** provisioning/deprovisioning keyed on `external_id`
    (mandatory for bank tenants; JIT never deprovisions).
-4. **Session/MFA/step-up policy + token revocation** on role change
-   (`session_epoch`).
+4. **Session/MFA/step-up policy + token revocation** on role change through the
+   built `authorization_version` / `authv` invalidation seam.
 5. **Administration area consolidation** — grow Settings + the Data Engine
    screens into the §10.2 org console behind Org Admin/`sso:manage`/`users:*`,
    so bank IT self-serves connections and SSO without AequorOS staff. The

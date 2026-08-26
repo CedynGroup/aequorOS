@@ -23,6 +23,21 @@ The policy vocabulary lives only in `backend/app/core/authorization.py`:
 - static bundles: Viewer, Auditor, Analyst, Approver, Account Admin, and the
   machine-only Integration Writer.
 
+The v1 bundle contents are deliberately narrow:
+
+| Bundle | Granted actions |
+|---|---|
+| Viewer | `view` |
+| Auditor | `view` |
+| Analyst | `view`, `create`, `edit`, `run`, `validate`, `export` |
+| Approver | `view`, `review`, `approve` |
+| Account Admin | `administer` |
+| Integration Writer | `ingest` |
+
+`configure`, `sign_off`, and `submit` are reserved action names but are not in
+any v1 bundle. Workflow-specific authority for them must be designed explicitly
+rather than inferred from a nearby role.
+
 No route name, HTTP verb, UI navigation item, or token permission claim creates
 authority. Static bundles are code; v1 has no mutable permission catalog and no
 configurable deny grant.
@@ -54,7 +69,8 @@ organization_id)` to `users` and from `(institution_id, organization_id)` to
 `banks`. The service repeats both ownership checks before insert. The table is
 tenant-owned and has ENABLE + FORCE RLS with the standard
 `app.organization_id` policy. Status/validity constraints make active,
-suspended, revoked, scheduled, and expired states unambiguous.
+suspended, and revoked stored states, plus not-yet-valid and expired effective
+states, unambiguous.
 
 ## Decision semantics and conditions
 
@@ -96,6 +112,8 @@ access and refresh, even if their signature and old role claims are valid. The
 safe deployment consequence is a deliberate one-time re-authentication for
 sessions outstanding at deploy time. Existing active users then receive tokens
 at version 1 and retain current product behavior through the legacy hierarchy.
+Integration keys and operator impersonation tokens retain their separate
+credential lifecycles and do not carry `authv`.
 
 ## Shadow rollout and next vertical slice
 

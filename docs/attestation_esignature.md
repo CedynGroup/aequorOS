@@ -193,10 +193,14 @@ fallback to exact email match on a pre-provisioned active account
 stub and returns 403 until an admin approves with an explicit role.
 
 Access tokens are HS256, 15-minute TTL, carrying `sub` (user UUID), `org`
-(now the `OR-XXXXXXXX` platform code, post-epoch), `roles`, `email`, `name`
-(`app/core/security.py:92`). `validate_tenant_context` re-checks on **every
-request** that the user still exists in the org and is active
-(`app/api/deps.py:153`), so deactivation kills live sessions immediately.
+(the `OR-XXXXXXXX` platform code), legacy `roles`, authoritative `authv`,
+`email`, and `name` (`app/core/security.py:create_token`).
+`validate_tenant_context` re-checks on every tenant data request that the user
+still exists in the org, is active, and has the same `authorization_version` as
+the token. Deactivation therefore kills live sessions immediately; a role,
+scope, status, or security mutation must bump the version and revoke refresh
+families through `invalidate_user_authorization()` so existing access and
+refresh tokens fail closed.
 
 **Stable per-user identifiers available today:**
 
