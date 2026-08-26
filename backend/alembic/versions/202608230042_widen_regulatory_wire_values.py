@@ -7,6 +7,10 @@ Revises: 202608230043
 and ``xlsx_working`` is an admitted package artifact kind (12 characters).
 Their columns remained VARCHAR(16) and VARCHAR(8), respectively, so SQLite
 accepted values that PostgreSQL correctly rejected.
+
+The revision identifier predates the existing ``202608230043`` head, but this
+migration was authored later and therefore revises that head. The numeric
+ordering is intentionally non-monotonic; the dependency chain remains linear.
 """
 
 from __future__ import annotations
