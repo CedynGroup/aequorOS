@@ -4,14 +4,16 @@
  * Every console API call goes through here, in all auth modes:
  * - password (primary): the operator session JWT from the HttpOnly session
  *   cookie becomes the bearer — browser JavaScript never holds the credential;
- * - workforce OIDC (secondary): same cookie mechanics with the id_token;
+ * - workforce OIDC (secondary): same cookie mechanics with the id_token; the
+ *   backend requires a matching active operator_users row and uses its role;
  * - dev token (local only): the browser's own Authorization header is
  *   forwarded verbatim.
  *
  * The proxy adds no authorization of its own — the operator API verifies the
- * bearer (dev token or id_token signature/issuer/audience/domain) on every
- * request. Only /operator/* paths are forwardable, so the console cannot be
- * used as an open relay to arbitrary backend routes.
+ * bearer (dev token, operator JWT, or id_token signature/issuer/audience/domain
+ * plus active operator row) on every request. Only /operator/* paths are
+ * forwardable, so the console cannot be used as an open relay to arbitrary
+ * backend routes.
  */
 
 import { NextResponse, type NextRequest } from 'next/server';

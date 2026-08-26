@@ -13,6 +13,16 @@ accepted by the backend only on loopback and only outside production
 (app/core/security.py) — this stub cannot be used against a deployed
 environment, by construction.
 
+Provision the email you will enter before testing (the default shown by the
+stub is ``eric@aequoros.com``):
+
+    uv run python scripts/create_operator.py \
+        --email eric@aequoros.com --display-name "Eric" --role developer
+
+The stub proves workforce identity only. The operator API still requires that
+verified email to match an active ``operator_users`` row and takes the role
+from that row; an allowed-domain email alone receives the generic 401.
+
 The consent page shows an email box (default eric@aequoros.com) instead of
 real authentication — it is a test double for the IdP, not an identity
 system. NEVER deploy it.

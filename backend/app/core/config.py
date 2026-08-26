@@ -334,9 +334,7 @@ class CorsSettings(BaseSettings):
     model_config = SETTINGS_CONFIG
 
     origins_raw: str = Field(default="", alias="CORS_ORIGINS")
-    methods_raw: str = Field(
-        default="GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS", alias="CORS_METHODS"
-    )
+    methods_raw: str = Field(default="GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS", alias="CORS_METHODS")
     headers_raw: str = Field(
         default="Accept,Authorization,Content-Type,X-Request-ID", alias="CORS_HEADERS"
     )
@@ -508,9 +506,7 @@ class DeskSettings(BaseSettings):
         """The parsed allow-list, or None when every scheduled source runs."""
         if self.desk_capture_sources is None:
             return None
-        keys = tuple(
-            key.strip() for key in self.desk_capture_sources.split(",") if key.strip()
-        )
+        keys = tuple(key.strip() for key in self.desk_capture_sources.split(",") if key.strip())
         return keys or None
 
 
@@ -772,7 +768,9 @@ class OperatorSettings(BaseSettings):
     jwt_secret: str | None = Field(default=None, alias="OPERATOR_JWT_SECRET")
     #: Workforce OIDC (Google Workspace / Okta issuer). Verified with the same
     #: zero-trust machinery as customer SSO (`verify_oidc_id_token`); tokens
-    #: must carry a verified email under the allowed domain.
+    #: must carry a verified email under the allowed domain, and that email
+    #: must identify an active, explicitly provisioned ``operator_users`` row.
+    #: Domain membership alone grants no operator role.
     oidc_issuer: str | None = Field(default=None, alias="OPERATOR_OIDC_ISSUER")
     oidc_client_id: str | None = Field(default=None, alias="OPERATOR_OIDC_CLIENT_ID")
     oidc_allowed_domain: str = Field(default="aequoros.com", alias="OPERATOR_OIDC_ALLOWED_DOMAIN")
@@ -780,9 +778,7 @@ class OperatorSettings(BaseSettings):
     #: ``dashboard_url`` by the act-as-examiner mint endpoint so the console knows
     #: where to hand the operator off with the impersonation token. Never a
     #: secret — just where the read-only examiner view is rendered.
-    bank_app_base_url: str = Field(
-        default="https://bank.aequoros.com", alias="BANK_APP_BASE_URL"
-    )
+    bank_app_base_url: str = Field(default="https://bank.aequoros.com", alias="BANK_APP_BASE_URL")
     #: Per-tenant KMS keys + SSE-KMS bucket encryption during provisioning
     #: (developer.md §2a). Off by default: MinIO deployments have no KMS, and
     #: the saga records the step as honestly skipped rather than pretending.
@@ -814,9 +810,7 @@ class OperatorSettings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [
-            origin.strip()
-            for origin in self.operator_cors_origins_raw.split(",")
-            if origin.strip()
+            origin.strip() for origin in self.operator_cors_origins_raw.split(",") if origin.strip()
         ]
 
     @property
@@ -830,9 +824,7 @@ class OperatorSettings(BaseSettings):
     @property
     def cors_headers(self) -> list[str]:
         return [
-            header.strip()
-            for header in self.operator_cors_headers_raw.split(",")
-            if header.strip()
+            header.strip() for header in self.operator_cors_headers_raw.split(",") if header.strip()
         ]
 
 

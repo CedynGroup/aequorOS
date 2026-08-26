@@ -86,8 +86,8 @@ class OperatorUser(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     Mirrors the CLIENT identity model (tenant ``users``): email+password is
     the primary sign-in (Argon2id hash, same scheme as tenant accounts) and
-    workforce OIDC is the secondary path — an OIDC sign-in whose email has a
-    row here must find it active, and takes its role from the row.
+    workforce OIDC is the secondary path — an OIDC sign-in must find an active
+    row here and takes its role from that row.
 
     GLOBAL table, deliberately NOT RLS-forced (operator precedent: these are
     control-plane records owned by the operator role, not tenant data).
@@ -121,12 +121,8 @@ class OperatorUser(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     failed_login_attempts: Mapped[int] = mapped_column(
         Integer, default=0, server_default=sql_text("0"), nullable=False
     )
-    locked_until: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    last_login_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TenantStorage(UuidV4PrimaryKeyMixin, TimestampMixin, Base):

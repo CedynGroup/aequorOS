@@ -368,7 +368,11 @@ def test_a_package_cannot_reach_submission_without_its_approval(
 # --- 6. a missing policy is not an exemption ----------------------------------
 
 
-def test_a_missing_policy_does_not_disable_the_control(db_session: Session) -> None:
+def test_a_missing_policy_does_not_disable_the_control(
+    db_session: Session,
+    storage_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Case 6. No configured row anywhere: the DEFAULT is the strict one.
 
     An institution that never opened Settings must not be the institution whose
@@ -377,6 +381,14 @@ def test_a_missing_policy_does_not_disable_the_control(db_session: Session) -> N
     preparer's certification still leaves the approver outstanding and the
     package unreleased.
     """
+    monkeypatch.setattr(
+        "app.services.attestation.artifact_signing.get_storage_client",
+        lambda: storage_engine,
+    )
+    monkeypatch.setattr(
+        "app.services.regulatory_reporting.exports.get_storage_client",
+        lambda: storage_engine,
+    )
     package = _seed(db_session)
     for row in db_session.scalars(select(ReturnSigningPolicy)):
         db_session.delete(row)

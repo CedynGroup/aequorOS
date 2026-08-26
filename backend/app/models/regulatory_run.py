@@ -72,7 +72,7 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
     bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
     reporting_period_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    module: Mapped[str] = mapped_column(String(16), nullable=False)
+    module: Mapped[str] = mapped_column(String(32), nullable=False)
     scenario_code: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     engine_version: Mapped[str] = mapped_column(String(80), nullable=False)

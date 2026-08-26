@@ -28,6 +28,7 @@ from copy import deepcopy
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -58,6 +59,7 @@ from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import institution_profile, regulatory_liquidity
 from app.services.attestation import digests, register_state
+from app.services.regulatory_reporting import exports as reporting_exports
 from app.services.regulatory_reporting import generation, workflow
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY
@@ -555,19 +557,24 @@ def test_export_refuses_a_snapshot_that_drifted_from_its_seal(
 
 
 def test_export_warns_but_proceeds_when_no_seal_was_ever_recorded(
-    db_session: Session, storage: InMemoryStorageClient, caplog: pytest.LogCaptureFixture
+    db_session: Session, storage: InMemoryStorageClient
 ) -> None:
     _seed_with_baseline_run(db_session)
     package = _generate(db_session)
     package.snapshot_sha256 = None
     db_session.commit()
 
-    with caplog.at_level("WARNING"):
+    with patch.object(
+        reporting_exports.logger,
+        "warning",
+        wraps=reporting_exports.logger.warning,
+    ) as warning:
         artifact = export_package(db_session, MAKER, package, "xlsx")
     db_session.commit()
     assert artifact.size_bytes > 0
     assert _read_output(db_session, storage, artifact.object_path)
-    assert any("snapshot_sha256" in record.message for record in caplog.records)
+    warning.assert_called_once()
+    assert "snapshot_sha256" in warning.call_args.args[0]
 
 
 # ---------------------------------------------------------------------------

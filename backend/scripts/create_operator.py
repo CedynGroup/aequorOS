@@ -5,6 +5,8 @@ Staff auth mirrors the client model: email+password is the primary sign-in
 There is no self-serve signup and no committed seed: an operator is a row in
 the GLOBAL ``operator_users`` table (no RLS — control-plane precedent). This
 CLI creates or updates one idempotently, keyed on lowercased email.
+Workforce SSO also requires this row to be active and takes its role from it;
+belonging to the configured workforce email domain alone grants no access.
 
 PRODUCTION BOOTSTRAP: dev-token auth cannot exist in production (the operator
 app refuses to boot with it enabled), so the first ``operator_admin`` there is

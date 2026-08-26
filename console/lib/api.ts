@@ -22,7 +22,8 @@
  *   (app/api/op/[...path]/route.ts), in all auth modes:
  *   - password (primary): the operator session JWT lives in an HttpOnly
  *     cookie the proxy turns into the bearer — browser JS never holds it;
- *   - workforce OIDC (secondary): identical cookie mechanics, id_token;
+ *   - workforce OIDC (secondary): identical cookie mechanics, id_token; the
+ *     backend requires a matching active operator_users row and uses its role;
  *   - dev token (local only): the sessionStorage token rides the
  *     Authorization header and the proxy forwards it verbatim (the backend
  *     hard-refuses dev auth on any DEPLOYED environment — the rule is an
