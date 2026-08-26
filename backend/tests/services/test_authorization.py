@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import uuid4
 
 import jwt
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -96,9 +97,78 @@ def test_existing_users_start_versioned_without_implicit_new_authority(
     )
 
 
+def test_token_issuance_refreshes_authorization_version_after_owner_lock(
+    db_session: Session,
+) -> None:
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    db_session.execute(
+        update(User)
+        .where(User.id == user.id)
+        .values(authorization_version=2)
+        .execution_options(synchronize_session=False)
+    )
+    assert user.authorization_version == 1
+
+    issued = authentication.issue_tokens(db_session, user)
+    claims = jwt.decode(issued.access_token, options={"verify_signature": False})
+
+    assert claims["authv"] == 2
+
+
 def test_database_rejects_cross_tenant_institution_reference(db_session: Session) -> None:
     _banks(db_session)
     db_session.add(_raw_binding(organization_id=ORG_1, institution_id=BANK_2))
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
+
+
+@pytest.mark.parametrize(
+    ("principal_type", "role_bundle"),
+    [
+        (PrincipalType.HUMAN, RoleBundle.INTEGRATION_WRITER),
+        (PrincipalType.MACHINE, RoleBundle.ANALYST),
+    ],
+)
+def test_database_rejects_incompatible_principal_bundle_pairs(
+    db_session: Session,
+    principal_type: PrincipalType,
+    role_bundle: RoleBundle,
+) -> None:
+    _banks(db_session)
+    binding = _raw_binding(organization_id=ORG_1, institution_id=BANK_1)
+    binding.principal_type = principal_type.value
+    binding.role_bundle = role_bundle.value
+    db_session.add(binding)
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
+
+
+@pytest.mark.parametrize(
+    ("status", "revoked_at", "revoked_reason"),
+    [
+        (BindingStatus.ACTIVE, None, "not revoked"),
+        (BindingStatus.SUSPENDED, None, "not revoked"),
+        (BindingStatus.REVOKED, utc_now(), None),
+        (BindingStatus.REVOKED, utc_now(), "   "),
+    ],
+)
+def test_database_rejects_inconsistent_revocation_evidence(
+    db_session: Session,
+    status: BindingStatus,
+    revoked_at: datetime | None,
+    revoked_reason: str | None,
+) -> None:
+    _banks(db_session)
+    binding = _raw_binding(organization_id=ORG_1, institution_id=BANK_1)
+    binding.status = status.value
+    binding.revoked_at = revoked_at
+    binding.revoked_reason = revoked_reason
+    db_session.add(binding)
 
     with pytest.raises(IntegrityError):
         db_session.commit()

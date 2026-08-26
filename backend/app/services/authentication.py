@@ -129,6 +129,7 @@ def issue_tokens(
     # either finish before this successor is written (and this call then finds a
     # revoked ancestor) or wait and see it. See _lock_session_owner (D-30).
     _lock_session_owner(db, user.id)
+    db.refresh(user)
     now = utc_now()
     token_id = uuid4()
     common = {

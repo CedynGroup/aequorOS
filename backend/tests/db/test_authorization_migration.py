@@ -26,6 +26,7 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
         "ck_users_authorization_version_positive",
         "fk_authorization_bindings_principal_tenant",
         "fk_authorization_bindings_institution_tenant",
+        "ck_authorization_bindings_principal_bundle",
         "ck_authorization_bindings_institution_target",
         "ck_authorization_bindings_validity_window",
         "ck_authorization_bindings_revocation_state",

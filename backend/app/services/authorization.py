@@ -29,6 +29,7 @@ from app.core.authorization import (
     ResourceLocator,
     RoleBundle,
     SensitivityScope,
+    principal_bundle_compatible,
 )
 from app.core.authorization import (
     evaluate_permission as evaluate_grants,
@@ -208,9 +209,11 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
     actual_type = _principal_type(principal)
     if principal_type is not actual_type:
         raise AuthorizationInvariantError("principal type does not match the identity record")
-    if principal_type is PrincipalType.MACHINE and role_bundle is not RoleBundle.INTEGRATION_WRITER:
-        raise AuthorizationInvariantError("machine principals require a machine permission bundle")
-    if principal_type is PrincipalType.HUMAN and role_bundle is RoleBundle.INTEGRATION_WRITER:
+    if not principal_bundle_compatible(principal_type, role_bundle):
+        if principal_type is PrincipalType.MACHINE:
+            raise AuthorizationInvariantError(
+                "machine principals require a machine permission bundle"
+            )
         raise AuthorizationInvariantError("human principals cannot receive a machine bundle")
     _validate_scope(db, organization_id, scope)
     _validate_grantor(db, organization_id, grantor)

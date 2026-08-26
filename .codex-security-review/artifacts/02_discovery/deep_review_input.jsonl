@@ -1,0 +1,10 @@
+{"path":"backend/alembic/versions/202608250044_authorization_foundation.py","area":"diff"}
+{"path":"backend/app/api/deps.py","area":"diff"}
+{"path":"backend/app/core/authorization.py","area":"diff"}
+{"path":"backend/app/core/security.py","area":"diff"}
+{"path":"backend/app/models/__init__.py","area":"diff"}
+{"path":"backend/app/models/authorization.py","area":"diff"}
+{"path":"backend/app/models/refresh_token.py","area":"diff"}
+{"path":"backend/app/models/user.py","area":"diff"}
+{"path":"backend/app/services/authentication.py","area":"diff"}
+{"path":"backend/app/services/authorization.py","area":"diff"}

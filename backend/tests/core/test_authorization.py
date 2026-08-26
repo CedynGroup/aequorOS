@@ -101,6 +101,36 @@ def test_liq_analyst_plus_reg_approver_does_not_create_cross_product_authority()
     assert not _evaluate(Permission.RUN, _resource(module=Module.REGULATORY), bindings).allowed
 
 
+@pytest.mark.parametrize(
+    ("principal_type", "role_bundle", "permission"),
+    [
+        (PrincipalType.HUMAN, RoleBundle.INTEGRATION_WRITER, Permission.INGEST),
+        (PrincipalType.MACHINE, RoleBundle.ANALYST, Permission.RUN),
+    ],
+)
+def test_evaluator_denies_incompatible_principal_bundle_pairs(
+    principal_type: PrincipalType,
+    role_bundle: RoleBundle,
+    permission: Permission,
+) -> None:
+    binding = replace(
+        _binding(role=role_bundle, module=ModuleScope.LIQUIDITY),
+        principal_type=principal_type,
+    )
+    principal = replace(PRINCIPAL, principal_type=principal_type)
+
+    decision = evaluate_permission(
+        principal,
+        permission,
+        _resource(),
+        [binding],
+        now=NOW,
+    )
+
+    assert not decision.allowed
+    assert decision.binding_trace[0].reason == "principal_bundle_incompatible"
+
+
 def test_organization_wide_scope_is_explicit_and_institution_scope_is_exact() -> None:
     institution_only = _binding(role=RoleBundle.VIEWER, module=ModuleScope.LIQUIDITY)
     organization_wide = _binding(

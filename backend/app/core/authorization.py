@@ -147,6 +147,12 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
 )
 
 
+def principal_bundle_compatible(principal_type: PrincipalType, role_bundle: RoleBundle) -> bool:
+    return (principal_type is PrincipalType.MACHINE) == (
+        role_bundle is RoleBundle.INTEGRATION_WRITER
+    )
+
+
 class ConditionKind(StrEnum):
     """Reserved non-bypassable runtime condition hooks."""
 
@@ -310,7 +316,13 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
     tenant_matches = principal.organization_id == resource.organization_id
     for binding in bindings:
         active, lifecycle_reason = _active(binding, moment)
-        permission_matches = permission in ROLE_PERMISSIONS[binding.role_bundle]
+        bundle_compatible = principal_bundle_compatible(binding.principal_type, binding.role_bundle)
+        permission_matches = (
+            bundle_compatible and permission in ROLE_PERMISSIONS[binding.role_bundle]
+        )
+        permission_reason = (
+            "permission_not_in_bundle" if bundle_compatible else "principal_bundle_incompatible"
+        )
         organization_matches = (
             tenant_matches
             and binding.organization_id == principal.organization_id
@@ -342,7 +354,7 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
         elif not active:
             reason = lifecycle_reason
         elif not permission_matches:
-            reason = "permission_not_in_bundle"
+            reason = permission_reason
         elif not organization_matches:
             reason = "principal_or_tenant_mismatch"
         elif not institution_matches:

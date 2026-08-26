@@ -1,0 +1,46 @@
+{
+  "completeness": "complete",
+  "deferred": [],
+  "documentType": "codex-security.coverage",
+  "excludePaths": [],
+  "explicitExclusions": [],
+  "includePaths": [
+    "backend/"
+  ],
+  "inventoryStrategy": "diff",
+  "mode": "branch_diff",
+  "scanId": "aequoros_authz_diff_9e184597",
+  "schemaVersion": "1.0",
+  "surfaces": [
+    {
+      "disposition": "no_issue_found",
+      "id": "binding_schema",
+      "label": "Binding schema, migration, and RLS",
+      "notes": "Reviewed schema constraints, composite ownership FKs, migration parity, and FORCE RLS. Two non-exploitable integrity hardening gaps remain code-review warnings.",
+      "receiptRefs": [
+        "artifacts/02_discovery/work_ledger.jsonl"
+      ],
+      "riskArea": "tenant and authorization integrity"
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "policy_kernel",
+      "label": "Pure authorization evaluator",
+      "notes": "Exact AND-within-row and OR-across-row semantics, lifecycle, principal type, and global vetoes reviewed.",
+      "receiptRefs": [
+        "artifacts/02_discovery/work_ledger.jsonl"
+      ],
+      "riskArea": "authorization bypass"
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "session_transition",
+      "label": "JWT authorization-version transition",
+      "notes": "Required claims, tenant-session comparison, refresh comparison, and invalidation transaction reviewed. One fail-closed login race remains a correctness warning.",
+      "receiptRefs": [
+        "artifacts/02_discovery/work_ledger.jsonl"
+      ],
+      "riskArea": "session invalidation"
+    }
+  ]
+}

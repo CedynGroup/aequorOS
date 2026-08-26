@@ -115,6 +115,11 @@ def upgrade() -> None:
             name="ck_authorization_bindings_role_bundle",
         ),
         sa.CheckConstraint(
+            "(principal_type = 'machine' AND role_bundle = 'integration_writer') OR "
+            "(principal_type = 'human' AND role_bundle <> 'integration_writer')",
+            name="ck_authorization_bindings_principal_bundle",
+        ),
+        sa.CheckConstraint(
             "institution_scope IN ('organization', 'institution')",
             name="ck_authorization_bindings_institution_scope",
         ),
@@ -155,8 +160,9 @@ def upgrade() -> None:
             name="ck_authorization_bindings_validity_window",
         ),
         sa.CheckConstraint(
-            "(status = 'revoked' AND revoked_at IS NOT NULL) OR "
-            "(status <> 'revoked' AND revoked_at IS NULL)",
+            "(status = 'revoked' AND revoked_at IS NOT NULL AND "
+            "revoked_reason IS NOT NULL AND length(trim(revoked_reason)) > 0) OR "
+            "(status <> 'revoked' AND revoked_at IS NULL AND revoked_reason IS NULL)",
             name="ck_authorization_bindings_revocation_state",
         ),
     )
