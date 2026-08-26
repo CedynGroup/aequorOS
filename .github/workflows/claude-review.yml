@@ -85,7 +85,11 @@ jobs:
           # Profile and other cross-stack changes can span migrations, API
           # contracts, generated clients, and dashboard code. Leave enough
           # turns for Claude to inspect each layer and submit its formal review.
-          claude_args: "--max-turns 40"
+          # Pin the repository-provisioned model so a Claude Code upgrade
+          # cannot silently select a model unavailable to this API key.
+          claude_args: |
+            --max-turns 40
+            --model claude-sonnet-4-6
 
       - name: Enable auto-merge when approved and guardrails hold
         if: vars.AGENT_AUTOMERGE == 'on'
