@@ -85,6 +85,7 @@ jobs:
         # The classifier below owns the verdict. This lets it distinguish a
         # pre-inference provider outage from a real review failure rather than
         # turning every action failure into a misleading green check.
+        # Auto-merge still requires Claude's formal approval.
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
