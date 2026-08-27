@@ -44,9 +44,11 @@ class User(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
         CheckConstraint(f"theme IN ({_values(USER_THEMES)})", name="ck_users_theme"),
         Index("ix_users_organization_id", "organization_id"),
-        # SSO identity is unique per provider (an OAuth subject maps to one user).
+        # OIDC subjects are tenant-scoped through the verified SSO connection.
+        # Two IdPs may legitimately emit the same opaque subject string.
         Index(
             "uq_users_auth_provider_sso_subject",
+            "organization_id",
             "auth_provider",
             "sso_subject",
             unique=True,

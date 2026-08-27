@@ -23,12 +23,6 @@ export interface SsoLoginRequest {
    * @memberof SsoLoginRequest
    */
   idToken: string;
-  /**
-   *
-   * @type {string}
-   * @memberof SsoLoginRequest
-   */
-  organizationId?: string | null;
 }
 
 /**
@@ -54,8 +48,6 @@ export function SsoLoginRequestFromJSONTyped(
   }
   return {
     idToken: json["id_token"],
-    organizationId:
-      json["organization_id"] == null ? undefined : json["organization_id"],
   };
 }
 
@@ -73,6 +65,5 @@ export function SsoLoginRequestToJSONTyped(
 
   return {
     id_token: value["idToken"],
-    organization_id: value["organizationId"],
   };
 }

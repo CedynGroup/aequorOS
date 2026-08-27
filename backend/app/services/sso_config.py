@@ -149,16 +149,27 @@ def _open_secret(connection: SsoConnection) -> str:
 
 
 def find_enabled_by_issuer_audience(
-    db: Session, *, issuer: str, audience: str
+    db: Session, *, issuer: str, audience: object
 ) -> SsoConnection | None:
-    """Route an incoming id_token to its connection (cross-tenant system session)."""
-    return db.scalar(
+    """Route unverified hints only when they identify exactly one connection.
+
+    OIDC permits a list-valued ``aud`` claim.  All string audiences participate
+    in routing, but zero or multiple enabled matches fail closed: an ambiguous
+    issuer/audience tuple cannot be allowed to choose an organization's identity
+    namespace by database row order.
+    """
+    raw_audiences = audience if isinstance(audience, list) else [audience]
+    audiences = sorted({value for value in raw_audiences if isinstance(value, str) and value})
+    if not audiences:
+        return None
+    connections = db.scalars(
         select(SsoConnection).where(
             SsoConnection.enabled.is_(True),
             SsoConnection.issuer == issuer.rstrip("/"),
-            SsoConnection.client_id == audience,
+            SsoConnection.client_id.in_(audiences),
         )
-    )
+    ).all()
+    return connections[0] if len(connections) == 1 else None
 
 
 def resolve_client_config(db: Session) -> SsoClientConfig | None:

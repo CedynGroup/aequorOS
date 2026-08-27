@@ -8,6 +8,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.json_schema import SkipJsonSchema
 
 _BCP47_PATTERN = (
     r"^[A-Za-z]{2,3}(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?"
@@ -31,7 +32,11 @@ class SsoLoginRequest(BaseModel):
     # it against the configured connection's issuer JWKS (zero-trust) before
     # issuing app tokens.
     id_token: str = Field(min_length=1)
-    organization_id: str | None = None
+    # Transitional compatibility only: older callers may still send the former
+    # tenant hint, but it is no longer part of the public OpenAPI contract and
+    # never selects authority.  The exchange accepts it only when it exactly
+    # matches the organization on the cryptographically verified connection.
+    organization_id: SkipJsonSchema[str | None] = None
 
 
 class TokenResponse(BaseModel):
@@ -121,6 +126,7 @@ class SsoConnectionUpdateRequest(BaseModel):
         if _is_loopback_issuer_allowed(value):
             return value
         return check_url_syntax(value, field="issuer")
+
     client_id: str = Field(min_length=1, max_length=255)
     client_secret: str | None = Field(default=None, max_length=1024)
     allowed_email_domains: list[str] = Field(default_factory=list, max_length=32)

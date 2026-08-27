@@ -14,9 +14,11 @@ user provisioning.
 
 Your IdP issues a signed identity token to AequorOS after a user authenticates
 with you. AequorOS verifies that token's signature against your IdP's published
-keys, checks the email domain you allow, and — only if that person has already
-been provisioned an AequorOS account — starts their session. **SSO never creates
-accounts**: an unknown identity is rejected even with a valid token.
+keys, binds the verified IdP connection to your AequorOS organization, checks
+the email domain you allow, and — only if that person has already been
+provisioned an AequorOS account — starts their session. Account matching, access
+requests, and session tokens stay inside the organization that owns that
+verified connection; the exchange request cannot select another tenant.
 
 ## What AequorOS needs from you
 
@@ -111,6 +113,10 @@ is what authorizes a person.
 - **Zero-trust verification:** the AequorOS backend independently validates every
   identity token against your IdP's published signing keys (issuer + audience +
   expiry + signature); nothing is trusted client-side.
+- **Tenant binding:** the verified issuer/client connection is the sole source
+  of the AequorOS organization. The public token-exchange contract contains no
+  organization selector; a legacy matching hint is tolerated temporarily, and
+  a mismatched hint is rejected as an invalid SSO token.
 - **Secret handling:** the client secret is stored AES-256-GCM-encrypted, is
   write-only through the UI and API, and is scoped — it can only be used to
   initiate sign-ins against the redirect URI registered in *your* IdP.
