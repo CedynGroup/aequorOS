@@ -209,6 +209,39 @@ async function main(): Promise<void> {
   await invalidateGenerationChanges(idleClient, scope, BANK_ID, changed);
   await waitFor(() => idleRequests === 3, 'generation invalidation did not refetch');
 
+  const raceClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 0 } },
+  });
+  const releases: Array<(value: string) => void> = [];
+  let raceRequests = 0;
+  const raceObserver = new QueryObserver(raceClient, {
+    queryKey: currentLiquidity,
+    queryFn: () =>
+      new Promise<string>((resolve) => {
+        raceRequests += 1;
+        releases.push(resolve);
+      }),
+  });
+  const unsubscribeRace = raceObserver.subscribe(() => undefined);
+  await waitFor(() => raceRequests === 1, 'initial race request did not start');
+  const invalidation = invalidateGenerationChanges(
+    raceClient,
+    scope,
+    BANK_ID,
+    ['liquidity'],
+  );
+  await waitFor(
+    () => raceRequests === 2,
+    'generation invalidation did not replace the in-flight request',
+  );
+  releases[0]('stale-generation');
+  releases[1]('fresh-generation');
+  await invalidation;
+  await waitFor(
+    () => raceClient.getQueryData(currentLiquidity) === 'fresh-generation',
+    'superseded in-flight response remained cached',
+  );
+
   const jitter = jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'live-summary', scope, BANK_ID);
   assert.equal(jitter, jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'live-summary', scope, BANK_ID));
   assert.ok(jitter >= 18_000 && jitter <= 22_000);
@@ -246,6 +279,9 @@ async function main(): Promise<void> {
 
   unsubscribeDetailed();
   detailedObserver.destroy();
+  unsubscribeRace();
+  raceObserver.destroy();
+  raceClient.clear();
   idleClient.clear();
   requestClient.clear();
   console.log(

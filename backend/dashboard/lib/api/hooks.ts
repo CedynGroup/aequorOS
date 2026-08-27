@@ -214,6 +214,32 @@ export function useCapitalDashboard(
   });
 }
 
+export function useEffectiveRatioDashboards(
+  bankId: string | undefined,
+  periodId: string,
+) {
+  const currentLiq = useLiquidityDashboard(bankId);
+  const currentCap = useCapitalDashboard(bankId);
+  const needsPeriodLiq =
+    currentLiq.isError ||
+    Boolean(currentLiq.data && currentLiq.data.period.id !== periodId);
+  const needsPeriodCap =
+    currentCap.isError ||
+    Boolean(currentCap.data && currentCap.data.period.id !== periodId);
+  const periodLiq = useLiquidityDashboard(
+    needsPeriodLiq ? bankId : undefined,
+    periodId,
+  );
+  const periodCap = useCapitalDashboard(
+    needsPeriodCap ? bankId : undefined,
+    periodId,
+  );
+  return {
+    liquidity: needsPeriodLiq ? periodLiq : currentLiq,
+    capital: needsPeriodCap ? periodCap : currentCap,
+  };
+}
+
 export function useRegulatoryRuns(
   bankId: string | undefined,
   filters: {

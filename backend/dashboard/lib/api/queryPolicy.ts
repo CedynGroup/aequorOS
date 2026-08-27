@@ -99,24 +99,28 @@ export function invalidateScopedPrefixes(
   scope: QueryAuthorityScope,
   bankId: string | undefined
 ): Promise<void[]> {
+  const matchesScope = (prefix: string, key: QueryKey): boolean => {
+    if (key[0] !== prefix) return false;
+    const scoped =
+      key[1] === scope.tenantId &&
+      key[2] === scope.authorityId &&
+      key[3] === (bankId ?? null);
+    // During the incremental key migration, non-home reads still use
+    // [prefix, bankId, …]. The QueryClient itself is authority-scoped,
+    // so matching that bank-local legacy shape cannot cross a boundary.
+    const bankLocalLegacy = Boolean(bankId) && key[1] === bankId;
+    return scoped || bankLocalLegacy;
+  };
+
   return Promise.all(
-    prefixes.map((prefix) =>
-      queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey;
-          if (key[0] !== prefix) return false;
-          const scoped =
-            key[1] === scope.tenantId &&
-            key[2] === scope.authorityId &&
-            key[3] === (bankId ?? null);
-          // During the incremental key migration, non-home reads still use
-          // [prefix, bankId, …]. The QueryClient itself is authority-scoped,
-          // so matching that bank-local legacy shape cannot cross a boundary.
-          const bankLocalLegacy = Boolean(bankId) && key[1] === bankId;
-          return scoped || bankLocalLegacy;
-        },
-      })
-    )
+    prefixes.map(async (prefix) => {
+      const filters = {
+        predicate: (query: { queryKey: QueryKey }) =>
+          matchesScope(prefix, query.queryKey),
+      };
+      await queryClient.cancelQueries(filters);
+      await queryClient.invalidateQueries(filters);
+    })
   );
 }
 

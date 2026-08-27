@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 const BANK_ID = 'BK-SAMP0001';
 const PERIOD_ID = 'period-latest';
+const HISTORICAL_PERIOD_ID = 'period-historical';
 
 async function waitFor(check: () => boolean, message: string): Promise<void> {
   const deadline = Date.now() + 1_000;
@@ -149,11 +150,23 @@ async function main(): Promise<void> {
     getBankPeriodFacts: response('facts', {}),
   });
   mock(clients.regulatoryLiquidityApi, {
-    getLiquidityDashboard: response('liq-dashboard', {}),
+    getLiquidityDashboard: async ({ reportingPeriodId }: { reportingPeriodId?: string }) => {
+      const name = reportingPeriodId
+        ? `liq-dashboard:${reportingPeriodId}`
+        : 'liq-dashboard';
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+      return { period: { id: reportingPeriodId ?? PERIOD_ID }, trend: [] };
+    },
     runAllLiquidityScenarios: response('liq-mutation', {}),
   });
   mock(clients.regulatoryCapitalApi, {
-    getCapitalDashboard: response('cap-dashboard', {}),
+    getCapitalDashboard: async ({ reportingPeriodId }: { reportingPeriodId?: string }) => {
+      const name = reportingPeriodId
+        ? `cap-dashboard:${reportingPeriodId}`
+        : 'cap-dashboard';
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+      return { period: { id: reportingPeriodId ?? PERIOD_ID }, trend: [] };
+    },
   });
   mock(clients.regulatoryIrrApi, {
     getIrrDashboardRaw: async () => {
@@ -191,6 +204,7 @@ async function main(): Promise<void> {
   let runLiquidityScenarios: (() => Promise<unknown>) | null = null;
   let authorityMounts = 0;
   let resolvedAuthority: ReturnType<typeof useQueryAuthorityScope> | null = null;
+  let selectRatioPeriod: ((periodId: string) => void) | null = null;
 
   function AuthorityProbe() {
     const authority = useQueryAuthorityScope();
@@ -202,6 +216,8 @@ async function main(): Promise<void> {
   }
 
   function CommandCenterHookHarness() {
+    const [ratioPeriodId, setRatioPeriodId] = React.useState(PERIOD_ID);
+    selectRatioPeriod = setRatioPeriodId;
     queryClient = useQueryClient();
     hooks.useBanks();
     hooks.useReportingPeriods(BANK_ID);
@@ -214,9 +230,8 @@ async function main(): Promise<void> {
     hooks.useNotifications();
     hooks.useNotifications();
     hooks.useLiquidityDashboard(BANK_ID);
-    hooks.useLiquidityDashboard(BANK_ID);
     hooks.useCapitalDashboard(BANK_ID);
-    hooks.useCapitalDashboard(BANK_ID);
+    hooks.useEffectiveRatioDashboards(BANK_ID, ratioPeriodId);
     hooks.useIrrDashboard(BANK_ID);
     hooks.useFxDashboard(BANK_ID);
     hooks.useFtpDashboard(BANK_ID);
@@ -279,6 +294,16 @@ async function main(): Promise<void> {
       .reduce((total, [, count]) => total + count, 0),
     20,
     'real duplicate consumers must collapse to one request per resource',
+  );
+
+  await act(async () => {
+    selectRatioPeriod!(HISTORICAL_PERIOD_ID);
+  });
+  await waitFor(
+    () =>
+      counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) === 1 &&
+      counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) === 1,
+    'historical ratio dashboards did not retain explicit-period semantics',
   );
 
   await act(async () => {

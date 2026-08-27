@@ -29,12 +29,9 @@ import {
   CHART_GRID,
   seriesColor,
 } from '@/lib/chartTheme';
-import {
-  useCapitalDashboard,
-  useLiquidityDashboard,
-} from '@/lib/api/hooks';
 import { num } from '@/lib/api/values';
 import { useModuleScope } from '@/components/shell/BankContext';
+import { useEffectiveRatioDashboards } from '@/lib/api/hooks';
 
 type TrendRow = {
   t: number;
@@ -46,20 +43,19 @@ type TrendRow = {
 
 export default function RatioTrendChart({
   bankId,
+  periodId,
 }: {
   bankId: string | undefined;
+  periodId: string;
 }) {
   const [range, setRange] = useState<RangePreset>('1Y');
   // An SDI does not file Basel LCR/NSFR (docs/sdi.md §4.6) — its capital headline
   // is the s.29 CAR; liquidity is supervised via LMTD on the Liquidity page.
   const isSdi = useModuleScope().institutionClass === 'sdi';
-  // The trend arrays are identical for current and selected-period dashboard
-  // reads. Reuse the current payloads already owned by the pulse wall; asking
-  // for an explicit period would fetch both heavyweight dashboards again only
-  // to render the same home series. Period-specific module pages retain their
-  // explicit semantic keys and stored-run behavior.
-  const liq = useLiquidityDashboard(bankId);
-  const cap = useCapitalDashboard(bankId);
+  const { liquidity: liq, capital: cap } = useEffectiveRatioDashboards(
+    bankId,
+    periodId,
+  );
 
   const rows = useMemo<TrendRow[]>(() => {
     const byPeriod = new Map<string, TrendRow>();
