@@ -135,6 +135,7 @@ async function main(): Promise<void> {
   };
   let generation = 7;
   let officialGeneration = 1;
+  let latestOfficialRunVersion = 1;
   let currentPeriodId = PERIOD_ID;
   let currentDetailGate: Promise<void> | null = null;
   let releaseInitialSignals: (() => void) | null = null;
@@ -174,6 +175,24 @@ async function main(): Promise<void> {
       return { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
     },
     runAllLiquidityScenarios: response('liq-mutation', {}),
+    listRegulatoryRuns: async () => {
+      counts.set(
+        'official-run-signal',
+        (counts.get('official-run-signal') ?? 0) + 1,
+      );
+      await initialSignalGate;
+      return {
+        total: latestOfficialRunVersion,
+        runs: [
+          {
+            id: `run-${latestOfficialRunVersion}`,
+            module: 'liquidity',
+            status: 'succeeded',
+            inputHash: `run-hash-${latestOfficialRunVersion}`,
+          },
+        ],
+      };
+    },
   });
   mock(clients.regulatoryCapitalApi, {
     getCapitalDashboard: async ({ reportingPeriodId }: { reportingPeriodId?: string }) => {
@@ -269,6 +288,7 @@ async function main(): Promise<void> {
     hooks.useLiveSummary(BANK_ID);
     hooks.useLiveSummary(BANK_ID);
     hooks.useBankFreshness(BANK_ID, PERIOD_ID, false);
+    hooks.useLatestOfficialRunSignal(BANK_ID);
     hooks.useBankAlerts(BANK_ID);
     hooks.useBankAlerts(BANK_ID);
     hooks.useNotifications();
@@ -331,7 +351,10 @@ async function main(): Promise<void> {
     releaseStatus!();
   });
   await waitFor(
-    () => counts.get('live-summary') === 1 && counts.get('freshness') === 1,
+    () =>
+      counts.get('live-summary') === 1 &&
+      counts.get('freshness') === 1 &&
+      counts.get('official-run-signal') === 1,
     'initial dashboard signals did not start',
   );
   assert.equal(
@@ -348,7 +371,7 @@ async function main(): Promise<void> {
     releaseInitialSignals!();
   });
   await waitFor(
-    () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 21,
+    () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 22,
     'Command Center resources did not settle',
   );
   const initialCounts = new Map(counts);
@@ -365,7 +388,7 @@ async function main(): Promise<void> {
     [...initialCounts.entries()]
       .filter(([name]) => name !== 'liq-mutation')
       .reduce((total, [, count]) => total + count, 0),
-    21,
+    22,
     'real duplicate consumers must collapse to one request per resource',
   );
 
@@ -450,7 +473,6 @@ async function main(): Promise<void> {
   });
   assert.equal(counts.get('liq-dashboard'), beforeIdleLiquidity);
   assert.equal(counts.get('cap-dashboard'), beforeIdleCapital);
-  const idleLiquidityCount = counts.get('liq-dashboard') ?? 0;
   const idleCapitalCount = counts.get('cap-dashboard') ?? 0;
 
   officialGeneration += 1;
@@ -471,11 +493,27 @@ async function main(): Promise<void> {
     'official-run signal invalidated an unaffected module',
   );
 
+  latestOfficialRunVersion += 1;
+  const beforeHistoricalOfficialCapital = counts.get('cap-dashboard') ?? 0;
+  const beforeHistoricalOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
+  await act(async () => {
+    await queryClient!.invalidateQueries({
+      predicate: (query) => query.queryKey[0] === 'official-run-signal',
+    });
+  });
+  await waitFor(
+    () =>
+      counts.get('cap-dashboard') === beforeHistoricalOfficialCapital + 1 &&
+      counts.get('liq-dashboard') === beforeHistoricalOfficialLiquidity + 1,
+    'non-selected official run did not invalidate cached trend details',
+  );
+
+  const beforeLiquidityMutation = counts.get('liq-dashboard') ?? 0;
   await act(async () => {
     await runLiquidityScenarios!();
   });
   await waitFor(
-    () => counts.get('liq-dashboard') === idleLiquidityCount + 1,
+    () => counts.get('liq-dashboard') === beforeLiquidityMutation + 1,
     'mutation did not invalidate detail',
   );
 
@@ -566,7 +604,7 @@ async function main(): Promise<void> {
   globalThis.setInterval = nativeSetInterval;
   globalThis.setTimeout = nativeSetTimeout;
   console.log(
-    'queryAuthorityBoundary.test.tsx: pending 0; settled 21 resources/21 calls; equivalent detail deduped; idle and invalidation passed',
+    'queryAuthorityBoundary.test.tsx: pending 0; settled 22 resources/22 calls; equivalent detail deduped; idle and invalidation passed',
   );
 }
 

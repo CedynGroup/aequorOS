@@ -18,10 +18,13 @@ import {
   invalidateOfficialRunChanges,
   invalidateScopedPrefixes,
   jitteredPollInterval,
+  latestOfficialRunFingerprint,
+  observedSignalChanges,
   officialRunFingerprint,
   queryAuthorityScope,
   regulatoryDetailInvalidationPrefixes,
   scopedQueryKey,
+  waitForInitialDashboardSignals,
 } from './queryPolicy';
 
 const BANK_ID = 'BK-SAMP0001';
@@ -79,7 +82,37 @@ async function main(): Promise<void> {
   assert.notDeepEqual(currentLiquidity, tenantKey);
   assert.notDeepEqual(currentLiquidity, authorityKey);
 
-  // The settled home owns 21 logical resources. Duplicate consumers (header,
+  const failedSignalClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  let signalShouldFail = true;
+  let signalRequests = 0;
+  const signalKey = scopedQueryKey('live-summary', scope, BANK_ID);
+  await assert.rejects(
+    failedSignalClient.fetchQuery({
+      queryKey: signalKey,
+      queryFn: async () => {
+        signalRequests += 1;
+        if (signalShouldFail) throw new Error('signal unavailable');
+        return { modules: [] };
+      },
+    }),
+  );
+  signalShouldFail = false;
+  await waitForInitialDashboardSignals(failedSignalClient, scope, BANK_ID);
+  assert.equal(signalRequests, 2, 'an errored initial signal must recover before detail proceeds');
+
+  const recovered = generationFingerprint([
+    {
+      module: 'liquidity',
+      calculationGeneration: 9,
+      engineVersion: 'live-liquidity-v1',
+    },
+  ]);
+  assert.deepEqual(observedSignalChanges(undefined, recovered, true), ['liquidity']);
+  assert.deepEqual(observedSignalChanges(undefined, recovered, false), []);
+
+  // The settled home owns 22 logical resources. Duplicate consumers (header,
   // breach banner, pulse wall, ratio panel, balance strip) all ask TanStack for
   // the same stable keys, yielding one request per resource.
   const current = (prefix: string) =>
@@ -90,6 +123,7 @@ async function main(): Promise<void> {
     scopedQueryKey('facts', scope, BANK_ID, PERIOD_ID),
     scopedQueryKey('live-summary', scope, BANK_ID),
     scopedQueryKey('freshness', scope, BANK_ID, PERIOD_ID),
+    scopedQueryKey('official-run-signal', scope, BANK_ID),
     scopedQueryKey('alerts', scope, BANK_ID, 20),
     scopedQueryKey('notifications', scope, false),
     current('liq-dashboard'),
@@ -103,7 +137,7 @@ async function main(): Promise<void> {
     scopedQueryKey('de-batches', scope, BANK_ID, 'all'),
     scopedQueryKey('de-activations', scope, BANK_ID),
   ];
-  assert.equal(homeResources.length, 21);
+  assert.equal(homeResources.length, 22);
   const requestCounts = new Map<string, number>();
   const requestClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 1_000 } },
@@ -298,6 +332,20 @@ async function main(): Promise<void> {
   ]);
   const officialChanges = changedGenerations(previousOfficial, nextOfficial);
   assert.deepEqual(officialChanges, ['capital']);
+  assert.notEqual(
+    latestOfficialRunFingerprint(10, {
+      id: 'run-new',
+      module: 'liquidity',
+      status: 'succeeded',
+      inputHash: 'historical-period-hash',
+    }),
+    latestOfficialRunFingerprint(9, {
+      id: 'run-old',
+      module: 'capital',
+      status: 'succeeded',
+      inputHash: 'selected-period-hash',
+    }),
+  );
   await invalidateOfficialRunChanges(
     officialClient,
     scope,
@@ -334,13 +382,15 @@ async function main(): Promise<void> {
   // Count model for the same 65-second idle window used by the pre-change
   // fixture. Only the cheap live summary, freshness, alert list, and inbox retain a
   // cadence. With this fixture's deterministic jitter: 21 initial resources
-  // + 3 summary ticks + 2 freshness ticks + 3 alert ticks + 1 inbox tick = 30
+  // + 3 summary ticks + 2 freshness ticks + 3 latest-run ticks + 3 alert ticks
+  // + 1 inbox tick = 34
   // requests. The five
   // module detail payloads each load once and contribute zero idle polls.
   const idleWindowMs = 65_000;
   const retainedIntervals = [
     jitter,
     jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'freshness', scope, BANK_ID),
+    jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'official-run-signal', scope, BANK_ID),
     jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'alerts', scope, BANK_ID),
     jitteredPollInterval(60_000, 'notifications', scope),
   ];
@@ -350,7 +400,7 @@ async function main(): Promise<void> {
       (ticks, interval) => ticks + Math.floor(idleWindowMs / interval),
       0
     );
-  assert.equal(afterIdleRequests, 30);
+  assert.equal(afterIdleRequests, 34);
   assert.equal(
     homeResources.filter((key) =>
       [
@@ -379,10 +429,11 @@ async function main(): Promise<void> {
     observed.observer.destroy();
   }
   officialClient.clear();
+  failedSignalClient.clear();
   idleClient.clear();
   requestClient.clear();
   console.log(
-    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 21/30/5; detailed idle polls 0; invalidation passed'
+    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 22/34/5; detailed idle polls 0; invalidation passed'
   );
 }
 

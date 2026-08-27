@@ -27,6 +27,7 @@ import { isApiError } from '@/lib/api/client';
 import {
   useBankFreshness,
   useBanks,
+  useLatestOfficialRunSignal,
   useReportingPeriods,
 } from '@/lib/api/hooks';
 import { setActiveJurisdiction } from '@/lib/format';
@@ -166,6 +167,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const period =
     periods.find((p) => p.id === selectedPeriodId) ?? periods[0] ?? null;
   useBankFreshness(period ? bank?.id : undefined, period?.id);
+  useLatestOfficialRunSignal(period ? bank?.id : undefined);
 
   const isLoading =
     banksQuery.isLoading || (Boolean(bank) && periodsQuery.isLoading);

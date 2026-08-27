@@ -73,15 +73,20 @@ export async function waitForInitialDashboardSignals(
     predicate: (query) => {
       const key = query.queryKey;
       return (
-        (key[0] === 'live-summary' || key[0] === 'freshness') &&
+        (key[0] === 'live-summary' ||
+          key[0] === 'freshness' ||
+          key[0] === 'official-run-signal') &&
         key[1] === scope.tenantId &&
         key[2] === scope.authorityId &&
         key[3] === (bankId ?? null)
       );
     },
   });
-  await Promise.allSettled(
+  await Promise.all(
     signals.flatMap((query) => {
+      if (query.state.status === 'error') {
+        return [query.fetch()];
+      }
       if (query.promise) return [query.promise];
       if (query.state.status === 'pending') return [query.fetch()];
       return [];
@@ -124,6 +129,37 @@ export function invalidateScopedPrefixes(
   scope: QueryAuthorityScope,
   bankId: string | undefined
 ): Promise<void[]> {
+  return invalidateMatchingScopedPrefixes(
+    queryClient,
+    prefixes,
+    scope,
+    bankId,
+    false,
+  );
+}
+
+export function invalidateCachedScopedPrefixes(
+  queryClient: QueryClient,
+  prefixes: readonly string[],
+  scope: QueryAuthorityScope,
+  bankId: string | undefined
+): Promise<void[]> {
+  return invalidateMatchingScopedPrefixes(
+    queryClient,
+    prefixes,
+    scope,
+    bankId,
+    true,
+  );
+}
+
+function invalidateMatchingScopedPrefixes(
+  queryClient: QueryClient,
+  prefixes: readonly string[],
+  scope: QueryAuthorityScope,
+  bankId: string | undefined,
+  cachedOnly: boolean,
+): Promise<void[]> {
   const matchesScope = (prefix: string, key: QueryKey): boolean => {
     if (key[0] !== prefix) return false;
     const scoped =
@@ -140,8 +176,9 @@ export function invalidateScopedPrefixes(
   return Promise.all(
     prefixes.map(async (prefix) => {
       const filters = {
-        predicate: (query: { queryKey: QueryKey }) =>
-          matchesScope(prefix, query.queryKey),
+        predicate: (query: { queryKey: QueryKey; state: { data: unknown } }) =>
+          matchesScope(prefix, query.queryKey) &&
+          (!cachedOnly || query.state.data !== undefined),
       };
       await queryClient.cancelQueries(filters);
       await queryClient.invalidateQueries(filters);
@@ -258,6 +295,35 @@ export function changedGenerations(
   return [...next].flatMap(([module, fingerprint]) =>
     previous.get(module) === fingerprint ? [] : [module]
   );
+}
+
+export function observedSignalChanges(
+  previous: ReadonlyMap<string, string> | undefined,
+  next: ReadonlyMap<string, string>,
+  reconcileAfterError: boolean
+): string[] {
+  if (previous) return changedGenerations(previous, next);
+  return reconcileAfterError ? [...next.keys()] : [];
+}
+
+export type LatestOfficialRunSignal = Readonly<{
+  id: string;
+  module: string;
+  status: string;
+  inputHash: string;
+}>;
+
+export function latestOfficialRunFingerprint(
+  total: number,
+  latest: LatestOfficialRunSignal | undefined
+): string {
+  return JSON.stringify([
+    total,
+    latest?.id ?? null,
+    latest?.module ?? null,
+    latest?.status ?? null,
+    latest?.inputHash ?? null,
+  ]);
 }
 
 export async function refreshLiveSummaryGenerationChanges(

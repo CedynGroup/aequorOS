@@ -120,10 +120,14 @@ import {
   dashboardQueryKey,
   dashboardSemantic,
   generationFingerprint,
+  generationInvalidationPrefixes,
+  invalidateCachedScopedPrefixes,
   invalidateGenerationChanges,
   invalidateOfficialRunChanges,
   invalidateScopedPrefixes,
   jitteredPollInterval,
+  latestOfficialRunFingerprint,
+  observedSignalChanges,
   officialRunFingerprint,
   regulatoryDetailInvalidationPrefixes,
   scopedQueryKey,
@@ -900,14 +904,23 @@ export function useApplyBehavioralModel(
 /** As-of + reason payload for a pipeline action. */
 export type PipelineActionInput = { asOfDate: string; reason: string };
 
-const observedLiveGenerations = new WeakMap<
-  object,
-  Map<string, ReadonlyMap<string, string>>
->();
+type ObservedModuleSignal = {
+  fingerprint?: ReadonlyMap<string, string>;
+  failed: boolean;
+};
 
-const observedOfficialRuns = new WeakMap<
+const observedLiveGenerations = new WeakMap<object, Map<string, ObservedModuleSignal>>();
+
+const observedOfficialRuns = new WeakMap<object, Map<string, ObservedModuleSignal>>();
+
+type ObservedLatestRunSignal = {
+  fingerprint?: string;
+  failed: boolean;
+};
+
+const observedLatestOfficialRuns = new WeakMap<
   object,
-  Map<string, ReadonlyMap<string, string>>
+  Map<string, ObservedLatestRunSignal>
 >();
 
 /** Cross-module current metrics + per-module generation signal, cheaply polled. */
@@ -928,24 +941,36 @@ export function useLiveSummary(bankId: string | undefined) {
   });
 
   useEffect(() => {
-    if (!bankId || !query.data) return;
+    if (!bankId) return;
     let byScope = observedLiveGenerations.get(queryClient);
     if (!byScope) {
       byScope = new Map();
       observedLiveGenerations.set(queryClient, byScope);
     }
     const identity = `${scope.tenantId}|${scope.authorityId}|${bankId}`;
+    const observed = byScope.get(identity);
+    if (!query.data) {
+      if (query.isError) {
+        byScope.set(identity, { fingerprint: observed?.fingerprint, failed: true });
+      }
+      return;
+    }
     const next = generationFingerprint(query.data.modules);
-    const previous = byScope.get(identity);
-    // Store first so duplicate useLiveSummary observers cannot invalidate the
-    // same detail queries more than once for one generation transition.
-    byScope.set(identity, next);
-    if (!previous) return;
-    const changed = changedGenerations(previous, next);
+    byScope.set(identity, { fingerprint: next, failed: false });
+    const recovering = !observed?.fingerprint && (observed?.failed ?? false);
+    const changed = observedSignalChanges(observed?.fingerprint, next, false);
+    if (recovering) {
+      void invalidateCachedScopedPrefixes(
+        queryClient,
+        generationInvalidationPrefixes([...next.keys()]),
+        scope,
+        bankId,
+      );
+    }
     if (changed.length > 0) {
       void invalidateGenerationChanges(queryClient, scope, bankId, changed);
     }
-  }, [bankId, query.data, queryClient, scope]);
+  }, [bankId, query.data, query.isError, queryClient, scope]);
 
   return query;
 }
@@ -984,18 +1009,32 @@ export function useBankFreshness(
   });
 
   useEffect(() => {
-    if (!bankId || !query.data) return;
+    if (!bankId) return;
     let byScope = observedOfficialRuns.get(queryClient);
     if (!byScope) {
       byScope = new Map();
       observedOfficialRuns.set(queryClient, byScope);
     }
     const identity = `${scope.tenantId}|${scope.authorityId}|${bankId}|${periodId ?? ''}`;
+    const observed = byScope.get(identity);
+    if (!query.data) {
+      if (query.isError) {
+        byScope.set(identity, { fingerprint: observed?.fingerprint, failed: true });
+      }
+      return;
+    }
     const next = officialRunFingerprint(query.data.modules);
-    const previous = byScope.get(identity);
-    byScope.set(identity, next);
-    if (!previous) return;
-    const changed = changedGenerations(previous, next);
+    byScope.set(identity, { fingerprint: next, failed: false });
+    const recovering = !observed?.fingerprint && (observed?.failed ?? false);
+    const changed = observedSignalChanges(observed?.fingerprint, next, false);
+    if (recovering) {
+      void invalidateCachedScopedPrefixes(
+        queryClient,
+        regulatoryDetailInvalidationPrefixes([...next.keys()]),
+        scope,
+        bankId,
+      );
+    }
     if (changed.length > 0) {
       void invalidateOfficialRunChanges(
         queryClient,
@@ -1004,7 +1043,68 @@ export function useBankFreshness(
         changed,
       );
     }
-  }, [bankId, periodId, query.data, queryClient, scope]);
+  }, [bankId, periodId, query.data, query.isError, queryClient, scope]);
+
+  return query;
+}
+
+export function useLatestOfficialRunSignal(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: scopedQueryKey('official-run-signal', scope, bankId ?? null),
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryLiquidityApi.listRegulatoryRuns({
+          bankId: bankId!,
+          limit: 1,
+          offset: 0,
+        })
+      ),
+    enabled: Boolean(bankId),
+    refetchInterval: jitteredPollInterval(
+      LIVE_SIGNAL_POLL_MS,
+      'official-run-signal',
+      scope,
+      bankId,
+    ),
+  });
+
+  useEffect(() => {
+    if (!bankId) return;
+    let byScope = observedLatestOfficialRuns.get(queryClient);
+    if (!byScope) {
+      byScope = new Map();
+      observedLatestOfficialRuns.set(queryClient, byScope);
+    }
+    const identity = `${scope.tenantId}|${scope.authorityId}|${bankId}`;
+    const observed = byScope.get(identity);
+    if (!query.data) {
+      if (query.isError) {
+        byScope.set(identity, {
+          fingerprint: observed?.fingerprint,
+          failed: true,
+        });
+      }
+      return;
+    }
+    const next = latestOfficialRunFingerprint(query.data.total, query.data.runs[0]);
+    byScope.set(identity, { fingerprint: next, failed: false });
+    if (
+      (observed?.fingerprint !== undefined && observed.fingerprint !== next) ||
+      (observed?.fingerprint === undefined && observed?.failed)
+    ) {
+      const invalidate = observed?.fingerprint === undefined
+        ? invalidateCachedScopedPrefixes
+        : invalidateScopedPrefixes;
+      void invalidate(
+        queryClient,
+        officialRunCompletionPrefixes,
+        scope,
+        bankId,
+      );
+    }
+  }, [bankId, query.data, query.isError, queryClient, scope]);
 
   return query;
 }
