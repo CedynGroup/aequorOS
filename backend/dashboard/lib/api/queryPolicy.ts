@@ -306,24 +306,40 @@ export function observedSignalChanges(
   return reconcileAfterError ? [...next.keys()] : [];
 }
 
-export type LatestOfficialRunSignal = Readonly<{
+export type OfficialCompletionSignal = Readonly<{
   id: string;
   module: string;
+  scenarioCode: string;
   status: string;
   inputHash: string;
 }>;
 
-export function latestOfficialRunFingerprint(
-  total: number,
-  latest: LatestOfficialRunSignal | undefined
-): string {
-  return JSON.stringify([
-    total,
-    latest?.id ?? null,
-    latest?.module ?? null,
-    latest?.status ?? null,
-    latest?.inputHash ?? null,
-  ]);
+const OFFICIAL_COMPLETION_SCENARIOS = new Map([
+  ['liquidity', 'baseline'],
+  ['capital', 'baseline'],
+  ['irr', 'baseline'],
+  ['fx', 'baseline'],
+  ['ftp', 'baseline'],
+  ['forecast', 'base'],
+]);
+
+export function officialCompletionFingerprint(
+  runs: readonly OfficialCompletionSignal[]
+): ReadonlyMap<string, string> {
+  const fingerprints = new Map<string, string>();
+  for (const run of runs) {
+    const officialScenario = OFFICIAL_COMPLETION_SCENARIOS.get(run.module);
+    if (
+      !officialScenario ||
+      run.status !== 'succeeded' ||
+      run.scenarioCode !== officialScenario ||
+      fingerprints.has(run.module)
+    ) {
+      continue;
+    }
+    fingerprints.set(run.module, JSON.stringify([run.id, run.inputHash]));
+  }
+  return fingerprints;
 }
 
 export async function refreshLiveSummaryGenerationChanges(

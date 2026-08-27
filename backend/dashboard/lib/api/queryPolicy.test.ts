@@ -18,8 +18,8 @@ import {
   invalidateOfficialRunChanges,
   invalidateScopedPrefixes,
   jitteredPollInterval,
-  latestOfficialRunFingerprint,
   observedSignalChanges,
+  officialCompletionFingerprint,
   officialRunFingerprint,
   queryAuthorityScope,
   regulatoryDetailInvalidationPrefixes,
@@ -332,19 +332,58 @@ async function main(): Promise<void> {
   ]);
   const officialChanges = changedGenerations(previousOfficial, nextOfficial);
   assert.deepEqual(officialChanges, ['capital']);
-  assert.notEqual(
-    latestOfficialRunFingerprint(10, {
-      id: 'run-new',
-      module: 'liquidity',
-      status: 'succeeded',
-      inputHash: 'historical-period-hash',
-    }),
-    latestOfficialRunFingerprint(9, {
-      id: 'run-old',
+  const officialBaseline = officialCompletionFingerprint([
+    {
+      id: 'capital-official-old',
       module: 'capital',
+      scenarioCode: 'baseline',
       status: 'succeeded',
-      inputHash: 'selected-period-hash',
-    }),
+      inputHash: 'capital-official-hash-old',
+    },
+  ]);
+  const scenarioOnlyChange = officialCompletionFingerprint([
+    {
+      id: 'capital-stress-new',
+      module: 'capital',
+      scenarioCode: 'severe',
+      status: 'succeeded',
+      inputHash: 'capital-stress-hash-new',
+    },
+    {
+      id: 'capital-official-old',
+      module: 'capital',
+      scenarioCode: 'baseline',
+      status: 'succeeded',
+      inputHash: 'capital-official-hash-old',
+    },
+  ]);
+  assert.deepEqual(changedGenerations(officialBaseline, scenarioOnlyChange), []);
+  const nextOfficialBaseline = officialCompletionFingerprint([
+    {
+      id: 'capital-official-new',
+      module: 'capital',
+      scenarioCode: 'baseline',
+      status: 'succeeded',
+      inputHash: 'capital-official-hash-new',
+    },
+    {
+      id: 'forecast-official-new',
+      module: 'forecast',
+      scenarioCode: 'base',
+      status: 'succeeded',
+      inputHash: 'forecast-official-hash-new',
+    },
+    {
+      id: 'whatif-new',
+      module: 'whatif',
+      scenarioCode: 'baseline',
+      status: 'succeeded',
+      inputHash: 'whatif-hash-new',
+    },
+  ]);
+  assert.deepEqual(
+    changedGenerations(officialBaseline, nextOfficialBaseline),
+    ['capital', 'forecast'],
   );
   await invalidateOfficialRunChanges(
     officialClient,

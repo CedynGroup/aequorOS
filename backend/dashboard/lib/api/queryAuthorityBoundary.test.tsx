@@ -135,7 +135,15 @@ async function main(): Promise<void> {
   };
   let generation = 7;
   let officialGeneration = 1;
-  let latestOfficialRunVersion = 1;
+  const latestRegulatoryRuns = [
+    {
+      id: 'liquidity-official-1',
+      module: 'liquidity',
+      scenarioCode: 'baseline',
+      status: 'succeeded',
+      inputHash: 'liquidity-official-hash-1',
+    },
+  ];
   let currentPeriodId = PERIOD_ID;
   let currentDetailGate: Promise<void> | null = null;
   let releaseInitialSignals: (() => void) | null = null;
@@ -182,15 +190,8 @@ async function main(): Promise<void> {
       );
       await initialSignalGate;
       return {
-        total: latestOfficialRunVersion,
-        runs: [
-          {
-            id: `run-${latestOfficialRunVersion}`,
-            module: 'liquidity',
-            status: 'succeeded',
-            inputHash: `run-hash-${latestOfficialRunVersion}`,
-          },
-        ],
+        total: latestRegulatoryRuns.length,
+        runs: latestRegulatoryRuns,
       };
     },
   });
@@ -493,7 +494,31 @@ async function main(): Promise<void> {
     'official-run signal invalidated an unaffected module',
   );
 
-  latestOfficialRunVersion += 1;
+  latestRegulatoryRuns.unshift({
+    id: 'capital-stress-2',
+    module: 'capital',
+    scenarioCode: 'severe',
+    status: 'succeeded',
+    inputHash: 'capital-stress-hash-2',
+  });
+  const beforeScenarioCapital = counts.get('cap-dashboard') ?? 0;
+  const beforeScenarioLiquidity = counts.get('liq-dashboard') ?? 0;
+  await act(async () => {
+    await queryClient!.invalidateQueries({
+      predicate: (query) => query.queryKey[0] === 'official-run-signal',
+    });
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(counts.get('cap-dashboard'), beforeScenarioCapital);
+  assert.equal(counts.get('liq-dashboard'), beforeScenarioLiquidity);
+
+  latestRegulatoryRuns.unshift({
+    id: 'capital-official-2',
+    module: 'capital',
+    scenarioCode: 'baseline',
+    status: 'succeeded',
+    inputHash: 'capital-official-hash-2',
+  });
   const beforeHistoricalOfficialCapital = counts.get('cap-dashboard') ?? 0;
   const beforeHistoricalOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
   await act(async () => {
@@ -502,10 +527,13 @@ async function main(): Promise<void> {
     });
   });
   await waitFor(
-    () =>
-      counts.get('cap-dashboard') === beforeHistoricalOfficialCapital + 1 &&
-      counts.get('liq-dashboard') === beforeHistoricalOfficialLiquidity + 1,
+    () => counts.get('cap-dashboard') === beforeHistoricalOfficialCapital + 1,
     'non-selected official run did not invalidate cached trend details',
+  );
+  assert.equal(
+    counts.get('liq-dashboard'),
+    beforeHistoricalOfficialLiquidity,
+    'non-selected official run invalidated an unaffected module',
   );
 
   const beforeLiquidityMutation = counts.get('liq-dashboard') ?? 0;

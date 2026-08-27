@@ -126,7 +126,7 @@ import {
   invalidateOfficialRunChanges,
   invalidateScopedPrefixes,
   jitteredPollInterval,
-  latestOfficialRunFingerprint,
+  officialCompletionFingerprint,
   observedSignalChanges,
   officialRunFingerprint,
   regulatoryDetailInvalidationPrefixes,
@@ -913,14 +913,9 @@ const observedLiveGenerations = new WeakMap<object, Map<string, ObservedModuleSi
 
 const observedOfficialRuns = new WeakMap<object, Map<string, ObservedModuleSignal>>();
 
-type ObservedLatestRunSignal = {
-  fingerprint?: string;
-  failed: boolean;
-};
-
 const observedLatestOfficialRuns = new WeakMap<
   object,
-  Map<string, ObservedLatestRunSignal>
+  Map<string, ObservedModuleSignal>
 >();
 
 /** Cross-module current metrics + per-module generation signal, cheaply polled. */
@@ -1057,7 +1052,7 @@ export function useLatestOfficialRunSignal(bankId: string | undefined) {
       apiCall(() =>
         regulatoryLiquidityApi.listRegulatoryRuns({
           bankId: bankId!,
-          limit: 1,
+          limit: 25,
           offset: 0,
         })
       ),
@@ -1088,21 +1083,20 @@ export function useLatestOfficialRunSignal(bankId: string | undefined) {
       }
       return;
     }
-    const next = latestOfficialRunFingerprint(query.data.total, query.data.runs[0]);
+    const next = officialCompletionFingerprint(query.data.runs);
     byScope.set(identity, { fingerprint: next, failed: false });
-    if (
-      (observed?.fingerprint !== undefined && observed.fingerprint !== next) ||
-      (observed?.fingerprint === undefined && observed?.failed)
-    ) {
-      const invalidate = observed?.fingerprint === undefined
-        ? invalidateCachedScopedPrefixes
-        : invalidateScopedPrefixes;
-      void invalidate(
+    const recovering = !observed?.fingerprint && (observed?.failed ?? false);
+    const changed = observedSignalChanges(observed?.fingerprint, next, false);
+    if (recovering) {
+      void invalidateCachedScopedPrefixes(
         queryClient,
-        officialRunCompletionPrefixes,
+        regulatoryDetailInvalidationPrefixes([...next.keys()]),
         scope,
         bankId,
       );
+    }
+    if (changed.length > 0) {
+      void invalidateOfficialRunChanges(queryClient, scope, bankId, changed);
     }
   }, [bankId, query.data, query.isError, queryClient, scope]);
 
