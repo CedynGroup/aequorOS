@@ -85,7 +85,6 @@ jobs:
         # The classifier below owns the verdict. This lets it distinguish a
         # pre-inference provider outage from a real review failure rather than
         # turning every action failure into a misleading green check.
-        # Auto-merge still requires Claude's formal approval.
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
@@ -106,9 +105,9 @@ jobs:
           # Profile and other cross-stack changes can span migrations, API
           # contracts, generated clients, and dashboard code. Leave enough
           # turns for Claude to inspect each layer and submit its formal review.
-          # Pin a published API model so a Claude Code default-model rollout
-          # cannot break every PR review before the reviewer takes its first turn.
-          claude_args: "--model claude-sonnet-4-6 --max-turns 40"
+          # Pin the model so a Claude Code upgrade cannot silently select a new
+          # model that the repository's API key is not provisioned to use.
+          claude_args: "--max-turns 40 --model claude-sonnet-4-6"
 
       - name: Publish Claude review verdict
         id: verdict
