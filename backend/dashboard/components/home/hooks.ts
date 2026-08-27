@@ -22,6 +22,8 @@ import type {
 import { apiCall, banksApi } from '@/lib/api/client';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useBankPeriodFacts } from '@/lib/api/hooks';
+import { scopedQueryKey } from '@/lib/api/queryPolicy';
+import { useQueryAuthorityScope } from '@/lib/api/useQueryScope';
 
 
 /** How many older periods the fallback probe will inspect before giving up. */
@@ -69,6 +71,7 @@ export function useEffectivePeriod(): EffectivePeriodResult {
   const { bank, period, periods } = useBankContext();
   const bankId = bank?.id;
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
 
   const selectedFacts = useBankPeriodFacts(bankId, period?.id);
   // undefined → still loading; true/false → known.
@@ -79,12 +82,13 @@ export function useEffectivePeriod(): EffectivePeriodResult {
       : undefined;
 
   const fallback = useQuery({
-    queryKey: [
+    queryKey: scopedQueryKey(
       'home-effective-period',
-      bankId,
-      period?.id,
+      scope,
+      bankId ?? null,
+      period?.id ?? null,
       periods.map((p) => p.id).join(','),
-    ],
+    ),
     enabled: Boolean(bankId && period) && selectedEmpty === true,
     staleTime: 60_000,
     queryFn: async () => {
@@ -101,7 +105,10 @@ export function useEffectivePeriod(): EffectivePeriodResult {
         );
         if (hasAnyFacts(facts)) {
           // Warm the shared facts cache so downstream panels reuse it.
-          queryClient.setQueryData(['facts', bankId, candidate.id], facts);
+          queryClient.setQueryData(
+            scopedQueryKey('facts', scope, bankId ?? null, candidate.id),
+            facts,
+          );
           return candidate.id;
         }
       }

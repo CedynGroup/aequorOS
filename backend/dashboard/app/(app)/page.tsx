@@ -140,7 +140,6 @@ export default function CommandCenterPage() {
                       <div className="xl:col-span-3 min-w-0">
                         <RatioTrendChart
                           bankId={bankId}
-                          period={effective.period!}
                         />
                       </div>
                       <div className="xl:col-span-2 min-w-0">

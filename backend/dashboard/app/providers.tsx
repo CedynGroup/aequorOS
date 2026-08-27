@@ -8,6 +8,10 @@ import { setAccessToken } from '@/lib/api/token';
 import { LOGIN_URL } from '@/lib/loginUrl';
 import ProfileProvider from '@/components/profile/ProfileProvider';
 import ImpersonationBanner from '@/components/impersonation/ImpersonationBanner';
+import {
+  QueryAuthorityScopeProvider,
+  useResolvedQueryAuthorityScope,
+} from '@/lib/api/useQueryScope';
 
 /** Keeps the API client's bearer token in sync with the NextAuth session. */
 function TokenSync() {
@@ -25,7 +29,7 @@ function TokenSync() {
   return null;
 }
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+function AuthorityScopedCache({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -39,6 +43,28 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
+  useEffect(() => () => queryClient.clear(), [queryClient]);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ProfileProvider>{children}</ProfileProvider>
+    </QueryClientProvider>
+  );
+}
+
+function AuthorityQueryBoundary({ children }: { children: React.ReactNode }) {
+  const scope = useResolvedQueryAuthorityScope();
+  // Remounting disposes the entire old cache. Explicitly scoped financial keys
+  // remain the primary boundary; this protects legacy keys during migration.
+  const authorityKey = `${scope.tenantId}|${scope.authorityId}`;
+  return (
+    <QueryAuthorityScopeProvider scope={scope}>
+      <AuthorityScopedCache key={authorityKey}>{children}</AuthorityScopedCache>
+    </QueryAuthorityScopeProvider>
+  );
+}
+
+export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     // Re-pull the session periodically (and on window focus) so the rotated
     // access token propagates to the client cache before it expires.
@@ -47,9 +73,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       {/* App-wide staff-inspection banner. Renders nothing on a normal session
           (no hand-off cookie), so it is inert outside impersonation. */}
       <ImpersonationBanner />
-      <QueryClientProvider client={queryClient}>
-        <ProfileProvider>{children}</ProfileProvider>
-      </QueryClientProvider>
+      <AuthorityQueryBoundary>{children}</AuthorityQueryBoundary>
     </SessionProvider>
   );
 }
