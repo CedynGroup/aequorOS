@@ -48,10 +48,10 @@ Match existing code exactly; do not introduce new patterns when one below alread
   overflow against `MAX_STORED_MONEY = Decimal("9999999999999999.9999")`. Never use float for
   financial values.
 - **JSON columns** for snapshots/details/diagnostics: `Mapped[dict[str, Any]] = mapped_column(
-  JSON, default=dict, server_default=sql_text("'{}'"), nullable=False)` (lists use
+JSON, default=dict, server_default=sql_text("'{}'"), nullable=False)` (lists use
   `default=list, server_default=sql_text("'[]'")`). Models declare generic `JSON`; migrations
   declare `postgresql.JSONB`. A column named `metadata` maps as `metadata_: Mapped[...] =
-  mapped_column("metadata", JSON, ...)` because `metadata` is reserved on the Base.
+mapped_column("metadata", JSON, ...)` because `metadata` is reserved on the Base.
 
 ### Composite-FK tenant pattern
 
@@ -239,27 +239,27 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
 
 ### Backend
 
-| Helper | Where | Use for |
-| --- | --- | --- |
-| `DbSession`, `Tenant`, `MutationTenant`, `Storage`, `TenantContext` | `app/api/deps.py` | Every route's session/tenant/storage wiring. |
-| `record_event(db, ctx, *, event_type, entity_type, entity_id, details)` | `app/services/audit.py` | Audit trail for every meaningful mutation, same transaction. |
-| `get_case_or_404` / `get_case_for_update_or_404` / `ensure_case_is_not_archived` / `ensure_status_transition_allowed` | `app/services/cases.py` | Tenant-scoped existence + state guards (template for `get_bank_or_404`). |
-| `get_finding_or_404`, `list_findings`, `list_case_findings`, `create_case_finding`, `update_finding`, `apply_finding_update`, `is_liquidity_workflow_finding`, `list_finding_evidence` | `app/services/findings.py` | Generic finding CRUD/review; reuse for new engines' findings. |
-| `calculate_metrics`, `generate_findings`, `lock_finding_publication`, `serialize_finding_publication` | `app/services/liquidity.py` | Template for deterministic metric + finding publication with advisory-lock serialization. |
-| `MONEY`, `RATIO`, `MAX_STORED_MONEY`, `_money`/`_ratio` quantizers, `_snapshot_hash` | `app/services/calculations.py`, `capital.py`, `liquidity.py` | Money/ratio rounding constants and SHA-256 input hashing (copy the constants; keep values consistent). |
-| `RISK_TYPES`, `FindingStatus`, `Severity`, `CaseStatus`, `FindingSource`, derived sets | `app/domain/risk_constants.py` | Shared enum values; extend here, not inline. |
-| `ObjectStorage` protocol, `get_object_storage` | `app/integrations/storage/` | All object-storage access; override in tests via dependency_overrides. |
-| `Base`, `UuidV4PrimaryKeyMixin`, `UuidV7PrimaryKeyMixin`, `TimestampMixin`, `utc_now` | `app/db/base.py` | Model building blocks. |
-| `Settings` / `get_settings()` | `app/core/config.py` | Env config; add nested `BaseSettings` groups with env aliases. |
-| `ORG_1/ORG_2/USER_1/USER_2`, `headers()`, `ApiFactories`, `FakeStorage`, `db_client` | `tests/` | Test tenancy, data factories, storage stubbing. |
+| Helper                                                                                                                                                                                 | Where                                                        | Use for                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `DbSession`, `Tenant`, `MutationTenant`, `Storage`, `TenantContext`                                                                                                                    | `app/api/deps.py`                                            | Every route's session/tenant/storage wiring.                                                           |
+| `record_event(db, ctx, *, event_type, entity_type, entity_id, details)`                                                                                                                | `app/services/audit.py`                                      | Audit trail for every meaningful mutation, same transaction.                                           |
+| `get_case_or_404` / `get_case_for_update_or_404` / `ensure_case_is_not_archived` / `ensure_status_transition_allowed`                                                                  | `app/services/cases.py`                                      | Tenant-scoped existence + state guards (template for `get_bank_or_404`).                               |
+| `get_finding_or_404`, `list_findings`, `list_case_findings`, `create_case_finding`, `update_finding`, `apply_finding_update`, `is_liquidity_workflow_finding`, `list_finding_evidence` | `app/services/findings.py`                                   | Generic finding CRUD/review; reuse for new engines' findings.                                          |
+| `calculate_metrics`, `generate_findings`, `lock_finding_publication`, `serialize_finding_publication`                                                                                  | `app/services/liquidity.py`                                  | Template for deterministic metric + finding publication with advisory-lock serialization.              |
+| `MONEY`, `RATIO`, `MAX_STORED_MONEY`, `_money`/`_ratio` quantizers, `_snapshot_hash`                                                                                                   | `app/services/calculations.py`, `capital.py`, `liquidity.py` | Money/ratio rounding constants and SHA-256 input hashing (copy the constants; keep values consistent). |
+| `RISK_TYPES`, `FindingStatus`, `Severity`, `CaseStatus`, `FindingSource`, derived sets                                                                                                 | `app/domain/risk_constants.py`                               | Shared enum values; extend here, not inline.                                                           |
+| `ObjectStorage` protocol, `get_object_storage`                                                                                                                                         | `app/integrations/storage/`                                  | All object-storage access; override in tests via dependency_overrides.                                 |
+| `Base`, `UuidV4PrimaryKeyMixin`, `UuidV7PrimaryKeyMixin`, `TimestampMixin`, `utc_now`                                                                                                  | `app/db/base.py`                                             | Model building blocks.                                                                                 |
+| `Settings` / `get_settings()`                                                                                                                                                          | `app/core/config.py`                                         | Env config; add nested `BaseSettings` groups with env aliases.                                         |
+| `ORG_1/ORG_2/USER_1/USER_2`, `headers()`, `ApiFactories`, `FakeStorage`, `db_client`                                                                                                   | `tests/`                                                     | Test tenancy, data factories, storage stubbing.                                                        |
 
 ### Frontend
 
-| Helper | Where | Use for |
-| --- | --- | --- |
-| `configuration`, `apiBaseUrl`, `apiOrigin` | `backend/dashboard/lib/api/client.ts` | Generated-client setup and the single API-origin authority. |
-| `setAccessToken`, `getAccessToken` | `backend/dashboard/lib/api/token.ts` | Expiry-aware bearer-token cache synchronized with NextAuth. |
-| Generated `*Api` classes and wire types | `packages/risk-service-api` | Every supported tenant API request and response. |
-| TanStack Query hooks | `backend/dashboard/lib/api/hooks.ts` | Shared server-state reads, mutations, keys, and invalidation. |
-| `numOrNull`, `assessAgainstFloor`, `floorStatus` | `backend/dashboard/lib/api/values.ts` | Fail-closed numeric and regulatory-floor presentation. |
-| Dashboard design and component rules | `backend/dashboard/README.md` | Current bank-product UI conventions and verification commands. |
+| Helper                                           | Where                                 | Use for                                                        |
+| ------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------- |
+| `configuration`, `apiBaseUrl`, `apiOrigin`       | `backend/dashboard/lib/api/client.ts` | Generated-client setup and the single API-origin authority.    |
+| `setAccessToken`, `getAccessToken`               | `backend/dashboard/lib/api/token.ts`  | Expiry-aware bearer-token cache synchronized with NextAuth.    |
+| Generated `*Api` classes and wire types          | `packages/risk-service-api`           | Every supported tenant API request and response.               |
+| TanStack Query hooks                             | `backend/dashboard/lib/api/hooks.ts`  | Shared server-state reads, mutations, keys, and invalidation.  |
+| `numOrNull`, `assessAgainstFloor`, `floorStatus` | `backend/dashboard/lib/api/values.ts` | Fail-closed numeric and regulatory-floor presentation.         |
+| Dashboard design and component rules             | `backend/dashboard/README.md`         | Current bank-product UI conventions and verification commands. |

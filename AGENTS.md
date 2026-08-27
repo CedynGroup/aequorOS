@@ -167,7 +167,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   Legacy recode (migration `202608150013`): the pre-template `BSD2`(CAR)/`BSD3`(LCR) entries are
   now `CAR-RWA`/`LCR-NSFR`; the `BSD-MONTHLY` placeholder is retired. Weekly returns anchor on
   Friday close (Guide fixes cadence not weekday). Gate: `tests/services/test_bog_forms_framework.py`
-  + `tests/services/bog_forms/`; matrix `scripts/bog_coverage_matrix.py`.
+  - `tests/services/bog_forms/`; matrix `scripts/bog_coverage_matrix.py`.
 - **Phase 2 (product.md §Phase 2) is fully built (2026-08-08).** All 11 LMTD
   appendix tables; per-currency gaps + `usd_funding_stress` (snapshot
   `bank-facts-v3`); server-side EWI/CFP with the ¶74 notification
@@ -367,9 +367,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - **Attestation / e-signature (built 2026-07-25; spec `docs/attestation_esignature.md`).**
   Signing is REQUIRED for every return by default (`default_policy`:
   `require_signature=True`, `require_signed_pdf=True`, preparer+approver, no family
-  exemptions — changed 2026-07-25 on the founder's call). What BoG demands *of the
-  artifact* stays unconfigured-by-default (spec §8 C1–C4: officer titles stay unset);
-  what the institution demands *of itself* before filing is the product. A deployment
+  exemptions — changed 2026-07-25 on the founder's call). What BoG demands _of the
+  artifact_ stays unconfigured-by-default (spec §8 C1–C4: officer titles stay unset);
+  what the institution demands _of itself_ before filing is the product. A deployment
   that cannot sign therefore cannot file — `ensure_signing_configured` raises
   `signing_not_configured` naming the settings, and in production `/health/ready` 503s
   (boot only WARNS — an earlier boot refusal locked out the admin who could fix it).
@@ -397,7 +397,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `app/services/attestation/digests.py`; never add volatile fields. Signer IDs (`SGN-` +
   16 Crockford) are HMAC-derived from the user UUID under `SIGNER_ID_PEPPER` then
   **persisted as the authority** — rotating the pepper must never re-derive an existing
-  identity. Append-only is *tiered* by DB trigger (migration `202607250027`):
+  identity. Append-only is _tiered_ by DB trigger (migration `202607250027`):
   `audit_events` blocks UPDATE+DELETE; signature/identity/artifact-version tables block
   UPDATE only (DELETE reachable via package CASCADE) — see spec §9 D1 for why. Step-up:
   password re-entry, or an SSO redirect through the three Next.js server routes under
@@ -406,7 +406,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   the session or a client fetch.
 - **Jurisdiction is data — never hardcode country identity (built 2026-07-23).** The
   global `jurisdictions` registry (`code → country, currency, locale, central bank,
-  regulator short, portal, timezone`; NOT tenant-scoped; GH/NG/KE/ZA seeded) resolves
+regulator short, portal, timezone`; NOT tenant-scoped; GH/NG/KE/ZA seeded) resolves
   through `banks.jurisdiction_code` and rides the bank API payload
   (`BankRead.jurisdiction`). Dashboard: BankContext binds it into `lib/format.ts`
   (`setActiveJurisdiction`) — use `fmtCurrency`/`fmtInt`/`fmtLocale()`/`regShort()`/
@@ -426,9 +426,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `bog_excess_reserves_hqla` fact categories mean "central-bank reserves" in every
   jurisdiction and are load-bearing wire/DB keys (value-based `input_hash`, BSD
   line maps, goldens) — same rule as the `refinitiv` vendor id surviving its
-  rebrand. Country identity in *matching logic* is the real defect: the GL cash
+  rebrand. Country identity in _matching logic_ is the real defect: the GL cash
   classifier tested the literal token `"bog"`, so the SDI's `GL-1020 "Balances
-  with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
+with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
   `fact_derivation._CentralBankNames` (the bank's own `central_bank_name` +
   `regulator_short` from the registry — never `country_name`, which would sweep
   "Government of Ghana bonds" into the cash line).

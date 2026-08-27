@@ -10,14 +10,14 @@ Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
 
 ## 1. System map
 
-| Component | Path | Stack | Role |
-| --- | --- | --- | --- |
-| Risk service | `backend` | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract. |
-| Generated API client | `packages/risk-service-api` | typescript-fetch output of openapi-generator 7.13 | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited. |
-| Marketing site | `frontend` | Next.js 14 | Static marketing site. **Out of scope for this build. Do not touch.** |
-| Product UI | `dashboard` | Next.js 14, Tailwind (token design system), TanStack Query, recharts | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`. |
-| Database | remote Postgres `<postgres-host>:<port>/<database>` (managed, TimescaleDB-enabled) | Primary DB for dev, tests (via `TEST_DATABASE_URL`, disposable per-run schemas), and deployment; credentials only in untracked `backend/.env` | Schema kept at alembic head. Single role, **no BYPASSRLS** — the cross-tenant worker needs a BYPASSRLS role (`WORKER_DATABASE_URL`) before running against it. |
-| Local infra (offline fallback) | `backend/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `backend`. |
+| Component                      | Path                                                                               | Stack                                                                                                                                         | Role                                                                                                                                                           |
+| ------------------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Risk service                   | `backend`                                                                          | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3                                                                 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract.                                                             |
+| Generated API client           | `packages/risk-service-api`                                                        | typescript-fetch output of openapi-generator 7.13                                                                                             | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited.                                                   |
+| Marketing site                 | `frontend`                                                                         | Next.js 14                                                                                                                                    | Static marketing site. **Out of scope for this build. Do not touch.**                                                                                          |
+| Product UI                     | `dashboard`                                                                        | Next.js 14, Tailwind (token design system), TanStack Query, recharts                                                                          | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`.                                                            |
+| Database                       | remote Postgres `<postgres-host>:<port>/<database>` (managed, TimescaleDB-enabled) | Primary DB for dev, tests (via `TEST_DATABASE_URL`, disposable per-run schemas), and deployment; credentials only in untracked `backend/.env` | Schema kept at alembic head. Single role, **no BYPASSRLS** — the cross-tenant worker needs a BYPASSRLS role (`WORKER_DATABASE_URL`) before running against it. |
+| Local infra (offline fallback) | `backend/docker-compose.yml`                                                       | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local`                 | Started with `docker compose up -d` from `backend`.                                                                                                            |
 
 Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `backend/mise.toml`),
 `uv` for Python deps, `pnpm` workspaces (`pnpm-workspace.yaml` includes `packages/*`, `frontend`, `dashboard`). Pre-commit config is at the repo root
@@ -99,14 +99,14 @@ The reference implementation is the balance-sheet forecast + capital + liquidity
 tables (all in `app/models/calculation.py` and `app/models/capital.py`, migrations
 `202607130002`, `202607130003`, `202607140001`):
 
-| Table | Model | Purpose |
-| --- | --- | --- |
-| `calculation_runs` | `CalculationRun` | One immutable forecast attempt: status, scenario, `rerun_of_run_id`, `engine_version`, `input_schema_version`, `output_schema_version`, `input_hash` (SHA-256 of the canonical JSON snapshot), full `inputs` JSON snapshot, horizon, `as_of_date`, `started_at`/`completed_at`, `error_code`/`error_message`/`error_details`, `created_by`. |
-| `calculation_forecast_periods` | `CalculationForecastPeriod` | One row per annual output period, unique on `(run_id, period_number)`, `ondelete="CASCADE"`. Money at `Numeric(20, 4)`. |
-| `capital_projections` | `CapitalProjection` | Immutable capital attempt consuming one **successful** run; copies the run's `input_hash` and currency; own `engine_version` and lifecycle. |
-| `capital_indicators` | `CapitalIndicator` | Per-period ratios at `Numeric(12, 8)`, `pressure_level` check constraint. |
-| `capital_projection_findings` | `CapitalProjectionFinding` | Join table linking generated `RiskFinding` rows to the projection. |
-| `liquidity_analysis_results` | `LiquidityAnalysisResult` | Exactly one per successful run (`UniqueConstraint("run_id")`), versioned via `analysis_version`, metrics stored as JSON. |
+| Table                          | Model                       | Purpose                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `calculation_runs`             | `CalculationRun`            | One immutable forecast attempt: status, scenario, `rerun_of_run_id`, `engine_version`, `input_schema_version`, `output_schema_version`, `input_hash` (SHA-256 of the canonical JSON snapshot), full `inputs` JSON snapshot, horizon, `as_of_date`, `started_at`/`completed_at`, `error_code`/`error_message`/`error_details`, `created_by`. |
+| `calculation_forecast_periods` | `CalculationForecastPeriod` | One row per annual output period, unique on `(run_id, period_number)`, `ondelete="CASCADE"`. Money at `Numeric(20, 4)`.                                                                                                                                                                                                                     |
+| `capital_projections`          | `CapitalProjection`         | Immutable capital attempt consuming one **successful** run; copies the run's `input_hash` and currency; own `engine_version` and lifecycle.                                                                                                                                                                                                 |
+| `capital_indicators`           | `CapitalIndicator`          | Per-period ratios at `Numeric(12, 8)`, `pressure_level` check constraint.                                                                                                                                                                                                                                                                   |
+| `capital_projection_findings`  | `CapitalProjectionFinding`  | Join table linking generated `RiskFinding` rows to the projection.                                                                                                                                                                                                                                                                          |
+| `liquidity_analysis_results`   | `LiquidityAnalysisResult`   | Exactly one per successful run (`UniqueConstraint("run_id")`), versioned via `analysis_version`, metrics stored as JSON.                                                                                                                                                                                                                    |
 
 Invariants every new engine must copy (verified in `app/services/calculations.py`,
 `app/services/capital.py`, `app/services/liquidity.py`):
@@ -352,7 +352,7 @@ How `app/services/liquidity.py` publishes findings (the template for new engines
    scenario as `superseded` (reviewed findings are never touched), then creates one
    `RiskFinding` per concern with `source="deterministic_rule"`, `rule_id`, `rule_version`, and
    `details={"liquidity": {workflow_id, rule_version, calculation_run_id, scenario_id,
-   input_hash, metrics}}`, plus `RiskFindingEvidence` rows for each forecast period, canonical
+input_hash, metrics}}`, plus `RiskFindingEvidence` rows for each forecast period, canonical
    input record, and scenario assumption — every locator carries the run's `input_hash` and a
    case-workspace deep-link `source_url`.
 3. Workflow findings are protected from the generic `PATCH /api/v1/findings/{finding_id}`
@@ -373,7 +373,7 @@ description of existing tables.**
   workspace (`financial_*` tables), case scenarios (`risk_scenarios`, `scenario_assumptions`),
   and case-scoped `calculation_runs` / `capital_projections` / liquidity analysis — is **LEGACY**
   as of this build. It stays in place: existing features keep working, its tests keep passing,
-  and its *patterns* (tenancy, immutable runs, findings, audit) are the blueprint for new work.
+  and its _patterns_ (tenancy, immutable runs, findings, audit) are the blueprint for new work.
 - The new ALM/regulatory vertical is **bank-scoped, not case-scoped**. New tables for this build:
   `banks`, `bank_reporting_periods`, `bank_financial_facts`, effective-dated `param_*` tables
   (runoff rates, ASF/RSF weights, risk weights, thresholds, stress shocks — versioned with
@@ -440,16 +440,16 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 
 ## 8. Validation commands
 
-| Target | Commands |
-| --- | --- |
-| risk-service (all) | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check` |
-| risk-service vs Postgres | `docker compose up -d risk-postgres` then `mise run risk-service:test-postgres` (sets `TEST_DATABASE_URL`) |
-| risk-service migrations | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"` |
-| dashboard | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` (e2e: `e2e`, needs object storage from `backend/.env`) |
-| marketing | `pnpm --filter @aequoros/frontend lint` · `build` |
-| operator console | `pnpm --filter @aequoros/console typecheck` · `test` · `build` (no ESLint: the workspace has no ESLint dependency or config) |
-| generated client | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`) |
-| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean) |
+| Target                   | Commands                                                                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check`       |
+| risk-service vs Postgres | `docker compose up -d risk-postgres` then `mise run risk-service:test-postgres` (sets `TEST_DATABASE_URL`)                       |
+| risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                 |
+| dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` (e2e: `e2e`, needs object storage from `backend/.env`) |
+| marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                |
+| operator console         | `pnpm --filter @aequoros/console typecheck` · `test` · `build` (no ESLint: the workspace has no ESLint dependency or config)     |
+| generated client         | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                               |
+| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean)                             |
 
 All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 
@@ -457,11 +457,11 @@ All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 appeared in no workflow at all, and the dashboard workflow ran neither `lint` nor `test`, so
 the regulatory fail-open guard and the browser-runtime SSRF guard were unenforced):
 
-| Workflow | Jobs |
-| --- | --- |
+| Workflow                             | Jobs                                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `.github/workflows/risk-service.yml` | `static` · `architecture` · `unit` · `postgres` · `postgres-suite` · `api-fresh` · `real-data` (conditional) |
-| `.github/workflows/dashboard.yml` | `dashboard` — client typecheck, dashboard typecheck, lint, test, build |
-| `.github/workflows/web.yml` | `frontend` — lint, build · `console` — typecheck, test, build |
+| `.github/workflows/dashboard.yml`    | `dashboard` — client typecheck, dashboard typecheck, lint, test, build                                       |
+| `.github/workflows/web.yml`          | `frontend` — lint, build · `console` — typecheck, test, build                                                |
 
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.
@@ -494,15 +494,15 @@ immutable `RegulatoryRun` persistence (snapshot + SHA-256 hash + versioned metri
 validations), bank + reporting-period scoping, effective-dated `param_*` inputs, and a
 `get_<module>_dashboard` with stored-run-first + inline-fallback.
 
-| # | Module | Engine | Key endpoints |
-|---|--------|--------|---------------|
-| 1 | Liquidity | LCR / NSFR / stress | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
-| 2 | Basel Capital | RWA / CAR-Tier1-CET1-leverage / stress | `/banks/{id}/capital/*`, `/submissions/bsd2` |
-| 3 | Forecasting | 5y projection / optimizer / what-if | `/banks/{id}/forecast/*` |
-| 4 | Cash-flow LSTM | in-process `backend/app/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast` |
-| 5 | IRR (IRRBB) | gap / duration / EVE (6 Basel) / EaR | `/banks/{id}/irr/*` |
-| 6 | FX | NOP / historical-sim VaR / IFRS 9 hedges | `/banks/{id}/fx/*` |
-| 7 | FTP | matched-maturity curve / product & branch P&L / NMD | `/banks/{id}/ftp/*` |
+| #   | Module         | Engine                                               | Key endpoints                                  |
+| --- | -------------- | ---------------------------------------------------- | ---------------------------------------------- |
+| 1   | Liquidity      | LCR / NSFR / stress                                  | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
+| 2   | Basel Capital  | RWA / CAR-Tier1-CET1-leverage / stress               | `/banks/{id}/capital/*`, `/submissions/bsd2`   |
+| 3   | Forecasting    | 5y projection / optimizer / what-if                  | `/banks/{id}/forecast/*`                       |
+| 4   | Cash-flow LSTM | in-process `backend/app/ml` (LSTM + static baseline) | `/banks/{id}/cashflow-forecast`                |
+| 5   | IRR (IRRBB)    | gap / duration / EVE (6 Basel) / EaR                 | `/banks/{id}/irr/*`                            |
+| 6   | FX             | NOP / historical-sim VaR / IFRS 9 hedges             | `/banks/{id}/fx/*`                             |
+| 7   | FTP            | matched-maturity curve / product & branch P&L / NMD  | `/banks/{id}/ftp/*`                            |
 
 The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
 and line-section CHECK constraints for IRR/FX/FTP; those modules add no further migrations.

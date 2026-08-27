@@ -25,14 +25,14 @@ The policy vocabulary lives only in `backend/app/core/authorization.py`:
 
 The v1 bundle contents are deliberately narrow:
 
-| Bundle | Granted actions |
-|---|---|
-| Viewer | `view` |
-| Auditor | `view` |
-| Analyst | `view`, `create`, `edit`, `run`, `validate`, `export` |
-| Approver | `view`, `review`, `approve` |
-| Account Admin | `administer` |
-| Integration Writer | `ingest` |
+| Bundle             | Granted actions                                       |
+| ------------------ | ----------------------------------------------------- |
+| Viewer             | `view`                                                |
+| Auditor            | `view`                                                |
+| Analyst            | `view`, `create`, `edit`, `run`, `validate`, `export` |
+| Approver           | `view`, `review`, `approve`                           |
+| Account Admin      | `administer`                                          |
+| Integration Writer | `ingest`                                              |
 
 `configure`, `sign_off`, and `submit` are reserved action names but are not in
 any v1 bundle. Workflow-specific authority for them must be designed explicitly
