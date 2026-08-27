@@ -95,6 +95,24 @@ def test_existing_users_start_versioned_without_implicit_new_authority(
     )
 
 
+def test_legacy_admin_role_is_not_new_policy_authority(db_session: Session) -> None:
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    user.role = "admin"
+    db_session.commit()
+
+    decision = authorization.evaluate_permission(
+        db_session,
+        PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
+        Permission.ADMINISTER,
+        ResourceLocator(ORG_1, None, Module.ACCOUNT, Sensitivity.RESTRICTED),
+    )
+
+    assert not decision.allowed
+    assert decision.reason == "no_active_exact_binding"
+    assert decision.matching_binding_ids == ()
+
+
 def test_token_issuance_refreshes_authorization_version_after_owner_lock(
     db_session: Session,
 ) -> None:

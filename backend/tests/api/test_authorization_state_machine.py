@@ -208,7 +208,23 @@ def test_authorization_version_session_state_machine(db_client: TestClient) -> N
         "/api/v1/regulatory-reporting/templates",
     ),
 )
-def test_routes_without_db_session_reject_stale_access_tokens(
+def test_authenticated_read_surfaces_accept_current_active_users(
+    db_client: TestClient,
+    path: str,
+) -> None:
+    response = db_client.get(path, headers=headers())
+
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/api/v1/market-data/templates/yield_curve",
+        "/api/v1/regulatory-reporting/templates",
+    ),
+)
+def test_authenticated_read_surfaces_reject_stale_access_tokens(
     db_client: TestClient,
     path: str,
 ) -> None:
@@ -231,7 +247,7 @@ def test_routes_without_db_session_reject_stale_access_tokens(
         "/api/v1/regulatory-reporting/templates",
     ),
 )
-def test_routes_without_db_session_reject_inactive_users(
+def test_authenticated_read_surfaces_reject_inactive_users(
     db_client: TestClient,
     path: str,
 ) -> None:

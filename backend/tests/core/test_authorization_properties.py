@@ -17,7 +17,6 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.authorization import (
-    ROLE_PERMISSIONS,
     BindingGrant,
     BindingStatus,
     ConditionCheck,
@@ -33,7 +32,6 @@ from app.core.authorization import (
     Sensitivity,
     SensitivityScope,
     evaluate_permission,
-    principal_bundle_compatible,
 )
 
 _NOW = datetime(2026, 8, 26, 12, tzinfo=UTC)
@@ -43,6 +41,27 @@ _BANK = "BK-SAMP0001"
 _OTHER_BANK = "BK-OTHR0001"
 _PRINCIPAL_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 _OTHER_PRINCIPAL_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+
+# Deliberately independent of the production bundle map. This is the policy
+# contract the evaluator output is compared with, not a restatement through an
+# implementation helper that would reproduce the same bug.
+_REFERENCE_ROLE_PERMISSIONS: dict[RoleBundle, frozenset[Permission]] = {
+    RoleBundle.VIEWER: frozenset({Permission.VIEW}),
+    RoleBundle.AUDITOR: frozenset({Permission.VIEW}),
+    RoleBundle.ANALYST: frozenset(
+        {
+            Permission.VIEW,
+            Permission.CREATE,
+            Permission.EDIT,
+            Permission.RUN,
+            Permission.VALIDATE,
+            Permission.EXPORT,
+        }
+    ),
+    RoleBundle.APPROVER: frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
+    RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
+    RoleBundle.INTEGRATION_WRITER: frozenset({Permission.INGEST}),
+}
 
 
 def _reference_match(
@@ -57,9 +76,15 @@ def _reference_match(
         and binding.valid_from <= _NOW
         and (binding.valid_until is None or binding.valid_until > _NOW)
     )
+    bundle_compatible = (
+        binding.principal_type is PrincipalType.MACHINE
+        and binding.role_bundle is RoleBundle.INTEGRATION_WRITER
+    ) or (
+        binding.principal_type is PrincipalType.HUMAN
+        and binding.role_bundle is not RoleBundle.INTEGRATION_WRITER
+    )
     permission_matches = (
-        principal_bundle_compatible(binding.principal_type, binding.role_bundle)
-        and permission in ROLE_PERMISSIONS[binding.role_bundle]
+        bundle_compatible and permission in _REFERENCE_ROLE_PERMISSIONS[binding.role_bundle]
     )
     organization_matches = (
         principal.organization_id == resource.organization_id

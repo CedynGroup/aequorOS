@@ -33,6 +33,35 @@ BANK_B = "BK-SAMP0002"
 USER = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 PRINCIPAL = PrincipalLocator(ORG, USER, PrincipalType.HUMAN)
 
+ROLE_EXPECTATIONS: tuple[
+    tuple[PrincipalType, RoleBundle, frozenset[Permission]],
+    ...,
+] = (
+    (PrincipalType.HUMAN, RoleBundle.VIEWER, frozenset({Permission.VIEW})),
+    (PrincipalType.HUMAN, RoleBundle.AUDITOR, frozenset({Permission.VIEW})),
+    (
+        PrincipalType.HUMAN,
+        RoleBundle.ANALYST,
+        frozenset(
+            {
+                Permission.VIEW,
+                Permission.CREATE,
+                Permission.EDIT,
+                Permission.RUN,
+                Permission.VALIDATE,
+                Permission.EXPORT,
+            }
+        ),
+    ),
+    (
+        PrincipalType.HUMAN,
+        RoleBundle.APPROVER,
+        frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
+    ),
+    (PrincipalType.HUMAN, RoleBundle.ACCOUNT_ADMIN, frozenset({Permission.ADMINISTER})),
+    (PrincipalType.MACHINE, RoleBundle.INTEGRATION_WRITER, frozenset({Permission.INGEST})),
+)
+
 
 def _resource(
     *,
@@ -101,6 +130,35 @@ def test_liq_analyst_plus_reg_approver_does_not_create_cross_product_authority()
     assert not _evaluate(Permission.RUN, _resource(module=Module.REGULATORY), bindings).allowed
 
 
+@pytest.mark.parametrize(("principal_type", "role_bundle", "expected"), ROLE_EXPECTATIONS)
+def test_each_role_bundle_has_an_explicit_allow_and_deny_contract(
+    principal_type: PrincipalType,
+    role_bundle: RoleBundle,
+    expected: frozenset[Permission],
+) -> None:
+    principal = replace(PRINCIPAL, principal_type=principal_type)
+    binding = replace(
+        _binding(role=role_bundle, module=ModuleScope.ALL),
+        principal_type=principal_type,
+    )
+
+    outcomes = {
+        permission: evaluate_permission(
+            principal,
+            permission,
+            _resource(),
+            [binding],
+            now=NOW,
+        ).allowed
+        for permission in Permission
+    }
+
+    assert {permission for permission, allowed in outcomes.items() if allowed} == expected
+    assert {permission for permission, allowed in outcomes.items() if not allowed} == (
+        set(Permission) - expected
+    )
+
+
 @pytest.mark.parametrize(
     ("principal_type", "role_bundle", "permission"),
     [
@@ -146,6 +204,15 @@ def test_organization_wide_scope_is_explicit_and_institution_scope_is_exact() ->
     assert _evaluate(Permission.VIEW, _resource(bank_id=None), [organization_wide]).allowed
 
 
+def test_organization_tenant_mismatch_denies_an_otherwise_exact_grant() -> None:
+    exact = _binding(role=RoleBundle.VIEWER, module=ModuleScope.LIQUIDITY)
+    other_tenant_binding = replace(exact, organization_id="OR-1S000002")
+    other_tenant_resource = replace(_resource(), organization_id="OR-1S000002")
+
+    assert not _evaluate(Permission.VIEW, _resource(), [other_tenant_binding]).allowed
+    assert not _evaluate(Permission.VIEW, other_tenant_resource, [exact]).allowed
+
+
 def test_module_and_sensitivity_dimensions_both_have_to_match() -> None:
     grant = _binding(role=RoleBundle.ANALYST, module=ModuleScope.LIQUIDITY)
 
@@ -187,6 +254,19 @@ def test_inactive_lifecycle_states_deny(changes: dict[str, object], reason: str)
     assert decision.binding_trace[0].reason == reason
 
 
+def test_validity_window_is_start_inclusive_and_end_exclusive() -> None:
+    starts_now = _binding(
+        role=RoleBundle.ANALYST,
+        module=ModuleScope.LIQUIDITY,
+        valid_from=NOW,
+        valid_until=NOW + dt.timedelta(microseconds=1),
+    )
+    ends_now = replace(starts_now, valid_from=NOW - dt.timedelta(days=1), valid_until=NOW)
+
+    assert _evaluate(Permission.RUN, _resource(), [starts_now]).allowed
+    assert not _evaluate(Permission.RUN, _resource(), [ends_now]).allowed
+
+
 def test_bindings_union_only_after_each_independent_binding_matches() -> None:
     scope_match_without_permission = _binding(
         role=RoleBundle.VIEWER,
@@ -218,26 +298,27 @@ def test_bindings_union_only_after_each_independent_binding_matches() -> None:
     assert len(allowed.matching_binding_ids) == 1
 
 
-def test_non_bypassable_condition_vetoes_every_matching_binding() -> None:
+@pytest.mark.parametrize("kind", tuple(ConditionKind))
+def test_non_bypassable_condition_vetoes_every_matching_binding(kind: ConditionKind) -> None:
     bindings = [
         _binding(role=RoleBundle.ANALYST, module=ModuleScope.LIQUIDITY),
         _binding(role=RoleBundle.ANALYST, module=ModuleScope.ALL),
     ]
     condition = ConditionCheck(
-        kind=ConditionKind.DEMO_MODE,
+        kind=kind,
         passed=False,
-        reason="mutations are disabled in demo mode",
+        reason=f"{kind.value} requirement not satisfied",
     )
 
     decision = _evaluate(Permission.RUN, _resource(), bindings, conditions=(condition,))
 
     assert not decision.allowed
-    assert decision.reason == "condition_denied:demo_mode"
+    assert decision.reason == f"condition_denied:{kind.value}"
     assert len(decision.matching_binding_ids) == 2
     assert decision.to_audit_dict()["conditions"] == [
         {
-            "kind": "demo_mode",
+            "kind": kind.value,
             "passed": False,
-            "reason": "mutations are disabled in demo mode",
+            "reason": f"{kind.value} requirement not satisfied",
         }
     ]
