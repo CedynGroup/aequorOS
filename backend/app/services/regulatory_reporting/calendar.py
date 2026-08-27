@@ -14,14 +14,20 @@ satisfy its obligation for RAG purposes.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import RegulatoryPackage, RegulatoryReportingSettings
+from app.models import (
+    RegulatoryPackage,
+    RegulatoryReportingSettings,
+    RegulatorySubmissionEvent,
+)
 from app.schemas.regulatory_reporting import (
     ReportingObligationListRead,
     ReportingObligationRead,
@@ -40,10 +46,102 @@ from app.services.regulatory_reporting.registry import (
     get_definition,
     monthly_day,
 )
-from app.services.regulatory_reporting.workflow import has_pending_orass_reupload
 
 DUE_SOON_DAYS = 7
 _COMPLETED_STATUSES = ("submitted", "acknowledged")
+
+type _PackageKey = tuple[str, date]
+
+
+@dataclass(frozen=True)
+class _PackageSummary:
+    """The only package fields an obligation/anchor row renders."""
+
+    id: UUID
+    status: str
+    version: int
+
+
+def _calendar_package_state(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    schedule: dict[str, list[date]],
+) -> tuple[dict[_PackageKey, _PackageSummary], set[UUID]]:
+    """Load current solo packages and pending ORASS flags in at most two queries.
+
+    Calendar size is driven by regulator anchors (hundreds of obligations for a
+    12-month horizon), so neither package nor submission-event reads may live in
+    the obligation loop.  The first query projects only the fields the board
+    needs; the optional second query reads every relevant submitted-event chain
+    once and applies the same "latest submitted event wins" rule as the package
+    workflow.
+    """
+    scheduled_keys = {
+        (return_code, reporting_date)
+        for return_code, reporting_dates in schedule.items()
+        for reporting_date in reporting_dates
+    }
+    if not scheduled_keys:
+        return {}, set()
+
+    reporting_dates = [key[1] for key in scheduled_keys]
+    rows = db.execute(
+        select(
+            RegulatoryPackage.id,
+            RegulatoryPackage.return_code,
+            RegulatoryPackage.reporting_date,
+            RegulatoryPackage.status,
+            RegulatoryPackage.version,
+        ).where(
+            RegulatoryPackage.organization_id == ctx.organization_id,
+            RegulatoryPackage.bank_id == bank_id,
+            RegulatoryPackage.return_code.in_(tuple(schedule)),
+            RegulatoryPackage.reporting_date >= min(reporting_dates),
+            RegulatoryPackage.reporting_date <= max(reporting_dates),
+            # The obligation board enumerates one solo row per anchor. Solo and
+            # consolidated package version chains are independent and must not
+            # compete for that row.
+            RegulatoryPackage.basis == "solo",
+            RegulatoryPackage.status != "superseded",
+        )
+    ).all()
+    packages = {
+        (row.return_code, row.reporting_date): _PackageSummary(
+            id=row.id,
+            status=row.status,
+            version=row.version,
+        )
+        for row in rows
+        if (row.return_code, row.reporting_date) in scheduled_keys
+    }
+
+    submitted_ids = [package.id for package in packages.values() if package.status == "submitted"]
+    if not submitted_ids:
+        return packages, set()
+
+    pending_by_package: dict[UUID, bool] = {}
+    event_rows = db.execute(
+        select(
+            RegulatorySubmissionEvent.package_id,
+            RegulatorySubmissionEvent.detail,
+        )
+        .where(
+            RegulatorySubmissionEvent.organization_id == ctx.organization_id,
+            RegulatorySubmissionEvent.package_id.in_(submitted_ids),
+            RegulatorySubmissionEvent.event == "submitted",
+        )
+        .order_by(
+            RegulatorySubmissionEvent.package_id,
+            RegulatorySubmissionEvent.occurred_at,
+            RegulatorySubmissionEvent.id,
+        )
+    ).all()
+    for row in event_rows:
+        pending_by_package[row.package_id] = bool(row.detail.get("pending_orass_reupload"))
+    return packages, {
+        package_id for package_id, is_pending in pending_by_package.items() if is_pending
+    }
 
 
 def _rag(
@@ -134,19 +232,12 @@ def list_obligations(
     coverage = snapshot_coverage(
         db, ctx, bank, sorted({date_ for dates in schedule.values() for date_ in dates})
     )
+    packages, pending_reuploads = _calendar_package_state(db, ctx, bank.id, schedule)
     for definition in eligibility.eligible_definitions():
         for reporting_date in schedule[definition.code]:
             due_date = _due_date(definition, reporting_date, overrides)
-            package = db.scalar(
-                select(RegulatoryPackage).where(
-                    RegulatoryPackage.organization_id == ctx.organization_id,
-                    RegulatoryPackage.bank_id == bank.id,
-                    RegulatoryPackage.return_code == definition.code,
-                    RegulatoryPackage.reporting_date == reporting_date,
-                    RegulatoryPackage.status != "superseded",
-                )
-            )
-            pending_reupload = package is not None and has_pending_orass_reupload(db, package)
+            package = packages.get((definition.code, reporting_date))
+            pending_reupload = package is not None and package.id in pending_reuploads
             obligations.append(
                 ReportingObligationRead(
                     return_code=definition.code,
@@ -237,20 +328,15 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + horizon + injectab
     reporting_dates = anchor_dates(definition, today, horizon_end)
     coverage = snapshot_coverage(db, ctx, bank, reporting_dates)
     overrides = _deadline_overrides(db, ctx, bank.id)
+    packages, pending_reuploads = _calendar_package_state(
+        db, ctx, bank.id, {definition.code: reporting_dates}
+    )
 
     anchors: list[ReturnAnchorRead] = []
     for reporting_date in reporting_dates:
         due_date = _due_date(definition, reporting_date, overrides)
-        package = db.scalar(
-            select(RegulatoryPackage).where(
-                RegulatoryPackage.organization_id == ctx.organization_id,
-                RegulatoryPackage.bank_id == bank.id,
-                RegulatoryPackage.return_code == definition.code,
-                RegulatoryPackage.reporting_date == reporting_date,
-                RegulatoryPackage.status != "superseded",
-            )
-        )
-        pending_reupload = package is not None and has_pending_orass_reupload(db, package)
+        package = packages.get((definition.code, reporting_date))
+        pending_reupload = package is not None and package.id in pending_reuploads
         covered = coverage[reporting_date]
         anchors.append(
             ReturnAnchorRead(
