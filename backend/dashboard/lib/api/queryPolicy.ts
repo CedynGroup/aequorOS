@@ -104,8 +104,8 @@ export function scopedBankPrefix(
 }
 
 /**
- * Stable ±10% jitter. It spreads tenants across the polling window without
- * making tests or a single browser session nondeterministic.
+ * Stable ±10% jitter. It spreads tenant/authority/bank cache scopes across the
+ * polling window without making tests or a browser session nondeterministic.
  */
 export function jitteredPollInterval(
   baseMs: number,

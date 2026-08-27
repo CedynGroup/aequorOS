@@ -158,7 +158,7 @@ async function main(): Promise<void> {
   assert.equal(HEAVY_DASHBOARD_QUERY_POLICY.refetchOnWindowFocus, 'always');
   assert.equal(HEAVY_DASHBOARD_QUERY_POLICY.refetchOnMount, 'always');
 
-  // The settled home owns 21 logical resources. Duplicate consumers (header,
+  // The settled home owns 22 logical resources. Duplicate consumers (header,
   // breach banner, pulse wall, ratio panel, balance strip) all ask TanStack for
   // the same stable keys, yielding one request per resource.
   const current = (prefix: string) =>

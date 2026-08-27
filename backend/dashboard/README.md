@@ -192,6 +192,33 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
 - NextAuth for password and OIDC SSO sign-in
 - Inter (UI) + IBM Plex Mono (numerical data) via `next/font/google`
 
+## Query cache and refresh policy
+
+`lib/api/queryPolicy.ts` is the authority for Command Center and regulatory-
+dashboard caching. Its keys are prefix-first and include tenant, authenticated
+authority (actor plus sorted roles), bank, and then semantic dimensions. Current
+and explicit-period dashboard reads have distinct stable keys. The root
+`QueryClient` is also replaced and its old cache cleared when the tenant or
+authority changes, including entry to or exit from staff inspection; ordinary
+access-token rotation deliberately keeps the same cache.
+
+Heavy liquidity, capital, IRRBB, FX, FTP, and live-snapshot payloads do not use
+fixed polling. They refresh on mount/window focus, after a relevant accepted
+mutation or completed pipeline job, and when the cheap live-summary generation
+or freshness official-run signal changes for that module. Live summary,
+freshness, and alerts retain a 20-second cadence with stable ±10% cache-scope jitter;
+notifications retain 60 seconds with the same jitter. A failed initial signal
+does not block an otherwise available detail response.
+
+The Command Center ratio panel first shares the current liquidity and capital
+queries with the other home consumers. It issues an explicit-period request only
+when the current response names a different period (or fails), preserving
+historical semantics without duplicating equivalent payloads. The deterministic
+fixture records the bounded-idle improvement as **23 resources / 44 calls / 21
+detail calls before** and **22 / 33 / 5 after**, with zero detail polling. Keep
+`lib/api/queryPolicy.test.ts` and `lib/api/queryAuthorityBoundary.test.tsx` green
+when changing query keys, refresh behavior, session authority, or home requests.
+
 ## Run locally
 
 ```bash
@@ -207,7 +234,7 @@ The backend API must be running (`cd backend && fastapi dev app/main.py --port 8
 ```bash
 pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
 pnpm --filter @aequoros/dashboard lint        # next lint
-pnpm --filter @aequoros/dashboard test        # pure-function suites
+pnpm --filter @aequoros/dashboard test        # unit and query-cache policy suites
 pnpm --filter @aequoros/dashboard build       # next build
 pnpm --filter @aequoros/dashboard e2e         # Playwright (needs object storage)
 ```

@@ -907,7 +907,7 @@ export function useApplyBehavioralModel(
 // and the two background pipeline actions ("Recompute now" → /refresh,
 // "Mint official run" → /official-runs).
 //
-// The cheap read hooks poll (with stable tenant jitter) so the dashboard
+// The cheap read hooks poll (with stable cache-scope jitter) so the dashboard
 // reflects background work. A live-summary generation change invalidates the
 // affected detailed module payloads; those heavyweight reads never poll on
 // their own. The two write hooks also invalidate once their jobs complete.
@@ -1152,7 +1152,8 @@ async function pollJobToCompletion(
 
 /**
  * "Recompute now" — enqueue a live pipeline_refresh, poll it to completion, and
- * refresh every live read + module dashboard. Derives facts and recomputes live
+ * refresh the cheap live signals. A changed live-summary generation then
+ * refreshes only the affected module details. Derives facts and recomputes live
  * metrics/findings without minting an immutable regulatory run.
  */
 export function useRefreshBankData(bankId: string | undefined) {
@@ -1177,8 +1178,9 @@ export function useRefreshBankData(bankId: string | undefined) {
 
 /**
  * "Mint official run for filing" — enqueue an immutable official run, poll it to
- * completion, and refresh every live read + module dashboard. The official run
- * is what clears the freshness "data changed since last official run" state.
+ * completion, and refresh the live signals and regulatory detail caches. The
+ * official run is what clears the freshness "data changed since last official
+ * run" state.
  */
 export function useMintOfficialRun(bankId: string | undefined) {
   const queryClient = useQueryClient();
