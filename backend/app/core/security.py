@@ -3,8 +3,8 @@
 The backend is both the issuer and the verifier of app tokens (HS256 over
 ``AuthSettings.jwt_secret``), so every API request is authenticated by verifying a
 signed token — never by trusting a header. A token carries the tenant (``org``),
-the user (``sub``), and ``roles``; the API layer derives ``TenantContext`` and
-enforces RBAC from the *verified* claims.
+the user (``sub``), legacy ``roles``, and authoritative authorization version
+(``authv``); the API layer rejects a version that no longer matches the user.
 
 If ``AUTH_JWT_SECRET`` is unset, :func:`create_token` / :func:`decode_token` raise
 ``AuthConfigError`` rather than degrade — the demo header-trust path can never
@@ -100,6 +100,7 @@ def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
     subject: UUID,
     organization_id: str,
     roles: list[str],
+    authorization_version: int,
     token_type: TokenType,
     email: str | None = None,
     name: str | None = None,
@@ -107,15 +108,18 @@ def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
     now: dt.datetime | None = None,
     settings: AuthSettings | None = None,
 ) -> str:
-    """Sign an app access/refresh token for (org, user, roles).
+    """Sign an app access/refresh token for (org, user, roles, authority version).
 
     ``jti`` is REQUIRED for a refresh token and forbidden-by-omission for an
     access token: refresh-token state (rotation, reuse detection, revocation)
     lives in ``refresh_tokens`` keyed by that identifier, so a refresh token
-    minted without one would be unrevokable by construction. Access tokens stay
-    stateless — they are short-lived and verified by signature alone.
+    minted without one would be unrevokable by construction. Access tokens have
+    no server-side token row, but their ``authv`` is checked against the tenant
+    user on every data-bearing request.
     """
     settings = settings or get_settings().auth
+    if isinstance(authorization_version, bool) or authorization_version < 1:
+        raise ValueError("authorization_version must be a positive integer")
     moment = now or utc_now()
     ttl = (
         settings.access_token_ttl_seconds
@@ -132,6 +136,7 @@ def create_token(  # noqa: PLR0913 - a token carries the full identity envelope
         "sub": str(subject),
         "org": str(organization_id),
         "roles": list(roles),
+        "authv": authorization_version,
         "type": token_type,
         "iss": settings.jwt_issuer,
         "aud": settings.jwt_audience,
@@ -155,14 +160,16 @@ def decode_token(
 ) -> dict[str, Any]:
     """Verify signature, expiry, issuer, audience, and required claims; return them.
 
-    A refresh token additionally MUST carry ``jti``. That is the fail-closed half
+    Every app token MUST carry ``authv``; a refresh token additionally MUST carry
+    ``jti``. That is the fail-closed half
     of refresh-token revocation: a token with no ``jti`` has no server-side state,
     so it can be neither rotated nor revoked — and tokens minted before migration
     ``202608220028`` carry none. They are refused here rather than silently
-    trusted, which means sessions that predate the migration re-authenticate.
+    trusted. Tokens predating authorization migration ``202608250044`` have no
+    ``authv`` and also re-authenticate once.
     """
     settings = settings or get_settings().auth
-    required = ["exp", "iat", "sub", "org", "type"]
+    required = ["exp", "iat", "sub", "org", "type", "authv"]
     if expected_type == "refresh":
         required.append("jti")
     try:
@@ -179,6 +186,13 @@ def decode_token(
     if expected_type is not None and claims.get("type") != expected_type:
         msg = f"expected a {expected_type} token, got {claims.get('type')!r}"
         raise TokenInvalidError(msg)
+    authorization_version = claims.get("authv")
+    if (
+        isinstance(authorization_version, bool)
+        or not isinstance(authorization_version, int)
+        or authorization_version < 1
+    ):
+        raise TokenInvalidError("authv must be a positive integer")
     return claims
 
 

@@ -11,6 +11,7 @@ from app.models.attestation import (
     SigningAuthorization,
 )
 from app.models.audit_event import AuditEvent
+from app.models.authorization import AuthorizationBinding
 from app.models.calculation import (
     CalculationForecastPeriod,
     CalculationRun,
@@ -166,6 +167,7 @@ from app.models.user import User
 __all__ = [
     "AdoptedSignatureAppearance",
     "AttestationSignature",
+    "AuthorizationBinding",
     "AuditEvent",
     "Bank",
     "BankFinancialFact",

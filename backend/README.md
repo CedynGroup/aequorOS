@@ -17,6 +17,11 @@ the tenant API).
   worker and signing subsystems independently
 - Password and OIDC SSO authentication (AequorOS is its own relying party — no
   third-party broker), integration-key service accounts, RLS-forced tenancy
+- Shadow-only scoped authorization bindings with deny-by-default, explainable
+  evaluation; endpoint enforcement still uses the legacy role hierarchy. App
+  access and refresh tokens carry `authv`, so migration `202608250044` causes a
+  deliberate one-time re-authentication and later authorization changes can
+  invalidate every session immediately. See `docs/authorization_foundation.md`.
 - Data Engine: Excel/CSV upload, push API, market-data adapters, and the
   database-direct adapter (see the deployment note below)
 - Six calculation modules — liquidity (LCR/NSFR/stress/LMT), Basel capital
@@ -97,7 +102,7 @@ export is needed. Two operational notes for the remote:
 
 - **RLS hides everything without the tenant GUC.** Ad-hoc `psql` against the remote shows zero
   rows on tenant tables (`FORCE ROW LEVEL SECURITY`); set
-  `SELECT set_config('app.organization_id', '<org-uuid>', false);` first when inspecting.
+  `SELECT set_config('app.organization_id', '<OR-XXXXXXXX>', false);` first when inspecting.
 - **The single remote role has no BYPASSRLS**, so the cross-tenant background worker cannot
   claim queued jobs there yet — request a BYPASSRLS-granted role from the DB host and set it as
   `WORKER_DATABASE_URL` before running the worker against the remote.
@@ -114,12 +119,13 @@ export DATABASE_URL=postgresql+psycopg://risk_service_app:risk_service_app@local
 runtime, runs Alembic migrations, and grants the runtime role data privileges.
 The migration role can bypass RLS for migrations and backfills; the app runtime
 role is still created with `NOBYPASSRLS`.
-For local test and sample-demo workflows only, it seeds two demo tenants so
-audit foreign keys and header-based tenant context work:
+For local test and sample-demo workflows only, it seeds two demo identities for
+audit foreign keys. The script still prints their legacy tenant-header values
+for old fixture tooling, but the API does not trust those headers. Business API
+requests require an app access token issued by password or SSO login:
 
-```bash
-X-Org-Id: 11111111-1111-4111-8111-111111111111
-X-User-Id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+```http
+Authorization: Bearer <app-access-token>
 ```
 
 Health endpoints:
@@ -140,16 +146,16 @@ Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
 `PATCH` routes below that path support institutions, accounts, reporting
 periods, balances, cash flows, obligations, and covenants. These mutations
-require both `X-Org-Id` and `X-User-Id`; each request body requires a non-empty
-`reason`. Successful responses contain the updated `record` and the case's
+require an authenticated mutation-capable bearer principal; each request body
+requires a non-empty `reason`. Successful responses contain the updated `record` and the case's
 refreshed `validation` state. See `docs/architecture.md` for the complete
 contract and correction-history behavior.
 
 Case scenarios are read from `GET /api/v1/cases/{case_id}/scenarios`. Initialize
 the baseline and downside defaults with `POST .../scenarios/initialize`, or use
 the resource-specific scenario, copy, archive, assumption, and review routes
-below that path. All mutations require `X-Org-Id`, `X-User-Id`, and a non-empty
-`reason`. An active scenario is calculation-ready only when it has a non-null,
+below that path. All mutations require an authenticated mutation-capable bearer
+principal and a non-empty `reason`. An active scenario is calculation-ready only when it has a non-null,
 reviewed assumption in each required category: growth, expenses, cash-flow
 timing, credit usage, and repayment behavior. Editing or copying an assumption
 resets its review state to `draft`. Mutation responses include the scenario's
@@ -171,8 +177,8 @@ defaults to today.
 Rerunning creates a new run for the original scenario using current canonical
 financial data and reviewed assumptions. Its body may be `{}`; omitted fields
 reuse the original period count and default the as-of date to today, while
-provided fields override those values. Both mutations require `X-Org-Id` and
-`X-User-Id`.
+provided fields override those values. Both mutations require an authenticated
+mutation-capable bearer principal.
 
 The first engine executes synchronously, but commits its `queued` and `running`
 states before calculation. A `201` response contains the final persisted run,
@@ -201,8 +207,8 @@ GET  /api/v1/cases/{case_id}/capital-summary
 GET  /api/v1/cases/{case_id}/capital-comparison
 ```
 
-Creating a projection requires `calculation_run_id`, `X-Org-Id`, and
-`X-User-Id`. The run must be successful and belong to an active scenario in the
+Creating a projection requires `calculation_run_id` and an authenticated
+mutation-capable bearer principal. The run must be successful and belong to an active scenario in the
 same case and tenant. Each attempt is immutable and stores the run input hash,
 engine version, reporting currency, lifecycle state, period indicators, and any
 named failure diagnostic. The history route is newest-first and supports
@@ -248,7 +254,7 @@ POST /api/v1/cases/{case_id}/liquidity/findings/{finding_id}/review
 ```
 
 The body action is `acknowledge` or `dismiss`; dismissal requires a non-empty
-reason. Review requires `X-Org-Id` and `X-User-Id`, records audit events, and is
+reason. Review requires an authenticated mutation-capable bearer principal, records audit events, and is
 rejected for terminal findings or findings belonging to archived scenarios.
 The generic findings update endpoint does not mutate liquidity workflow
 findings. A newer successful run supersedes open findings from the previous run

@@ -104,6 +104,18 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   deliberately NOT RLS-forced (pre-auth global hash lookup; hashes+metadata only —
   keep it that way and keep endpoints org-filtered). Public contract:
   docs/API_INTEGRATION.md §1.
+- **Authorization foundation (built 2026-08-25; `backend/docs/authorization_foundation.md`).**
+  New policy authority is an indivisible `authorization_bindings` row: principal/type +
+  static bundle + explicit organization/institution/module/sensitivity scope + provenance
+  and lifecycle. Rows OR only after every dimension within a row ANDs; explicit `all`
+  values provide broad module/sensitivity scope, and organization-wide institution
+  coverage is named.
+  The evaluator is deny-by-default, ignores scalar role/token permission claims, returns an
+  audit-ready trace, and accepts global condition vetoes. This is shadow-only: migration
+  `202608250044` backfills no bindings or Owner/Admin authority. Token `authv` enforcement is
+  live: pre-migration/stale tokens 401; every future role/scope/status/security mutation must
+  call `authorization.invalidate_user_authorization` in-transaction to bump the user version
+  and revoke refresh families.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).
@@ -155,7 +167,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   Legacy recode (migration `202608150013`): the pre-template `BSD2`(CAR)/`BSD3`(LCR) entries are
   now `CAR-RWA`/`LCR-NSFR`; the `BSD-MONTHLY` placeholder is retired. Weekly returns anchor on
   Friday close (Guide fixes cadence not weekday). Gate: `tests/services/test_bog_forms_framework.py`
-  + `tests/services/bog_forms/`; matrix `scripts/bog_coverage_matrix.py`.
+  - `tests/services/bog_forms/`; matrix `scripts/bog_coverage_matrix.py`.
 - **Phase 2 (product.md §Phase 2) is fully built (2026-08-08).** All 11 LMTD
   appendix tables; per-currency gaps + `usd_funding_stress` (snapshot
   `bank-facts-v3`); server-side EWI/CFP with the ¶74 notification
@@ -184,17 +196,16 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   formatting; generated files must contain no inline suppressions, while type-checking,
   package tests, and freshness checks remain required. Client regeneration intentionally
   bypasses the formatting exclusion to normalize deterministic output.
-- Financial review UI code lives under the removed `aequoros-web` SPA (see git history) and must call
-  `FinancialDataApi` from `packages/risk-service-api`; do not duplicate OpenAPI payloads or
-  hand-roll financial workspace requests.
+- The case-based financial-review UI lived in the removed `aequoros-web` SPA
+  (see git history). If that vertical returns in `backend/dashboard`, it must
+  call `FinancialDataApi` from `packages/risk-service-api`; do not duplicate
+  OpenAPI payloads or hand-roll financial workspace requests.
 - Canonical institution, account, reporting-period, balance, cash-flow, obligation, and covenant
   mutations require a non-empty reason and return the record plus refreshed validation. Their
   review forms support manual entry and correction through the generated contracts.
-- Keep every financial mutation disabled while demo mode is active. Constrain account and
-  obligation statuses to generated contract values; automatic covenant compliance recalculation
-  must omit `complianceStatus` so the backend derives it from the covenant inputs.
-- Validate web changes with `pnpm --filter @aequoros/aequoros-web typecheck`, `lint`, `test`, and
-  `build`; deterministic financial review journeys are in `e2e/financial-review.spec.ts`.
+- Constrain account and obligation statuses to generated contract values;
+  automatic covenant compliance recalculation must omit `complianceStatus` so
+  the backend derives it from the covenant inputs.
 - Balance-sheet forecast attempts live under `/api/v1/cases/{case_id}/calculation-runs`.
   Runs are immutable snapshots: reruns create a new row with current canonical
   financial data and reviewed scenario assumptions, while prior successful
@@ -356,9 +367,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - **Attestation / e-signature (built 2026-07-25; spec `docs/attestation_esignature.md`).**
   Signing is REQUIRED for every return by default (`default_policy`:
   `require_signature=True`, `require_signed_pdf=True`, preparer+approver, no family
-  exemptions — changed 2026-07-25 on the founder's call). What BoG demands *of the
-  artifact* stays unconfigured-by-default (spec §8 C1–C4: officer titles stay unset);
-  what the institution demands *of itself* before filing is the product. A deployment
+  exemptions — changed 2026-07-25 on the founder's call). What BoG demands _of the
+  artifact_ stays unconfigured-by-default (spec §8 C1–C4: officer titles stay unset);
+  what the institution demands _of itself_ before filing is the product. A deployment
   that cannot sign therefore cannot file — `ensure_signing_configured` raises
   `signing_not_configured` naming the settings, and in production `/health/ready` 503s
   (boot only WARNS — an earlier boot refusal locked out the admin who could fix it).
@@ -386,7 +397,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `app/services/attestation/digests.py`; never add volatile fields. Signer IDs (`SGN-` +
   16 Crockford) are HMAC-derived from the user UUID under `SIGNER_ID_PEPPER` then
   **persisted as the authority** — rotating the pepper must never re-derive an existing
-  identity. Append-only is *tiered* by DB trigger (migration `202607250027`):
+  identity. Append-only is _tiered_ by DB trigger (migration `202607250027`):
   `audit_events` blocks UPDATE+DELETE; signature/identity/artifact-version tables block
   UPDATE only (DELETE reachable via package CASCADE) — see spec §9 D1 for why. Step-up:
   password re-entry, or an SSO redirect through the three Next.js server routes under
@@ -395,7 +406,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   the session or a client fetch.
 - **Jurisdiction is data — never hardcode country identity (built 2026-07-23).** The
   global `jurisdictions` registry (`code → country, currency, locale, central bank,
-  regulator short, portal, timezone`; NOT tenant-scoped; GH/NG/KE/ZA seeded) resolves
+regulator short, portal, timezone`; NOT tenant-scoped; GH/NG/KE/ZA seeded) resolves
   through `banks.jurisdiction_code` and rides the bank API payload
   (`BankRead.jurisdiction`). Dashboard: BankContext binds it into `lib/format.ts`
   (`setActiveJurisdiction`) — use `fmtCurrency`/`fmtInt`/`fmtLocale()`/`regShort()`/
@@ -415,9 +426,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `bog_excess_reserves_hqla` fact categories mean "central-bank reserves" in every
   jurisdiction and are load-bearing wire/DB keys (value-based `input_hash`, BSD
   line maps, goldens) — same rule as the `refinitiv` vendor id surviving its
-  rebrand. Country identity in *matching logic* is the real defect: the GL cash
+  rebrand. Country identity in _matching logic_ is the real defect: the GL cash
   classifier tested the literal token `"bog"`, so the SDI's `GL-1020 "Balances
-  with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
+with Bank of Ghana"` fell into `other_assets` and out of HQLA. Match on
   `fact_derivation._CentralBankNames` (the bank's own `central_bank_name` +
   `regulator_short` from the registry — never `country_name`, which would sweep
   "Government of Ghana bonds" into the cash line).

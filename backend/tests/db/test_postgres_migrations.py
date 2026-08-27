@@ -95,11 +95,12 @@ class MigratedPostgresSchema:
             )
 
 
-def postgres_schema_url(database_url: str, schema_name: str) -> str:
+def postgres_schema_url(database_url: str, schema_name: str, *, role: str | None = None) -> str:
     url = make_url(database_url)
-    return url.update_query_dict({"options": f"-csearch_path={schema_name}"}).render_as_string(
-        hide_password=False
-    )
+    options = f"-csearch_path={schema_name}"
+    if role is not None:
+        options = f"{options} -crole={role}"
+    return url.update_query_dict({"options": options}).render_as_string(hide_password=False)
 
 
 @pytest.fixture
@@ -109,15 +110,21 @@ def migrated_postgres_schema(monkeypatch: pytest.MonkeyPatch) -> Iterator[Migrat
         pytest.skip("TEST_DATABASE_URL must point to Postgres.")
 
     schema_name = f"risk_service_migration_{uuid4().hex}"
-    database_url = postgres_schema_url(test_database_url, schema_name)
     alembic_config = alembic_config_for_app()
     admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
+    with admin_engine.connect() as connection:
+        is_superuser = connection.scalar(
+            text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+        )
+    migration_role = "pg_database_owner" if is_superuser else None
+    database_url = postgres_schema_url(test_database_url, schema_name, role=migration_role)
     app_engine = create_engine(database_url)
     monkeypatch.setenv("DATABASE_URL", database_url)
     clear_database_caches()
 
     with admin_engine.connect() as connection:
-        connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
+        authorization = " AUTHORIZATION pg_database_owner" if migration_role is not None else ""
+        connection.execute(text(f'CREATE SCHEMA "{schema_name}"{authorization}'))
 
     try:
         command.upgrade(alembic_config, "head")

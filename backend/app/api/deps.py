@@ -29,6 +29,10 @@ class TenantContext:
     organization_id: str
     actor_user_id: UUID | None = None
     roles: tuple[str, ...] = ()
+    # Present on normal app tokens and compared with users.authorization_version
+    # before their role claims are accepted. Integration keys and impersonation
+    # use separate credential lifecycles and leave this unset.
+    authorization_version: int | None = None
     # Set ONLY under operator act-as-examiner impersonation: the originating
     # inspector session id. Its presence marks the principal as a read-only
     # operator view (actor_user_id is None — the actor is staff, not a tenant
@@ -108,6 +112,13 @@ def get_current_principal(
     authenticated route, before any handler or narrower ``ctx`` dependency runs.
     """
     principal = _authenticate_principal(credentials)
+    if principal.authorization_version is not None:
+        session = get_sessionmaker()()
+        session.info["organization_id"] = principal.organization_id
+        try:
+            validate_tenant_context(session, principal)
+        finally:
+            session.close()
     refuse_impersonated_mutation(request, principal)
     return principal
 
@@ -187,6 +198,7 @@ def _authenticate_principal(
         organization_id=str(claims["org"]),
         actor_user_id=UUID(claims["sub"]),
         roles=tuple(claims.get("roles", ())),
+        authorization_version=int(claims["authv"]),
     )
 
 
@@ -301,7 +313,8 @@ def get_tenant_db_session(
     session = get_sessionmaker()()
     session.info["organization_id"] = ctx.organization_id
     try:
-        validate_tenant_context(session, ctx)
+        if ctx.authorization_version is None:
+            validate_tenant_context(session, ctx)
         yield session
     except Exception:
         session.rollback()
@@ -336,14 +349,14 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
     if ctx.actor_user_id is None:
         return
 
-    actor_user_id = session.scalar(
-        select(User.id).where(
+    actor = session.scalar(
+        select(User).where(
             User.id == ctx.actor_user_id,
             User.organization_id == ctx.organization_id,
             User.is_active.is_(True),
         )
     )
-    if actor_user_id is None:
+    if actor is None:
         # A verified token whose subject is not an active user of the org it
         # claims. Deactivation is the benign explanation; a replayed or
         # cross-tenant token is the one worth seeing.
@@ -355,6 +368,22 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tenant context is not valid.",
+        )
+    if (
+        ctx.authorization_version is not None
+        and ctx.authorization_version != actor.authorization_version
+    ):
+        authorization_denied(
+            reason="stale_authorization_version",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            token_authorization_version=ctx.authorization_version,
+            current_authorization_version=actor.authorization_version,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session authorization is stale. Sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 

@@ -37,15 +37,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
-#: Why a token stopped being usable. ``reuse_detected`` is the security event:
-#: a token that had already been rotated was presented outside the grace window,
-#: so every live member of its family was revoked with this reason.
+#: Why a token stopped being usable. ``reuse_detected`` means a rotated token
+#: was presented outside the grace window, so its family was revoked;
+#: ``authorization_changed`` means the user's authority generation advanced.
 REVOCATION_REASONS: tuple[str, ...] = (
     "logout",
     "password_change",
     "user_deactivated",
     "reuse_detected",
     "admin_revoked",
+    "authorization_changed",
 )
 
 

@@ -52,6 +52,7 @@ def test_access_token_roundtrips_with_identity_claims() -> None:
         subject=user,
         organization_id=org,
         roles=["analyst"],
+        authorization_version=7,
         token_type="access",
         email="a@bank.example",
         settings=_SETTINGS,
@@ -60,6 +61,7 @@ def test_access_token_roundtrips_with_identity_claims() -> None:
     assert claims["sub"] == str(user)
     assert claims["org"] == str(org)
     assert claims["roles"] == ["analyst"]
+    assert claims["authv"] == 7
     assert claims["type"] == "access"
     assert claims["email"] == "a@bank.example"
 
@@ -72,6 +74,7 @@ def test_refresh_token_type_is_enforced() -> None:
         subject=user,
         organization_id=org,
         roles=["viewer"],
+        authorization_version=1,
         token_type="refresh",
         jti=str(uuid4()),
         settings=_SETTINGS,
@@ -89,6 +92,7 @@ def test_expired_token_is_rejected() -> None:
         subject=user,
         organization_id=org,
         roles=["viewer"],
+        authorization_version=1,
         token_type="access",
         now=past,
         settings=_SETTINGS,
@@ -103,6 +107,7 @@ def test_tampered_token_is_rejected() -> None:
         subject=user,
         organization_id=org,
         roles=["admin"],
+        authorization_version=1,
         token_type="access",
         settings=_SETTINGS,
     )
@@ -119,6 +124,7 @@ def test_token_signed_with_another_secret_is_rejected() -> None:
         subject=user,
         organization_id=org,
         roles=["viewer"],
+        authorization_version=1,
         token_type="access",
         settings=other,
     )
@@ -134,6 +140,7 @@ def test_unconfigured_secret_fails_closed() -> None:
             subject=user,
             organization_id=org,
             roles=["viewer"],
+            authorization_version=1,
             token_type="access",
             settings=unconfigured,
         )

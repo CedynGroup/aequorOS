@@ -2,12 +2,22 @@
 
 **Status:** implementation spec · **Audience:** dashboard + platform engineers · **Owner:** Eric
 
+> **As-built foundation (2026-08-25):** The first additive authorization slice
+> is recorded in the backend
+> [`authorization_foundation.md`](../backend/docs/authorization_foundation.md).
+> It corrects the proposed independent `user_roles`/`user_scopes` shape to
+> indivisible scoped bindings, adds exact resource evaluation and authorization
+> version invalidation, and remains shadow-only except for stale-session denial.
+> This proposal's later UI, role-administration, lifecycle, and broad endpoint
+> rollout sections are not claims that those features are built.
+
 This document specifies how AequorOS grants access to bank users, what each user
 type can see and do, how the three settings surfaces (personal / org-admin /
 vendor-platform) are structured, and how banks invite and onboard their people.
 It is written to be **built incrementally on the auth layer that already exists**
-(JWT sessions, `organization_id` RLS, the `admin > approver > analyst > viewer`
-roles, and the regulatory-reporting maker-checker trail).
+(JWT sessions, `organization_id` RLS, the legacy
+`admin > approver > analyst > examiner > viewer` hierarchy, and the
+regulatory-reporting maker-checker trail).
 
 Everything here is grounded in how real treasury/ALM systems (Kyriba, ION, FIS,
 Murex, Adenza/ControllerView, OneSumX, the Regnology-powered **Bank of Ghana
@@ -24,14 +34,15 @@ building:
 - Building the **role-aware dashboards** → [§5 personas](#5-personas--roles--what-they-need), [§9 per-persona dashboards](#9-per-persona-dashboards-what-to-build), [§8 enforcement](#8-enforcement-architecture).
 - Building **settings** → [§10 three-tier settings](#10-settings-architecture-three-tiers), [§12 UI specs](#12-user-menu--ui-specs).
 - Building **invite / onboarding** → [§11 lifecycle & onboarding](#11-user-lifecycle--onboarding).
-- Need the **data model / API** → [§13](#13-data-model), [§14](#14-api-surface).
+- Need the **data model / API** → [§13](#13-data-model), [§14](#14-target-api-surface).
 - Sequencing the work → [§15 roadmap](#15-phased-roadmap).
 
-Terminology: **tenant = organization = one bank**. **Maker** = the person who
+Terminology: **security tenant = organization (`OR-*`)**; an organization owns
+one or more **institutions/banks (`BK-*`)**. **Maker** = the person who
 creates/edits/runs. **Checker** = the independent person who reviews/approves.
 Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX**,
 **FTP**, **FCST** (Forecasting), **BEH** (Behavioral), **DATA** (Data Engine),
-**REG** (Regulatory Reporting).
+**REG** (Regulatory Reporting), **RISK**, **MARKETS**, **ACCOUNT**, and **AUDIT**.
 
 ---
 
@@ -39,28 +50,37 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 
 ### What already exists (build on this — do not rebuild)
 
-| Area | Current state | Where |
-|---|---|---|
-| Auth | Zero-trust JWT (HS256), Argon2id passwords, **own-OIDC SSO** (no third-party broker; built 2026-07-20), refresh rotation | `app/core/security.py`, `dashboard/auth.ts` |
+| Area                                 | Current state                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                                                                                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth                                 | Zero-trust JWT (HS256), Argon2id passwords, **own-OIDC SSO** (no third-party broker; built 2026-07-20), refresh rotation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `app/core/security.py`, `dashboard/auth.ts`                                                                                                                                                             |
 | SSO self-service (single connection) | **BUILT.** Per-org `sso_connections` row: issuer + client id + AES-256-GCM-sealed secret (write-only), allowed email domains, enable toggle — managed by an `admin` in **Settings → Authentication**. Backend verifies id_tokens against the connection issuer's JWKS (discovery-based, RS256/ES256, `email_verified` + domain enforcement); dashboard NextAuth loads the client config through an `SSO_INTERNAL_KEY`-gated internal endpoint. Pre-provisioned users by default; **request-access JIT is BUILT as a per-connection opt-in** (`jit_enabled`): first sign-in from an allowed domain records a **deactivated** stub and returns 403 "awaiting administrator approval" — zero access until an admin approves it with an explicit role via `/auth/sso/access-requests` (list/approve/reject; Settings → Authentication card). Refused at config AND login time without a non-empty domain list. One connection per org / one enabled per deployment — Phase 2 lifts this. | `app/models/sso_connection.py`, `app/services/sso_config.py`, `app/services/authentication.py`, `app/api/v1/auth.py`, `dashboard/components/settings/AuthenticationPanel.tsx`, `docs/sso-onboarding.md` |
-| Connection health (bank-IT surface) | **BUILT** (read-only): Data Engine → Overview aggregates every configured source connection (DB-direct, T24, market-data) with live status, last sync, credential expiry, and plain-language remediation hints | `dashboard/components/data-engine/ConnectionHealthPanel.tsx` |
-| Roles | `admin > approver > analyst > viewer` (linear rank), single role per user | `app/core/security.py:ROLES`, `app/models/user.py:USER_ROLES` |
-| Enforcement | Only the **viewer↔analyst write boundary** is wired (`get_mutation_tenant_context` requires `analyst`+). `require_role(minimum)` factory exists but gates nothing else. | `app/api/deps.py` |
-| Tenancy | Postgres RLS forced on `app.organization_id`; cross-tenant work runs on the BYPASSRLS `WORKER_DATABASE_URL` role | `app/db/session.py`, CLAUDE.md |
-| Maker-checker | **Regulatory reporting already has it**: `draft→generated→validated→pending_approval→approved→submitted→acknowledged→…` with an append-only approval trail where **checker ≠ maker is enforced in the service** | `app/models/regulatory_reporting.py` (`PACKAGE_STATUSES`, `APPROVAL_ACTIONS`, `RegulatoryPackageApproval`) |
-| Token claims | `sub`, `org`, `roles[]`, `email`, `name` | `app/core/security.py:create_token` |
-| Identity in UI | Header + settings read the real session (name/role); route gate redirects unauthenticated → `/login` | `dashboard/components/shell/Header.tsx`, `dashboard/middleware.ts` |
+| Connection health (bank-IT surface)  | **BUILT** (read-only): Data Engine → Overview aggregates every configured source connection (DB-direct, T24, market-data) with live status, last sync, credential expiry, and plain-language remediation hints                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `dashboard/components/data-engine/ConnectionHealthPanel.tsx`                                                                                                                                            |
+| Legacy roles                         | `admin > approver > analyst > examiner > viewer` (linear rank), one scalar role per user; still the endpoint authority during shadow rollout                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `app/core/security.py:ROLES`, `app/models/user.py:USER_ROLES`                                                                                                                                           |
+| Endpoint enforcement                 | Coarse legacy dependencies enforce viewer/analyst mutation separation and selected approver/admin gates. The new binding evaluator is not an endpoint gate yet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `app/api/deps.py`                                                                                                                                                                                       |
+| Tenancy                              | Postgres RLS forced on `app.organization_id`; cross-tenant work runs on the BYPASSRLS `WORKER_DATABASE_URL` role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `app/db/session.py`, CLAUDE.md                                                                                                                                                                          |
+| Maker-checker                        | **Regulatory reporting already has it**: `draft→generated→validated→pending_approval→approved→submitted→acknowledged→…` with an append-only approval trail where **checker ≠ maker is enforced in the service**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `app/models/regulatory_reporting.py` (`PACKAGE_STATUSES`, `APPROVAL_ACTIONS`, `RegulatoryPackageApproval`)                                                                                              |
+| Authorization foundation             | **BUILT, SHADOW-ONLY.** Deny-by-default evaluation over indivisible `authorization_bindings`; exact organization/institution, module, sensitivity, lifecycle, principal-type, and runtime-condition matching. No binding CRUD API and no endpoint gate yet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `app/core/authorization.py`, `app/services/authorization.py`, `backend/docs/authorization_foundation.md`                                                                                                |
+| Token claims                         | App access and refresh tokens carry `sub`, `org`, legacy `roles[]`, and authoritative `authv`, plus `email`/`name` when present; refresh tokens also require `jti`. Pre-`202608250044` and stale-version sessions fail closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `app/core/security.py:create_token`, `app/api/deps.py:validate_tenant_context`                                                                                                                          |
+| Identity in UI                       | Header + settings read the real session (name/role); route gate redirects unauthenticated → `/login`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `dashboard/components/shell/Header.tsx`, `dashboard/middleware.ts`                                                                                                                                      |
 
 ### The gap this spec closes
 
-1. `approver` and `admin` roles exist but **enforce nothing distinct** — no approval gate, no admin gate.
-2. **No user management**: no invitations, no user CRUD, no role assignment UI, no org-admin console, no vendor platform console.
+1. Selected `approver` and `admin` gates exist, but remain coarse legacy-rank
+   checks rather than exact module/resource binding decisions.
+2. **No tenant grant administration**: no invitations, general user CRUD, role
+   assignment UI, or org-admin grant console. The separate staff operator
+   console is built but is not a tenant authorization surface.
 3. **`Organization` is bare** (`{id, name}`) — no domain, plan, SSO config, or settings.
-4. **One flat role per user**, no module/entity/desk scoping — a Liquidity Manager and a CFO get the same surface.
+4. Endpoint enforcement still uses **one flat legacy role per user**. Exact
+   institution/module/sensitivity bindings now exist and are evaluable, but are
+   shadow-only and have no administration surface; desk/currency scope is not
+   represented yet.
 5. **No SoD engine** beyond the one hand-rolled REG check; no generalized maker-checker on calculation/official runs.
-6. **No audit log**, no SCIM, no impersonation, no seat/plan concept. (SSO
-   self-service exists in single-connection form — see §2 above; Phase 2 grows
-   it to multi-connection + home-realm discovery, it is NOT rebuilt.)
+6. Audit events and read-only operator impersonation exist, but there is no
+   generalized authorization-decision audit envelope, SCIM, or seat/plan
+   concept. (SSO self-service exists in single-connection form — see §2 above;
+   Phase 2 grows it to multi-connection + home-realm discovery, it is NOT
+   rebuilt.)
 
 ### Target model in one sentence
 
@@ -85,14 +105,14 @@ Treasury access design is not arbitrary — it falls out of two long-standing
 control frameworks a bank auditor will expect to see reflected:
 
 - **Front / Middle / Back office separation** (Association of Corporate
-  Treasurers). Front office *executes* deals; middle office *monitors limits and
-  exposures*; back office *confirms, settles, reconciles*. "The front office does
+  Treasurers). Front office _executes_ deals; middle office _monitors limits and
+  exposures_; back office _confirms, settles, reconciles_. "The front office does
   the deal but doesn't settle the money; the back office settles the money but
   doesn't do the deal."
 - **Three Lines model** (IIA; codified for banking by BCBS). **1st line** =
-  business owns/runs risk (can *initiate/configure*); **2nd line** = Risk &
-  Compliance set limits and *review/challenge/approve*; **3rd line** = Internal
-  Audit gets *independent read + audit trail*, changes nothing.
+  business owns/runs risk (can _initiate/configure_); **2nd line** = Risk &
+  Compliance set limits and _review/challenge/approve_; **3rd line** = Internal
+  Audit gets _independent read + audit trail_, changes nothing.
 
 These collapse into **the one rule everything else serves**:
 
@@ -110,7 +130,7 @@ Every access check answers: **who (role) → may do what (permission) → on wha
 3. **Scope** — the boundary a permission applies within: tenant → legal entity → module → desk/portfolio/currency → data-sensitivity.
 4. **Condition (attribute)** — runtime context: environment (**live vs demo**),
    **as-of date**, **maker≠checker** on this object, **approval limit** not
-   exceeded, step-up-MFA present. These are *conditions*, not roles — encoding
+   exceeded, step-up-MFA present. These are _conditions_, not roles — encoding
    them as roles is exactly the explosion trap.
 
 > Two AequorOS rules from `CLAUDE.md` are **conditions, not roles**: "financial
@@ -125,7 +145,7 @@ Every access check answers: **who (role) → may do what (permission) → on wha
 ```
                        ┌────────────────────────────────────────────┐
                        │   PLATFORM PLANE  (AequorOS / vendor)       │
-                       │   admin.aequoros.com — CROSS-TENANT         │
+                       │   console.aequoros.com — CROSS-TENANT       │
                        │   runs OUTSIDE RLS (BYPASSRLS, like the     │
                        │   background worker's WORKER_DATABASE_URL)  │
                        └───────────────┬────────────────────────────┘
@@ -143,7 +163,7 @@ Every access check answers: **who (role) → may do what (permission) → on wha
 
 - **Tenant plane** — everything a bank's own users touch, hard-scoped to their
   `organization_id` by RLS. No tenant role can ever reach cross-tenant data.
-- **Platform plane** — the *only* cross-tenant surface, for AequorOS staff. It
+- **Platform plane** — the _only_ cross-tenant surface, for AequorOS staff. It
   must run outside RLS — **the same architectural seam as the existing
   `WORKER_DATABASE_URL` BYPASSRLS worker** — or it reads empty. It is the most
   heavily audited surface in the system.
@@ -156,29 +176,29 @@ This is the answer to "who gets access, at what level, and for what." Posture:
 **I** = initiates/creates/runs (maker), **A** = reviews/approves/signs-off
 (checker), **V** = view-only.
 
-| # | Persona (bank job) | Line | What they do & need access for | Modules | Posture | AequorOS role preset (§6) |
-|---|---|---|---|---|---|---|
-| 1 | **Group / Head Treasurer** | 1 | Owns funding & liquidity strategy; sets desk mandates; approves large exceptions; final treasury sign-off | LIQ, FCST, FTP, IRRBB, FX (oversight), CAP (V) | A + V | Approver (LIQ/FCST/FTP/IRRBB/FX), high approval tier |
-| 2 | **ALM / Balance-sheet Manager** | 1 | Runs forecasts & scenarios; structural IRR & liquidity gap; curates behavioral assumptions; ALCO packs | FCST, IRRBB, LIQ, BEH, FTP | I | Analyst (FCST/IRRBB/LIQ/BEH) |
-| 3 | **Liquidity Manager** | 1 | Daily cash/liquidity position; LCR/NSFR monitoring & drivers; HQLA; survival horizon | LIQ, FCST (V), DATA (V) | I | Analyst (LIQ) |
-| 4 | **Money-Market / FX Dealer** | 1 | Executes MM/FX within mandate; deal entry; manages open positions | FX, LIQ (funding) | I (deal only) | Analyst (FX), desk-scoped; **never** settlement approve |
-| 5 | **Market & FX Risk Officer** | 2 | Independent limit/VaR monitoring; challenges positions; maintains limits; breach escalation | FX, IRRBB (challenge), CAP (mkt RWA) | A + V + configure(limits) | Approver (FX) + Risk config |
-| 6 | **IRRBB Analyst** | 1/2 | EVE/NII, repricing gap; NMD/prepayment assumptions; IRRBB return prep | IRRBB, BEH, FCST, REG (IRRBB templates) | I | Analyst (IRRBB/BEH) |
-| 7 | **FTP / Funding Owner** | 1 | Designs & maintains FTP curves/methodology; publishes transfer rates | FTP, LIQ, FCST | I + configure | Analyst (FTP) + FTP config |
-| 8 | **Back-office / Settlements / Ops** | 1 (segregated) | Confirms & settles deals; payment approval/release; reconciliation; standing data | DATA, FX/LIQ post-trade | I + A (approve **xor** release) | Analyst (DATA) + Approver (settlements), split per user |
-| 9 | **Financial Control / Finance** | 1/2 | GL reconciliations; source-to-report mapping; reconcile engine↔accounting; data-quality sign-off | DATA (map), REG (prep), CAP, FCST | I + review + export | Analyst (DATA/REG) + export |
-| 10 | **CFO** | Exec | Owns finance/reg numbers; **attests/signs off returns before submission**; approves capital & funding plans | REG, CAP, FCST, LIQ | A / sign-off | Approver + `reg:sign_off`, top approval tier |
-| 11 | **CRO / Head of Risk** | 2 | Owns risk appetite & limits; independent review of all risk; **approves models & assumptions** | all risk modules, BEH, REG (risk returns) | A / challenge + configure | Approver (all) + `beh:approve` + Risk config |
-| 12 | **Regulatory Reporting Officer** | 2 | Assembles BoG returns; runs validation rules; reconciles template↔source; **submits to ORASS**; owns supervisor relationship | REG, DATA (V), all outputs (consume) | I + submit | Analyst (REG) + `reg:submit` |
-| 13 | **Internal Audit** | 3 | Independent assurance over controls, models, SoD, lineage; reads all, changes nothing | ALL (read + **audit log**) | V-only + audit | Auditor |
-| 14 | **Compliance** | 2 | Obligation mapping; policy adherence; verifies SoD/four-eyes are configured & operating | REG, DATA (policy), config-audit | V + policy config | Auditor + policy config |
-| 15 | **Board / Exec (read-only)** | Gov | Consume ALCO/board dashboards; risk appetite vs actuals; no operational access | aggregated dashboards | V-only (published) | Viewer (published views) |
-| 16 | **Managing Director / CEO** | Exec | **Final attester on BoG returns** — "the MD sends the report to BoG" is a signature act, not a compilation step; chairs ALCO in most banks; consumes board views | REG (attest only), aggregated dashboards | A / sign-off | Approver limited to `reg:sign_off` (signing step-up), top tier; Viewer elsewhere |
-| 17 | **ALCO Secretary / pack compiler** | 1/2 | Assembles the committee pack from unit-owned sections; chases section sign-offs; records decisions & action items; circulates pre-meeting. Usually treasury middle office or Finance (confirm with practitioner) | all module outputs (V), PACK | I (compile) + V | Analyst (PACK) + `pack:compile`, `pack:publish`, `committee:record` |
-| 18 | **Credit contributor** | 1 | Contributes the credit section (loan book, NPLs, concentrations narrative) to the monthly committee pack; **not a treasury user** — touches nothing else | PACK (own section), LE outputs (V) | I (own section only) | Analyst scoped to owned pack section |
-| 19 | **Operations contributor** | 1 | Contributes the op-risk incidents section monthly; **not a treasury user** — the narrowest access pattern in the product | PACK (own section) | I (own section only) | Analyst scoped to owned pack section |
-| — | **Org Admin** | — | Manages the bank's users, roles, SSO/SCIM, org settings, audit — **no operational approve/run** | Settings only | admin | Org Admin |
-| — | **Org Owner** | — | The bank's account owner: Org Admin + billing + ownership transfer | Settings + billing | admin+ | Org Owner |
+| #   | Persona (bank job)                  | Line           | What they do & need access for                                                                                                                                                                                   | Modules                                        | Posture                         | AequorOS role preset (§6)                                                        |
+| --- | ----------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------- |
+| 1   | **Group / Head Treasurer**          | 1              | Owns funding & liquidity strategy; sets desk mandates; approves large exceptions; final treasury sign-off                                                                                                        | LIQ, FCST, FTP, IRRBB, FX (oversight), CAP (V) | A + V                           | Approver (LIQ/FCST/FTP/IRRBB/FX), high approval tier                             |
+| 2   | **ALM / Balance-sheet Manager**     | 1              | Runs forecasts & scenarios; structural IRR & liquidity gap; curates behavioral assumptions; ALCO packs                                                                                                           | FCST, IRRBB, LIQ, BEH, FTP                     | I                               | Analyst (FCST/IRRBB/LIQ/BEH)                                                     |
+| 3   | **Liquidity Manager**               | 1              | Daily cash/liquidity position; LCR/NSFR monitoring & drivers; HQLA; survival horizon                                                                                                                             | LIQ, FCST (V), DATA (V)                        | I                               | Analyst (LIQ)                                                                    |
+| 4   | **Money-Market / FX Dealer**        | 1              | Executes MM/FX within mandate; deal entry; manages open positions                                                                                                                                                | FX, LIQ (funding)                              | I (deal only)                   | Analyst (FX), desk-scoped; **never** settlement approve                          |
+| 5   | **Market & FX Risk Officer**        | 2              | Independent limit/VaR monitoring; challenges positions; maintains limits; breach escalation                                                                                                                      | FX, IRRBB (challenge), CAP (mkt RWA)           | A + V + configure(limits)       | Approver (FX) + Risk config                                                      |
+| 6   | **IRRBB Analyst**                   | 1/2            | EVE/NII, repricing gap; NMD/prepayment assumptions; IRRBB return prep                                                                                                                                            | IRRBB, BEH, FCST, REG (IRRBB templates)        | I                               | Analyst (IRRBB/BEH)                                                              |
+| 7   | **FTP / Funding Owner**             | 1              | Designs & maintains FTP curves/methodology; publishes transfer rates                                                                                                                                             | FTP, LIQ, FCST                                 | I + configure                   | Analyst (FTP) + FTP config                                                       |
+| 8   | **Back-office / Settlements / Ops** | 1 (segregated) | Confirms & settles deals; payment approval/release; reconciliation; standing data                                                                                                                                | DATA, FX/LIQ post-trade                        | I + A (approve **xor** release) | Analyst (DATA) + Approver (settlements), split per user                          |
+| 9   | **Financial Control / Finance**     | 1/2            | GL reconciliations; source-to-report mapping; reconcile engine↔accounting; data-quality sign-off                                                                                                                 | DATA (map), REG (prep), CAP, FCST              | I + review + export             | Analyst (DATA/REG) + export                                                      |
+| 10  | **CFO**                             | Exec           | Owns finance/reg numbers; **attests/signs off returns before submission**; approves capital & funding plans                                                                                                      | REG, CAP, FCST, LIQ                            | A / sign-off                    | Approver + `reg:sign_off`, top approval tier                                     |
+| 11  | **CRO / Head of Risk**              | 2              | Owns risk appetite & limits; independent review of all risk; **approves models & assumptions**                                                                                                                   | all risk modules, BEH, REG (risk returns)      | A / challenge + configure       | Approver (all) + `beh:approve` + Risk config                                     |
+| 12  | **Regulatory Reporting Officer**    | 2              | Assembles BoG returns; runs validation rules; reconciles template↔source; **submits to ORASS**; owns supervisor relationship                                                                                     | REG, DATA (V), all outputs (consume)           | I + submit                      | Analyst (REG) + `reg:submit`                                                     |
+| 13  | **Internal Audit**                  | 3              | Independent assurance over controls, models, SoD, lineage; reads all, changes nothing                                                                                                                            | ALL (read + **audit log**)                     | V-only + audit                  | Auditor                                                                          |
+| 14  | **Compliance**                      | 2              | Obligation mapping; policy adherence; verifies SoD/four-eyes are configured & operating                                                                                                                          | REG, DATA (policy), config-audit               | V + policy config               | Auditor + policy config                                                          |
+| 15  | **Board / Exec (read-only)**        | Gov            | Consume ALCO/board dashboards; risk appetite vs actuals; no operational access                                                                                                                                   | aggregated dashboards                          | V-only (published)              | Viewer (published views)                                                         |
+| 16  | **Managing Director / CEO**         | Exec           | **Final attester on BoG returns** — "the MD sends the report to BoG" is a signature act, not a compilation step; chairs ALCO in most banks; consumes board views                                                 | REG (attest only), aggregated dashboards       | A / sign-off                    | Approver limited to `reg:sign_off` (signing step-up), top tier; Viewer elsewhere |
+| 17  | **ALCO Secretary / pack compiler**  | 1/2            | Assembles the committee pack from unit-owned sections; chases section sign-offs; records decisions & action items; circulates pre-meeting. Usually treasury middle office or Finance (confirm with practitioner) | all module outputs (V), PACK                   | I (compile) + V                 | Analyst (PACK) + `pack:compile`, `pack:publish`, `committee:record`              |
+| 18  | **Credit contributor**              | 1              | Contributes the credit section (loan book, NPLs, concentrations narrative) to the monthly committee pack; **not a treasury user** — touches nothing else                                                         | PACK (own section), LE outputs (V)             | I (own section only)            | Analyst scoped to owned pack section                                             |
+| 19  | **Operations contributor**          | 1              | Contributes the op-risk incidents section monthly; **not a treasury user** — the narrowest access pattern in the product                                                                                         | PACK (own section)                             | I (own section only)            | Analyst scoped to owned pack section                                             |
+| —   | **Org Admin**                       | —              | Manages the bank's users, roles, SSO/SCIM, org settings, audit — **no operational approve/run**                                                                                                                  | Settings only                                  | admin                           | Org Admin                                                                        |
+| —   | **Org Owner**                       | —              | The bank's account owner: Org Admin + billing + ownership transfer                                                                                                                                               | Settings + billing                             | admin+                          | Org Owner                                                                        |
 
 **Reading it for dashboards:** persona → role preset → [§9](#9-per-persona-dashboards-what-to-build) tells you the landing page, visible nav, and allowed actions to render.
 
@@ -189,7 +209,7 @@ reporting/treasury) plus LMTD 2026 Part II ¶10–21. A bank runs **two distinct
 flows** that our personas must serve, and they exercise different parts of the
 product:
 
-**Flow A — internal governance (monthly).** Each *arm* of the bank produces its
+**Flow A — internal governance (monthly).** Each _arm_ of the bank produces its
 piece → the ALCO Secretary compiles the committee pack from unit-owned sections
 → ALCO meets, challenges (LMTD ¶11(h) makes "review and challenge" a Board duty),
 decides, minutes → escalates to Board. The pack always contains sections the
@@ -197,7 +217,7 @@ platform does not compute (macro commentary, credit narrative, op-risk
 incidents) — hence the contributor personas (#18–19) and manual sections in the
 pack model.
 
-**Flow B — regulatory filing.** Finance/Reg Reporting *prepares* returns (#9,
+**Flow B — regulatory filing.** Finance/Reg Reporting _prepares_ returns (#9,
 #12); sign-off is an attestation chain (#10 CFO, #16 MD); submission goes out
 under `reg:submit` (#12). The MD compiles nothing — the MD signs. This flow is
 already built (attestation + PAdES signing); persona #16 exists so the MD's
@@ -210,16 +230,16 @@ to the spreadsheet-per-department status quo — never fork per-department apps.
 **Bank org unit → preset bundle** (module grants express departments; no new
 base roles needed — §6.2 multi-role covers hybrids):
 
-| Bank unit | Line | Preset bundle (invite-time) |
-|---|---|---|
-| Treasury front office | 1 | #1 Treasurer, #3 Liquidity Mgr, #4 Dealer (desk-scoped) |
-| ALM / middle office | 1/2 | #2 ALM Mgr, #7 FTP Owner, #17 ALCO Secretary |
-| Risk (CRO org) | 2 | #5 Market Risk, #11 CRO, #6 IRRBB Analyst |
-| Finance / Financial Control | 1/2 | #9 Finance, #10 CFO, #12 Reg Reporting Officer |
-| Credit | 1 | #18 Credit contributor (LE outputs view + own pack section) |
-| Operations | 1 | #8 Back-office, #19 Ops contributor |
-| Executive | — | #16 MD/CEO, #15 Board viewers |
-| Internal Audit | 3 | #13 Auditor (LMTD ¶20–21: annual framework review, reports to Board) |
+| Bank unit                   | Line | Preset bundle (invite-time)                                          |
+| --------------------------- | ---- | -------------------------------------------------------------------- |
+| Treasury front office       | 1    | #1 Treasurer, #3 Liquidity Mgr, #4 Dealer (desk-scoped)              |
+| ALM / middle office         | 1/2  | #2 ALM Mgr, #7 FTP Owner, #17 ALCO Secretary                         |
+| Risk (CRO org)              | 2    | #5 Market Risk, #11 CRO, #6 IRRBB Analyst                            |
+| Finance / Financial Control | 1/2  | #9 Finance, #10 CFO, #12 Reg Reporting Officer                       |
+| Credit                      | 1    | #18 Credit contributor (LE outputs view + own pack section)          |
+| Operations                  | 1    | #8 Back-office, #19 Ops contributor                                  |
+| Executive                   | —    | #16 MD/CEO, #15 Board viewers                                        |
+| Internal Audit              | 3    | #13 Auditor (LMTD ¶20–21: annual framework review, reports to Board) |
 
 **LMTD Part II hooks this spec must serve:** ¶11(b)–(e) — the **Board** sets
 internal thresholds for the six monitoring tools, cumulative and per-currency
@@ -251,34 +271,37 @@ grants) + (approval tier)` applied at invite time — not new roles. This is the
 Stripe/Datadog/Okta pattern (predefined roles + optional custom roles later),
 deliberately capped to avoid role explosion.
 
-### 6.1 Base roles (extend the current four)
+### 6.1 Target base roles
 
-| Base role | Replaces / maps from | Purpose | Key permissions | Must NOT |
-|---|---|---|---|---|
-| **Viewer** | `viewer` | Read-only within scope | `*:view` (scoped) | any mutation |
-| **Auditor** | *(new; a Viewer variant)* | Read-only **+ audit-log read**, whole tenant | `*:view`, `audit:read` | any mutation, any approve |
-| **Analyst** (Preparer / maker) | `analyst` | Core treasury/ALM work | `{module}:view|create|edit|run`, `export` (scoped) | approve/sign-off/submit **their own** object |
-| **Approver** (Reviewer / checker) | `approver` | Four-eyes approval | `{module}:review|approve`, `reg:sign_off`, `reg:submit` (scoped) | edit the object they are approving |
-| **Org Admin** | *(split out of `admin`)* | Account administration only | `users:*`, `roles:*`, `sso:*`, `scim:*`, `org:settings`, `audit:read` | operational `run/approve/submit` (SoD C9) |
-| **Org Owner** | *(top of `admin`)* | Bank's account owner | Org Admin **+** `billing:*`, `org:transfer`, `org:delete` | cross-tenant anything |
-| **Billing Manager** | *(new, optional)* | Subscription & seats | `billing:*` | domain data |
+| Base role                         | Replaces / maps from      | Purpose                                      | Key permissions                                                       | Must NOT                                        |
+| --------------------------------- | ------------------------- | -------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------- |
+| **Viewer**                        | `viewer`                  | Read-only within scope                       | `*:view` (scoped)                                                     | any mutation                                    |
+| **Auditor**                       | _(new; a Viewer variant)_ | Read-only **+ audit-log read**, whole tenant | `*:view`, `audit:read`                                                | any mutation, any approve                       |
+| **Analyst** (Preparer / maker)    | `analyst`                 | Core treasury/ALM work                       | `{module}:view                                                        | create                                          | edit                               | run`, `export` (scoped) | approve/sign-off/submit **their own** object |
+| **Approver** (Reviewer / checker) | `approver`                | Four-eyes approval                           | `{module}:review                                                      | approve`, `reg:sign_off`, `reg:submit` (scoped) | edit the object they are approving |
+| **Org Admin**                     | _(split out of `admin`)_  | Account administration only                  | `users:*`, `roles:*`, `sso:*`, `scim:*`, `org:settings`, `audit:read` | operational `run/approve/submit` (SoD C9)       |
+| **Org Owner**                     | _(top of `admin`)_        | Bank's account owner                         | Org Admin **+** `billing:*`, `org:transfer`, `org:delete`             | cross-tenant anything                           |
+| **Billing Manager**               | _(new, optional)_         | Subscription & seats                         | `billing:*`                                                           | domain data                                     |
 
 **Migration note:** today's single `admin` conflates account-admin with
 operational-super — a segregation-of-duties smell (Snowflake's rule: never mix
-account-management privileges with entity privileges in one role). Split it:
-existing `admin` users become **Org Admin**; designate one **Org Owner** per
-tenant. Keep the `admin>approver>analyst>viewer` rank in `security.py` for
-backward compatibility during migration, but move real decisions to the
-permission check in [§7](#7-permission-model).
+account-management privileges with entity privileges in one role). The
+foundation adds Account Admin as a static binding bundle, but migration
+`202608250044` deliberately creates no bindings and converts no existing
+`admin`. Org Owner is not a foundation bundle. Keep the legacy hierarchy for
+backward compatibility during shadow rollout; a later governed migration must
+make any Admin/Owner mapping explicit.
 
-### 6.2 A user can hold more than one role
+### 6.2 A user can hold more than one scoped bundle
 
-The token already carries `roles[]` (a list). Use it: a person can be **Analyst
-on LIQ and Approver on REG** simultaneously — effective permissions are the
-union, and **maker≠checker is enforced per object at action time** (§7.4), not by
-forbidding the combination. This is exactly how the existing
-`RegulatoryPackageApproval` works ("checker ≠ maker enforced in service") —
-generalize that mechanism.
+Do not derive this authority from token `roles[]`: that claim is legacy rollout
+state and the new evaluator ignores it. Persist one complete
+`authorization_bindings` row per bundle/scope combination. A person can be
+**Analyst on LIQ and Approver on REG** simultaneously because independently
+matching rows union; their dimensions never form a Cartesian product. Thus the
+same rows do not grant Analyst on REG or Approver on LIQ. **Maker≠checker** is a
+non-bypassable per-object condition (§7.4), not a reason to forbid holding both
+bundles.
 
 ### 6.3 Custom roles — later, gated
 
@@ -290,6 +313,14 @@ count (Okta caps at 100/org) to prevent proliferation.
 ---
 
 ## 7. Permission model
+
+> **Foundation boundary:** `app/core/authorization.py` stores a small action
+> enum separately from the resource's concrete module. Its v1 bundles grant:
+> Viewer/Auditor = `view`; Analyst = `view|create|edit|run|validate|export`;
+> Approver = `view|review|approve`; Account Admin = `administer`; and the
+> machine-only Integration Writer = `ingest`. `configure`, `sign_off`, and
+> `submit` are reserved but are not in any v1 bundle. The richer namespaces and
+> matrices below remain target design, not as-built authority.
 
 ### 7.1 Permission namespace (`resource:action`)
 
@@ -348,24 +379,24 @@ platform:flags     platform:billing     platform:audit   platform:staff
 
 `●` = for every module in the user's grant scope. `—` = never.
 
-| Permission | Viewer | Auditor | Analyst | Approver | Org Admin | Org Owner |
-|---|:--:|:--:|:--:|:--:|:--:|:--:|
-| `{m}:view` | ● | ● | ● | ● | ●¹ | ●¹ |
-| `{m}:create` / `edit` | — | — | ● | — | — | — |
-| `{m}:run` | — | — | ● | — | — | — |
-| `{m}:review` / `approve` | — | — | — | ● | — | — |
-| `{m}:configure` | — | — | ●² | ●² | — | — |
-| `{m}:export` | —³ | ● | ● | ● | — | — |
-| `reg:validate` | — | — | ● | ● | — | — |
-| `reg:sign_off` | — | — | — | ●⁴ | — | — |
-| `reg:submit` | — | — | ●⁴ | ●⁴ | — | — |
-| `pack:contribute` | — | — | ●⁵ | — | — | — |
-| `pack:signoff_section` | — | — | — | ●⁵ | — | — |
-| `pack:compile` / `publish` / `committee:record` | — | — | ●⁵ | — | — | — |
-| `audit:read` | — | ● | — | — | ● | ● |
-| `users:* / roles:* / sso:* / scim:*` | — | — | — | — | ● | ● |
-| `org:settings` | — | — | — | — | ● | ● |
-| `billing:* / org:transfer / org:delete` | — | — | — | — | — | ● |
+| Permission                                      | Viewer | Auditor | Analyst | Approver | Org Admin | Org Owner |
+| ----------------------------------------------- | :----: | :-----: | :-----: | :------: | :-------: | :-------: |
+| `{m}:view`                                      |   ●    |    ●    |    ●    |    ●     |    ●¹     |    ●¹     |
+| `{m}:create` / `edit`                           |   —    |    —    |    ●    |    —     |     —     |     —     |
+| `{m}:run`                                       |   —    |    —    |    ●    |    —     |     —     |     —     |
+| `{m}:review` / `approve`                        |   —    |    —    |    —    |    ●     |     —     |     —     |
+| `{m}:configure`                                 |   —    |    —    |   ●²    |    ●²    |     —     |     —     |
+| `{m}:export`                                    |   —³   |    ●    |    ●    |    ●     |     —     |     —     |
+| `reg:validate`                                  |   —    |    —    |    ●    |    ●     |     —     |     —     |
+| `reg:sign_off`                                  |   —    |    —    |    —    |    ●⁴    |     —     |     —     |
+| `reg:submit`                                    |   —    |    —    |   ●⁴    |    ●⁴    |     —     |     —     |
+| `pack:contribute`                               |   —    |    —    |   ●⁵    |    —     |     —     |     —     |
+| `pack:signoff_section`                          |   —    |    —    |    —    |    ●⁵    |     —     |     —     |
+| `pack:compile` / `publish` / `committee:record` |   —    |    —    |   ●⁵    |    —     |     —     |     —     |
+| `audit:read`                                    |   —    |    ●    |    —    |    —     |     ●     |     ●     |
+| `users:* / roles:* / sso:* / scim:*`            |   —    |    —    |    —    |    —     |     ●     |     ●     |
+| `org:settings`                                  |   —    |    —    |    —    |    —     |     ●     |     ●     |
+| `billing:* / org:transfer / org:delete`         |   —    |    —    |    —    |    —     |     —     |     ●     |
 
 ¹ Org Admin/Owner see dashboards for administration context but hold no operational write.
 ² `configure` is granted per-preset (FTP owner, ALM assumptions, Risk limits) — not to every Analyst/Approver.
@@ -377,16 +408,16 @@ platform:flags     platform:billing     platform:audit   platform:staff
 
 Every grant is evaluated within a scope. Default-deny outside it.
 
-| Scope | Meaning | Enforcement |
-|---|---|---|
-| **Tenant** | the bank | already: RLS on `organization_id` |
-| **Legal entity** | subsidiary within a banking group | `user_scopes.entity_id[]`; filter queries |
-| **Module** | LIQ/CAP/… | encoded in which `{module}:*` perms the role holds |
-| **Desk / portfolio / currency** | a dealer acts only on their book (Bloomberg TOMS precedent: user/desk/asset-class/region/firm) | `user_scopes.desk[]` |
-| **Data sensitivity** | customer-level BEH inputs vs aggregated outputs | gate raw `view`/`export` separately from dashboard `view` |
-| **Environment** | live vs **demo** | condition, not role — block writes in demo |
-| **Approval tier** | numeric ceiling on `approve` (deal size / exception magnitude); above → escalate | attach to the `approve` grant per preset |
-| **Pack section** | a contributor acts only on the committee-pack section(s) their unit owns (§5.1 Flow A) | `pack_sections.owner` (role preset or named users); `pack:contribute`/`signoff_section` evaluated per section |
+| Scope                           | Meaning                                                                                        | Enforcement                                                                                                   |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Organization**                | the security tenant/account (`OR-*`)                                                           | binding `organization_id` + forced RLS                                                                        |
+| **Institution**                 | one bank/legal entity (`BK-*`) beneath the organization                                        | exact `institution_id`, or explicit `institution_scope=organization`                                          |
+| **Module**                      | LIQ/CAP/…                                                                                      | exact `module_scope`, or explicit `all`                                                                       |
+| **Desk / portfolio / currency** | a dealer acts only on their book (Bloomberg TOMS precedent: user/desk/asset-class/region/firm) | future scoped extension; absent from rollout v1                                                               |
+| **Data sensitivity**            | published, aggregated, confidential, or restricted                                             | exact `sensitivity_scope`, or explicit `all`                                                                  |
+| **Environment**                 | live vs **demo**                                                                               | global condition veto, not a role or binding dimension                                                        |
+| **Approval tier**               | numeric ceiling on `approve` (deal size / exception magnitude); above → escalate               | attach to the `approve` grant per preset                                                                      |
+| **Pack section**                | a contributor acts only on the committee-pack section(s) their unit owns (§5.1 Flow A)         | `pack_sections.owner` (role preset or named users); `pack:contribute`/`signoff_section` evaluated per section |
 
 ### 7.4 Segregation of Duties — enforced at action time
 
@@ -406,21 +437,21 @@ service (`app/services/approvals.py`) keyed on `(object_type, object_id, org_id)
 
 **Toxic-combination denies (checked at role-assignment time too):**
 
-| # | Deny both to one identity within the same scope | Why |
-|---|---|---|
-| C1 | deal entry (FX) **&** deal confirm/settle | front ≠ back office |
-| C2 | payment/settlement **approve** & **release** | two-stage even inside back office |
-| C3 | reconciliation & payment approval | conceal-your-own-error risk |
-| C4 | DATA ingest/map/activate **&** sign-off/submit of the return built on it | producer ≠ approver of numbers |
-| C5 | configure scenario/BEH assumptions **&** approve the run that consumes them | assumption-setter can't self-bless |
-| C6 | run an engine calc **&** reg sign-off/submit of that result | run ≠ approve ≠ submit |
-| C7 | BEH model owner **&** model validator **&** audit | Three-Lines independence |
-| C9 | user/role administration **&** operational approve rights on same object | admin can't grant themselves approvals |
-| C10 | reg-return preparer **&** internal sign-off **&** submitter | prepare / attest / submit split |
+| #   | Deny both to one identity within the same scope                             | Why                                    |
+| --- | --------------------------------------------------------------------------- | -------------------------------------- |
+| C1  | deal entry (FX) **&** deal confirm/settle                                   | front ≠ back office                    |
+| C2  | payment/settlement **approve** & **release**                                | two-stage even inside back office      |
+| C3  | reconciliation & payment approval                                           | conceal-your-own-error risk            |
+| C4  | DATA ingest/map/activate **&** sign-off/submit of the return built on it    | producer ≠ approver of numbers         |
+| C5  | configure scenario/BEH assumptions **&** approve the run that consumes them | assumption-setter can't self-bless     |
+| C6  | run an engine calc **&** reg sign-off/submit of that result                 | run ≠ approve ≠ submit                 |
+| C7  | BEH model owner **&** model validator **&** audit                           | Three-Lines independence               |
+| C9  | user/role administration **&** operational approve rights on same object    | admin can't grant themselves approvals |
+| C10 | reg-return preparer **&** internal sign-off **&** submitter                 | prepare / attest / submit split        |
 
 Ship SoD **monitoring/reporting**, not just assignment-time blocks — the Kyriba
 lesson is that role assignment alone is insufficient; auditors want a report of
-who *could* violate SoD and who *did*.
+who _could_ violate SoD and who _did_.
 
 ---
 
@@ -428,37 +459,26 @@ who *could* violate SoD and who *did*.
 
 ### 8.1 Backend (extend `app/api/deps.py`)
 
-The plumbing is 80% there. Add:
+The persistence-neutral vocabulary, `ResourceLocator`, static bundle map, exact
+evaluator, database service, and transactional invalidation seam are built.
+`evaluate_permission()` starts denied, loads only the principal's persisted
+bindings, requires every dimension within one row to match, unions complete
+rows, verifies the active principal and institution ownership, then applies all
+workflow-supplied conditions as global vetoes. It returns an audit-ready trace.
 
-```python
-# app/api/deps.py  (sketch)
+What remains is endpoint integration. Add a narrow dependency for each migrated
+vertical that constructs the canonical resource locator and calls the service
+evaluator; do not resolve authority from `roles[]`, route names, HTTP verbs, or
+UI state. Keep `get_mutation_tenant_context` only as the legacy coarse gate
+during measured shadow rollout. Demo-mode, maker-checker, step-up, and approval
+limits remain owned by their workflows and enter the evaluator as typed
+conditions, so another allow binding cannot bypass them.
 
-def require_permission(perm: str, *, scope: ScopeSpec | None = None):
-    """FastAPI dependency: 403 unless the principal holds `perm` within `scope`."""
-    def _dep(ctx: Annotated[TenantContext, Depends(get_current_principal)]) -> TenantContext:
-        if not authz.has_permission(ctx, perm, scope):
-            raise HTTPException(403, f"Requires '{perm}'.")
-        return ctx
-    return _dep
-
-def require_maker_checker(object_type: str):
-    """For approve/sign_off/submit endpoints: 409 if actor is a prior maker."""
-    ...
-```
-
-- Resolve a principal's **effective permissions** from `roles[] + user_scopes`
-  via a static `ROLE_PERMISSIONS` map (mostly constant) — cache per (org,user)
-  with a short TTL (reuse the tenant-validation cache seam) so it's not a
-  per-request DB hit.
-- Keep `get_mutation_tenant_context` as the coarse "is a writer" gate; layer
-  `require_permission("liq:run", …)` on the specific endpoints.
-- **Environment condition:** the existing demo-mode write block becomes a
-  condition inside `has_permission` (writes denied when `env == demo`).
-- **Reason + audit:** every `run/approve/sign_off/submit/configure/admin` action
-  writes an immutable audit row (§13) with the already-required non-empty reason.
-- **Token/session revocation on role change:** on role/scope/deactivation change,
-  bump a per-user `session_epoch`; reject tokens with a stale epoch (don't wait
-  for the 15-min expiry).
+`users.authorization_version` is already live. Every app token carries `authv`;
+tenant validation and refresh reject a stale version. Any future role, scope,
+status, or security mutation must call
+`invalidate_user_authorization()` in the same transaction, which increments the
+version and revokes every refresh family with `authorization_changed`.
 
 ### 8.2 Frontend (dashboard)
 
@@ -471,25 +491,26 @@ def require_maker_checker(object_type: str):
   render disabled-with-tooltip or hidden based on permissions in the session.
   Never rely on hiding alone — the backend is the boundary; the UI just avoids
   dead ends.
-- **Session claims:** extend the JWT/session to carry `roles[]` + a compact
-  `perms`/`scopes` summary (or fetch `/auth/me` once and cache) so the UI can
-  gate without a call per button. Refresh on role change (§8.1 epoch).
+- **Session state:** do not make token `roles[]`, `perms`, or `scopes` an
+  authority source. Expose an effective, display-only capability summary from a
+  server-evaluated `/auth/me` contract when endpoint rollout begins. A version
+  change invalidates the app session through `authv` (§8.1).
 
 ### 8.3 Default landing per role
 
 Send each user to where their job starts, not always Command Center:
 
-| Role preset | Default landing |
-|---|---|
-| Treasurer / ALM / CFO / CRO / Board | `/` Command Center (their role-lens) |
-| Liquidity Manager | `/liquidity` |
-| IRRBB Analyst | `/irr` |
-| FX Dealer / FX Risk | `/fx` |
-| FTP Owner | `/ftp` |
-| Finance / Reg Reporting Officer | `/submissions` (Regulatory Reporting) |
-| Data/Ops | `/data-engine` |
-| Auditor / Compliance | `/reports` + Audit log |
-| Org Admin / Owner | `/settings` (Org console) |
+| Role preset                         | Default landing                       |
+| ----------------------------------- | ------------------------------------- |
+| Treasurer / ALM / CFO / CRO / Board | `/` Command Center (their role-lens)  |
+| Liquidity Manager                   | `/liquidity`                          |
+| IRRBB Analyst                       | `/irr`                                |
+| FX Dealer / FX Risk                 | `/fx`                                 |
+| FTP Owner                           | `/ftp`                                |
+| Finance / Reg Reporting Officer     | `/submissions` (Regulatory Reporting) |
+| Data/Ops                            | `/data-engine`                        |
+| Auditor / Compliance                | `/reports` + Audit log                |
+| Org Admin / Owner                   | `/settings` (Org console)             |
 
 ---
 
@@ -499,30 +520,30 @@ For each role preset the dev renders: **default landing**, **visible nav**,
 **allowed actions**, **hidden/disabled**. Use the same underlying pages —
 role-gate the surface, don't fork the app.
 
-| Role preset | Visible nav (modules) | Allowed actions | Hidden / disabled |
-|---|---|---|---|
-| **Treasurer** | Command Center, LIQ, FCST, FTP, IRRBB, FX, CAP(view), Risk, Alerts, Reports | approve runs/exceptions, view all, mint official runs (with tier), export | Data Engine writes, Settings admin, reg submit |
-| **ALM Manager** | Command Center, FCST, IRRBB, LIQ, BEH, FTP, Markets, Positions | create/edit scenarios, run calcs, configure assumptions | approve own runs, reg sign-off, Settings admin |
-| **Liquidity Manager** | Command Center, LIQ, FCST(view), Alerts, DATA(view) | run LIQ, monitor, view | other-module writes, approve, Settings |
-| **FX Dealer** | FX (own desk), Markets, Positions, LIQ(funding) | deal entry on own desk/ccy | settlement approve/release, other desks, other modules |
-| **FX / Market Risk Officer** | FX, IRRBB(challenge), CAP(mkt), Risk, Alerts | review/approve FX limits, configure limits, view | deal entry (SoD), reg submit |
-| **IRRBB Analyst** | IRRBB, BEH, FCST, REG(IRRBB templates) | run IRRBB, set assumptions, prep IRRBB return | approve own, submit, Settings |
-| **FTP Owner** | FTP, LIQ, FCST | configure FTP curves, run, approve own methodology | other-module writes, reg submit |
-| **Back-office / Ops** | DATA, FX/LIQ post-trade, Alerts | confirm/settle, approve **xor** release (per user) | deal entry, both approve+release |
-| **Finance / Control** | DATA(map), REG, CAP, FCST, Reports | map data, prep returns, reconcile, export | reg sign-off (unless CFO), approve own |
-| **CFO** | Command Center(CFO lens), REG, CAP, FCST, LIQ, Reports | **sign off / attest** returns & plans, approve, view | data entry, deal entry |
-| **CRO / Head of Risk** | all risk modules, BEH, REG(risk), Risk & Limits, Alerts | approve/challenge, approve models, configure risk appetite/limits | run own calcs then self-approve |
-| **Reg Reporting Officer** | REG, DATA(view), all outputs(view), Reports | prep + validate + **submit to ORASS** (post sign-off) | edit source financials, self-sign-off |
-| **Auditor** | ALL (read) + **Audit log** | view everything, export evidence | every mutation, every approve |
-| **Compliance** | REG, DATA(policy), Reports, Audit(read) | configure policy/SoD rules, view | operational writes |
-| **Board / Exec (Viewer)** | Command Center (published), module dashboards (aggregated) | view published views only | raw data, export, drill-to-source |
-| **MD / CEO** | Command Center (published), REG (attestation queue), Reports | **sign/attest returns** (step-up), view published views | edit anything, deal entry, data entry, submit |
-| **ALCO Secretary** | Committee pack workspace, all module outputs (view), Reports | assemble pack, chase section sign-offs, record decisions/actions, publish | edit unit sections they don't own, reg sign-off/submit |
-| **Credit / Ops contributor** | **Their pack section only** (+ LE outputs view for Credit) | contribute + edit own section until sign-off | everything else — the narrowest surface in the app |
-| **Org Admin / Owner** | **Settings / Org console** (+ read dashboards) | manage users/roles/SSO/SCIM/audit (+ billing = Owner) | run/approve/submit anything |
+| Role preset                  | Visible nav (modules)                                                       | Allowed actions                                                           | Hidden / disabled                                      |
+| ---------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Treasurer**                | Command Center, LIQ, FCST, FTP, IRRBB, FX, CAP(view), Risk, Alerts, Reports | approve runs/exceptions, view all, mint official runs (with tier), export | Data Engine writes, Settings admin, reg submit         |
+| **ALM Manager**              | Command Center, FCST, IRRBB, LIQ, BEH, FTP, Markets, Positions              | create/edit scenarios, run calcs, configure assumptions                   | approve own runs, reg sign-off, Settings admin         |
+| **Liquidity Manager**        | Command Center, LIQ, FCST(view), Alerts, DATA(view)                         | run LIQ, monitor, view                                                    | other-module writes, approve, Settings                 |
+| **FX Dealer**                | FX (own desk), Markets, Positions, LIQ(funding)                             | deal entry on own desk/ccy                                                | settlement approve/release, other desks, other modules |
+| **FX / Market Risk Officer** | FX, IRRBB(challenge), CAP(mkt), Risk, Alerts                                | review/approve FX limits, configure limits, view                          | deal entry (SoD), reg submit                           |
+| **IRRBB Analyst**            | IRRBB, BEH, FCST, REG(IRRBB templates)                                      | run IRRBB, set assumptions, prep IRRBB return                             | approve own, submit, Settings                          |
+| **FTP Owner**                | FTP, LIQ, FCST                                                              | configure FTP curves, run, approve own methodology                        | other-module writes, reg submit                        |
+| **Back-office / Ops**        | DATA, FX/LIQ post-trade, Alerts                                             | confirm/settle, approve **xor** release (per user)                        | deal entry, both approve+release                       |
+| **Finance / Control**        | DATA(map), REG, CAP, FCST, Reports                                          | map data, prep returns, reconcile, export                                 | reg sign-off (unless CFO), approve own                 |
+| **CFO**                      | Command Center(CFO lens), REG, CAP, FCST, LIQ, Reports                      | **sign off / attest** returns & plans, approve, view                      | data entry, deal entry                                 |
+| **CRO / Head of Risk**       | all risk modules, BEH, REG(risk), Risk & Limits, Alerts                     | approve/challenge, approve models, configure risk appetite/limits         | run own calcs then self-approve                        |
+| **Reg Reporting Officer**    | REG, DATA(view), all outputs(view), Reports                                 | prep + validate + **submit to ORASS** (post sign-off)                     | edit source financials, self-sign-off                  |
+| **Auditor**                  | ALL (read) + **Audit log**                                                  | view everything, export evidence                                          | every mutation, every approve                          |
+| **Compliance**               | REG, DATA(policy), Reports, Audit(read)                                     | configure policy/SoD rules, view                                          | operational writes                                     |
+| **Board / Exec (Viewer)**    | Command Center (published), module dashboards (aggregated)                  | view published views only                                                 | raw data, export, drill-to-source                      |
+| **MD / CEO**                 | Command Center (published), REG (attestation queue), Reports                | **sign/attest returns** (step-up), view published views                   | edit anything, deal entry, data entry, submit          |
+| **ALCO Secretary**           | Committee pack workspace, all module outputs (view), Reports                | assemble pack, chase section sign-offs, record decisions/actions, publish | edit unit sections they don't own, reg sign-off/submit |
+| **Credit / Ops contributor** | **Their pack section only** (+ LE outputs view for Credit)                  | contribute + edit own section until sign-off                              | everything else — the narrowest surface in the app     |
+| **Org Admin / Owner**        | **Settings / Org console** (+ read dashboards)                              | manage users/roles/SSO/SCIM/audit (+ billing = Owner)                     | run/approve/submit anything                            |
 
 The existing **role-lens tabs** on Command Center (Treasurer / ALM / Risk / CFO)
-are the right pattern — extend them to *default and lock* to the user's role
+are the right pattern — extend them to _default and lock_ to the user's role
 rather than being a free toggle for everyone.
 
 ---
@@ -578,7 +599,7 @@ compute, About) is the seed of **Organization → General** + the read-only
 **Data & compute**. Grow it into the above; the current "Users & roles" panel
 (now showing the real signed-in user) becomes the full **Members** page.
 
-### 10.3 Platform / vendor super-admin console (`admin.aequoros.com`, staff-only)
+### 10.3 Platform / vendor super-admin console (`console.aequoros.com`, staff-only)
 
 Separate app/subdomain, **never** mixed into the tenant nav. Runs outside RLS.
 
@@ -644,7 +665,7 @@ Phase 2 **continues from that code**: many connections per org, email-first
 home-realm discovery on /login (type work email → route to that bank's IdP —
 NextAuth v5's per-request lazy config is the mechanism, already in use in
 `dashboard/auth.ts`), verified domains, and `sso_enforced` per org. SSO decides
-*who may sign in*; provisioning decides *who exists*.
+_who may sign in_; provisioning decides _who exists_.
 
 ### 11.4 JIT + SCIM + verified domains
 
@@ -656,10 +677,12 @@ NextAuth v5's per-request lazy config is the mechanism, already in use in
 ### 11.5 Offboarding (deprovision order)
 
 SSO cutoff alone does **not** kill live sessions or app-native entitlements. In order:
-1. Disable account + **terminate all active sessions** (bump `session_epoch`).
+
+1. Disable account + **terminate all active sessions** (active-user validation
+   rejects access tokens; revoke every refresh family).
 2. **Revoke API keys, refresh/OAuth tokens, connected-app grants.**
 3. Remove app-native roles/scopes.
-4. **Transfer ownership** of cases/scenarios/reports/connections to a named custodian *before* deactivating.
+4. **Transfer ownership** of cases/scenarios/reports/connections to a named custodian _before_ deactivating.
 5. Rotate any shared secrets held.
 6. **Post-offboarding audit 24–72 h later** to confirm all paths closed.
 
@@ -671,7 +694,7 @@ For the platform console's "view as" (Pigment's reference model):
   `impersonator` claim** for attribution, a **read-only flag**, and a **≤30-min
   expiry**. Keep the admin's own token separately for instant exit.
 - **Read-only by default, enforced in middleware** (mutations → 403 before
-  business logic). Impersonation is for *observing*, not acting.
+  business logic). Impersonation is for _observing_, not acting.
 - **Access = intersection** of both users' permissions, only within orgs the
   impersonator already covers.
 - **Persistent unmistakable UI**: full-screen border + sticky banner with the
@@ -686,6 +709,7 @@ For the platform console's "view as" (Pigment's reference model):
 ## 12. User menu & UI specs
 
 ### 12.1 Role-aware account menu
+
 See [§10.1](#101-personal--the-avatar-dropdown-every-user). Show the signed-in identity + role; reveal
 "Organization settings" / "Audit log" **only** with the matching permission.
 
@@ -735,20 +759,24 @@ status (active|suspended), sso_enforced (bool), created_by`.
 **`users`** (extend `app/models/user.py`):
 add `status (invited|active|suspended|deactivated)`, `job_title`,
 `external_id` (stable IdP id for SCIM), `invited_by`, `invited_at`,
-`activated_at`, `deactivated_at`, `session_epoch (int)`, `mfa_enrolled (bool)`.
-Keep `role` for back-compat but treat `user_roles` as the source of truth.
+`activated_at`, `deactivated_at`, `mfa_enrolled (bool)`. Keep `role` for legacy
+endpoint compatibility. `authorization_version` is already built; use it rather
+than adding a second session-generation field.
 
-**`user_roles`** *(new — many-to-many, replaces single `role`)*:
-`user_id, org_id, role (base role), preset (nullable), granted_by, granted_at`.
+**`authorization_bindings`** _(BUILT, shadow-only)_: one indivisible row holds
+`organization_id, principal_user_id, principal_type, role_bundle,
+institution_scope, institution_id, module_scope, sensitivity_scope,
+granted_by_type, granted_by_id, grant_reason, granted_at, status, valid_from,
+valid_until, revoked_at, revoked_reason`. Composite principal/institution tenant
+foreign keys, checks, and FORCE RLS enforce the shape. This table supersedes the
+independent `user_roles`/`user_scopes` proposal, whose arrays could accidentally
+create cross-product authority.
 
-**`user_scopes`** *(new)*:
-`user_id, org_id, entity_id[] , desk[] , module[] , approval_tier (int), environment`.
-
-**`invitations`** *(new)*:
+**`invitations`** _(new)_:
 `id, org_id, email, role_presets[], scope, token_hash, invited_by, expires_at,
 status (pending|accepted|expired|revoked), accepted_at`. Store **only the hash**.
 
-**`sso_connections`** *(BUILT in single-connection form — extend, don't recreate)*:
+**`sso_connections`** _(BUILT in single-connection form — extend, don't recreate)_:
 as-built columns: `organization_id (unique — Phase 2 drops the unique for
 multi-connection), issuer, client_id, client_secret_ciphertext +
 client_secret_fingerprint (AES-256-GCM via CREDENTIAL_VAULT_MASTER_KEY),
@@ -756,11 +784,11 @@ allowed_email_domains (json), enabled, updated_by` + RLS (enabled/forced +
 tenant policy). Phase 2 adds: `protocol (saml|oidc), idp_metadata (SAML),
 domains[] (verified), enforced (bool), jit_enabled, scim_token_hash, status`.
 
-**`approvals`** *(new — generalize `RegulatoryPackageApproval`)*:
+**`approvals`** _(new — generalize `RegulatoryPackageApproval`)_:
 `id, org_id, object_type, object_id, action (requested|reviewed|approved|rejected|signed_off|submitted),
 actor_user_id, reason, occurred_at`. Append-only; **checker ≠ prior maker enforced in the service**.
 
-**`audit_log`** *(new — append-only, tamper-evident)*:
+**`audit_log`** _(new — append-only, tamper-evident)_:
 `id, org_id (nullable for platform), actor_user_id, impersonator_user_id (nullable),
 action, resource_type, resource_id, reason, ip, session_id, result, occurred_at`.
 Not editable/deletable via the app; consider hash-chaining + WORM storage
@@ -768,23 +796,29 @@ Not editable/deletable via the app; consider hash-chaining + WORM storage
 create/edit/delete/**export**, approvals, submissions, impersonation, SSO/SCIM
 changes, and every financial mutation (with its reason).
 
-**`platform_staff`** + **`platform_staff_roles`** *(new)*: vendor employees
+**`platform_staff`** + **`platform_staff_roles`** _(new)_: vendor employees
 (super-admin / support / billing / read-only), outside RLS.
 
-**`impersonation_sessions`** *(new)*: `id, impersonator_user_id, target_user_id,
+**`impersonation_sessions`** _(new)_: `id, impersonator_user_id, target_user_id,
 org_id, reason, ticket_ref, read_only, started_at, expires_at, ended_at`.
 
 ### RLS reminder
+
 Everything tenant-scoped keeps RLS on `organization_id`. `platform_staff`,
 `impersonation_sessions`, and cross-tenant reads live on the **BYPASSRLS** path
-(same seam as `WORKER_DATABASE_URL`). The platform console is the *only*
+(same seam as `WORKER_DATABASE_URL`). The platform console is the _only_
 cross-tenant surface.
 
 ---
 
-## 14. API surface
+## 14. Target API surface
 
-Tenant plane (under `/api/v1`, RLS-scoped, admin-gated where noted):
+Except for the routes explicitly marked **BUILT** below, this is the target
+tenant contract rather than the current OpenAPI surface. The existing
+`GET /auth/me` returns identity, preferences, and the legacy scalar role; its
+effective-permission and scope fields land with endpoint authorization rollout.
+
+Tenant plane (under `/api/v1`, RLS-scoped, permission-gated where noted):
 
 ```
 # current user
@@ -827,7 +861,7 @@ GET     /orgs/{org}/audit                           audit:read
 POST  /.../{object}:request-review | review | approve | reject | sign-off | submit
 ```
 
-Platform plane (`admin.aequoros.com`, outside RLS, `platform:*`):
+Platform plane (`console.aequoros.com`, outside RLS, `platform:*`):
 
 ```
 GET/POST /platform/tenants                          platform:tenants / platform:provision
@@ -847,10 +881,14 @@ The generated TS client (`packages/risk-service-api`) must be regenerated
 
 Ship value early; don't block the dashboards on SSO/SCIM.
 
-**Phase 0 — role plumbing (unblocks role-aware dashboards).**
-`ROLE_PERMISSIONS` map + `require_permission` + `/auth/me` returning effective
-perms; split `admin`→ Org Admin/Owner; nav filtering + action gating + default
-landings ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)). No new tables except `user_roles`/`user_scopes`.
+**Phase 0 — authorization foundation and first endpoint slice.**
+The static `ROLE_PERMISSIONS` map, scoped binding table, exact evaluator, and
+`authv` invalidation seam are **BUILT**. Remaining Phase-0 work is one measured
+endpoint vertical, governed pilot binding creation, `/auth/me` display
+capabilities, nav/action gating, and default landings
+([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).
+Do not add independent `user_roles`/`user_scopes` tables or implicitly split
+legacy `admin` into Org Admin/Owner.
 
 **Phase 1 — org admin console + invites.**
 `organizations`/`users` fields, `invitations`, Members table, invite modal, role
@@ -861,10 +899,10 @@ unit presets from §5.1** (Treasury / ALM / Risk / Finance / Credit / Operations
 "the Head of Credit" without composing grants by hand — presets are bundles,
 not new roles (§6.1).
 
-*(The `pack:*` / `committee:*` namespace in §7.1 is reserved here but ships
+_(The `pack:*` / `committee:*` namespace in §7.1 is reserved here but ships
 with the committee-pack contribution workflow itself — product.md global
 Phase 3 items 5–6. Do not build pack permissions before the pack exists;
-personas #17–19 become invitable at that point.)*
+personas #17–19 become invitable at that point.)_
 
 **Phase 2 — enterprise auth + bank-safe administration (CONTINUE from the
 own-OIDC already built — do not rebuild it, and do not reintroduce a
@@ -884,6 +922,7 @@ Data Engine connection-health panel, and `docs/sso-onboarding.md` (Google
 Workspace + Entra runbooks — extend per IdP as banks onboard).
 
 Build in this phase:
+
 1. **Multi-connection SSO + home-realm discovery** — drop the one-per-org
    unique, key linked identities on `(connection, subject)`, email-first /login
    (work email → that bank's IdP), `sso_enforced` per org (passwords off).
@@ -892,8 +931,8 @@ Build in this phase:
    allow-list only mitigates.
 3. **JIT + SCIM 2.0** provisioning/deprovisioning keyed on `external_id`
    (mandatory for bank tenants; JIT never deprovisions).
-4. **Session/MFA/step-up policy + token revocation** on role change
-   (`session_epoch`).
+4. **Session/MFA/step-up policy + token revocation** on role change through the
+   built `authorization_version` / `authv` invalidation seam.
 5. **Administration area consolidation** — grow Settings + the Data Engine
    screens into the §10.2 org console behind Org Admin/`sso:manage`/`users:*`,
    so bank IT self-serves connections and SSO without AequorOS staff. The
@@ -913,12 +952,14 @@ roles, break-glass accounts.
 ## 16. Sources
 
 **Bank governance flow (added 2026-08-07 — grounds §5.1)**
+
 - BoG Liquidity Monitoring Tools Directive 2026, Part II ¶10–21 (Board/Senior Management/IAF duties): local copy `docs/Liquidity-Monitoring-Tools-Directive-Cleaned-9.2.26.pdf`
 - BoG Liquidity Risk Management Directive 2026 (**obtained 2026-08-07** — local copy `docs/Liquidity-Risk-Management-Directive-Cleaned-11.12.25.pdf`; analysis in `docs/lrmd_gap_analysis.md`; ¶19 CRO, ¶20 ALCO, ¶17 SoD, ¶12 LAS)
 - BoG Corporate Governance Directive 2018: https://www.bog.gov.gh/wp-content/uploads/2019/09/CGD-Corporate-Governance-Directive-2018-Final-For-PublicationV1.1.pdf
-- Choudhry, *The Principles of Banking* ch. 9 — the ALCO pack is compiled by the middle office: https://www.oreilly.com/library/view/the-principles-of/9780470827024/chapter09.html
+- Choudhry, _The Principles of Banking_ ch. 9 — the ALCO pack is compiled by the middle office: https://www.oreilly.com/library/view/the-principles-of/9780470827024/chapter09.html
 
 **Treasury roles, SoD, incumbents**
+
 - ACT — Segregation of duties: https://www.treasurers.org/hub/treasurer-magazine/treasury-essentials-segregation-duties
 - ACT — Ideal treasury team structure: https://www.treasurers.org/hub/treasurer-magazine/is-there-an-ideal-structure-for-treasury-teams
 - ACT Wiki — Segregation of duties: https://wiki.treasurers.org/wiki/Segregation_of_duties
@@ -934,6 +975,7 @@ roles, break-glass accounts.
 - RegReportingDesk — COREP sign-off accountability: https://regreportingdesk.com/corep-reporting-explained/
 
 **RBAC/ABAC, product role models, lifecycle, security, UI**
+
 - IBM — RBAC implementation: https://www.ibm.com/think/topics/role-based-access-control-implementation
 - DEV — RBAC vs ABAC vs ReBAC (role explosion): https://dev.to/kanywst/rbac-vs-abac-vs-rebac-how-to-choose-and-implement-access-control-models-3i2d
 - Cerbos — 3 authorization designs for SaaS: https://www.cerbos.dev/blog/3-most-common-authorization-designs-for-saas-products
@@ -960,6 +1002,6 @@ roles, break-glass accounts.
 
 ---
 
-*This spec is intentionally incremental: Phase 0 makes the dashboards
+_This spec is intentionally incremental: Phase 0 makes the dashboards
 role-aware on the existing auth layer; later phases add the org console, SSO/SCIM,
-and the platform plane. Build in that order.*
+and the platform plane. Build in that order._

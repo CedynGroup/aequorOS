@@ -54,12 +54,14 @@ def real_headers(
     user_id: UUID = REAL_USER_ID,
     roles: tuple[str, ...] = ("admin",),
     email: str = REAL_USER_EMAIL,
+    authorization_version: int = 1,
 ) -> dict[str, str]:
     """Signed bearer token for a REAL user in a REAL org on the primary DB."""
     token = create_token(
         subject=user_id,
         organization_id=org_id,
         roles=list(roles),
+        authorization_version=authorization_version,
         token_type="access",
         email=email,
         settings=get_settings().auth,

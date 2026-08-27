@@ -48,10 +48,10 @@ Match existing code exactly; do not introduce new patterns when one below alread
   overflow against `MAX_STORED_MONEY = Decimal("9999999999999999.9999")`. Never use float for
   financial values.
 - **JSON columns** for snapshots/details/diagnostics: `Mapped[dict[str, Any]] = mapped_column(
-  JSON, default=dict, server_default=sql_text("'{}'"), nullable=False)` (lists use
+JSON, default=dict, server_default=sql_text("'{}'"), nullable=False)` (lists use
   `default=list, server_default=sql_text("'[]'")`). Models declare generic `JSON`; migrations
   declare `postgresql.JSONB`. A column named `metadata` maps as `metadata_: Mapped[...] =
-  mapped_column("metadata", JSON, ...)` because `metadata` is reserved on the Base.
+mapped_column("metadata", JSON, ...)` because `metadata` is reserved on the Base.
 
 ### Composite-FK tenant pattern
 
@@ -182,7 +182,9 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
   `Base.metadata.create_all`, demo tenants seeded, storage overridden with `FakeStorage`),
   `db_session`, `api_factories`, `fake_storage`, `tenant_ctx`, `test_settings`/`db_settings`.
 - **Tenant constants** from `tests/api/helpers.py`: `ORG_1`, `ORG_2`, `USER_1`, `USER_2`, and
-  `headers(org_id, user_id)` which returns `{"X-Org-Id": ..., "X-User-Id": ...}`.
+  `headers(org_id, user_id, roles, authorization_version)`, which returns a signed
+  `Authorization: Bearer ...` access token. It defaults to the seeded user's current
+  authorization version (`1`); stale-session tests pass an older value explicitly.
 - **Factories**: `tests/api/factories/` package — `ApiFactories` bundles `CaseFactory`,
   `DocumentFactory`, `AssessmentFactory` (+ `MutableFakeStorage`); factories create data through
   the real HTTP API and assert status codes.
@@ -195,116 +197,41 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
 
 ---
 
-## 2. Web (apps/aequoros-web)
+## 2. Authenticated bank dashboard (`backend/dashboard`)
 
-### Component library — `src/components/ui.tsx` (single file, complete export list)
+The case-based `apps/aequoros-web` SPA was removed. The authenticated bank
+product is the Next.js App Router package at `backend/dashboard`; its detailed
+screen, regulatory-copy, arithmetic, and local-development rules live in
+[`backend/dashboard/README.md`](backend/dashboard/README.md).
 
-| Export | Usage |
-| --- | --- |
-| `Button` | `<Button variant="default|outline|ghost|danger" size="default|sm|icon">` — the only button. |
-| `Input` | Styled `<input>`; pass `aria-label` when there is no visible label. |
-| `Textarea` | Styled `<textarea>`. |
-| `Label` | Uppercase micro-label `<span>` for form fields/sections. |
-| `Badge` | `<Badge tone="neutral|success|warning|danger|info">` status chip. |
-| `Panel` | Bordered surface `<section>`; the standard tab/card container. |
-| `PanelHeader` | `title` + optional `meta` and `actions` row inside a `Panel`. |
-| `Alert` | `<Alert title="..." tone="neutral|danger|warning">children</Alert>` for empty/info/error states. |
-| `Skeleton` | Pulsing placeholder block; pair with `aria-label="Loading ..."` wrappers. |
-| `Tabs`, `TabsList`, `TabsContent` | Radix Tabs re-exports (controlled via `value`/`onValueChange`). |
-| `TabsTrigger` | Styled Radix trigger. |
-| `Select`, `SelectItem` | Controlled Radix select: `<Select ariaLabel value onValueChange placeholder>` + `SelectItem value`. |
-| `Checkbox` | Controlled Radix checkbox; requires `aria-label`. |
-| `Switch` | Controlled Radix switch. |
-| `Dialog`, `DialogTrigger`, `DialogContent` | Radix dialog; `DialogContent` takes `title` (+ optional `description`). |
-| `DropdownMenu`, `DropdownMenuTrigger`, `DropdownMenuContent`, `DropdownMenuItem` | Radix dropdown re-exports. |
-| `Tooltip` | `<Tooltip label="...">{trigger}</Tooltip>`. |
+### API access
 
-Styling uses Tailwind with CSS-variable tokens: `rgb(var(--border))`, `--surface`, `--muted`,
-`--muted-foreground`, `--primary`, `--danger`, `--focus` (defined in `src/styles.css`). Compose
-classes with `cn()` from `src/lib/utils.ts`. Do not add a second component library.
+- Use the generated `@aequoros/risk-service-api` classes and types. Never
+  duplicate OpenAPI payloads or hand-roll tenant identity headers.
+- Import the shared `configuration` from `backend/dashboard/lib/api/client.ts`.
+  It sets the generated client's `basePath` and supplies a current app access
+  token through `Configuration.accessToken`; generated requests therefore send
+  `Authorization: Bearer <token>`.
+- The verified bearer token establishes organization, actor, legacy role, and
+  authorization version. Browser-supplied `X-Org-Id` / `X-User-Id` values are
+  not an identity mechanism and must not be added to new clients.
+- `TokenSync` keeps the browser token cache current. The access-token callback
+  falls back to `getSession()` before the first sync and supports the separate
+  read-only operator-impersonation bearer lifecycle.
+- Direct `fetch` calls are exceptional (downloads, server-only attestation
+  routes, and non-generated endpoints); they must attach the same bearer token
+  and must not recreate generated request/response shapes.
 
-### API access — two sanctioned patterns, nothing else
+### Query and validation conventions
 
-Base URL: `apiBaseUrl()` in `src/lib/constants.ts` — `VITE_RISK_API_BASE_URL` env override,
-default `http://127.0.0.1:8003/api/v1`. Tenant identity is a
-`TenantHeaders = { orgId, userId }` object threaded through props.
-
-**Pattern A — `riskApi` wrapper (`src/lib/api.ts`).** Adding a new endpoint:
-
-1. Import the generated request/response types **and** their `FromJSON`/`ToJSON` codecs from
-   `@aequoros/risk-service-api`.
-2. Add a method to the `riskApi` object that calls
-   `apiJson<T>(path, tenant, DecoderFromJSON, init?)` — `apiJson` injects `Accept`,
-   `Content-Type`, `X-Org-Id`, `X-User-Id`, and normalizes failures into
-   `ApiError { statusCode, code, message, response }` (check with `isApiError`).
-3. Query strings go through the local `toQuery({ snake_case_param: value })` helper (drops
-   `undefined`/empty); bodies are `JSON.stringify(SomethingToJSON(payload))`.
-
-**Pattern B — generated API class (newer; see `src/features/liquidity/liquidity-client.ts`).**
-Instantiate the generated class with
-`new LiquidityApi(new Configuration({ basePath: apiBaseUrl().replace(/\/api\/v1\/?$/, "") }))`
-and call its camelCase operations, passing `xOrgId`/`xUserId` explicitly. Wrap it in a small
-feature-local client interface so components stay mockable. Per `CLAUDE.md`, financial-workspace
-code must use `FinancialDataApi` this way. Prefer Pattern B for new verticals.
-
-Never hand-roll payload shapes or duplicate OpenAPI types — regenerate the client instead.
-
-### TanStack Query conventions (from `liquidity-tab.tsx` / `capital-tab.tsx`)
-
-- `queryKey: [<resource-kebab-name>, tenant, caseId, ...discriminators]`, e.g.
-  `["liquidity-summary", tenant, caseId, scenarioId, runId]`,
-  `["calculation-runs", tenant, caseId, scenarioId, offset]`,
-  `["capital-projections", tenant, caseId, attemptOffset]`. The whole `tenant` object is part of
-  the key. Fixed-variant queries append a string discriminator (`"capital-active"`).
-- Gate dependent queries with `enabled: Boolean(...)`.
-- Mutations: `useMutation` + `onSuccess` → `queryClient.invalidateQueries({ queryKey: [prefix,
-  ...] })` (prefix invalidation is used deliberately, e.g. `["capital-projections"]`), plus a
-  `toast.success(...)` from `sonner`. Render mutation errors with `<ErrorPanel error={...} />`.
-- Loading = `Skeleton` blocks; error = `ErrorPanel`; empty = `Alert`.
-
-### Adding a console tab
-
-1. Add the tab id to the `tabs` array in `src/lib/constants.ts` (this drives the `ConsoleTab`
-   type and URL `?tab=` validation via `isConsoleTab`).
-2. Create `src/features/<domain>/<domain>-tab.tsx` exporting `<DomainTab>` with props
-   `{ tenant, caseId, mutationDisabled?, mutationDisabledReason? }`.
-3. Register it in `src/features/risk-console/case-workspace.tsx`: a `lazy(() => import(...))`
-   at top, a `<TabsTrigger value="...">` in the list, and a `<TabsContent>` wrapping the tab in
-   `<LazyTabBoundary>`.
-4. Colocate tests as `<name>.test.tsx` next to the source (Vitest + Testing Library; browser-mode
-   variants use `.browser.test.tsx`).
-
-### Demo-mode / read-only gating
-
-`risk-console.tsx` holds `mockWorkspace` state; when on, list/case data comes from
-`src/features/demo-data/demo-data.ts` and every mutating tab receives
-`mutationDisabled={mockWorkspace || caseRetired}` with
-`mutationDisabledReason={caseRetired ? "retired-case" : "demo"}`. Tabs must render an explanatory
-`Alert` and suppress all mutation UI when disabled — **every financial mutation stays disabled in
-demo mode** (CLAUDE.md requirement). Follow `liquidity-tab.tsx` for the
-`readOnlyReason` cascade (`demo` / `retired-case` / `archived-scenario` / terminal finding).
-
-### Formatting helpers
-
-- `src/lib/money.ts` — `formatMoney(value: string, currency)` and
-  `formatDecimal(value: string, fractionDigits)`. Inputs are **decimal strings** (the generated
-  client surfaces backend `Decimal`s as strings); BigInt-based half-up rounding, locale-aware.
-  Use these for all money/ratio display. (`src/lib/utils.ts` contains an older duplicate
-  `formatMoney`; prefer `money.ts`.)
-- `src/lib/utils.ts` — `cn` (clsx + tailwind-merge), `labelize` (snake_case → Title Case),
-  `truncateId` (uuid → `8chars...4chars`), `formatJson`.
-- `src/features/risk-console/format.tsx` — `StatusBadge`, `RiskBadge`, `DecisionBadge`,
-  `relative(date)` (via `date-fns formatDistanceToNow`).
-- `src/lib/persistent-state.ts` — `usePersistentState(key, default)` localStorage-backed string
-  state. `src/lib/workspace-deep-link.ts` — `workspaceHash()` / `focusWorkspaceTarget()` for the
-  `#...-record-id` deep links that evidence `source_url`s produce.
-
-### Lint/type constraints
-
-- `pnpm --filter @aequoros/aequoros-web lint` runs
-  `oxlint src e2e vite.config.ts vitest.browser.config.ts playwright.config.ts --react-plugin
-  --jsx-a11y-plugin --vitest-plugin --import-plugin --deny-warnings`. Warnings fail the build;
-  jsx-a11y is enforced (label your inputs/selects). TypeScript is strict; `typecheck` = `tsc -b`.
+- TanStack Query hooks are centralized under `backend/dashboard/lib/api/`; keep
+  query keys resource-specific and invalidate the affected resource after a
+  successful mutation.
+- Missing backend values remain missing. Follow
+  `backend/dashboard/lib/api/values.ts` and the fail-open guard: never turn an
+  absent denominator into zero or write a regulatory threshold into UI code.
+- Validate with `pnpm --filter @aequoros/dashboard typecheck`, `lint`, `test`,
+  and `build`; run the package's Playwright suite for end-to-end changes.
 
 ---
 
@@ -312,33 +239,27 @@ demo mode** (CLAUDE.md requirement). Follow `liquidity-tab.tsx` for the
 
 ### Backend
 
-| Helper | Where | Use for |
-| --- | --- | --- |
-| `DbSession`, `Tenant`, `MutationTenant`, `Storage`, `TenantContext` | `app/api/deps.py` | Every route's session/tenant/storage wiring. |
-| `record_event(db, ctx, *, event_type, entity_type, entity_id, details)` | `app/services/audit.py` | Audit trail for every meaningful mutation, same transaction. |
-| `get_case_or_404` / `get_case_for_update_or_404` / `ensure_case_is_not_archived` / `ensure_status_transition_allowed` | `app/services/cases.py` | Tenant-scoped existence + state guards (template for `get_bank_or_404`). |
-| `get_finding_or_404`, `list_findings`, `list_case_findings`, `create_case_finding`, `update_finding`, `apply_finding_update`, `is_liquidity_workflow_finding`, `list_finding_evidence` | `app/services/findings.py` | Generic finding CRUD/review; reuse for new engines' findings. |
-| `calculate_metrics`, `generate_findings`, `lock_finding_publication`, `serialize_finding_publication` | `app/services/liquidity.py` | Template for deterministic metric + finding publication with advisory-lock serialization. |
-| `MONEY`, `RATIO`, `MAX_STORED_MONEY`, `_money`/`_ratio` quantizers, `_snapshot_hash` | `app/services/calculations.py`, `capital.py`, `liquidity.py` | Money/ratio rounding constants and SHA-256 input hashing (copy the constants; keep values consistent). |
-| `RISK_TYPES`, `FindingStatus`, `Severity`, `CaseStatus`, `FindingSource`, derived sets | `app/domain/risk_constants.py` | Shared enum values; extend here, not inline. |
-| `ObjectStorage` protocol, `get_object_storage` | `app/integrations/storage/` | All object-storage access; override in tests via dependency_overrides. |
-| `Base`, `UuidV4PrimaryKeyMixin`, `UuidV7PrimaryKeyMixin`, `TimestampMixin`, `utc_now` | `app/db/base.py` | Model building blocks. |
-| `Settings` / `get_settings()` | `app/core/config.py` | Env config; add nested `BaseSettings` groups with env aliases. |
-| `ORG_1/ORG_2/USER_1/USER_2`, `headers()`, `ApiFactories`, `FakeStorage`, `db_client` | `tests/` | Test tenancy, data factories, storage stubbing. |
+| Helper                                                                                                                                                                                 | Where                                                        | Use for                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `DbSession`, `Tenant`, `MutationTenant`, `Storage`, `TenantContext`                                                                                                                    | `app/api/deps.py`                                            | Every route's session/tenant/storage wiring.                                                           |
+| `record_event(db, ctx, *, event_type, entity_type, entity_id, details)`                                                                                                                | `app/services/audit.py`                                      | Audit trail for every meaningful mutation, same transaction.                                           |
+| `get_case_or_404` / `get_case_for_update_or_404` / `ensure_case_is_not_archived` / `ensure_status_transition_allowed`                                                                  | `app/services/cases.py`                                      | Tenant-scoped existence + state guards (template for `get_bank_or_404`).                               |
+| `get_finding_or_404`, `list_findings`, `list_case_findings`, `create_case_finding`, `update_finding`, `apply_finding_update`, `is_liquidity_workflow_finding`, `list_finding_evidence` | `app/services/findings.py`                                   | Generic finding CRUD/review; reuse for new engines' findings.                                          |
+| `calculate_metrics`, `generate_findings`, `lock_finding_publication`, `serialize_finding_publication`                                                                                  | `app/services/liquidity.py`                                  | Template for deterministic metric + finding publication with advisory-lock serialization.              |
+| `MONEY`, `RATIO`, `MAX_STORED_MONEY`, `_money`/`_ratio` quantizers, `_snapshot_hash`                                                                                                   | `app/services/calculations.py`, `capital.py`, `liquidity.py` | Money/ratio rounding constants and SHA-256 input hashing (copy the constants; keep values consistent). |
+| `RISK_TYPES`, `FindingStatus`, `Severity`, `CaseStatus`, `FindingSource`, derived sets                                                                                                 | `app/domain/risk_constants.py`                               | Shared enum values; extend here, not inline.                                                           |
+| `ObjectStorage` protocol, `get_object_storage`                                                                                                                                         | `app/integrations/storage/`                                  | All object-storage access; override in tests via dependency_overrides.                                 |
+| `Base`, `UuidV4PrimaryKeyMixin`, `UuidV7PrimaryKeyMixin`, `TimestampMixin`, `utc_now`                                                                                                  | `app/db/base.py`                                             | Model building blocks.                                                                                 |
+| `Settings` / `get_settings()`                                                                                                                                                          | `app/core/config.py`                                         | Env config; add nested `BaseSettings` groups with env aliases.                                         |
+| `ORG_1/ORG_2/USER_1/USER_2`, `headers()`, `ApiFactories`, `FakeStorage`, `db_client`                                                                                                   | `tests/`                                                     | Test tenancy, data factories, storage stubbing.                                                        |
 
 ### Frontend
 
-| Helper | Where | Use for |
-| --- | --- | --- |
-| Full `ui.tsx` component set (table above) | `src/components/ui.tsx` | All UI primitives for new tabs. |
-| `FindingReviewCard` | `src/features/findings/finding-review-card.tsx` | Shared severity/status card for any finding-review UI (used by liquidity + findings tabs). |
-| `ErrorPanel`, `DataList`, `EmptyRow` | `src/shared/route-ui.tsx` | Error rendering (understands `ApiError`), definition lists, empty table rows. |
-| `riskApi`, `apiJson`, `apiText`, `isApiError`, `TenantHeaders` | `src/lib/api.ts` | Pattern-A endpoint wrappers. |
-| `liquidityReviewClient` | `src/features/liquidity/liquidity-client.ts` | Pattern-B reference: wrapping a generated `*Api` class. |
-| `apiBaseUrl`, `tabs`, `ConsoleTab`, `isConsoleTab` | `src/lib/constants.ts` | Base URL + tab registry. |
-| `formatMoney`, `formatDecimal` | `src/lib/money.ts` | Money/ratio display from decimal strings. |
-| `cn`, `labelize`, `truncateId`, `formatJson` | `src/lib/utils.ts` | Class merging and misc formatting. |
-| `StatusBadge`, `RiskBadge`, `DecisionBadge`, `relative` | `src/features/risk-console/format.tsx` | Case metadata display. |
-| `usePersistentState` | `src/lib/persistent-state.ts` | localStorage-persisted UI state (tenant ids, toggles). |
-| `workspaceHash`, `focusWorkspaceTarget` | `src/lib/workspace-deep-link.ts` | Evidence deep-link focus behavior. |
-| `mockCase`, `mockCaseList` | `src/features/demo-data/demo-data.ts` | Demo-mode data (keep new tabs demo-safe). |
+| Helper                                           | Where                                 | Use for                                                        |
+| ------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------- |
+| `configuration`, `apiBaseUrl`, `apiOrigin`       | `backend/dashboard/lib/api/client.ts` | Generated-client setup and the single API-origin authority.    |
+| `setAccessToken`, `getAccessToken`               | `backend/dashboard/lib/api/token.ts`  | Expiry-aware bearer-token cache synchronized with NextAuth.    |
+| Generated `*Api` classes and wire types          | `packages/risk-service-api`           | Every supported tenant API request and response.               |
+| TanStack Query hooks                             | `backend/dashboard/lib/api/hooks.ts`  | Shared server-state reads, mutations, keys, and invalidation.  |
+| `numOrNull`, `assessAgainstFloor`, `floorStatus` | `backend/dashboard/lib/api/values.ts` | Fail-closed numeric and regulatory-floor presentation.         |
+| Dashboard design and component rules             | `backend/dashboard/README.md`         | Current bank-product UI conventions and verification commands. |

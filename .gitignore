@@ -14,6 +14,12 @@ pnpm-debug.log*
 # Local Claude Code worktrees.
 .claude/worktrees/
 
+# Generated Codex Security scan bundles.
+.codex-security-review/
+
+# Local Hypothesis example database; useful for replay, never source.
+.hypothesis/
+
 # Local data-engine sample inputs (37MB xlsx/csv) — regenerable, not source.
 data/
 # ...but committed test fixtures live in a data/ dir too; keep them tracked.
