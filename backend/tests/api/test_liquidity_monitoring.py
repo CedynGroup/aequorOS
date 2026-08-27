@@ -146,8 +146,15 @@ def test_liquidity_monitoring_shadow_failure_does_not_become_an_endpoint_gate(
 ) -> None:
     _seed_liquidity_book()
 
-    def fail_shadow_evaluation(*args: object, **kwargs: object) -> None:
-        raise RuntimeError("synthetic shadow-only failure")
+    def fail_shadow_evaluation(session: Any, *args: object, **kwargs: object) -> None:
+        session.add(
+            User(
+                id=USER_1,
+                organization_id=ORG_1,
+                email="duplicate.user@example.test",
+            )
+        )
+        session.flush()
 
     monkeypatch.setattr(authorization, "evaluate_permission", fail_shadow_evaluation)
     records, sink_id = _capture_shadow_records()
@@ -167,4 +174,4 @@ def test_liquidity_monitoring_shadow_failure_does_not_become_an_endpoint_gate(
     assert shadow[0]["legacy_allowed"] is True
     assert shadow[0]["reason"] == "shadow_evaluation_failed"
     assert shadow[0]["severity"] == "error"
-    assert shadow[0]["error_type"] == "RuntimeError"
+    assert shadow[0]["error_type"] == "IntegrityError"

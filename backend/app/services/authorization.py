@@ -354,14 +354,15 @@ def observe_shadow_permission(  # noqa: PLR0913 - the observed decision tuple is
         "sensitivity": resource.sensitivity.value,
     }
     try:
-        decision = evaluate_permission(
-            db,
-            principal,
-            permission,
-            resource,
-            conditions=conditions,
-            now=now,
-        )
+        with db.begin_nested():
+            decision = evaluate_permission(
+                db,
+                principal,
+                permission,
+                resource,
+                conditions=conditions,
+                now=now,
+            )
     except Exception as exc:  # noqa: BLE001 - shadow observation must never become a route gate
         authorization_shadow_decision(
             binding_allowed=False,
