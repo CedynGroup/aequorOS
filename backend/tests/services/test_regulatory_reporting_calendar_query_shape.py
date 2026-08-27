@@ -1,8 +1,8 @@
-"""Deterministic SQL-shape contracts for the regulatory calendar.
+"""Protect the regulatory calendar's fixed database-query budget.
 
-These are count/shape budgets, not wall-clock performance tests: remote
-Postgres latency varies, while one package query and at most one submission-
-event query is a stable property the obligation horizon must not amplify.
+The tests count SQL statements instead of elapsed time, which varies by
+environment. Any horizon must need only one package query and, when relevant,
+one submission-event query.
 """
 
 from __future__ import annotations
@@ -89,9 +89,8 @@ def test_obligation_query_shape_is_constant_as_horizon_grows(
 ) -> None:
     materialize_canonical_test_book(db_session)
     seed = calendar.list_obligations(db_session, _MAKER, SAMPLE_BANK_ID, 3, as_of=_AS_OF)
-    # Exercise the optional pending-reupload lookup with enough packages that a
-    # per-package regression would be obvious. Every package gets one latest
-    # submitted event carrying the downtime flag.
+    # Include enough pending re-uploads to prove that package count does not
+    # increase the query budget.
     lcr = next(
         item
         for item in seed.obligations
@@ -126,8 +125,7 @@ def test_obligation_query_shape_is_constant_as_horizon_grows(
     )
 
     assert len(long.obligations) > len(short.obligations)
-    # One current-package SELECT and one batched submitted-event SELECT at
-    # either horizon. The whole service path remains a small constant budget.
+    # Both horizons share the same fixed package and event query budget.
     for statements in (short_sql, long_sql):
         assert len(_table_selects(statements, "regulatory_packages")) == 1
         assert len(_table_selects(statements, "regulatory_submission_events")) == 1

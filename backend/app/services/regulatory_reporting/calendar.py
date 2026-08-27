@@ -55,7 +55,7 @@ type _PackageKey = tuple[str, date]
 
 @dataclass(frozen=True)
 class _PackageSummary:
-    """The only package fields an obligation/anchor row renders."""
+    """Package state needed to build a calendar row."""
 
     id: UUID
     status: str
@@ -68,14 +68,11 @@ def _calendar_package_state(
     bank_id: str,
     schedule: dict[str, list[date]],
 ) -> tuple[dict[_PackageKey, _PackageSummary], set[UUID]]:
-    """Load current solo packages and pending ORASS flags in at most two queries.
+    """Return package state without queries growing with the calendar horizon.
 
-    Calendar size is driven by regulator anchors (hundreds of obligations for a
-    12-month horizon), so neither package nor submission-event reads may live in
-    the obligation loop.  The first query projects only the fields the board
-    needs; the optional second query reads every relevant submitted-event chain
-    once and applies the same "latest submitted event wins" rule as the package
-    workflow.
+    Results stay within the caller's organization. Only current solo packages
+    can satisfy calendar obligations, and a submitted package remains pending
+    when its latest submitted event requires ORASS re-upload.
     """
     scheduled_keys = {
         (return_code, reporting_date)
@@ -99,9 +96,8 @@ def _calendar_package_state(
             RegulatoryPackage.return_code.in_(tuple(schedule)),
             RegulatoryPackage.reporting_date >= min(reporting_dates),
             RegulatoryPackage.reporting_date <= max(reporting_dates),
-            # The obligation board enumerates one solo row per anchor. Solo and
-            # consolidated package version chains are independent and must not
-            # compete for that row.
+            # Calendar obligations use the solo basis. Consolidated package
+            # chains are separate and cannot satisfy them.
             RegulatoryPackage.basis == "solo",
             RegulatoryPackage.status != "superseded",
         )
