@@ -117,6 +117,9 @@ is what authorizes a person.
   of the AequorOS organization. The public token-exchange contract contains no
   organization selector; a legacy matching hint is tolerated temporarily, and
   a mismatched hint is rejected as an invalid SSO token.
+- **Deterministic routing:** list-valued OIDC audiences are supported, but the
+  issuer and audiences must identify exactly one enabled connection. Missing,
+  oversized, or ambiguous audience sets are rejected before account matching.
 - **Secret handling:** the client secret is stored AES-256-GCM-encrypted, is
   write-only through the UI and API, and is scoped — it can only be used to
   initiate sign-ins against the redirect URI registered in *your* IdP.

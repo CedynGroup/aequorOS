@@ -187,11 +187,14 @@ The bank's own IdP is the authority. `verify_oidc_id_token`
 (`app/core/security.py:199`) performs discovery, fetches the issuer JWKS, and
 validates RS256/ES256 with issuer and audience taken **from the stored
 connection row, never from the token**. Trusted claims: `sub`, `email`,
-`email_verified`, `name`. Subject → user mapping is
-`auth_provider='oidc' AND sso_subject=sub AND is_active`, with a first-login
-fallback to exact email match on a pre-provisioned active account
-(`app/services/authentication.py:110`). Opt-in JIT records a **deactivated**
-stub and returns 403 until an admin approves with an explicit role.
+`email_verified`, `name`. The uniquely selected, verified connection is the
+sole organization authority for lookup and issued tokens. Subject → user
+mapping is `organization_id=connection.organization_id AND
+auth_provider='oidc' AND sso_subject=sub AND is_active`, with a first-login
+fallback to exact email match on a pre-provisioned active account in that same
+organization (`app/services/authentication.py`). Opt-in JIT records a
+**deactivated** stub in that organization and returns 403 until an admin
+approves with an explicit role.
 
 **Authentication update (2026-08-25).** Access tokens are HS256, 15-minute TTL,
 carrying `sub` (user UUID), `org`
