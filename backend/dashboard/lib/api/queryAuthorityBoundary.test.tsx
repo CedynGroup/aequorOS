@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 const BANK_ID = 'BK-SAMP0001';
 const PERIOD_ID = 'period-latest';
 const HISTORICAL_PERIOD_ID = 'period-historical';
+const TREND_PERIOD_IDS = Array.from(
+  { length: 12 },
+  (_, index) => `period-trend-${index + 1}`,
+);
 const UPDATED_PERIOD_ID = 'period-updated';
 
 async function waitFor(check: () => boolean, message: string): Promise<void> {
@@ -135,6 +139,7 @@ async function main(): Promise<void> {
   };
   let generation = 7;
   let officialGeneration = 1;
+  let trendOfficialGeneration = 1;
   type MockRegulatoryRun = {
     id: string;
     module: string;
@@ -258,16 +263,29 @@ async function main(): Promise<void> {
   });
   mock(clients.liveEngineApi, {
     getLiveSummary: liveSummary,
-    getBankFreshness: async () => {
-      counts.set('freshness', (counts.get('freshness') ?? 0) + 1);
+    getBankFreshness: async ({
+      reportingPeriodId,
+    }: {
+      reportingPeriodId?: string;
+    }) => {
+      const name =
+        reportingPeriodId === PERIOD_ID
+          ? 'freshness'
+          : 'official-period-signal';
+      const observedOfficialGeneration =
+        reportingPeriodId === PERIOD_ID
+          ? officialGeneration
+          : trendOfficialGeneration;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
       await initialSignalGate;
       return {
+        reportingPeriodId: reportingPeriodId ?? null,
         modules: [
           {
             module: 'capital',
-            officialRunHash: `official-${officialGeneration}`,
+            officialRunHash: `official-${observedOfficialGeneration}`,
             officialRunAt: new Date(
-              `2026-08-27T12:0${officialGeneration}:00Z`,
+              `2026-08-27T12:0${observedOfficialGeneration}:00Z`,
             ),
           },
         ],
@@ -325,7 +343,7 @@ async function main(): Promise<void> {
     hooks.useLiveSummary(BANK_ID);
     hooks.useLiveSummary(BANK_ID);
     hooks.useBankFreshness(BANK_ID, PERIOD_ID, false);
-    hooks.useLatestOfficialRunSignal(BANK_ID);
+    hooks.useLatestOfficialRunSignal(BANK_ID, TREND_PERIOD_IDS);
     hooks.useBankAlerts(BANK_ID);
     hooks.useBankAlerts(BANK_ID);
     hooks.useNotifications();
@@ -391,6 +409,7 @@ async function main(): Promise<void> {
     () =>
       counts.get('live-summary') === 1 &&
       counts.get('freshness') === 1 &&
+      counts.get('official-period-signal') === TREND_PERIOD_IDS.length &&
       counts.get('official-run-signal') === 2,
     'initial dashboard signals did not start',
   );
@@ -408,7 +427,7 @@ async function main(): Promise<void> {
     releaseInitialSignals!();
   });
   await waitFor(
-    () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 22,
+    () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 23,
     'Command Center resources did not settle',
   );
   const initialCounts = new Map(counts);
@@ -425,7 +444,7 @@ async function main(): Promise<void> {
     [...initialCounts.entries()]
       .filter(([name]) => name !== 'liq-mutation')
       .reduce((total, [, count]) => total + count, 0),
-    23,
+    35,
     'real duplicate consumers must collapse while the bounded trend signal reads two modules',
   );
 
@@ -553,7 +572,15 @@ async function main(): Promise<void> {
   assert.equal(counts.get('cap-dashboard'), beforeScenarioCapital);
   assert.equal(counts.get('liq-dashboard'), beforeScenarioLiquidity);
 
+  const newerFailedAttempts = Array.from({ length: 101 }, (_, index) => ({
+    id: `capital-failed-${index}`,
+    module: 'capital',
+    scenarioCode: 'baseline',
+    status: 'failed',
+    inputHash: `capital-failed-hash-${index}`,
+  }));
   latestRegulatoryRuns.unshift(
+    ...newerFailedAttempts,
     {
       id: 'capital-official-2',
       module: 'capital',
@@ -566,14 +593,8 @@ async function main(): Promise<void> {
         withdrawals: [],
       },
     },
-    ...Array.from({ length: 101 }, (_, index) => ({
-      id: `capital-failed-${index}`,
-      module: 'capital',
-      scenarioCode: 'baseline',
-      status: 'failed',
-      inputHash: `capital-failed-hash-${index}`,
-    })),
   );
+  trendOfficialGeneration += 1;
   const requestsBeforeHistoricalOfficial = officialSignalRequests.length;
   const beforeHistoricalOfficialCapital = counts.get('cap-dashboard') ?? 0;
   const beforeHistoricalOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
@@ -602,6 +623,14 @@ async function main(): Promise<void> {
       { module: 'liquidity', scenarioCode: 'baseline', limit: 1, offset: 0 },
       { module: 'capital', scenarioCode: 'baseline', limit: 1, offset: 0 },
     ],
+  );
+
+  latestRegulatoryRuns.splice(
+    0,
+    latestRegulatoryRuns.length,
+    ...latestRegulatoryRuns.filter(
+      (run) => !run.id.startsWith('capital-failed-'),
+    ),
   );
 
   const capitalOfficialIndex = latestRegulatoryRuns.findIndex(
@@ -747,7 +776,7 @@ async function main(): Promise<void> {
   globalThis.setInterval = nativeSetInterval;
   globalThis.setTimeout = nativeSetTimeout;
   console.log(
-    'queryAuthorityBoundary.test.tsx: pending 0; settled 22 resources/23 calls; bounded official signal; idle and invalidation passed',
+    'queryAuthorityBoundary.test.tsx: pending 0; settled 22 resources/35 calls; bounded official signal; idle and invalidation passed',
   );
 }
 

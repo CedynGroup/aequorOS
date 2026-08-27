@@ -167,7 +167,13 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const period =
     periods.find((p) => p.id === selectedPeriodId) ?? periods[0] ?? null;
   useBankFreshness(period ? bank?.id : undefined, period?.id);
-  useLatestOfficialRunSignal(period ? bank?.id : undefined);
+  useLatestOfficialRunSignal(
+    period ? bank?.id : undefined,
+    periods
+      .slice(0, 13)
+      .filter((candidate) => candidate.id !== period?.id)
+      .map((candidate) => candidate.id),
+  );
 
   const isLoading =
     banksQuery.isLoading || (Boolean(bank) && periodsQuery.isLoading);

@@ -125,6 +125,7 @@ import {
   invalidateOfficialRunChanges,
   invalidateScopedPrefixes,
   jitteredPollInterval,
+  officialBaselineFingerprint,
   officialCompletionFingerprint,
   observedSignalChanges,
   officialRunFingerprint,
@@ -1049,31 +1050,59 @@ export function useBankFreshness(
   return query;
 }
 
-export function useLatestOfficialRunSignal(bankId: string | undefined) {
+export function useLatestOfficialRunSignal(
+  bankId: string | undefined,
+  reportingPeriodIds: readonly string[],
+) {
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   const query = useQuery({
-    queryKey: scopedQueryKey('official-run-signal', scope, bankId ?? null),
+    queryKey: scopedQueryKey(
+      'official-run-signal',
+      scope,
+      bankId ?? null,
+      ...reportingPeriodIds,
+    ),
     queryFn: async () => {
-      const pages = await Promise.all(
-        (
-          [
-            ['liquidity', 'baseline'],
-            ['capital', 'baseline'],
-          ] as const
-        ).map(([module, scenarioCode]) =>
-          apiCall(() =>
-            regulatoryLiquidityApi.listRegulatoryRuns({
-              bankId: bankId!,
-              module,
-              scenarioCode,
-              limit: 1,
-              offset: 0,
-            })
+      const [periods, pages] = await Promise.all([
+        Promise.all(
+          reportingPeriodIds.map((reportingPeriodId) =>
+            apiCall(() =>
+              liveEngineApi.getBankFreshness({
+                bankId: bankId!,
+                reportingPeriodId,
+              })
+            )
           )
-        )
-      );
+        ),
+        Promise.all(
+          (
+            [
+              ['liquidity', 'baseline'],
+              ['capital', 'baseline'],
+            ] as const
+          ).map(([module, scenarioCode]) =>
+            apiCall(() =>
+              regulatoryLiquidityApi.listRegulatoryRuns({
+                bankId: bankId!,
+                module,
+                scenarioCode,
+                limit: 1,
+                offset: 0,
+              })
+            )
+          )
+        ),
+      ]);
       return {
+        periods: periods.map((period) => ({
+          ...period,
+          modules: period.modules.filter(
+            (moduleSignal) =>
+              moduleSignal.module === 'liquidity' ||
+              moduleSignal.module === 'capital'
+          ),
+        })),
         runs: pages.flatMap((page) => page.runs),
       };
     },
@@ -1104,7 +1133,11 @@ export function useLatestOfficialRunSignal(bankId: string | undefined) {
       }
       return;
     }
-    const next = officialCompletionFingerprint(query.data.runs);
+    const next = officialBaselineFingerprint(
+      query.data.periods,
+      query.data.runs,
+      observed?.fingerprint,
+    );
     byScope.set(identity, { fingerprint: next, failed: false });
     const recovering = !observed?.fingerprint && (observed?.failed ?? false);
     const changed = observedSignalChanges(observed?.fingerprint, next, false);

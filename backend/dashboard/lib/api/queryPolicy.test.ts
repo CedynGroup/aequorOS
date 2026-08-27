@@ -19,6 +19,7 @@ import {
   invalidateScopedPrefixes,
   jitteredPollInterval,
   observedSignalChanges,
+  officialBaselineFingerprint,
   officialCompletionFingerprint,
   officialRunFingerprint,
   queryAuthorityScope,
@@ -30,6 +31,10 @@ import {
 
 const BANK_ID = 'BK-SAMP0001';
 const PERIOD_ID = 'period-latest';
+const TREND_PERIOD_IDS = Array.from(
+  { length: 12 },
+  (_, index) => `period-trend-${index + 1}`,
+);
 const scope = queryAuthorityScope('OR-DEM00001', 'analyst@aequoros.example', ['analyst']);
 
 async function waitFor(check: () => boolean, message: string): Promise<void> {
@@ -135,7 +140,7 @@ async function main(): Promise<void> {
     scopedQueryKey('facts', scope, BANK_ID, PERIOD_ID),
     scopedQueryKey('live-summary', scope, BANK_ID),
     scopedQueryKey('freshness', scope, BANK_ID, PERIOD_ID),
-    scopedQueryKey('official-run-signal', scope, BANK_ID),
+    scopedQueryKey('official-run-signal', scope, BANK_ID, ...TREND_PERIOD_IDS),
     scopedQueryKey('alerts', scope, BANK_ID, 20),
     scopedQueryKey('notifications', scope, false),
     current('liq-dashboard'),
@@ -397,6 +402,89 @@ async function main(): Promise<void> {
     changedGenerations(officialBaseline, nextOfficialBaseline),
     ['capital', 'forecast'],
   );
+
+  const successfulPeriodBaseline = officialBaselineFingerprint(
+    [
+      {
+        reportingPeriodId: TREND_PERIOD_IDS[0],
+        modules: [
+          {
+            module: 'capital',
+            officialRunHash: 'capital-official-hash-old',
+            officialRunAt: '2026-08-27T12:00:00Z',
+          },
+        ],
+      },
+    ],
+    [
+      {
+        id: 'capital-official-old',
+        module: 'capital',
+        scenarioCode: 'baseline',
+        status: 'succeeded',
+        inputHash: 'capital-official-hash-old',
+      },
+    ],
+  );
+  const successfulPeriodMaskedByFailures = officialBaselineFingerprint(
+    [
+      {
+        reportingPeriodId: TREND_PERIOD_IDS[0],
+        modules: [
+          {
+            module: 'capital',
+            officialRunHash: 'capital-official-hash-new',
+            officialRunAt: '2026-08-27T12:05:00Z',
+          },
+        ],
+      },
+    ],
+    Array.from({ length: 101 }, (_, index) => ({
+      id: `capital-failed-${index}`,
+      module: 'capital',
+      scenarioCode: 'baseline',
+      status: 'failed',
+      inputHash: `capital-failed-hash-${index}`,
+    })),
+    successfulPeriodBaseline,
+  );
+  assert.deepEqual(
+    changedGenerations(
+      successfulPeriodBaseline,
+      successfulPeriodMaskedByFailures,
+    ),
+    ['capital'],
+    'a successful baseline must remain observable behind newer failed attempts',
+  );
+  const failedAttemptsOnly = officialBaselineFingerprint(
+    [
+      {
+        reportingPeriodId: TREND_PERIOD_IDS[0],
+        modules: [
+          {
+            module: 'capital',
+            officialRunHash: 'capital-official-hash-old',
+            officialRunAt: '2026-08-27T12:00:00Z',
+          },
+        ],
+      },
+    ],
+    [
+      {
+        id: 'capital-failed-newer',
+        module: 'capital',
+        scenarioCode: 'baseline',
+        status: 'failed',
+        inputHash: 'capital-failed-hash-newer',
+      },
+    ],
+    successfulPeriodBaseline,
+  );
+  assert.deepEqual(
+    changedGenerations(successfulPeriodBaseline, failedAttemptsOnly),
+    [],
+    'failed attempts alone must not replace the latest successful baseline',
+  );
   const withdrawnOfficialBaseline = officialCompletionFingerprint([
     {
       id: 'capital-official-old',
@@ -460,11 +548,11 @@ async function main(): Promise<void> {
   assert.ok(jitter >= 18_000 && jitter <= 22_000);
 
   // Count model for the same 65-second idle window used by the pre-change
-  // fixture. Only the cheap live summary, freshness, bounded two-module
+  // fixture. Only the cheap live summary, freshness, bounded trend-period
   // official-run signal, alert list, and inbox retain a cadence. With this
-  // fixture's deterministic jitter: 22 logical initial resources / 23 calls
-  // + 3 summary ticks + 2 freshness ticks + 6 latest-run module calls
-  // + 3 alert ticks + 1 inbox tick = 38 requests. The five
+  // fixture's deterministic jitter: 22 logical initial resources / 35 calls
+  // + 3 summary ticks + 2 freshness ticks + 42 official-signal calls
+  // + 3 alert ticks + 1 inbox tick = 86 requests. The five
   // module detail payloads each load once and contribute zero idle polls.
   const idleWindowMs = 65_000;
   const retainedIntervals = [
@@ -480,13 +568,13 @@ async function main(): Promise<void> {
     BANK_ID,
   );
   const afterIdleRequests =
-    homeResources.length + 1 +
+    homeResources.length + 13 +
     retainedIntervals.reduce(
       (ticks, interval) => ticks + Math.floor(idleWindowMs / interval),
       0,
     ) +
-    2 * Math.floor(idleWindowMs / officialSignalInterval);
-  assert.equal(afterIdleRequests, 38);
+    14 * Math.floor(idleWindowMs / officialSignalInterval);
+  assert.equal(afterIdleRequests, 86);
   assert.equal(
     homeResources.filter((key) =>
       [
@@ -519,7 +607,7 @@ async function main(): Promise<void> {
   idleClient.clear();
   requestClient.clear();
   console.log(
-    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 22/38/5; detailed idle polls 0; invalidation passed'
+    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 22/86/5; detailed idle polls 0; invalidation passed'
   );
 }
 

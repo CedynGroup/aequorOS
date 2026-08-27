@@ -400,6 +400,58 @@ export function officialCompletionFingerprint(
   );
 }
 
+export type OfficialPeriodSignal = Readonly<{
+  reportingPeriodId: string | null;
+  modules: readonly OfficialRunSignal[];
+}>;
+
+export function officialBaselineFingerprint(
+  periods: readonly OfficialPeriodSignal[],
+  runs: readonly OfficialCompletionSignal[],
+  previous?: ReadonlyMap<string, string>
+): ReadonlyMap<string, string> {
+  const periodFingerprints = new Map<string, string[]>();
+  for (const period of periods) {
+    for (const moduleSignal of period.modules) {
+      const fingerprints = periodFingerprints.get(moduleSignal.module) ?? [];
+      fingerprints.push(
+        JSON.stringify([
+          period.reportingPeriodId,
+          moduleSignal.officialRunHash ?? null,
+          moduleSignal.officialRunAt ?? null,
+        ])
+      );
+      periodFingerprints.set(moduleSignal.module, fingerprints);
+    }
+  }
+
+  const completionFingerprints = officialCompletionFingerprint(runs);
+  const modules = new Set([
+    ...periodFingerprints.keys(),
+    ...completionFingerprints.keys(),
+  ]);
+  return new Map(
+    [...modules].map((module) => {
+      let completionFingerprint = completionFingerprints.get(module);
+      if (completionFingerprint === undefined) {
+        const previousFingerprint = previous?.get(module);
+        if (previousFingerprint) {
+          const parsed = JSON.parse(previousFingerprint) as [unknown, unknown];
+          completionFingerprint =
+            typeof parsed[1] === 'string' ? parsed[1] : undefined;
+        }
+      }
+      return [
+        module,
+        JSON.stringify([
+          [...(periodFingerprints.get(module) ?? [])].sort(),
+          completionFingerprint ?? null,
+        ]),
+      ];
+    })
+  );
+}
+
 export async function refreshLiveSummaryGenerationChanges(
   queryClient: QueryClient,
   scope: QueryAuthorityScope,
