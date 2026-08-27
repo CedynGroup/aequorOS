@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { SessionProvider, signOut, useSession } from 'next-auth/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { usePathname } from 'next/navigation';
 
 import { setAccessToken } from '@/lib/api/token';
 import { LOGIN_URL } from '@/lib/loginUrl';
 import ProfileProvider from '@/components/profile/ProfileProvider';
 import ImpersonationBanner from '@/components/impersonation/ImpersonationBanner';
-import {
-  QueryAuthorityScopeProvider,
-  useResolvedQueryAuthorityScope,
-} from '@/lib/api/useQueryScope';
+import QueryAuthorityBoundary from '@/lib/api/QueryAuthorityBoundary';
+import { queryAuthorityScope } from '@/lib/api/queryPolicy';
+import { useResolvedQueryAuthorityScope } from '@/lib/api/useQueryScope';
+
+const PUBLIC_QUERY_SCOPE = queryAuthorityScope('public', 'anonymous', []);
 
 /** Keeps the API client's bearer token in sync with the NextAuth session. */
 function TokenSync() {
@@ -29,38 +30,29 @@ function TokenSync() {
   return null;
 }
 
-function AuthorityScopedCache({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            retry: 1,
-            refetchOnWindowFocus: false,
-          },
-        },
-      })
-  );
-
-  useEffect(() => () => queryClient.clear(), [queryClient]);
-
+function AuthorityQueryBoundary({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const scope = useResolvedQueryAuthorityScope();
+  const publicRoute = pathname === '/login' || pathname === '/inspect';
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryAuthorityBoundary
+      scope={publicRoute ? PUBLIC_QUERY_SCOPE : scope}
+      fallback={<AuthorityLoading />}
+    >
       <ProfileProvider>{children}</ProfileProvider>
-    </QueryClientProvider>
+    </QueryAuthorityBoundary>
   );
 }
 
-function AuthorityQueryBoundary({ children }: { children: React.ReactNode }) {
-  const scope = useResolvedQueryAuthorityScope();
-  // Remounting disposes the entire old cache. Explicitly scoped financial keys
-  // remain the primary boundary; this protects legacy keys during migration.
-  const authorityKey = `${scope.tenantId}|${scope.authorityId}`;
+function AuthorityLoading() {
   return (
-    <QueryAuthorityScopeProvider scope={scope}>
-      <AuthorityScopedCache key={authorityKey}>{children}</AuthorityScopedCache>
-    </QueryAuthorityScopeProvider>
+    <div
+      className="min-h-screen flex items-center justify-center bg-surface-alt"
+      aria-busy="true"
+      aria-label="Loading authenticated workspace"
+    >
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-action/25 border-t-action" />
+    </div>
   );
 }
 

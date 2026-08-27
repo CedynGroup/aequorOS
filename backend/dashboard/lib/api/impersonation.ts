@@ -16,7 +16,7 @@
  * token's own `exp`.
  */
 
-import { IMPERSONATION_MARKER_COOKIE } from '@/lib/impersonation-cookies';
+import { IMPERSONATION_MARKER_COOKIE } from '../impersonation-cookies';
 
 export interface ImpersonationState {
   /** A staff inspection hand-off is active on this browser. */
