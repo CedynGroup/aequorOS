@@ -22,6 +22,7 @@ import {
   officialCompletionFingerprint,
   officialRunFingerprint,
   queryAuthorityScope,
+  reconcileStartedScopedPrefixes,
   regulatoryDetailInvalidationPrefixes,
   scopedQueryKey,
   waitForInitialDashboardSignals,
@@ -98,9 +99,20 @@ async function main(): Promise<void> {
       },
     }),
   );
+  await waitForInitialDashboardSignals(failedSignalClient, scope, BANK_ID);
+  assert.equal(signalRequests, 2, 'an errored initial signal should be retried once');
+  let detailRequests = 0;
+  await failedSignalClient.fetchQuery({
+    queryKey: currentLiquidity,
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(failedSignalClient, scope, BANK_ID);
+      detailRequests += 1;
+      return 'available-detail';
+    },
+  });
+  assert.equal(detailRequests, 1, 'signal failure must not block an available detail read');
   signalShouldFail = false;
   await waitForInitialDashboardSignals(failedSignalClient, scope, BANK_ID);
-  assert.equal(signalRequests, 2, 'an errored initial signal must recover before detail proceeds');
 
   const recovered = generationFingerprint([
     {
@@ -262,15 +274,15 @@ async function main(): Promise<void> {
   });
   const unsubscribeRace = raceObserver.subscribe(() => undefined);
   await waitFor(() => raceRequests === 1, 'initial race request did not start');
-  const invalidation = invalidateGenerationChanges(
+  const invalidation = reconcileStartedScopedPrefixes(
     raceClient,
+    ['liq-dashboard'],
     scope,
     BANK_ID,
-    ['liquidity'],
   );
   await waitFor(
     () => raceRequests === 2,
-    'generation invalidation did not replace the in-flight request',
+    'signal recovery did not replace the in-flight detail request',
   );
   releases[0]('stale-generation');
   releases[1]('fresh-generation');
@@ -384,6 +396,35 @@ async function main(): Promise<void> {
   assert.deepEqual(
     changedGenerations(officialBaseline, nextOfficialBaseline),
     ['capital', 'forecast'],
+  );
+  const withdrawnOfficialBaseline = officialCompletionFingerprint([
+    {
+      id: 'capital-official-old',
+      module: 'capital',
+      scenarioCode: 'baseline',
+      status: 'succeeded',
+      inputHash: 'capital-official-hash-old',
+      evidence: {
+        status: 'inputs_withdrawn',
+        rowsWithdrawn: 4,
+        withdrawals: [
+          {
+            withdrawalId: 'withdrawal-1',
+            approvedAt: '2026-08-27T12:10:00Z',
+          },
+        ],
+      },
+    },
+  ]);
+  assert.deepEqual(
+    changedGenerations(officialBaseline, withdrawnOfficialBaseline),
+    ['capital'],
+    'derived evidence withdrawal must invalidate its module',
+  );
+  assert.deepEqual(
+    changedGenerations(withdrawnOfficialBaseline, officialBaseline),
+    ['capital'],
+    'derived evidence restoration must invalidate its module',
   );
   await invalidateOfficialRunChanges(
     officialClient,

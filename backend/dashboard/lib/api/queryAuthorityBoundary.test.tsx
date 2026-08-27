@@ -135,7 +135,19 @@ async function main(): Promise<void> {
   };
   let generation = 7;
   let officialGeneration = 1;
-  const latestRegulatoryRuns = [
+  type MockRegulatoryRun = {
+    id: string;
+    module: string;
+    scenarioCode: string;
+    status: string;
+    inputHash: string;
+    evidence?: {
+      status: string;
+      rowsWithdrawn: number;
+      withdrawals: Array<{ withdrawalId: string; approvedAt: string }>;
+    };
+  };
+  const latestRegulatoryRuns: MockRegulatoryRun[] = [
     {
       id: 'liquidity-official-1',
       module: 'liquidity',
@@ -183,15 +195,32 @@ async function main(): Promise<void> {
       return { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
     },
     runAllLiquidityScenarios: response('liq-mutation', {}),
-    listRegulatoryRuns: async () => {
+    listRegulatoryRuns: async ({
+      module,
+      scenarioCode,
+      limit = 25,
+      offset = 0,
+    }: {
+      module?: string;
+      scenarioCode?: string;
+      limit?: number;
+      offset?: number;
+    }) => {
       counts.set(
         'official-run-signal',
         (counts.get('official-run-signal') ?? 0) + 1,
       );
       await initialSignalGate;
+      const matching = latestRegulatoryRuns.filter(
+        (run) =>
+          (!module || run.module === module) &&
+          (!scenarioCode || run.scenarioCode === scenarioCode),
+      );
+      const runs = matching.slice(offset, offset + limit);
       return {
-        total: latestRegulatoryRuns.length,
-        runs: latestRegulatoryRuns,
+        total: matching.length,
+        runs,
+        hasMore: offset + runs.length < matching.length,
       };
     },
   });
@@ -512,13 +541,27 @@ async function main(): Promise<void> {
   assert.equal(counts.get('cap-dashboard'), beforeScenarioCapital);
   assert.equal(counts.get('liq-dashboard'), beforeScenarioLiquidity);
 
-  latestRegulatoryRuns.unshift({
-    id: 'capital-official-2',
-    module: 'capital',
-    scenarioCode: 'baseline',
-    status: 'succeeded',
-    inputHash: 'capital-official-hash-2',
-  });
+  latestRegulatoryRuns.unshift(
+    ...Array.from({ length: 101 }, (_, index) => ({
+      id: `capital-failed-${index}`,
+      module: 'capital',
+      scenarioCode: 'baseline',
+      status: 'failed',
+      inputHash: `capital-failed-hash-${index}`,
+    })),
+    {
+      id: 'capital-official-2',
+      module: 'capital',
+      scenarioCode: 'baseline',
+      status: 'succeeded',
+      inputHash: 'capital-official-hash-2',
+      evidence: {
+        status: 'current',
+        rowsWithdrawn: 0,
+        withdrawals: [],
+      },
+    },
+  );
   const beforeHistoricalOfficialCapital = counts.get('cap-dashboard') ?? 0;
   const beforeHistoricalOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
   await act(async () => {
@@ -534,6 +577,53 @@ async function main(): Promise<void> {
     counts.get('liq-dashboard'),
     beforeHistoricalOfficialLiquidity,
     'non-selected official run invalidated an unaffected module',
+  );
+
+  const capitalOfficialIndex = latestRegulatoryRuns.findIndex(
+    (run) => run.id === 'capital-official-2',
+  );
+  latestRegulatoryRuns[capitalOfficialIndex] = {
+    ...latestRegulatoryRuns[capitalOfficialIndex],
+    evidence: {
+      status: 'inputs_withdrawn',
+      rowsWithdrawn: 3,
+      withdrawals: [
+        {
+          withdrawalId: 'withdrawal-1',
+          approvedAt: '2026-08-27T12:30:00Z',
+        },
+      ],
+    },
+  };
+  const beforeWithdrawalCapital = counts.get('cap-dashboard') ?? 0;
+  const beforeWithdrawalLiquidity = counts.get('liq-dashboard') ?? 0;
+  await act(async () => {
+    await queryClient!.invalidateQueries({
+      predicate: (query) => query.queryKey[0] === 'official-run-signal',
+    });
+  });
+  await waitFor(
+    () => counts.get('cap-dashboard') === beforeWithdrawalCapital + 1,
+    'official-run evidence withdrawal did not invalidate capital detail',
+  );
+  assert.equal(counts.get('liq-dashboard'), beforeWithdrawalLiquidity);
+
+  latestRegulatoryRuns[capitalOfficialIndex] = {
+    ...latestRegulatoryRuns[capitalOfficialIndex],
+    evidence: {
+      status: 'current',
+      rowsWithdrawn: 0,
+      withdrawals: [],
+    },
+  };
+  await act(async () => {
+    await queryClient!.invalidateQueries({
+      predicate: (query) => query.queryKey[0] === 'official-run-signal',
+    });
+  });
+  await waitFor(
+    () => counts.get('cap-dashboard') === beforeWithdrawalCapital + 2,
+    'official-run evidence restoration did not invalidate capital detail',
   );
 
   const beforeLiquidityMutation = counts.get('liq-dashboard') ?? 0;

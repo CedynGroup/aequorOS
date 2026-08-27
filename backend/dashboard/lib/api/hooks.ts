@@ -121,7 +121,6 @@ import {
   dashboardSemantic,
   generationFingerprint,
   generationInvalidationPrefixes,
-  invalidateCachedScopedPrefixes,
   invalidateGenerationChanges,
   invalidateOfficialRunChanges,
   invalidateScopedPrefixes,
@@ -129,6 +128,7 @@ import {
   officialCompletionFingerprint,
   observedSignalChanges,
   officialRunFingerprint,
+  reconcileStartedScopedPrefixes,
   regulatoryDetailInvalidationPrefixes,
   scopedQueryKey,
   waitForInitialDashboardSignals,
@@ -955,7 +955,7 @@ export function useLiveSummary(bankId: string | undefined) {
     const recovering = !observed?.fingerprint && (observed?.failed ?? false);
     const changed = observedSignalChanges(observed?.fingerprint, next, false);
     if (recovering) {
-      void invalidateCachedScopedPrefixes(
+      void reconcileStartedScopedPrefixes(
         queryClient,
         generationInvalidationPrefixes([...next.keys()]),
         scope,
@@ -1023,7 +1023,7 @@ export function useBankFreshness(
     const recovering = !observed?.fingerprint && (observed?.failed ?? false);
     const changed = observedSignalChanges(observed?.fingerprint, next, false);
     if (recovering) {
-      void invalidateCachedScopedPrefixes(
+      void reconcileStartedScopedPrefixes(
         queryClient,
         regulatoryDetailInvalidationPrefixes([...next.keys()]),
         scope,
@@ -1048,14 +1048,22 @@ export function useLatestOfficialRunSignal(bankId: string | undefined) {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: scopedQueryKey('official-run-signal', scope, bankId ?? null),
-    queryFn: () =>
-      apiCall(() =>
-        regulatoryLiquidityApi.listRegulatoryRuns({
-          bankId: bankId!,
-          limit: 25,
-          offset: 0,
-        })
-      ),
+    queryFn: async () => {
+      let offset = 0;
+      const runs = [];
+      while (true) {
+        const page = await apiCall(() =>
+          regulatoryLiquidityApi.listRegulatoryRuns({
+            bankId: bankId!,
+            limit: 100,
+            offset,
+          })
+        );
+        runs.push(...page.runs);
+        if (!page.hasMore || page.runs.length === 0) return { runs };
+        offset += page.runs.length;
+      }
+    },
     enabled: Boolean(bankId),
     refetchInterval: jitteredPollInterval(
       LIVE_SIGNAL_POLL_MS,
@@ -1088,7 +1096,7 @@ export function useLatestOfficialRunSignal(bankId: string | undefined) {
     const recovering = !observed?.fingerprint && (observed?.failed ?? false);
     const changed = observedSignalChanges(observed?.fingerprint, next, false);
     if (recovering) {
-      void invalidateCachedScopedPrefixes(
+      void reconcileStartedScopedPrefixes(
         queryClient,
         regulatoryDetailInvalidationPrefixes([...next.keys()]),
         scope,

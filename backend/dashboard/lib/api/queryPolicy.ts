@@ -82,7 +82,7 @@ export async function waitForInitialDashboardSignals(
       );
     },
   });
-  await Promise.all(
+  await Promise.allSettled(
     signals.flatMap((query) => {
       if (query.state.status === 'error') {
         return [query.fetch()];
@@ -153,12 +153,27 @@ export function invalidateCachedScopedPrefixes(
   );
 }
 
+export function reconcileStartedScopedPrefixes(
+  queryClient: QueryClient,
+  prefixes: readonly string[],
+  scope: QueryAuthorityScope,
+  bankId: string | undefined
+): Promise<void[]> {
+  return invalidateMatchingScopedPrefixes(
+    queryClient,
+    prefixes,
+    scope,
+    bankId,
+    'started',
+  );
+}
+
 function invalidateMatchingScopedPrefixes(
   queryClient: QueryClient,
   prefixes: readonly string[],
   scope: QueryAuthorityScope,
   bankId: string | undefined,
-  cachedOnly: boolean,
+  selection: boolean | 'started',
 ): Promise<void[]> {
   const matchesScope = (prefix: string, key: QueryKey): boolean => {
     if (key[0] !== prefix) return false;
@@ -175,10 +190,26 @@ function invalidateMatchingScopedPrefixes(
 
   return Promise.all(
     prefixes.map(async (prefix) => {
+      type Candidate = {
+        queryKey: QueryKey;
+        state: { data: unknown; fetchStatus: string };
+      };
+      const selected = selection === 'started'
+        ? new Set<object>(
+            queryClient.getQueryCache().findAll({
+              predicate: (query: Candidate) =>
+                matchesScope(prefix, query.queryKey) &&
+                (query.state.data !== undefined ||
+                  query.state.fetchStatus === 'fetching'),
+            })
+          )
+        : undefined;
       const filters = {
-        predicate: (query: { queryKey: QueryKey; state: { data: unknown } }) =>
-          matchesScope(prefix, query.queryKey) &&
-          (!cachedOnly || query.state.data !== undefined),
+        predicate: (query: Candidate) =>
+          selected
+            ? selected.has(query)
+            : matchesScope(prefix, query.queryKey) &&
+              (selection === false || query.state.data !== undefined),
       };
       await queryClient.cancelQueries(filters);
       await queryClient.invalidateQueries(filters);
@@ -312,6 +343,14 @@ export type OfficialCompletionSignal = Readonly<{
   scenarioCode: string;
   status: string;
   inputHash: string;
+  evidence?: Readonly<{
+    status: string;
+    rowsWithdrawn?: number;
+    withdrawals?: readonly Readonly<{
+      withdrawalId: string;
+      approvedAt?: unknown;
+    }>[];
+  }>;
 }>;
 
 const OFFICIAL_COMPLETION_SCENARIOS = new Map([
@@ -326,20 +365,39 @@ const OFFICIAL_COMPLETION_SCENARIOS = new Map([
 export function officialCompletionFingerprint(
   runs: readonly OfficialCompletionSignal[]
 ): ReadonlyMap<string, string> {
-  const fingerprints = new Map<string, string>();
+  const moduleRuns = new Map<string, string[]>();
   for (const run of runs) {
     const officialScenario = OFFICIAL_COMPLETION_SCENARIOS.get(run.module);
     if (
       !officialScenario ||
       run.status !== 'succeeded' ||
-      run.scenarioCode !== officialScenario ||
-      fingerprints.has(run.module)
+      run.scenarioCode !== officialScenario
     ) {
       continue;
     }
-    fingerprints.set(run.module, JSON.stringify([run.id, run.inputHash]));
+    const fingerprints = moduleRuns.get(run.module) ?? [];
+    fingerprints.push(
+      JSON.stringify([
+        run.id,
+        run.inputHash,
+        run.evidence?.status ?? null,
+        run.evidence?.rowsWithdrawn ?? null,
+        [...(run.evidence?.withdrawals ?? [])]
+          .map((withdrawal) => [
+            withdrawal.withdrawalId,
+            withdrawal.approvedAt ?? null,
+          ])
+          .sort(([left], [right]) => String(left).localeCompare(String(right))),
+      ])
+    );
+    moduleRuns.set(run.module, fingerprints);
   }
-  return fingerprints;
+  return new Map(
+    [...moduleRuns].map(([module, fingerprints]) => [
+      module,
+      JSON.stringify(fingerprints.sort()),
+    ])
+  );
 }
 
 export async function refreshLiveSummaryGenerationChanges(
