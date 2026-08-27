@@ -187,6 +187,7 @@ export function useLiquidityDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   const semantic = dashboardSemantic(periodId);
@@ -210,6 +211,7 @@ export function useCapitalDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   const semantic = dashboardSemantic(periodId);
@@ -422,6 +424,7 @@ export function useIrrDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
@@ -482,6 +485,7 @@ export function useFxDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
@@ -527,6 +531,7 @@ export function useFtpDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
@@ -577,6 +582,7 @@ export function useRwaBreakdown(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
@@ -600,6 +606,7 @@ export function useCapitalStructure(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({

@@ -207,7 +207,8 @@ async function main(): Promise<void> {
     }: {
       reportingPeriodId?: string;
     }) => {
-      counts.set('freshness', (counts.get('freshness') ?? 0) + 1);
+      const name = `freshness:${reportingPeriodId ?? 'current'}`;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
       await initialSignalGate;
       return {
         reportingPeriodId: reportingPeriodId ?? null,
@@ -338,7 +339,8 @@ async function main(): Promise<void> {
   await waitFor(
     () =>
       counts.get('live-summary') === 1 &&
-      counts.get('freshness') === 1,
+      counts.get('freshness:current') === 1 &&
+      counts.get(`freshness:${PERIOD_ID}`) === 1,
     'initial dashboard signals did not start',
   );
   assert.equal(
@@ -355,7 +357,7 @@ async function main(): Promise<void> {
     releaseInitialSignals!();
   });
   await waitFor(
-    () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 21,
+    () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 22,
     'Command Center resources did not settle',
   );
   const initialCounts = new Map(counts);
@@ -372,7 +374,7 @@ async function main(): Promise<void> {
     [...initialCounts.entries()]
       .filter(([name]) => name !== 'liq-mutation')
       .reduce((total, [, count]) => total + count, 0),
-    21,
+    22,
     'real duplicate consumers must collapse without cross-period summary polling',
   );
 
@@ -389,6 +391,32 @@ async function main(): Promise<void> {
   );
   assert.equal(effectiveLiquidityPeriod, HISTORICAL_PERIOD_ID);
   assert.equal(effectiveCapitalPeriod, HISTORICAL_PERIOD_ID);
+  assert.equal(
+    counts.get('freshness:current'),
+    1,
+    'current-semantic module reads must share one freshness signal',
+  );
+  assert.equal(
+    counts.get(`freshness:${HISTORICAL_PERIOD_ID}`),
+    1,
+    'effective-period dashboard reads must share one freshness signal',
+  );
+  officialGeneration += 1;
+  const beforeFallbackOfficialCapital =
+    counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0;
+  await act(async () => {
+    await queryClient!.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey[0] === 'freshness' &&
+        query.queryKey[4] === HISTORICAL_PERIOD_ID,
+    });
+  });
+  await waitFor(
+    () =>
+      counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ===
+      beforeFallbackOfficialCapital + 1,
+    'effective-period official-run signal did not invalidate displayed detail',
+  );
 
   let releaseHistoricalRefetch: (() => void) | null = null;
   currentDetailGate = new Promise<void>((resolve) => {
@@ -469,7 +497,8 @@ async function main(): Promise<void> {
   const beforeScheduledOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
   await act(async () => {
     await queryClient!.invalidateQueries({
-      predicate: (query) => query.queryKey[0] === 'freshness',
+      predicate: (query) =>
+        query.queryKey[0] === 'freshness' && query.queryKey[4] === null,
     });
   });
   await waitFor(
@@ -552,9 +581,11 @@ async function main(): Promise<void> {
   await waitFor(
     () =>
       (counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2 &&
-      (counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2,
+      (counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2 &&
+      (counts.get(`freshness:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2,
     'historical dashboards did not reactivate before the official run',
   );
+  await new Promise((resolve) => setTimeout(resolve, 20));
   const beforeOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
   const beforeOfficialCapital = counts.get('cap-dashboard') ?? 0;
   const beforeOfficialHistoricalLiquidity =
@@ -591,7 +622,7 @@ async function main(): Promise<void> {
   globalThis.setInterval = nativeSetInterval;
   globalThis.setTimeout = nativeSetTimeout;
   console.log(
-    'queryAuthorityBoundary.test.tsx: pending 0; settled 21 resources/calls; focus, idle, and invalidation passed',
+    'queryAuthorityBoundary.test.tsx: pending 0; settled 22 resources/calls; focus, idle, and invalidation passed',
   );
 }
 

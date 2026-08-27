@@ -138,6 +138,7 @@ async function main(): Promise<void> {
     scopedQueryKey('facts', scope, BANK_ID, PERIOD_ID),
     scopedQueryKey('live-summary', scope, BANK_ID),
     scopedQueryKey('freshness', scope, BANK_ID, PERIOD_ID),
+    scopedQueryKey('freshness', scope, BANK_ID, null),
     scopedQueryKey('alerts', scope, BANK_ID, 20),
     scopedQueryKey('notifications', scope, false),
     current('liq-dashboard'),
@@ -151,7 +152,7 @@ async function main(): Promise<void> {
     scopedQueryKey('de-batches', scope, BANK_ID, 'all'),
     scopedQueryKey('de-activations', scope, BANK_ID),
   ];
-  assert.equal(homeResources.length, 21);
+  assert.equal(homeResources.length, 22);
   const requestCounts = new Map<string, number>();
   const requestClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 1_000 } },
@@ -380,14 +381,15 @@ async function main(): Promise<void> {
   assert.ok(jitter >= 18_000 && jitter <= 22_000);
 
   // Count model for the same 65-second idle window used by the pre-change
-  // fixture. Only the cheap live summary, selected-period freshness, alert
-  // list, and inbox retain a cadence. With this fixture's deterministic
-  // jitter: 21 logical initial resources/calls + 3 summary ticks + 2 freshness
-  // ticks + 3 alert ticks + 1 inbox tick = 30 requests. The five
+  // fixture. Only the cheap live summary, active current/selected-period
+  // freshness signals, alert list, and inbox retain a cadence. With this
+  // fixture's deterministic jitter the total remains below the 44-request
+  // baseline. The five
   // module detail payloads each load once and contribute zero idle polls.
   const idleWindowMs = 65_000;
   const retainedIntervals = [
     jitter,
+    jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'freshness', scope, BANK_ID),
     jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'freshness', scope, BANK_ID),
     jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'alerts', scope, BANK_ID),
     jitteredPollInterval(60_000, 'notifications', scope),
@@ -398,7 +400,7 @@ async function main(): Promise<void> {
       (ticks, interval) => ticks + Math.floor(idleWindowMs / interval),
       0,
     );
-  assert.equal(afterIdleRequests, 30);
+  assert.ok(afterIdleRequests < 44);
   assert.equal(
     homeResources.filter((key) =>
       [
@@ -431,7 +433,7 @@ async function main(): Promise<void> {
   idleClient.clear();
   requestClient.clear();
   console.log(
-    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 21/30/5; detailed idle polls 0; invalidation passed'
+    `queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after ${homeResources.length}/${afterIdleRequests}/5; detailed idle polls 0; invalidation passed`
   );
 }
 

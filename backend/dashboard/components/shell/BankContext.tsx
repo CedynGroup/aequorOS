@@ -24,11 +24,7 @@ import type {
   BankReportingPeriodRead,
 } from '@aequoros/risk-service-api';
 import { isApiError } from '@/lib/api/client';
-import {
-  useBankFreshness,
-  useBanks,
-  useReportingPeriods,
-} from '@/lib/api/hooks';
+import { useBanks, useReportingPeriods } from '@/lib/api/hooks';
 import { setActiveJurisdiction } from '@/lib/format';
 import { moduleSetFrom, type ModuleScope } from '@/lib/modules';
 import Logo from './Logo';
@@ -165,7 +161,6 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const period =
     periods.find((p) => p.id === selectedPeriodId) ?? periods[0] ?? null;
-  useBankFreshness(period ? bank?.id : undefined, period?.id);
 
   const isLoading =
     banksQuery.isLoading || (Boolean(bank) && periodsQuery.isLoading);
