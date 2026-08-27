@@ -112,6 +112,13 @@ def get_current_principal(
     authenticated route, before any handler or narrower ``ctx`` dependency runs.
     """
     principal = _authenticate_principal(credentials)
+    if principal.authorization_version is not None:
+        session = get_sessionmaker()()
+        session.info["organization_id"] = principal.organization_id
+        try:
+            validate_tenant_context(session, principal)
+        finally:
+            session.close()
     refuse_impersonated_mutation(request, principal)
     return principal
 
@@ -306,7 +313,8 @@ def get_tenant_db_session(
     session = get_sessionmaker()()
     session.info["organization_id"] = ctx.organization_id
     try:
-        validate_tenant_context(session, ctx)
+        if ctx.authorization_version is None:
+            validate_tenant_context(session, ctx)
         yield session
     except Exception:
         session.rollback()

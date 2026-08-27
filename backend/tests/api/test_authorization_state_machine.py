@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 import jwt
+import pytest
 from fastapi.testclient import TestClient
 from hypothesis import settings
 from hypothesis import strategies as st
@@ -32,7 +33,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_sessionmaker
 from app.models import RefreshToken, User
 from app.services import authentication, authorization
-from tests.api.helpers import ORG_1, USER_1
+from tests.api.helpers import ORG_1, USER_1, headers
 
 
 @contextmanager
@@ -198,3 +199,49 @@ def test_authorization_version_session_state_machine(db_client: TestClient) -> N
             deadline=None,
         ),
     )
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/api/v1/market-data/templates/yield_curve",
+        "/api/v1/regulatory-reporting/templates",
+    ),
+)
+def test_routes_without_db_session_reject_stale_access_tokens(
+    db_client: TestClient,
+    path: str,
+) -> None:
+    with _session() as session:
+        user = session.get(User, USER_1)
+        assert user is not None
+        user.authorization_version = 2
+        session.commit()
+
+    response = db_client.get(path, headers=headers(authorization_version=1))
+
+    assert response.status_code == 401
+    assert response.json()["error"]["message"] == ("Session authorization is stale. Sign in again.")
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/api/v1/market-data/templates/yield_curve",
+        "/api/v1/regulatory-reporting/templates",
+    ),
+)
+def test_routes_without_db_session_reject_inactive_users(
+    db_client: TestClient,
+    path: str,
+) -> None:
+    with _session() as session:
+        user = session.get(User, USER_1)
+        assert user is not None
+        user.is_active = False
+        session.commit()
+
+    response = db_client.get(path, headers=headers())
+
+    assert response.status_code == 401
+    assert response.json()["error"]["message"] == "Tenant context is not valid."

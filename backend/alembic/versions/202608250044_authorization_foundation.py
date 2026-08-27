@@ -197,6 +197,10 @@ def downgrade() -> None:
     op.drop_table(_TABLE)
 
     op.drop_constraint("ck_refresh_tokens_revoked_reason", "refresh_tokens", type_="check")
+    op.execute(
+        "UPDATE refresh_tokens SET revoked_reason = 'admin_revoked' "
+        "WHERE revoked_reason = 'authorization_changed'"
+    )
     op.create_check_constraint(
         "ck_refresh_tokens_revoked_reason",
         "refresh_tokens",
