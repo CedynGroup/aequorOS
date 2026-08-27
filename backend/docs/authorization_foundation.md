@@ -1,4 +1,4 @@
-# Authorization foundation (as built 2026-08-25)
+# Authorization foundation (as built through 2026-08-27)
 
 This document records the first bounded server-side slice of `docs/rbac.md`.
 The new policy kernel is additive and shadow-only; the authorization-version
@@ -156,8 +156,13 @@ credential lifecycles and do not carry `authv`.
 
 The fixed evaluator, service, refresh-token, and Postgres migration suites pin
 the binding semantics, database constraints, FORCE RLS, cross-tenant refusal,
-and atomic version-bump/session-revocation contract. Two generative suites add
-coverage beyond the fixed examples:
+and atomic version-bump/session-revocation contract. The fixed tests also prove
+that one institution binding does not reach a sibling, an explicitly
+organization-wide binding does, cross-organization and invalid targets fail
+closed with actionable reasons, and suspended or absent bindings default to
+denial. The Liquidity Monitoring API tests pin both allowed and denied shadow
+telemetry and prove that a shadow-evaluation failure cannot change the legacy
+response. Two generative suites add coverage beyond the fixed examples:
 
 - `tests/core/test_authorization_properties.py` compares the evaluator with an
   independent per-binding oracle across binding order, partial cross-row

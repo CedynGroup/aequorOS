@@ -2,8 +2,8 @@
 
 **Status:** implementation spec · **Audience:** dashboard + platform engineers · **Owner:** Eric
 
-> **As-built foundation (2026-08-25):** The first additive authorization slice
-> is recorded in the backend
+> **As-built foundation (updated 2026-08-27):** The additive authorization slices
+> are recorded in the backend
 > [`authorization_foundation.md`](../backend/docs/authorization_foundation.md).
 > It corrects the proposed independent `user_roles`/`user_scopes` shape to
 > indivisible scoped bindings, adds exact resource evaluation and authorization
