@@ -34,6 +34,7 @@ from app.core.authorization import (
 from app.core.authorization import (
     evaluate_permission as evaluate_grants,
 )
+from app.core.observability import authorization_shadow_decision
 from app.db.base import utc_now
 from app.models import AuthorizationBinding, Bank, OperatorUser, User
 from app.services import authentication
@@ -263,6 +264,49 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
 ) -> AuthorizationDecision:
     """Resolve authority from persisted bindings only, with an audit-ready trace."""
 
+    user = db.scalar(
+        select(User).where(
+            User.id == principal.principal_id,
+            User.organization_id == principal.organization_id,
+            User.is_active.is_(True),
+        )
+    )
+    if user is None or _principal_type(user) is not principal.principal_type:
+        decision = evaluate_grants(
+            principal,
+            permission,
+            resource,
+            (),
+            conditions=conditions,
+            now=now,
+        )
+        return replace(decision, allowed=False, reason="principal_not_active")
+    if resource.organization_id != principal.organization_id:
+        return evaluate_grants(
+            principal,
+            permission,
+            resource,
+            (),
+            conditions=conditions,
+            now=now,
+        )
+    if resource.institution_scope is InstitutionScope.INSTITUTION:
+        institution = db.scalar(
+            select(Bank.id).where(
+                Bank.id == resource.institution_id,
+                Bank.organization_id == resource.organization_id,
+            )
+        )
+        if institution is None:
+            decision = evaluate_grants(
+                principal,
+                permission,
+                resource,
+                (),
+                conditions=conditions,
+                now=now,
+            )
+            return replace(decision, allowed=False, reason="resource_institution_not_in_tenant")
     bindings = list(
         db.scalars(
             select(AuthorizationBinding).where(
@@ -272,7 +316,7 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
             )
         )
     )
-    decision = evaluate_grants(
+    return evaluate_grants(
         principal,
         permission,
         resource,
@@ -280,22 +324,62 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
         conditions=conditions,
         now=now,
     )
-    user = db.scalar(
-        select(User).where(
-            User.id == principal.principal_id,
-            User.organization_id == principal.organization_id,
-            User.is_active.is_(True),
+
+
+def observe_shadow_permission(  # noqa: PLR0913 - the observed decision tuple is explicit
+    db: Session,
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    *,
+    legacy_allowed: bool,
+    conditions: tuple[ConditionCheck, ...] = (),
+    now: datetime | None = None,
+) -> AuthorizationDecision | None:
+    """Evaluate and emit policy parity while legacy authorization remains authoritative.
+
+    This function never grants or refuses the request.  It gives one real route
+    a stable, queryable rollout signal without silently migrating that route to
+    the binding evaluator.
+    """
+
+    target_fields = {
+        "organization_id": resource.organization_id,
+        "principal_id": str(principal.principal_id),
+        "principal_type": principal.principal_type.value,
+        "permission": permission.value,
+        "institution_scope": resource.institution_scope.value,
+        "institution_id": resource.institution_id,
+        "module": resource.module.value,
+        "sensitivity": resource.sensitivity.value,
+    }
+    try:
+        decision = evaluate_permission(
+            db,
+            principal,
+            permission,
+            resource,
+            conditions=conditions,
+            now=now,
         )
+    except Exception as exc:  # noqa: BLE001 - shadow observation must never become a route gate
+        authorization_shadow_decision(
+            binding_allowed=False,
+            legacy_allowed=legacy_allowed,
+            reason="shadow_evaluation_failed",
+            severity="error",
+            error_type=type(exc).__name__,
+            **target_fields,
+        )
+        return None
+    authorization_shadow_decision(
+        binding_allowed=decision.allowed,
+        legacy_allowed=legacy_allowed,
+        reason=decision.reason,
+        matching_binding_ids=",".join(str(value) for value in decision.matching_binding_ids),
+        binding_trace=",".join(
+            f"{trace.binding_id}:{trace.reason}" for trace in decision.binding_trace
+        ),
+        **target_fields,
     )
-    if user is None or _principal_type(user) is not principal.principal_type:
-        return replace(decision, allowed=False, reason="principal_not_active")
-    if resource.institution_id is not None:
-        institution = db.scalar(
-            select(Bank.id).where(
-                Bank.id == resource.institution_id,
-                Bank.organization_id == resource.organization_id,
-            )
-        )
-        if institution is None:
-            return replace(decision, allowed=False, reason="resource_institution_not_in_tenant")
     return decision

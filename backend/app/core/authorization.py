@@ -172,9 +172,27 @@ class ResourceLocator:
     """Canonical attributes a policy decision may match in rollout v1."""
 
     organization_id: str
+    institution_scope: InstitutionScope
     institution_id: str | None
     module: Module
     sensitivity: Sensitivity
+
+    def __post_init__(self) -> None:
+        """Reject ambiguous resource targets before policy evaluation.
+
+        A nullable institution identifier is not itself a scope.  Callers must
+        name whether they are addressing the organization or one institution,
+        using the same explicit vocabulary as persisted bindings.
+        """
+
+        if not isinstance(self.institution_scope, InstitutionScope):
+            raise ValueError("resource institution scope must be organization or institution")
+        if self.institution_scope is InstitutionScope.ORGANIZATION:
+            if self.institution_id is not None:
+                raise ValueError("organization-scoped resource must not carry an institution id")
+            return
+        if self.institution_id is None or not self.institution_id.strip():
+            raise ValueError("institution-scoped resource requires an explicit institution id")
 
 
 @dataclass(frozen=True)
@@ -249,6 +267,7 @@ class AuthorizationDecision:
             },
             "resource": {
                 "organization_id": self.resource.organization_id,
+                "institution_scope": self.resource.institution_scope.value,
                 "institution_id": self.resource.institution_id,
                 "module": self.resource.module.value,
                 "sensitivity": self.resource.sensitivity.value,
@@ -288,7 +307,10 @@ def _active(binding: BindingGrant, now: datetime) -> tuple[bool, str]:
 def _institution_matches(binding: BindingGrant, resource: ResourceLocator) -> bool:
     if binding.institution_scope is InstitutionScope.ORGANIZATION:
         return binding.institution_id is None
-    return resource.institution_id is not None and binding.institution_id == resource.institution_id
+    return (
+        resource.institution_scope is InstitutionScope.INSTITUTION
+        and binding.institution_id == resource.institution_id
+    )
 
 
 def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
