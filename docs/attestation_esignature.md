@@ -154,8 +154,9 @@ Attestation binds to `RegulatoryRun` only.
 | `rejected` / `declined` | `superseded` |
 | `superseded` | *(terminal)* |
 
-Role gating (`app/api/deps.py`; hierarchy `admin ⊃ approver ⊃ analyst ⊃ viewer`,
-`app/core/security.py:33`):
+Role gating (`app/api/deps.py`; hierarchy
+`admin ⊃ approver ⊃ analyst ⊃ examiner ⊃ viewer`,
+`app/core/security.py:ROLES`):
 
 | Action | Gate |
 |---|---|

@@ -423,7 +423,7 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
   (calendar features), `baseline.py`, `model.py` (train/persist/forecast), `config.py`
   (`TrainingConfig`, model version).
 - Endpoints (`/banks/{id}/cashflow-forecast`, `/banks/{id}/cashflow-history`) enforce tenant
-  scoping (headers → `TenantContext` → bank ownership) in
+  scoping (verified bearer credential → `TenantContext` → bank ownership) in
   `app/services/cashflow_forecast.py`, which lazy-trains on first forecast (or loads saved
   artifacts) via an in-process `ForecastService` singleton. The ML package itself is
   tenant-unaware compute; the service layer owns authorization and response shaping.

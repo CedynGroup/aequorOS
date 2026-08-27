@@ -808,9 +808,14 @@ cross-tenant surface.
 
 ---
 
-## 14. API surface
+## 14. Target API surface
 
-Tenant plane (under `/api/v1`, RLS-scoped, admin-gated where noted):
+Except for the routes explicitly marked **BUILT** below, this is the target
+tenant contract rather than the current OpenAPI surface. The existing
+`GET /auth/me` returns identity, preferences, and the legacy scalar role; its
+effective-permission and scope fields land with endpoint authorization rollout.
+
+Tenant plane (under `/api/v1`, RLS-scoped, permission-gated where noted):
 
 ```
 # current user
