@@ -101,7 +101,7 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
     os.getenv("TEST_DATABASE_URL") is None,
     reason="TEST_DATABASE_URL is required for Postgres migration tests.",
 )
-def test_authorization_migration_downgrade_normalizes_revocation_reason(
+def test_authorization_migration_downgrade_normalizes_under_tenant_scoped_role(
     migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     organization_id = "OR-RBCK0001"
@@ -152,6 +152,23 @@ def test_authorization_migration_downgrade_normalizes_revocation_reason(
             },
         )
 
+    with migrated_postgres_schema.app_engine.connect() as connection:
+        role_state = connection.execute(
+            text(
+                "SELECT current_user, rolsuper OR rolbypassrls "
+                "FROM pg_roles WHERE rolname = current_user"
+            )
+        ).one()
+        visible_rows = connection.scalar(
+            text("SELECT count(*) FROM refresh_tokens WHERE id = :id"),
+            {"id": token_id},
+        )
+
+    assert role_state[1] is False, (
+        f"TEST_DATABASE_URL role {role_state[0]} must not bypass RLS for this proof."
+    )
+    assert visible_rows == 0
+
     command.downgrade(alembic_config_for_app(), "202608230042")
     clear_database_caches()
 
@@ -178,7 +195,20 @@ def test_authorization_migration_downgrade_normalizes_revocation_reason(
             ),
             {"schema_name": migrated_postgres_schema.schema_name},
         )
+        force_rls_restored = connection.scalar(
+            text(
+                """
+                SELECT c.relforcerowsecurity
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = :schema_name
+                  AND c.relname = 'refresh_tokens'
+                """
+            ),
+            {"schema_name": migrated_postgres_schema.schema_name},
+        )
 
     assert reason == "admin_revoked"
     assert constraint_definition is not None
     assert "authorization_changed" not in constraint_definition
+    assert force_rls_restored is True

@@ -17,6 +17,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db.session import force_rls_suspended
 
 revision = "202608250044"
 down_revision = "202608230042"
@@ -197,10 +198,11 @@ def downgrade() -> None:
     op.drop_table(_TABLE)
 
     op.drop_constraint("ck_refresh_tokens_revoked_reason", "refresh_tokens", type_="check")
-    op.execute(
-        "UPDATE refresh_tokens SET revoked_reason = 'admin_revoked' "
-        "WHERE revoked_reason = 'authorization_changed'"
-    )
+    with force_rls_suspended(op.get_bind(), "refresh_tokens"):
+        op.execute(
+            "UPDATE refresh_tokens SET revoked_reason = 'admin_revoked' "
+            "WHERE revoked_reason = 'authorization_changed'"
+        )
     op.create_check_constraint(
         "ck_refresh_tokens_revoked_reason",
         "refresh_tokens",
