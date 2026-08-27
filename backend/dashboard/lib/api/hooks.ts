@@ -125,7 +125,6 @@ import {
   invalidateOfficialRunChanges,
   invalidateScopedPrefixes,
   jitteredPollInterval,
-  officialCompletionFingerprint,
   observedSignalChanges,
   officialRunFingerprint,
   reconcileStartedScopedPrefixes,
@@ -919,11 +918,6 @@ const observedLiveGenerations = new WeakMap<object, Map<string, ObservedModuleSi
 
 const observedOfficialRuns = new WeakMap<object, Map<string, ObservedModuleSignal>>();
 
-const observedLatestOfficialRuns = new WeakMap<
-  object,
-  Map<string, ObservedModuleSignal>
->();
-
 /** Cross-module current metrics + per-module generation signal, cheaply polled. */
 export function useLiveSummary(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
@@ -1045,87 +1039,6 @@ export function useBankFreshness(
       );
     }
   }, [bankId, periodId, query.data, query.isError, queryClient, scope]);
-
-  return query;
-}
-
-export function useLatestOfficialRunSignal(
-  bankId: string | undefined,
-  reportingPeriodIds: readonly string[],
-) {
-  const scope = useQueryAuthorityScope();
-  const queryClient = useQueryClient();
-  const query = useQuery({
-    queryKey: scopedQueryKey(
-      'official-run-signal',
-      scope,
-      bankId ?? null,
-      ...reportingPeriodIds,
-    ),
-    queryFn: async () => {
-      const pages = await Promise.all(
-        (
-          [
-            ['liquidity', 'baseline'],
-            ['capital', 'baseline'],
-          ] as const
-        ).map(([module, scenarioCode]) =>
-          apiCall(() =>
-            regulatoryLiquidityApi.listRegulatoryRuns({
-              bankId: bankId!,
-              module,
-              scenarioCode,
-              limit: 100,
-              offset: 0,
-            })
-          )
-        )
-      );
-      return pages.flatMap((page) => page.runs);
-    },
-    enabled: Boolean(bankId),
-    refetchInterval: jitteredPollInterval(
-      LIVE_SIGNAL_POLL_MS,
-      'official-run-signal',
-      scope,
-      bankId,
-    ),
-  });
-
-  useEffect(() => {
-    if (!bankId) return;
-    let byScope = observedLatestOfficialRuns.get(queryClient);
-    if (!byScope) {
-      byScope = new Map();
-      observedLatestOfficialRuns.set(queryClient, byScope);
-    }
-    const identity = `${scope.tenantId}|${scope.authorityId}|${bankId}`;
-    const observed = byScope.get(identity);
-    if (!query.data) {
-      if (query.isError) {
-        byScope.set(identity, {
-          fingerprint: observed?.fingerprint,
-          failed: true,
-        });
-      }
-      return;
-    }
-    const next = officialCompletionFingerprint(query.data, reportingPeriodIds);
-    byScope.set(identity, { fingerprint: next, failed: false });
-    const recovering = !observed?.fingerprint && (observed?.failed ?? false);
-    const changed = observedSignalChanges(observed?.fingerprint, next, false);
-    if (recovering) {
-      void reconcileStartedScopedPrefixes(
-        queryClient,
-        regulatoryDetailInvalidationPrefixes([...next.keys()]),
-        scope,
-        bankId,
-      );
-    }
-    if (changed.length > 0) {
-      void invalidateOfficialRunChanges(queryClient, scope, bankId, changed);
-    }
-  }, [bankId, query.data, query.isError, queryClient, reportingPeriodIds, scope]);
 
   return query;
 }

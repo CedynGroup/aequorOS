@@ -16,9 +16,10 @@ export type DashboardSemantic =
   Readonly<{ mode: 'current' }> | Readonly<{ mode: 'period'; periodId: string }>;
 
 export const HEAVY_DASHBOARD_QUERY_POLICY = Object.freeze({
-  // Detailed regulatory payloads move only when the cheap live-generation
-  // signal moves or an accepted mutation/job explicitly invalidates them.
+  // Detailed regulatory payloads never use fixed polling.
   refetchInterval: false as const,
+  refetchOnWindowFocus: 'always' as const,
+  refetchOnMount: 'always' as const,
 });
 
 export const LIVE_SIGNAL_POLL_MS = 20_000;
@@ -73,9 +74,7 @@ export async function waitForInitialDashboardSignals(
     predicate: (query) => {
       const key = query.queryKey;
       return (
-        (key[0] === 'live-summary' ||
-          key[0] === 'freshness' ||
-          key[0] === 'official-run-signal') &&
+        (key[0] === 'live-summary' || key[0] === 'freshness') &&
         key[1] === scope.tenantId &&
         key[2] === scope.authorityId &&
         key[3] === (bankId ?? null)
@@ -335,82 +334,6 @@ export function observedSignalChanges(
 ): string[] {
   if (previous) return changedGenerations(previous, next);
   return reconcileAfterError ? [...next.keys()] : [];
-}
-
-export type OfficialCompletionSignal = Readonly<{
-  id: string;
-  module: string;
-  reportingPeriodId?: string;
-  scenarioCode: string;
-  status: string;
-  inputHash: string;
-  evidence?: Readonly<{
-    status: string;
-    rowsWithdrawn?: number;
-    withdrawals?: readonly Readonly<{
-      withdrawalId: string;
-      approvedAt?: unknown;
-    }>[];
-  }>;
-}>;
-
-const OFFICIAL_COMPLETION_SCENARIOS = new Map([
-  ['liquidity', 'baseline'],
-  ['capital', 'baseline'],
-  ['irr', 'baseline'],
-  ['fx', 'baseline'],
-  ['ftp', 'baseline'],
-  ['forecast', 'base'],
-]);
-
-export function officialCompletionFingerprint(
-  runs: readonly OfficialCompletionSignal[],
-  reportingPeriodIds?: readonly string[],
-): ReadonlyMap<string, string> {
-  const moduleRuns = new Map<string, string[]>();
-  const representedPeriods = reportingPeriodIds
-    ? new Set(reportingPeriodIds)
-    : undefined;
-  const observedBaselines = new Set<string>();
-  for (const run of runs) {
-    const officialScenario = OFFICIAL_COMPLETION_SCENARIOS.get(run.module);
-    if (
-      !officialScenario ||
-      run.status !== 'succeeded' ||
-      run.scenarioCode !== officialScenario ||
-      (representedPeriods &&
-        (!run.reportingPeriodId ||
-          !representedPeriods.has(run.reportingPeriodId)))
-    ) {
-      continue;
-    }
-    const baselineIdentity = `${run.module}|${run.reportingPeriodId ?? ''}`;
-    if (observedBaselines.has(baselineIdentity)) continue;
-    observedBaselines.add(baselineIdentity);
-    const fingerprints = moduleRuns.get(run.module) ?? [];
-    fingerprints.push(
-      JSON.stringify([
-        run.reportingPeriodId ?? null,
-        run.id,
-        run.inputHash,
-        run.evidence?.status ?? null,
-        run.evidence?.rowsWithdrawn ?? null,
-        [...(run.evidence?.withdrawals ?? [])]
-          .map((withdrawal) => [
-            withdrawal.withdrawalId,
-            withdrawal.approvedAt ?? null,
-          ])
-          .sort(([left], [right]) => String(left).localeCompare(String(right))),
-      ])
-    );
-    moduleRuns.set(run.module, fingerprints);
-  }
-  return new Map(
-    [...moduleRuns].map(([module, fingerprints]) => [
-      module,
-      JSON.stringify(fingerprints.sort()),
-    ])
-  );
 }
 
 export async function refreshLiveSummaryGenerationChanges(

@@ -19,7 +19,6 @@ import {
   invalidateScopedPrefixes,
   jitteredPollInterval,
   observedSignalChanges,
-  officialCompletionFingerprint,
   officialRunFingerprint,
   queryAuthorityScope,
   reconcileStartedScopedPrefixes,
@@ -30,10 +29,6 @@ import {
 
 const BANK_ID = 'BK-SAMP0001';
 const PERIOD_ID = 'period-latest';
-const TREND_PERIOD_IDS = Array.from(
-  { length: 12 },
-  (_, index) => `period-trend-${index + 1}`,
-);
 const scope = queryAuthorityScope('OR-DEM00001', 'analyst@aequoros.example', ['analyst']);
 
 async function waitFor(check: () => boolean, message: string): Promise<void> {
@@ -128,7 +123,11 @@ async function main(): Promise<void> {
   assert.deepEqual(observedSignalChanges(undefined, recovered, true), ['liquidity']);
   assert.deepEqual(observedSignalChanges(undefined, recovered, false), []);
 
-  // The settled home owns 22 logical resources. Duplicate consumers (header,
+  assert.equal(HEAVY_DASHBOARD_QUERY_POLICY.refetchInterval, false);
+  assert.equal(HEAVY_DASHBOARD_QUERY_POLICY.refetchOnWindowFocus, 'always');
+  assert.equal(HEAVY_DASHBOARD_QUERY_POLICY.refetchOnMount, 'always');
+
+  // The settled home owns 21 logical resources. Duplicate consumers (header,
   // breach banner, pulse wall, ratio panel, balance strip) all ask TanStack for
   // the same stable keys, yielding one request per resource.
   const current = (prefix: string) =>
@@ -139,7 +138,6 @@ async function main(): Promise<void> {
     scopedQueryKey('facts', scope, BANK_ID, PERIOD_ID),
     scopedQueryKey('live-summary', scope, BANK_ID),
     scopedQueryKey('freshness', scope, BANK_ID, PERIOD_ID),
-    scopedQueryKey('official-run-signal', scope, BANK_ID, ...TREND_PERIOD_IDS),
     scopedQueryKey('alerts', scope, BANK_ID, 20),
     scopedQueryKey('notifications', scope, false),
     current('liq-dashboard'),
@@ -153,7 +151,7 @@ async function main(): Promise<void> {
     scopedQueryKey('de-batches', scope, BANK_ID, 'all'),
     scopedQueryKey('de-activations', scope, BANK_ID),
   ];
-  assert.equal(homeResources.length, 22);
+  assert.equal(homeResources.length, 21);
   const requestCounts = new Map<string, number>();
   const requestClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 1_000 } },
@@ -348,157 +346,6 @@ async function main(): Promise<void> {
   ]);
   const officialChanges = changedGenerations(previousOfficial, nextOfficial);
   assert.deepEqual(officialChanges, ['capital']);
-  const officialBaseline = officialCompletionFingerprint([
-    {
-      id: 'capital-official-old',
-      module: 'capital',
-      scenarioCode: 'baseline',
-      status: 'succeeded',
-      inputHash: 'capital-official-hash-old',
-    },
-  ]);
-  const scenarioOnlyChange = officialCompletionFingerprint([
-    {
-      id: 'capital-stress-new',
-      module: 'capital',
-      scenarioCode: 'severe',
-      status: 'succeeded',
-      inputHash: 'capital-stress-hash-new',
-    },
-    {
-      id: 'capital-official-old',
-      module: 'capital',
-      scenarioCode: 'baseline',
-      status: 'succeeded',
-      inputHash: 'capital-official-hash-old',
-    },
-  ]);
-  assert.deepEqual(changedGenerations(officialBaseline, scenarioOnlyChange), []);
-  const nextOfficialBaseline = officialCompletionFingerprint([
-    {
-      id: 'capital-official-new',
-      module: 'capital',
-      scenarioCode: 'baseline',
-      status: 'succeeded',
-      inputHash: 'capital-official-hash-new',
-    },
-    {
-      id: 'forecast-official-new',
-      module: 'forecast',
-      scenarioCode: 'base',
-      status: 'succeeded',
-      inputHash: 'forecast-official-hash-new',
-    },
-    {
-      id: 'whatif-new',
-      module: 'whatif',
-      scenarioCode: 'baseline',
-      status: 'succeeded',
-      inputHash: 'whatif-hash-new',
-    },
-  ]);
-  assert.deepEqual(
-    changedGenerations(officialBaseline, nextOfficialBaseline),
-    ['capital', 'forecast'],
-  );
-
-  const successfulPeriodBaseline = officialCompletionFingerprint(
-    [
-      {
-        id: 'capital-official-old',
-        module: 'capital',
-        reportingPeriodId: TREND_PERIOD_IDS[0],
-        scenarioCode: 'baseline',
-        status: 'succeeded',
-        inputHash: 'capital-official-hash-old',
-      },
-    ],
-    TREND_PERIOD_IDS,
-  );
-  const successfulPeriodMaskedByFailures = officialCompletionFingerprint(
-    [
-      ...Array.from({ length: 75 }, (_, index) => ({
-        id: `capital-failed-${index}`,
-        module: 'capital',
-        reportingPeriodId: TREND_PERIOD_IDS[0],
-        scenarioCode: 'baseline',
-        status: 'failed',
-        inputHash: `capital-failed-hash-${index}`,
-      })),
-      {
-        id: 'capital-official-new',
-        module: 'capital',
-        reportingPeriodId: TREND_PERIOD_IDS[0],
-        scenarioCode: 'baseline',
-        status: 'succeeded',
-        inputHash: 'capital-official-hash-new',
-      },
-    ],
-    TREND_PERIOD_IDS,
-  );
-  assert.deepEqual(
-    changedGenerations(
-      successfulPeriodBaseline,
-      successfulPeriodMaskedByFailures,
-    ),
-    ['capital'],
-    'a successful baseline must remain observable behind newer failed attempts',
-  );
-  const failedAttemptsOnly = officialCompletionFingerprint(
-    [
-      {
-        id: 'capital-failed-newer',
-        module: 'capital',
-        reportingPeriodId: TREND_PERIOD_IDS[0],
-        scenarioCode: 'baseline',
-        status: 'failed',
-        inputHash: 'capital-failed-hash-newer',
-      },
-      {
-        id: 'capital-official-old',
-        module: 'capital',
-        reportingPeriodId: TREND_PERIOD_IDS[0],
-        scenarioCode: 'baseline',
-        status: 'succeeded',
-        inputHash: 'capital-official-hash-old',
-      },
-    ],
-    TREND_PERIOD_IDS,
-  );
-  assert.deepEqual(
-    changedGenerations(successfulPeriodBaseline, failedAttemptsOnly),
-    [],
-    'failed attempts alone must not replace the latest successful baseline',
-  );
-  const withdrawnOfficialBaseline = officialCompletionFingerprint([
-    {
-      id: 'capital-official-old',
-      module: 'capital',
-      scenarioCode: 'baseline',
-      status: 'succeeded',
-      inputHash: 'capital-official-hash-old',
-      evidence: {
-        status: 'inputs_withdrawn',
-        rowsWithdrawn: 4,
-        withdrawals: [
-          {
-            withdrawalId: 'withdrawal-1',
-            approvedAt: '2026-08-27T12:10:00Z',
-          },
-        ],
-      },
-    },
-  ]);
-  assert.deepEqual(
-    changedGenerations(officialBaseline, withdrawnOfficialBaseline),
-    ['capital'],
-    'derived evidence withdrawal must invalidate its module',
-  );
-  assert.deepEqual(
-    changedGenerations(withdrawnOfficialBaseline, officialBaseline),
-    ['capital'],
-    'derived evidence restoration must invalidate its module',
-  );
   await invalidateOfficialRunChanges(
     officialClient,
     scope,
@@ -533,11 +380,10 @@ async function main(): Promise<void> {
   assert.ok(jitter >= 18_000 && jitter <= 22_000);
 
   // Count model for the same 65-second idle window used by the pre-change
-  // fixture. Only the cheap live summary, freshness, bounded official-run
-  // signal, alert list, and inbox retain a cadence. With this fixture's
-  // deterministic jitter: 22 logical initial resources / 23 calls
-  // + 3 summary ticks + 2 freshness ticks + 6 official-signal calls
-  // + 3 alert ticks + 1 inbox tick = 38 requests. The five
+  // fixture. Only the cheap live summary, selected-period freshness, alert
+  // list, and inbox retain a cadence. With this fixture's deterministic
+  // jitter: 21 logical initial resources/calls + 3 summary ticks + 2 freshness
+  // ticks + 3 alert ticks + 1 inbox tick = 30 requests. The five
   // module detail payloads each load once and contribute zero idle polls.
   const idleWindowMs = 65_000;
   const retainedIntervals = [
@@ -546,20 +392,13 @@ async function main(): Promise<void> {
     jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'alerts', scope, BANK_ID),
     jitteredPollInterval(60_000, 'notifications', scope),
   ];
-  const officialSignalInterval = jitteredPollInterval(
-    LIVE_SIGNAL_POLL_MS,
-    'official-run-signal',
-    scope,
-    BANK_ID,
-  );
   const afterIdleRequests =
-    homeResources.length + 1 +
+    homeResources.length +
     retainedIntervals.reduce(
       (ticks, interval) => ticks + Math.floor(idleWindowMs / interval),
       0,
-    ) +
-    2 * Math.floor(idleWindowMs / officialSignalInterval);
-  assert.equal(afterIdleRequests, 38);
+    );
+  assert.equal(afterIdleRequests, 30);
   assert.equal(
     homeResources.filter((key) =>
       [
@@ -592,7 +431,7 @@ async function main(): Promise<void> {
   idleClient.clear();
   requestClient.clear();
   console.log(
-    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 22/38/5; detailed idle polls 0; invalidation passed'
+    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 21/30/5; detailed idle polls 0; invalidation passed'
   );
 }
 
