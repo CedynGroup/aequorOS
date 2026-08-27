@@ -3,10 +3,12 @@ name: Claude PR Review
 # Agent-as-reviewer, then GitHub-native auto-merge into main.
 #
 #   review job — always runs. Claude reviews the diff and submits a FORMAL PR
-#   review (APPROVE / REQUEST_CHANGES) plus inline comments. Then, only when
-#   every guardrail holds and Claude approved, it ENABLES GitHub native
-#   auto-merge (`gh pr merge --auto --squash`). GitHub then merges the PR by
-#   itself once the required status checks pass — no polling, correct timing.
+#   review (APPROVE / REQUEST_CHANGES) plus inline comments. A separate
+#   `Claude review verdict` check reports success, failure, or neutral when a
+#   provider/account outage prevented any model work. Then, only when every
+#   guardrail holds and Claude approved, it ENABLES GitHub native auto-merge
+#   (`gh pr merge --auto --squash`). GitHub then merges the PR by itself once
+#   the required status checks pass — no polling, correct timing.
 #
 # Guardrails (all must hold before auto-merge is enabled):
 #   * repo variable AGENT_AUTOMERGE == 'on'  (ships OFF — first PRs review-only)
@@ -38,11 +40,12 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-  checks: read
+  checks: write
   statuses: read
 
 jobs:
   review:
+    name: Run and classify Claude review
     # Dependabot is excluded because this job CANNOT work on its PRs. GitHub
     # runs Dependabot-triggered workflows against a separate secret store, so
     # `secrets.ANTHROPIC_API_KEY` resolves to an empty string and the action
@@ -65,7 +68,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Snapshot existing reviews
+        id: reviews-before
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          MAX_ID=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
+            | jq -s '[.[][] | .id] | max // 0')
+          echo "max_id=$MAX_ID" >> "$GITHUB_OUTPUT"
+
       - name: Claude review
+        id: claude
+        # The classifier below owns the verdict. This lets it distinguish a
+        # pre-inference provider outage from a real review failure rather than
+        # turning every action failure into a misleading green check.
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -85,10 +105,146 @@ jobs:
           # Profile and other cross-stack changes can span migrations, API
           # contracts, generated clients, and dashboard code. Leave enough
           # turns for Claude to inspect each layer and submit its formal review.
-          claude_args: "--max-turns 40"
+          # Pin the model so a Claude Code upgrade cannot silently select a new
+          # model that the repository's API key is not provisioned to use.
+          claude_args: "--max-turns 40 --model claude-sonnet-4-6"
+
+      - name: Publish Claude review verdict
+        id: verdict
+        if: always()
+        env:
+          ACTION_OUTCOME: ${{ steps.claude.outcome }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          REVIEWS_BEFORE: ${{ steps.reviews-before.outputs.max_id }}
+        run: |
+          set -euo pipefail
+
+          publish_verdict() {
+            local conclusion=$1 title=$2 summary=$3
+            jq -n \
+              --arg conclusion "$conclusion" \
+              --arg head_sha "$HEAD_SHA" \
+              --arg summary "$summary" \
+              --arg title "$title" \
+              '{
+                name: "Claude review verdict",
+                head_sha: $head_sha,
+                status: "completed",
+                conclusion: $conclusion,
+                output: {title: $title, summary: $summary}
+              }' | gh api --method POST "repos/$REPO/check-runs" --input - >/dev/null
+          }
+
+          # The action deliberately self-skips when it cannot validate a
+          # workflow-file change against the trusted default-branch copy. Its
+          # documented execution-file output is then unset: no review happened,
+          # so report neutral rather than manufacturing success or failure.
+          if [[ "$ACTION_OUTCOME" == "success" && -z "$EXECUTION_FILE" ]]; then
+            MESSAGE="No review was performed because the action's workflow-validation guard skipped execution."
+            publish_verdict neutral "No review performed" "$MESSAGE"
+            echo "::notice::$MESSAGE"
+            exit 0
+          fi
+
+          if [[ "$ACTION_OUTCOME" == "success" && -f "$EXECUTION_FILE" ]]; then
+            # Only a new bot review submitted by this action run can satisfy
+            # the verdict. Human or stale approvals are deliberately ignored.
+            STATE=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" | jq -sr \
+              --arg head_sha "$HEAD_SHA" \
+              --argjson before "${REVIEWS_BEFORE:-0}" \
+              '[.[][] | select(
+                .id > $before
+                and .commit_id == $head_sha
+                and .user.type == "Bot"
+              )] | sort_by(.submitted_at) | last | .state // ""')
+            case "$STATE" in
+              APPROVED)
+                publish_verdict success "Review approved" \
+                  "Claude completed the review and submitted a formal approval for this commit."
+                echo "approved=true" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              CHANGES_REQUESTED)
+                publish_verdict failure "Review requested changes" \
+                  "Claude completed the review and submitted a formal request for changes."
+                echo "::error::Claude requested changes."
+                exit 1
+                ;;
+              *)
+                publish_verdict failure "Formal review missing" \
+                  "The action completed but did not submit a formal review for this commit."
+                echo "::error::Claude completed without a formal review for this commit."
+                exit 1
+                ;;
+            esac
+          fi
+
+          # Neutral is intentionally narrow: the execution report must prove
+          # an API rejection happened before inference. Ambiguous failures,
+          # local/action errors, and failures after any model work stay red.
+          if [[ -n "$EXECUTION_FILE" && -f "$EXECUTION_FILE" ]] && jq -e '
+            (([.[] | select(.type == "result")] | last) as $result
+              | $result.is_error == true
+                and $result.terminal_reason == "api_error"
+                and ($result.num_turns | type == "number")
+                and $result.num_turns == 1
+                and ($result.usage | type == "object")
+                and ($result.usage | has("input_tokens"))
+                and ($result.usage.input_tokens | type == "number")
+                and $result.usage.input_tokens == 0
+                and ($result.usage | has("output_tokens"))
+                and ($result.usage.output_tokens | type == "number")
+                and $result.usage.output_tokens == 0
+                and ($result | has("modelUsage"))
+                and ($result.modelUsage | type == "object")
+                and ($result.modelUsage | length == 0)
+                and (($result.api_error_status // $result.error_status) as $status
+                  | ($status | type == "number")
+                    and ($status == 400 or $status == 401 or $status == 403 or $status == 404
+                      or $status == 408 or $status == 429
+                      or ($status >= 500 and $status <= 599))))
+          ' "$EXECUTION_FILE" >/dev/null; then
+            STATUS=$(jq -r \
+              '[.[] | select(.type == "result")] | last
+                | .api_error_status // .error_status' "$EXECUTION_FILE")
+            MESSAGE="No review was performed because the Anthropic API was unavailable before inference (HTTP $STATUS)."
+            publish_verdict neutral "No review performed" "$MESSAGE"
+            echo "::notice::$MESSAGE"
+            exit 0
+          fi
+
+          DIAGNOSTIC="execution_file=<missing>"
+          if [[ -n "$EXECUTION_FILE" && -f "$EXECUTION_FILE" ]]; then
+            IFS=$'\t' read -r TERMINAL_REASON API_ERROR_STATUS ERROR_STATUS NUM_TURNS INPUT_TOKENS OUTPUT_TOKENS MODEL_COUNT < <(
+              jq -r '
+                def shown: if . == null then "<missing>" else tostring end;
+                ([.[] | select(.type == "result")] | last // {}) as $result
+                | [
+                    ($result.terminal_reason | shown),
+                    ($result.api_error_status | shown),
+                    ($result.error_status | shown),
+                    ($result.num_turns | shown),
+                    ($result.usage.input_tokens | shown),
+                    ($result.usage.output_tokens | shown),
+                    (($result.modelUsage // {}) | length | tostring)
+                  ] | @tsv
+              ' "$EXECUTION_FILE"
+            )
+            DIAGNOSTIC="terminal_reason=$TERMINAL_REASON; api_error_status=$API_ERROR_STATUS; error_status=$ERROR_STATUS; num_turns=$NUM_TURNS; usage.input_tokens=$INPUT_TOKENS; usage.output_tokens=$OUTPUT_TOKENS; modelUsage.size=$MODEL_COUNT"
+          fi
+          publish_verdict failure "Review execution failed" \
+            "Claude did not complete a formal review, and the failure was not a proven pre-inference provider or account outage. Observed: $DIAGNOSTIC"
+          echo "::error::Claude review failed without a trustworthy pre-inference outage signal."
+          exit 1
 
       - name: Enable auto-merge when approved and guardrails hold
-        if: vars.AGENT_AUTOMERGE == 'on'
+        if: >-
+          vars.AGENT_AUTOMERGE == 'on'
+          && steps.verdict.outputs.approved == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
