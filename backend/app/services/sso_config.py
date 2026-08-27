@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 _SECRET_KEY = "client_secret"
+_MAX_ROUTING_AUDIENCES = 8
 
 
 @dataclass(frozen=True)
@@ -159,6 +160,8 @@ def find_enabled_by_issuer_audience(
     namespace by database row order.
     """
     raw_audiences = audience if isinstance(audience, list) else [audience]
+    if len(raw_audiences) > _MAX_ROUTING_AUDIENCES:
+        return None
     audiences = sorted({value for value in raw_audiences if isinstance(value, str) and value})
     if not audiences:
         return None

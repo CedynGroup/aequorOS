@@ -1,7 +1,7 @@
 """Scope OIDC subject uniqueness to the verified connection organization.
 
 Revision ID: 202608270044
-Revises: 202608230042
+Revises: 202608250044
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "202608270044"
-down_revision = "202608230042"
+down_revision = "202608250044"
 branch_labels = None
 depends_on = None
 

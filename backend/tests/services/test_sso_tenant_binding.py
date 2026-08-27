@@ -220,6 +220,27 @@ def test_list_valued_audience_routes_when_connection_client_is_not_first(
     _assert_issued_for(issued, ORG_1)
 
 
+def test_oversized_audience_list_fails_generically_before_verification(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seeded_user(db_session, organization_id=ORG_1)
+    _connection(db_session)
+    db_session.commit()
+    monkeypatch.setattr(
+        "app.core.security.verify_oidc_id_token",
+        lambda *args, **kwargs: pytest.fail("oversized routing must not attempt verification"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        authentication.login_with_sso(
+            db_session,
+            id_token=_token(audience=[*[f"audience-{index}" for index in range(8)], _CLIENT_ID]),
+        )
+
+    _assert_http_error(exc_info, 401, "Invalid SSO token.")
+
+
 def test_ambiguous_enabled_connection_selection_fails_generically_before_verification(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
