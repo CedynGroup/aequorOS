@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 const BANK_ID = 'BK-SAMP0001';
 const PERIOD_ID = 'period-latest';
 const HISTORICAL_PERIOD_ID = 'period-historical';
+const UPDATED_PERIOD_ID = 'period-updated';
 
 async function waitFor(check: () => boolean, message: string): Promise<void> {
   const deadline = Date.now() + 1_000;
@@ -133,6 +134,8 @@ async function main(): Promise<void> {
     return value;
   };
   let generation = 7;
+  let currentPeriodId = PERIOD_ID;
+  let currentDetailGate: Promise<void> | null = null;
   const liveSummary = async () => {
     counts.set('live-summary', (counts.get('live-summary') ?? 0) + 1);
     return {
@@ -161,7 +164,8 @@ async function main(): Promise<void> {
         ? `liq-dashboard:${reportingPeriodId}`
         : 'liq-dashboard';
       counts.set(name, (counts.get(name) ?? 0) + 1);
-      return { period: { id: reportingPeriodId ?? PERIOD_ID }, trend: [] };
+      if (!reportingPeriodId && currentDetailGate) await currentDetailGate;
+      return { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
     },
     runAllLiquidityScenarios: response('liq-mutation', {}),
   });
@@ -171,7 +175,8 @@ async function main(): Promise<void> {
         ? `cap-dashboard:${reportingPeriodId}`
         : 'cap-dashboard';
       counts.set(name, (counts.get(name) ?? 0) + 1);
-      return { period: { id: reportingPeriodId ?? PERIOD_ID }, trend: [] };
+      if (!reportingPeriodId && currentDetailGate) await currentDetailGate;
+      return { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
     },
   });
   mock(clients.regulatoryIrrApi, {
@@ -193,6 +198,7 @@ async function main(): Promise<void> {
     getLiveSummary: liveSummary,
     getBankAlerts: response('alerts', {}),
     refreshBankData: response('refresh-mutation', { jobId: 'pipeline-job' }),
+    mintOfficialRun: response('official-run-mutation', { jobId: 'official-run-job' }),
     listLiveSnapshots: async ({ module: liveModule }: { module: string }) => {
       const name = `live-snapshots:${liveModule}`;
       counts.set(name, (counts.get(name) ?? 0) + 1);
@@ -206,6 +212,7 @@ async function main(): Promise<void> {
     getJob: response('job-status', { status: 'succeeded' }),
   });
   mock(ingestion.ingestionApi, {
+    activateBankData: response('activation-mutation', {}),
     listIngestionBatches: response('de-batches', {}),
     listBankDataActivations: response('de-activations', {}),
   });
@@ -213,6 +220,8 @@ async function main(): Promise<void> {
   let queryClient: ReturnType<typeof useQueryClient> | null = null;
   let runLiquidityScenarios: (() => Promise<unknown>) | null = null;
   let refreshBankData: (() => Promise<unknown>) | null = null;
+  let mintOfficialRun: (() => Promise<unknown>) | null = null;
+  let activateBankData: (() => Promise<unknown>) | null = null;
   let authorityMounts = 0;
   let resolvedAuthority: ReturnType<typeof useQueryAuthorityScope> | null = null;
   let selectRatioPeriod: ((periodId: string) => void) | null = null;
@@ -265,6 +274,12 @@ async function main(): Promise<void> {
     const refresh = hooks.useRefreshBankData(BANK_ID);
     refreshBankData = () =>
       refresh.mutateAsync({ asOfDate: '2026-08-27', reason: 'test refresh' });
+    const officialRun = hooks.useMintOfficialRun(BANK_ID);
+    mintOfficialRun = () =>
+      officialRun.mutateAsync({ asOfDate: '2026-08-27', reason: 'test official run' });
+    const activation = ingestion.useActivateBankData(BANK_ID);
+    activateBankData = () =>
+      activation.mutateAsync({ asOfDate: '2026-08-27', runCalculations: true });
     return null;
   }
 
@@ -321,40 +336,140 @@ async function main(): Promise<void> {
     'historical ratio dashboards did not retain explicit-period semantics',
   );
 
+  let releaseCurrentDetail: (() => void) | null = null;
+  currentDetailGate = new Promise<void>((resolve) => {
+    releaseCurrentDetail = resolve;
+  });
+  const beforeCurrentRefetch = counts.get('liq-dashboard') ?? 0;
+  await act(async () => {
+    void queryClient!.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey[0] === 'liq-dashboard' && query.queryKey[4] === 'current',
+    });
+    void queryClient!.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey[0] === 'cap-dashboard' && query.queryKey[4] === 'current',
+    });
+    selectRatioPeriod!(UPDATED_PERIOD_ID);
+  });
+  await waitFor(
+    () => counts.get('liq-dashboard') === beforeCurrentRefetch + 1,
+    'current ratio dashboard did not begin refetching',
+  );
+  assert.equal(
+    counts.get(`liq-dashboard:${UPDATED_PERIOD_ID}`),
+    undefined,
+    'retained current data must not start an equivalent period request',
+  );
+  currentPeriodId = UPDATED_PERIOD_ID;
+  currentDetailGate = null;
+  await act(async () => {
+    releaseCurrentDetail!();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(counts.get(`liq-dashboard:${UPDATED_PERIOD_ID}`), undefined);
+  assert.equal(counts.get(`cap-dashboard:${UPDATED_PERIOD_ID}`), undefined);
+
+  const beforeIdleLiquidity = counts.get('liq-dashboard') ?? 0;
+  const beforeIdleCapital = counts.get('cap-dashboard') ?? 0;
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 70));
   });
-  assert.equal(counts.get('liq-dashboard'), 1, 'heavy detail must remain idle');
-  assert.equal(counts.get('cap-dashboard'), 1, 'heavy detail must remain idle');
+  assert.equal(counts.get('liq-dashboard'), beforeIdleLiquidity);
+  assert.equal(counts.get('cap-dashboard'), beforeIdleCapital);
+  const idleLiquidityCount = counts.get('liq-dashboard') ?? 0;
+  const idleCapitalCount = counts.get('cap-dashboard') ?? 0;
 
   await act(async () => {
     await runLiquidityScenarios!();
   });
-  await waitFor(() => counts.get('liq-dashboard') === 2, 'mutation did not invalidate detail');
+  await waitFor(
+    () => counts.get('liq-dashboard') === idleLiquidityCount + 1,
+    'mutation did not invalidate detail',
+  );
 
   generation += 1;
+  const beforePipelineRefresh = counts.get('liq-dashboard') ?? 0;
   await act(async () => {
     await refreshBankData!();
   });
   await waitFor(
-    () => counts.get('liq-dashboard') === 3,
+    () => counts.get('liq-dashboard') === beforePipelineRefresh + 1,
     'pipeline generation did not invalidate detail',
   );
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(
     counts.get('liq-dashboard'),
-    3,
+    beforePipelineRefresh + 1,
     'pipeline completion must fetch generation-owned detail exactly once',
   );
 
   generation += 1;
+  const beforeSignalRefresh = counts.get('liq-dashboard') ?? 0;
   await act(async () => {
     await queryClient!.invalidateQueries({ queryKey: ['live-summary'] });
   });
   await waitFor(
-    () => counts.get('liq-dashboard') === 4,
+    () => counts.get('liq-dashboard') === beforeSignalRefresh + 1,
     'live generation change did not invalidate detail',
   );
+
+  generation += 1;
+  const beforeActivationLiquidity = counts.get('liq-dashboard') ?? 0;
+  const beforeActivationCapital = counts.get('cap-dashboard') ?? 0;
+  await act(async () => {
+    await activateBankData!();
+  });
+  await waitFor(
+    () =>
+      counts.get('liq-dashboard') === beforeActivationLiquidity + 1 &&
+      counts.get('cap-dashboard') === beforeActivationCapital + 1,
+    'activation did not refresh detailed dashboards',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(counts.get('liq-dashboard'), beforeActivationLiquidity + 1);
+  assert.equal(counts.get('cap-dashboard'), beforeActivationCapital + 1);
+
+  await act(async () => {
+    selectRatioPeriod!(HISTORICAL_PERIOD_ID);
+  });
+  await waitFor(
+    () =>
+      (counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2 &&
+      (counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2,
+    'historical dashboards did not reactivate before the official run',
+  );
+  const beforeOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
+  const beforeOfficialCapital = counts.get('cap-dashboard') ?? 0;
+  const beforeOfficialHistoricalLiquidity =
+    counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0;
+  const beforeOfficialHistoricalCapital =
+    counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0;
+  await act(async () => {
+    await mintOfficialRun!();
+  });
+  await waitFor(
+    () =>
+      counts.get('liq-dashboard') === beforeOfficialLiquidity + 1 &&
+      counts.get('cap-dashboard') === beforeOfficialCapital + 1 &&
+      counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) ===
+        beforeOfficialHistoricalLiquidity + 1 &&
+      counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ===
+        beforeOfficialHistoricalCapital + 1,
+    'official run did not refresh regulatory detail',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(counts.get('liq-dashboard'), beforeOfficialLiquidity + 1);
+  assert.equal(counts.get('cap-dashboard'), beforeOfficialCapital + 1);
+  assert.equal(
+    counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`),
+    beforeOfficialHistoricalLiquidity + 1,
+  );
+  assert.equal(
+    counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`),
+    beforeOfficialHistoricalCapital + 1,
+  );
+  assert.ok((counts.get('cap-dashboard') ?? 0) > idleCapitalCount);
 
   await act(async () => renderer!.unmount());
   globalThis.setInterval = nativeSetInterval;

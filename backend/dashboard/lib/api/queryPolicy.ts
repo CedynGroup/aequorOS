@@ -133,6 +133,17 @@ const GENERATION_PREFIXES: Partial<Record<string, readonly string[]>> = {
   forecast: ['forecast-runs'],
 };
 
+export function generationInvalidationPrefixes(
+  modules: readonly string[]
+): string[] {
+  const prefixes = new Set<string>();
+  for (const liveModule of modules) {
+    for (const prefix of GENERATION_PREFIXES[liveModule] ?? []) prefixes.add(prefix);
+  }
+  if (modules.length > 0) prefixes.add('live-snapshots');
+  return [...prefixes];
+}
+
 /** Refresh detailed reads only for engines whose cheap generation moved. */
 export function invalidateGenerationChanges(
   queryClient: QueryClient,
@@ -140,14 +151,12 @@ export function invalidateGenerationChanges(
   bankId: string | undefined,
   modules: readonly string[]
 ): Promise<void[]> {
-  const prefixes = new Set<string>();
-  for (const liveModule of modules) {
-    for (const prefix of GENERATION_PREFIXES[liveModule] ?? []) prefixes.add(prefix);
-  }
-  // The ladder is module-keyed after the scoped bank prefix. Invalidating the
-  // bank prefix remains cheap and avoids stale prior-close deltas.
-  if (modules.length > 0) prefixes.add('live-snapshots');
-  return invalidateScopedPrefixes(queryClient, [...prefixes], scope, bankId);
+  return invalidateScopedPrefixes(
+    queryClient,
+    generationInvalidationPrefixes(modules),
+    scope,
+    bankId
+  );
 }
 
 export type LiveGenerationSignal = Readonly<{
@@ -180,5 +189,25 @@ export function changedGenerations(
 ): string[] {
   return [...next].flatMap(([module, fingerprint]) =>
     previous.get(module) === fingerprint ? [] : [module]
+  );
+}
+
+export async function refreshLiveSummaryGenerationChanges(
+  queryClient: QueryClient,
+  scope: QueryAuthorityScope,
+  bankId: string | undefined
+): Promise<string[]> {
+  const queryKey = scopedQueryKey('live-summary', scope, bankId ?? null);
+  const before = queryClient.getQueryData<{ modules?: readonly LiveGenerationSignal[] }>(
+    queryKey
+  );
+  await invalidateScopedPrefixes(queryClient, ['live-summary'], scope, bankId);
+  const after = queryClient.getQueryData<{ modules?: readonly LiveGenerationSignal[] }>(
+    queryKey
+  );
+  if (!before?.modules || !after?.modules) return [];
+  return changedGenerations(
+    generationFingerprint(before.modules),
+    generationFingerprint(after.modules)
   );
 }

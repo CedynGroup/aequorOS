@@ -24,7 +24,9 @@ import {
 } from '@aequoros/risk-service-api';
 import { apiCall, configuration } from './client';
 import {
+  generationInvalidationPrefixes,
   invalidateScopedPrefixes,
+  refreshLiveSummaryGenerationChanges,
   scopedBankPrefix,
   scopedQueryKey,
 } from './queryPolicy';
@@ -491,10 +493,18 @@ export function useActivateBankData(bankId: string | undefined) {
           },
         }),
       ),
-    onSuccess: () => {
+    onSuccess: async () => {
       // The new reporting period must appear in the header selector, and every
       // module dashboard now has fresh runs for it.
-      void invalidateScopedPrefixes(queryClient, [
+      const changedModules = await refreshLiveSummaryGenerationChanges(
+        queryClient,
+        scope,
+        bankId,
+      );
+      const generationOwned = new Set(
+        generationInvalidationPrefixes(changedModules),
+      );
+      await invalidateScopedPrefixes(queryClient, [
         'periods',
         'facts',
         'liq-dashboard',
@@ -508,13 +518,12 @@ export function useActivateBankData(bankId: string | undefined) {
         'cap-structure',
         'bsd3',
         'bsd2',
-        'live-summary',
         'freshness',
         'alerts',
         'live-snapshots',
         'de-activations',
         'de-summary',
-      ], scope, bankId);
+      ].filter((prefix) => !generationOwned.has(prefix)), scope, bankId);
     },
   });
 }

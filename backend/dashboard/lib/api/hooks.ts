@@ -223,11 +223,13 @@ export function useEffectiveRatioDashboards(
   const currentLiq = useLiquidityDashboard(bankId);
   const currentCap = useCapitalDashboard(bankId);
   const needsPeriodLiq =
-    currentLiq.isError ||
-    Boolean(currentLiq.data && currentLiq.data.period.id !== periodId);
+    !currentLiq.isFetching &&
+    (currentLiq.isError ||
+      Boolean(currentLiq.data && currentLiq.data.period.id !== periodId));
   const needsPeriodCap =
-    currentCap.isError ||
-    Boolean(currentCap.data && currentCap.data.period.id !== periodId);
+    !currentCap.isFetching &&
+    (currentCap.isError ||
+      Boolean(currentCap.data && currentCap.data.period.id !== periodId));
   const periodLiq = useLiquidityDashboard(
     needsPeriodLiq ? bankId : undefined,
     periodId,
@@ -976,6 +978,31 @@ async function invalidateCompletedPipeline(
   );
 }
 
+const officialRunCompletionPrefixes = [
+  'liq-dashboard',
+  'cap-dashboard',
+  'irr-dashboard',
+  'fx-dashboard',
+  'ftp-dashboard',
+  'cap-rwa',
+  'cap-structure',
+  'forecast-runs',
+];
+
+async function invalidateCompletedOfficialRun(
+  queryClient: QueryClient,
+  scope: QueryAuthorityScope,
+  bankId: string | undefined,
+) {
+  await invalidateCompletedPipeline(queryClient, scope, bankId);
+  await invalidateScopedPrefixes(
+    queryClient,
+    officialRunCompletionPrefixes,
+    scope,
+    bankId,
+  );
+}
+
 /**
  * Poll a queued job to a terminal state. Resolves with the final job on
  * success; rejects with a normalized ApiError on failure. Bounded so a stuck
@@ -1050,7 +1077,7 @@ export function useMintOfficialRun(bankId: string | undefined) {
       );
       return pollJobToCompletion(enqueued.jobId);
     },
-    onSuccess: () => invalidateCompletedPipeline(queryClient, scope, bankId),
+    onSuccess: () => invalidateCompletedOfficialRun(queryClient, scope, bankId),
   });
 }
 
