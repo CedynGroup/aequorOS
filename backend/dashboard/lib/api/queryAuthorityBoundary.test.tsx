@@ -30,6 +30,8 @@ async function main(): Promise<void> {
     _load: (request: string, parent: unknown, isMain: boolean) => unknown;
   };
   const originalLoad = moduleWithLoader._load;
+  let loadedReact: typeof import('react') | undefined;
+  let loadedHooks: typeof import('./hooks') | undefined;
   class ApiStub {}
   class ConfigurationStub {
     constructor(_options: unknown) {}
@@ -86,10 +88,41 @@ async function main(): Promise<void> {
         useSession: () => ({ data: null, status: 'loading' }),
       };
     }
+    if (request === 'next/link') {
+      return ({ children, ...props }: { children?: import('react').ReactNode }) =>
+        loadedReact!.createElement('a', props, children);
+    }
+    if (request === 'lucide-react') {
+      return new Proxy({}, {
+        get: () => (props: object) => loadedReact!.createElement('span', props),
+      });
+    }
+    if (request === '@/lib/api/hooks') return loadedHooks;
+    if (request === '@/components/ui/SectionCard') {
+      return ({ children }: { children?: import('react').ReactNode }) =>
+        loadedReact!.createElement('section', null, children);
+    }
+    if (request === '@/components/ui/StatusPill') {
+      return ({ children }: { children?: import('react').ReactNode }) =>
+        loadedReact!.createElement('span', null, children);
+    }
+    if (request === '@/components/ui/Skeleton') {
+      return { SkeletonLine: () => loadedReact!.createElement('span') };
+    }
+    if (request === '@/lib/api/values') {
+      return {
+        fmtRelative: () => 'just now',
+        shortId: (value: string) => value,
+      };
+    }
+    if (request === '@/components/live/moduleDisplay') {
+      return { LIVE_MODULE_LABELS: { capital: 'Capital' } };
+    }
     return originalLoad(request, parent, isMain);
   };
 
   const React = await import('react');
+  loadedReact = React;
   const { act, create } = await import('react-test-renderer');
   const { focusManager, useQueryClient } = await import('@tanstack/react-query');
   const { GET: getImpersonationStatus } = await import(
@@ -101,6 +134,10 @@ async function main(): Promise<void> {
     useResolvedQueryAuthorityScope,
   } = await import('./useQueryScope');
   const hooks = await import('./hooks');
+  loadedHooks = hooks;
+  const { default: FreshnessStrip } = await import(
+    '../../components/reports/FreshnessStrip'
+  );
   const ingestion = await import('./ingestion');
   const clients = await import('./client');
   moduleWithLoader._load = originalLoad;
@@ -619,6 +656,32 @@ async function main(): Promise<void> {
   assert.ok((counts.get('cap-dashboard') ?? 0) > idleCapitalCount);
 
   await act(async () => renderer!.unmount());
+
+  const reportsPeriodId = 'period-reports';
+  const beforeReportsFreshness = counts.get(`freshness:${reportsPeriodId}`) ?? 0;
+  let reportsRenderer: ReturnType<typeof create>;
+  await act(async () => {
+    reportsRenderer = create(
+      <QueryAuthorityBoundary
+        scope={{
+          tenantId: impersonationClaims.org,
+          authorityId: `operator:${impersonationClaims.act_operator}|examiner`,
+        }}
+      >
+        <FreshnessStrip
+          bankId={BANK_ID}
+          period={{ id: reportsPeriodId, label: 'Reports period' } as never}
+        />
+      </QueryAuthorityBoundary>,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 70));
+  });
+  assert.ok(
+    (counts.get(`freshness:${reportsPeriodId}`) ?? 0) >=
+      beforeReportsFreshness + 2,
+    'Reports freshness strip must retain the cheap jittered poll',
+  );
+  await act(async () => reportsRenderer!.unmount());
   globalThis.setInterval = nativeSetInterval;
   globalThis.setTimeout = nativeSetTimeout;
   console.log(
