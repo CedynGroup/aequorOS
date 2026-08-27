@@ -26,7 +26,7 @@ returns would silently produce an unbindable signature on the corporate packs.
 
 ---
 
-## 1. Part 1 — The system as built today
+## 1. Part 1 — Implementation baseline and current authentication boundary
 
 Verified against branch `eric` @ `ab5c2a1`; primary database at alembic head
 `202607240026`. File:line references are load-bearing — this section is a
@@ -192,7 +192,8 @@ fallback to exact email match on a pre-provisioned active account
 (`app/services/authentication.py:110`). Opt-in JIT records a **deactivated**
 stub and returns 403 until an admin approves with an explicit role.
 
-Access tokens are HS256, 15-minute TTL, carrying `sub` (user UUID), `org`
+**Authentication update (2026-08-25).** Access tokens are HS256, 15-minute TTL,
+carrying `sub` (user UUID), `org`
 (the `OR-XXXXXXXX` platform code), legacy `roles`, authoritative `authv`,
 `email`, and `name` (`app/core/security.py:create_token`).
 `validate_tenant_context` re-checks on every tenant data request that the user
@@ -211,9 +212,10 @@ refresh tokens fail closed.
 | `users.sso_subject` | **Not guaranteed** — the issuer is not stored beside it, the unique index is global `(auth_provider, sso_subject)`, and Entra-style pairwise subjects change if `client_id` rotates | Unsuitable |
 | Platform IDs (`OR-`, `BK-`) | Permanent, opaque | Exist for orgs and banks **only** — there is no per-user equivalent |
 
-There is **no step-up authentication, MFA, ACR, or re-authentication concept in
-the system at all** — an exhaustive search returns zero implementation hits in
-backend and dashboard alike.
+At this reviewed baseline there was **no step-up authentication, MFA, ACR, or
+re-authentication concept**. The built attestation system now provides password
+re-entry and the server-only SSO step-up flow recorded in §9; its remaining
+live-IdP verification limitation is listed under §9 "Honest limitations."
 
 ### 1.5 Where evidence is persisted — and how immutable it really is
 
