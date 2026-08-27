@@ -156,6 +156,12 @@ async function main(): Promise<void> {
       inputHash: 'liquidity-official-hash-1',
     },
   ];
+  const officialSignalRequests: Array<{
+    module?: string;
+    scenarioCode?: string;
+    limit: number;
+    offset: number;
+  }> = [];
   let currentPeriodId = PERIOD_ID;
   let currentDetailGate: Promise<void> | null = null;
   let releaseInitialSignals: (() => void) | null = null;
@@ -206,6 +212,7 @@ async function main(): Promise<void> {
       limit?: number;
       offset?: number;
     }) => {
+      officialSignalRequests.push({ module, scenarioCode, limit, offset });
       counts.set(
         'official-run-signal',
         (counts.get('official-run-signal') ?? 0) + 1,
@@ -384,7 +391,7 @@ async function main(): Promise<void> {
     () =>
       counts.get('live-summary') === 1 &&
       counts.get('freshness') === 1 &&
-      counts.get('official-run-signal') === 1,
+      counts.get('official-run-signal') === 2,
     'initial dashboard signals did not start',
   );
   assert.equal(
@@ -418,8 +425,8 @@ async function main(): Promise<void> {
     [...initialCounts.entries()]
       .filter(([name]) => name !== 'liq-mutation')
       .reduce((total, [, count]) => total + count, 0),
-    22,
-    'real duplicate consumers must collapse to one request per resource',
+    23,
+    'real duplicate consumers must collapse while the bounded trend signal reads two modules',
   );
 
   await act(async () => {
@@ -482,10 +489,13 @@ async function main(): Promise<void> {
     () => counts.get('liq-dashboard') === beforeCurrentRefetch + 1,
     'current ratio dashboard did not begin refetching',
   );
-  assert.equal(
-    counts.get(`liq-dashboard:${UPDATED_PERIOD_ID}`),
-    undefined,
-    'retained current data must not start an equivalent period request',
+  await waitFor(
+    () =>
+      counts.get(`liq-dashboard:${UPDATED_PERIOD_ID}`) === 1 &&
+      counts.get(`cap-dashboard:${UPDATED_PERIOD_ID}`) === 1 &&
+      effectiveLiquidityPeriod === UPDATED_PERIOD_ID &&
+      effectiveCapitalPeriod === UPDATED_PERIOD_ID,
+    'a new period selection must use its own fallback during a current refetch',
   );
   currentPeriodId = UPDATED_PERIOD_ID;
   currentDetailGate = null;
@@ -493,8 +503,10 @@ async function main(): Promise<void> {
     releaseCurrentDetail!();
   });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(counts.get(`liq-dashboard:${UPDATED_PERIOD_ID}`), undefined);
-  assert.equal(counts.get(`cap-dashboard:${UPDATED_PERIOD_ID}`), undefined);
+  assert.equal(counts.get(`liq-dashboard:${UPDATED_PERIOD_ID}`), 1);
+  assert.equal(counts.get(`cap-dashboard:${UPDATED_PERIOD_ID}`), 1);
+  assert.equal(effectiveLiquidityPeriod, UPDATED_PERIOD_ID);
+  assert.equal(effectiveCapitalPeriod, UPDATED_PERIOD_ID);
 
   const beforeIdleLiquidity = counts.get('liq-dashboard') ?? 0;
   const beforeIdleCapital = counts.get('cap-dashboard') ?? 0;
@@ -542,13 +554,6 @@ async function main(): Promise<void> {
   assert.equal(counts.get('liq-dashboard'), beforeScenarioLiquidity);
 
   latestRegulatoryRuns.unshift(
-    ...Array.from({ length: 101 }, (_, index) => ({
-      id: `capital-failed-${index}`,
-      module: 'capital',
-      scenarioCode: 'baseline',
-      status: 'failed',
-      inputHash: `capital-failed-hash-${index}`,
-    })),
     {
       id: 'capital-official-2',
       module: 'capital',
@@ -561,7 +566,15 @@ async function main(): Promise<void> {
         withdrawals: [],
       },
     },
+    ...Array.from({ length: 101 }, (_, index) => ({
+      id: `capital-failed-${index}`,
+      module: 'capital',
+      scenarioCode: 'baseline',
+      status: 'failed',
+      inputHash: `capital-failed-hash-${index}`,
+    })),
   );
+  const requestsBeforeHistoricalOfficial = officialSignalRequests.length;
   const beforeHistoricalOfficialCapital = counts.get('cap-dashboard') ?? 0;
   const beforeHistoricalOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
   await act(async () => {
@@ -577,6 +590,18 @@ async function main(): Promise<void> {
     counts.get('liq-dashboard'),
     beforeHistoricalOfficialLiquidity,
     'non-selected official run invalidated an unaffected module',
+  );
+  assert.equal(
+    officialSignalRequests.length - requestsBeforeHistoricalOfficial,
+    2,
+    'official signal must remain bounded regardless of run-history size',
+  );
+  assert.deepEqual(
+    officialSignalRequests.slice(-2),
+    [
+      { module: 'liquidity', scenarioCode: 'baseline', limit: 1, offset: 0 },
+      { module: 'capital', scenarioCode: 'baseline', limit: 1, offset: 0 },
+    ],
   );
 
   const capitalOfficialIndex = latestRegulatoryRuns.findIndex(
@@ -722,7 +747,7 @@ async function main(): Promise<void> {
   globalThis.setInterval = nativeSetInterval;
   globalThis.setTimeout = nativeSetTimeout;
   console.log(
-    'queryAuthorityBoundary.test.tsx: pending 0; settled 22 resources/22 calls; equivalent detail deduped; idle and invalidation passed',
+    'queryAuthorityBoundary.test.tsx: pending 0; settled 22 resources/23 calls; bounded official signal; idle and invalidation passed',
   );
 }
 

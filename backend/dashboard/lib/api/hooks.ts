@@ -236,24 +236,30 @@ export function useEffectiveRatioDashboards(
 ) {
   const currentLiq = useLiquidityDashboard(bankId);
   const currentCap = useCapitalDashboard(bankId);
-  const establishedLiqPeriod = useRef<string | null>(null);
-  const establishedCapPeriod = useRef<string | null>(null);
-  if (!currentLiq.isFetching) {
-    establishedLiqPeriod.current =
-      currentLiq.isError ||
-      Boolean(currentLiq.data && currentLiq.data.period.id !== periodId)
-        ? periodId
-        : null;
+  const liqSelection = useRef<{ periodId: string; mismatch: boolean } | null>(
+    null,
+  );
+  const capSelection = useRef<{ periodId: string; mismatch: boolean } | null>(
+    null,
+  );
+  if (liqSelection.current?.periodId !== periodId || !currentLiq.isFetching) {
+    liqSelection.current = {
+      periodId,
+      mismatch:
+        currentLiq.isError ||
+        Boolean(currentLiq.data && currentLiq.data.period.id !== periodId),
+    };
   }
-  if (!currentCap.isFetching) {
-    establishedCapPeriod.current =
-      currentCap.isError ||
-      Boolean(currentCap.data && currentCap.data.period.id !== periodId)
-        ? periodId
-        : null;
+  if (capSelection.current?.periodId !== periodId || !currentCap.isFetching) {
+    capSelection.current = {
+      periodId,
+      mismatch:
+        currentCap.isError ||
+        Boolean(currentCap.data && currentCap.data.period.id !== periodId),
+    };
   }
-  const needsPeriodLiq = establishedLiqPeriod.current === periodId;
-  const needsPeriodCap = establishedCapPeriod.current === periodId;
+  const needsPeriodLiq = liqSelection.current.mismatch;
+  const needsPeriodCap = capSelection.current.mismatch;
   const periodLiq = useLiquidityDashboard(
     needsPeriodLiq ? bankId : undefined,
     periodId,
@@ -1049,20 +1055,27 @@ export function useLatestOfficialRunSignal(bankId: string | undefined) {
   const query = useQuery({
     queryKey: scopedQueryKey('official-run-signal', scope, bankId ?? null),
     queryFn: async () => {
-      let offset = 0;
-      const runs = [];
-      while (true) {
-        const page = await apiCall(() =>
-          regulatoryLiquidityApi.listRegulatoryRuns({
-            bankId: bankId!,
-            limit: 100,
-            offset,
-          })
-        );
-        runs.push(...page.runs);
-        if (!page.hasMore || page.runs.length === 0) return { runs };
-        offset += page.runs.length;
-      }
+      const pages = await Promise.all(
+        (
+          [
+            ['liquidity', 'baseline'],
+            ['capital', 'baseline'],
+          ] as const
+        ).map(([module, scenarioCode]) =>
+          apiCall(() =>
+            regulatoryLiquidityApi.listRegulatoryRuns({
+              bankId: bankId!,
+              module,
+              scenarioCode,
+              limit: 1,
+              offset: 0,
+            })
+          )
+        )
+      );
+      return {
+        runs: pages.flatMap((page) => page.runs),
+      };
     },
     enabled: Boolean(bankId),
     refetchInterval: jitteredPollInterval(

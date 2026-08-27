@@ -460,27 +460,33 @@ async function main(): Promise<void> {
   assert.ok(jitter >= 18_000 && jitter <= 22_000);
 
   // Count model for the same 65-second idle window used by the pre-change
-  // fixture. Only the cheap live summary, freshness, alert list, and inbox retain a
-  // cadence. With this fixture's deterministic jitter: 21 initial resources
-  // + 3 summary ticks + 2 freshness ticks + 3 latest-run ticks + 3 alert ticks
-  // + 1 inbox tick = 34
-  // requests. The five
+  // fixture. Only the cheap live summary, freshness, bounded two-module
+  // official-run signal, alert list, and inbox retain a cadence. With this
+  // fixture's deterministic jitter: 22 logical initial resources / 23 calls
+  // + 3 summary ticks + 2 freshness ticks + 6 latest-run module calls
+  // + 3 alert ticks + 1 inbox tick = 38 requests. The five
   // module detail payloads each load once and contribute zero idle polls.
   const idleWindowMs = 65_000;
   const retainedIntervals = [
     jitter,
     jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'freshness', scope, BANK_ID),
-    jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'official-run-signal', scope, BANK_ID),
     jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'alerts', scope, BANK_ID),
     jitteredPollInterval(60_000, 'notifications', scope),
   ];
+  const officialSignalInterval = jitteredPollInterval(
+    LIVE_SIGNAL_POLL_MS,
+    'official-run-signal',
+    scope,
+    BANK_ID,
+  );
   const afterIdleRequests =
-    homeResources.length +
+    homeResources.length + 1 +
     retainedIntervals.reduce(
       (ticks, interval) => ticks + Math.floor(idleWindowMs / interval),
-      0
-    );
-  assert.equal(afterIdleRequests, 34);
+      0,
+    ) +
+    2 * Math.floor(idleWindowMs / officialSignalInterval);
+  assert.equal(afterIdleRequests, 38);
   assert.equal(
     homeResources.filter((key) =>
       [
@@ -513,7 +519,7 @@ async function main(): Promise<void> {
   idleClient.clear();
   requestClient.clear();
   console.log(
-    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 22/34/5; detailed idle polls 0; invalidation passed'
+    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 22/38/5; detailed idle polls 0; invalidation passed'
   );
 }
 
