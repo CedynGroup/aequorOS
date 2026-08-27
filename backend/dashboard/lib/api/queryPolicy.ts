@@ -77,7 +77,8 @@ export async function waitForInitialDashboardSignals(
         (key[0] === 'live-summary' || key[0] === 'freshness') &&
         key[1] === scope.tenantId &&
         key[2] === scope.authorityId &&
-        key[3] === (bankId ?? null)
+        key[3] === (bankId ?? null) &&
+        query.getObserversCount() > 0
       );
     },
   });

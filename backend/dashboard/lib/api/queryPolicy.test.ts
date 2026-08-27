@@ -88,15 +88,18 @@ async function main(): Promise<void> {
   let signalShouldFail = true;
   let signalRequests = 0;
   const signalKey = scopedQueryKey('live-summary', scope, BANK_ID);
-  await assert.rejects(
-    failedSignalClient.fetchQuery({
-      queryKey: signalKey,
-      queryFn: async () => {
-        signalRequests += 1;
-        if (signalShouldFail) throw new Error('signal unavailable');
-        return { modules: [] };
-      },
-    }),
+  const failedSignalObserver = new QueryObserver(failedSignalClient, {
+    queryKey: signalKey,
+    queryFn: async () => {
+      signalRequests += 1;
+      if (signalShouldFail) throw new Error('signal unavailable');
+      return { modules: [] };
+    },
+  });
+  const unsubscribeFailedSignal = failedSignalObserver.subscribe(() => undefined);
+  await waitFor(
+    () => failedSignalClient.getQueryState(signalKey)?.status === 'error',
+    'active signal did not enter its expected error state',
   );
   await waitForInitialDashboardSignals(failedSignalClient, scope, BANK_ID);
   assert.equal(signalRequests, 2, 'an errored initial signal should be retried once');
@@ -112,6 +115,34 @@ async function main(): Promise<void> {
   assert.equal(detailRequests, 1, 'signal failure must not block an available detail read');
   signalShouldFail = false;
   await waitForInitialDashboardSignals(failedSignalClient, scope, BANK_ID);
+
+  const abandonedPeriodKey = scopedQueryKey(
+    'freshness',
+    scope,
+    BANK_ID,
+    'period-abandoned',
+  );
+  let abandonedPeriodRequests = 0;
+  const abandonedPeriodObserver = new QueryObserver(failedSignalClient, {
+    queryKey: abandonedPeriodKey,
+    queryFn: async () => {
+      abandonedPeriodRequests += 1;
+      throw new Error('abandoned period unavailable');
+    },
+  });
+  const unsubscribeAbandonedPeriod = abandonedPeriodObserver.subscribe(() => undefined);
+  await waitFor(
+    () => failedSignalClient.getQueryState(abandonedPeriodKey)?.status === 'error',
+    'abandoned period signal did not enter its expected error state',
+  );
+  unsubscribeAbandonedPeriod();
+  await waitForInitialDashboardSignals(failedSignalClient, scope, BANK_ID);
+  assert.equal(
+    abandonedPeriodRequests,
+    1,
+    'navigation must not retry an inactive cached period signal',
+  );
+  unsubscribeFailedSignal();
 
   const recovered = generationFingerprint([
     {
