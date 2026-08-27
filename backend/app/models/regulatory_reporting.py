@@ -1,12 +1,13 @@
 """Regulatory Reporting & Submission Hub tables (docs/regulatory_reporting.md §3).
 
 Packages are immutable, versioned snapshots of a generated return for one
-``(bank, return_code, reporting_date)``: regeneration mints a new version and
-marks the prior current version ``superseded`` — it never mutates. A partial
-unique index keeps exactly one non-superseded version per key. Artifacts,
-approvals, and submission events are append-only children; channel configs
-hold per-bank submission-channel settings with write-only encrypted
-credentials (EncryptedDbVault pattern).
+``(bank, return_code, reporting_date, basis)``: regeneration mints a new
+version and marks the prior current version ``superseded`` — it never mutates.
+A partial unique index keeps exactly one non-superseded version per key, with
+independent solo and consolidated chains. Artifacts, approvals, and submission
+events are append-only children; channel configs hold per-bank
+submission-channel settings with write-only encrypted credentials
+(EncryptedDbVault pattern).
 """
 
 from __future__ import annotations

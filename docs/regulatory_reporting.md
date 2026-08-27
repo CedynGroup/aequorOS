@@ -99,17 +99,20 @@ draft → generated → validated → pending_approval → approved → submitte
                                       ↓ rejected(approval)          ↓
                                    generated (rework)      acknowledged | rejected(BoG)
                                                                     ↓ rejected → resubmitted (new version, supersedes)
-any regeneration for the same (family, reporting_date) ⇒ new version, prior → superseded
+any regeneration for the same (return_code, reporting_date, basis)
+  ⇒ new version, prior → superseded
 ```
 
 ## 3. Data model (migration 202607170009, all RLS + tenant-scoped)
 
 - `regulatory_packages`: organization_id, bank_id, return_family, return_code, reporting_date,
-  frequency, status (CHECK per lifecycle), version, supersedes_id, snapshot JSON (the full
-  generated return content — rows, totals, metadata), source_runs JSON
+  frequency, basis (`solo` or `consolidated`), status (CHECK per lifecycle), version,
+  supersedes_id, snapshot JSON (the full generated return content — rows, totals, metadata),
+  source_runs JSON
   ([{module, run_id, input_hash, engine_version}]), validation_report JSON, generated_by,
-  generated_at, notes. Unique current-version per (org, bank, return_code, reporting_date)
-  WHERE status != 'superseded'.
+  generated_at, notes. Unique current-version per
+  (org, bank, return_code, reporting_date, basis) WHERE status != 'superseded'; solo and
+  consolidated version chains are independent.
 - `regulatory_package_artifacts`: package_id, kind (xlsx|csv|pdf), object_path (outputs tier:
   `bog_returns/{reporting_date}/{package_id}/{return_code}.{ext}`), checksum_sha256, size_bytes.
 - `regulatory_package_approvals`: package_id, action (requested|approved|rejected), actor_user_id,
@@ -161,7 +164,11 @@ distinct artifact kind that is never filed and never signed), `csv`. Rendering:
 - `anchors.py` — the reporting dates a return reports on, from the registry alone (no DB, no
   tenant), plus `snapshot_coverage` (which of those dates the bank has computed figures for).
 - `calendar.py` — obligations for the next N months per registry + bank config; RAG staleness;
-  `list_return_anchors` (the per-return picker the Returns workspace binds to).
+  `list_return_anchors` (the per-return picker the Returns workspace binds to). Both surfaces
+  link only the current solo package for each anchor and batch those package reads into one query,
+  plus at most one submission-event query for pending ORASS re-uploads; horizon growth does not
+  increase their SQL query count. The contract is pinned by
+  `tests/services/test_regulatory_reporting_calendar_query_shape.py`.
 
 ### 5a. Reporting date vs data arrival (corrected 2026-08-23)
 

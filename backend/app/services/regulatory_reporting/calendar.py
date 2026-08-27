@@ -2,7 +2,7 @@
 
 For every registry entry: the currently-due reporting date plus the upcoming
 reporting dates inside the horizon, each with its deadline-rule due date, the
-current (non-superseded) package covering it, and a RAG grade —
+current non-superseded solo package covering it, and a RAG grade —
 ``overdue`` (deadline passed without a submitted/acknowledged package),
 ``due_soon`` (deadline within the warning window), else ``on_track``.
 
