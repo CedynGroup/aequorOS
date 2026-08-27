@@ -69,7 +69,15 @@ export async function GET(): Promise<NextResponse> {
 
   const claims = decodeClaims(token);
   const operator = claims
-    ? firstString(claims, ['operator', 'operator_email', 'actor', 'act', 'email', 'sub'])
+    ? firstString(claims, [
+        'act_operator',
+        'operator',
+        'operator_email',
+        'actor',
+        'act',
+        'email',
+        'sub',
+      ])
     : null;
   const org = claims ? firstString(claims, ['org', 'organization', 'organization_id']) : null;
   const expSeconds = claims && typeof claims.exp === 'number' ? claims.exp : null;
