@@ -120,6 +120,21 @@ at version 1 and retain current product behavior through the legacy hierarchy.
 Integration keys and operator impersonation tokens retain their separate
 credential lifecycles and do not carry `authv`.
 
+## Executable verification
+
+The fixed evaluator, service, refresh-token, and Postgres migration suites pin
+the binding semantics, database constraints, FORCE RLS, cross-tenant refusal,
+and atomic version-bump/session-revocation contract. Two generative suites add
+coverage beyond the fixed examples:
+
+- `tests/core/test_authorization_properties.py` compares the evaluator with an
+  independent per-binding oracle across binding order, partial cross-row
+  matches, runtime conditions, and exact lifecycle boundaries; and
+- `tests/api/test_authorization_state_machine.py` exercises arbitrary sequences
+  of token-family issue, refresh rotation, and authorization invalidation,
+  checking after every transition that stale access and refresh credentials
+  remain unusable and their persisted families are revoked.
+
 ## Shadow rollout and next vertical slice
 
 The new evaluator is not wired as an endpoint gate yet. Existing routes keep
