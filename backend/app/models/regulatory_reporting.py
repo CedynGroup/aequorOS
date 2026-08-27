@@ -116,8 +116,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_regulatory_packages_frequency",
         ),
         CheckConstraint(
-            "attestation_state IN ('unsigned', 'preparer_certified', "
-            "'fully_certified', 'void')",
+            "attestation_state IN ('unsigned', 'preparer_certified', 'fully_certified', 'void')",
             name="ck_regulatory_packages_attestation_state",
         ),
         CheckConstraint(
