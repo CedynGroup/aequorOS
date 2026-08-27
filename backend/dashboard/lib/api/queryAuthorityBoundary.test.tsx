@@ -137,8 +137,13 @@ async function main(): Promise<void> {
   let officialGeneration = 1;
   let currentPeriodId = PERIOD_ID;
   let currentDetailGate: Promise<void> | null = null;
+  let releaseInitialSignals: (() => void) | null = null;
+  const initialSignalGate = new Promise<void>((resolve) => {
+    releaseInitialSignals = resolve;
+  });
   const liveSummary = async () => {
     counts.set('live-summary', (counts.get('live-summary') ?? 0) + 1);
+    await initialSignalGate;
     return {
       modules: [
         {
@@ -199,6 +204,7 @@ async function main(): Promise<void> {
     getLiveSummary: liveSummary,
     getBankFreshness: async () => {
       counts.set('freshness', (counts.get('freshness') ?? 0) + 1);
+      await initialSignalGate;
       return {
         modules: [
           {
@@ -240,6 +246,8 @@ async function main(): Promise<void> {
   let authorityMounts = 0;
   let resolvedAuthority: ReturnType<typeof useQueryAuthorityScope> | null = null;
   let selectRatioPeriod: ((periodId: string) => void) | null = null;
+  let effectiveLiquidityPeriod: string | undefined;
+  let effectiveCapitalPeriod: string | undefined;
 
   function AuthorityProbe() {
     const authority = useQueryAuthorityScope();
@@ -267,7 +275,9 @@ async function main(): Promise<void> {
     hooks.useNotifications();
     hooks.useLiquidityDashboard(BANK_ID);
     hooks.useCapitalDashboard(BANK_ID);
-    hooks.useEffectiveRatioDashboards(BANK_ID, ratioPeriodId);
+    const effectiveRatios = hooks.useEffectiveRatioDashboards(BANK_ID, ratioPeriodId);
+    effectiveLiquidityPeriod = effectiveRatios.liquidity.data?.period.id;
+    effectiveCapitalPeriod = effectiveRatios.capital.data?.period.id;
     hooks.useIrrDashboard(BANK_ID);
     hooks.useFxDashboard(BANK_ID);
     hooks.useFtpDashboard(BANK_ID);
@@ -321,6 +331,23 @@ async function main(): Promise<void> {
     releaseStatus!();
   });
   await waitFor(
+    () => counts.get('live-summary') === 1 && counts.get('freshness') === 1,
+    'initial dashboard signals did not start',
+  );
+  assert.equal(
+    counts.get('liq-dashboard'),
+    undefined,
+    'liquidity detail started before its initial signals settled',
+  );
+  assert.equal(
+    counts.get('cap-dashboard'),
+    undefined,
+    'capital detail started before its initial signals settled',
+  );
+  await act(async () => {
+    releaseInitialSignals!();
+  });
+  await waitFor(
     () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 21,
     'Command Center resources did not settle',
   );
@@ -348,9 +375,39 @@ async function main(): Promise<void> {
   await waitFor(
     () =>
       counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) === 1 &&
-      counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) === 1,
+      counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) === 1 &&
+      effectiveLiquidityPeriod === HISTORICAL_PERIOD_ID &&
+      effectiveCapitalPeriod === HISTORICAL_PERIOD_ID,
     'historical ratio dashboards did not retain explicit-period semantics',
   );
+  assert.equal(effectiveLiquidityPeriod, HISTORICAL_PERIOD_ID);
+  assert.equal(effectiveCapitalPeriod, HISTORICAL_PERIOD_ID);
+
+  let releaseHistoricalRefetch: (() => void) | null = null;
+  currentDetailGate = new Promise<void>((resolve) => {
+    releaseHistoricalRefetch = resolve;
+  });
+  const beforeHistoricalRefetch = counts.get('liq-dashboard') ?? 0;
+  await act(async () => {
+    void queryClient!.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey[0] === 'liq-dashboard' && query.queryKey[4] === 'current',
+    });
+    void queryClient!.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey[0] === 'cap-dashboard' && query.queryKey[4] === 'current',
+    });
+  });
+  await waitFor(
+    () => counts.get('liq-dashboard') === beforeHistoricalRefetch + 1,
+    'current dashboard did not begin its historical-selection refetch',
+  );
+  assert.equal(effectiveLiquidityPeriod, HISTORICAL_PERIOD_ID);
+  assert.equal(effectiveCapitalPeriod, HISTORICAL_PERIOD_ID);
+  currentDetailGate = null;
+  await act(async () => {
+    releaseHistoricalRefetch!();
+  });
 
   let releaseCurrentDetail: (() => void) | null = null;
   currentDetailGate = new Promise<void>((resolve) => {

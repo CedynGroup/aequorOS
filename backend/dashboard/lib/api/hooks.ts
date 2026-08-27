@@ -10,7 +10,7 @@
  * the related bank-local reads.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   keepPreviousData,
   useMutation,
@@ -127,6 +127,7 @@ import {
   officialRunFingerprint,
   regulatoryDetailInvalidationPrefixes,
   scopedQueryKey,
+  waitForInitialDashboardSignals,
   type QueryAuthorityScope,
 } from './queryPolicy';
 import { useQueryAuthorityScope } from './useQueryScope';
@@ -184,16 +185,19 @@ export function useLiquidityDashboard(
   periodId?: string | undefined
 ) {
   const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   const semantic = dashboardSemantic(periodId);
   return useQuery({
     queryKey: dashboardQueryKey('liq-dashboard', scope, bankId, semantic),
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryLiquidityApi.getLiquidityDashboard({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
@@ -204,16 +208,19 @@ export function useCapitalDashboard(
   periodId?: string | undefined
 ) {
   const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   const semantic = dashboardSemantic(periodId);
   return useQuery({
     queryKey: dashboardQueryKey('cap-dashboard', scope, bankId, semantic),
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryCapitalApi.getCapitalDashboard({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
@@ -225,14 +232,24 @@ export function useEffectiveRatioDashboards(
 ) {
   const currentLiq = useLiquidityDashboard(bankId);
   const currentCap = useCapitalDashboard(bankId);
-  const needsPeriodLiq =
-    !currentLiq.isFetching &&
-    (currentLiq.isError ||
-      Boolean(currentLiq.data && currentLiq.data.period.id !== periodId));
-  const needsPeriodCap =
-    !currentCap.isFetching &&
-    (currentCap.isError ||
-      Boolean(currentCap.data && currentCap.data.period.id !== periodId));
+  const establishedLiqPeriod = useRef<string | null>(null);
+  const establishedCapPeriod = useRef<string | null>(null);
+  if (!currentLiq.isFetching) {
+    establishedLiqPeriod.current =
+      currentLiq.isError ||
+      Boolean(currentLiq.data && currentLiq.data.period.id !== periodId)
+        ? periodId
+        : null;
+  }
+  if (!currentCap.isFetching) {
+    establishedCapPeriod.current =
+      currentCap.isError ||
+      Boolean(currentCap.data && currentCap.data.period.id !== periodId)
+        ? periodId
+        : null;
+  }
+  const needsPeriodLiq = establishedLiqPeriod.current === periodId;
+  const needsPeriodCap = establishedCapPeriod.current === periodId;
   const periodLiq = useLiquidityDashboard(
     needsPeriodLiq ? bankId : undefined,
     periodId,
@@ -397,6 +414,7 @@ export function useIrrDashboard(
   periodId?: string | undefined
 ) {
   const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: dashboardQueryKey(
       'irr-dashboard',
@@ -404,8 +422,9 @@ export function useIrrDashboard(
       bankId,
       dashboardSemantic(periodId),
     ),
-    queryFn: () =>
-      apiCall(async () => {
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(async () => {
         // The live IRR service returns HTTP 200 with an availability envelope
         // while current facts lack a compatible analysis context. Detect it
         // before generated-client deserialization expects dashboard arrays.
@@ -425,7 +444,8 @@ export function useIrrDashboard(
           );
         }
         return response.value();
-      }),
+      });
+    },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
@@ -454,6 +474,7 @@ export function useFxDashboard(
   periodId?: string | undefined
 ) {
   const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: dashboardQueryKey(
       'fx-dashboard',
@@ -461,13 +482,15 @@ export function useFxDashboard(
       bankId,
       dashboardSemantic(periodId),
     ),
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryFxApi.getFxDashboard({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
@@ -496,6 +519,7 @@ export function useFtpDashboard(
   periodId?: string | undefined
 ) {
   const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: dashboardQueryKey(
       'ftp-dashboard',
@@ -503,13 +527,15 @@ export function useFtpDashboard(
       bankId,
       dashboardSemantic(periodId),
     ),
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryFtpApi.getFtpDashboard({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
@@ -542,15 +568,19 @@ export function useRwaBreakdown(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['cap-rwa', bankId, periodId],
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryCapitalApi.getRwaBreakdown({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
     retry: (failureCount, error) =>
       !isNoBaselineRunError(error) && failureCount < 1,
@@ -561,15 +591,19 @@ export function useCapitalStructure(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['cap-structure', bankId, periodId],
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryCapitalApi.getCapitalStructure({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
     retry: (failureCount, error) =>
       !isNoBaselineRunError(error) && failureCount < 1,
@@ -631,6 +665,8 @@ export function useForecastRuns(
   bankId: string | undefined,
   filters: { limit?: number; offset?: number } = {}
 ) {
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: [
       'forecast-runs',
@@ -638,14 +674,16 @@ export function useForecastRuns(
       filters.limit ?? 25,
       filters.offset ?? 0,
     ],
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         forecastingApi.listForecastRuns({
           bankId: bankId!,
           limit: filters.limit,
           offset: filters.offset,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
   });
 }
@@ -3580,6 +3618,7 @@ export function useLiveSnapshots(
   days = 45
 ) {
   const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: scopedQueryKey(
       'live-snapshots',
@@ -3588,10 +3627,12 @@ export function useLiveSnapshots(
       module,
       days,
     ),
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         liveEngineApi.listLiveSnapshots({ bankId: bankId!, module, days })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
   });

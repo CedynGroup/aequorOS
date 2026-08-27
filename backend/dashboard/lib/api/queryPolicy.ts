@@ -64,6 +64,31 @@ export function dashboardQueryKey(
   );
 }
 
+export async function waitForInitialDashboardSignals(
+  queryClient: QueryClient,
+  scope: QueryAuthorityScope,
+  bankId: string | undefined
+): Promise<void> {
+  const signals = queryClient.getQueryCache().findAll({
+    predicate: (query) => {
+      const key = query.queryKey;
+      return (
+        (key[0] === 'live-summary' || key[0] === 'freshness') &&
+        key[1] === scope.tenantId &&
+        key[2] === scope.authorityId &&
+        key[3] === (bankId ?? null)
+      );
+    },
+  });
+  await Promise.allSettled(
+    signals.flatMap((query) => {
+      if (query.promise) return [query.promise];
+      if (query.state.status === 'pending') return [query.fetch()];
+      return [];
+    })
+  );
+}
+
 /** Prefix used to invalidate one bank without disturbing another authority. */
 export function scopedBankPrefix(
   prefix: string,
