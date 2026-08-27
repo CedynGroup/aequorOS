@@ -70,7 +70,7 @@ organization_id)` to `users` and from `(institution_id, organization_id)` to
 tenant-owned and has ENABLE + FORCE RLS with the standard
 `app.organization_id` policy. Status/validity constraints make active,
 suspended, and revoked stored states, plus not-yet-valid and expired effective
-states, unambiguous.
+states, unambiguous. `valid_from` is inclusive and `valid_until` is exclusive.
 
 The creation service also verifies that the principal type matches the identity
 record, machine and human bundles are not mixed, and a tenant-user or operator
@@ -96,6 +96,13 @@ maker/checker, step-up, and approval-limit policies. Those conditions remain
 owned by their workflows and cannot be bypassed by adding another allow
 binding. The filing workflow is not changed by this slice.
 
+The persistence boundary adds two fail-closed checks after evaluating the
+bindings: the principal must still be an active tenant member of the declared
+type, and any institution named by the resource must belong to that same
+tenant. These return explained denials (`principal_not_active` or
+`resource_institution_not_in_tenant`) rather than allowing a matching row to
+outlive its identity or resource.
+
 ## Authorization version and deployment transition
 
 Migration `202608250044` adds `users.authorization_version`, initially `1`, and
@@ -103,11 +110,11 @@ does **not** backfill any binding. In particular, an existing scalar `admin` is
 not silently made an operational principal, Account Admin, or Org Owner in the
 new model.
 
-Every newly issued access and refresh token carries the authoritative `authv`.
-Tenant request validation compares it with the active user row; refresh also
-requires the current value in addition to the server-side token record. A stale
-version returns 401. `invalidate_user_authorization()` locks the user, advances
-the version, and revokes every refresh family with
+Every newly issued access and refresh token carries the authoritative, positive
+integer `authv`. Every normal app-JWT request compares it with the active user
+row; refresh also requires the current value in addition to the server-side
+token record. A stale version returns 401. `invalidate_user_authorization()`
+locks the user, advances the version, and revokes every refresh family with
 `authorization_changed` in one transaction. The binding creation primitive
 uses this operation before commit. Future role, scope, status, and security
 mutations must do the same.

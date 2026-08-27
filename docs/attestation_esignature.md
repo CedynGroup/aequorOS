@@ -196,13 +196,13 @@ stub and returns 403 until an admin approves with an explicit role.
 **Authentication update (2026-08-25).** Access tokens are HS256, 15-minute TTL,
 carrying `sub` (user UUID), `org`
 (the `OR-XXXXXXXX` platform code), legacy `roles`, authoritative `authv`,
-`email`, and `name` (`app/core/security.py:create_token`).
-`validate_tenant_context` re-checks on every tenant data request that the user
-still exists in the org, is active, and has the same `authorization_version` as
-the token. Deactivation therefore kills live sessions immediately; a role,
-scope, status, or security mutation must bump the version and revoke refresh
-families through `invalidate_user_authorization()` so existing access and
-refresh tokens fail closed.
+and optional `email` and `name` (`app/core/security.py:create_token`). Every
+normal app-token request re-checks that the user still exists in the org, is
+active, and has the same `authorization_version` as the token. Deactivation
+therefore kills live sessions immediately; a role, scope, status, or security
+mutation must bump the version and revoke refresh families through
+`invalidate_user_authorization()` so existing access and refresh tokens fail
+closed.
 
 **Stable per-user identifiers available today:**
 

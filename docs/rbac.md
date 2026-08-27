@@ -34,7 +34,7 @@ building:
 - Building the **role-aware dashboards** → [§5 personas](#5-personas--roles--what-they-need), [§9 per-persona dashboards](#9-per-persona-dashboards-what-to-build), [§8 enforcement](#8-enforcement-architecture).
 - Building **settings** → [§10 three-tier settings](#10-settings-architecture-three-tiers), [§12 UI specs](#12-user-menu--ui-specs).
 - Building **invite / onboarding** → [§11 lifecycle & onboarding](#11-user-lifecycle--onboarding).
-- Need the **data model / API** → [§13](#13-data-model), [§14](#14-api-surface).
+- Need the **data model / API** → [§13](#13-data-model), [§14](#14-target-api-surface).
 - Sequencing the work → [§15 roadmap](#15-phased-roadmap).
 
 Terminology: **security tenant = organization (`OR-*`)**; an organization owns
@@ -60,7 +60,7 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 | Tenancy | Postgres RLS forced on `app.organization_id`; cross-tenant work runs on the BYPASSRLS `WORKER_DATABASE_URL` role | `app/db/session.py`, CLAUDE.md |
 | Maker-checker | **Regulatory reporting already has it**: `draft→generated→validated→pending_approval→approved→submitted→acknowledged→…` with an append-only approval trail where **checker ≠ maker is enforced in the service** | `app/models/regulatory_reporting.py` (`PACKAGE_STATUSES`, `APPROVAL_ACTIONS`, `RegulatoryPackageApproval`) |
 | Authorization foundation | **BUILT, SHADOW-ONLY.** Deny-by-default evaluation over indivisible `authorization_bindings`; exact organization/institution, module, sensitivity, lifecycle, principal-type, and runtime-condition matching. No binding CRUD API and no endpoint gate yet. | `app/core/authorization.py`, `app/services/authorization.py`, `backend/docs/authorization_foundation.md` |
-| Token claims | App access and refresh tokens carry `sub`, `org`, legacy `roles[]`, authoritative `authv`, `email`, and `name`; refresh tokens also require `jti`. Pre-`202608250044` and stale-version sessions fail closed. | `app/core/security.py:create_token`, `app/api/deps.py:validate_tenant_context` |
+| Token claims | App access and refresh tokens carry `sub`, `org`, legacy `roles[]`, and authoritative `authv`, plus `email`/`name` when present; refresh tokens also require `jti`. Pre-`202608250044` and stale-version sessions fail closed. | `app/core/security.py:create_token`, `app/api/deps.py:validate_tenant_context` |
 | Identity in UI | Header + settings read the real session (name/role); route gate redirects unauthenticated → `/login` | `dashboard/components/shell/Header.tsx`, `dashboard/middleware.ts` |
 
 ### The gap this spec closes
@@ -145,7 +145,7 @@ Every access check answers: **who (role) → may do what (permission) → on wha
 ```
                        ┌────────────────────────────────────────────┐
                        │   PLATFORM PLANE  (AequorOS / vendor)       │
-                       │   admin.aequoros.com — CROSS-TENANT         │
+                       │   console.aequoros.com — CROSS-TENANT       │
                        │   runs OUTSIDE RLS (BYPASSRLS, like the     │
                        │   background worker's WORKER_DATABASE_URL)  │
                        └───────────────┬────────────────────────────┘
@@ -271,7 +271,7 @@ grants) + (approval tier)` applied at invite time — not new roles. This is the
 Stripe/Datadog/Okta pattern (predefined roles + optional custom roles later),
 deliberately capped to avoid role explosion.
 
-### 6.1 Base roles (extend the current four)
+### 6.1 Target base roles
 
 | Base role | Replaces / maps from | Purpose | Key permissions | Must NOT |
 |---|---|---|---|---|
@@ -599,7 +599,7 @@ compute, About) is the seed of **Organization → General** + the read-only
 **Data & compute**. Grow it into the above; the current "Users & roles" panel
 (now showing the real signed-in user) becomes the full **Members** page.
 
-### 10.3 Platform / vendor super-admin console (`admin.aequoros.com`, staff-only)
+### 10.3 Platform / vendor super-admin console (`console.aequoros.com`, staff-only)
 
 Separate app/subdomain, **never** mixed into the tenant nav. Runs outside RLS.
 
@@ -858,7 +858,7 @@ GET     /orgs/{org}/audit                           audit:read
 POST  /.../{object}:request-review | review | approve | reject | sign-off | submit
 ```
 
-Platform plane (`admin.aequoros.com`, outside RLS, `platform:*`):
+Platform plane (`console.aequoros.com`, outside RLS, `platform:*`):
 
 ```
 GET/POST /platform/tenants                          platform:tenants / platform:provision
