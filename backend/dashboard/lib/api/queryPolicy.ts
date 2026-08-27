@@ -340,6 +340,7 @@ export function observedSignalChanges(
 export type OfficialCompletionSignal = Readonly<{
   id: string;
   module: string;
+  reportingPeriodId?: string;
   scenarioCode: string;
   status: string;
   inputHash: string;
@@ -363,21 +364,33 @@ const OFFICIAL_COMPLETION_SCENARIOS = new Map([
 ]);
 
 export function officialCompletionFingerprint(
-  runs: readonly OfficialCompletionSignal[]
+  runs: readonly OfficialCompletionSignal[],
+  reportingPeriodIds?: readonly string[],
 ): ReadonlyMap<string, string> {
   const moduleRuns = new Map<string, string[]>();
+  const representedPeriods = reportingPeriodIds
+    ? new Set(reportingPeriodIds)
+    : undefined;
+  const observedBaselines = new Set<string>();
   for (const run of runs) {
     const officialScenario = OFFICIAL_COMPLETION_SCENARIOS.get(run.module);
     if (
       !officialScenario ||
       run.status !== 'succeeded' ||
-      run.scenarioCode !== officialScenario
+      run.scenarioCode !== officialScenario ||
+      (representedPeriods &&
+        (!run.reportingPeriodId ||
+          !representedPeriods.has(run.reportingPeriodId)))
     ) {
       continue;
     }
+    const baselineIdentity = `${run.module}|${run.reportingPeriodId ?? ''}`;
+    if (observedBaselines.has(baselineIdentity)) continue;
+    observedBaselines.add(baselineIdentity);
     const fingerprints = moduleRuns.get(run.module) ?? [];
     fingerprints.push(
       JSON.stringify([
+        run.reportingPeriodId ?? null,
         run.id,
         run.inputHash,
         run.evidence?.status ?? null,
@@ -397,58 +410,6 @@ export function officialCompletionFingerprint(
       module,
       JSON.stringify(fingerprints.sort()),
     ])
-  );
-}
-
-export type OfficialPeriodSignal = Readonly<{
-  reportingPeriodId: string | null;
-  modules: readonly OfficialRunSignal[];
-}>;
-
-export function officialBaselineFingerprint(
-  periods: readonly OfficialPeriodSignal[],
-  runs: readonly OfficialCompletionSignal[],
-  previous?: ReadonlyMap<string, string>
-): ReadonlyMap<string, string> {
-  const periodFingerprints = new Map<string, string[]>();
-  for (const period of periods) {
-    for (const moduleSignal of period.modules) {
-      const fingerprints = periodFingerprints.get(moduleSignal.module) ?? [];
-      fingerprints.push(
-        JSON.stringify([
-          period.reportingPeriodId,
-          moduleSignal.officialRunHash ?? null,
-          moduleSignal.officialRunAt ?? null,
-        ])
-      );
-      periodFingerprints.set(moduleSignal.module, fingerprints);
-    }
-  }
-
-  const completionFingerprints = officialCompletionFingerprint(runs);
-  const modules = new Set([
-    ...periodFingerprints.keys(),
-    ...completionFingerprints.keys(),
-  ]);
-  return new Map(
-    [...modules].map((module) => {
-      let completionFingerprint = completionFingerprints.get(module);
-      if (completionFingerprint === undefined) {
-        const previousFingerprint = previous?.get(module);
-        if (previousFingerprint) {
-          const parsed = JSON.parse(previousFingerprint) as [unknown, unknown];
-          completionFingerprint =
-            typeof parsed[1] === 'string' ? parsed[1] : undefined;
-        }
-      }
-      return [
-        module,
-        JSON.stringify([
-          [...(periodFingerprints.get(module) ?? [])].sort(),
-          completionFingerprint ?? null,
-        ]),
-      ];
-    })
   );
 }
 
