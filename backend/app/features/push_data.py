@@ -9,9 +9,10 @@ The ``bank_id`` path segment accepts the platform institution ID
 (BK-XXXXXXXX) — the identifier banks are onboarded with — or the internal
 bank UUID for backward compatibility.
 
-Auth (MVP): the same tenant headers as the rest of the API (X-Org-Id /
-X-User-Id). Production integration adds OAuth2 client-credentials / mTLS in
-front of these endpoints; the resource design does not change.
+Auth: an integration key (`aeq_live_...`) is the bearer credential. It resolves
+to a tenant-scoped service account through the separate integration-key
+lifecycle; app-JWT `authv` versioning does not apply to it. Deployments may add
+OAuth2 client-credentials or mTLS in front without changing the resource design.
 """
 
 from __future__ import annotations

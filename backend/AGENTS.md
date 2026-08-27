@@ -6,7 +6,7 @@ This file is the starting point for agents working in `backend`.
 
 | Document                                           | Purpose                                                                          |
 | -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [README.md](README.md)                             | Local setup, run commands, environment variables, and demo tenant headers.       |
+| [README.md](README.md)                             | Local setup, run commands, environment variables, and API authentication.        |
 | [docs/architecture.md](docs/architecture.md)       | Service boundaries, tenant isolation, API versioning, and background job policy. |
 | [docker-compose.yml](docker-compose.yml)           | Local Postgres and MinIO services for demos and Postgres-backed tests.           |
 | [scripts/bootstrap_db.sh](scripts/bootstrap_db.sh) | Database role setup, migrations, grants, and demo tenant seeding.                |

@@ -182,7 +182,9 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
   `Base.metadata.create_all`, demo tenants seeded, storage overridden with `FakeStorage`),
   `db_session`, `api_factories`, `fake_storage`, `tenant_ctx`, `test_settings`/`db_settings`.
 - **Tenant constants** from `tests/api/helpers.py`: `ORG_1`, `ORG_2`, `USER_1`, `USER_2`, and
-  `headers(org_id, user_id)` which returns `{"X-Org-Id": ..., "X-User-Id": ...}`.
+  `headers(org_id, user_id, roles, authorization_version)`, which returns a signed
+  `Authorization: Bearer ...` access token. It defaults to the seeded user's current
+  authorization version (`1`); stale-session tests pass an older value explicitly.
 - **Factories**: `tests/api/factories/` package — `ApiFactories` bundles `CaseFactory`,
   `DocumentFactory`, `AssessmentFactory` (+ `MutableFakeStorage`); factories create data through
   the real HTTP API and assert status codes.

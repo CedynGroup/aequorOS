@@ -1,7 +1,8 @@
 # AequorOS Architecture
 
-Single source of truth for agents building new modules. Every claim below was verified against
-the code on 2026-07-14. When this document and the code disagree, the code wins — fix this file.
+Single source of truth for agents building new modules. Initially verified on
+2026-07-14 and updated through 2026-08-25. When this document and the code
+disagree, the code wins — fix this file.
 
 Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
 
@@ -76,8 +77,8 @@ is one indivisible principal/type + static bundle + organization/institution +
 module + sensitivity + provenance + lifecycle tuple. Dimensions inside a row
 AND; independently complete rows OR. The pure evaluator starts denied, accepts
 only exact active persisted bindings, ignores scalar role and token-permission
-claims, and applies demo-mode, maker-checker, step-up, and limit conditions as
-global vetoes. Its decision includes an audit-ready trace.
+claims, and applies workflow-supplied demo-mode, maker-checker, step-up, and
+limit conditions as global vetoes. Its decision includes an audit-ready trace.
 
 This kernel is shadow-only: no endpoint uses it as a gate, no grant API exists,
 and the migration backfills no binding or implicit Admin/Owner authority.

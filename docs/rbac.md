@@ -42,7 +42,7 @@ one or more **institutions/banks (`BK-*`)**. **Maker** = the person who
 creates/edits/runs. **Checker** = the independent person who reviews/approves.
 Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX**,
 **FTP**, **FCST** (Forecasting), **BEH** (Behavioral), **DATA** (Data Engine),
-**REG** (Regulatory Reporting).
+**REG** (Regulatory Reporting), **RISK**, **MARKETS**, **ACCOUNT**, and **AUDIT**.
 
 ---
 

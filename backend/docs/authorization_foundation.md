@@ -59,8 +59,8 @@ it cannot produce Analyst on REG or Approver on LIQ.
 
 Broad scope is named, never inferred:
 
-- `institution_scope=organization` is the explicit institution-wide case and
-  requires `institution_id IS NULL`;
+- `institution_scope=organization` explicitly covers every institution in the
+  organization and requires `institution_id IS NULL`;
 - `institution_scope=institution` requires one exact `institution_id`;
 - module and sensitivity broad grants store the explicit value `all`.
 
@@ -71,6 +71,11 @@ tenant-owned and has ENABLE + FORCE RLS with the standard
 `app.organization_id` policy. Status/validity constraints make active,
 suspended, and revoked stored states, plus not-yet-valid and expired effective
 states, unambiguous.
+
+The creation service also verifies that the principal type matches the identity
+record, machine and human bundles are not mixed, and a tenant-user or operator
+grantor is active. It requires non-empty grant provenance and creates only an
+active binding; lifecycle mutation APIs do not exist in this slice.
 
 ## Decision semantics and conditions
 
