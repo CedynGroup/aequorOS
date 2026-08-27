@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { useSession } from 'next-auth/react';
 import { useImpersonation } from '../../components/impersonation/useImpersonation';
-import { refreshImpersonationStatus } from './impersonation';
+import { resolveImpersonationStatus } from './impersonation';
 import { queryAuthorityScope, type QueryAuthorityScope } from './queryPolicy';
 
 const QueryAuthorityContext = createContext<QueryAuthorityScope | null>(null);
@@ -24,11 +24,20 @@ export function useResolvedQueryAuthorityScope(): QueryAuthorityScope | null {
 
   useEffect(() => {
     let active = true;
-    void refreshImpersonationStatus().finally(() => {
-      if (active) setInspectionResolved(true);
-    });
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const resolve = async () => {
+      const result = await resolveImpersonationStatus();
+      if (!active) return;
+      if (result.confirmed) {
+        setInspectionResolved(true);
+        return;
+      }
+      retry = setTimeout(resolve, 1_000);
+    };
+    void resolve();
     return () => {
       active = false;
+      if (retry) clearTimeout(retry);
     };
   }, []);
 

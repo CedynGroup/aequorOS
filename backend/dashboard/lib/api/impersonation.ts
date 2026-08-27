@@ -43,7 +43,12 @@ const IDLE: ImpersonationState = {
 };
 
 let state: ImpersonationState = IDLE;
-let inflight: Promise<ImpersonationState> | null = null;
+type ImpersonationStatusResolution = Readonly<{
+  state: ImpersonationState;
+  confirmed: boolean;
+}>;
+
+let inflight: Promise<ImpersonationStatusResolution> | null = null;
 const listeners = new Set<() => void>();
 
 function emit(): void {
@@ -84,33 +89,34 @@ export function impersonationMarkerPresent(): boolean {
     .some((entry) => entry.startsWith(`${IMPERSONATION_MARKER_COOKIE}=`));
 }
 
-/** Fetch (once, then cache) the hand-off status from the server route. */
-export async function refreshImpersonationStatus(): Promise<ImpersonationState> {
-  if (typeof window === 'undefined') return IDLE;
+export async function resolveImpersonationStatus(): Promise<ImpersonationStatusResolution> {
+  if (typeof window === 'undefined') return { state: IDLE, confirmed: true };
   if (!impersonationMarkerPresent()) {
     if (state !== IDLE) setState(IDLE);
-    return IDLE;
+    return { state: IDLE, confirmed: true };
   }
   if (inflight) return inflight;
   inflight = (async () => {
     try {
       const res = await fetch('/api/impersonation/status', { cache: 'no-store' });
       if (!res.ok) {
-        setState(IDLE);
-        return IDLE;
+        return { state, confirmed: false };
       }
       const body = (await res.json()) as ImpersonationState;
       setState(body);
-      return body;
+      return { state: body, confirmed: true };
     } catch {
-      // Transient network error — keep whatever we last knew rather than
-      // dropping the operator out of inspection.
-      return state;
+      return { state, confirmed: false };
     } finally {
       inflight = null;
     }
   })();
   return inflight;
+}
+
+/** Fetch (once, then cache) the hand-off status from the server route. */
+export async function refreshImpersonationStatus(): Promise<ImpersonationState> {
+  return (await resolveImpersonationStatus()).state;
 }
 
 /**

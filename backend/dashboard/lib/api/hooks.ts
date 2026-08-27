@@ -17,6 +17,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import type {
   LiveModule,
   AnalysisRunCreate,
@@ -123,6 +124,7 @@ import {
   invalidateScopedPrefixes,
   jitteredPollInterval,
   scopedQueryKey,
+  type QueryAuthorityScope,
 } from './queryPolicy';
 import { useQueryAuthorityScope } from './useQueryScope';
 
@@ -949,28 +951,30 @@ export function useBankAlerts(bankId: string | undefined, limit = 20) {
   });
 }
 
-// Every read that a pipeline action can move. Invalidated (by prefix) once a
-// refresh/official-run job completes so live numbers, freshness, alerts, and
-// module dashboards all re-fetch together.
-const livePipelineInvalidatePrefixes = [
-  'live-summary',
+const livePipelineCompletionPrefixes = [
   'freshness',
   'alerts',
-  'liq-dashboard',
-  'cap-dashboard',
-  'irr-dashboard',
-  'fx-dashboard',
-  'ftp-dashboard',
-  'cap-rwa',
-  'cap-structure',
   'bsd3',
   'bsd2',
   'reg-runs',
   'reg-run',
-  'forecast-runs',
   'facts',
   'periods',
 ];
+
+async function invalidateCompletedPipeline(
+  queryClient: QueryClient,
+  scope: QueryAuthorityScope,
+  bankId: string | undefined,
+) {
+  await invalidateScopedPrefixes(queryClient, ['live-summary'], scope, bankId);
+  await invalidateScopedPrefixes(
+    queryClient,
+    livePipelineCompletionPrefixes,
+    scope,
+    bankId,
+  );
+}
 
 /**
  * Poll a queued job to a terminal state. Resolves with the final job on
@@ -1021,14 +1025,7 @@ export function useRefreshBankData(bankId: string | undefined) {
       );
       return pollJobToCompletion(enqueued.jobId);
     },
-    onSuccess: () => {
-      void invalidateScopedPrefixes(
-        queryClient,
-        livePipelineInvalidatePrefixes,
-        scope,
-        bankId,
-      );
-    },
+    onSuccess: () => invalidateCompletedPipeline(queryClient, scope, bankId),
   });
 }
 
@@ -1053,14 +1050,7 @@ export function useMintOfficialRun(bankId: string | undefined) {
       );
       return pollJobToCompletion(enqueued.jobId);
     },
-    onSuccess: () => {
-      void invalidateScopedPrefixes(
-        queryClient,
-        livePipelineInvalidatePrefixes,
-        scope,
-        bankId,
-      );
-    },
+    onSuccess: () => invalidateCompletedPipeline(queryClient, scope, bankId),
   });
 }
 

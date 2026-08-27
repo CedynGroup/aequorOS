@@ -18,8 +18,11 @@ async function main(): Promise<void> {
     cookie: 'aeq-impersonation-active=1',
   };
   const nativeSetInterval = globalThis.setInterval;
+  const nativeSetTimeout = globalThis.setTimeout;
   globalThis.setInterval = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
     nativeSetInterval(handler, timeout && timeout >= 1_000 ? 30 : timeout, ...args)) as typeof setInterval;
+  globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
+    nativeSetTimeout(handler, timeout && timeout >= 1_000 ? 30 : timeout, ...args)) as typeof setTimeout;
 
   const { default: NodeModule } = await import('node:module');
   const moduleWithLoader = NodeModule as typeof NodeModule & {
@@ -111,11 +114,14 @@ async function main(): Promise<void> {
   assert.equal(inspectionStatus.org, impersonationClaims.org);
   assert.equal(inspectionStatus.token, impersonationToken);
 
+  let statusRequests = 0;
   let releaseStatus: (() => void) | null = null;
   const statusGate = new Promise<void>((resolve) => {
     releaseStatus = resolve;
   });
   globalThis.fetch = (async () => {
+    statusRequests += 1;
+    if (statusRequests === 1) throw new TypeError('transient status failure');
     await statusGate;
     return Response.json(inspectionStatus);
   }) as typeof fetch;
@@ -186,6 +192,7 @@ async function main(): Promise<void> {
   mock(clients.liveEngineApi, {
     getLiveSummary: liveSummary,
     getBankAlerts: response('alerts', {}),
+    refreshBankData: response('refresh-mutation', { jobId: 'pipeline-job' }),
     listLiveSnapshots: async ({ module: liveModule }: { module: string }) => {
       const name = `live-snapshots:${liveModule}`;
       counts.set(name, (counts.get(name) ?? 0) + 1);
@@ -195,6 +202,9 @@ async function main(): Promise<void> {
   mock(clients.notificationsApi, {
     listNotifications: response('notifications', {}),
   });
+  mock(clients.jobsApi, {
+    getJob: response('job-status', { status: 'succeeded' }),
+  });
   mock(ingestion.ingestionApi, {
     listIngestionBatches: response('de-batches', {}),
     listBankDataActivations: response('de-activations', {}),
@@ -202,6 +212,7 @@ async function main(): Promise<void> {
 
   let queryClient: ReturnType<typeof useQueryClient> | null = null;
   let runLiquidityScenarios: (() => Promise<unknown>) | null = null;
+  let refreshBankData: (() => Promise<unknown>) | null = null;
   let authorityMounts = 0;
   let resolvedAuthority: ReturnType<typeof useQueryAuthorityScope> | null = null;
   let selectRatioPeriod: ((periodId: string) => void) | null = null;
@@ -251,6 +262,9 @@ async function main(): Promise<void> {
     const mutation = hooks.useRunAllLiquidityScenarios(BANK_ID);
     runLiquidityScenarios = () =>
       mutation.mutateAsync({ reportingPeriodId: PERIOD_ID });
+    const refresh = hooks.useRefreshBankData(BANK_ID);
+    refreshBankData = () =>
+      refresh.mutateAsync({ asOfDate: '2026-08-27', reason: 'test refresh' });
     return null;
   }
 
@@ -270,6 +284,7 @@ async function main(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 70));
   });
   assert.equal(counts.size, 0, 'unresolved authority must not mount query consumers');
+  assert.equal(statusRequests, 2, 'transient inspection status failure must retry');
 
   await act(async () => {
     releaseStatus!();
@@ -319,15 +334,31 @@ async function main(): Promise<void> {
 
   generation += 1;
   await act(async () => {
-    await queryClient!.invalidateQueries({ queryKey: ['live-summary'] });
+    await refreshBankData!();
   });
   await waitFor(
     () => counts.get('liq-dashboard') === 3,
+    'pipeline generation did not invalidate detail',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(
+    counts.get('liq-dashboard'),
+    3,
+    'pipeline completion must fetch generation-owned detail exactly once',
+  );
+
+  generation += 1;
+  await act(async () => {
+    await queryClient!.invalidateQueries({ queryKey: ['live-summary'] });
+  });
+  await waitFor(
+    () => counts.get('liq-dashboard') === 4,
     'live generation change did not invalidate detail',
   );
 
   await act(async () => renderer!.unmount());
   globalThis.setInterval = nativeSetInterval;
+  globalThis.setTimeout = nativeSetTimeout;
   console.log(
     'queryAuthorityBoundary.test.tsx: pending 0; settled 20 resources/20 calls; equivalent detail deduped; idle and invalidation passed',
   );
