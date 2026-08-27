@@ -134,6 +134,7 @@ async function main(): Promise<void> {
     return value;
   };
   let generation = 7;
+  let officialGeneration = 1;
   let currentPeriodId = PERIOD_ID;
   let currentDetailGate: Promise<void> | null = null;
   const liveSummary = async () => {
@@ -196,6 +197,20 @@ async function main(): Promise<void> {
   });
   mock(clients.liveEngineApi, {
     getLiveSummary: liveSummary,
+    getBankFreshness: async () => {
+      counts.set('freshness', (counts.get('freshness') ?? 0) + 1);
+      return {
+        modules: [
+          {
+            module: 'capital',
+            officialRunHash: `official-${officialGeneration}`,
+            officialRunAt: new Date(
+              `2026-08-27T12:0${officialGeneration}:00Z`,
+            ),
+          },
+        ],
+      };
+    },
     getBankAlerts: response('alerts', {}),
     refreshBankData: response('refresh-mutation', { jobId: 'pipeline-job' }),
     mintOfficialRun: response('official-run-mutation', { jobId: 'official-run-job' }),
@@ -245,6 +260,7 @@ async function main(): Promise<void> {
     hooks.useBankPeriodFacts(BANK_ID, PERIOD_ID);
     hooks.useLiveSummary(BANK_ID);
     hooks.useLiveSummary(BANK_ID);
+    hooks.useBankFreshness(BANK_ID, PERIOD_ID, false);
     hooks.useBankAlerts(BANK_ID);
     hooks.useBankAlerts(BANK_ID);
     hooks.useNotifications();
@@ -305,7 +321,7 @@ async function main(): Promise<void> {
     releaseStatus!();
   });
   await waitFor(
-    () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 20,
+    () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 21,
     'Command Center resources did not settle',
   );
   const initialCounts = new Map(counts);
@@ -322,7 +338,7 @@ async function main(): Promise<void> {
     [...initialCounts.entries()]
       .filter(([name]) => name !== 'liq-mutation')
       .reduce((total, [, count]) => total + count, 0),
-    20,
+    21,
     'real duplicate consumers must collapse to one request per resource',
   );
 
@@ -379,6 +395,24 @@ async function main(): Promise<void> {
   assert.equal(counts.get('cap-dashboard'), beforeIdleCapital);
   const idleLiquidityCount = counts.get('liq-dashboard') ?? 0;
   const idleCapitalCount = counts.get('cap-dashboard') ?? 0;
+
+  officialGeneration += 1;
+  const beforeScheduledOfficialCapital = counts.get('cap-dashboard') ?? 0;
+  const beforeScheduledOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
+  await act(async () => {
+    await queryClient!.invalidateQueries({
+      predicate: (query) => query.queryKey[0] === 'freshness',
+    });
+  });
+  await waitFor(
+    () => counts.get('cap-dashboard') === beforeScheduledOfficialCapital + 1,
+    'scheduled official-run signal did not invalidate capital detail',
+  );
+  assert.equal(
+    counts.get('liq-dashboard'),
+    beforeScheduledOfficialLiquidity,
+    'official-run signal invalidated an unaffected module',
+  );
 
   await act(async () => {
     await runLiquidityScenarios!();
@@ -475,7 +509,7 @@ async function main(): Promise<void> {
   globalThis.setInterval = nativeSetInterval;
   globalThis.setTimeout = nativeSetTimeout;
   console.log(
-    'queryAuthorityBoundary.test.tsx: pending 0; settled 20 resources/20 calls; equivalent detail deduped; idle and invalidation passed',
+    'queryAuthorityBoundary.test.tsx: pending 0; settled 21 resources/21 calls; equivalent detail deduped; idle and invalidation passed',
   );
 }
 

@@ -124,7 +124,7 @@ export function invalidateScopedPrefixes(
   );
 }
 
-const GENERATION_PREFIXES: Partial<Record<string, readonly string[]>> = {
+const REGULATORY_DETAIL_PREFIXES: Partial<Record<string, readonly string[]>> = {
   liquidity: ['liq-dashboard'],
   capital: ['cap-dashboard', 'cap-rwa', 'cap-structure'],
   irr: ['irr-dashboard'],
@@ -133,13 +133,22 @@ const GENERATION_PREFIXES: Partial<Record<string, readonly string[]>> = {
   forecast: ['forecast-runs'],
 };
 
-export function generationInvalidationPrefixes(
+export function regulatoryDetailInvalidationPrefixes(
   modules: readonly string[]
 ): string[] {
   const prefixes = new Set<string>();
   for (const liveModule of modules) {
-    for (const prefix of GENERATION_PREFIXES[liveModule] ?? []) prefixes.add(prefix);
+    for (const prefix of REGULATORY_DETAIL_PREFIXES[liveModule] ?? []) {
+      prefixes.add(prefix);
+    }
   }
+  return [...prefixes];
+}
+
+export function generationInvalidationPrefixes(
+  modules: readonly string[]
+): string[] {
+  const prefixes = new Set(regulatoryDetailInvalidationPrefixes(modules));
   if (modules.length > 0) prefixes.add('live-snapshots');
   return [...prefixes];
 }
@@ -154,6 +163,40 @@ export function invalidateGenerationChanges(
   return invalidateScopedPrefixes(
     queryClient,
     generationInvalidationPrefixes(modules),
+    scope,
+    bankId
+  );
+}
+
+export type OfficialRunSignal = Readonly<{
+  module: string;
+  officialRunHash?: unknown;
+  officialRunAt?: unknown;
+}>;
+
+export function officialRunFingerprint(
+  modules: readonly OfficialRunSignal[]
+): ReadonlyMap<string, string> {
+  return new Map(
+    modules.map((liveModule) => [
+      liveModule.module,
+      JSON.stringify([
+        liveModule.officialRunHash ?? null,
+        liveModule.officialRunAt ?? null,
+      ]),
+    ])
+  );
+}
+
+export function invalidateOfficialRunChanges(
+  queryClient: QueryClient,
+  scope: QueryAuthorityScope,
+  bankId: string | undefined,
+  modules: readonly string[]
+): Promise<void[]> {
+  return invalidateScopedPrefixes(
+    queryClient,
+    regulatoryDetailInvalidationPrefixes(modules),
     scope,
     bankId
   );

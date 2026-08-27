@@ -15,9 +15,12 @@ import {
   dashboardSemantic,
   generationFingerprint,
   invalidateGenerationChanges,
+  invalidateOfficialRunChanges,
   invalidateScopedPrefixes,
   jitteredPollInterval,
+  officialRunFingerprint,
   queryAuthorityScope,
+  regulatoryDetailInvalidationPrefixes,
   scopedQueryKey,
 } from './queryPolicy';
 
@@ -76,7 +79,7 @@ async function main(): Promise<void> {
   assert.notDeepEqual(currentLiquidity, tenantKey);
   assert.notDeepEqual(currentLiquidity, authorityKey);
 
-  // The settled home owns 20 logical resources. Duplicate consumers (header,
+  // The settled home owns 21 logical resources. Duplicate consumers (header,
   // breach banner, pulse wall, ratio panel, balance strip) all ask TanStack for
   // the same stable keys, yielding one request per resource.
   const current = (prefix: string) =>
@@ -86,6 +89,7 @@ async function main(): Promise<void> {
     scopedQueryKey('periods', scope, BANK_ID),
     scopedQueryKey('facts', scope, BANK_ID, PERIOD_ID),
     scopedQueryKey('live-summary', scope, BANK_ID),
+    scopedQueryKey('freshness', scope, BANK_ID, PERIOD_ID),
     scopedQueryKey('alerts', scope, BANK_ID, 20),
     scopedQueryKey('notifications', scope, false),
     current('liq-dashboard'),
@@ -99,7 +103,7 @@ async function main(): Promise<void> {
     scopedQueryKey('de-batches', scope, BANK_ID, 'all'),
     scopedQueryKey('de-activations', scope, BANK_ID),
   ];
-  assert.equal(homeResources.length, 20);
+  assert.equal(homeResources.length, 21);
   const requestCounts = new Map<string, number>();
   const requestClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 1_000 } },
@@ -242,18 +246,101 @@ async function main(): Promise<void> {
     'superseded in-flight response remained cached',
   );
 
+  const officialClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 0 } },
+  });
+  const officialCounts = new Map<string, number>();
+  const observe = (name: string, queryKey: readonly unknown[]) => {
+    const observer = new QueryObserver(officialClient, {
+      queryKey,
+      queryFn: async () => {
+        const count = (officialCounts.get(name) ?? 0) + 1;
+        officialCounts.set(name, count);
+        return count;
+      },
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    return { observer, unsubscribe };
+  };
+  const capitalObserver = observe('capital', current('cap-dashboard'));
+  const forecastObserver = observe(
+    'forecast',
+    scopedQueryKey('forecast-runs', scope, BANK_ID),
+  );
+  const liquidityObserver = observe('liquidity', currentLiquidity);
+  const otherTenantCapitalObserver = observe(
+    'other-tenant-capital',
+    dashboardQueryKey(
+      'cap-dashboard',
+      otherTenant,
+      BANK_ID,
+      dashboardSemantic(),
+    ),
+  );
+  await waitFor(
+    () => [...officialCounts.values()].filter((count) => count === 1).length === 4,
+    'official-run fixture did not load',
+  );
+
+  const previousOfficial = officialRunFingerprint([
+    {
+      module: 'capital',
+      officialRunHash: 'official-a',
+      officialRunAt: '2026-08-27T12:00:00Z',
+    },
+  ]);
+  const nextOfficial = officialRunFingerprint([
+    {
+      module: 'capital',
+      officialRunHash: 'official-b',
+      officialRunAt: '2026-08-27T12:05:00Z',
+    },
+  ]);
+  const officialChanges = changedGenerations(previousOfficial, nextOfficial);
+  assert.deepEqual(officialChanges, ['capital']);
+  await invalidateOfficialRunChanges(
+    officialClient,
+    scope,
+    BANK_ID,
+    officialChanges,
+  );
+  await waitFor(
+    () => officialCounts.get('capital') === 2,
+    'official-run transition did not refresh the affected detail',
+  );
+  assert.equal(officialCounts.get('forecast'), 1);
+  assert.equal(officialCounts.get('liquidity'), 1);
+  assert.equal(officialCounts.get('other-tenant-capital'), 1);
+
+  await invalidateScopedPrefixes(
+    officialClient,
+    regulatoryDetailInvalidationPrefixes(['capital', 'forecast']),
+    scope,
+    BANK_ID,
+  );
+  await waitFor(
+    () =>
+      officialCounts.get('capital') === 3 &&
+      officialCounts.get('forecast') === 2,
+    'capital assumption change did not refresh derived capital and forecast reads',
+  );
+  assert.equal(officialCounts.get('liquidity'), 1);
+  assert.equal(officialCounts.get('other-tenant-capital'), 1);
+
   const jitter = jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'live-summary', scope, BANK_ID);
   assert.equal(jitter, jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'live-summary', scope, BANK_ID));
   assert.ok(jitter >= 18_000 && jitter <= 22_000);
 
   // Count model for the same 65-second idle window used by the pre-change
-  // fixture. Only the cheap live summary, alert list, and inbox retain a
-  // cadence. With this fixture's deterministic jitter: 20 initial resources
-  // + 3 summary ticks + 3 alert ticks + 1 inbox tick = 27 requests. The five
+  // fixture. Only the cheap live summary, freshness, alert list, and inbox retain a
+  // cadence. With this fixture's deterministic jitter: 21 initial resources
+  // + 3 summary ticks + 2 freshness ticks + 3 alert ticks + 1 inbox tick = 30
+  // requests. The five
   // module detail payloads each load once and contribute zero idle polls.
   const idleWindowMs = 65_000;
   const retainedIntervals = [
     jitter,
+    jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'freshness', scope, BANK_ID),
     jitteredPollInterval(LIVE_SIGNAL_POLL_MS, 'alerts', scope, BANK_ID),
     jitteredPollInterval(60_000, 'notifications', scope),
   ];
@@ -263,7 +350,7 @@ async function main(): Promise<void> {
       (ticks, interval) => ticks + Math.floor(idleWindowMs / interval),
       0
     );
-  assert.equal(afterIdleRequests, 27);
+  assert.equal(afterIdleRequests, 30);
   assert.equal(
     homeResources.filter((key) =>
       [
@@ -282,10 +369,20 @@ async function main(): Promise<void> {
   unsubscribeRace();
   raceObserver.destroy();
   raceClient.clear();
+  for (const observed of [
+    capitalObserver,
+    forecastObserver,
+    liquidityObserver,
+    otherTenantCapitalObserver,
+  ]) {
+    observed.unsubscribe();
+    observed.observer.destroy();
+  }
+  officialClient.clear();
   idleClient.clear();
   requestClient.clear();
   console.log(
-    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 20/27/5; detailed idle polls 0; invalidation passed'
+    'queryPolicy.test.ts: before 23 resources/44 calls/21 detail calls -> after 21/30/5; detailed idle polls 0; invalidation passed'
   );
 }
 

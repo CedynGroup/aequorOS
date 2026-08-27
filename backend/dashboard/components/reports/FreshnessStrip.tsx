@@ -39,7 +39,7 @@ export default function FreshnessStrip({
   bankId: string | undefined;
   period: BankReportingPeriodRead;
 }) {
-  const freshness = useBankFreshness(bankId, period.id);
+  const freshness = useBankFreshness(bankId, period.id, false);
   const modules = freshness.data?.modules ?? [];
   const staleCount = modules.filter((m) => m.isStale).length;
 

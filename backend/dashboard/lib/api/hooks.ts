@@ -121,8 +121,11 @@ import {
   dashboardSemantic,
   generationFingerprint,
   invalidateGenerationChanges,
+  invalidateOfficialRunChanges,
   invalidateScopedPrefixes,
   jitteredPollInterval,
+  officialRunFingerprint,
+  regulatoryDetailInvalidationPrefixes,
   scopedQueryKey,
   type QueryAuthorityScope,
 } from './queryPolicy';
@@ -864,6 +867,11 @@ const observedLiveGenerations = new WeakMap<
   Map<string, ReadonlyMap<string, string>>
 >();
 
+const observedOfficialRuns = new WeakMap<
+  object,
+  Map<string, ReadonlyMap<string, string>>
+>();
+
 /** Cross-module current metrics + per-module generation signal, cheaply polled. */
 export function useLiveSummary(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
@@ -907,10 +915,12 @@ export function useLiveSummary(bankId: string | undefined) {
 /** Per-module live-vs-official-run freshness for a period, polled. */
 export function useBankFreshness(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
+  poll = true,
 ) {
   const scope = useQueryAuthorityScope();
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: scopedQueryKey(
       'freshness',
       scope,
@@ -925,13 +935,40 @@ export function useBankFreshness(
         })
       ),
     enabled: Boolean(bankId),
-    refetchInterval: jitteredPollInterval(
-      LIVE_SIGNAL_POLL_MS,
-      'freshness',
-      scope,
-      bankId,
-    ),
+    refetchInterval: poll
+      ? jitteredPollInterval(
+          LIVE_SIGNAL_POLL_MS,
+          'freshness',
+          scope,
+          bankId,
+        )
+      : false,
   });
+
+  useEffect(() => {
+    if (!bankId || !query.data) return;
+    let byScope = observedOfficialRuns.get(queryClient);
+    if (!byScope) {
+      byScope = new Map();
+      observedOfficialRuns.set(queryClient, byScope);
+    }
+    const identity = `${scope.tenantId}|${scope.authorityId}|${bankId}|${periodId ?? ''}`;
+    const next = officialRunFingerprint(query.data.modules);
+    const previous = byScope.get(identity);
+    byScope.set(identity, next);
+    if (!previous) return;
+    const changed = changedGenerations(previous, next);
+    if (changed.length > 0) {
+      void invalidateOfficialRunChanges(
+        queryClient,
+        scope,
+        bankId,
+        changed,
+      );
+    }
+  }, [bankId, periodId, query.data, queryClient, scope]);
+
+  return query;
 }
 
 /** Open limit-breach alerts across modules, polled — powers the header bell. */
@@ -978,16 +1015,19 @@ async function invalidateCompletedPipeline(
   );
 }
 
-const officialRunCompletionPrefixes = [
-  'liq-dashboard',
-  'cap-dashboard',
-  'irr-dashboard',
-  'fx-dashboard',
-  'ftp-dashboard',
-  'cap-rwa',
-  'cap-structure',
-  'forecast-runs',
-];
+const officialRunCompletionPrefixes = regulatoryDetailInvalidationPrefixes([
+  'liquidity',
+  'capital',
+  'irr',
+  'fx',
+  'ftp',
+  'forecast',
+]);
+
+const capitalAssumptionPrefixes = regulatoryDetailInvalidationPrefixes([
+  'capital',
+  'forecast',
+]);
 
 async function invalidateCompletedOfficialRun(
   queryClient: QueryClient,
@@ -3486,6 +3526,7 @@ export function useUpdateLiquidityEwiRegister(bankId: string | undefined) {
 
 export function useUpdateCrmHaircutRegister(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: CrmHaircutUpdate) =>
       apiCall(() =>
@@ -3496,12 +3537,19 @@ export function useUpdateCrmHaircutRegister(bankId: string | undefined) {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['crm-haircuts', bankId] });
+      void invalidateScopedPrefixes(
+        queryClient,
+        capitalAssumptionPrefixes,
+        scope,
+        bankId,
+      );
     },
   });
 }
 
 export function useUpdateEclAssumptionRegister(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: EclAssumptionUpdate) =>
       apiCall(() =>
@@ -3512,6 +3560,12 @@ export function useUpdateEclAssumptionRegister(bankId: string | undefined) {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ecl-assumptions', bankId] });
+      void invalidateScopedPrefixes(
+        queryClient,
+        capitalAssumptionPrefixes,
+        scope,
+        bankId,
+      );
     },
   });
 }
