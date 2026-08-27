@@ -65,29 +65,28 @@ fails when regeneration changes committed generated files.
 import { CapitalApi, Configuration } from "@aequoros/risk-service-api";
 
 const capital = new CapitalApi(
-  new Configuration({ basePath: "http://127.0.0.1:8003" }),
+  new Configuration({
+    basePath: "http://127.0.0.1:8003",
+    accessToken: appAccessToken,
+  }),
 );
 
 const projection = await capital.createCapitalProjection({
   caseId,
-  xOrgId,
-  xUserId,
   capitalProjectionCreate: { calculationRunId },
 });
 
-const comparison = await capital.getCapitalComparison({ caseId, xOrgId });
+const comparison = await capital.getCapitalComparison({ caseId });
 
 if (projection.error !== null || comparison.diagnostic !== null) {
   // Render the persisted projection failure or comparison-basis diagnostic.
 }
 ```
 
-Capital mutations require both tenant headers. List, detail, summary, and
-comparison calls require `X-Org-Id` and accept `X-User-Id` when an actor is
-available.
-
-Calculation mutations require both tenant headers. List and detail calls
-require `X-Org-Id` and accept `X-User-Id` when an actor is available.
+All calls use the bearer access token configured through `accessToken`; the
+verified token establishes the tenant and actor. App tokens issued by the
+service carry `authv`, and pre-authorization-version or stale sessions fail
+closed.
 
 Liquidity analysis is exposed through the generated `LiquidityApi`:
 
@@ -95,12 +94,14 @@ Liquidity analysis is exposed through the generated `LiquidityApi`:
 import { Configuration, LiquidityApi } from "@aequoros/risk-service-api";
 
 const liquidity = new LiquidityApi(
-  new Configuration({ basePath: "http://127.0.0.1:8003" }),
+  new Configuration({
+    basePath: "http://127.0.0.1:8003",
+    accessToken: appAccessToken,
+  }),
 );
 
 const summary = await liquidity.getLiquiditySummary({
   caseId,
-  xOrgId,
   scenarioId,
   runId,
 });
@@ -108,14 +109,12 @@ const summary = await liquidity.getLiquiditySummary({
 const reviewed = await liquidity.reviewLiquidityFinding({
   caseId,
   findingId,
-  xOrgId,
-  xUserId,
   liquidityFindingReview: { action: "dismiss", reason: "Duplicate exposure." },
 });
 ```
 
 Summary reads can omit `scenarioId` and `runId` to select the newest successful
-run. Finding review requires both tenant headers; dismissal also requires a
+run. Finding review requires an authenticated actor; dismissal also requires a
 non-empty reason.
 """
 GITIGNORE = """# Generated files - only exclude compiled output
