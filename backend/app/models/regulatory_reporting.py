@@ -1,12 +1,10 @@
 """Regulatory Reporting & Submission Hub tables (docs/regulatory_reporting.md §3).
 
-Packages are immutable, versioned snapshots of a generated return for one
-``(bank, return_code, reporting_date)``: regeneration mints a new version and
-marks the prior current version ``superseded`` — it never mutates. A partial
-unique index keeps exactly one non-superseded version per key. Artifacts,
-approvals, and submission events are append-only children; channel configs
-hold per-bank submission-channel settings with write-only encrypted
-credentials (EncryptedDbVault pattern).
+Packages are immutable versions of a generated return for one bank, reporting
+date, return, and basis. Regeneration supersedes the current version without
+changing its history. Solo and consolidated packages have independent version
+chains. Artifacts, approvals, and submission events are append-only; channel
+credentials remain write-only.
 """
 
 from __future__ import annotations
@@ -115,8 +113,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_regulatory_packages_frequency",
         ),
         CheckConstraint(
-            "attestation_state IN ('unsigned', 'preparer_certified', "
-            "'fully_certified', 'void')",
+            "attestation_state IN ('unsigned', 'preparer_certified', 'fully_certified', 'void')",
             name="ck_regulatory_packages_attestation_state",
         ),
         CheckConstraint(
@@ -145,9 +142,8 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "bank_id",
             "status",
         ),
-        # One current (non-superseded) version per return per reporting date
-        # per reporting basis — solo and consolidated are independent version
-        # chains for the same (return_code, reporting_date).
+        # Solo and consolidated packages keep independent current versions for
+        # the same return and reporting date.
         Index(
             "uq_regulatory_packages_current",
             "organization_id",
