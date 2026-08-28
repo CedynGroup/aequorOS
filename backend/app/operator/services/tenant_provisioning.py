@@ -55,7 +55,7 @@ from app.schemas.operator import (
     ProvisioningStepRead,
     TenantProvisionCreate,
 )
-from app.services import institution_types, parameter_register
+from app.services import institution_types, organization_ownership, parameter_register
 from app.services.market_desk import publication as desk_publication
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings
@@ -72,7 +72,7 @@ SSO_REDIRECT_URI_PATHS: tuple[str, str] = (
 )
 
 #: Steps whose effects live in the DB transaction (rolled back wholesale).
-_DB_STEPS = frozenset({"organization", "bank", "sso_stub", "first_admin"})
+_DB_STEPS = frozenset({"organization", "bank", "sso_stub", "first_admin", "first_owner"})
 
 
 @dataclass(frozen=True)
@@ -296,27 +296,50 @@ def _step_sso_stub(db: Session, organization_id: str, state: _SagaState) -> None
 
 def _step_first_admin(
     db: Session, payload: TenantProvisionCreate, organization_id: str, state: _SagaState
-) -> None:
+) -> User:
     one_time_password = secrets.token_urlsafe(24)
-    db.add(
-        User(
-            organization_id=organization_id,
-            email=payload.admin_email.lower(),
-            display_name=payload.admin_full_name,
-            role="admin",
-            auth_provider="password",
-            is_active=True,
-            password_hash=security.hash_password(one_time_password),
-        )
+    administrator = User(
+        organization_id=organization_id,
+        email=payload.admin_email.lower(),
+        display_name=payload.admin_full_name,
+        role="account_admin",
+        auth_provider="password",
+        is_active=True,
+        password_hash=security.hash_password(one_time_password),
     )
+    db.add(administrator)
     db.flush()
     state.one_time_password = one_time_password
     state.record(
         "first_admin",
         "succeeded",
-        f"admin {payload.admin_email.lower()} created (auth_provider=password). The "
+        f"account admin {payload.admin_email.lower()} created (auth_provider=password). The "
         "one-time password is in this result ONLY — it is never stored or logged; "
         "hand it over out-of-band and have the admin change it at first sign-in.",
+    )
+    return administrator
+
+
+def _step_first_owner(
+    db: Session,
+    organization_id: str,
+    administrator: User,
+    operator: OperatorContext,
+    state: _SagaState,
+) -> None:
+    assignment = organization_ownership.assign_initial_owner(
+        db,
+        organization_id=organization_id,
+        candidate=administrator,
+        granted_by_id=f"tenant_provisioning:{operator.email}",
+        commit=False,
+    )
+    state.record(
+        "first_owner",
+        "succeeded",
+        f"{administrator.email} assigned Org Owner because the new organization has "
+        "exactly one eligible active human administrator "
+        f"(binding {assignment.owner_binding_id}).",
     )
 
 
@@ -490,11 +513,13 @@ def provision_tenant(  # noqa: PLR0915 - one linear saga; each step is named and
             f"{payload.license_type}, institution_type={payload.institution_type})",
         )
 
-        # c. storage  d. kms  e. sso stub  f. first admin  g. parameters  h. readiness
+        # c. storage  d. kms  e. sso stub  f. first admin  g. first owner
+        # h. parameters  i. readiness
         registry = _step_storage(db, bank, organization.id, clients, state)
         _step_kms(registry, organization.id, clients, operator_settings, state)
         _step_sso_stub(db, organization.id, state)
-        _step_first_admin(db, payload, organization.id, state)
+        administrator = _step_first_admin(db, payload, organization.id, state)
+        _step_first_owner(db, organization.id, administrator, operator, state)
         _step_parameters(db, bank, organization.id, operator, state)
         _step_readiness(db, organization.id, bank.id, state)
     except _SagaAbort:
@@ -558,6 +583,7 @@ _STEP_ORDER = (
     "kms",
     "sso_stub",
     "first_admin",
+    "first_owner",
     "readiness",
     "desk_market_data",
 )

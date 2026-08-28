@@ -286,14 +286,17 @@ deliberately capped to avoid role explosion.
 | **Org Owner**                     | _(top of `admin`)_        | Bank's account owner                         | Org Admin **+** `billing:*`, `org:transfer`, `org:delete`             | cross-tenant anything                           |
 | **Billing Manager**               | _(new, optional)_         | Subscription & seats                         | `billing:*`                                                           | domain data                                     |
 
-**Migration note:** today's single `admin` conflates account-admin with
-operational-super — a segregation-of-duties smell (Snowflake's rule: never mix
-account-management privileges with entity privileges in one role). The
-foundation adds Account Admin as a static binding bundle, but migration
-`202608250044` deliberately creates no bindings and converts no existing
-`admin`. Org Owner is not a foundation bundle. Keep the legacy hierarchy for
-backward compatibility during shadow rollout; a later governed migration must
-make any Admin/Owner mapping explicit.
+**Migration note (as built through 2026-08-28):** today's single `admin`
+conflated account administration with operational superuser authority — a
+segregation-of-duties smell (Snowflake's rule: never mix account-management
+privileges with entity privileges in one role). Foundation migration
+`202608250044` deliberately created no bindings. Migration `202608280045` adds
+the distinct Org Owner bundle and converts every persisted `admin` to the
+account-plane-only scalar `account_admin`, invalidating its sessions so the old
+analyst/approver rank is not grandfathered. Initial ownership is automatic only
+for exactly one active human legacy administrator. Zero/multiple-candidate
+organizations receive no owner binding and are persisted in
+`organization_owner_assignments` for explicit staff designation.
 
 ### 6.2 A user can hold more than one scoped bundle
 

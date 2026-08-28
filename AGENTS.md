@@ -119,6 +119,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   live: pre-migration/stale tokens 401; every future role/scope/status/security mutation must
   call `authorization.invalidate_user_authorization` in-transaction to bump the user version
   and revoke refresh families.
+  **Initial ownership (built 2026-08-28; migration `202608280045`).** Org Owner is an
+  explicit organization-wide `org_owner` binding. Backfill assigns only when exactly one
+  active human legacy admin exists; zero/multiple candidates get no binding and remain
+  queryable, with candidate snapshots, in `organization_owner_assignments`. The migration
+  converts every scalar `admin` to non-operational `account_admin`, bumps `authv`, and revokes
+  refresh families; account admins pass the account-plane compatibility gate but never the
+  analyst/approver ladder. Staff provisioning creates its sole first admin, owner binding, and
+  assignment state atomically. Explicit designation mutation/UI remains later staff-plane work:
+  a zero-owner tenant has no tenant authority that could authorize its own designation.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).

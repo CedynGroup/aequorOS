@@ -149,6 +149,11 @@ def test_unconfigured_secret_fails_closed() -> None:
 # -- roles -------------------------------------------------------------------
 def test_role_hierarchy() -> None:
     assert has_role(["admin"], "viewer") is True  # admin outranks everything
+    assert has_role(["account_admin"], "admin") is True
+    assert has_role(["account_admin"], "account_admin") is True
+    assert has_role(["account_admin"], "viewer") is False
+    assert has_role(["account_admin"], "analyst") is False
+    assert has_role(["account_admin"], "approver") is False
     assert has_role(["analyst"], "analyst") is True
     assert has_role(["analyst"], "approver") is False  # analyst cannot approve
     assert has_role(["viewer"], "analyst") is False

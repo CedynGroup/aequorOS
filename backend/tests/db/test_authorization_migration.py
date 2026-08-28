@@ -27,7 +27,8 @@ __all__ = ["migrated_postgres_schema"]
 def test_authorization_migration_creates_constraints_and_forced_rls(
     migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    assert migrated_postgres_schema.tables({"authorization_bindings"}) == {"authorization_bindings"}
+    expected_tables = {"authorization_bindings", "organization_owner_assignments"}
+    assert migrated_postgres_schema.tables(expected_tables) == expected_tables
     expected_constraints = {
         "ck_users_authorization_version_positive",
         "fk_authorization_bindings_principal_tenant",
@@ -45,11 +46,23 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
         "ck_authorization_bindings_grant_reason",
         "ck_authorization_bindings_validity_window",
         "ck_authorization_bindings_revocation_state",
+        "fk_organization_owner_assignments_owner_tenant",
+        "ck_organization_owner_assignments_status",
+        "ck_organization_owner_assignments_basis",
+        "ck_organization_owner_assignments_candidate_count",
+        "ck_organization_owner_assignments_resolution",
+        "ck_organization_owner_assignments_basis_count",
     }
     assert migrated_postgres_schema.constraints(expected_constraints) == expected_constraints
-    assert migrated_postgres_schema.policies({"authorization_bindings"}) == {
-        "authorization_bindings_tenant_isolation"
+    assert migrated_postgres_schema.policies(expected_tables) == {
+        "authorization_bindings_tenant_isolation",
+        "organization_owner_assignments_tenant_isolation",
     }
+    expected_indexes = {
+        "uq_authorization_bindings_active_org_owner",
+        "ix_organization_owner_assignments_status",
+    }
+    assert migrated_postgres_schema.indexes(expected_indexes) == expected_indexes
 
     with migrated_postgres_schema.app_engine.connect() as connection:
         forced = connection.scalar(
@@ -60,6 +73,18 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE n.nspname = :schema_name
                   AND c.relname = 'authorization_bindings'
+                """
+            ),
+            {"schema_name": migrated_postgres_schema.schema_name},
+        )
+        assignment_forced = connection.scalar(
+            text(
+                """
+                SELECT c.relforcerowsecurity
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = :schema_name
+                  AND c.relname = 'organization_owner_assignments'
                 """
             ),
             {"schema_name": migrated_postgres_schema.schema_name},
@@ -92,6 +117,7 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
         )
 
     assert forced is True
+    assert assignment_forced is True
     assert version_default == "1"
     assert refresh_revocation_constraint is not None
     assert "authorization_changed" in refresh_revocation_constraint

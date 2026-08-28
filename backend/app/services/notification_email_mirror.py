@@ -88,12 +88,13 @@ def _recipient_emails(session: Session, notification: Notification) -> list[str]
             )
         )
         return [email] if email else []
-    # Org-wide rows mirror to active admins (the accountable inbox owners).
+    # Org-wide rows mirror to active account administrators. ``admin`` remains
+    # only for rolling/test compatibility; migration 202608280045 leaves none.
     return list(
         session.scalars(
             select(User.email).where(
                 User.organization_id == notification.organization_id,
-                User.role == "admin",
+                User.role.in_(("account_admin", "admin")),
                 User.is_active.is_(True),
             )
         )

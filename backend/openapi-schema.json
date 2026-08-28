@@ -33867,7 +33867,7 @@
           "role": {
             "default": "viewer",
             "enum": [
-              "admin",
+              "account_admin",
               "approver",
               "analyst",
               "viewer"

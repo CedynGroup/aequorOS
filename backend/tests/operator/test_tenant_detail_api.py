@@ -70,7 +70,7 @@ def test_tenant_users_lists_the_seeded_admin(
     # The provisioning saga seeds the first admin.
     assert any(u["email"] == "admin@testbank.example" for u in users)
     admin = next(u for u in users if u["email"] == "admin@testbank.example")
-    assert admin["role"] == "admin"
+    assert admin["role"] == "account_admin"
     assert admin["is_active"] is True
     assert set(admin) == {
         "email",

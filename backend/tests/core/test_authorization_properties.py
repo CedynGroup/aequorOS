@@ -60,6 +60,7 @@ _REFERENCE_ROLE_PERMISSIONS: dict[RoleBundle, frozenset[Permission]] = {
     ),
     RoleBundle.APPROVER: frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
     RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
+    RoleBundle.ORG_OWNER: frozenset({Permission.ADMINISTER}),
     RoleBundle.INTEGRATION_WRITER: frozenset({Permission.INGEST}),
 }
 

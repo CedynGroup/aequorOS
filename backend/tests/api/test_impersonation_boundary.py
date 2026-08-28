@@ -186,6 +186,25 @@ def test_the_fourteen_audited_routes_now_carry_a_role_gate(client: TestClient) -
         assert guards[entry], f"{entry} is still behind the read-only Tenant guard"
 
 
+def test_account_admin_cannot_use_approver_gated_regulatory_submission(
+    db_client: TestClient,
+) -> None:
+    """The legacy admin split must remove operational superuser authority.
+
+    The resource need not exist: the role dependency runs before the workflow
+    lookup, proving an account-only administrator cannot reach the submission
+    service through the real regulatory route.
+    """
+
+    response = db_client.post(
+        f"/api/v1/banks/BK-SAMP0001/regulatory-packages/{uuid4()}/submit",
+        headers=headers(roles=("account_admin",)),
+        json={"channel": "email"},
+    )
+    assert response.status_code == 403
+    assert "analyst" in response.json()["error"]["message"]
+
+
 def test_impersonation_exemption_set_is_minimal_and_real(client: TestClient) -> None:
     """Every exemption must name a route that exists and is an unsafe method."""
     table = {(method, path) for method, path, _ in _unsafe_routes(client)}

@@ -73,7 +73,7 @@ def _seed_admin(db: Session) -> None:
             organization_id=ORG_1,
             email="admin.two@aequoros.example",
             display_name="Admin Two",
-            role="admin",
+            role="account_admin",
         )
     )
     db.commit()

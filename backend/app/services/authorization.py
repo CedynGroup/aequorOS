@@ -189,6 +189,7 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
     reason: str,
     valid_from: datetime | None = None,
     valid_until: datetime | None = None,
+    commit: bool = True,
 ) -> AuthorizationBinding:
     """Create one indivisible grant and invalidate existing sessions.
 
@@ -248,8 +249,11 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
         reason=f"role binding granted: {grant_reason}",
         commit=False,
     )
-    db.commit()
-    db.refresh(binding)
+    if commit:
+        db.commit()
+        db.refresh(binding)
+    else:
+        db.flush()
     return binding
 
 

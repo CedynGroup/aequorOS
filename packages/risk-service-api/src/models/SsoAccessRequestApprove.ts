@@ -29,7 +29,7 @@ export interface SsoAccessRequestApprove {
  * @export
  */
 export const SsoAccessRequestApproveRoleEnum = {
-  Admin: "admin",
+  AccountAdmin: "account_admin",
   Approver: "approver",
   Analyst: "analyst",
   Viewer: "viewer",

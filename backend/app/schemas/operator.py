@@ -30,6 +30,7 @@ type ProvisioningStepName = Literal[
     "kms",
     "sso_stub",
     "first_admin",
+    "first_owner",
     # The institution's own board register (``param_*``). Without it a tenant is
     # provisioned, ingests its whole book, and still cannot produce a single
     # successful calculation run (founder review 2026-08-23).

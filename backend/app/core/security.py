@@ -31,13 +31,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Roles, most- to least-privileged. `admin` manages users/config; `approver` is the
-# maker-checker second signer; `analyst` runs calculations + mutations; `examiner`
-# is the supervisory read-only role (Phase 2 item 7: reads everything incl. the
-# examiner surfaces, mutates nothing — every mutation gate sits at analyst or
-# above); `viewer` reads the standard surfaces only.
+# Legacy operational roles, most- to least-privileged. ``admin`` remains in the
+# token vocabulary only so pre-migration/test claims can be decoded, but migration
+# 202608280045 converts every persisted administrator to ``account_admin`` and
+# invalidates their sessions. ``account_admin`` is deliberately outside this
+# ladder: it may pass the account-plane ``require_role("admin")`` compatibility
+# gate, but can never satisfy analyst or approver gates.
 ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "examiner", "viewer")
 _ROLE_RANK = {role: rank for rank, role in enumerate(ROLES)}
+ACCOUNT_ADMIN_ROLE = "account_admin"
 
 TokenType = Literal["access", "refresh"]
 
@@ -81,10 +83,15 @@ def needs_rehash(password_hash: str) -> bool:
 # -- roles -------------------------------------------------------------------
 def has_role(user_roles: list[str], required: str) -> bool:
     """True if any of ``user_roles`` is at least as privileged as ``required``."""
+    if required in {"admin", ACCOUNT_ADMIN_ROLE}:
+        return any(role in {"admin", ACCOUNT_ADMIN_ROLE} for role in user_roles)
     threshold = _ROLE_RANK.get(required)
     if threshold is None:
         return False
-    return any(_ROLE_RANK.get(role, len(ROLES)) <= threshold for role in user_roles)
+    return any(
+        role != ACCOUNT_ADMIN_ROLE and _ROLE_RANK.get(role, len(ROLES)) <= threshold
+        for role in user_roles
+    )
 
 
 # -- tokens ------------------------------------------------------------------

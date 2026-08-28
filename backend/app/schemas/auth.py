@@ -151,7 +151,7 @@ class SsoAccessRequestRead(BaseModel):
 class SsoAccessRequestApprove(BaseModel):
     """Approval is the authorization act — the admin explicitly picks the role."""
 
-    role: Literal["admin", "approver", "analyst", "viewer"] = "viewer"
+    role: Literal["account_admin", "approver", "analyst", "viewer"] = "viewer"
 
 
 class SsoClientConfigResponse(BaseModel):
