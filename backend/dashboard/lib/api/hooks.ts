@@ -3,21 +3,21 @@
 /**
  * TanStack Query hooks over the generated risk-service client.
  *
- * Query keys: ['banks'], ['periods', bankId], ['liq-dashboard', bankId,
- * periodId], ['cap-dashboard', bankId, periodId], ['reg-runs', bankId, ...],
- * ['reg-run', bankId, runId], ['bsd3'|'bsd2', bankId, periodId],
- * ['cashflow-forecast', bankId, horizon, mode], ['cashflow-history', bankId,
- * days], ['attn-*', ...] (attestation). Mutations invalidate the related read
- * keys.
+ * Home and detailed module keys use the authority-scoped factories in
+ * queryPolicy.ts: prefix → tenant → authority → bank → semantic dimensions.
+ * Older non-home hooks retain their prefix-first shapes during migration; the
+ * QueryClient itself remounts at every authority boundary. Mutations invalidate
+ * the related bank-local reads.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import type {
   LiveModule,
   AnalysisRunCreate,
@@ -113,35 +113,52 @@ import {
   getReportComparison,
   type ReportComparisonParams,
 } from './reportComparison';
+import {
+  HEAVY_DASHBOARD_QUERY_POLICY,
+  LIVE_SIGNAL_POLL_MS,
+  changedGenerations,
+  dashboardQueryKey,
+  dashboardSemantic,
+  generationFingerprint,
+  generationInvalidationPrefixes,
+  invalidateGenerationChanges,
+  invalidateOfficialRunChanges,
+  invalidateScopedPrefixes,
+  jitteredPollInterval,
+  observedSignalChanges,
+  officialRunFingerprint,
+  reconcileStartedScopedPrefixes,
+  regulatoryDetailInvalidationPrefixes,
+  scopedQueryKey,
+  waitForInitialDashboardSignals,
+  type QueryAuthorityScope,
+} from './queryPolicy';
+import { useQueryAuthorityScope } from './useQueryScope';
 
 
-/**
- * Polling cadence for the always-on "live" reads (live-summary, freshness,
- * alerts) and the module dashboards. The backend recomputes in the background
- * on ingestion, so the UI re-fetches on a timer to reflect it without a manual
- * refresh. Kept above the 30s query staleTime so a poll actually re-fetches.
- */
-const LIVE_REFETCH_MS = 20_000;
 const DASHBOARD_REFETCH_MS = 30_000;
 
 export function useBanks() {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['banks'],
+    queryKey: scopedQueryKey('banks', scope),
     queryFn: () => apiCall(() => banksApi.listBanks({})),
   });
 }
 
 export function useBank(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['bank', bankId],
+    queryKey: scopedQueryKey('bank', scope, bankId ?? null),
     queryFn: () => apiCall(() => banksApi.getBank({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
 
 export function useReportingPeriods(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['periods', bankId],
+    queryKey: scopedQueryKey('periods', scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => banksApi.listBankReportingPeriods({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -152,8 +169,9 @@ export function useBankPeriodFacts(
   bankId: string | undefined,
   periodId: string | undefined
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['facts', bankId, periodId],
+    queryKey: scopedQueryKey('facts', scope, bankId ?? null, periodId ?? null),
     queryFn: () =>
       apiCall(() =>
         banksApi.getBankPeriodFacts({
@@ -169,17 +187,23 @@ export function useLiquidityDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
+  const semantic = dashboardSemantic(periodId);
   return useQuery({
-    queryKey: ['liq-dashboard', bankId, periodId],
-    queryFn: () =>
-      apiCall(() =>
+    queryKey: dashboardQueryKey('liq-dashboard', scope, bankId, semantic),
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryLiquidityApi.getLiquidityDashboard({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
-    refetchInterval: DASHBOARD_REFETCH_MS,
+    ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
 }
 
@@ -187,18 +211,68 @@ export function useCapitalDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
+  const semantic = dashboardSemantic(periodId);
   return useQuery({
-    queryKey: ['cap-dashboard', bankId, periodId],
-    queryFn: () =>
-      apiCall(() =>
+    queryKey: dashboardQueryKey('cap-dashboard', scope, bankId, semantic),
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryCapitalApi.getCapitalDashboard({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
-    refetchInterval: DASHBOARD_REFETCH_MS,
+    ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
+}
+
+export function useEffectiveRatioDashboards(
+  bankId: string | undefined,
+  periodId: string,
+) {
+  const currentLiq = useLiquidityDashboard(bankId);
+  const currentCap = useCapitalDashboard(bankId);
+  const liqSelection = useRef<{ periodId: string; mismatch: boolean } | null>(
+    null,
+  );
+  const capSelection = useRef<{ periodId: string; mismatch: boolean } | null>(
+    null,
+  );
+  if (liqSelection.current?.periodId !== periodId || !currentLiq.isFetching) {
+    liqSelection.current = {
+      periodId,
+      mismatch:
+        currentLiq.isError ||
+        Boolean(currentLiq.data && currentLiq.data.period.id !== periodId),
+    };
+  }
+  if (capSelection.current?.periodId !== periodId || !currentCap.isFetching) {
+    capSelection.current = {
+      periodId,
+      mismatch:
+        currentCap.isError ||
+        Boolean(currentCap.data && currentCap.data.period.id !== periodId),
+    };
+  }
+  const needsPeriodLiq = liqSelection.current.mismatch;
+  const needsPeriodCap = capSelection.current.mismatch;
+  const periodLiq = useLiquidityDashboard(
+    needsPeriodLiq ? bankId : undefined,
+    periodId,
+  );
+  const periodCap = useCapitalDashboard(
+    needsPeriodCap ? bankId : undefined,
+    periodId,
+  );
+  return {
+    liquidity: needsPeriodLiq ? periodLiq : currentLiq,
+    capital: needsPeriodCap ? periodCap : currentCap,
+  };
 }
 
 export function useRegulatoryRuns(
@@ -271,6 +345,7 @@ const capitalInvalidatePrefixes = [
 
 export function useCreateRegulatoryRun(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: {
       module: RegulatoryModule;
@@ -288,15 +363,14 @@ export function useCreateRegulatoryRun(bankId: string | undefined) {
         run.module === 'capital'
           ? capitalInvalidatePrefixes
           : liquidityInvalidatePrefixes;
-      prefixes.forEach((prefix) => {
-        void queryClient.invalidateQueries({ queryKey: [prefix] });
-      });
+      void invalidateScopedPrefixes(queryClient, prefixes, scope, bankId);
     },
   });
 }
 
 export function useRunAllLiquidityScenarios(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: { reportingPeriodId: string }) =>
       apiCall(() =>
@@ -306,15 +380,19 @@ export function useRunAllLiquidityScenarios(bankId: string | undefined) {
         })
       ),
     onSuccess: () => {
-      liquidityInvalidatePrefixes.forEach((prefix) => {
-        void queryClient.invalidateQueries({ queryKey: [prefix] });
-      });
+      void invalidateScopedPrefixes(
+        queryClient,
+        liquidityInvalidatePrefixes,
+        scope,
+        bankId,
+      );
     },
   });
 }
 
 export function useRunAllCapitalScenarios(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: { reportingPeriodId: string }) =>
       apiCall(() =>
@@ -324,9 +402,12 @@ export function useRunAllCapitalScenarios(bankId: string | undefined) {
         })
       ),
     onSuccess: () => {
-      capitalInvalidatePrefixes.forEach((prefix) => {
-        void queryClient.invalidateQueries({ queryKey: [prefix] });
-      });
+      void invalidateScopedPrefixes(
+        queryClient,
+        capitalInvalidatePrefixes,
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -343,10 +424,19 @@ export function useIrrDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
-    queryKey: ['irr-dashboard', bankId, periodId],
-    queryFn: () =>
-      apiCall(async () => {
+    queryKey: dashboardQueryKey(
+      'irr-dashboard',
+      scope,
+      bankId,
+      dashboardSemantic(periodId),
+    ),
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(async () => {
         // The live IRR service returns HTTP 200 with an availability envelope
         // while current facts lack a compatible analysis context. Detect it
         // before generated-client deserialization expects dashboard arrays.
@@ -366,9 +456,10 @@ export function useIrrDashboard(
           );
         }
         return response.value();
-      }),
+      });
+    },
     enabled: Boolean(bankId),
-    refetchInterval: DASHBOARD_REFETCH_MS,
+    ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
 }
 
@@ -394,17 +485,27 @@ export function useFxDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
-    queryKey: ['fx-dashboard', bankId, periodId],
-    queryFn: () =>
-      apiCall(() =>
+    queryKey: dashboardQueryKey(
+      'fx-dashboard',
+      scope,
+      bankId,
+      dashboardSemantic(periodId),
+    ),
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryFxApi.getFxDashboard({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
-    refetchInterval: DASHBOARD_REFETCH_MS,
+    ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
 }
 
@@ -430,17 +531,27 @@ export function useFtpDashboard(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
-    queryKey: ['ftp-dashboard', bankId, periodId],
-    queryFn: () =>
-      apiCall(() =>
+    queryKey: dashboardQueryKey(
+      'ftp-dashboard',
+      scope,
+      bankId,
+      dashboardSemantic(periodId),
+    ),
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryFtpApi.getFtpDashboard({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
-    refetchInterval: DASHBOARD_REFETCH_MS,
+    ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
 }
 
@@ -471,15 +582,20 @@ export function useRwaBreakdown(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['cap-rwa', bankId, periodId],
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryCapitalApi.getRwaBreakdown({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
     retry: (failureCount, error) =>
       !isNoBaselineRunError(error) && failureCount < 1,
@@ -490,15 +606,20 @@ export function useCapitalStructure(
   bankId: string | undefined,
   periodId?: string | undefined
 ) {
+  useBankFreshness(bankId, periodId);
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['cap-structure', bankId, periodId],
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         regulatoryCapitalApi.getCapitalStructure({
           bankId: bankId!,
           reportingPeriodId: periodId,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
     retry: (failureCount, error) =>
       !isNoBaselineRunError(error) && failureCount < 1,
@@ -560,6 +681,8 @@ export function useForecastRuns(
   bankId: string | undefined,
   filters: { limit?: number; offset?: number } = {}
 ) {
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: [
       'forecast-runs',
@@ -567,14 +690,16 @@ export function useForecastRuns(
       filters.limit ?? 25,
       filters.offset ?? 0,
     ],
-    queryFn: () =>
-      apiCall(() =>
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         forecastingApi.listForecastRuns({
           bankId: bankId!,
           limit: filters.limit,
           offset: filters.offset,
         })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
   });
 }
@@ -782,34 +907,91 @@ export function useApplyBehavioralModel(
 // and the two background pipeline actions ("Recompute now" → /refresh,
 // "Mint official run" → /official-runs).
 //
-// The three read hooks poll on a timer so the dashboard reflects the backend's
-// automatic recompute-on-ingestion without any manual refresh. The two write
-// hooks enqueue a job, poll it to completion, then invalidate every live read
-// plus the module dashboards so the numbers and freshness badges update in one
-// step.
+// The cheap read hooks poll (with stable cache-scope jitter) so the dashboard
+// reflects background work. A live-summary generation change invalidates the
+// affected detailed module payloads; those heavyweight reads never poll on
+// their own. The two write hooks also invalidate once their jobs complete.
 // ---------------------------------------------------------------------------
 
 /** As-of + reason payload for a pipeline action. */
 export type PipelineActionInput = { asOfDate: string; reason: string };
 
-/** Cross-module current metrics + per-module status, polled. */
+type ObservedModuleSignal = {
+  fingerprint?: ReadonlyMap<string, string>;
+  failed: boolean;
+};
+
+const observedLiveGenerations = new WeakMap<object, Map<string, ObservedModuleSignal>>();
+
+const observedOfficialRuns = new WeakMap<object, Map<string, ObservedModuleSignal>>();
+
+/** Cross-module current metrics + per-module generation signal, cheaply polled. */
 export function useLiveSummary(bankId: string | undefined) {
-  return useQuery({
-    queryKey: ['live-summary', bankId],
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: scopedQueryKey('live-summary', scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => liveEngineApi.getLiveSummary({ bankId: bankId! })),
     enabled: Boolean(bankId),
-    refetchInterval: LIVE_REFETCH_MS,
+    refetchInterval: jitteredPollInterval(
+      LIVE_SIGNAL_POLL_MS,
+      'live-summary',
+      scope,
+      bankId,
+    ),
   });
+
+  useEffect(() => {
+    if (!bankId) return;
+    let byScope = observedLiveGenerations.get(queryClient);
+    if (!byScope) {
+      byScope = new Map();
+      observedLiveGenerations.set(queryClient, byScope);
+    }
+    const identity = `${scope.tenantId}|${scope.authorityId}|${bankId}`;
+    const observed = byScope.get(identity);
+    if (!query.data) {
+      if (query.isError) {
+        byScope.set(identity, { fingerprint: observed?.fingerprint, failed: true });
+      }
+      return;
+    }
+    const next = generationFingerprint(query.data.modules);
+    byScope.set(identity, { fingerprint: next, failed: false });
+    const recovering = !observed?.fingerprint && (observed?.failed ?? false);
+    const changed = observedSignalChanges(observed?.fingerprint, next, false);
+    if (recovering) {
+      void reconcileStartedScopedPrefixes(
+        queryClient,
+        generationInvalidationPrefixes([...next.keys()]),
+        scope,
+        bankId,
+      );
+    }
+    if (changed.length > 0) {
+      void invalidateGenerationChanges(queryClient, scope, bankId, changed);
+    }
+  }, [bankId, query.data, query.isError, queryClient, scope]);
+
+  return query;
 }
 
 /** Per-module live-vs-official-run freshness for a period, polled. */
 export function useBankFreshness(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
+  poll = true,
 ) {
-  return useQuery({
-    queryKey: ['freshness', bankId, periodId ?? null],
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: scopedQueryKey(
+      'freshness',
+      scope,
+      bankId ?? null,
+      periodId ?? null,
+    ),
     queryFn: () =>
       apiCall(() =>
         liveEngineApi.getBankFreshness({
@@ -818,45 +1000,127 @@ export function useBankFreshness(
         })
       ),
     enabled: Boolean(bankId),
-    refetchInterval: LIVE_REFETCH_MS,
+    refetchInterval: poll
+      ? jitteredPollInterval(
+          LIVE_SIGNAL_POLL_MS,
+          'freshness',
+          scope,
+          bankId,
+        )
+      : false,
   });
+
+  useEffect(() => {
+    if (!bankId) return;
+    let byScope = observedOfficialRuns.get(queryClient);
+    if (!byScope) {
+      byScope = new Map();
+      observedOfficialRuns.set(queryClient, byScope);
+    }
+    const identity = `${scope.tenantId}|${scope.authorityId}|${bankId}|${periodId ?? ''}`;
+    const observed = byScope.get(identity);
+    if (!query.data) {
+      if (query.isError) {
+        byScope.set(identity, { fingerprint: observed?.fingerprint, failed: true });
+      }
+      return;
+    }
+    const next = officialRunFingerprint(query.data.modules);
+    byScope.set(identity, { fingerprint: next, failed: false });
+    const recovering = !observed?.fingerprint && (observed?.failed ?? false);
+    const changed = observedSignalChanges(observed?.fingerprint, next, false);
+    if (recovering) {
+      void reconcileStartedScopedPrefixes(
+        queryClient,
+        regulatoryDetailInvalidationPrefixes([...next.keys()]),
+        scope,
+        bankId,
+      );
+    }
+    if (changed.length > 0) {
+      void invalidateOfficialRunChanges(
+        queryClient,
+        scope,
+        bankId,
+        changed,
+      );
+    }
+  }, [bankId, periodId, query.data, query.isError, queryClient, scope]);
+
+  return query;
 }
 
 /** Open limit-breach alerts across modules, polled — powers the header bell. */
 export function useBankAlerts(bankId: string | undefined, limit = 20) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['alerts', bankId, limit],
+    queryKey: scopedQueryKey('alerts', scope, bankId ?? null, limit),
     queryFn: () =>
       apiCall(() =>
         liveEngineApi.getBankAlerts({ bankId: bankId!, limit })
       ),
     enabled: Boolean(bankId),
-    refetchInterval: LIVE_REFETCH_MS,
+    refetchInterval: jitteredPollInterval(
+      LIVE_SIGNAL_POLL_MS,
+      'alerts',
+      scope,
+      bankId,
+    ),
   });
 }
 
-// Every read that a pipeline action can move. Invalidated (by prefix) once a
-// refresh/official-run job completes so live numbers, freshness, alerts, and
-// module dashboards all re-fetch together.
-const livePipelineInvalidatePrefixes = [
-  'live-summary',
+const livePipelineCompletionPrefixes = [
   'freshness',
   'alerts',
-  'liq-dashboard',
-  'cap-dashboard',
-  'irr-dashboard',
-  'fx-dashboard',
-  'ftp-dashboard',
-  'cap-rwa',
-  'cap-structure',
   'bsd3',
   'bsd2',
   'reg-runs',
   'reg-run',
-  'forecast-runs',
   'facts',
   'periods',
 ];
+
+async function invalidateCompletedPipeline(
+  queryClient: QueryClient,
+  scope: QueryAuthorityScope,
+  bankId: string | undefined,
+) {
+  await invalidateScopedPrefixes(queryClient, ['live-summary'], scope, bankId);
+  await invalidateScopedPrefixes(
+    queryClient,
+    livePipelineCompletionPrefixes,
+    scope,
+    bankId,
+  );
+}
+
+const officialRunCompletionPrefixes = regulatoryDetailInvalidationPrefixes([
+  'liquidity',
+  'capital',
+  'irr',
+  'fx',
+  'ftp',
+  'forecast',
+]);
+
+const capitalAssumptionPrefixes = regulatoryDetailInvalidationPrefixes([
+  'capital',
+  'forecast',
+]);
+
+async function invalidateCompletedOfficialRun(
+  queryClient: QueryClient,
+  scope: QueryAuthorityScope,
+  bankId: string | undefined,
+) {
+  await invalidateCompletedPipeline(queryClient, scope, bankId);
+  await invalidateScopedPrefixes(
+    queryClient,
+    officialRunCompletionPrefixes,
+    scope,
+    bankId,
+  );
+}
 
 /**
  * Poll a queued job to a terminal state. Resolves with the final job on
@@ -888,11 +1152,13 @@ async function pollJobToCompletion(
 
 /**
  * "Recompute now" — enqueue a live pipeline_refresh, poll it to completion, and
- * refresh every live read + module dashboard. Derives facts and recomputes live
+ * refresh the cheap live signals. A changed live-summary generation then
+ * refreshes only the affected module details. Derives facts and recomputes live
  * metrics/findings without minting an immutable regulatory run.
  */
 export function useRefreshBankData(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: async ({ asOfDate, reason }: PipelineActionInput) => {
       const enqueued = await apiCall(() =>
@@ -906,21 +1172,19 @@ export function useRefreshBankData(bankId: string | undefined) {
       );
       return pollJobToCompletion(enqueued.jobId);
     },
-    onSuccess: () => {
-      livePipelineInvalidatePrefixes.forEach((prefix) => {
-        void queryClient.invalidateQueries({ queryKey: [prefix] });
-      });
-    },
+    onSuccess: () => invalidateCompletedPipeline(queryClient, scope, bankId),
   });
 }
 
 /**
  * "Mint official run for filing" — enqueue an immutable official run, poll it to
- * completion, and refresh every live read + module dashboard. The official run
- * is what clears the freshness "data changed since last official run" state.
+ * completion, and refresh the live signals and regulatory detail caches. The
+ * official run is what clears the freshness "data changed since last official
+ * run" state.
  */
 export function useMintOfficialRun(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: async ({ asOfDate, reason }: PipelineActionInput) => {
       const enqueued = await apiCall(() =>
@@ -934,11 +1198,7 @@ export function useMintOfficialRun(bankId: string | undefined) {
       );
       return pollJobToCompletion(enqueued.jobId);
     },
-    onSuccess: () => {
-      livePipelineInvalidatePrefixes.forEach((prefix) => {
-        void queryClient.invalidateQueries({ queryKey: [prefix] });
-      });
-    },
+    onSuccess: () => invalidateCompletedOfficialRun(queryClient, scope, bankId),
   });
 }
 
@@ -1344,6 +1604,7 @@ export function useCanonicalPositionFacets(bankId: string | undefined) {
 /** Run an uploaded template file as a manual market data pull (§8.3). */
 export function useUploadMarketData(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: ({ file, asOfDate }: { file: File; asOfDate: string }) =>
       apiCall(() =>
@@ -1358,8 +1619,12 @@ export function useUploadMarketData(bankId: string | undefined) {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
       // Manual pulls land canonical market data the same way ingestion does.
-      void queryClient.invalidateQueries({ queryKey: ['de-batches', bankId] });
-      void queryClient.invalidateQueries({ queryKey: ['de-summary', bankId] });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ['de-batches', 'de-summary'],
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -2430,13 +2695,18 @@ export function useOfficerNames(): (userId: string) => string {
 
 /** The actor-visible notification feed (user-directed + org-wide rows). */
 export function useNotifications(unreadOnly = false) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['notifications', unreadOnly],
+    queryKey: scopedQueryKey('notifications', scope, unreadOnly),
     queryFn: () =>
       apiCall(() =>
         notificationsApi.listNotifications({ unreadOnly, limit: 50 })
       ),
-    refetchInterval: 60_000,
+    refetchInterval: jitteredPollInterval(
+      60_000,
+      'notifications',
+      scope,
+    ),
   });
 }
 
@@ -3296,6 +3566,7 @@ export function useEclAssumptionRegister(bankId: string | undefined) {
 
 export function useUpdateLiquidityThresholdRegister(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: LiquidityThresholdUpdate) =>
       apiCall(() =>
@@ -3307,7 +3578,12 @@ export function useUpdateLiquidityThresholdRegister(bankId: string | undefined) 
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['liq-thresholds', bankId] });
       // Threshold generations feed the monitoring/liquidity views.
-      void queryClient.invalidateQueries({ queryKey: ['liq-dashboard', bankId] });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ['liq-dashboard'],
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -3331,6 +3607,7 @@ export function useUpdateLiquidityEwiRegister(bankId: string | undefined) {
 
 export function useUpdateCrmHaircutRegister(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: CrmHaircutUpdate) =>
       apiCall(() =>
@@ -3341,12 +3618,19 @@ export function useUpdateCrmHaircutRegister(bankId: string | undefined) {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['crm-haircuts', bankId] });
+      void invalidateScopedPrefixes(
+        queryClient,
+        capitalAssumptionPrefixes,
+        scope,
+        bankId,
+      );
     },
   });
 }
 
 export function useUpdateEclAssumptionRegister(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: EclAssumptionUpdate) =>
       apiCall(() =>
@@ -3357,6 +3641,12 @@ export function useUpdateEclAssumptionRegister(bankId: string | undefined) {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['ecl-assumptions', bankId] });
+      void invalidateScopedPrefixes(
+        queryClient,
+        capitalAssumptionPrefixes,
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -3370,14 +3660,24 @@ export function useLiveSnapshots(
   module: LiveModule,
   days = 45
 ) {
+  const scope = useQueryAuthorityScope();
+  const queryClient = useQueryClient();
   return useQuery({
-    queryKey: ['live-snapshots', bankId, module, days],
-    queryFn: () =>
-      apiCall(() =>
+    queryKey: scopedQueryKey(
+      'live-snapshots',
+      scope,
+      bankId ?? null,
+      module,
+      days,
+    ),
+    queryFn: async () => {
+      await waitForInitialDashboardSignals(queryClient, scope, bankId);
+      return apiCall(() =>
         liveEngineApi.listLiveSnapshots({ bankId: bankId!, module, days })
-      ),
+      );
+    },
     enabled: Boolean(bankId),
-    refetchInterval: 120_000,
+    ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
 }
 
@@ -3431,4 +3731,3 @@ export function useCashflowWindow(
     enabled: enabled && Boolean(bankId && start && end),
   });
 }
-

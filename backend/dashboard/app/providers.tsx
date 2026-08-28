@@ -1,13 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { SessionProvider, signOut, useSession } from 'next-auth/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { usePathname } from 'next/navigation';
 
 import { setAccessToken } from '@/lib/api/token';
 import { LOGIN_URL } from '@/lib/loginUrl';
 import ProfileProvider from '@/components/profile/ProfileProvider';
 import ImpersonationBanner from '@/components/impersonation/ImpersonationBanner';
+import QueryAuthorityBoundary from '@/lib/api/QueryAuthorityBoundary';
+import { queryAuthorityScope } from '@/lib/api/queryPolicy';
+import { useResolvedQueryAuthorityScope } from '@/lib/api/useQueryScope';
+
+const PUBLIC_QUERY_SCOPE = queryAuthorityScope('public', 'anonymous', []);
 
 /** Keeps the API client's bearer token in sync with the NextAuth session. */
 function TokenSync() {
@@ -25,20 +30,33 @@ function TokenSync() {
   return null;
 }
 
-export default function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            retry: 1,
-            refetchOnWindowFocus: false,
-          },
-        },
-      })
+function AuthorityQueryBoundary({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const scope = useResolvedQueryAuthorityScope();
+  const publicRoute = pathname === '/login' || pathname === '/inspect';
+  return (
+    <QueryAuthorityBoundary
+      scope={publicRoute ? PUBLIC_QUERY_SCOPE : scope}
+      fallback={<AuthorityLoading />}
+    >
+      <ProfileProvider>{children}</ProfileProvider>
+    </QueryAuthorityBoundary>
   );
+}
 
+function AuthorityLoading() {
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center bg-surface-alt"
+      aria-busy="true"
+      aria-label="Loading authenticated workspace"
+    >
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-action/25 border-t-action" />
+    </div>
+  );
+}
+
+export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     // Re-pull the session periodically (and on window focus) so the rotated
     // access token propagates to the client cache before it expires.
@@ -47,9 +65,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       {/* App-wide staff-inspection banner. Renders nothing on a normal session
           (no hand-off cookie), so it is inert outside impersonation. */}
       <ImpersonationBanner />
-      <QueryClientProvider client={queryClient}>
-        <ProfileProvider>{children}</ProfileProvider>
-      </QueryClientProvider>
+      <AuthorityQueryBoundary>{children}</AuthorityQueryBoundary>
     </SessionProvider>
   );
 }

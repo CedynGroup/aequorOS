@@ -12,9 +12,18 @@
     "types": ["node"]
   },
   "include": [
+    "types/next-auth.d.ts",
     "lib/api/values.ts",
     "lib/api/values.test.ts",
     "lib/api/fail-open-guard.test.ts",
+    "lib/api/impersonation.ts",
+    "lib/api/QueryAuthorityBoundary.tsx",
+    "lib/api/queryAuthorityBoundary.test.tsx",
+    "lib/api/queryPolicy.ts",
+    "lib/api/queryPolicy.test.ts",
+    "lib/api/useQueryScope.ts",
+    "components/reports/FreshnessStrip.tsx",
+    "app/api/impersonation/status/route.ts",
     "lib/outbound.ts",
     "lib/outbound.test.ts",
     "lib/ip-version.test.ts"

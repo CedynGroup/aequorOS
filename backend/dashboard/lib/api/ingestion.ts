@@ -23,6 +23,14 @@ import {
   type MappingConfig,
 } from '@aequoros/risk-service-api';
 import { apiCall, configuration } from './client';
+import {
+  generationInvalidationPrefixes,
+  invalidateScopedPrefixes,
+  refreshLiveSummaryGenerationChanges,
+  scopedBankPrefix,
+  scopedQueryKey,
+} from './queryPolicy';
+import { useQueryAuthorityScope } from './useQueryScope';
 
 export type IngestionSourceSystem = ListIngestionBatchesSourceSystemEnum;
 
@@ -355,8 +363,14 @@ export function useIngestionBatches(
   bankId: string | undefined,
   sourceSystem?: IngestionSourceSystem,
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['de-batches', bankId, sourceSystem ?? 'all'],
+    queryKey: scopedQueryKey(
+      'de-batches',
+      scope,
+      bankId ?? null,
+      sourceSystem ?? 'all',
+    ),
     queryFn: () =>
       apiCall(() =>
         ingestionApi.listIngestionBatches({ bankId: bankId!, sourceSystem }),
@@ -367,8 +381,9 @@ export function useIngestionBatches(
 
 /** Per-source ingestion rollup + canonical model counts + activation history. */
 export function useIngestionSummary(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['de-summary', bankId],
+    queryKey: scopedQueryKey('de-summary', scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => ingestionApi.getIngestionSummary({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -461,6 +476,7 @@ export function useActivateTemplate(bankId: string | undefined) {
  */
 export function useActivateBankData(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation<
     DataActivationRead,
     unknown,
@@ -477,12 +493,20 @@ export function useActivateBankData(bankId: string | undefined) {
           },
         }),
       ),
-    onSuccess: () => {
+    onSuccess: async () => {
       // The new reporting period must appear in the header selector, and every
       // module dashboard now has fresh runs for it.
-      void queryClient.invalidateQueries({ queryKey: ['periods', bankId] });
-      void queryClient.invalidateQueries({ queryKey: ['facts', bankId] });
-      for (const prefix of [
+      const changedModules = await refreshLiveSummaryGenerationChanges(
+        queryClient,
+        scope,
+        bankId,
+      );
+      const generationOwned = new Set(
+        generationInvalidationPrefixes(changedModules),
+      );
+      await invalidateScopedPrefixes(queryClient, [
+        'periods',
+        'facts',
         'liq-dashboard',
         'cap-dashboard',
         'irr-dashboard',
@@ -494,18 +518,20 @@ export function useActivateBankData(bankId: string | undefined) {
         'cap-structure',
         'bsd3',
         'bsd2',
-      ]) {
-        void queryClient.invalidateQueries({ queryKey: [prefix] });
-      }
-      void queryClient.invalidateQueries({ queryKey: ['de-activations', bankId] });
-      void queryClient.invalidateQueries({ queryKey: ['de-summary', bankId] });
+        'freshness',
+        'alerts',
+        'live-snapshots',
+        'de-activations',
+        'de-summary',
+      ].filter((prefix) => !generationOwned.has(prefix)), scope, bankId);
     },
   });
 }
 
 export function useDataActivations(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['de-activations', bankId],
+    queryKey: scopedQueryKey('de-activations', scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => ingestionApi.listBankDataActivations({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -514,6 +540,7 @@ export function useDataActivations(bankId: string | undefined) {
 
 export function useUploadAndIngest(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: async ({ file, asOfDate }: { file: File; asOfDate: string }) => {
       const staged = await apiCall(() =>
@@ -531,9 +558,13 @@ export function useUploadAndIngest(bankId: string | undefined) {
       return { staged, started };
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['de-batches', bankId] });
+      void queryClient.invalidateQueries({
+        queryKey: scopedBankPrefix('de-batches', scope, bankId),
+      });
       void queryClient.invalidateQueries({ queryKey: ['de-positions', bankId] });
-      void queryClient.invalidateQueries({ queryKey: ['de-summary', bankId] });
+      void queryClient.invalidateQueries({
+        queryKey: scopedBankPrefix('de-summary', scope, bankId),
+      });
     },
   });
 }

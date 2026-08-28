@@ -224,7 +224,7 @@ on one canonical store — the live tier for intraday awareness, the official ti
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
   stale ("data changed since last filing run — mint an official run").
 - **Alerts** (`app/services/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
-  `live_findings` across modules, surfaced by the header bell (polled).
+  `live_findings` across modules, surfaced by the header bell (cheap, jittered polling).
 - **Scheduler** (`app/services/scheduler.py`): the worker enqueues a `scheduled_tick`; the handler
   enqueues an `official_run` per bank whose daily filing time (`OFFICIAL_RUN_HOUR`) is due. Inert
   unless `OFFICIAL_RUN_ENABLED`, so no environment auto-mints heavy runs.
@@ -233,8 +233,16 @@ on one canonical store — the live tier for intraday awareness, the official ti
   has fewer observations than the configured window, so a short upload still yields a best-effort
   stress instead of killing the whole FX module. On full history the window is used unchanged.
 
+The dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
+stable tenant/authority/bank jitter. A live generation or official-run change invalidates only
+the affected module's cached detail; heavyweight regulatory dashboards and live-snapshot series
+do not poll on their own. Their cache keys distinguish current from explicit-period reads and
+include tenant, authority, bank, and semantic dimensions; changing tenant or authority remounts
+the browser cache. See `backend/dashboard/README.md#query-cache-and-refresh-policy`.
+
 Deferred to a later phase (foundations are laid): true CDC/streaming ingestion (only `full`
-snapshot ships), WebSocket/SSE push (polling today), per-bank cron UI, email/webhook delivery.
+snapshot ships), WebSocket/SSE push (signal polling today), per-bank cron UI, email/webhook
+delivery.
 
 ### Live/governance boundary (enforced)
 

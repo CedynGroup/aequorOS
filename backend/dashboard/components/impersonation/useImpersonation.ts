@@ -6,7 +6,7 @@ import {
   getImpersonationServerSnapshot,
   subscribeImpersonation,
   type ImpersonationState,
-} from '@/lib/api/impersonation';
+} from '../../lib/api/impersonation';
 
 /**
  * Read the current act-as-examiner state. Backed by the framework-free store in

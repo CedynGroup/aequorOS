@@ -8,7 +8,7 @@
     "start": "next start -p 3001",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node .test-out/lib/api/values.test.js && node .test-out/lib/api/fail-open-guard.test.js && node .test-out/lib/outbound.test.js && node .test-out/lib/ip-version.test.js && rm -rf .test-out",
+    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node .test-out/lib/api/values.test.js && node .test-out/lib/api/fail-open-guard.test.js && node .test-out/lib/api/queryPolicy.test.js && node .test-out/lib/api/queryAuthorityBoundary.test.js && node .test-out/lib/outbound.test.js && node .test-out/lib/ip-version.test.js && rm -rf .test-out",
     "e2e": "playwright test"
   },
   "dependencies": {
@@ -28,11 +28,13 @@
     "@types/node": "^20.16.11",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
+    "@types/react-test-renderer": "18.3.1",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.15",
     "jose": "^6.2.4",
     "postcss": "^8.5.24",
+    "react-test-renderer": "18.3.1",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.2"
   },

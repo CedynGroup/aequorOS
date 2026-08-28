@@ -19,7 +19,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { BankReportingPeriodRead } from '@aequoros/risk-service-api';
 import RangeTabs, { RANGE_MONTHS, type RangePreset } from '@/components/ui/RangeTabs';
 import ChartFrame from '@/components/ui/ChartFrame';
 import {
@@ -30,13 +29,9 @@ import {
   CHART_GRID,
   seriesColor,
 } from '@/lib/chartTheme';
-import {
-  useCapitalDashboard,
-  useLiquidityDashboard,
-  useRegulatoryRun,
-} from '@/lib/api/hooks';
 import { num } from '@/lib/api/values';
 import { useModuleScope } from '@/components/shell/BankContext';
+import { useEffectiveRatioDashboards } from '@/lib/api/hooks';
 
 type TrendRow = {
   t: number;
@@ -48,19 +43,19 @@ type TrendRow = {
 
 export default function RatioTrendChart({
   bankId,
-  period,
+  periodId,
 }: {
   bankId: string | undefined;
-  period: BankReportingPeriodRead;
+  periodId: string;
 }) {
   const [range, setRange] = useState<RangePreset>('1Y');
   // An SDI does not file Basel LCR/NSFR (docs/sdi.md §4.6) — its capital headline
   // is the s.29 CAR; liquidity is supervised via LMTD on the Liquidity page.
   const isSdi = useModuleScope().institutionClass === 'sdi';
-  const liq = useLiquidityDashboard(bankId, period.id);
-  const cap = useCapitalDashboard(bankId, period.id);
-  // Audit chip for the footer: the liquidity baseline run backing this period.
-  const liqRun = useRegulatoryRun(bankId, liq.data?.latestRunId);
+  const { liquidity: liq, capital: cap } = useEffectiveRatioDashboards(
+    bankId,
+    periodId,
+  );
 
   const rows = useMemo<TrendRow[]>(() => {
     const byPeriod = new Map<string, TrendRow>();
@@ -117,10 +112,6 @@ export default function RatioTrendChart({
             {' · '}
             {storedCount} with stored results
           </span>
-          {liqRun.data && (
-            <span className="ml-auto">
-            </span>
-          )}
         </>
       }
     >
@@ -178,7 +169,8 @@ export default function RatioTrendChart({
                 strokeWidth={1.8}
                 dot={false}
                 connectNulls
-                // The dashboards poll — re-animating every refetch is noise.
+                // Generation invalidation can refresh the series; re-animating
+                // a freshness update is noise.
                 isAnimationActive={false}
               />
             )}

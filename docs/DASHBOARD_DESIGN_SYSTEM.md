@@ -93,5 +93,7 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
 - PDF/Excel export engine (print-optimized board pack ships; `window.print()` → PDF)
 - Alert acknowledge/resolve workflow (no mutation endpoint yet) and resolved-history tab
 - Server pagination for the positions blotter; deal-level cash-flow schedule drill
-- WebSocket push (30s polling today) · mobile layouts (desktop-first, responsive-safe)
+- WebSocket push (cheap live/freshness/alert signals use jittered polling today;
+  heavyweight module details refresh by invalidation) · mobile layouts
+  (desktop-first, responsive-safe)
 - Next 15/React 19 upgrade · i18n

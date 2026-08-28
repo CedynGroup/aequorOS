@@ -22,6 +22,8 @@ import {
   type DatabaseConnectionUpdate,
 } from '@aequoros/risk-service-api';
 import { apiCall, configuration } from './client';
+import { invalidateScopedPrefixes } from './queryPolicy';
+import { useQueryAuthorityScope } from './useQueryScope';
 
 // Reuse the shared, token-bearing Configuration so direct-connection calls
 // authenticate with the same backend JWT as every other module.
@@ -138,6 +140,7 @@ export function useDiscoverDatabaseSchema(bankId: string | undefined) {
  * immutable ingestion batch. Returns the batch id + terminal status. */
 export function useSyncDatabaseConnection(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: ({
       connectionId,
@@ -164,9 +167,13 @@ export function useSyncDatabaseConnection(bankId: string | undefined) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['db-direct-connections'] });
       // A sync mints a DB_DIRECT batch and may add canonical positions.
-      void queryClient.invalidateQueries({ queryKey: ['de-batches', bankId] });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ['de-batches', 'de-summary'],
+        scope,
+        bankId,
+      );
       void queryClient.invalidateQueries({ queryKey: ['de-positions', bankId] });
-      void queryClient.invalidateQueries({ queryKey: ['de-summary', bankId] });
     },
   });
 }
