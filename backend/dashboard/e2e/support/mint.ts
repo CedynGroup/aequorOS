@@ -43,6 +43,7 @@ export async function mintBackendToken(role: keyof typeof E2E_USERS): Promise<st
     org: E2E_ORG_ID,
     roles: user.roles,
     type: 'access',
+    authv: 1,
     email: `e2e.${String(role)}@aequoros.example`,
     name: `E2E ${String(role)}`,
   })
