@@ -8,7 +8,7 @@
     "start": "next start -p 3001",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node .test-out/lib/api/values.test.js && node .test-out/lib/api/fail-open-guard.test.js && node .test-out/lib/api/queryPolicy.test.js && node .test-out/lib/api/queryAuthorityBoundary.test.js && node .test-out/lib/outbound.test.js && node .test-out/lib/ip-version.test.js && rm -rf .test-out",
+    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node .test-out/lib/api/values.test.js && node .test-out/lib/api/accountAdministration.test.js && node .test-out/lib/api/fail-open-guard.test.js && node .test-out/lib/api/queryPolicy.test.js && node .test-out/lib/api/queryAuthorityBoundary.test.js && node .test-out/lib/outbound.test.js && node .test-out/lib/ip-version.test.js && rm -rf .test-out",
     "e2e": "playwright test"
   },
   "dependencies": {

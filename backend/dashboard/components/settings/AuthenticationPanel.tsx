@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Settings → Authentication (SSO) — admin-only card for the org's own-OIDC
@@ -8,19 +8,26 @@
  * never displayed again — the UI only shows whether one is set.
  */
 
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSession } from 'next-auth/react';
-import { ShieldCheck } from 'lucide-react';
-import type { SsoConnectionResponse } from '@aequoros/risk-service-api';
-import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import CopyButton from '@/components/ui/CopyButton';
-import StatusPill from '@/components/ui/StatusPill';
-import { SkeletonLine } from '@/components/ui/Skeleton';
-import { authApi, normalizeApiError } from '@/lib/api/client';
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
+import { ShieldCheck } from "lucide-react";
+import {
+  SsoAccessRequestApproveRoleEnum,
+  type SsoConnectionResponse,
+} from "@aequoros/risk-service-api";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import CopyButton from "@/components/ui/CopyButton";
+import StatusPill from "@/components/ui/StatusPill";
+import { SkeletonLine } from "@/components/ui/Skeleton";
+import { authApi, normalizeApiError } from "@/lib/api/client";
+import {
+  hasAccountAdministrationRole,
+  ssoApprovalRoleOptions,
+} from "@/lib/api/accountAdministration";
 
-const QUERY_KEY = ['settings', 'sso-connection'];
-const REQUESTS_KEY = ['settings', 'sso-access-requests'];
+const QUERY_KEY = ["settings", "sso-connection"];
+const REQUESTS_KEY = ["settings", "sso-access-requests"];
 
 interface FormState {
   issuer: string;
@@ -33,10 +40,10 @@ interface FormState {
 
 function toForm(connection: SsoConnectionResponse | null): FormState {
   return {
-    issuer: connection?.issuer ?? '',
-    clientId: connection?.clientId ?? '',
-    clientSecret: '',
-    domains: (connection?.allowedEmailDomains ?? []).join(', '),
+    issuer: connection?.issuer ?? "",
+    clientId: connection?.clientId ?? "",
+    clientSecret: "",
+    domains: (connection?.allowedEmailDomains ?? []).join(", "),
     enabled: connection?.enabled ?? false,
     jitEnabled: connection?.jitEnabled ?? false,
   };
@@ -44,7 +51,7 @@ function toForm(connection: SsoConnectionResponse | null): FormState {
 
 export default function AuthenticationPanel() {
   const { data: session } = useSession();
-  const isAdmin = (session?.user?.roles ?? []).includes('admin');
+  const isAdmin = hasAccountAdministrationRole(session?.user?.roles ?? []);
   if (!isAdmin) return null;
   return <AuthenticationPanelInner />;
 }
@@ -71,12 +78,12 @@ function AuthenticationPanelInner() {
    * debug — so both are shown here, together, with the reason each exists.
    */
   const redirectUris = useMemo(() => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
     return [
-      { path: '/api/auth/callback/sso', purpose: 'Sign-in' },
+      { path: "/api/auth/callback/sso", purpose: "Sign-in" },
       {
-        path: '/api/attestation/step-up/callback',
-        purpose: 'Re-authentication when certifying a return',
+        path: "/api/attestation/step-up/callback",
+        purpose: "Re-authentication when certifying a return",
       },
     ].map((entry) => ({ ...entry, uri: `${origin}${entry.path}` }));
   }, []);
@@ -89,7 +96,7 @@ function AuthenticationPanelInner() {
           clientId: payload.clientId.trim(),
           clientSecret: payload.clientSecret ? payload.clientSecret : null,
           allowedEmailDomains: payload.domains
-            .split(',')
+            .split(",")
             .map((domain) => domain.trim())
             .filter(Boolean),
           enabled: payload.enabled,
@@ -99,7 +106,7 @@ function AuthenticationPanelInner() {
     onSuccess: (saved) => {
       queryClient.setQueryData(QUERY_KEY, saved);
       setForm(null); // re-seed from the saved state (clears the secret field)
-      setNotice('Saved. Changes apply to new sign-ins within a minute.');
+      setNotice("Saved. Changes apply to new sign-ins within a minute.");
     },
     onError: async (error) => {
       const normalized = await normalizeApiError(error);
@@ -113,7 +120,7 @@ function AuthenticationPanelInner() {
   }
 
   const inputClass =
-    'w-full px-3 py-2 border border-border rounded-md bg-surface text-body text-navy font-mono';
+    "w-full px-3 py-2 border border-border rounded-md bg-surface text-body text-navy font-mono";
 
   return (
     <Card>
@@ -122,8 +129,8 @@ function AuthenticationPanelInner() {
         subtitle="Sign-in through your institution's identity provider — OpenID Connect"
         action={
           connectionQuery.isLoading ? undefined : (
-            <StatusPill tone={connection?.enabled ? 'success' : 'slate'}>
-              {connection?.enabled ? 'Enabled' : 'Disabled'}
+            <StatusPill tone={connection?.enabled ? "success" : "slate"}>
+              {connection?.enabled ? "Enabled" : "Disabled"}
             </StatusPill>
           )
         }
@@ -165,8 +172,9 @@ function AuthenticationPanelInner() {
                 ))}
               </ul>
               <p className="mt-1.5 text-caption text-slate leading-relaxed">
-                Both use this same client. Registering only the first leaves sign-in
-                working while certifying a return fails at re-authentication.
+                Both use this same client. Registering only the first leaves
+                sign-in working while certifying a return fails at
+                re-authentication.
               </p>
             </div>
 
@@ -209,7 +217,9 @@ function AuthenticationPanelInner() {
               <input
                 type="password"
                 autoComplete="off"
-                placeholder={connection?.clientSecretSet ? '••••••••  (unchanged)' : ''}
+                placeholder={
+                  connection?.clientSecretSet ? "••••••••  (unchanged)" : ""
+                }
                 value={draft.clientSecret}
                 onChange={(e) => update({ clientSecret: e.target.value })}
                 className={inputClass}
@@ -220,7 +230,8 @@ function AuthenticationPanelInner() {
               <span className="block text-caption font-medium text-navy mb-1.5">
                 Allowed email domains
                 <span className="ml-2 font-normal text-slate">
-                  — comma-separated; blank allows any (provisioned users only either way)
+                  — comma-separated; blank allows any (provisioned users only
+                  either way)
                 </span>
               </span>
               <input
@@ -254,9 +265,9 @@ function AuthenticationPanelInner() {
               <span className="text-body text-navy">
                 Let employees request access on first sign-in
                 <span className="block text-caption text-slate">
-                  A sign-in from an allowed domain records a request below —{' '}
-                  <strong>no access is granted</strong> until you approve it with a
-                  role. Requires at least one allowed email domain.
+                  A sign-in from an allowed domain records a request below —{" "}
+                  <strong>no access is granted</strong> until you approve it
+                  with a role. Requires at least one allowed email domain.
                 </span>
               </span>
             </label>
@@ -274,7 +285,7 @@ function AuthenticationPanelInner() {
                 className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary font-medium transition-colors disabled:opacity-60"
               >
                 <ShieldCheck size={15} aria-hidden />
-                {save.isPending ? 'Saving…' : 'Save connection'}
+                {save.isPending ? "Saving…" : "Save connection"}
               </button>
               <p className="text-caption text-slate">
                 SSO never grants access by itself — accounts are provisioned or
@@ -290,7 +301,7 @@ function AuthenticationPanelInner() {
   );
 }
 
-const ROLE_OPTIONS = ['viewer', 'analyst', 'approver', 'admin'] as const;
+const ROLE_OPTIONS = ssoApprovalRoleOptions(SsoAccessRequestApproveRoleEnum);
 
 /** JIT sign-ins awaiting approval. Approval — with an explicit role — is the
  * authorization act; rejection deletes the never-activated stub. */
@@ -301,23 +312,27 @@ function AccessRequests() {
     queryFn: () => authApi.authListSsoAccessRequests(),
     refetchInterval: 60_000,
   });
-  const [roles, setRoles] = useState<Record<string, string>>({});
+  const [roles, setRoles] = useState<
+    Record<string, SsoAccessRequestApproveRoleEnum>
+  >({});
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: REQUESTS_KEY });
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: REQUESTS_KEY });
   const approve = useMutation({
     mutationFn: (userId: string) =>
       authApi.authApproveSsoAccessRequest({
         userId,
         ssoAccessRequestApprove: {
-          role: (roles[userId] ?? 'viewer') as (typeof ROLE_OPTIONS)[number],
+          role: roles[userId] ?? SsoAccessRequestApproveRoleEnum.Viewer,
         },
       }),
     onSuccess: refresh,
     onError: async (e) => setError((await normalizeApiError(e)).message),
   });
   const reject = useMutation({
-    mutationFn: (userId: string) => authApi.authRejectSsoAccessRequest({ userId }),
+    mutationFn: (userId: string) =>
+      authApi.authRejectSsoAccessRequest({ userId }),
     onSuccess: refresh,
     onError: async (e) => setError((await normalizeApiError(e)).message),
   });
@@ -338,13 +353,21 @@ function AccessRequests() {
               <p className="text-body text-navy truncate">
                 {request.displayName ?? request.email}
               </p>
-              <p className="text-caption text-slate truncate">{request.email}</p>
+              <p className="text-caption text-slate truncate">
+                {request.email}
+              </p>
             </div>
             <select
               aria-label={`Role for ${request.email}`}
-              value={roles[request.userId] ?? 'viewer'}
+              value={
+                roles[request.userId] ?? SsoAccessRequestApproveRoleEnum.Viewer
+              }
               onChange={(e) =>
-                setRoles((prev) => ({ ...prev, [request.userId]: e.target.value }))
+                setRoles((prev) => ({
+                  ...prev,
+                  [request.userId]: e.target
+                    .value as SsoAccessRequestApproveRoleEnum,
+                }))
               }
               className="px-2 py-1.5 border border-border rounded-md bg-surface text-caption text-navy"
             >
