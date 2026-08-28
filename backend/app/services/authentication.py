@@ -430,7 +430,7 @@ def login_with_sso(
         and resolved_org == connection.organization_id
     ):
         # Access-request flow: record (or re-acknowledge) a deactivated stub and
-        # refuse the session — approval is an explicit admin act. A previously
+        # refuse the session — approval is an explicit account-admin act. A previously
         # REJECTED stub becomes a fresh request again (the rejection is cleared).
         stub = _inactive_user_by_email(db, connection.organization_id, str(email))
         if stub is None:
@@ -453,7 +453,7 @@ def login_with_sso(
     return issue_tokens(db, user, settings)
 
 
-# -- SSO access requests (JIT stubs awaiting admin approval) -------------------
+# -- SSO access requests (JIT stubs awaiting account-admin approval) -----------
 def _access_request_stmt(organization_id: str):  # noqa: ANN202 - sqlalchemy Select
     """A pure JIT stub: deactivated, OIDC-linked, never logged in, no password.
     Deliberately narrow so admin-deactivated (offboarded) accounts never show
@@ -503,7 +503,7 @@ def _provision_signer_identity(db: Session, user: User) -> None:
 def approve_sso_access_request(
     db: Session, *, organization_id: str, user_id: UUID, role: str
 ) -> User:
-    """The authorization act: an admin activates the requested account with an
+    """The authorization act: an account admin activates the requested account with an
     explicitly chosen role."""
     user = _get_access_request(db, organization_id, user_id)
     user.role = role

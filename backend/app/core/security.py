@@ -276,7 +276,7 @@ def decode_impersonation_token(token: str, *, secret: str) -> dict[str, Any] | N
 
 # -- OIDC discovery + JWKS ---------------------------------------------------
 # Every fetch below aims the backend's socket at a destination somebody else
-# chose. The ``issuer`` is TENANT-SETTABLE (an org admin's
+# chose. The ``issuer`` is TENANT-SETTABLE (an account administrator's
 # ``SsoConnectionUpdateRequest.issuer``); the ``jwks_uri`` is named by whatever
 # answered the discovery request — a SECOND, separately attacker-controlled URL;
 # and either fetch can be redirected onward by the remote side. An

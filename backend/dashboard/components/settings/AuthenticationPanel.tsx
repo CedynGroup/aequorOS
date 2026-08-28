@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Settings → Authentication (SSO) — admin-only card for the org's own-OIDC
+ * Settings → Authentication (SSO) — account-admin-only card for the org's own-OIDC
  * connection. The bank's IT registers an app in THEIR IdP (Google Workspace,
  * Entra, Okta, …) with our redirect URI, then enters the issuer / client ID /
  * client secret here. The secret is write-only: it is sealed server-side and

@@ -100,7 +100,7 @@ async function refreshAccessToken(token: import('next-auth/jwt').JWT) {
 // races the boundary.
 const REFRESH_SKEW_MS = 60_000;
 
-// --- SSO client config (from the backend, where the org admin manages it) ------
+// --- SSO client config (from the backend, where the account admin manages it) --
 interface SsoClientConfig {
   enabled: boolean;
   issuer?: string | null;
@@ -120,7 +120,7 @@ const SSO_CACHE_MS = 60_000;
 /**
  * Refuse an SSO config whose issuer is not a routable public destination.
  *
- * `issuer` is set by an org admin (Settings → Authentication) and openid-client
+ * `issuer` is set by an account admin (Settings → Authentication) and openid-client
  * fetches it from INSIDE this Node process — its discovery request and its
  * token-endpoint exchange are server-side fetches the backend's Python egress
  * guard structurally cannot see, because they happen in a different runtime in

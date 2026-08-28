@@ -115,7 +115,7 @@ These return explained denials (`principal_not_active`,
 misleading matching-binding trace rather than allowing a matching row to
 outlive its identity or resource.
 
-## Institution-target slice and migration posture (as built 2026-08-27)
+## Institution-target slice and migration posture (as built 2026-08-28)
 
 `GET /banks/{bank_id}/liquidity-monitoring` is the first real resource path to
 construct an exact institution-scoped locator. For normal tenant app sessions
@@ -187,9 +187,9 @@ authorize it; this slice provides no grant UI or mutation API.
 ## Authorization version and deployment transition
 
 Migration `202608250044` adds `users.authorization_version`, initially `1`, and
-does **not** backfill any binding. In particular, an existing scalar `admin` is
-not silently made an operational principal, Account Admin, or Org Owner in the
-new model.
+does **not** itself backfill any binding. Follow-on migration `202608280045`
+performs the explicit initial-owner assignment and account-role split described
+above; it never infers owner authority merely from `account_admin`.
 
 Every newly issued access and refresh token carries the authoritative, positive
 integer `authv`. Every normal app-JWT request compares it with the active user
@@ -202,9 +202,10 @@ mutations must do the same.
 
 Tokens issued before this migration have no `authv`. They fail closed for both
 access and refresh, even if their signature and old role claims are valid. The
-safe deployment consequence is a deliberate one-time re-authentication for
-sessions outstanding at deploy time. Existing active users then receive tokens
-at version 1 and retain current product behavior through the legacy hierarchy.
+safe deployment consequence of the foundation migration is a deliberate
+one-time re-authentication for sessions outstanding at deploy time. The initial
+ownership migration advances every legacy admin's version again while moving
+them outside the operational hierarchy, so those sessions also fail closed.
 Integration keys and operator impersonation tokens retain their separate
 credential lifecycles and do not carry `authv`.
 

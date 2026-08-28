@@ -2,7 +2,8 @@
 
 ``provision_tenant`` creates everything a new bank tenant needs — org, bank,
 storage buckets, (optionally) a per-tenant KMS key, the disabled SSO stub,
-and the first admin — as an explicit saga: every step records
+the first account administrator, and that user's Org Owner binding — as an
+explicit saga: every step records
 ``succeeded | failed | skipped | rolled_back`` so partial failure never
 leaves a half-tenant silently. On any failure the DB transaction rolls back
 and freshly-created buckets are deleted (they are empty at that point; when
@@ -19,7 +20,7 @@ Rules this module enforces on purpose:
   bucket-creation path — with the institution slug derived from the bank
   platform ID and PERSISTED on ``banks.storage_slug`` so first ingestion
   reuses exactly these buckets instead of minting a second slug.
-- The first admin's one-time password appears in the saga RESULT once
+- The first account administrator's one-time password appears in the saga RESULT once
   (integration-key precedent); only the Argon2id hash is stored, and the
   audit log never sees the plaintext.
 """

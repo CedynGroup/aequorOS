@@ -140,7 +140,7 @@ class SsoConnectionResponse(BaseModel):
 
 
 class SsoAccessRequestRead(BaseModel):
-    """A JIT sign-in awaiting admin approval (deactivated account stub)."""
+    """A JIT sign-in awaiting account-admin approval (deactivated account stub)."""
 
     user_id: UUID
     email: str
@@ -149,7 +149,7 @@ class SsoAccessRequestRead(BaseModel):
 
 
 class SsoAccessRequestApprove(BaseModel):
-    """Approval is the authorization act — the admin explicitly picks the role."""
+    """Approval is the authorization act — the account admin explicitly picks the role."""
 
     role: Literal["account_admin", "approver", "analyst", "viewer"] = "viewer"
 

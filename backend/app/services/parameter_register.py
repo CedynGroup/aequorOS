@@ -16,7 +16,8 @@ Two parameter stores exist and they are NOT interchangeable (founder review,
 What went wrong
 ---------------
 Nothing ever created the second one. ``provision_tenant`` had steps for storage,
-KMS, SSO and a first admin, and :func:`_step_readiness` then certified the tenant
+KMS, SSO and a first administrator (now an account administrator with an atomic
+Org Owner binding), and :func:`_step_readiness` then certified the tenant
 "empty-but-wired … goes live on its first ingestion" without ever checking that
 the engines had anything to compute with. So a tenant could ingest 490k position
 rows, derive a balancing book, and still produce zero successful runs — which is

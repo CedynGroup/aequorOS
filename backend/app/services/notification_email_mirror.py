@@ -130,7 +130,7 @@ def run_notification_email_mirror(session: Session, job: Job) -> None:
             for row in rows:
                 recipients = _recipient_emails(session, row)
                 if not recipients:
-                    # Nothing to deliver to (deactivated user, no admins):
+                    # Nothing to deliver to (deactivated user, no account admins):
                     # stamp it so the outbox cannot jam on the row forever.
                     row.emailed_at = now
                     skipped_no_recipient += 1

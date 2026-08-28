@@ -1,9 +1,9 @@
-"""Integration keys: admin-gated issue/list/revoke for bank middleware.
+"""Integration keys: account-admin-gated issue/list/revoke for bank middleware.
 
 The raw key is returned exactly once at issuance; listing exposes only the
 display prefix and lifecycle metadata. Requests authenticated WITH an
-integration key cannot manage keys (admin role required — service accounts
-are analysts).
+integration key cannot manage keys (account-administration authority required;
+service accounts are outside that gate).
 """
 
 from __future__ import annotations
