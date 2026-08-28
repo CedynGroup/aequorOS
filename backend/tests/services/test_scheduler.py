@@ -76,9 +76,8 @@ def test_run_tick_enqueues_official_and_reschedules_when_enabled(
 def test_run_tick_enqueues_live_refreshes_when_enabled(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """LIVE_REFRESH_ENABLED alone keeps the tick alive and refreshes a bank
-    whose live tier has never been computed — "Live" must mean today, not the
-    last ingestion."""
+    """LIVE_REFRESH_ENABLED keeps the recovery tick alive and initializes a
+    bank whose accepted input has no live materialisation."""
     monkeypatch.setenv("LIVE_REFRESH_ENABLED", "true")
     get_settings.cache_clear()
     materialize_canonical_test_book(db_session)
@@ -101,8 +100,7 @@ def test_run_tick_enqueues_live_refreshes_when_enabled(
 def test_live_refresh_skips_a_fresh_live_tier(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A live tier computed within the interval is left alone — the scheduled
-    refresh exists to cure staleness, not to churn."""
+    """A live tier newer than accepted ingestion is left alone regardless of age."""
     monkeypatch.setenv("LIVE_REFRESH_ENABLED", "true")
     get_settings.cache_clear()
     materialize_canonical_test_book(db_session)

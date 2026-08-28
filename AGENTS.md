@@ -233,7 +233,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   zero `RegulatoryRun` writes, while scheduled/on-demand `official_run` jobs mint the immutable
   filing runs. Endpoints: `GET /banks/{id}/live-summary|freshness|alerts`,
   `POST /banks/{id}/refresh|official-runs`. `GET live-summary` is strictly read-only: ingestion,
-  market-data, governed-parameter, and entitlement mutations are the enqueue authorities.
+  market-data, governed-input, entitlement, and reconciliation mutations are the enqueue
+  authorities.
   Module-level `availability=unavailable` is a stable structural result until one of those inputs
   changes; only true module exceptions reuse the same job row's bounded exponential retry, with
   classification/attempt/`next_retry_at` persisted on `live_metrics`.

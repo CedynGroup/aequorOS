@@ -208,7 +208,10 @@ mutation or completed pipeline job, and when the cheap live-summary generation
 or freshness official-run signal changes for that module. Live summary,
 freshness, and alerts retain a 20-second cadence with stable ±10% cache-scope jitter;
 notifications retain 60 seconds with the same jitter. A failed initial signal
-does not block an otherwise available detail response.
+does not block an otherwise available detail response. These signal requests are
+observational: in particular, an unchanged live-summary poll performs no enqueue
+and no commit. Recalculation comes from accepted input/governance mutations, a
+requested refresh, or the worker's due retry of a genuine module exception.
 
 The Command Center ratio panel first shares the current liquidity and capital
 queries with the other home consumers. It issues an explicit-period request only

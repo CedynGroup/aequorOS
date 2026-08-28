@@ -48,15 +48,17 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
     """The always-live treasury cockpit.
 
     This endpoint is strictly observational. Ingestion, market-data,
-    entitlement, and governed-parameter mutations enqueue recomputation at the
-    point they advance an input; the worker persists new module generations.
+    entitlement, governed-input, and reconciliation mutations enqueue
+    recomputation at the point they advance an input; the worker persists new
+    module generations.
     A dashboard poll only reads those generations and therefore cannot turn a
     stable structural ``availability=unavailable`` result into queue churn.
 
     Two honesty flags ride the payload, and neither is a constant:
 
     ``is_stale`` says the cache is behind the book — data was ingested after
-    these figures were computed and a refresh is queued. It used to be a
+    these figures were computed. The ingestion write is the refresh authority;
+    this read does not inspect or mutate queue state. The flag used to be a
     hardcoded ``False`` (audit 2026-08-22 D-1), which presented a value computed
     before the book changed as current. It is still NOT drift versus the last
     official filing: that is a governance concept and lives in

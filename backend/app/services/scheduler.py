@@ -55,9 +55,11 @@ def any_scheduling_enabled(settings: Settings) -> bool:
 
 
 def run_tick(session: Session, job: Job) -> None:
-    """Worker handler: enqueue due official runs and market data pulls, then
-    reschedule. Inert (no enqueue, no reschedule) while both official runs and
-    scheduled market data pulls are disabled."""
+    """Run every enabled scheduled feature, then enqueue the next hourly tick.
+
+    Inert (no enqueue and no reschedule) only when every flag recognized by
+    :func:`any_scheduling_enabled` is disabled.
+    """
     settings = get_settings()
     official_enabled = settings.worker.official_run_enabled
     market_data_enabled = settings.market_data.market_data_pull_enabled

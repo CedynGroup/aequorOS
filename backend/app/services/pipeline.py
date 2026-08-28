@@ -176,8 +176,9 @@ def recompute_modules(
 
     This is the light half of the live tier: it does NOT re-derive facts (no
     mass delete/insert). The background refresh calls it after deriving current
-    facts; reads only consume the persisted rows. Ingestion, methodology,
-    parameter, and entitlement mutations enqueue that refresh at the point the
+    facts; reads only consume the persisted rows. Ingestion, market-data,
+    methodology, parameter, tenant assumption/threshold/haircut, entitlement,
+    and reconciliation mutations enqueue that refresh at the point the
     corresponding input generation changes.
     """
     modules_ok: list[str] = []

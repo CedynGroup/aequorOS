@@ -71,11 +71,12 @@ class LiveSummaryRead(ClosedModel):
     period_label: str | None
     source_as_of_date: date | None
     modules: list[LiveModuleView]
-    # True when data has been ingested since these figures were computed, so a
-    # refresh is queued and the numbers below are behind the book. It is NOT
-    # drift versus the last official filing — that is a governance concept and
-    # lives in ``BankFreshnessRead``. It was previously hardcoded false, which
-    # presented a value computed before the book changed as current.
+    # True when data has been ingested since these figures were computed, so the
+    # numbers below are behind the book. This read does not report or alter queue
+    # state. It is NOT drift versus the last official filing — that is a
+    # governance concept and lives in ``BankFreshnessRead``. It was previously
+    # hardcoded false, which presented a value computed before the book changed
+    # as current.
     is_stale: bool
     computed_at: datetime | None = Field(title="Live Summary Computed At")
     #: The balance-sheet identity verdict for the book these figures rest on.

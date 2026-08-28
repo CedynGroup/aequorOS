@@ -157,8 +157,10 @@ semantics follow the plane, never the other way round:
    Desk headers surface it as "Positions as of {timestamp}" (data provenance,
    not reporting vocabulary). Ingestion cadence sets its resolution.
 2. **Live plane (desk)** — the rolling current position: `live_metrics`
-   recomputes on every ingestion (debounced) plus the hourly schedule, and
-   `live_metric_snapshots` cuts one row per (bank, day, module) — the day's
+   recomputes after authoritative input mutations (debounced), while an optional
+   hourly safety net only recovers an input generation newer than its live rows;
+   it does not recompute unchanged state. `live_metric_snapshots` cuts one row
+   per (bank, day, module) — the day's
    last refresh is the EOD close, today's row is the live edge. Desk deltas
    read this ladder ("vs prior close"); daily sparklines too. Value-based
    hashing guarantees figures cannot drift between refreshes, so "Live"
@@ -211,7 +213,7 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `WORKER_DATABASE_URL` is unset it falls back to `DATABASE_URL` (correct for SQLite tests).
 - **Live tier** — `pipeline.run_refresh` (`job_type=pipeline_refresh`): re-derives facts, then for
   each cheap module computes a baseline metric + limit evaluation (`compute_live`, reusing the
-  dashboards' inline path), **upserts** one `live_metrics` row, and reconciles open `live_findings`
+  same domain engines as the detail views), **upserts** one `live_metrics` row, and reconciles open `live_findings`
   (continuing breaches keep identity; cleared breaches are superseded). It creates **zero**
   `RegulatoryRun` rows. Forecast has no cheap path, so its live row mirrors the latest succeeded
   official forecast run (populated on the next refresh after an official run).
@@ -226,17 +228,29 @@ on one canonical store — the live tier for intraday awareness, the official ti
 - **Alerts** (`app/services/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
   `live_findings` across modules, surfaced by the header bell (cheap, jittered polling).
 - **Scheduler** (`app/services/scheduler.py`): the worker enqueues a `scheduled_tick`; the handler
-  enqueues an `official_run` per bank whose daily filing time (`OFFICIAL_RUN_HOUR`) is due. Inert
-  unless `OFFICIAL_RUN_ENABLED`, so no environment auto-mints heavy runs.
+  enqueues an `official_run` per bank whose daily filing time (`OFFICIAL_RUN_HOUR`) is due. With
+  `LIVE_REFRESH_ENABLED`, the same tick is only a recovery net for a bank whose latest ingestion
+  is newer than its oldest live module; age alone and structural unavailability are not triggers.
+  The official-run schedule is inert unless `OFFICIAL_RUN_ENABLED`, so no environment auto-mints
+  heavy runs.
+- **Refresh authority and retries.** `GET /banks/{id}/live-summary` only reads persisted rows and
+  computes its staleness signal; it never enqueues or commits. Accepted ingestion and market-data
+  writes, approved methodology/regulatory-parameter changes, tenant assumption/threshold/haircut
+  changes, entitlement changes, reconciliation-exception changes, and the explicit refresh action
+  enqueue recomputation in their mutation transaction. A module that successfully returns
+  `availability=unavailable`, or a reconciliation-blocked book, is stable until such an input
+  changes. Only an exception raised by a module retries the same job after 10, 20, then 40 seconds
+  (default three-attempt cap); `retry_classification`, `retry_attempt_count`, and `next_retry_at`
+  on `live_metrics` expose that state, and successful recovery clears it.
 - **Robustness note.** Live compute degrades rather than fails on thin data: FX
   `compute_stressed_var` clamps the cedi-crisis window to the available return history when a bank
   has fewer observations than the configured window, so a short upload still yields a best-effort
   stress instead of killing the whole FX module. On full history the window is used unchanged.
 
 The dashboard polls only cheap live-summary, freshness, alert, and notification signals, with
-stable tenant/authority/bank jitter. A live generation or official-run change invalidates only
-the affected module's cached detail; heavyweight regulatory dashboards and live-snapshot series
-do not poll on their own. Their cache keys distinguish current from explicit-period reads and
+stable tenant/authority/bank jitter. Signal polls are read-only; a live generation or
+official-run change invalidates only the affected module's cached detail. Heavyweight regulatory
+dashboards and live-snapshot series do not poll on their own. Their cache keys distinguish current from explicit-period reads and
 include tenant, authority, bank, and semantic dimensions; changing tenant or authority remounts
 the browser cache. See `backend/dashboard/README.md#query-cache-and-refresh-policy`.
 
@@ -253,7 +267,9 @@ which replaces the bank's `current_financial_facts` materialisation from
 accepted canonical state, then upserts each module's live state with source
 as-of date, input hash, engine version, generation, computation timestamp, and
 pipeline status. Partial failures are retained as explicit failed live state;
-they never silently present a previous result as current.
+they never silently present a previous result as current. Other mutations of
+inputs consumed by the live engines enqueue the same coalesced refresh at the
+write boundary; reads never repair the calculation plane.
 
 `BankFinancialFact` remains the period-keyed **official/as-of** materialisation
 used only by explicit official runs and historical analysis. The nullable
