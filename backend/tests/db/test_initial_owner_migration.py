@@ -76,6 +76,37 @@ def _insert_user(  # noqa: PLR0913 - fixture rows keep every eligibility dimensi
     )
 
 
+def _insert_refresh_token(
+    connection,
+    *,
+    organization_id: str,
+    user_id: UUID,
+    token_id: UUID,
+    now: datetime,
+) -> None:
+    connection.execute(
+        text(
+            """
+            INSERT INTO refresh_tokens
+                (id, organization_id, user_id, family_id, token_hash, issued_at,
+                 expires_at, created_at, updated_at)
+            VALUES
+                (:id, :organization_id, :user_id, :family_id, :token_hash, :now,
+                 :expires_at, :now, :now)
+            """
+        ),
+        {
+            "id": token_id,
+            "organization_id": organization_id,
+            "user_id": user_id,
+            "family_id": token_id,
+            "token_hash": token_id.hex * 2,
+            "now": now,
+            "expires_at": now + timedelta(days=14),
+        },
+    )
+
+
 def _owner_state(schema: MigratedPostgresSchema, organization_id: str) -> dict:
     with schema.app_engine.begin() as connection:
         connection.execute(
@@ -331,7 +362,7 @@ def test_initial_owner_migration_handles_zero_one_and_many_without_guessing(  # 
                     assert row["role"] == "account_admin"
                     assert row["authorization_version"] == 2
 
-    assert has_role(["account_admin"], "admin") is True
+    assert has_role(["account_admin"], "admin") is False
     assert has_role(["account_admin"], "analyst") is False
     assert has_role(["account_admin"], "approver") is False
     with migrated_postgres_schema.app_engine.begin() as connection:
@@ -363,3 +394,194 @@ def test_initial_owner_migration_handles_zero_one_and_many_without_guessing(  # 
                 text("DELETE FROM organizations WHERE id = :organization_id"),
                 {"organization_id": organization_id},
             )
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration tests.",
+)
+def test_downgrade_restores_only_recorded_legacy_administrators(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    command.downgrade(alembic_config_for_app(), "202608250044")
+    clear_database_caches()
+    organization_id = "OR-DOWN0001"
+    user_id = uuid4()
+    refresh_id = uuid4()
+    now = datetime.now(UTC)
+
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        _insert_organization(connection, organization_id, now)
+        _insert_user(
+            connection,
+            organization_id=organization_id,
+            user_id=user_id,
+            email="legacy.admin@downgrade.example",
+            display_name="Legacy Administrator",
+            now=now,
+        )
+
+    command.upgrade(alembic_config_for_app(), "head")
+    clear_database_caches()
+
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
+        recorded = connection.execute(
+            text(
+                "SELECT user_id, organization_id FROM initial_admin_role_demotions "
+                "WHERE user_id = :user_id"
+            ),
+            {"user_id": user_id},
+        ).one()
+        assert recorded == (user_id, organization_id)
+        _insert_refresh_token(
+            connection,
+            organization_id=organization_id,
+            user_id=user_id,
+            token_id=refresh_id,
+            now=now,
+        )
+
+    command.downgrade(alembic_config_for_app(), "202608250044")
+    clear_database_caches()
+
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
+        restored = connection.execute(
+            text("SELECT role, authorization_version FROM users WHERE id = :user_id"),
+            {"user_id": user_id},
+        ).one()
+        revoked = connection.execute(
+            text("SELECT revoked_at, revoked_reason FROM refresh_tokens WHERE id = :token_id"),
+            {"token_id": refresh_id},
+        ).one()
+        assert restored == ("admin", 3)
+        assert revoked.revoked_at is not None
+        assert revoked.revoked_reason == "authorization_changed"
+        connection.execute(
+            text("DELETE FROM organizations WHERE id = :organization_id"),
+            {"organization_id": organization_id},
+        )
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration tests.",
+)
+def test_downgrade_refuses_post_upgrade_account_administrators_before_mutation(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    command.downgrade(alembic_config_for_app(), "202608250044")
+    clear_database_caches()
+    organization_id = "OR-DOWN0002"
+    migrated_user_id = uuid4()
+    new_user_id = uuid4()
+    migrated_refresh_id = uuid4()
+    new_refresh_id = uuid4()
+    now = datetime.now(UTC)
+
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        _insert_organization(connection, organization_id, now)
+        _insert_user(
+            connection,
+            organization_id=organization_id,
+            user_id=migrated_user_id,
+            email="migrated.admin@downgrade.example",
+            display_name="Migrated Administrator",
+            now=now,
+        )
+
+    command.upgrade(alembic_config_for_app(), "head")
+    clear_database_caches()
+
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
+        _insert_user(
+            connection,
+            organization_id=organization_id,
+            user_id=new_user_id,
+            email="new.admin@downgrade.example",
+            display_name="New Account Administrator",
+            role="account_admin",
+            now=now,
+        )
+        _insert_refresh_token(
+            connection,
+            organization_id=organization_id,
+            user_id=migrated_user_id,
+            token_id=migrated_refresh_id,
+            now=now,
+        )
+        _insert_refresh_token(
+            connection,
+            organization_id=organization_id,
+            user_id=new_user_id,
+            token_id=new_refresh_id,
+            now=now,
+        )
+
+    with pytest.raises(RuntimeError, match=str(new_user_id)):
+        command.downgrade(alembic_config_for_app(), "202608250044")
+    clear_database_caches()
+
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
+        users = dict(
+            connection.execute(
+                text("SELECT id, role FROM users WHERE id IN (:migrated_user_id, :new_user_id)"),
+                {"migrated_user_id": migrated_user_id, "new_user_id": new_user_id},
+            ).all()
+        )
+        assert users == {
+            migrated_user_id: "account_admin",
+            new_user_id: "account_admin",
+        }
+        revoked = dict(
+            connection.execute(
+                text(
+                    "SELECT id, revoked_at FROM refresh_tokens "
+                    "WHERE id IN (:migrated_refresh_id, :new_refresh_id)"
+                ),
+                {
+                    "migrated_refresh_id": migrated_refresh_id,
+                    "new_refresh_id": new_refresh_id,
+                },
+            ).all()
+        )
+        assert revoked == {migrated_refresh_id: None, new_refresh_id: None}
+        connection.execute(
+            text("DELETE FROM users WHERE id = :user_id"),
+            {"user_id": new_user_id},
+        )
+
+    command.downgrade(alembic_config_for_app(), "202608250044")
+    clear_database_caches()
+
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
+        assert (
+            connection.scalar(
+                text("SELECT role FROM users WHERE id = :user_id"),
+                {"user_id": migrated_user_id},
+            )
+            == "admin"
+        )
+        connection.execute(
+            text("DELETE FROM organizations WHERE id = :organization_id"),
+            {"organization_id": organization_id},
+        )

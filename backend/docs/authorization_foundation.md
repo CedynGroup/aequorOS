@@ -164,10 +164,18 @@ Owner binding per organization.
 The same migration converts every persisted scalar `admin` to
 `account_admin`, increments `authorization_version`, and revokes outstanding
 refresh families with `authorization_changed`. `account_admin` passes only the
-legacy account-plane `require_role("admin")` compatibility gate; it sits outside
-the analyst/approver ladder and cannot reach regulatory submission. This avoids
-grandfathering operational superuser authority while binding enforcement remains
-shadow-only.
+explicit account-administration gate used by SSO membership and integration-key
+management; the generic `require_role("admin")` dependency remains operational
+and excludes it. It sits outside the analyst/approver ladder and cannot reach
+attestation policy, placement-template mutation, or regulatory submission. This
+avoids grandfathering operational superuser authority while binding enforcement
+remains shadow-only.
+
+Migration `202608280045` records every demoted legacy administrator in the
+FORCE-RLS `initial_admin_role_demotions` table. Downgrade restores and invalidates
+sessions only for those recorded identities. If a post-migration
+`account_admin` exists, downgrade refuses before changing any role or refresh
+family because the historical schema cannot represent that account safely.
 
 The staff provisioning saga creates a new organization and exactly one active
 human account administrator, then creates its owner binding and assignment row

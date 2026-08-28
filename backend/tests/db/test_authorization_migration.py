@@ -27,7 +27,11 @@ __all__ = ["migrated_postgres_schema"]
 def test_authorization_migration_creates_constraints_and_forced_rls(
     migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    expected_tables = {"authorization_bindings", "organization_owner_assignments"}
+    expected_tables = {
+        "authorization_bindings",
+        "initial_admin_role_demotions",
+        "organization_owner_assignments",
+    }
     assert migrated_postgres_schema.tables(expected_tables) == expected_tables
     expected_constraints = {
         "ck_users_authorization_version_positive",
@@ -52,10 +56,12 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
         "ck_organization_owner_assignments_candidate_count",
         "ck_organization_owner_assignments_resolution",
         "ck_organization_owner_assignments_basis_count",
+        "fk_initial_admin_role_demotions_user_tenant",
     }
     assert migrated_postgres_schema.constraints(expected_constraints) == expected_constraints
     assert migrated_postgres_schema.policies(expected_tables) == {
         "authorization_bindings_tenant_isolation",
+        "initial_admin_role_demotions_tenant_isolation",
         "organization_owner_assignments_tenant_isolation",
     }
     expected_indexes = {
@@ -89,6 +95,18 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
             ),
             {"schema_name": migrated_postgres_schema.schema_name},
         )
+        demotions_forced = connection.scalar(
+            text(
+                """
+                SELECT c.relforcerowsecurity
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = :schema_name
+                  AND c.relname = 'initial_admin_role_demotions'
+                """
+            ),
+            {"schema_name": migrated_postgres_schema.schema_name},
+        )
         version_default = connection.scalar(
             text(
                 """
@@ -118,6 +136,7 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
 
     assert forced is True
     assert assignment_forced is True
+    assert demotions_forced is True
     assert version_default == "1"
     assert refresh_revocation_constraint is not None
     assert "authorization_changed" in refresh_revocation_constraint

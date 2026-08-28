@@ -32,6 +32,7 @@ depends_on = None
 
 _ASSIGNMENTS = "organization_owner_assignments"
 _BINDINGS = "authorization_bindings"
+_ROLE_DEMOTIONS = "initial_admin_role_demotions"
 _TENANT_ID_EXPR = "NULLIF(current_setting('app.organization_id', true), '')"
 _SYSTEM_GRANTOR = "migration:202608280045"
 _AUTO_REASON = (
@@ -231,9 +232,34 @@ def upgrade() -> None:
         _ASSIGNMENTS,
         ["status", "organization_id"],
     )
+    op.create_table(
+        _ROLE_DEMOTIONS,
+        sa.Column("user_id", sa.Uuid(), nullable=False),
+        sa.Column("organization_id", sa.String(length=16), nullable=False),
+        sa.Column("demoted_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("user_id"),
+        sa.ForeignKeyConstraint(
+            ["user_id", "organization_id"],
+            ["users.id", "users.organization_id"],
+            ondelete="CASCADE",
+            name="fk_initial_admin_role_demotions_user_tenant",
+        ),
+    )
     bind = op.get_bind()
     with force_rls_suspended(bind, "organizations", "users", "refresh_tokens", _BINDINGS):
         _backfill_assignment_states(bind, now)
+
+        bind.execute(
+            sa.text(
+                f"""
+                INSERT INTO {_ROLE_DEMOTIONS} (user_id, organization_id, demoted_at)
+                SELECT id, organization_id, :now
+                FROM users
+                WHERE role = 'admin'
+                """
+            ),
+            {"now": now},
+        )
 
         # End every legacy admin session in the same transaction as the role
         # split. Already-revoked refresh rows keep their original evidence.
@@ -265,33 +291,72 @@ def upgrade() -> None:
         WITH CHECK ((organization_id)::text = {_TENANT_ID_EXPR})
         """
     )
+    op.execute(f"ALTER TABLE {_ROLE_DEMOTIONS} ENABLE ROW LEVEL SECURITY")
+    op.execute(f"ALTER TABLE {_ROLE_DEMOTIONS} FORCE ROW LEVEL SECURITY")
+    op.execute(
+        f"""
+        CREATE POLICY {_ROLE_DEMOTIONS}_tenant_isolation ON {_ROLE_DEMOTIONS}
+        FOR ALL
+        USING ((organization_id)::text = {_TENANT_ID_EXPR})
+        WITH CHECK ((organization_id)::text = {_TENANT_ID_EXPR})
+        """
+    )
 
 
 def downgrade() -> None:
     now = datetime.now(UTC)
     bind = op.get_bind()
-    # A downgrade restores the legacy scalar authority; invalidate every affected
-    # session again so no account-only token is reinterpreted as operational.
-    with force_rls_suspended(bind, "users", "refresh_tokens"):
+    with force_rls_suspended(bind, "users", "refresh_tokens", _ROLE_DEMOTIONS):
+        unmigrated_account_admins = list(
+            bind.execute(
+                sa.text(
+                    f"""
+                    SELECT users.id
+                    FROM users
+                    LEFT JOIN {_ROLE_DEMOTIONS}
+                      ON {_ROLE_DEMOTIONS}.user_id = users.id
+                     AND {_ROLE_DEMOTIONS}.organization_id = users.organization_id
+                    WHERE users.role = 'account_admin'
+                      AND {_ROLE_DEMOTIONS}.user_id IS NULL
+                    ORDER BY users.id
+                    """
+                )
+            ).scalars()
+        )
+        if unmigrated_account_admins:
+            identities = ", ".join(str(user_id) for user_id in unmigrated_account_admins)
+            raise RuntimeError(
+                f"Cannot downgrade while post-migration account administrators exist: {identities}"
+            )
+
         bind.execute(
             sa.text(
-                """
+                f"""
                 UPDATE refresh_tokens
                 SET revoked_at = :now, revoked_reason = 'authorization_changed'
                 WHERE revoked_at IS NULL
-                  AND user_id IN (SELECT id FROM users WHERE role = 'account_admin')
+                  AND user_id IN (
+                      SELECT {_ROLE_DEMOTIONS}.user_id
+                      FROM {_ROLE_DEMOTIONS}
+                      JOIN users ON users.id = {_ROLE_DEMOTIONS}.user_id
+                      WHERE users.role = 'account_admin'
+                  )
                 """
             ),
             {"now": now},
         )
         bind.execute(
             sa.text(
-                "UPDATE users SET role = 'admin', "
+                f"UPDATE users SET role = 'admin', "
                 "authorization_version = authorization_version + 1 "
-                "WHERE role = 'account_admin'"
+                f"WHERE role = 'account_admin' AND id IN (SELECT user_id FROM {_ROLE_DEMOTIONS})"
             )
         )
 
+    op.execute(f"DROP POLICY IF EXISTS {_ROLE_DEMOTIONS}_tenant_isolation ON {_ROLE_DEMOTIONS}")
+    op.execute(f"ALTER TABLE {_ROLE_DEMOTIONS} NO FORCE ROW LEVEL SECURITY")
+    op.execute(f"ALTER TABLE {_ROLE_DEMOTIONS} DISABLE ROW LEVEL SECURITY")
+    op.drop_table(_ROLE_DEMOTIONS)
     op.execute(f"DROP POLICY IF EXISTS {_ASSIGNMENTS}_tenant_isolation ON {_ASSIGNMENTS}")
     op.execute(f"ALTER TABLE {_ASSIGNMENTS} NO FORCE ROW LEVEL SECURITY")
     op.execute(f"ALTER TABLE {_ASSIGNMENTS} DISABLE ROW LEVEL SECURITY")

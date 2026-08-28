@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import DbSession, TenantContext, require_role
+from app.api.deps import DbSession, TenantContext, require_account_administration
 from app.schemas.integration_keys import (
     IntegrationKeyIssued,
     IntegrationKeyIssueRequest,
@@ -25,7 +25,7 @@ from app.services import integration_keys
 
 router = APIRouter(tags=["integration-keys"])
 
-AdminCtx = Annotated[TenantContext, Depends(require_role("admin"))]
+AdminCtx = Annotated[TenantContext, Depends(require_account_administration)]
 
 
 @router.get(

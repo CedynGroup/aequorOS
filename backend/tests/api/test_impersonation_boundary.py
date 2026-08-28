@@ -48,8 +48,8 @@ _UNSAFE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
 # fails it.
 #
 # Note the audit's own count of 14 was taken WITHOUT crediting the explicit
-# ``require_role("admin")`` dependencies on the attestation, integration-key and
-# SSO-administration routes; those were never viewer-writable. With `require_role`
+# explicit admin dependencies on the attestation, integration-key and
+# SSO-administration routes; those were never viewer-writable. With those gates
 # credited (see ``_is_role_guarded``), these three are the whole residue.
 _UNFIXED_READ_GUARDED_UNSAFE_ROUTES: frozenset[tuple[str, str]] = frozenset(
     {
@@ -203,6 +203,21 @@ def test_account_admin_cannot_use_approver_gated_regulatory_submission(
     )
     assert response.status_code == 403
     assert "analyst" in response.json()["error"]["message"]
+
+
+def test_account_admin_is_limited_to_account_administration(db_client: TestClient) -> None:
+    account_headers = headers(roles=("account_admin",))
+
+    integration_keys = db_client.get("/api/v1/integration-keys", headers=account_headers)
+    assert integration_keys.status_code == 200, integration_keys.text
+
+    attestation_templates = db_client.put(
+        "/api/v1/attestation/signature-placements",
+        headers=account_headers,
+        json={},
+    )
+    assert attestation_templates.status_code == 403
+    assert "admin" in attestation_templates.json()["error"]["message"]
 
 
 def test_impersonation_exemption_set_is_minimal_and_real(client: TestClient) -> None:
