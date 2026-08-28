@@ -18,7 +18,9 @@ keys, binds the verified IdP connection to your AequorOS organization, checks
 the email domain you allow, and — only if that person has already been
 provisioned an AequorOS account — starts their session. Account matching, access
 requests, and session tokens stay inside the organization that owns that
-verified connection; the exchange request cannot select another tenant.
+verified connection. The identity connection you registered decides which
+AequorOS organization the sign-in belongs to, and a sign-in can never land in a
+different organization from the one that owns that connection.
 
 ## What AequorOS needs from you
 
@@ -78,8 +80,8 @@ IdP's published issuer (it must serve
 
 ## Who gets in: two provisioning modes
 
-SSO never grants access by itself — in both modes, an administrator's decision
-is what authorizes a person.
+**SSO never grants access by itself:** in both modes, an administrator's
+decision is what authorizes a person.
 
 - **Pre-provisioned only (default):** only people who already have an AequorOS
   account can sign in. Tightest control; onboarding each user is an explicit act.
@@ -113,13 +115,14 @@ is what authorizes a person.
 - **Zero-trust verification:** the AequorOS backend independently validates every
   identity token against your IdP's published signing keys (issuer + audience +
   expiry + signature); nothing is trusted client-side.
-- **Tenant binding:** the verified issuer/client connection is the sole source
-  of the AequorOS organization. The public token-exchange contract contains no
-  organization selector; a legacy matching hint is tolerated temporarily, and
-  a mismatched hint is rejected as an invalid SSO token.
-- **Deterministic routing:** list-valued OIDC audiences are supported, but the
-  issuer and audiences must identify exactly one enabled connection. Missing,
-  oversized, or ambiguous audience sets are rejected before account matching.
+- **Tenant binding:** the identity connection you registered decides which
+  AequorOS organization a sign-in belongs to. The sign-in request cannot ask for
+  a different one. If anything in the request disagrees with that connection,
+  sign-in is refused.
+- **Choosing the connection:** a token may carry more than one audience value,
+  but its issuer and audience values must identify exactly one enabled AequorOS
+  identity connection. If those values are missing or do not point to exactly
+  one connection, sign-in is refused before AequorOS looks up any account.
 - **Secret handling:** the client secret is stored AES-256-GCM-encrypted, is
   write-only through the UI and API, and is scoped — it can only be used to
   initiate sign-ins against the redirect URI registered in *your* IdP.
