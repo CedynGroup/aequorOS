@@ -137,9 +137,7 @@ class TenantsListRead(ClosedModel):
 
 
 # -- activity feed ----------------------------------------------------------------
-type ActivityKind = Literal[
-    "ingestion_batch", "job", "official_run", "package", "audit_event"
-]
+type ActivityKind = Literal["ingestion_batch", "job", "official_run", "package", "audit_event"]
 
 
 class ActivityItemRead(ClosedModel):

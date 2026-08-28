@@ -538,18 +538,20 @@ def test_downgrade_refuses_post_upgrade_account_administrators_before_mutation(
             text("SELECT set_config('app.organization_id', :organization_id, true)"),
             {"organization_id": organization_id},
         )
-        users = dict(
-            connection.execute(
+        users = {
+            row.id: row.role
+            for row in connection.execute(
                 text("SELECT id, role FROM users WHERE id IN (:migrated_user_id, :new_user_id)"),
                 {"migrated_user_id": migrated_user_id, "new_user_id": new_user_id},
-            ).all()
-        )
+            )
+        }
         assert users == {
             migrated_user_id: "account_admin",
             new_user_id: "account_admin",
         }
-        revoked = dict(
-            connection.execute(
+        revoked = {
+            row.id: row.revoked_at
+            for row in connection.execute(
                 text(
                     "SELECT id, revoked_at FROM refresh_tokens "
                     "WHERE id IN (:migrated_refresh_id, :new_refresh_id)"
@@ -558,8 +560,8 @@ def test_downgrade_refuses_post_upgrade_account_administrators_before_mutation(
                     "migrated_refresh_id": migrated_refresh_id,
                     "new_refresh_id": new_refresh_id,
                 },
-            ).all()
-        )
+            )
+        }
         assert revoked == {migrated_refresh_id: None, new_refresh_id: None}
         connection.execute(
             text("DELETE FROM users WHERE id = :user_id"),

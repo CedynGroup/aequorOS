@@ -113,10 +113,7 @@ def _run_mirror(db: Session) -> Job:
 def test_mirror_disabled_by_default(db_session: Session) -> None:
     assert enqueue_due_notification_mirror(db_session, ORG_1, now=NOW) is False
     assert (
-        db_session.scalar(
-            select(Job.id).where(Job.job_type == "notification_email_mirror")
-        )
-        is None
+        db_session.scalar(select(Job.id).where(Job.job_type == "notification_email_mirror")) is None
     )
 
 
@@ -138,12 +135,7 @@ def test_mirror_sends_and_stamps_outbox(
     # Org-wide row fanned out to the active admin's address.
     recipients = {str(message["To"]) for message in _FakeSmtp.sent}
     assert any("admin.two@aequoros.example" in value for value in recipients)
-    assert (
-        db_session.scalar(
-            select(Notification).where(Notification.emailed_at.is_(None))
-        )
-        is None
-    )
+    assert db_session.scalar(select(Notification).where(Notification.emailed_at.is_(None))) is None
 
     # Second cycle: outbox drained, nothing re-sent (idempotent).
     _FakeSmtp.sent = []
@@ -174,9 +166,7 @@ def test_mirror_outage_leaves_outbox_pending(
     assert job2.progress == {"sent": 2, "skipped_no_recipient": 0}
 
 
-def test_enqueue_coalesces_per_hour(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_enqueue_coalesces_per_hour(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_smtp(monkeypatch)
     assert enqueue_due_notification_mirror(db_session, ORG_1, now=NOW) is True
     db_session.commit()

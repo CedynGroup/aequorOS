@@ -182,9 +182,9 @@ def _step_storage(
 
     # Probe: put + GET + delete in the temp tier. GET, not HEAD — the managed
     # MinIO's Cloudflare WAF blocks HEAD (developer.md §2 step 3).
-    temp_bucket = StorageLocation(
-        institution_slug=slug, tier="temp", object_path=""
-    ).bucket_name(clients.storage_settings.env)
+    temp_bucket = StorageLocation(institution_slug=slug, tier="temp", object_path="").bucket_name(
+        clients.storage_settings.env
+    )
     probe_key = f"provisioning-probe/{uuid4().hex}"
     probe_body = b"aequoros provisioning probe"
     clients.s3_client.put_object(Bucket=temp_bucket, Key=probe_key, Body=probe_body)
@@ -382,16 +382,12 @@ def _step_readiness(db: Session, organization_id: str, bank_id: str, state: _Sag
     )
     bank_ok = (
         db.scalar(
-            select(Bank.id).where(
-                Bank.id == bank_id, Bank.organization_id == organization_id
-            )
+            select(Bank.id).where(Bank.id == bank_id, Bank.organization_id == organization_id)
         )
         is not None
     )
     if not (org_ok and bank_ok):
-        raise state.fail(
-            "readiness", "provisioned org/bank rows are not readable back — aborting."
-        )
+        raise state.fail("readiness", "provisioned org/bank rows are not readable back — aborting.")
     period_count = db.scalar(
         select(func.count())
         .select_from(BankReportingPeriod)
@@ -433,9 +429,7 @@ def _cleanup_external(clients: ProvisioningClients, state: _SagaState) -> None:
     notes: list[str] = []
     if state.kms_key_id is not None and clients.kms_client is not None:
         try:
-            clients.kms_client.schedule_key_deletion(
-                KeyId=state.kms_key_id, PendingWindowInDays=7
-            )
+            clients.kms_client.schedule_key_deletion(KeyId=state.kms_key_id, PendingWindowInDays=7)
             notes.append(f"KMS key {state.kms_key_id} scheduled for deletion (7 days)")
         except Exception as exc:  # noqa: BLE001 - cleanup must report, not raise
             notes.append(
@@ -447,9 +441,7 @@ def _cleanup_external(clients: ProvisioningClients, state: _SagaState) -> None:
             clients.s3_client.delete_bucket(Bucket=bucket)  # type: ignore[union-attr]
             notes.append(f"deleted bucket {bucket}")
         except Exception as exc:  # noqa: BLE001 - cleanup must report, not raise
-            notes.append(
-                f"MANUAL CLEANUP NEEDED: bucket {bucket} could not be deleted ({exc})"
-            )
+            notes.append(f"MANUAL CLEANUP NEEDED: bucket {bucket} could not be deleted ({exc})")
     if notes:
         state.record("cleanup", "succeeded", "; ".join(notes))
 
@@ -569,9 +561,7 @@ def provision_tenant(  # noqa: PLR0915 - one linear saga; each step is named and
             "failed",
             "latest desk market-data backfill failed; retry from the Market Desk",
         )
-        state.warnings.append(
-            "latest desk market-data backfill failed; retry from the Market Desk"
-        )
+        state.warnings.append("latest desk market-data backfill failed; retry from the Market Desk")
     _audit(db, operator, payload, state, succeeded=True)
     db.commit()
     return _result(payload, state, succeeded=True)

@@ -40,9 +40,7 @@ def mirror_enabled() -> bool:
     return get_settings().smtp.enabled
 
 
-def enqueue_due_notification_mirror(
-    session: Session, org_id: str, *, now: datetime
-) -> bool:
+def enqueue_due_notification_mirror(session: Session, org_id: str, *, now: datetime) -> bool:
     """Enqueue at most one mirror job per org per hour; no-op when disabled."""
     if not mirror_enabled():
         return False
@@ -56,9 +54,7 @@ def enqueue_due_notification_mirror(
     )
     if existing is not None:
         return False
-    job_queue.enqueue(
-        session, org_id, JOB_TYPE, payload={}, coalesce_key=coalesce_key
-    )
+    job_queue.enqueue(session, org_id, JOB_TYPE, payload={}, coalesce_key=coalesce_key)
     return True
 
 

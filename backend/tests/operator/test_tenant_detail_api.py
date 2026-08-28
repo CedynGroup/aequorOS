@@ -15,9 +15,7 @@ BASE = "/operator/v1/tenants"
 
 
 def _provision(client: TestClient) -> tuple[str, str]:
-    body = client.post(
-        f"{BASE}", json=provision_payload(), headers=operator_headers()
-    ).json()
+    body = client.post(f"{BASE}", json=provision_payload(), headers=operator_headers()).json()
     assert body["succeeded"] is True, body
     return body["organization_id"], body["bank_id"]
 
@@ -62,9 +60,7 @@ def test_tenant_users_lists_the_seeded_admin(
 ) -> None:
     organization_id, _bank_id = _provision(operator_client)
     start_inspection(operator_client, organization_id)
-    response = operator_client.get(
-        f"{BASE}/{organization_id}/users", headers=operator_headers()
-    )
+    response = operator_client.get(f"{BASE}/{organization_id}/users", headers=operator_headers())
     assert response.status_code == 200
     users = response.json()["users"]
     # The provisioning saga seeds the first admin.
@@ -177,9 +173,7 @@ def test_tenant_entitlements_unknown_org_is_403_without_a_session(
 def test_tenant_storage_is_best_effort_for_minio(operator_client: TestClient) -> None:
     organization_id, _bank_id = _provision(operator_client)
     start_inspection(operator_client, organization_id)
-    response = operator_client.get(
-        f"{BASE}/{organization_id}/storage", headers=operator_headers()
-    )
+    response = operator_client.get(f"{BASE}/{organization_id}/storage", headers=operator_headers())
     assert response.status_code == 200
     body = response.json()
     assert body["provider"] == "minio"
@@ -195,8 +189,6 @@ def test_tenant_storage_unknown_org_is_403_without_a_session(
     operator_client: TestClient,
 ) -> None:
     assert (
-        operator_client.get(
-            f"{BASE}/OR-00000000/storage", headers=operator_headers()
-        ).status_code
+        operator_client.get(f"{BASE}/OR-00000000/storage", headers=operator_headers()).status_code
         == 403
     )

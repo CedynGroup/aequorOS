@@ -331,15 +331,21 @@ def seed_tenant_register(  # noqa: PLR0913 - tenant keys, regime, approver and
         for scenario, shocks in _IRRBB_SHOCKS.items():
             shock_rows += [
                 ParamStressShock(
-                    module="irr", scenario_code=scenario, shock_key=key,
-                    shock_value=Decimal(value), **common,
+                    module="irr",
+                    scenario_code=scenario,
+                    shock_key=key,
+                    shock_value=Decimal(value),
+                    **common,
                 )
                 for key, value in shocks.items()
             ]
         shock_rows += [
             ParamStressShock(
-                module="irr", scenario_code="base_curve", shock_key=key,
-                shock_value=Decimal(value), **common,
+                module="irr",
+                scenario_code="base_curve",
+                shock_key=key,
+                shock_value=Decimal(value),
+                **common,
             )
             for key, value in _base_curve_rows(base_curve).items()
         ]
@@ -361,8 +367,10 @@ def seed_tenant_register(  # noqa: PLR0913 - tenant keys, regime, approver and
         if (count := existing(ParamLcrRunoffRate)) == 0:
             flows = [
                 ParamLcrRunoffRate(
-                    flow_direction=direction, category=category,
-                    rate_pct=Decimal(value), **common,
+                    flow_direction=direction,
+                    category=category,
+                    rate_pct=Decimal(value),
+                    **common,
                 )
                 for direction, table in (
                     ("outflow", BANK_LCR_OUTFLOWS),
@@ -377,9 +385,7 @@ def seed_tenant_register(  # noqa: PLR0913 - tenant keys, regime, approver and
 
         if (count := existing(ParamNsfrWeight)) == 0:
             weights = [
-                ParamNsfrWeight(
-                    side=side, category=category, weight_pct=Decimal(value), **common
-                )
+                ParamNsfrWeight(side=side, category=category, weight_pct=Decimal(value), **common)
                 for side, table in (("asf", BANK_NSFR_ASF), ("rsf", BANK_NSFR_RSF))
                 for category, value in table.items()
             ]
@@ -397,9 +403,7 @@ def register_row_count(db: Session, organization_id: str) -> int:
     """Total tenant parameter rows across every table, for the readiness gate."""
     return sum(
         db.scalar(
-            select(func.count())
-            .select_from(model)
-            .where(model.organization_id == organization_id)
+            select(func.count()).select_from(model).where(model.organization_id == organization_id)
         )
         or 0
         for model in PARAMETER_MODELS

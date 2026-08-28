@@ -183,9 +183,7 @@ def test_lowercase_currency_is_422(operator_client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_unknown_jurisdiction_is_422(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_unknown_jurisdiction_is_422(operator_client: TestClient, operator_db: Session) -> None:
     response = operator_client.post(
         "/operator/v1/tenants",
         json=provision_payload(jurisdiction_code="ZZ"),
@@ -207,9 +205,7 @@ def test_missing_institution_type_is_schema_level_422(operator_client: TestClien
     assert response.json()["error"]["code"] == "validation_error"
 
 
-def test_unknown_institution_type_is_422(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_unknown_institution_type_is_422(operator_client: TestClient, operator_db: Session) -> None:
     response = operator_client.post(
         "/operator/v1/tenants",
         json=provision_payload(institution_type="not_a_real_licence_class"),

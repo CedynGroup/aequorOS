@@ -121,6 +121,7 @@ class SsoConnectionUpdateRequest(BaseModel):
         if _is_loopback_issuer_allowed(value):
             return value
         return check_url_syntax(value, field="issuer")
+
     client_id: str = Field(min_length=1, max_length=255)
     client_secret: str | None = Field(default=None, max_length=1024)
     allowed_email_domains: list[str] = Field(default_factory=list, max_length=32)
