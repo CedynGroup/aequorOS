@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import dynamic from 'next/dynamic';
-import { useEffect, useRef, useState } from 'react';
-import ChartFrame from '@/components/ui/ChartFrame';
-import { useModuleScope } from '@/components/shell/BankContext';
+import dynamic from "next/dynamic";
+import { useEffect, useRef, useState } from "react";
+import ChartFrame from "@/components/ui/ChartFrame";
+import { useModuleScope } from "@/components/shell/BankContext";
 
-const RatioTrendChart = dynamic(() => import('./RatioTrendChart'), {
+const RatioTrendChart = dynamic(() => import("./RatioTrendChart"), {
   ssr: false,
   loading: RatioTrendChartSkeleton,
 });
@@ -29,7 +29,7 @@ export default function DeferredRatioTrendChart({
     const panel = panelRef.current;
     if (!panel || shouldLoad) return;
 
-    if (!('IntersectionObserver' in window)) {
+    if (!("IntersectionObserver" in window)) {
       setShouldLoad(true);
       return;
     }
@@ -40,7 +40,7 @@ export default function DeferredRatioTrendChart({
         setShouldLoad(true);
         observer.disconnect();
       },
-      { rootMargin: '320px 0px' },
+      { rootMargin: "320px 0px" },
     );
 
     observer.observe(panel);
@@ -60,15 +60,15 @@ export default function DeferredRatioTrendChart({
 
 /** Matches the loaded frame's fixed geometry so the async swap cannot shift it. */
 function RatioTrendChartSkeleton() {
-  const isSdi = useModuleScope().institutionClass === 'sdi';
+  const isSdi = useModuleScope().institutionClass === "sdi";
 
   return (
     <ChartFrame
       title="Ratio trend"
       subtitle={
         isSdi
-          ? 'CAR (s.29) per reporting period'
-          : 'LCR & NSFR (left axis) · CAR (right axis) per reporting period'
+          ? "CAR (s.29) per reporting period"
+          : "LCR & NSFR (left axis) · CAR (right axis) per reporting period"
       }
       height={280}
       loading
@@ -77,7 +77,7 @@ function RatioTrendChartSkeleton() {
           className="inline-flex items-center rounded-md border border-border-light bg-surface p-0.5 animate-pulse"
           aria-hidden
         >
-          {['3M', '6M', '1Y', 'All'].map((label) => (
+          {["3M", "6M", "1Y", "All"].map((label) => (
             <span key={label} className="invisible px-2.5 py-1 text-micro">
               {label}
             </span>
@@ -87,8 +87,8 @@ function RatioTrendChartSkeleton() {
       footer={
         <span className="invisible" aria-hidden>
           {isSdi
-            ? '0 periods · 0 with stored results'
-            : '0 periods · LCR +0.0pp over the window · 0 with stored results'}
+            ? "0 periods · 0 with stored results"
+            : "0 periods · LCR +0.0pp over the window · 0 with stored results"}
         </span>
       }
     >

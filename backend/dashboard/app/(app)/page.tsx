@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Treasury Command Center — the home page and hero of the bank demo.
@@ -15,30 +15,37 @@
  * can never show populated KPIs beside an "empty" live state again.
  */
 
-import Link from 'next/link';
-import { Database, Info } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import EmptyState from '@/components/ui/EmptyState';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonCard, SkeletonChart, SkeletonLine } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
-import { fmtDateUTC, labelize } from '@/lib/api/values';
-import { useEffectivePeriod } from '@/components/home/hooks';
-import RoleLensTabs, { ROLE_CONFIG, useRoleLens } from '@/components/home/RoleLens';
-import BreachBanner from '@/components/home/BreachBanner';
-import UnreconciledBookBanner from '@/components/live/UnreconciledBookBanner';
-import PulseWall from '@/components/home/PulseWall';
-import BalanceSheetStrip from '@/components/home/BalanceSheetStrip';
-import DeferredRatioTrendChart from '@/components/home/DeferredRatioTrendChart';
-import WindowAnalysis from '@/components/home/WindowAnalysis';
-import OperationalFeed from '@/components/home/OperationalFeed';
-import SdiLiquiditySummary from '@/components/home/SdiLiquiditySummary';
-import { centralBankName } from '@/lib/format';
+import Link from "next/link";
+import { Database, Info } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import {
+  SkeletonCard,
+  SkeletonChart,
+  SkeletonLine,
+} from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
+import { fmtDateUTC, labelize } from "@/lib/api/values";
+import { useEffectivePeriod } from "@/components/home/hooks";
+import RoleLensTabs, {
+  ROLE_CONFIG,
+  useRoleLens,
+} from "@/components/home/RoleLens";
+import BreachBanner from "@/components/home/BreachBanner";
+import UnreconciledBookBanner from "@/components/live/UnreconciledBookBanner";
+import PulseWall from "@/components/home/PulseWall";
+import BalanceSheetStrip from "@/components/home/BalanceSheetStrip";
+import DeferredRatioTrendChart from "@/components/home/DeferredRatioTrendChart";
+import WindowAnalysis from "@/components/home/WindowAnalysis";
+import OperationalFeed from "@/components/home/OperationalFeed";
+import SdiLiquiditySummary from "@/components/home/SdiLiquiditySummary";
+import { centralBankName } from "@/lib/format";
 
 export default function CommandCenterPage() {
   const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
-  const isSdi = moduleScope.institutionClass === 'sdi';
+  const isSdi = moduleScope.institutionClass === "sdi";
   const [role, setRole] = useRoleLens();
   const lens = ROLE_CONFIG[role];
   const effective = useEffectivePeriod();
@@ -50,7 +57,7 @@ export default function CommandCenterPage() {
         subtitle={
           bank
             ? `${bank.name} · ${centralBankName()} licensee · ${labelize(bank.licenseType)}`
-            : 'Loading bank profile…'
+            : "Loading bank profile…"
         }
         action={<RoleLensTabs role={role} onChange={setRole} />}
       />
@@ -61,7 +68,11 @@ export default function CommandCenterPage() {
         <div className="px-8 py-6 space-y-6">
           <UnreconciledBookBanner bankId={bankId} />
           <BreachBanner bankId={bankId} hasData={false} />
-          <PulseWall bankId={bankId} moduleOrder={lens.moduleOrder} hasData={false} />
+          <PulseWall
+            bankId={bankId}
+            moduleOrder={lens.moduleOrder}
+            hasData={false}
+          />
           <div className="py-4 max-w-2xl mx-auto">
             {effective.error ? (
               <div className="mb-6">
@@ -96,10 +107,10 @@ export default function CommandCenterPage() {
                 aria-hidden
               />
               <p className="text-body text-navy/85 leading-relaxed">
-                Showing{' '}
+                Showing{" "}
                 <span className="font-medium text-navy">
                   {fmtDateUTC(effective.period.periodEnd)}
-                </span>{' '}
+                </span>{" "}
                 — latest computed period. The selected period (
                 {effective.selectedPeriod.label}) has no activated data yet.
               </p>
@@ -115,7 +126,7 @@ export default function CommandCenterPage() {
 
           {lens.panels.map((panel) => {
             switch (panel) {
-              case 'pulse':
+              case "pulse":
                 return (
                   <PulseWall
                     key="pulse"
@@ -123,9 +134,9 @@ export default function CommandCenterPage() {
                     moduleOrder={lens.moduleOrder}
                   />
                 );
-              case 'window':
+              case "window":
                 return <WindowAnalysis key="window" bankId={bankId} />;
-              case 'balance':
+              case "balance":
                 return (
                   <BalanceSheetStrip
                     key="balance"
@@ -133,7 +144,7 @@ export default function CommandCenterPage() {
                     period={effective.period!}
                   />
                 );
-              case 'band':
+              case "band":
                 return (
                   <div key="band" className="space-y-6">
                     <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
