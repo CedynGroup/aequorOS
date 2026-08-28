@@ -209,10 +209,11 @@ def grant_tier(  # noqa: PLR0913 - keyword-only grant record: every field is aud
     effective_from: date,
     granted_by: str,
     notes: str | None = None,
-) -> list[MarketDataEntitlement]:
+) -> tuple[list[MarketDataEntitlement], bool]:
     """Expand a tier into per-dataset active grants (idempotent per dataset)."""
     datasets = expand_tier(tier)
     created: list[MarketDataEntitlement] = []
+    changed = False
     for dataset_code in datasets:
         existing = db.scalar(
             select(MarketDataEntitlement).where(
@@ -236,8 +237,9 @@ def grant_tier(  # noqa: PLR0913 - keyword-only grant record: every field is aud
         )
         db.add(row)
         created.append(row)
+        changed = True
     db.flush()
-    return created
+    return created, changed
 
 
 def grant_dataset(  # noqa: PLR0913 - keyword-only grant record: every field is audited
@@ -249,7 +251,7 @@ def grant_dataset(  # noqa: PLR0913 - keyword-only grant record: every field is 
     granted_by: str,
     notes: str | None = None,
     tier: str | None = None,
-) -> MarketDataEntitlement:
+) -> tuple[MarketDataEntitlement, bool]:
     if dataset_code not in DESK_DATASET_CODES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -258,6 +260,16 @@ def grant_dataset(  # noqa: PLR0913 - keyword-only grant record: every field is 
                 f"choose {', '.join(DESK_DATASET_CODES)}."
             ),
         )
+    existing = db.scalar(
+        select(MarketDataEntitlement).where(
+            MarketDataEntitlement.organization_id == organization_id,
+            MarketDataEntitlement.dataset_code == dataset_code,
+            MarketDataEntitlement.status == "active",
+            MarketDataEntitlement.effective_from == effective_from,
+        )
+    )
+    if existing is not None:
+        return existing, False
     row = MarketDataEntitlement(
         organization_id=organization_id,
         dataset_code=dataset_code,
@@ -269,7 +281,7 @@ def grant_dataset(  # noqa: PLR0913 - keyword-only grant record: every field is 
     )
     db.add(row)
     db.flush()
-    return row
+    return row, True
 
 
 def revoke(
@@ -279,7 +291,7 @@ def revoke(
     organization_id: str,
     revoked_by: str,
     effective_to: date | None = None,
-) -> MarketDataEntitlement:
+) -> tuple[MarketDataEntitlement, bool]:
     """End-date one grant. ``organization_id`` is REQUIRED and is part of the
     lookup key, never a check applied afterwards.
 
@@ -301,13 +313,13 @@ def revoke(
             detail="Entitlement does not exist.",
         )
     if row.status == "revoked":
-        return row
+        return row, False
     row.status = "revoked"
     row.revoked_by = revoked_by
     row.revoked_at = utc_now()
     row.effective_to = effective_to or utc_now().date()
     db.flush()
-    return row
+    return row, True
 
 
 def list_entitlements(

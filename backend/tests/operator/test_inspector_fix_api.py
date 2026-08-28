@@ -575,8 +575,20 @@ def test_config_foreign_mapping_is_404(
 
 # -- scoped config: threshold supersession ---------------------------------------
 def test_config_threshold_value_creates_new_effective_row_and_audits(
-    operator_client: TestClient, operator_db: Session
+    operator_client: TestClient,
+    operator_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    refreshes: list[str] = []
+
+    def enqueue(*_args: object, **_kwargs: object) -> list[object]:
+        refreshes.append("refresh")
+        return []
+
+    monkeypatch.setattr(
+        "app.operator.features.inspector_fix.live_refresh_triggers.enqueue_organization_change",
+        enqueue,
+    )
     organization_id, _bank = _provision(operator_client)
     threshold_id = _seed_liquidity_threshold(operator_db, organization_id)
     start_inspection(operator_client, organization_id)
@@ -596,6 +608,7 @@ def test_config_threshold_value_creates_new_effective_row_and_audits(
     assert body["kind"] == "threshold_value"
     assert body["before"]["value_pct"] == 100.0
     assert body["after"]["value_pct"] == 110.0
+    assert refreshes == ["refresh"]
     new_row_id = UUID(body["target_id"])
     assert new_row_id != threshold_id
 

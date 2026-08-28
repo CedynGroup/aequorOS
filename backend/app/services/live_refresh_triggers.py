@@ -1,10 +1,9 @@
 """Authoritative non-ingestion triggers for the live calculation plane.
 
 Ingestion and market-data writers already enqueue their target bank directly.
-Global governed-parameter approvals and tenant entitlement mutations are the
-other input-generation boundaries: they fan out one coalesced refresh per
-affected bank here, in the same transaction as the mutation. Reads never heal
-or schedule the live plane.
+Governed methodology, parameter, entitlement, and reconciliation mutations fan
+out one coalesced refresh per affected bank here, in the same transaction as
+the mutation. Reads never heal or schedule the live plane.
 """
 
 from __future__ import annotations
@@ -53,6 +52,61 @@ def enqueue_entitlement_change(
         for bank in db.scalars(
             select(Bank).where(Bank.organization_id == organization_id)
         )
+        if (job := _enqueue_bank(db, bank, reason=reason)) is not None
+    ]
+    db.flush()
+    return jobs
+
+
+def enqueue_bank_change(
+    db: Session,
+    *,
+    organization_id: str,
+    bank_id: str,
+    reason: str,
+) -> Job | None:
+    bank = db.scalar(
+        select(Bank).where(
+            Bank.organization_id == organization_id,
+            Bank.id == bank_id,
+        )
+    )
+    if bank is None:
+        return None
+    job = _enqueue_bank(db, bank, reason=reason)
+    db.flush()
+    return job
+
+
+def enqueue_organization_change(
+    db: Session,
+    *,
+    organization_id: str,
+    reason: str,
+    jurisdiction_code: str | None = None,
+) -> list[Job]:
+    stmt = select(Bank).where(Bank.organization_id == organization_id)
+    if jurisdiction_code is not None:
+        stmt = stmt.where(Bank.jurisdiction_code == jurisdiction_code)
+    jobs = [
+        job
+        for bank in db.scalars(stmt)
+        if (job := _enqueue_bank(db, bank, reason=reason)) is not None
+    ]
+    db.flush()
+    return jobs
+
+
+def enqueue_methodology_change(
+    db: Session,
+    *,
+    methodology_code: str,
+    version: int,
+) -> list[Job]:
+    reason = f"desk methodology approved:{methodology_code}:v{version}"
+    jobs = [
+        job
+        for bank in db.scalars(select(Bank))
         if (job := _enqueue_bank(db, bank, reason=reason)) is not None
     ]
     db.flush()

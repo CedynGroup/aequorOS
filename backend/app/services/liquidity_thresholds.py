@@ -37,7 +37,7 @@ from app.schemas.liquidity_thresholds import (
     LiquidityThresholdRegisterRead,
     LiquidityThresholdUpdate,
 )
-from app.services import jurisdictions, regulatory_parameters
+from app.services import jurisdictions, live_refresh_triggers, regulatory_parameters
 from app.services.audit import record_event
 from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.params import get_active_params
@@ -336,6 +336,12 @@ def update_register(
             "reason": payload.reason,
         },
     )
+    live_refresh_triggers.enqueue_organization_change(
+        db,
+        organization_id=ctx.organization_id,
+        jurisdiction_code=jurisdiction,
+        reason="liquidity threshold register updated",
+    )
     db.commit()
     return get_register(db, ctx, bank_id, payload.effective_from)
 
@@ -452,6 +458,12 @@ def update_haircut_schedule(
             "asset_classes": sorted(cls.strip().upper() for cls in payload.haircuts),
             "reason": payload.reason,
         },
+    )
+    live_refresh_triggers.enqueue_organization_change(
+        db,
+        organization_id=ctx.organization_id,
+        jurisdiction_code=jurisdiction,
+        reason="liquidity haircut schedule updated",
     )
     db.commit()
     return get_haircut_schedule(db, ctx, bank_id, payload.effective_from)

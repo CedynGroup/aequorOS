@@ -118,8 +118,22 @@ def test_desk_endpoints_require_operator_auth(operator_client: TestClient) -> No
 
 
 def test_methodology_lifecycle_with_dual_control_and_audit(
-    operator_client: TestClient, operator_db: Session
+    operator_client: TestClient,
+    operator_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    refreshes: list[tuple[str, int]] = []
+
+    def enqueue_methodology(
+        _db: Session, *, methodology_code: str, version: int
+    ) -> list[object]:
+        refreshes.append((methodology_code, version))
+        return []
+
+    monkeypatch.setattr(
+        "app.operator.features.desk.live_refresh_triggers.enqueue_methodology_change",
+        enqueue_methodology,
+    )
     created = operator_client.post(
         f"{BASE}/methodologies/ensure-default", headers=operator_headers()
     )
@@ -148,6 +162,7 @@ def test_methodology_lifecycle_with_dual_control_and_audit(
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "approved"
     assert approved.json()["approved_by"] == DEV_EMAIL
+    assert refreshes == [("AEQ-GHS-CURVES", 1)]
 
     # Track 2: the same operator proposes v2 ...
     proposed = operator_client.post(

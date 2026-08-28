@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -169,6 +170,42 @@ def test_grant_dataset_and_revoke_are_gated_and_audited(
     for action in ("inspector.entitlement.grant_dataset", "inspector.entitlement.revoke"):
         rows = _audit_rows(operator_db, action)
         assert [row.target_org for row in rows] == [org_id], action
+
+
+def test_idempotent_retries_do_not_enqueue_refreshes(
+    operator_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+
+    def enqueue(*_args: object, **_kwargs: object) -> list[object]:
+        calls.append("refresh")
+        return []
+
+    monkeypatch.setattr(
+        "app.operator.features.desk.live_refresh_triggers.enqueue_entitlement_change",
+        enqueue,
+    )
+    org_id = _provision(operator_client)
+    start_inspection(operator_client, org_id)
+
+    first = _grant_tier(operator_client, org_id, tier="core")
+    repeated = _grant_tier(operator_client, org_id, tier="core")
+    assert first.status_code == repeated.status_code == 201
+    assert calls == ["refresh"]
+
+    entitlement_id = first.json()["entitlements"][0]["id"]
+    first_revoke = operator_client.post(
+        f"{DESK}/{entitlement_id}/revoke",
+        json={"organization_id": org_id},
+        headers=operator_headers(),
+    )
+    repeated_revoke = operator_client.post(
+        f"{DESK}/{entitlement_id}/revoke",
+        json={"organization_id": org_id},
+        headers=operator_headers(),
+    )
+    assert first_revoke.status_code == repeated_revoke.status_code == 200
+    assert calls == ["refresh", "refresh"]
 
 
 # -- cross-tenant scoping ----------------------------------------------------------
