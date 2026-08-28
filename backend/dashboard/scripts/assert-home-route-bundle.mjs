@@ -6,15 +6,20 @@ const dashboardRoot = resolve(import.meta.dirname, '..');
 const distDir = resolve(dashboardRoot, process.env.NEXT_DIST_DIR || '.next');
 const manifestPath = resolve(distDir, 'app-build-manifest.json');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-const homeEntry = manifest.pages?.['/(app)/page'];
+const homeEntryNames = ['/(app)/page', '/(app)/layout', '/layout'];
+const missingHomeEntries = homeEntryNames.filter(
+  (entryName) => !Array.isArray(manifest.pages?.[entryName]),
+);
 
-if (!Array.isArray(homeEntry)) {
+if (missingHomeEntries.length > 0) {
   throw new Error(
-    `Could not find the Command Center entry graph (/(app)/page) in ${manifestPath}`,
+    `Could not find the Command Center entry graph entries (${missingHomeEntries.join(', ')}) in ${manifestPath}`,
   );
 }
 
-const initialJavaScript = homeEntry.filter((file) => file.endsWith('.js'));
+const initialJavaScript = [
+  ...new Set(homeEntryNames.flatMap((entryName) => manifest.pages[entryName])),
+].filter((file) => file.endsWith('.js'));
 const offendingChunks = [];
 let rawBytes = 0;
 let gzipBytes = 0;
