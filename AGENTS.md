@@ -109,7 +109,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   static bundle + explicit organization/institution/module/sensitivity scope + provenance
   and lifecycle. Rows OR only after every dimension within a row ANDs; explicit `all`
   values provide broad module/sensitivity scope, and organization-wide institution
-  coverage is named.
+  coverage is named. `ResourceLocator` also names its target scope: an institution target
+  requires an exact `BK-*`, while an organization target forbids one; missing/null never
+  broadens. Liquidity Monitoring is the first real shadow-observed path
+  (`authz.shadow_decision`) but still follows legacy endpoint authorization.
   The evaluator is deny-by-default, ignores scalar role/token permission claims, returns an
   audit-ready trace, and accepts global condition vetoes. This is shadow-only: migration
   `202608250044` backfills no bindings or Owner/Admin authority. Token `authv` enforcement is

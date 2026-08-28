@@ -1,4 +1,4 @@
-# Authorization foundation (as built 2026-08-25)
+# Authorization foundation (as built through 2026-08-27)
 
 This document records the first bounded server-side slice of `docs/rbac.md`.
 The new policy kernel is additive and shadow-only; the authorization-version
@@ -80,7 +80,12 @@ active binding; lifecycle mutation APIs do not exist in this slice.
 ## Decision semantics and conditions
 
 `ResourceLocator` carries exactly the rollout-v1 resource attributes:
-organization, optional institution, concrete module, and concrete sensitivity.
+organization, an explicit organization-or-institution target, concrete module,
+and concrete sensitivity. An institution target requires a non-empty
+`institution_id`; an organization target forbids one. A missing institution is
+therefore never interpreted as broad access. The same `InstitutionScope`
+vocabulary is used by bindings and resources so their matching semantics cannot
+drift.
 The shared evaluator:
 
 1. starts denied;
@@ -96,12 +101,32 @@ maker/checker, step-up, and approval-limit policies. Those conditions remain
 owned by their workflows and cannot be bypassed by adding another allow
 binding. The filing workflow is not changed by this slice.
 
-The persistence boundary adds two fail-closed checks after evaluating the
-bindings: the principal must still be an active tenant member of the declared
-type, and any institution named by the resource must belong to that same
-tenant. These return explained denials (`principal_not_active` or
-`resource_institution_not_in_tenant`) rather than allowing a matching row to
+The persistence boundary performs two fail-closed checks before evaluating any
+binding: the principal must still be an active tenant member of the declared
+type, and an institution-targeted resource must belong to that same tenant.
+These return explained denials (`principal_not_active`,
+`resource_tenant_mismatch`, or `resource_institution_not_in_tenant`) with no
+misleading matching-binding trace rather than allowing a matching row to
 outlive its identity or resource.
+
+## Institution-target slice and migration posture (as built 2026-08-27)
+
+`GET /banks/{bank_id}/liquidity-monitoring` is the first real resource path to
+construct an exact institution-scoped locator. For normal tenant app sessions
+it evaluates `view` on LIQ/confidential and emits `authz.shadow_decision` with
+the legacy and binding outcomes, reason, target, matching binding IDs, and
+per-binding reasons. The route still follows its existing authenticated read
+contract regardless of the shadow outcome. Operator impersonation and
+integration-key credentials retain their separate lifecycles and are outside
+this human-binding pilot. A shadow-evaluation failure emits
+`shadow_evaluation_failed` at error severity and does not become a route gate.
+
+This slice requires no new migration. It reuses migration `202608250044`'s
+composite institution/organization foreign key and forced-RLS binding table.
+Organization membership, token `org`, the session's `app.organization_id`,
+organization-scoped foreign keys, and FORCE RLS remain the outer boundary. No
+binding backfill, tenant grant endpoint, owner authority, or other RBAC
+administration surface is introduced.
 
 ## Authorization version and deployment transition
 
@@ -131,8 +156,13 @@ credential lifecycles and do not carry `authv`.
 
 The fixed evaluator, service, refresh-token, and Postgres migration suites pin
 the binding semantics, database constraints, FORCE RLS, cross-tenant refusal,
-and atomic version-bump/session-revocation contract. Two generative suites add
-coverage beyond the fixed examples:
+and atomic version-bump/session-revocation contract. The fixed tests also prove
+that one institution binding does not reach a sibling, an explicitly
+organization-wide binding does, cross-organization and invalid targets fail
+closed with actionable reasons, and suspended or absent bindings default to
+denial. The Liquidity Monitoring API tests pin both allowed and denied shadow
+telemetry and prove that a shadow-evaluation failure cannot change the legacy
+response. Two generative suites add coverage beyond the fixed examples:
 
 - `tests/core/test_authorization_properties.py` compares the evaluator with an
   independent per-binding oracle across binding order, partial cross-row
@@ -144,15 +174,13 @@ coverage beyond the fixed examples:
 
 ## Shadow rollout and next vertical slice
 
-The new evaluator is not wired as an endpoint gate yet. Existing routes keep
-their current rank checks; the new table starts empty, grant CRUD is absent, and
-no current user is broadened or narrowed by a binding. This allows the schema,
-decision trace, and invalidation seam to land without an unsafe partial
-authorization cutover.
+The new evaluator is not an endpoint gate yet. Existing routes keep their
+current rank checks; the new table starts empty, grant CRUD is absent, and no
+current user is broadened or narrowed by a binding. Liquidity Monitoring now
+records legacy-versus-binding decisions for one exact institution target, which
+is evidence for a later enforcement decision rather than enforcement itself.
 
-The next bounded vertical slice should select one institution-scoped Liquidity
-read/run flow, resolve its canonical bank resource, create explicit pilot
-bindings through a governed non-tenant path, and record legacy-versus-new shadow
-decisions. Enforcement should switch only after parity/denial telemetry is
-reviewed. Role/grant administration remains later work and must add delegation,
-SoD, reason/audit, and last-admin/owner safeguards before exposure.
+The next bounded slice may provision governed pilot bindings and review
+parity/denial telemetry before switching any endpoint gate. Role/grant
+administration remains later work and must add delegation, SoD, reason/audit,
+and last-admin/owner safeguards before exposure.

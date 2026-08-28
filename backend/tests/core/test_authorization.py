@@ -69,7 +69,10 @@ def _resource(
     module: Module = Module.LIQUIDITY,
     sensitivity: Sensitivity = Sensitivity.CONFIDENTIAL,
 ) -> ResourceLocator:
-    return ResourceLocator(ORG, bank_id, module, sensitivity)
+    institution_scope = (
+        InstitutionScope.ORGANIZATION if bank_id is None else InstitutionScope.INSTITUTION
+    )
+    return ResourceLocator(ORG, institution_scope, bank_id, module, sensitivity)
 
 
 def _binding(  # noqa: PLR0913 - scope/lifecycle dimensions stay explicit in tests
@@ -202,6 +205,46 @@ def test_organization_wide_scope_is_explicit_and_institution_scope_is_exact() ->
     assert not _evaluate(Permission.VIEW, _resource(bank_id=BANK_B), [institution_only]).allowed
     assert _evaluate(Permission.VIEW, _resource(bank_id=BANK_B), [organization_wide]).allowed
     assert _evaluate(Permission.VIEW, _resource(bank_id=None), [organization_wide]).allowed
+
+
+@pytest.mark.parametrize(
+    ("institution_scope", "institution_id", "message"),
+    [
+        (
+            InstitutionScope.INSTITUTION,
+            None,
+            "institution-scoped resource requires an explicit institution id",
+        ),
+        (
+            InstitutionScope.INSTITUTION,
+            "",
+            "institution-scoped resource requires an explicit institution id",
+        ),
+        (
+            InstitutionScope.ORGANIZATION,
+            BANK_A,
+            "organization-scoped resource must not carry an institution id",
+        ),
+        (
+            "institution",
+            BANK_A,
+            "resource institution scope must be organization or institution",
+        ),
+    ],
+)
+def test_resource_target_rejects_null_or_ambiguous_institution_semantics(
+    institution_scope: InstitutionScope | str,
+    institution_id: str | None,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        ResourceLocator(
+            ORG,
+            institution_scope,  # pyright: ignore[reportArgumentType]
+            institution_id,
+            Module.LIQUIDITY,
+            Sensitivity.CONFIDENTIAL,
+        )
 
 
 def test_organization_tenant_mismatch_denies_an_otherwise_exact_grant() -> None:

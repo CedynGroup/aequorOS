@@ -31,6 +31,7 @@ from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1
 
 BANK_1 = "BK-AUTH0001"
+BANK_1_SIBLING = "BK-AUTH0003"
 BANK_2 = "BK-AUTH0002"
 
 
@@ -42,6 +43,16 @@ def _banks(db: Session) -> None:
                 organization_id=ORG_1,
                 name="Authorization Bank One",
                 short_name="Auth One",
+                currency="GHS",
+                jurisdiction_code="GH",
+                license_type="universal_bank",
+                institution_type=FALLBACK_TYPE_CODE,
+            ),
+            Bank(
+                id=BANK_1_SIBLING,
+                organization_id=ORG_1,
+                name="Authorization Bank One Sibling",
+                short_name="Auth Sibling",
                 currency="GHS",
                 jurisdiction_code="GH",
                 license_type="universal_bank",
@@ -105,7 +116,13 @@ def test_legacy_admin_role_is_not_new_policy_authority(db_session: Session) -> N
         db_session,
         PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
         Permission.ADMINISTER,
-        ResourceLocator(ORG_1, None, Module.ACCOUNT, Sensitivity.RESTRICTED),
+        ResourceLocator(
+            ORG_1,
+            InstitutionScope.ORGANIZATION,
+            None,
+            Module.ACCOUNT,
+            Sensitivity.RESTRICTED,
+        ),
     )
 
     assert not decision.allowed
@@ -263,6 +280,141 @@ def test_binding_creation_bumps_version_and_revokes_refresh_families_atomically(
     assert {row.revoked_reason for row in refresh_rows} == {"authorization_changed"}
 
 
+def _institution_resource(institution_id: str) -> ResourceLocator:
+    return ResourceLocator(
+        ORG_1,
+        InstitutionScope.INSTITUTION,
+        institution_id,
+        Module.LIQUIDITY,
+        Sensitivity.CONFIDENTIAL,
+    )
+
+
+def test_institution_binding_allows_one_institution_and_denies_its_sibling(
+    db_session: Session,
+) -> None:
+    _banks(db_session)
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    binding = authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=user.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.VIEWER,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION,
+            BANK_1,
+            ModuleScope.LIQUIDITY,
+            SensitivityScope.CONFIDENTIAL,
+        ),
+        grantor=authorization.GrantorRef(
+            authorization.GrantorType.SYSTEM,
+            "test-suite",
+        ),
+        reason="institution-specific liquidity visibility",
+    )
+    principal = PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN)
+
+    allowed = authorization.evaluate_permission(
+        db_session,
+        principal,
+        Permission.VIEW,
+        _institution_resource(BANK_1),
+    )
+    sibling_denied = authorization.evaluate_permission(
+        db_session,
+        principal,
+        Permission.VIEW,
+        _institution_resource(BANK_1_SIBLING),
+    )
+
+    assert allowed.allowed
+    assert allowed.matching_binding_ids == (binding.id,)
+    assert not sibling_denied.allowed
+    assert sibling_denied.reason == "no_active_exact_binding"
+    assert sibling_denied.binding_trace[0].reason == "institution_mismatch"
+    assert sibling_denied.to_audit_dict()["resource"] == {
+        "organization_id": ORG_1,
+        "institution_scope": InstitutionScope.INSTITUTION.value,
+        "institution_id": BANK_1_SIBLING,
+        "module": Module.LIQUIDITY.value,
+        "sensitivity": Sensitivity.CONFIDENTIAL.value,
+    }
+
+
+def test_explicit_organization_binding_covers_sibling_institutions(
+    db_session: Session,
+) -> None:
+    _banks(db_session)
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    binding = authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=user.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.VIEWER,
+        scope=authorization.BindingScope(
+            InstitutionScope.ORGANIZATION,
+            None,
+            ModuleScope.LIQUIDITY,
+            SensitivityScope.CONFIDENTIAL,
+        ),
+        grantor=authorization.GrantorRef(
+            authorization.GrantorType.SYSTEM,
+            "test-suite",
+        ),
+        reason="explicit organization-wide liquidity visibility",
+    )
+    principal = PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN)
+
+    for institution_id in (BANK_1, BANK_1_SIBLING):
+        decision = authorization.evaluate_permission(
+            db_session,
+            principal,
+            Permission.VIEW,
+            _institution_resource(institution_id),
+        )
+        assert decision.allowed
+        assert decision.matching_binding_ids == (binding.id,)
+
+
+def test_institution_decision_defaults_denied_and_ignores_suspended_binding(
+    db_session: Session,
+) -> None:
+    _banks(db_session)
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    principal = PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN)
+    resource = _institution_resource(BANK_1)
+
+    default_denial = authorization.evaluate_permission(
+        db_session,
+        principal,
+        Permission.VIEW,
+        resource,
+    )
+    assert not default_denial.allowed
+    assert default_denial.reason == "no_active_exact_binding"
+    assert default_denial.binding_trace == ()
+
+    binding = _raw_binding(organization_id=ORG_1, institution_id=BANK_1)
+    binding.status = BindingStatus.SUSPENDED.value
+    db_session.add(binding)
+    db_session.commit()
+
+    suspended_denial = authorization.evaluate_permission(
+        db_session,
+        principal,
+        Permission.VIEW,
+        resource,
+    )
+    assert not suspended_denial.allowed
+    assert suspended_denial.reason == "no_active_exact_binding"
+    assert suspended_denial.binding_trace[0].reason == "binding_suspended"
+
+
 def test_service_denies_locator_whose_institution_is_not_in_resource_tenant(
     db_session: Session,
 ) -> None:
@@ -292,11 +444,19 @@ def test_service_denies_locator_whose_institution_is_not_in_resource_tenant(
         db_session,
         PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
         Permission.VIEW,
-        ResourceLocator(ORG_1, BANK_2, Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
+        ResourceLocator(
+            ORG_1,
+            InstitutionScope.INSTITUTION,
+            BANK_2,
+            Module.LIQUIDITY,
+            Sensitivity.CONFIDENTIAL,
+        ),
     )
 
     assert not decision.allowed
     assert decision.reason == "resource_institution_not_in_tenant"
+    assert decision.matching_binding_ids == ()
+    assert decision.binding_trace == ()
 
 
 def test_machine_principal_cannot_receive_a_human_bundle(db_session: Session) -> None:

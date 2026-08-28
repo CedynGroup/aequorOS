@@ -96,7 +96,7 @@ def _reference_match(
         institution_matches = binding.institution_id is None
     else:
         institution_matches = (
-            resource.institution_id is not None
+            resource.institution_scope is InstitutionScope.INSTITUTION
             and binding.institution_id == resource.institution_id
         )
     module_matches = (
@@ -168,7 +168,16 @@ def test_evaluator_matches_independent_per_binding_oracle(  # noqa: PLR0913
     condition_results: list[bool],
 ) -> None:
     principal = PrincipalLocator(_ORG, _PRINCIPAL_ID, PrincipalType.HUMAN)
-    resource = ResourceLocator(resource_organization_id, institution_id, module, sensitivity)
+    institution_scope = (
+        InstitutionScope.ORGANIZATION if institution_id is None else InstitutionScope.INSTITUTION
+    )
+    resource = ResourceLocator(
+        resource_organization_id,
+        institution_scope,
+        institution_id,
+        module,
+        sensitivity,
+    )
     conditions = tuple(
         ConditionCheck(kind, passed, f"{kind.value}:{passed}")
         for kind, passed in zip(ConditionKind, condition_results, strict=False)
@@ -252,7 +261,13 @@ def test_partial_scope_matches_on_different_rows_never_compose(
     if wrong_module is module or wrong_sensitivity is sensitivity:
         return
     principal = PrincipalLocator(_ORG, _PRINCIPAL_ID, PrincipalType.HUMAN)
-    resource = ResourceLocator(_ORG, _BANK, module, sensitivity)
+    resource = ResourceLocator(
+        _ORG,
+        InstitutionScope.INSTITUTION,
+        _BANK,
+        module,
+        sensitivity,
+    )
     module_only = _exact_binding(
         binding_ids[0],
         module_scope=ModuleScope(module.value),
@@ -323,7 +338,13 @@ def test_lifecycle_boundaries_fail_closed(
     decision = evaluate_permission(
         PrincipalLocator(_ORG, _PRINCIPAL_ID, PrincipalType.HUMAN),
         Permission.RUN,
-        ResourceLocator(_ORG, _BANK, Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
+        ResourceLocator(
+            _ORG,
+            InstitutionScope.INSTITUTION,
+            _BANK,
+            Module.LIQUIDITY,
+            Sensitivity.CONFIDENTIAL,
+        ),
         [binding],
         now=_NOW,
     )

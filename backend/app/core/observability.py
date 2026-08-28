@@ -80,6 +80,7 @@ class Condition(StrEnum):
     AUTH_ANOMALY = "auth.anomaly"
     SSRF_BLOCKED = "egress.blocked"
     AUTHORIZATION_DENIED = "authz.denied"
+    AUTHORIZATION_SHADOW_DECISION = "authz.shadow_decision"
     CROSS_TENANT_ATTEMPT = "tenant.cross_access_attempt"
 
 
@@ -137,6 +138,9 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
         "is covered (app/core/outbound.py)"
     ),
     Condition.AUTHORIZATION_DENIED: "this log line only, from the gates in app/api/deps.py",
+    Condition.AUTHORIZATION_SHADOW_DECISION: (
+        "this log line only, from app/services/authorization.py::observe_shadow_permission"
+    ),
     Condition.CROSS_TENANT_ATTEMPT: "this log line only, from app/api/deps.py",
 }
 
@@ -182,6 +186,27 @@ def authorization_denied(*, reason: str, **fields: Any) -> None:
         Condition.AUTHORIZATION_DENIED,
         "Authorization denied",
         severity="warning",
+        reason=reason,
+        **fields,
+    )
+
+
+def authorization_shadow_decision(
+    *,
+    binding_allowed: bool,
+    legacy_allowed: bool,
+    reason: str,
+    severity: Severity = "info",
+    **fields: Any,
+) -> None:
+    """Record binding-policy parity without changing the legacy route result."""
+
+    emit(
+        Condition.AUTHORIZATION_SHADOW_DECISION,
+        "Authorization shadow decision",
+        severity=severity,
+        binding_allowed=binding_allowed,
+        legacy_allowed=legacy_allowed,
         reason=reason,
         **fields,
     )

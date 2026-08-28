@@ -2,12 +2,15 @@
 
 **Status:** implementation spec · **Audience:** dashboard + platform engineers · **Owner:** Eric
 
-> **As-built foundation (2026-08-25):** The first additive authorization slice
-> is recorded in the backend
+> **As-built foundation (updated 2026-08-27):** The additive authorization slices
+> are recorded in the backend
 > [`authorization_foundation.md`](../backend/docs/authorization_foundation.md).
 > It corrects the proposed independent `user_roles`/`user_scopes` shape to
 > indivisible scoped bindings, adds exact resource evaluation and authorization
 > version invalidation, and remains shadow-only except for stale-session denial.
+> The institution-target slice (2026-08-27) makes resource target scope explicit
+> (organization or one exact institution; `NULL` never broadens) and records
+> shadow decisions on Liquidity Monitoring without changing route enforcement.
 > This proposal's later UI, role-administration, lifecycle, and broad endpoint
 > rollout sections are not claims that those features are built.
 
@@ -59,7 +62,7 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 | Endpoint enforcement                 | Coarse legacy dependencies enforce viewer/analyst mutation separation and selected approver/admin gates. The new binding evaluator is not an endpoint gate yet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `app/api/deps.py`                                                                                                                                                                                       |
 | Tenancy                              | Postgres RLS forced on `app.organization_id`; cross-tenant work runs on the BYPASSRLS `WORKER_DATABASE_URL` role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `app/db/session.py`, CLAUDE.md                                                                                                                                                                          |
 | Maker-checker                        | **Regulatory reporting already has it**: `draft→generated→validated→pending_approval→approved→submitted→acknowledged→…` with an append-only approval trail where **checker ≠ maker is enforced in the service**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `app/models/regulatory_reporting.py` (`PACKAGE_STATUSES`, `APPROVAL_ACTIONS`, `RegulatoryPackageApproval`)                                                                                              |
-| Authorization foundation             | **BUILT, SHADOW-ONLY.** Deny-by-default evaluation over indivisible `authorization_bindings`; exact organization/institution, module, sensitivity, lifecycle, principal-type, and runtime-condition matching. No binding CRUD API and no endpoint gate yet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `app/core/authorization.py`, `app/services/authorization.py`, `backend/docs/authorization_foundation.md`                                                                                                |
+| Authorization foundation             | **BUILT, SHADOW-ONLY.** Deny-by-default evaluation over indivisible `authorization_bindings`; explicit organization-or-exact-institution resource targets; exact module, sensitivity, lifecycle, principal-type, and runtime-condition matching. Liquidity Monitoring emits legacy-versus-binding shadow decisions, but no binding CRUD API or binding endpoint gate exists.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `app/core/authorization.py`, `app/services/authorization.py`, `app/features/read_liquidity_monitoring.py`, `backend/docs/authorization_foundation.md`                                                    |
 | Token claims                         | App access and refresh tokens carry `sub`, `org`, legacy `roles[]`, and authoritative `authv`, plus `email`/`name` when present; refresh tokens also require `jti`. Pre-`202608250044` and stale-version sessions fail closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `app/core/security.py:create_token`, `app/api/deps.py:validate_tenant_context`                                                                                                                          |
 | Identity in UI                       | Header + settings read the real session (name/role); route gate redirects unauthenticated → `/login`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `dashboard/components/shell/Header.tsx`, `dashboard/middleware.ts`                                                                                                                                      |
 
@@ -459,20 +462,23 @@ who _could_ violate SoD and who _did_.
 
 ### 8.1 Backend (extend `app/api/deps.py`)
 
-The persistence-neutral vocabulary, `ResourceLocator`, static bundle map, exact
-evaluator, database service, and transactional invalidation seam are built.
+The persistence-neutral vocabulary, explicit-target `ResourceLocator`, static
+bundle map, exact evaluator, database service, and transactional invalidation
+seam are built.
 `evaluate_permission()` starts denied, loads only the principal's persisted
 bindings, requires every dimension within one row to match, unions complete
 rows, verifies the active principal and institution ownership, then applies all
 workflow-supplied conditions as global vetoes. It returns an audit-ready trace.
 
-What remains is endpoint integration. Add a narrow dependency for each migrated
-vertical that constructs the canonical resource locator and calls the service
-evaluator; do not resolve authority from `roles[]`, route names, HTTP verbs, or
-UI state. Keep `get_mutation_tenant_context` only as the legacy coarse gate
-during measured shadow rollout. Demo-mode, maker-checker, step-up, and approval
-limits remain owned by their workflows and enter the evaluator as typed
-conditions, so another allow binding cannot bypass them.
+Liquidity Monitoring is the first measured path: it constructs the canonical
+institution target and emits `authz.shadow_decision`, but the binding result is
+not yet an endpoint gate. For each later migrated vertical, construct the same
+explicit locator and call the service evaluator; do not resolve authority from
+`roles[]`, route names, HTTP verbs, or UI state. Keep
+`get_mutation_tenant_context` as the legacy coarse gate during measured shadow
+rollout. Demo-mode, maker-checker, step-up, and approval limits remain owned by
+their workflows and enter the evaluator as typed conditions, so another allow
+binding cannot bypass them.
 
 `users.authorization_version` is already live. Every app token carries `authv`;
 tenant validation and refresh reject a stale version. Any future role, scope,
@@ -883,9 +889,11 @@ Ship value early; don't block the dashboards on SSO/SCIM.
 
 **Phase 0 — authorization foundation and first endpoint slice.**
 The static `ROLE_PERMISSIONS` map, scoped binding table, exact evaluator, and
-`authv` invalidation seam are **BUILT**. Remaining Phase-0 work is one measured
-endpoint vertical, governed pilot binding creation, `/auth/me` display
-capabilities, nav/action gating, and default landings
+`authv` invalidation seam are **BUILT**. The first measured endpoint observation
+is also built on Liquidity Monitoring; it is shadow telemetry, not enforcement.
+Remaining Phase-0 work is governed pilot binding creation, an evidence-backed
+endpoint enforcement decision, `/auth/me` display capabilities, nav/action
+gating, and default landings
 ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).
 Do not add independent `user_roles`/`user_scopes` tables or implicitly split
 legacy `admin` into Org Admin/Owner.

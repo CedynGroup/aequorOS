@@ -76,16 +76,20 @@ Migration `202608250044` adds an initially empty, FORCE-RLS
 is one indivisible principal/type + static bundle + organization/institution +
 module + sensitivity + provenance + lifecycle tuple. Dimensions inside a row
 AND; independently complete rows OR. The pure evaluator starts denied, accepts
-only exact active persisted bindings, ignores scalar role and token-permission
-claims, and applies workflow-supplied demo-mode, maker-checker, step-up, and
-limit conditions as global vetoes. Its decision includes an audit-ready trace.
+only exact active persisted bindings, and requires each resource to name either
+the organization or one exact institution; a missing institution never implies
+organization-wide scope. It ignores scalar role and token-permission claims and
+applies workflow-supplied demo-mode, maker-checker, step-up, and limit
+conditions as global vetoes. Its decision includes an audit-ready trace.
 
-This kernel is shadow-only: no endpoint uses it as a gate, no grant API exists,
-and the migration backfills no binding or implicit Admin/Owner authority.
-Existing endpoint behavior still comes from the legacy role hierarchy. Token
-version enforcement is live: every app access/refresh token requires positive
-`authv`; pre-migration or stale tokens return `401`. Every future role, scope,
-status, or security mutation must call
+This kernel is shadow-only: Liquidity Monitoring evaluates an exact institution
+target and emits `authz.shadow_decision`, but its legacy authenticated-read
+result remains authoritative even if shadow evaluation denies or fails. No
+endpoint uses the binding result as a gate, no grant API exists, and the
+migration backfills no binding or implicit Admin/Owner authority. Token version
+enforcement is live: every app access/refresh token requires positive `authv`;
+pre-migration or stale tokens return `401`. Every future role, scope, status, or
+security mutation must call
 `services.authorization.invalidate_user_authorization()` in its transaction to
 advance the version and revoke all refresh families. Full semantics and the
 deployment transition are in
