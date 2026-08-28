@@ -103,9 +103,7 @@ _MODULE_METRIC_FAMILY: dict[str, MetricFamily] = {
 }
 
 
-def _scoped_modules(
-    db: Session, bank: Bank
-) -> tuple[tuple[str, _ComputeLive], ...]:
+def _scoped_modules(db: Session, bank: Bank) -> tuple[tuple[str, _ComputeLive], ...]:
     """The cheap-tier modules the tenant's institution type is entitled to run.
 
     Delegates to ``module_scope`` — the ONE authority, shared with the official
@@ -742,9 +740,7 @@ def _ensure_live_period(
     period = _find_period(session, ctx, bank, as_of)
     if period is not None:
         return period
-    period = new_snapshot_period(
-        organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of
-    )
+    period = new_snapshot_period(organization_id=ctx.organization_id, bank_id=bank.id, as_of=as_of)
     session.add(period)
     session.flush()
     return period

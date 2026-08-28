@@ -155,9 +155,7 @@ def fix_config(
     Session-gated + audited as ``inspector.fix.config`` with before + after."""
     organization_id = normalize_public_id(org_id)
     session = require_active_inspection(db, operator, organization_id)
-    result = inspector_fix.apply_config(
-        db, organization_id, payload, approved_by=operator.email
-    )
+    result = inspector_fix.apply_config(db, organization_id, payload, approved_by=operator.email)
     refresh_jobs = (
         live_refresh_triggers.enqueue_organization_change(
             db,

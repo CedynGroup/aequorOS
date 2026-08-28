@@ -78,9 +78,7 @@ def list_regulatory_parameters(  # noqa: PLR0913 - query filters, one per column
         confirmation_status=confirmation_status,
         include_drafts=include_drafts,
     )
-    return RegulatoryParameterListRead(
-        parameters=[_read(r) for r in rows], total=len(rows)
-    )
+    return RegulatoryParameterListRead(parameters=[_read(r) for r in rows], total=len(rows))
 
 
 @router.post(

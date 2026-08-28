@@ -72,9 +72,7 @@ def expand_tier(tier: str) -> tuple[str, ...]:
     return datasets
 
 
-def active_datasets(
-    db: Session, organization_id: str, *, as_of: date | None = None
-) -> set[str]:
+def active_datasets(db: Session, organization_id: str, *, as_of: date | None = None) -> set[str]:
     """Dataset codes the org may receive/view on ``as_of`` (default today)."""
     as_of = as_of or utc_now().date()
     rows = list(
@@ -104,9 +102,7 @@ def scopes_for_datasets(datasets: set[str]) -> list[DataScope]:
     return sorted(scopes, key=lambda s: s.value)
 
 
-def filter_scopes(
-    scopes: list[DataScope], datasets: set[str]
-) -> list[DataScope]:
+def filter_scopes(scopes: list[DataScope], datasets: set[str]) -> list[DataScope]:
     allowed = set(scopes_for_datasets(datasets))
     return [s for s in scopes if s in allowed]
 
@@ -145,9 +141,7 @@ def tier_allows(curve_tier: str, datasets: set[str]) -> bool:
     return TIER_RANK.get(org_tier(datasets), 0) >= required
 
 
-def curve_definition_tier(
-    db: Session, curve_code: str, *, as_of: date | None = None
-) -> str | None:
+def curve_definition_tier(db: Session, curve_code: str, *, as_of: date | None = None) -> str | None:
     """The entitlement tier governing a curve code, or ``None`` when ungoverned.
 
     Resolves the latest APPROVED :class:`DeskCurveDefinition` for the code
@@ -256,8 +250,7 @@ def grant_dataset(  # noqa: PLR0913 - keyword-only grant record: every field is 
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
-                f"Unknown dataset_code {dataset_code!r}; "
-                f"choose {', '.join(DESK_DATASET_CODES)}."
+                f"Unknown dataset_code {dataset_code!r}; choose {', '.join(DESK_DATASET_CODES)}."
             ),
         )
     existing = db.scalar(

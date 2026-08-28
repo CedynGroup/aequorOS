@@ -272,9 +272,7 @@ def update_register(
                 "it. Record the generation for this institution's own class."
             ),
         )
-    unknown = sorted(
-        set(payload.thresholds) - set(BANK_MINIMUM_PCT) - set(EXTRA_THRESHOLD_CODES)
-    )
+    unknown = sorted(set(payload.thresholds) - set(BANK_MINIMUM_PCT) - set(EXTRA_THRESHOLD_CODES))
     if unknown:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

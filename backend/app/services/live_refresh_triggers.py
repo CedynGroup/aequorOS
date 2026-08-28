@@ -49,9 +49,7 @@ def enqueue_entitlement_change(
     """Reflow every live bank whose tenant entitlement digest changed."""
     jobs = [
         job
-        for bank in db.scalars(
-            select(Bank).where(Bank.organization_id == organization_id)
-        )
+        for bank in db.scalars(select(Bank).where(Bank.organization_id == organization_id))
         if (job := _enqueue_bank(db, bank, reason=reason)) is not None
     ]
     db.flush()

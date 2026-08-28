@@ -58,12 +58,8 @@ def downgrade() -> None:
         "live_metrics",
         type_="check",
     )
-    op.drop_constraint(
-        "ck_live_metrics_retry_attempt_count", "live_metrics", type_="check"
-    )
-    op.drop_constraint(
-        "ck_live_metrics_retry_classification", "live_metrics", type_="check"
-    )
+    op.drop_constraint("ck_live_metrics_retry_attempt_count", "live_metrics", type_="check")
+    op.drop_constraint("ck_live_metrics_retry_classification", "live_metrics", type_="check")
     op.drop_column("live_metrics", "next_retry_at")
     op.drop_column("live_metrics", "retry_attempt_count")
     op.drop_column("live_metrics", "retry_classification")

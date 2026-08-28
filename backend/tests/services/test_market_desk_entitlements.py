@@ -19,9 +19,7 @@ def _org(db: Session, name: str) -> Organization:
     return row
 
 
-def _approved_curve_definition(
-    db: Session, *, curve_code: str, tier: str
-) -> DeskCurveDefinition:
+def _approved_curve_definition(db: Session, *, curve_code: str, tier: str) -> DeskCurveDefinition:
     row = DeskCurveDefinition(
         curve_code=curve_code,
         version=1,
@@ -93,12 +91,8 @@ def test_core_tier_blocks_sovereign_curves(db_session: Session) -> None:
 
 def test_org_tier_resolves_the_highest_fully_held_tier() -> None:
     assert entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["core"])) == "core"
-    assert (
-        entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["standard"])) == "standard"
-    )
-    assert (
-        entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["premium"])) == "premium"
-    )
+    assert entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["standard"])) == "standard"
+    assert entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["premium"])) == "premium"
 
 
 def test_curve_visible_gates_on_definition_tier(db_session: Session) -> None:

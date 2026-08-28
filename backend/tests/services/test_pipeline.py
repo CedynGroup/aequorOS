@@ -664,8 +664,7 @@ def test_a_failing_module_does_not_erase_the_reporting_period(db_session: Sessio
 
     original = pipeline._CHEAP_MODULES
     pipeline._CHEAP_MODULES = tuple(
-        (module, _boom if module == "liquidity" else compute)
-        for module, compute in original
+        (module, _boom if module == "liquidity" else compute) for module, compute in original
     )
     try:
         outcome = pipeline.recompute_live(db_session, ctx, bank, as_of)

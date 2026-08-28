@@ -80,9 +80,7 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
             )
         )
     )
-    is_stale = _cache_is_behind_the_book(
-        db, ctx, bank, {row.module: row for row in rows}
-    )
+    is_stale = _cache_is_behind_the_book(db, ctx, bank, {row.module: row for row in rows})
     rows.sort(key=lambda row: _MODULE_ORDER.get(row.module, 99))
     modules = [
         LiveModuleView(

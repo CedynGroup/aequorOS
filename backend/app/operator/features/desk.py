@@ -192,9 +192,7 @@ def create_methodology(
     return _methodology_read(row)
 
 
-@router.post(
-    "/methodologies/ensure-default", response_model=DeskMethodologyRead, status_code=201
-)
+@router.post("/methodologies/ensure-default", response_model=DeskMethodologyRead, status_code=201)
 def ensure_default_methodology(db: OperatorDb, operator: Operator) -> DeskMethodologyRead:
     """Idempotent bootstrap of the AEQ-GHS-CURVES v1 draft (service-seeded,
     never a data migration — approval still happens through Track 2)."""

@@ -36,9 +36,7 @@ BASE = "/operator/v1/tenants"
 
 
 def _provision(client: TestClient, **overrides: object) -> tuple[str, str]:
-    body = client.post(
-        BASE, json=provision_payload(**overrides), headers=operator_headers()
-    ).json()
+    body = client.post(BASE, json=provision_payload(**overrides), headers=operator_headers()).json()
     assert body["succeeded"] is True, body
     return body["organization_id"], body["bank_id"]
 
@@ -195,9 +193,7 @@ def test_recompute_enqueues_job_and_audits_once(
     assert rows[0].detail["job_id"] == body["job_id"]
 
 
-def test_recompute_without_period_is_409(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_recompute_without_period_is_409(operator_client: TestClient, operator_db: Session) -> None:
     organization_id, _bank = _provision(operator_client)
     start_inspection(operator_client, organization_id)
     response = operator_client.post(
@@ -227,9 +223,7 @@ def test_official_run_enqueues_job_and_audits_once(
     assert body["job_type"] == "official_run"
 
     job = operator_db.scalar(
-        select(Job).where(
-            Job.organization_id == organization_id, Job.job_type == "official_run"
-        )
+        select(Job).where(Job.organization_id == organization_id, Job.job_type == "official_run")
     )
     assert job is not None
     assert job.bank_id == bank_id
@@ -548,9 +542,7 @@ def test_config_mapping_active_rejects_non_boolean(
     assert response.status_code == 422, response.text
 
 
-def test_config_foreign_mapping_is_404(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_config_foreign_mapping_is_404(operator_client: TestClient, operator_db: Session) -> None:
     org_a, bank_a = _provision(operator_client)
     org_b, _bank_b = _provision(
         operator_client,

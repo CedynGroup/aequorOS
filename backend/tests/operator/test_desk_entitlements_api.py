@@ -53,9 +53,7 @@ def _grant_tier(client: TestClient, org_id: str, tier: str = "premium"):  # noqa
 
 def _audit_rows(db: Session, action: str) -> list[OperatorAuditLog]:
     db.expire_all()
-    return list(
-        db.scalars(select(OperatorAuditLog).where(OperatorAuditLog.action == action))
-    )
+    return list(db.scalars(select(OperatorAuditLog).where(OperatorAuditLog.action == action)))
 
 
 # -- the gate --------------------------------------------------------------------
@@ -64,9 +62,7 @@ def test_every_entitlement_route_refuses_without_an_inspection_session(
 ) -> None:
     org_id = _provision(operator_client)
     calls = [
-        operator_client.get(
-            DESK, params={"organization_id": org_id}, headers=operator_headers()
-        ),
+        operator_client.get(DESK, params={"organization_id": org_id}, headers=operator_headers()),
         _grant_tier(operator_client, org_id),
         operator_client.post(
             f"{DESK}/grant-dataset",
@@ -90,9 +86,7 @@ def test_every_entitlement_route_refuses_without_an_inspection_session(
     operator_db.expire_all()
     assert operator_db.scalars(select(MarketDataEntitlement)).all() == []
     entitlement_actions = operator_db.scalars(
-        select(OperatorAuditLog.action).where(
-            OperatorAuditLog.action.like("%entitlement%")
-        )
+        select(OperatorAuditLog.action).where(OperatorAuditLog.action.like("%entitlement%"))
     ).all()
     assert list(entitlement_actions) == []
 
@@ -123,9 +117,7 @@ def test_grant_tier_is_gated_and_audited_against_the_tenant(
     assert rows[0].detail["tier"] == "premium"
 
 
-def test_read_is_gated_and_audited(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_read_is_gated_and_audited(operator_client: TestClient, operator_db: Session) -> None:
     org_id = _provision(operator_client)
     session_id = start_inspection(operator_client, org_id)
     _grant_tier(operator_client, org_id, tier="core")
@@ -246,9 +238,7 @@ def test_revoke_cannot_reach_another_tenants_grant(
     assert attempt.status_code == 404
     operator_db.expire_all()
     row = operator_db.scalar(
-        select(MarketDataEntitlement).where(
-            MarketDataEntitlement.id == UUID(entitlement_id)
-        )
+        select(MarketDataEntitlement).where(MarketDataEntitlement.id == UUID(entitlement_id))
     )
     assert row is not None and row.status == "active"
     assert _audit_rows(operator_db, "inspector.entitlement.revoke") == []
