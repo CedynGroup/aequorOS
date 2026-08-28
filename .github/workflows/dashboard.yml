@@ -26,7 +26,8 @@ name: Dashboard CI
 #                    against node:net.
 #                Both are described as load-bearing in the audit's security and
 #                production-readiness sections; neither was enforced anywhere.
-#   build      — production Next build
+#   build      — production Next build + Command Center entry-graph guard
+#                (Recharts must remain deferred from the home route)
 #
 # NOT gated here, and named rather than left to be discovered (D-32, 2026-08-22):
 #   e2e        — `pnpm --filter dashboard e2e`, the 7 Playwright specs under

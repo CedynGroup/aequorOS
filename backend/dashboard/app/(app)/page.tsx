@@ -29,7 +29,7 @@ import BreachBanner from '@/components/home/BreachBanner';
 import UnreconciledBookBanner from '@/components/live/UnreconciledBookBanner';
 import PulseWall from '@/components/home/PulseWall';
 import BalanceSheetStrip from '@/components/home/BalanceSheetStrip';
-import RatioTrendChart from '@/components/home/RatioTrendChart';
+import DeferredRatioTrendChart from '@/components/home/DeferredRatioTrendChart';
 import WindowAnalysis from '@/components/home/WindowAnalysis';
 import OperationalFeed from '@/components/home/OperationalFeed';
 import SdiLiquiditySummary from '@/components/home/SdiLiquiditySummary';
@@ -138,7 +138,7 @@ export default function CommandCenterPage() {
                   <div key="band" className="space-y-6">
                     <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
                       <div className="xl:col-span-3 min-w-0">
-                        <RatioTrendChart
+                        <DeferredRatioTrendChart
                           bankId={bankId}
                           periodId={effective.period!.id}
                         />
