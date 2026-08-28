@@ -406,8 +406,13 @@ def test_a_blocked_issuer_surfaces_as_an_auth_failure_not_a_crash(
     private_key, _jwks = _rsa_idp()
     now = int(security.utc_now().timestamp())
     id_token = jwt.encode(
-        {"iss": "https://idp.attacker.example", "aud": _AUDIENCE, "sub": "x", "iat": now,
-         "exp": now + 600},
+        {
+            "iss": "https://idp.attacker.example",
+            "aud": _AUDIENCE,
+            "sub": "x",
+            "iat": now,
+            "exp": now + 600,
+        },
         private_key,
         algorithm="RS256",
         headers={"kid": _KID},

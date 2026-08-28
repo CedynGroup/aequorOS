@@ -156,9 +156,7 @@ def verify_step_up(  # noqa: PLR0913 - two distinct proof methods + metadata
         evidence["method"] = "password_reauth"
         return evidence
 
-    raise StepUpRequired(
-        "Signing requires re-authentication. Confirm your identity to continue."
-    )
+    raise StepUpRequired("Signing requires re-authentication. Confirm your identity to continue.")
 
 
 def _verify_oidc_proof(
@@ -213,9 +211,7 @@ def _verify_oidc_proof(
     try:
         authenticated = datetime.fromtimestamp(int(auth_time), tz=UTC)
     except (TypeError, ValueError, OverflowError, OSError) as exc:
-        logger.warning(
-            "Step-up OIDC proof rejected: unusable auth_time %r: %s", auth_time, exc
-        )
+        logger.warning("Step-up OIDC proof rejected: unusable auth_time %r: %s", auth_time, exc)
         raise StepUpFailed(
             "Your identity provider reported a sign-in time this system could "
             "not read, so this signature cannot be tied to a fresh sign-in. "
@@ -363,11 +359,7 @@ def consume_authorization(  # noqa: PLR0913 - every field must be matched exactl
     if datetime.now(UTC) > expires_at:
         raise StepUpFailed("This signing authorisation has expired. Re-authenticate to sign.")
 
-    if (
-        row.user_id != user_id
-        or row.package_id != package_id
-        or row.signing_role != signing_role
-    ):
+    if row.user_id != user_id or row.package_id != package_id or row.signing_role != signing_role:
         raise StepUpFailed("This signing authorisation was issued for a different action.")
     if row.certification_digest != certification_digest:
         raise StepUpFailed(
