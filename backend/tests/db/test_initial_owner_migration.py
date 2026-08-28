@@ -381,9 +381,13 @@ def test_initial_owner_migration_handles_zero_one_and_many_without_guessing(  # 
     assert revoked["revoked_at"] is not None
     assert revoked["revoked_reason"] == "authorization_changed"
 
-    # The shared migration fixture downgrades all the way to base. Remove this
-    # test's service identities first: historical migration 202607240026 narrows
-    # auth_provider on downgrade and correctly refuses a surviving service row.
+    # The shared migration fixture downgrades all the way to base. Normalize this
+    # test's synthetic non-password identities first: historical provider
+    # migrations narrow auth_provider on downgrade, while FORCE RLS prevents their
+    # global conversion statements from seeing tenant rows without a tenant GUC.
+    # Keep the principals and organizations until the disposable schema is dropped
+    # because their append-only audit evidence may not be updated by FK ON DELETE
+    # SET NULL actions.
     for organization_id in (ZERO_ORG, ONE_ORG, MANY_ORG):
         with migrated_postgres_schema.app_engine.begin() as connection:
             connection.execute(
@@ -391,7 +395,11 @@ def test_initial_owner_migration_handles_zero_one_and_many_without_guessing(  # 
                 {"organization_id": organization_id},
             )
             connection.execute(
-                text("DELETE FROM organizations WHERE id = :organization_id"),
+                text(
+                    "UPDATE users SET auth_provider = 'password' "
+                    "WHERE organization_id = :organization_id "
+                    "AND auth_provider <> 'password'"
+                ),
                 {"organization_id": organization_id},
             )
 
@@ -464,10 +472,6 @@ def test_downgrade_restores_only_recorded_legacy_administrators(
         assert restored == ("admin", 3)
         assert revoked.revoked_at is not None
         assert revoked.revoked_reason == "authorization_changed"
-        connection.execute(
-            text("DELETE FROM organizations WHERE id = :organization_id"),
-            {"organization_id": organization_id},
-        )
 
 
 @pytest.mark.skipif(
@@ -563,8 +567,11 @@ def test_downgrade_refuses_post_upgrade_account_administrators_before_mutation(
             )
         }
         assert revoked == {migrated_refresh_id: None, new_refresh_id: None}
+        # Make the deliberately post-migration account compatible with the
+        # pre-migration role constraint without deleting its append-only audit
+        # evidence. The disposable schema fixture owns final row cleanup.
         connection.execute(
-            text("DELETE FROM users WHERE id = :user_id"),
+            text("UPDATE users SET role = 'viewer' WHERE id = :user_id"),
             {"user_id": new_user_id},
         )
 
@@ -582,8 +589,4 @@ def test_downgrade_refuses_post_upgrade_account_administrators_before_mutation(
                 {"user_id": migrated_user_id},
             )
             == "admin"
-        )
-        connection.execute(
-            text("DELETE FROM organizations WHERE id = :organization_id"),
-            {"organization_id": organization_id},
         )
