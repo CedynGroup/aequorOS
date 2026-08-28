@@ -121,8 +121,10 @@ decision is what authorizes a person.
   sign-in is refused.
 - **Choosing the connection:** a token may carry more than one audience value,
   but its issuer and audience values must identify exactly one enabled AequorOS
-  identity connection. If those values are missing or do not point to exactly
-  one connection, sign-in is refused before AequorOS looks up any account.
+  identity connection. When there is more than one audience, the token must also
+  identify AequorOS as the party it was issued to. If any of those values are
+  missing, disagree, or do not point to exactly one connection, sign-in is
+  refused before AequorOS looks up any account.
 - **Secret handling:** the client secret is stored AES-256-GCM-encrypted, is
   write-only through the UI and API, and is scoped — it can only be used to
   initiate sign-ins against the redirect URI registered in *your* IdP.

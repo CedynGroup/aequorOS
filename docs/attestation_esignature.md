@@ -184,7 +184,7 @@ records `actor_user_id`, `action ∈ (requested, approved, rejected)`, `reason`,
 ### 1.4 Identity: OIDC → platform user
 
 The bank's own IdP is the authority. `verify_oidc_id_token`
-(`app/core/security.py:199`) performs discovery, fetches the issuer JWKS, and
+(`app/core/security.py`) performs discovery, fetches the issuer JWKS, and
 validates RS256/ES256 with issuer and audience taken **from the stored
 connection row, never from the token**. Trusted claims: `sub`, `email`,
 `email_verified`, `name`. The uniquely selected, verified connection is the

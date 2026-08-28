@@ -465,6 +465,7 @@ def unverified_claims(id_token: str) -> dict[str, Any]:
 
 
 def validate_oidc_authorized_party(claims: dict[str, Any], *, audience: str) -> None:
+    """Enforce OIDC `azp` binding for single- and multi-audience tokens."""
     if "azp" in claims:
         if claims["azp"] != audience:
             raise TokenInvalidError("OIDC authorized party does not match audience.")

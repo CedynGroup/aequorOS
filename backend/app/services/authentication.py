@@ -384,7 +384,9 @@ def login_with_sso(
 
     Routing is zero-trust: the token's unverified ``iss``/``aud`` only *select* a
     stored, enabled connection — verification then runs against that connection's
-    issuer JWKS and client id, so a forged header buys nothing.
+    issuer JWKS and client id, so a forged header buys nothing. The verified
+    connection's organization is the sole namespace for account lookup, JIT and
+    issued tokens. ``organization_hint`` is compatibility-only and must match it.
     """
     settings = settings or get_settings().auth
     try:
