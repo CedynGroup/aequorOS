@@ -219,6 +219,16 @@ detail calls before** and **22 / 33 / 5 after**, with zero detail polling. Keep
 `lib/api/queryPolicy.test.ts` and `lib/api/queryAuthorityBoundary.test.tsx` green
 when changing query keys, refresh behavior, session authority, or home requests.
 
+Because that panel is below the fold, `DeferredRatioTrendChart` keeps its
+Recharts implementation out of the Command Center's initial JavaScript graph.
+It preserves the panel's fixed geometry with a loading frame, then requests the
+chart when the panel enters a 320 px viewport margin (immediately only when
+`IntersectionObserver` is unavailable). Other chart-heavy routes are not
+deferred by this boundary. The production `build` command runs
+`scripts/assert-home-route-bundle.mjs` after `next build`; the guard fails if a
+Recharts chunk returns to the home entry graph or the deferred chart chunk can
+no longer be identified.
+
 ## Run locally
 
 ```bash
@@ -235,7 +245,7 @@ The backend API must be running (`cd backend && fastapi dev app/main.py --port 8
 pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
 pnpm --filter @aequoros/dashboard lint        # next lint
 pnpm --filter @aequoros/dashboard test        # unit and query-cache policy suites
-pnpm --filter @aequoros/dashboard build       # next build
+pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
 pnpm --filter @aequoros/dashboard e2e         # Playwright (needs object storage)
 ```
 
@@ -292,7 +302,8 @@ reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
 Separate Vercel/Coolify project from the marketing site.
 
 1. Import the monorepo, root directory `backend/dashboard`.
-2. Framework: Next.js. Build: `next build`.
+2. Framework: Next.js. Build: `pnpm build` (Next production build plus the home
+   entry-graph guard described above).
 3. Bind `bank.aequoros.com`.
 4. `NEXT_PUBLIC_LOGIN_URL` is a **build arg** inlined at compile time — changing
    it needs a rebuild, not a restart.

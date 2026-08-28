@@ -1,4 +1,4 @@
-/** Temp: full-page home capture (RangeTabs + Window analysis). HOME_CHECK=1. */
+/** Temp: verify deferred ratio loading/geometry and capture home. HOME_CHECK=1. */
 import { expect, test } from '@playwright/test';
 import path from 'path';
 import { E2E_TMP } from '../playwright.config';
