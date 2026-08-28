@@ -373,6 +373,28 @@ def test_a_normal_sso_verification_still_succeeds_end_to_end(
     assert opener.opened == [_DISCOVERY, _JWKS_URI]
 
 
+@pytest.mark.parametrize(
+    ("claims", "accepted"),
+    [
+        ({"aud": _AUDIENCE}, True),
+        ({"aud": [_AUDIENCE]}, True),
+        ({"aud": ["another-client", _AUDIENCE], "azp": _AUDIENCE}, True),
+        ({"aud": ["another-client", _AUDIENCE]}, False),
+        ({"aud": ["another-client", _AUDIENCE], "azp": "another-client"}, False),
+        ({"aud": ["another-client", _AUDIENCE], "azp": None}, False),
+        ({"aud": _AUDIENCE, "azp": "another-client"}, False),
+        ({"aud": _AUDIENCE, "azp": None}, False),
+    ],
+)
+def test_oidc_authorized_party_rules(claims: dict[str, Any], accepted: bool) -> None:
+    if accepted:
+        security.validate_oidc_authorized_party(claims, audience=_AUDIENCE)
+        return
+
+    with pytest.raises(security.TokenInvalidError):
+        security.validate_oidc_authorized_party(claims, audience=_AUDIENCE)
+
+
 def test_a_blocked_issuer_surfaces_as_an_auth_failure_not_a_crash(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

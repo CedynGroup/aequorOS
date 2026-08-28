@@ -278,10 +278,8 @@ def find_enabled_by_issuer_audience_for(
     """
     unverified = security.unverified_claims(id_token)
     issuer = str(unverified.get("iss", ""))
-    audience = unverified.get("aud")
-    audience_value = audience[0] if isinstance(audience, list) and audience else audience
     connection = find_enabled_by_issuer_audience(
-        db, issuer=issuer, audience=str(audience_value or "")
+        db, issuer=issuer, audience=unverified.get("aud", "")
     )
     if connection is None or connection.organization_id != ctx.organization_id:
         raise StepUpFailed("No enabled identity provider matches this token.")

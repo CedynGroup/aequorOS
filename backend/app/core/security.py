@@ -464,6 +464,14 @@ def unverified_claims(id_token: str) -> dict[str, Any]:
         raise TokenInvalidError(f"Malformed id_token: {exc}") from exc
 
 
+def validate_oidc_authorized_party(claims: dict[str, Any], *, audience: str) -> None:
+    if "azp" in claims:
+        if claims["azp"] != audience:
+            raise TokenInvalidError("OIDC authorized party does not match audience.")
+    elif isinstance(claims.get("aud"), list) and len(claims["aud"]) > 1:
+        raise TokenInvalidError("OIDC authorized party is required for multiple audiences.")
+
+
 def verify_oidc_id_token(id_token: str, *, issuer: str, audience: str) -> dict[str, Any]:
     """Verify an OIDC id_token against its issuer's JWKS, return its claims.
 
@@ -474,7 +482,7 @@ def verify_oidc_id_token(id_token: str, *, issuer: str, audience: str) -> dict[s
     """
     try:
         signing_key = _jwks_client(_discover_jwks_uri(issuer)).get_signing_key_from_jwt(id_token)
-        return jwt.decode(
+        claims = jwt.decode(
             id_token,
             signing_key.key,
             algorithms=["RS256", "ES256"],
@@ -482,5 +490,7 @@ def verify_oidc_id_token(id_token: str, *, issuer: str, audience: str) -> dict[s
             issuer=issuer,
             options={"require": ["exp", "iat", "sub"]},
         )
+        validate_oidc_authorized_party(claims, audience=audience)
+        return claims
     except jwt.PyJWTError as exc:
         raise TokenInvalidError(f"OIDC id_token verification failed: {exc}") from exc

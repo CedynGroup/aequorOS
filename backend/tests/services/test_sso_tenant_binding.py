@@ -9,6 +9,7 @@ post-verification tenant-binding rules from the already-covered JWKS machinery.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import jwt
 import pytest
@@ -17,10 +18,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.core import security
 from app.db.session import get_sessionmaker
 from app.models import SsoConnection, User
 from app.services import authentication
+from app.services.attestation import stepup
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 _ISSUER = "https://idp.tenant-one.example"
@@ -38,7 +41,9 @@ def verified_idp(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     def _verified_claims(id_token: str, *, issuer: str, audience: str) -> dict[str, object]:
         assert issuer in {_ISSUER, _OTHER_ISSUER}
         assert audience in {_CLIENT_ID, _OTHER_CLIENT_ID}
-        return jwt.decode(id_token, options={"verify_signature": False})
+        claims = jwt.decode(id_token, options={"verify_signature": False})
+        security.validate_oidc_authorized_party(claims, audience=audience)
+        return claims
 
     monkeypatch.setattr("app.core.security.verify_oidc_id_token", _verified_claims)
     yield
@@ -50,18 +55,21 @@ def _token(
     audience: str | list[str] = _CLIENT_ID,
     subject: str = _SUBJECT,
     email: str = _EMAIL,
+    additional_claims: dict[str, object] | None = None,
 ) -> str:
+    claims: dict[str, object] = {
+        "iss": issuer,
+        "aud": audience,
+        "sub": subject,
+        "email": email,
+        "email_verified": True,
+        "name": "Hermetic SSO User",
+        "iat": 1,
+        "exp": 4_102_444_800,
+    }
+    claims.update(additional_claims or {})
     return jwt.encode(
-        {
-            "iss": issuer,
-            "aud": audience,
-            "sub": subject,
-            "email": email,
-            "email_verified": True,
-            "name": "Hermetic SSO User",
-            "iat": 1,
-            "exp": 4_102_444_800,
-        },
+        claims,
         "hermetic-routing-hint-only-key-000000",
         algorithm="HS256",
     )
@@ -205,7 +213,7 @@ def test_first_email_link_with_overlapping_domains_updates_only_verified_tenant(
     assert (tenant_two_user.auth_provider, tenant_two_user.sso_subject) == ("password", None)
 
 
-def test_list_valued_audience_routes_when_connection_client_is_not_first(
+def test_list_valued_audience_supports_login_and_step_up_when_client_is_not_first(
     db_session: Session,
 ) -> None:
     _seeded_user(db_session, organization_id=ORG_1)
@@ -214,10 +222,95 @@ def test_list_valued_audience_routes_when_connection_client_is_not_first(
 
     issued = authentication.login_with_sso(
         db_session,
-        id_token=_token(audience=["another-audience", _CLIENT_ID]),
+        id_token=_token(
+            audience=["another-audience", _CLIENT_ID],
+            additional_claims={"azp": _CLIENT_ID},
+        ),
     )
 
     _assert_issued_for(issued, ORG_1)
+    evidence = stepup.verify_step_up(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=USER_1,
+            roles=("approver",),
+        ),
+        USER_1,
+        id_token=_token(
+            audience=["another-audience", _CLIENT_ID],
+            additional_claims={
+                "azp": _CLIENT_ID,
+                "auth_time": int(datetime.now(UTC).timestamp()),
+            },
+        ),
+    )
+    assert evidence["method"] == "oidc_reauth"
+
+
+@pytest.mark.parametrize(
+    "extra_claims",
+    [{}, {"azp": _OTHER_CLIENT_ID}],
+    ids=["missing-azp", "wrong-azp"],
+)
+def test_multi_audience_rejects_invalid_authorized_party_before_account_lookup(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    extra_claims: dict[str, object],
+) -> None:
+    _seeded_user(db_session, organization_id=ORG_1)
+    _connection(db_session)
+    db_session.commit()
+    monkeypatch.setattr(
+        authentication,
+        "_resolve_sso_user",
+        lambda *args, **kwargs: pytest.fail("account lookup must not run"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        authentication.login_with_sso(
+            db_session,
+            id_token=_token(
+                audience=["another-audience", _CLIENT_ID],
+                additional_claims=extra_claims,
+            ),
+        )
+
+    _assert_http_error(exc_info, 401, "Invalid SSO token.")
+
+
+def test_single_audience_accepts_missing_authorized_party(db_session: Session) -> None:
+    _seeded_user(db_session, organization_id=ORG_1)
+    _connection(db_session)
+    db_session.commit()
+
+    issued = authentication.login_with_sso(db_session, id_token=_token())
+
+    _assert_issued_for(issued, ORG_1)
+
+
+@pytest.mark.parametrize("authorized_party", [_OTHER_CLIENT_ID, None], ids=["wrong", "null"])
+def test_single_audience_rejects_mismatched_authorized_party_before_account_lookup(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    authorized_party: object,
+) -> None:
+    _seeded_user(db_session, organization_id=ORG_1)
+    _connection(db_session)
+    db_session.commit()
+    monkeypatch.setattr(
+        authentication,
+        "_resolve_sso_user",
+        lambda *args, **kwargs: pytest.fail("account lookup must not run"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        authentication.login_with_sso(
+            db_session,
+            id_token=_token(additional_claims={"azp": authorized_party}),
+        )
+
+    _assert_http_error(exc_info, 401, "Invalid SSO token.")
 
 
 def test_oversized_audience_list_fails_generically_before_verification(
