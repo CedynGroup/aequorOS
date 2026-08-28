@@ -27,6 +27,7 @@ from app.schemas.operator import (
     RegulatoryParameterProposeRequest,
     RegulatoryParameterRead,
 )
+from app.services import live_refresh_triggers
 
 #: Observability (docs/sdi.md §19) — a structured runtime-log line for every
 #: control-plane mutation, alongside the persistent ``operator_audit_log`` record.
@@ -138,6 +139,7 @@ def approve_regulatory_parameter(
         approved_by=operator.email,
         change_rationale=payload.change_rationale,
     )
+    refresh_jobs = live_refresh_triggers.enqueue_regulatory_parameter_change(db, row)
     logger.info(
         "regulatory_parameter.approve param_id=%s scope=%s/%s code=%s value=%s "
         "effective_from=%s approved_by=%s",
@@ -158,6 +160,7 @@ def approve_regulatory_parameter(
             "param_code": row.param_code,
             "scope_key": row.scope_key,
             "effective_from": row.effective_from.isoformat(),
+            "live_refreshes_enqueued": len(refresh_jobs),
         },
     )
     db.commit()

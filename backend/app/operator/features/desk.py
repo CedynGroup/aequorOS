@@ -57,6 +57,7 @@ from app.schemas.market_desk import (
     DeskPublicationRead,
     DeskResearchAdjustmentsPut,
 )
+from app.services import live_refresh_triggers
 from app.services.market_desk import (
     calculation,
     determinations,
@@ -481,6 +482,11 @@ def grant_entitlement_tier(
         granted_by=operator.email,
         notes=payload.notes,
     )
+    refresh_jobs = live_refresh_triggers.enqueue_entitlement_change(
+        db,
+        organization_id=org_id,
+        reason=f"market-data entitlement tier granted:{payload.tier}",
+    )
     record_operator_action(
         db,
         operator,
@@ -491,6 +497,7 @@ def grant_entitlement_tier(
             "tier": payload.tier,
             "effective_from": payload.effective_from.isoformat(),
             "datasets": [r.dataset_code for r in rows],
+            "live_refreshes_enqueued": len(refresh_jobs),
         },
     )
     db.commit()
@@ -518,6 +525,11 @@ def grant_entitlement_dataset(
         granted_by=operator.email,
         notes=payload.notes,
     )
+    refresh_jobs = live_refresh_triggers.enqueue_entitlement_change(
+        db,
+        organization_id=org_id,
+        reason=f"market-data entitlement granted:{payload.dataset_code}",
+    )
     record_operator_action(
         db,
         operator,
@@ -527,6 +539,7 @@ def grant_entitlement_dataset(
             "session_id": str(session.id),
             "dataset_code": payload.dataset_code,
             "effective_from": payload.effective_from.isoformat(),
+            "live_refreshes_enqueued": len(refresh_jobs),
         },
     )
     db.commit()
@@ -549,6 +562,11 @@ def revoke_entitlement(
     row = entitlements.revoke(
         db, entitlement_id, organization_id=org_id, revoked_by=operator.email
     )
+    refresh_jobs = live_refresh_triggers.enqueue_entitlement_change(
+        db,
+        organization_id=org_id,
+        reason=f"market-data entitlement revoked:{row.dataset_code}",
+    )
     record_operator_action(
         db,
         operator,
@@ -558,6 +576,7 @@ def revoke_entitlement(
             "session_id": str(session.id),
             "entitlement_id": str(row.id),
             "dataset_code": row.dataset_code,
+            "live_refreshes_enqueued": len(refresh_jobs),
         },
     )
     db.commit()

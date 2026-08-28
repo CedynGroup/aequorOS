@@ -9,8 +9,6 @@ immediately and return the job id to poll via ``GET /jobs/{id}``.
 
 from __future__ import annotations
 
-from datetime import date
-
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -49,11 +47,11 @@ _MODULE_ORDER = {
 def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSummaryRead:
     """The always-live treasury cockpit.
 
-    The live view is compute-from-latest: on read it enqueues a recompute for
-    any module whose inputs have changed (new data ingested, or a methodology/
-    parameter version drift) via the shared cheap-tier ``pipeline.recompute_live``,
-    then serves the rows it holds. It never depends on a background job having
-    run.
+    This endpoint is strictly observational. Ingestion, market-data,
+    entitlement, and governed-parameter mutations enqueue recomputation at the
+    point they advance an input; the worker persists new module generations.
+    A dashboard poll only reads those generations and therefore cannot turn a
+    stable structural ``availability=unavailable`` result into queue churn.
 
     Two honesty flags ride the payload, and neither is a constant:
 
@@ -72,11 +70,6 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
-    is_stale = False
-    refresh_as_of = period.period_end if period is not None else _current_fact_as_of(db, ctx, bank)
-    if refresh_as_of is not None:
-        is_stale = _ensure_live_current(db, ctx, bank, refresh_as_of)
-
     rows = list(
         db.scalars(
             select(LiveMetric).where(
@@ -84,6 +77,9 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
                 LiveMetric.bank_id == bank.id,
             )
         )
+    )
+    is_stale = _cache_is_behind_the_book(
+        db, ctx, bank, {row.module: row for row in rows}
     )
     rows.sort(key=lambda row: _MODULE_ORDER.get(row.module, 99))
     modules = [
@@ -152,108 +148,35 @@ def _reconciliation_view(
     )
 
 
-def _ensure_live_current(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> bool:
-    """Keep the live cache current WITHOUT blocking the read.
-
-    A read never recomputes inline — the module engines are seconds each, far too
-    heavy for a request. Instead a CHEAP check (pure timestamp comparison, no
-    engine work) detects when data has been ingested since the cache was computed
-    and enqueues a coalesced background refresh; the in-process worker recomputes
-    and updates the cache within seconds, so the next poll reflects it. Fact
-    re-derivation and the engines stay entirely off the request path, and no
-    manual activation is ever required — a data change auto-refreshes.
-
-    Returns whether a refresh was needed, which IS the answer to "are the
-    figures the caller is about to read behind the book?" — the summary reports
-    it as ``is_stale`` rather than asserting freshness it has not established.
-    """
-    cached = {
-        row.module: row
-        for row in db.scalars(
-            select(LiveMetric).where(
-                LiveMetric.organization_id == ctx.organization_id,
-                LiveMetric.bank_id == bank.id,
-            )
-        )
-    }
-    behind = _cache_is_behind_the_book(db, ctx, bank, cached)
-    if not _refresh_needed(db, ctx, bank, cached, behind=behind):
-        return behind
-    job_queue.enqueue(
-        db,
-        ctx.organization_id,
-        "pipeline_refresh",
-        bank_id=bank.id,
-        payload={"as_of_date": as_of.isoformat(), "reason": "live-read auto-refresh"},
-        run_after=utc_now(),
-        coalesce_key=f"refresh:{bank.id}:{as_of.isoformat()}",
-    )
-    db.commit()
-    return behind
-
-
-def _current_fact_as_of(
-    db: Session, ctx: TenantContext, bank: Bank
-) -> date | None:
-    """Current live facts are a valid refresh anchor without a filing period."""
-    return db.scalar(
-        select(func.max(CurrentFinancialFact.source_as_of_date)).where(
-            CurrentFinancialFact.organization_id == ctx.organization_id,
-            CurrentFinancialFact.bank_id == bank.id,
-        )
-    )
-
-
-def _refresh_needed(
-    db: Session,
-    ctx: TenantContext,
-    bank: Bank,
-    cached: dict[str, LiveMetric],
-    *,
-    behind: bool,
-) -> bool:
-    """Should a background recompute be enqueued for this bank?
-
-    Broader than staleness on purpose: a module that FAILED, or that reported
-    itself unavailable, is worth retrying even when no new data has arrived,
-    because the cause may have been a transient or a since-corrected parameter.
-
-    A ``blocked`` module is deliberately NOT a trigger: it computed fine, and
-    re-running the pipeline cannot make a general ledger balance. It clears when
-    the corrected book is ingested, which ``behind`` already catches.
-    """
-    has_current_facts = db.scalar(
-        select(CurrentFinancialFact.id)
-        .where(
-            CurrentFinancialFact.organization_id == ctx.organization_id,
-            CurrentFinancialFact.bank_id == bank.id,
-        )
-        .limit(1)
-    )
-    if has_current_facts is None or not cached:
-        return True
-    if any(
-        row.pipeline_state == "failed"
-        or row.metrics.get("availability") == "unavailable"
-        for row in cached.values()
-    ):
-        return True
-    return behind
-
-
 def _cache_is_behind_the_book(
     db: Session, ctx: TenantContext, bank: Bank, cached: dict[str, LiveMetric]
 ) -> bool:
     """Has data been ingested since these figures were computed?
 
     Compares the newest ingestion batch against the oldest cached module — a pure
-    timestamp comparison, no engine work, so it is safe on every read. This is
-    the ONLY question ``is_stale`` answers, which is why it is separate from
-    :func:`_refresh_needed`: a permanently unavailable module (an SDI with no
-    market-data feed, say) must not make every live figure read as out of date.
+    timestamp comparison, no engine work or mutation, so it is safe on every
+    read. This is the ONLY question ``is_stale`` answers: a permanently
+    unavailable module (an SDI with no market-data feed, say) does not make
+    every live figure read as out of date.
     """
     if not cached:
-        return False
+        has_current_facts = db.scalar(
+            select(CurrentFinancialFact.id)
+            .where(
+                CurrentFinancialFact.organization_id == ctx.organization_id,
+                CurrentFinancialFact.bank_id == bank.id,
+            )
+            .limit(1)
+        )
+        has_ingestion = db.scalar(
+            select(IngestionBatch.id)
+            .where(
+                IngestionBatch.organization_id == ctx.organization_id,
+                IngestionBatch.bank_id == bank.id,
+            )
+            .limit(1)
+        )
+        return has_current_facts is not None or has_ingestion is not None
     oldest_compute = min((row.computed_at for row in cached.values()), default=None)
     latest_ingest = db.scalar(
         select(func.max(IngestionBatch.created_at)).where(

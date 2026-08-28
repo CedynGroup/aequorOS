@@ -144,7 +144,15 @@ def run_once(
         except Exception as exc:  # noqa: BLE001 - any handler failure retries
             logger.exception("Job %s (%s) failed", job_id, claimed.job_type)
             session.rollback()
-            job_queue.fail_with_retry(session, claimed, str(exc) or type(exc).__name__)
+            job_queue.fail_with_retry(
+                session,
+                claimed,
+                str(exc) or type(exc).__name__,
+                commit=False,
+            )
+            if isinstance(exc, pipeline.TransientLiveRefreshError):
+                pipeline.persist_transient_retry_state(session, claimed, exc)
+            session.commit()
     return True
 
 

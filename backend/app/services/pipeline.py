@@ -125,6 +125,21 @@ class PipelineError(Exception):
     """A refresh/official job could not run (missing bank or payload)."""
 
 
+class TransientLiveRefreshError(PipelineError):
+    """One or more live modules raised and the worker must retry this job.
+
+    Successful ``availability=unavailable`` results never enter this path: they
+    are structural outcomes and remain stable until an authoritative mutation
+    enqueues a new refresh. This exception carries only genuine module errors
+    to the worker's existing bounded queue backoff.
+    """
+
+    def __init__(self, modules_failed: dict[str, str]) -> None:
+        self.modules_failed = dict(modules_failed)
+        modules = ", ".join(sorted(modules_failed))
+        super().__init__(f"Transient live-module failure: {modules}")
+
+
 @dataclass(frozen=True)
 class RecomputeOutcome:
     """Result of a cheap-tier live recompute."""
@@ -159,12 +174,11 @@ def recompute_modules(
     row it writes ``pipeline_state="blocked"`` with the message, so the figures
     are never served as sound ones.
 
-    This is the light, read-safe half of the live tier: it does NOT re-derive
-    facts (no mass delete/insert), so it is fast and non-blocking on the request
-    path. The on-read live view (``live_view``) calls this so a methodology or
-    parameter change re-flows instantly and cheaply. Fact re-derivation — the
-    heavy half — happens only in :func:`recompute_live` (the ingestion-triggered
-    background job), never synchronously on a read.
+    This is the light half of the live tier: it does NOT re-derive facts (no
+    mass delete/insert). The background refresh calls it after deriving current
+    facts; reads only consume the persisted rows. Ingestion, methodology,
+    parameter, and entitlement mutations enqueue that refresh at the point the
+    corresponding input generation changes.
     """
     modules_ok: list[str] = []
     modules_failed: dict[str, str] = {}
@@ -259,8 +273,8 @@ def recompute_live(
 def run_refresh(session: Session, job: Job) -> None:
     """Cheap-tier worker handler: proactively warm the live view for a bank.
 
-    Delegates to :func:`recompute_live` (the same path the on-read live view
-    uses) and records the refresh audit event. Idempotent.
+    Delegates to :func:`recompute_live` and records the refresh audit event.
+    Idempotent; the live-summary read never invokes this path.
     """
     ctx = _ctx_from_job(session, job)
     bank = _bank_or_error(session, ctx, job)
@@ -282,6 +296,13 @@ def run_refresh(session: Session, job: Job) -> None:
         }
         return
 
+    progress = {
+        "as_of_date": as_of.isoformat(),
+        "modules_ok": outcome.modules_ok,
+        "modules_failed": outcome.modules_failed,
+        "reconciliation_blocked": outcome.reconciliation_block is not None,
+    }
+    job.progress = progress
     record_event(
         session,
         ctx,
@@ -297,12 +318,35 @@ def run_refresh(session: Session, job: Job) -> None:
         },
     )
     session.commit()
-    job.progress = {
-        "as_of_date": as_of.isoformat(),
-        "modules_ok": outcome.modules_ok,
-        "modules_failed": outcome.modules_failed,
-        "reconciliation_blocked": outcome.reconciliation_block is not None,
-    }
+    if outcome.modules_failed:
+        raise TransientLiveRefreshError(outcome.modules_failed)
+
+
+def persist_transient_retry_state(
+    session: Session,
+    job: Job,
+    failure: TransientLiveRefreshError,
+) -> None:
+    """Mirror the queue row's bounded retry schedule onto failed modules.
+
+    ``job_queue.fail_with_retry`` updates ``attempts`` and ``run_after`` first,
+    without committing; this function then stamps the affected live rows in the
+    same transaction. A terminally exhausted job has no ``next_retry_at``.
+    """
+    if job.bank_id is None:
+        return
+    rows = session.scalars(
+        select(LiveMetric).where(
+            LiveMetric.organization_id == job.organization_id,
+            LiveMetric.bank_id == job.bank_id,
+            LiveMetric.module.in_(tuple(failure.modules_failed)),
+        )
+    )
+    for row in rows:
+        row.retry_classification = "transient_failure"
+        row.retry_attempt_count = job.attempts
+        row.next_retry_at = job.run_after if job.status == "queued" else None
+    session.flush()
 
 
 def _mark_prior_live_metrics_unavailable(
@@ -317,8 +361,9 @@ def _mark_prior_live_metrics_unavailable(
     An empty first refresh has no row to update and remains a benign no-op. If
     rows already exist, retaining them as ``ready`` would present a result from
     an older financial book after the latest refresh refused to derive one.
-    ``live_view`` retries failed modules automatically using the latest actual
-    reporting period, so this creates no manual-refresh workflow.
+    A later input mutation enqueues a new refresh. This structural state is not
+    retried on reads or on a timer, so it creates neither a manual-refresh
+    workflow nor a permanent retry loop.
     """
     message = (
         f"Live recomputation found no canonical financial book for {as_of.isoformat()} "
@@ -333,6 +378,9 @@ def _mark_prior_live_metrics_unavailable(
     for row in rows:
         row.pipeline_state = "failed"
         row.pipeline_error = message
+        row.retry_classification = "structural_unavailable"
+        row.retry_attempt_count = 0
+        row.next_retry_at = None
     session.commit()
 
 
@@ -413,6 +461,11 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
     fix a general ledger.
     """
     pipeline_state = "blocked" if reconciliation_block is not None else "ready"
+    retry_classification = (
+        "structural_unavailable"
+        if reconciliation_block is None and metrics.get("availability") == "unavailable"
+        else None
+    )
     if reconciliation_block is not None:
         metrics = {**metrics, RECONCILIATION_METRIC_KEY: RECONCILIATION_METRIC_BLOCKED}
     existing = session.scalar(
@@ -438,6 +491,9 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
                 calculation_generation=1,
                 pipeline_state=pipeline_state,
                 pipeline_error=reconciliation_block,
+                retry_classification=retry_classification,
+                retry_attempt_count=0,
+                next_retry_at=None,
                 computed_at=now,
             )
         )
@@ -451,6 +507,9 @@ def _upsert_live_metric(  # noqa: PLR0913 - one upsert carries the full live row
         existing.calculation_generation += 1
         existing.pipeline_state = pipeline_state
         existing.pipeline_error = reconciliation_block
+        existing.retry_classification = retry_classification
+        existing.retry_attempt_count = 0
+        existing.next_retry_at = None
         existing.computed_at = now
     _upsert_live_snapshot(session, ctx, bank, period, module, metrics, status, now)
     session.flush()
@@ -492,6 +551,9 @@ def _upsert_live_failure(  # noqa: PLR0913 - one upsert carries the full live ro
                 calculation_generation=1,
                 pipeline_state="failed",
                 pipeline_error=error,
+                retry_classification="transient_failure",
+                retry_attempt_count=0,
+                next_retry_at=None,
                 computed_at=now,
             )
         )
@@ -504,6 +566,9 @@ def _upsert_live_failure(  # noqa: PLR0913 - one upsert carries the full live ro
         existing.calculation_generation += 1
         existing.pipeline_state = "failed"
         existing.pipeline_error = error
+        existing.retry_classification = "transient_failure"
+        existing.retry_attempt_count = 0
+        existing.next_retry_at = None
         existing.computed_at = now
     _upsert_live_snapshot(session, ctx, bank, period, module, {}, "na", now)
     session.flush()

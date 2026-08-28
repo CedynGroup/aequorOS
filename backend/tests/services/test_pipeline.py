@@ -12,10 +12,13 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from app import worker
 from app.api.deps import TenantContext
+from app.db.base import utc_now
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -26,11 +29,13 @@ from app.models import (
     LiveMetric,
     LiveMetricSnapshot,
     RegulatoryPackage,
+    RegulatoryParameter,
     RegulatoryRun,
 )
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import (
     job_queue,
+    live_refresh_triggers,
     live_view,
     pipeline,
     regulatory_capital,
@@ -189,6 +194,193 @@ def test_run_refresh_is_idempotent(db_session: Session) -> None:
         .group_by(LiveMetric.module)
     ).all()
     assert all(count == 1 for _module, count in per_module)
+
+
+def test_unavailable_live_module_does_not_make_summary_reads_write(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A structurally unavailable module is stable until a real input changes."""
+    _seed(db_session)
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    rating = _live_rows(db_session)["rating"]
+    assert rating.metrics["availability"] == "unavailable"
+
+    enqueue_count = 0
+    commit_count = 0
+    real_enqueue = live_view.job_queue.enqueue
+    real_commit = db_session.commit
+
+    def counted_enqueue(*args: object, **kwargs: object) -> Job:
+        nonlocal enqueue_count
+        enqueue_count += 1
+        return real_enqueue(*args, **kwargs)  # type: ignore[arg-type]
+
+    def counted_commit() -> None:
+        nonlocal commit_count
+        commit_count += 1
+        real_commit()
+
+    monkeypatch.setattr(live_view.job_queue, "enqueue", counted_enqueue)
+    monkeypatch.setattr(db_session, "commit", counted_commit)
+
+    poll_count = 5
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    for _ in range(poll_count):
+        live_view.get_live_summary(db_session, ctx, SAMPLE_BANK_ID)
+
+    assert enqueue_count == 0, (
+        f"{poll_count} unchanged live-summary polls enqueued {enqueue_count} refreshes"
+    )
+    assert commit_count == 0, (
+        f"{poll_count} unchanged live-summary polls committed {commit_count} transactions"
+    )
+
+
+def test_completed_refresh_does_not_reopen_on_unchanged_summary_read(
+    db_session: Session,
+) -> None:
+    """Completion cannot reopen the old queued-only coalescing window."""
+    _seed(db_session)
+    job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "pipeline_refresh",
+        bank_id=SAMPLE_BANK_ID,
+        payload={"as_of_date": FIXTURE_AS_OF.isoformat()},
+        coalesce_key=f"refresh:{SAMPLE_BANK_ID}:{FIXTURE_AS_OF.isoformat()}",
+    )
+    db_session.commit()
+    claimed = job_queue.claim_next(db_session, utc_now(), ("pipeline_refresh",))
+    assert claimed is not None
+    pipeline.run_refresh(db_session, claimed)
+    job_queue.complete(db_session, claimed)
+    assert _live_rows(db_session)["rating"].metrics["availability"] == "unavailable"
+    jobs_before = db_session.scalar(select(func.count()).select_from(Job)) or 0
+
+    live_view.get_live_summary(
+        db_session,
+        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+        SAMPLE_BANK_ID,
+    )
+
+    jobs_after = db_session.scalar(select(func.count()).select_from(Job)) or 0
+    assert jobs_after == jobs_before, (
+        f"unchanged read created {jobs_after - jobs_before} job(s) after completion"
+    )
+
+
+def test_transient_module_failure_obeys_bounded_backoff_then_recovers(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed(db_session)
+    real_scoped_modules = pipeline._scoped_modules  # pyright: ignore[reportPrivateUsage]
+    failures_left = 1
+
+    def scoped_modules(session: Session, bank: Bank) -> tuple[tuple[str, object], ...]:
+        modules = real_scoped_modules(session, bank)
+        liquidity_compute = next(compute for module, compute in modules if module == "liquidity")
+
+        def flaky_liquidity(*args: object, **kwargs: object) -> object:
+            nonlocal failures_left
+            if failures_left:
+                failures_left -= 1
+                raise RuntimeError("temporary liquidity dependency failure")
+            return liquidity_compute(*args, **kwargs)  # type: ignore[arg-type]
+
+        return tuple(
+            (module, flaky_liquidity if module == "liquidity" else compute)
+            for module, compute in modules
+        )
+
+    monkeypatch.setattr(pipeline, "_scoped_modules", scoped_modules)
+    start = utc_now()
+    clock = [start]
+    monkeypatch.setattr(worker, "utc_now", lambda: clock[0])
+    monkeypatch.setattr(job_queue, "utc_now", lambda: clock[0])
+    worker_sessions = sessionmaker(bind=db_session.get_bind(), expire_on_commit=False)
+
+    def new_worker_session(organization_id: str | None = None) -> Session:
+        session = worker_sessions()
+        if organization_id is not None:
+            session.info["organization_id"] = organization_id
+        return session
+
+    monkeypatch.setattr(worker, "_new_session", new_worker_session)
+    job = _refresh_job(db_session)
+
+    assert worker.run_once(("pipeline_refresh",), worker_id="risk-worker:retry-test")
+    db_session.expire_all()
+    persisted = db_session.get(Job, job.id)
+    assert persisted is not None
+    assert persisted.status == "queued"
+    assert persisted.attempts == 1
+    assert job_queue._as_aware(persisted.run_after) == (  # pyright: ignore[reportPrivateUsage]
+        start + job_queue.backoff(1)
+    )
+    failed = _live_rows(db_session)["liquidity"]
+    assert failed.retry_classification == "transient_failure"
+    assert failed.retry_attempt_count == 1
+    assert job_queue._as_aware(failed.next_retry_at) == job_queue._as_aware(  # pyright: ignore[reportPrivateUsage]
+        persisted.run_after
+    )
+
+    assert worker.run_once(("pipeline_refresh",), worker_id="risk-worker:retry-test") is False
+
+    clock[0] = start + job_queue.backoff(1)
+    assert worker.run_once(("pipeline_refresh",), worker_id="risk-worker:retry-test")
+    db_session.expire_all()
+    persisted = db_session.get(Job, job.id)
+    assert persisted is not None and persisted.status == "succeeded"
+    recovered = _live_rows(db_session)["liquidity"]
+    assert recovered.pipeline_state == "ready"
+    assert recovered.retry_classification is None
+    assert recovered.retry_attempt_count == 0
+    assert recovered.next_retry_at is None
+
+
+def test_governed_parameter_change_enqueues_and_advances_generation(
+    db_session: Session,
+) -> None:
+    _seed(db_session)
+    pipeline.run_refresh(db_session, _refresh_job(db_session))
+    before = _live_rows(db_session)["capital"]
+    before_generation = before.calculation_generation
+    before_hash = before.computed_from_input_hash
+    parameter = RegulatoryParameter(
+        scope_type="institution_class",
+        scope_key="bank",
+        param_code="car_min",
+        jurisdiction_code="GH",
+        value_numeric=Decimal("14"),
+        unit="percent",
+        source_citation="test governed capital-floor change",
+        confirmation_status="confirmed",
+        effective_from=FIXTURE_AS_OF,
+        status="approved",
+        proposed_by="maker@aequoros.com",
+        approved_by="checker@aequoros.com",
+        approved_at=utc_now(),
+    )
+    db_session.add(parameter)
+    db_session.flush()
+
+    jobs = live_refresh_triggers.enqueue_regulatory_parameter_change(db_session, parameter)
+    db_session.commit()
+
+    assert len(jobs) == 1
+    assert jobs[0].bank_id == SAMPLE_BANK_ID
+    pipeline.run_refresh(db_session, jobs[0])
+    db_session.expire_all()
+    after = _live_rows(db_session)["capital"]
+    assert after.calculation_generation > before_generation
+    assert after.computed_from_input_hash != before_hash
+    summary = live_view.get_live_summary(
+        db_session,
+        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+        SAMPLE_BANK_ID,
+    )
+    capital_signal = next(module for module in summary.modules if module.module == "capital")
+    assert capital_signal.calculation_generation == after.calculation_generation
 
 
 def test_failed_live_refresh_does_not_reference_a_vanished_ladder_period(
