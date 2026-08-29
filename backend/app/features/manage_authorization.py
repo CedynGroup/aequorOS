@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -19,11 +19,13 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
-from app.models import AuthorizationBinding, Bank, User
+from app.models import AuthorizationBinding, Bank, Organization, User
 from app.schemas.authorization import (
     BindingCreateRequest,
     BindingCreateResponse,
     BindingListRead,
+    BindingPreviewRead,
+    BindingPreviewRequest,
     BindingRead,
     BindingRevokeRequest,
     MemberListRead,
@@ -82,11 +84,11 @@ def _actor_name(
 
 
 def _binding_read(
-    db: DbSession,
     binding: AuthorizationBinding,
     *,
     users: dict[UUID, User],
     banks: dict[str, Bank],
+    organization: Organization,
 ) -> BindingRead:
     principal = users.get(binding.principal_user_id)
     role_bundle = RoleBundle(binding.role_bundle)
@@ -109,7 +111,19 @@ def _binding_read(
         sensitivity_scope=SensitivityScope(binding.sensitivity_scope),
         status=BindingStatus(binding.status),
         effective=effective,
-        authority_sentence=grant_administration.authority_sentence(db, binding),
+        authority_sentence=grant_administration.compose_authority_sentence(
+            principal_name=_display_name(principal, str(binding.principal_user_id)),
+            role_bundle=role_bundle,
+            institution_name=(
+                f"every institution in {organization.name}"
+                if binding.institution_scope == InstitutionScope.ORGANIZATION.value
+                else banks[binding.institution_id].name
+                if binding.institution_id is not None and binding.institution_id in banks
+                else str(binding.institution_id)
+            ),
+            module_scope=ModuleScope(binding.module_scope),
+            sensitivity_scope=SensitivityScope(binding.sensitivity_scope),
+        ),
         effective_permissions=sorted(
             permission.value for permission in ROLE_PERMISSIONS[role_bundle]
         ),
@@ -133,7 +147,7 @@ def _binding_read(
 
 def _presentation_maps(
     db: DbSession, organization_id: str
-) -> tuple[dict[UUID, User], dict[str, Bank]]:
+) -> tuple[dict[UUID, User], dict[str, Bank], Organization]:
     users = {
         user.id: user
         for user in db.scalars(select(User).where(User.organization_id == organization_id))
@@ -142,7 +156,10 @@ def _presentation_maps(
         bank.id: bank
         for bank in db.scalars(select(Bank).where(Bank.organization_id == organization_id))
     }
-    return users, banks
+    organization = db.get(Organization, organization_id)
+    if organization is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
+    return users, banks, organization
 
 
 def binding_response(
@@ -150,9 +167,11 @@ def binding_response(
     organization_id: str,
     result: grant_administration.GrantResult,
 ) -> BindingCreateResponse:
-    users, banks = _presentation_maps(db, organization_id)
+    users, banks, organization = _presentation_maps(db, organization_id)
     return BindingCreateResponse(
-        binding=_binding_read(db, result.binding, users=users, banks=banks),
+        binding=_binding_read(
+            result.binding, users=users, banks=banks, organization=organization
+        ),
         sod_decision=_sod_read(result.sod_decision),
     )
 
@@ -199,9 +218,51 @@ def list_authorization_bindings(
             )
         )
     )
-    users, banks = _presentation_maps(db, ctx.organization_id)
+    users, banks, organization = _presentation_maps(db, ctx.organization_id)
     return BindingListRead(
-        bindings=[_binding_read(db, row, users=users, banks=banks) for row in rows]
+        bindings=[
+            _binding_read(row, users=users, banks=banks, organization=organization)
+            for row in rows
+        ]
+    )
+
+
+@router.post(
+    "/authorization/bindings/preview",
+    response_model=BindingPreviewRead,
+    operation_id="previewAuthorizationBinding",
+)
+def preview_authorization_binding(
+    payload: BindingPreviewRequest,
+    db: DbSession,
+    ctx: GrantAdminTenant,
+) -> BindingPreviewRead:
+    member = _member_or_404(db, ctx, payload.principal_user_id)
+    scope = binding_scope(payload)
+    try:
+        grant_administration.validate_public_grant(RoleBundle(payload.role_bundle), scope)
+    except grant_administration.GrantAdministrationError as exc:
+        raise grant_conflict(exc) from exc
+    _, banks, organization = _presentation_maps(db, ctx.organization_id)
+    if scope.institution_scope is InstitutionScope.ORGANIZATION:
+        institution_name = f"every institution in {organization.name}"
+    else:
+        bank = banks.get(scope.institution_id or "")
+        if bank is None:
+            raise grant_conflict(
+                grant_administration.GrantAdministrationError(
+                    "institution is not part of the organization"
+                )
+            )
+        institution_name = bank.name
+    return BindingPreviewRead(
+        authority_sentence=grant_administration.compose_authority_sentence(
+            principal_name=_display_name(member, str(member.id)),
+            role_bundle=RoleBundle(payload.role_bundle),
+            institution_name=institution_name,
+            module_scope=scope.module_scope,
+            sensitivity_scope=scope.sensitivity_scope,
+        )
     )
 
 
@@ -260,11 +321,11 @@ def revoke_authorization_binding(
         )
     except grant_administration.GrantAdministrationError as exc:
         raise grant_conflict(exc) from exc
-    users, banks = _presentation_maps(db, ctx.organization_id)
-    return _binding_read(db, binding, users=users, banks=banks)
+    users, banks, organization = _presentation_maps(db, ctx.organization_id)
+    return _binding_read(binding, users=users, banks=banks, organization=organization)
 
 
-def _lifecycle_status(user: User) -> str:
+def _lifecycle_status(user: User) -> Literal["active", "invited", "deactivated"]:
     if user.is_active:
         return "active"
     if (
@@ -276,7 +337,7 @@ def _lifecycle_status(user: User) -> str:
     return "deactivated"
 
 
-def _access_request_state(user: User) -> str:
+def _access_request_state(user: User) -> Literal["none", "approval_needed", "rejected"]:
     if user.access_rejected_at is not None:
         return "rejected"
     if (
@@ -289,10 +350,12 @@ def _access_request_state(user: User) -> str:
     return "none"
 
 
-def _authentication_method(user: User) -> str:
+def _authentication_method(user: User) -> Literal["password", "sso", "service"]:
     if user.auth_provider == "oidc":
         return "sso"
-    return user.auth_provider
+    if user.auth_provider == "service":
+        return "service"
+    return "password"
 
 
 @router.get(
@@ -301,7 +364,7 @@ def _authentication_method(user: User) -> str:
     operation_id="listOrganizationMembers",
 )
 def list_organization_members(db: DbSession, ctx: GrantAdminTenant) -> MemberListRead:
-    users, banks = _presentation_maps(db, ctx.organization_id)
+    users, banks, organization = _presentation_maps(db, ctx.organization_id)
     bindings = list(
         db.scalars(
             select(AuthorizationBinding)
@@ -321,7 +384,7 @@ def list_organization_members(db: DbSession, ctx: GrantAdminTenant) -> MemberLis
         users.values(), key=lambda row: ((row.display_name or row.email).lower(), row.email)
     ):
         grant_reads = [
-            _binding_read(db, binding, users=users, banks=banks)
+            _binding_read(binding, users=users, banks=banks, organization=organization)
             for binding in by_principal[user.id]
         ]
         members.append(

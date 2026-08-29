@@ -65,6 +65,14 @@ class BindingCreateRequest(ScopedGrantInput):
     principal_user_id: UUID
 
 
+class BindingPreviewRequest(ScopedGrantInput):
+    principal_user_id: UUID
+
+
+class BindingPreviewRead(ClosedModel):
+    authority_sentence: str
+
+
 class BindingRevokeRequest(ClosedModel):
     reason: str = Field(min_length=1, max_length=2000)
 

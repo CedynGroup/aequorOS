@@ -219,6 +219,31 @@ def _scope_dict(binding: AuthorizationBinding) -> dict[str, str | None]:
     }
 
 
+def compose_authority_sentence(
+    *,
+    principal_name: str,
+    role_bundle: RoleBundle,
+    institution_name: str,
+    module_scope: ModuleScope,
+    sensitivity_scope: SensitivityScope,
+) -> str:
+    role = _ROLE_LABELS[role_bundle]
+    article = "an" if role[0].lower() in "aeiou" else "a"
+    module = _MODULE_LABELS[module_scope]
+    sensitivity = _SENSITIVITY_LABELS[sensitivity_scope]
+    module_phrase = (
+        "across all modules" if module_scope is ModuleScope.ALL else f"in {module}"
+    )
+    if sensitivity_scope is SensitivityScope.ALL:
+        sensitivity_phrase = "covering all sensitivity levels"
+    else:
+        sensitivity_phrase = f"covering {sensitivity} data"
+    return (
+        f"{principal_name} is {article} {role} {module_phrase} for {institution_name}, "
+        f"{sensitivity_phrase}."
+    )
+
+
 def authority_sentence(db: Session, binding: AuthorizationBinding) -> str:
     principal = db.scalar(
         select(User).where(
@@ -229,12 +254,9 @@ def authority_sentence(db: Session, binding: AuthorizationBinding) -> str:
     principal_name = (
         principal.display_name or principal.email if principal is not None else "This member"
     )
-    role = _ROLE_LABELS[RoleBundle(binding.role_bundle)]
-    article = "an" if role[0].lower() in "aeiou" else "a"
-    module = _MODULE_LABELS[ModuleScope(binding.module_scope)]
     if binding.institution_scope == InstitutionScope.ORGANIZATION.value:
         organization = db.get(Organization, binding.organization_id)
-        institution = (
+        institution_name = (
             f"every institution in {organization.name if organization else 'the organization'}"
         )
     else:
@@ -244,19 +266,13 @@ def authority_sentence(db: Session, binding: AuthorizationBinding) -> str:
                 Bank.organization_id == binding.organization_id,
             )
         )
-        institution = bank.name if bank is not None else str(binding.institution_id)
-    sensitivity = _SENSITIVITY_LABELS[SensitivityScope(binding.sensitivity_scope)]
-    if binding.module_scope == ModuleScope.ALL.value:
-        module_phrase = "across all modules"
-    else:
-        module_phrase = f"in {module}"
-    if binding.sensitivity_scope == SensitivityScope.ALL.value:
-        sensitivity_phrase = "covering all sensitivity levels"
-    else:
-        sensitivity_phrase = f"covering {sensitivity} data"
-    return (
-        f"{principal_name} is {article} {role} {module_phrase} for {institution}, "
-        f"{sensitivity_phrase}."
+        institution_name = bank.name if bank is not None else str(binding.institution_id)
+    return compose_authority_sentence(
+        principal_name=principal_name,
+        role_bundle=RoleBundle(binding.role_bundle),
+        institution_name=institution_name,
+        module_scope=ModuleScope(binding.module_scope),
+        sensitivity_scope=SensitivityScope(binding.sensitivity_scope),
     )
 
 
@@ -292,7 +308,7 @@ def _record_grant_audit(
     )
 
 
-def _validate_public_bundle(role_bundle: RoleBundle, scope: authorization.BindingScope) -> None:
+def validate_public_grant(role_bundle: RoleBundle, scope: authorization.BindingScope) -> None:
     if role_bundle in {RoleBundle.ORG_OWNER, RoleBundle.INTEGRATION_WRITER}:
         raise GrantAdministrationError("this role bundle is not grantable from Members")
     if role_bundle is RoleBundle.ACCOUNT_ADMIN and (
@@ -318,7 +334,17 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
     reason: str,
     commit: bool = True,
 ) -> GrantResult:
-    _validate_public_bundle(role_bundle, scope)
+    validate_public_grant(role_bundle, scope)
+    principal = db.scalar(
+        select(User)
+        .where(
+            User.id == principal_user_id,
+            User.organization_id == organization_id,
+        )
+        .with_for_update(key_share=True)
+    )
+    if principal is None:
+        raise GrantAdministrationError("principal is not a member of the organization")
     decision = check_sod_policy(
         db,
         organization_id=organization_id,

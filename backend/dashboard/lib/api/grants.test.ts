@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import {
   canAddGrantToMember,
-  grantAuthoritySentence,
   visibleGrantFragments,
 } from "./grants";
 
@@ -9,16 +8,11 @@ const draft = {
   roleBundle: "analyst",
   institutionScope: "institution",
   institutionId: "BK-GH000001",
-  institutionName: "Aequor Bank Ghana",
   moduleScope: "liq",
   sensitivityScope: "confidential",
   reason: "Treasury monitoring responsibilities",
 } as const;
 
-assert.equal(
-  grantAuthoritySentence("Amma Owusu", draft),
-  "Amma Owusu is an Analyst in Liquidity Monitoring for Aequor Bank Ghana, covering Confidential data.",
-);
 assert.equal(Array.isArray(draft.roleBundle), false);
 assert.equal(Array.isArray(draft.institutionId), false);
 assert.equal(Array.isArray(draft.moduleScope), false);
@@ -74,4 +68,4 @@ assert.equal(
   false,
 );
 
-console.log("grants.test.ts: sentence and compact grant summaries passed.");
+console.log("grants.test.ts: scalar and compact grant summaries passed.");

@@ -2987,6 +2987,78 @@
         "title": "BindingListRead",
         "type": "object"
       },
+      "BindingPreviewRead": {
+        "additionalProperties": false,
+        "properties": {
+          "authority_sentence": {
+            "title": "Authority Sentence",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authority_sentence"
+        ],
+        "title": "BindingPreviewRead",
+        "type": "object"
+      },
+      "BindingPreviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "institution_id": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant target institution ID"
+          },
+          "institution_scope": {
+            "$ref": "#/components/schemas/InstitutionScope"
+          },
+          "module_scope": {
+            "$ref": "#/components/schemas/ModuleScope"
+          },
+          "principal_user_id": {
+            "format": "uuid",
+            "title": "Principal User Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "role_bundle": {
+            "enum": [
+              "viewer",
+              "auditor",
+              "analyst",
+              "approver",
+              "account_admin"
+            ],
+            "title": "Role Bundle",
+            "type": "string"
+          },
+          "sensitivity_scope": {
+            "$ref": "#/components/schemas/SensitivityScope"
+          }
+        },
+        "required": [
+          "role_bundle",
+          "institution_scope",
+          "module_scope",
+          "sensitivity_scope",
+          "reason",
+          "principal_user_id"
+        ],
+        "title": "BindingPreviewRequest",
+        "type": "object"
+      },
       "BindingRead": {
         "additionalProperties": false,
         "properties": {
@@ -40527,6 +40599,102 @@
           }
         ],
         "summary": "Create Authorization Binding",
+        "tags": [
+          "authorization"
+        ]
+      }
+    },
+    "/api/v1/authorization/bindings/preview": {
+      "post": {
+        "operationId": "previewAuthorizationBinding",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindingPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BindingPreviewRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Authorization Binding",
         "tags": [
           "authorization"
         ]

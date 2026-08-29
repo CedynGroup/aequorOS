@@ -11,7 +11,6 @@ export type GrantDraft = Readonly<{
   roleBundle: BindingCreateRequestRoleBundleEnum;
   institutionScope: InstitutionScope;
   institutionId?: string;
-  institutionName: string;
   moduleScope: ModuleScope;
   sensitivityScope: SensitivityScope;
   reason: string;
@@ -55,23 +54,6 @@ function optionLabel(
   value: string,
 ): string {
   return options.find(([candidate]) => candidate === value)?.[1] ?? value;
-}
-
-export function grantAuthoritySentence(
-  principalName: string,
-  draft: GrantDraft,
-): string {
-  const role = optionLabel(ROLE_OPTIONS, draft.roleBundle);
-  const article = /^[aeiou]/i.test(role) ? "an" : "a";
-  const moduleLabel = optionLabel(MODULE_OPTIONS, draft.moduleScope);
-  const modulePhrase =
-    draft.moduleScope === "all" ? "across all modules" : `in ${moduleLabel}`;
-  const sensitivity = optionLabel(SENSITIVITY_OPTIONS, draft.sensitivityScope);
-  const sensitivityPhrase =
-    draft.sensitivityScope === "all"
-      ? "covering all sensitivity levels"
-      : `covering ${sensitivity} data`;
-  return `${principalName} is ${article} ${role} ${modulePhrase} for ${draft.institutionName}, ${sensitivityPhrase}.`;
 }
 
 export function compactGrantFragment(grant: BindingRead): string {

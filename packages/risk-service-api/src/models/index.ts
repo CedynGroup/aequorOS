@@ -128,6 +128,8 @@ export * from "./BindingCreateRequest";
 export * from "./BindingCreateResponse";
 export * from "./BindingInstitutionID";
 export * from "./BindingListRead";
+export * from "./BindingPreviewRead";
+export * from "./BindingPreviewRequest";
 export * from "./BindingRead";
 export * from "./BindingReadRevokedByType";
 export * from "./BindingRevokeRequest";

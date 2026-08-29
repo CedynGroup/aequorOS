@@ -26,7 +26,6 @@ import { avatarColor, initialsFrom } from "@/lib/api/identity";
 import { fmtRelative } from "@/lib/api/values";
 import {
   canAddGrantToMember,
-  grantAuthoritySentence,
   MODULE_OPTIONS,
   ROLE_OPTIONS,
   SENSITIVITY_OPTIONS,
@@ -452,7 +451,6 @@ function initialDraft(
     roleBundle: "analyst",
     institutionScope: bank ? "institution" : "organization",
     institutionId: bank?.id,
-    institutionName: bank?.name ?? "every institution in this organization",
     moduleScope: "liq",
     sensitivityScope: "confidential",
     reason: "",
@@ -473,24 +471,39 @@ function GrantComposer({
   const [step, setStep] = useState<"define" | "review" | "done">("define");
   const [draft, setDraft] = useState<GrantDraft>(() => initialDraft(banks));
   const [saved, setSaved] = useState<BindingCreateResponse | null>(null);
+  const [previewSentence, setPreviewSentence] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const name = memberName(member);
-  const sentence = grantAuthoritySentence(name, draft);
   const isPendingApproval = member.accessRequestState === "approval_needed";
+
+  const scope = {
+    roleBundle: draft.roleBundle,
+    institutionScope: draft.institutionScope,
+    institutionId:
+      draft.institutionScope === "institution" ? draft.institutionId : undefined,
+    moduleScope: draft.moduleScope,
+    sensitivityScope: draft.sensitivityScope,
+    reason: draft.reason.trim(),
+  };
+
+  const preview = useMutation({
+    mutationFn: () =>
+      authorizationApi.previewAuthorizationBinding({
+        bindingPreviewRequest: {
+          ...scope,
+          principalUserId: member.userId,
+        },
+      }),
+    onSuccess: (result) => {
+      setPreviewSentence(result.authoritySentence);
+      setStep("review");
+    },
+    onError: async (failure) =>
+      setError((await normalizeApiError(failure)).message),
+  });
 
   const submit = useMutation({
     mutationFn: async () => {
-      const scope = {
-        roleBundle: draft.roleBundle,
-        institutionScope: draft.institutionScope,
-        institutionId:
-          draft.institutionScope === "institution"
-            ? draft.institutionId
-            : undefined,
-        moduleScope: draft.moduleScope,
-        sensitivityScope: draft.sensitivityScope,
-        reason: draft.reason.trim(),
-      };
       if (isPendingApproval) {
         return authApi.authApproveSsoAccessRequest({
           userId: member.userId,
@@ -521,7 +534,6 @@ function GrantComposer({
         roleBundle,
         institutionScope: "organization",
         institutionId: undefined,
-        institutionName: "every institution in this organization",
         moduleScope: "account",
         sensitivityScope: "all",
       });
@@ -533,6 +545,7 @@ function GrantComposer({
   const resetForAnother = () => {
     setDraft(initialDraft(banks));
     setSaved(null);
+    setPreviewSentence(null);
     setError(null);
     setStep("define");
   };
@@ -581,7 +594,10 @@ function GrantComposer({
           className="space-y-5 p-5"
           onSubmit={(event) => {
             event.preventDefault();
-            if (draft.reason.trim()) setStep("review");
+            if (draft.reason.trim()) {
+              setError(null);
+              preview.mutate();
+            }
           }}
         >
           {isPendingApproval && (
@@ -621,8 +637,6 @@ function GrantComposer({
                   ...draft,
                   institutionScope: bank ? "institution" : "organization",
                   institutionId: bank?.id,
-                  institutionName:
-                    bank?.name ?? "every institution in this organization",
                 });
               }}
             />
@@ -667,7 +681,14 @@ function GrantComposer({
               placeholder="Why this authority is required"
             />
           </label>
-          <SentencePreview sentence={sentence} />
+          {error && (
+            <p
+              role="alert"
+              className="rounded-md bg-critical-light px-4 py-3 text-caption text-critical"
+            >
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-3">
             <button
               type="button"
@@ -678,21 +699,21 @@ function GrantComposer({
             </button>
             <button
               type="submit"
-              disabled={!draft.reason.trim()}
+              disabled={!draft.reason.trim() || preview.isPending}
               className="px-4 py-2.5 btn-primary text-body font-medium disabled:opacity-50"
             >
-              Review grant
+              {preview.isPending ? "Preparing review…" : "Review grant"}
             </button>
           </div>
         </form>
       )}
 
-      {step === "review" && (
+      {step === "review" && previewSentence && (
         <div className="space-y-5 p-5">
           <p className="text-body text-slate">
             Review the exact authority before granting it.
           </p>
-          <SentencePreview sentence={sentence} />
+          <SentencePreview sentence={previewSentence} />
           <div className="rounded-md border border-border-light p-4">
             <p className="text-micro font-medium uppercase tracking-wider text-slate">
               Reason
@@ -710,7 +731,10 @@ function GrantComposer({
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={() => setStep("define")}
+              onClick={() => {
+                setPreviewSentence(null);
+                setStep("define");
+              }}
               className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy hover:bg-surface-muted"
             >
               Back

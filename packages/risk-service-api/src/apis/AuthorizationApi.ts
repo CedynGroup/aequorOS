@@ -15,6 +15,8 @@ import type {
   BindingCreateRequest,
   BindingCreateResponse,
   BindingListRead,
+  BindingPreviewRead,
+  BindingPreviewRequest,
   BindingRead,
   BindingRevokeRequest,
   ErrorResponse,
@@ -27,6 +29,10 @@ import {
   BindingCreateResponseToJSON,
   BindingListReadFromJSON,
   BindingListReadToJSON,
+  BindingPreviewReadFromJSON,
+  BindingPreviewReadToJSON,
+  BindingPreviewRequestFromJSON,
+  BindingPreviewRequestToJSON,
   BindingReadFromJSON,
   BindingReadToJSON,
   BindingRevokeRequestFromJSON,
@@ -43,6 +49,10 @@ export interface CreateAuthorizationBindingRequest {
 
 export interface ListAuthorizationBindingsRequest {
   principalUserId?: string | null;
+}
+
+export interface PreviewAuthorizationBindingRequest {
+  bindingPreviewRequest: BindingPreviewRequest;
 }
 
 export interface RevokeAuthorizationBindingRequest {
@@ -207,6 +217,66 @@ export class AuthorizationApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<MemberListRead> {
     const response = await this.listOrganizationMembersRaw(initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * Preview Authorization Binding
+   */
+  async previewAuthorizationBindingRaw(
+    requestParameters: PreviewAuthorizationBindingRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BindingPreviewRead>> {
+    if (requestParameters["bindingPreviewRequest"] == null) {
+      throw new runtime.RequiredError(
+        "bindingPreviewRequest",
+        'Required parameter "bindingPreviewRequest" was null or undefined when calling previewAuthorizationBinding().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/authorization/bindings/preview`,
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: BindingPreviewRequestToJSON(
+          requestParameters["bindingPreviewRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BindingPreviewReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Preview Authorization Binding
+   */
+  async previewAuthorizationBinding(
+    requestParameters: PreviewAuthorizationBindingRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BindingPreviewRead> {
+    const response = await this.previewAuthorizationBindingRaw(
+      requestParameters,
+      initOverrides,
+    );
     return await response.value();
   }
 

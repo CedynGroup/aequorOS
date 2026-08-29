@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from uuid import UUID, uuid4
 
 import pytest
@@ -23,7 +25,7 @@ from app.core.authorization import (
 )
 from app.db.session import get_sessionmaker
 from app.models import AuditEvent, AuthorizationBinding, Bank, RefreshToken, User
-from app.services import authentication, authorization
+from app.services import authentication, authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, USER_1, USER_2, headers
 
@@ -223,6 +225,113 @@ def test_create_and_list_keep_every_scalar_dimension_exact(
             "sensitivity_scope": "confidential",
         }
         assert audit.details["reason"] == _payload()["reason"]
+
+
+def test_preview_and_persisted_organization_wide_sentences_are_identical(
+    grant_client: TestClient,
+) -> None:
+    payload = _payload(role="viewer")
+    payload.update(
+        institution_scope="organization",
+        institution_id=None,
+        module_scope="all",
+        sensitivity_scope="all",
+    )
+    preview = grant_client.post(
+        "/api/v1/authorization/bindings/preview",
+        headers=_owner_headers(),
+        json=payload,
+    )
+    assert preview.status_code == 200, preview.text
+
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=payload,
+    )
+    assert created.status_code == 201, created.text
+    previewed_sentence = preview.json()["authority_sentence"]
+    assert previewed_sentence == created.json()["binding"]["authority_sentence"]
+
+    with _session() as db:
+        audit = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "authorization.binding_granted",
+                AuditEvent.entity_id == created.json()["binding"]["id"],
+            )
+        )
+        assert audit is not None
+        assert audit.details["authority_sentence"] == previewed_sentence
+
+
+def test_concurrent_conflicting_grants_serialize_before_sod_decision(
+    grant_client: TestClient,
+) -> None:
+    sessionmaker = get_sessionmaker()
+    with sessionmaker() as dialect_session:
+        if dialect_session.get_bind().dialect.name != "postgresql":
+            pytest.skip("PostgreSQL row locks are required for concurrency coverage.")
+
+    analyst_scope = authorization.BindingScope(
+        InstitutionScope.INSTITUTION,
+        BANK_A,
+        ModuleScope.LIQUIDITY,
+        SensitivityScope.CONFIDENTIAL,
+    )
+    account_scope = authorization.BindingScope(
+        InstitutionScope.ORGANIZATION,
+        None,
+        ModuleScope.ACCOUNT,
+        SensitivityScope.ALL,
+    )
+    with sessionmaker() as analyst_session:
+        analyst_session.info["organization_id"] = ORG_1
+        grant_administration.create_scoped_grant(
+            analyst_session,
+            organization_id=ORG_1,
+            principal_user_id=GRANTEE,
+            role_bundle=RoleBundle.ANALYST,
+            scope=analyst_scope,
+            actor_user_id=USER_1,
+            reason="Concurrent analyst assignment",
+            commit=False,
+        )
+
+        def grant_account_administration() -> str:
+            with sessionmaker() as account_session:
+                account_session.info["organization_id"] = ORG_1
+                try:
+                    grant_administration.create_scoped_grant(
+                        account_session,
+                        organization_id=ORG_1,
+                        principal_user_id=GRANTEE,
+                        role_bundle=RoleBundle.ACCOUNT_ADMIN,
+                        scope=account_scope,
+                        actor_user_id=USER_1,
+                        reason="Concurrent account administration assignment",
+                    )
+                except grant_administration.SodPolicyBlocked:
+                    return "blocked"
+                return "created"
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(grant_account_administration)
+            with pytest.raises(FutureTimeoutError):
+                future.result(timeout=0.2)
+            analyst_session.commit()
+            assert future.result(timeout=5) == "blocked"
+
+    with _session() as verification_session:
+        active_bundles = set(
+            verification_session.scalars(
+                select(AuthorizationBinding.role_bundle).where(
+                    AuthorizationBinding.principal_user_id == GRANTEE,
+                    AuthorizationBinding.status == "active",
+                )
+            )
+        )
+    assert RoleBundle.ANALYST.value in active_bundles
+    assert RoleBundle.ACCOUNT_ADMIN.value not in active_bundles
 
 
 def test_one_request_cannot_fan_out_and_two_combinations_require_two_requests(
