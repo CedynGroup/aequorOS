@@ -73,7 +73,7 @@ dev = [
   "basedpyright",
   "hypothesis",
   "httpx",
-  "openapi-generator-cli[jdk4py]>=7.13,<7.25",
+  "openapi-generator-cli[jdk4py]>=7.13,<7.26",
   "pre-commit==4.6.1",
   "pytest",
   "ruff",
