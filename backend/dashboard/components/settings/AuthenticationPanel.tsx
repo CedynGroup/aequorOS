@@ -17,11 +17,16 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import CopyButton from "@/components/ui/CopyButton";
 import StatusPill from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
-import { authApi, normalizeApiError } from "@/lib/api/client";
+import {
+  authApi,
+  authorizationApi,
+  normalizeApiError,
+} from "@/lib/api/client";
 import { hasAccountAdministrationRole } from "@/lib/api/accountAdministration";
 
 const QUERY_KEY = ["settings", "sso-connection"];
 const REQUESTS_KEY = ["settings", "sso-access-requests"];
+const MEMBERS_KEY = ["settings", "organization-members"];
 
 interface FormState {
   issuer: string;
@@ -306,6 +311,11 @@ function AccessRequests() {
     queryFn: () => authApi.authListSsoAccessRequests(),
     refetchInterval: 60_000,
   });
+  const grantingAuthority = useQuery({
+    queryKey: MEMBERS_KEY,
+    queryFn: () => authorizationApi.listOrganizationMembers(),
+    retry: false,
+  });
   const [error, setError] = useState<string | null>(null);
 
   const refresh = () =>
@@ -337,12 +347,19 @@ function AccessRequests() {
                 {request.email}
               </p>
             </div>
-            <a
-              href="#members"
-              className="px-3 py-1.5 btn-primary text-caption font-medium"
-            >
-              Review in Members
-            </a>
+            {grantingAuthority.isSuccess ? (
+              <a
+                href="#members"
+                className="px-3 py-1.5 btn-primary text-caption font-medium"
+              >
+                Review in Members
+              </a>
+            ) : grantingAuthority.isError ? (
+              <p className="max-w-52 text-right text-caption text-slate">
+                An administrator with granting authority must approve this
+                request.
+              </p>
+            ) : null}
             <button
               type="button"
               disabled={reject.isPending}

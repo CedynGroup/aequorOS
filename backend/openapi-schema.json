@@ -2898,6 +2898,12 @@
       "BindingCreateRequest": {
         "additionalProperties": false,
         "properties": {
+          "expected_authority_sentence": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expected Authority Sentence",
+            "type": "string"
+          },
           "institution_id": {
             "anyOf": [
               {
@@ -2948,7 +2954,8 @@
           "module_scope",
           "sensitivity_scope",
           "reason",
-          "principal_user_id"
+          "principal_user_id",
+          "expected_authority_sentence"
         ],
         "title": "BindingCreateRequest",
         "type": "object"
@@ -34461,6 +34468,12 @@
         "additionalProperties": false,
         "description": "Approval activates identity and creates exactly one complete scoped grant.",
         "properties": {
+          "expected_authority_sentence": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expected Authority Sentence",
+            "type": "string"
+          },
           "institution_id": {
             "anyOf": [
               {
@@ -34505,7 +34518,8 @@
           "institution_scope",
           "module_scope",
           "sensitivity_scope",
-          "reason"
+          "reason",
+          "expected_authority_sentence"
         ],
         "title": "SsoAccessRequestApprove",
         "type": "object"

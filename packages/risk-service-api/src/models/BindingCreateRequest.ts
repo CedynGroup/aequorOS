@@ -48,6 +48,12 @@ import {
 export interface BindingCreateRequest {
   /**
    *
+   * @type {string}
+   * @memberof BindingCreateRequest
+   */
+  expectedAuthoritySentence: string;
+  /**
+   *
    * @type {GrantTargetInstitutionID}
    * @memberof BindingCreateRequest
    */
@@ -109,6 +115,11 @@ export type BindingCreateRequestRoleBundleEnum =
 export function instanceOfBindingCreateRequest(
   value: object,
 ): value is BindingCreateRequest {
+  if (
+    !("expectedAuthoritySentence" in value) ||
+    value["expectedAuthoritySentence"] === undefined
+  )
+    return false;
   if (!("institutionScope" in value) || value["institutionScope"] === undefined)
     return false;
   if (!("moduleScope" in value) || value["moduleScope"] === undefined)
@@ -136,6 +147,7 @@ export function BindingCreateRequestFromJSONTyped(
   }
   return {
     ...json,
+    expectedAuthoritySentence: json["expected_authority_sentence"],
     institutionId:
       json["institution_id"] == null
         ? undefined
@@ -162,6 +174,7 @@ export function BindingCreateRequestToJSONTyped(
   }
 
   return {
+    expected_authority_sentence: value["expectedAuthoritySentence"],
     institution_id: GrantTargetInstitutionIDToJSON(value["institutionId"]),
     institution_scope: InstitutionScopeToJSON(value["institutionScope"]),
     module_scope: ModuleScopeToJSON(value["moduleScope"]),

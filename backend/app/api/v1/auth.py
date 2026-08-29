@@ -236,6 +236,7 @@ def approve_sso_access_request(
             scope=binding_scope(payload),
             actor_user_id=ctx.actor_user_id,
             reason=payload.reason,
+            expected_authority_sentence=payload.expected_authority_sentence,
         )
     except grant_administration.GrantAdministrationError as exc:
         raise grant_conflict(exc) from exc

@@ -403,19 +403,33 @@ def test_grant_administration_state_machine_preserves_exact_union(
             module: Module,
             sensitivity: Sensitivity,
         ) -> None:
+            payload = {
+                "principal_user_id": str(_ADMIN_TARGET),
+                "role_bundle": role.value,
+                "institution_scope": "institution",
+                "institution_id": bank_id,
+                "module_scope": module.value,
+                "sensitivity_scope": sensitivity.value,
+                "reason": "state-machine complete scoped grant",
+            }
+            preview = db_client.post(
+                "/api/v1/authorization/bindings/preview",
+                headers=_grant_admin_headers(),
+                json=payload,
+            )
+            assert preview.status_code == 200, preview.text
+            payload["expected_authority_sentence"] = preview.json()["authority_sentence"]
             response = db_client.post(
                 "/api/v1/authorization/bindings",
                 headers=_grant_admin_headers(),
-                json={
-                    "principal_user_id": str(_ADMIN_TARGET),
-                    "role_bundle": role.value,
-                    "institution_scope": "institution",
-                    "institution_id": bank_id,
-                    "module_scope": module.value,
-                    "sensitivity_scope": sensitivity.value,
-                    "reason": "state-machine complete scoped grant",
-                },
+                json=payload,
             )
+            if response.status_code == 409:
+                details = response.json()["error"]["details"]
+                existing_id = UUID(details["existing_binding_id"])
+                assert existing_id in self.requested
+                assert existing_id not in self.revoked
+                return
             assert response.status_code == 201, response.text
             row = response.json()["binding"]
             assert row["sensitivity_scope"] == sensitivity.value

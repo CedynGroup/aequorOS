@@ -159,6 +159,8 @@ class SsoAccessRequestRead(BaseModel):
 class SsoAccessRequestApprove(ScopedGrantInput):
     """Approval activates identity and creates exactly one complete scoped grant."""
 
+    expected_authority_sentence: str = Field(min_length=1, max_length=2000)
+
 
 class SsoClientConfigResponse(BaseModel):
     """Internal (dashboard server → backend) OIDC client config. Never exposed in

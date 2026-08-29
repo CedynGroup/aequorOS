@@ -63,6 +63,7 @@ class ScopedGrantInput(ClosedModel):
 
 class BindingCreateRequest(ScopedGrantInput):
     principal_user_id: UUID
+    expected_authority_sentence: str = Field(min_length=1, max_length=2000)
 
 
 class BindingPreviewRequest(ScopedGrantInput):

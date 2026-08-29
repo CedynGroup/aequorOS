@@ -541,13 +541,17 @@ function GrantComposer({
       if (isPendingApproval) {
         return authApi.authApproveSsoAccessRequest({
           userId: member.userId,
-          ssoAccessRequestApprove: scope,
+          ssoAccessRequestApprove: {
+            ...scope,
+            expectedAuthoritySentence: previewSentence!,
+          },
         });
       }
       return authorizationApi.createAuthorizationBinding({
         bindingCreateRequest: {
           ...scope,
           principalUserId: member.userId,
+          expectedAuthoritySentence: previewSentence!,
         } satisfies BindingCreateRequest,
       });
     },

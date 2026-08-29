@@ -421,16 +421,24 @@ def test_jit_records_a_request_and_admin_approval_is_the_gate(
     # Approval creates one complete scoped binding; verified identity alone had
     # no access and the scalar role remains compatibility-only Viewer state.
     request_id = pending[0]["user_id"]
+    approval_payload = {
+        "role_bundle": "analyst",
+        "institution_scope": "institution",
+        "institution_id": REAL_BANK_ID,
+        "module_scope": "liq",
+        "sensitivity_scope": "confidential",
+        "reason": "Verified employee approved for liquidity analysis",
+    }
+    preview = auth_client.post(
+        "/api/v1/authorization/bindings/preview",
+        json={**approval_payload, "principal_user_id": request_id},
+        headers=real_headers(),
+    )
+    assert preview.status_code == 200, preview.text
+    approval_payload["expected_authority_sentence"] = preview.json()["authority_sentence"]
     approved = auth_client.post(
         f"/api/v1/auth/sso/access-requests/{request_id}/approve",
-        json={
-            "role_bundle": "analyst",
-            "institution_scope": "institution",
-            "institution_id": REAL_BANK_ID,
-            "module_scope": "liq",
-            "sensitivity_scope": "confidential",
-            "reason": "Verified employee approved for liquidity analysis",
-        },
+        json=approval_payload,
         headers=real_headers(),
     )
     assert approved.status_code == 200, approved.text

@@ -52,10 +52,23 @@ class SodPolicyBlocked(GrantAdministrationError):
         self.decision = decision
 
 
+class AuthorityReviewChanged(GrantAdministrationError):
+    def __init__(self) -> None:
+        super().__init__("The selection changed and must be reviewed again.")
+
+
+class DuplicateScopedGrant(GrantAdministrationError):
+    def __init__(self, binding_id: UUID, authority_sentence: str) -> None:
+        super().__init__(f"This authority already exists: {authority_sentence}")
+        self.binding_id = binding_id
+        self.authority_sentence = authority_sentence
+
+
 @dataclass(frozen=True)
 class GrantResult:
     binding: AuthorizationBinding
     sod_decision: SodDecision
+    authority_sentence: str
 
 
 _ROLE_LABELS = {
@@ -231,9 +244,7 @@ def compose_authority_sentence(
     article = "an" if role[0].lower() in "aeiou" else "a"
     module = _MODULE_LABELS[module_scope]
     sensitivity = _SENSITIVITY_LABELS[sensitivity_scope]
-    module_phrase = (
-        "across all modules" if module_scope is ModuleScope.ALL else f"in {module}"
-    )
+    module_phrase = "across all modules" if module_scope is ModuleScope.ALL else f"in {module}"
     if sensitivity_scope is SensitivityScope.ALL:
         sensitivity_phrase = "covering all sensitivity levels"
     else:
@@ -276,6 +287,57 @@ def authority_sentence(db: Session, binding: AuthorizationBinding) -> str:
     )
 
 
+def scoped_authority_sentence(  # noqa: PLR0913
+    db: Session,
+    *,
+    organization_id: str,
+    principal_user_id: UUID,
+    role_bundle: RoleBundle,
+    scope: authorization.BindingScope,
+    lock_names: bool = False,
+    locked_principal: User | None = None,
+) -> str:
+    principal = locked_principal
+    if principal is None:
+        principal_statement = select(User).where(
+            User.id == principal_user_id,
+            User.organization_id == organization_id,
+        )
+        if lock_names:
+            principal_statement = principal_statement.with_for_update()
+        principal = db.scalar(principal_statement)
+    if principal is None:
+        raise GrantAdministrationError("principal is not a member of the organization")
+
+    if scope.institution_scope is InstitutionScope.ORGANIZATION:
+        institution_statement = select(Organization).where(Organization.id == organization_id)
+        if lock_names:
+            institution_statement = institution_statement.with_for_update(read=True)
+        organization = db.scalar(institution_statement)
+        if organization is None:
+            raise GrantAdministrationError("organization not found")
+        institution_name = f"every institution in {organization.name}"
+    else:
+        institution_statement = select(Bank).where(
+            Bank.id == scope.institution_id,
+            Bank.organization_id == organization_id,
+        )
+        if lock_names:
+            institution_statement = institution_statement.with_for_update(read=True)
+        bank = db.scalar(institution_statement)
+        if bank is None:
+            raise GrantAdministrationError("institution is not part of the organization")
+        institution_name = bank.name
+
+    return compose_authority_sentence(
+        principal_name=principal.display_name or principal.email,
+        role_bundle=role_bundle,
+        institution_name=institution_name,
+        module_scope=scope.module_scope,
+        sensitivity_scope=scope.sensitivity_scope,
+    )
+
+
 def _tenant_actor_id(actor: authorization.GrantorRef) -> UUID | None:
     if actor.kind is not GrantorType.TENANT_USER:
         return None
@@ -286,6 +348,7 @@ def _record_grant_audit(
     db: Session,
     binding: AuthorizationBinding,
     actor: authorization.GrantorRef,
+    sentence: str,
 ) -> None:
     db.add(
         AuditEvent(
@@ -302,7 +365,7 @@ def _record_grant_audit(
                 "scope": _scope_dict(binding),
                 "occurred_at": binding.granted_at.isoformat(),
                 "reason": binding.grant_reason,
-                "authority_sentence": authority_sentence(db, binding),
+                "authority_sentence": sentence,
             },
         )
     )
@@ -332,6 +395,7 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
     scope: authorization.BindingScope,
     actor_user_id: UUID,
     reason: str,
+    expected_authority_sentence: str,
     commit: bool = True,
 ) -> GrantResult:
     validate_public_grant(role_bundle, scope)
@@ -341,10 +405,46 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
             User.id == principal_user_id,
             User.organization_id == organization_id,
         )
-        .with_for_update(key_share=True)
+        .with_for_update()
     )
     if principal is None:
         raise GrantAdministrationError("principal is not a member of the organization")
+    sentence = scoped_authority_sentence(
+        db,
+        organization_id=organization_id,
+        principal_user_id=principal_user_id,
+        role_bundle=role_bundle,
+        scope=scope,
+        lock_names=True,
+        locked_principal=principal,
+    )
+    if expected_authority_sentence != sentence:
+        raise AuthorityReviewChanged
+
+    active = list(
+        db.scalars(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.organization_id == organization_id,
+                AuthorizationBinding.principal_user_id == principal_user_id,
+                AuthorizationBinding.status == BindingStatus.ACTIVE.value,
+            )
+        )
+    )
+    duplicate = next(
+        (
+            binding
+            for binding in active
+            if binding_is_effective(binding)
+            and binding.role_bundle == role_bundle.value
+            and binding.institution_scope == scope.institution_scope.value
+            and binding.institution_id == scope.institution_id
+            and binding.module_scope == scope.module_scope.value
+            and binding.sensitivity_scope == scope.sensitivity_scope.value
+        ),
+        None,
+    )
+    if duplicate is not None:
+        raise DuplicateScopedGrant(duplicate.id, sentence)
     decision = check_sod_policy(
         db,
         organization_id=organization_id,
@@ -371,12 +471,12 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
         )
     except authorization.AuthorizationInvariantError as exc:
         raise GrantAdministrationError(str(exc)) from exc
-    _record_grant_audit(db, binding, actor)
+    _record_grant_audit(db, binding, actor, sentence)
     db.flush()
     if commit:
         db.commit()
         db.refresh(binding)
-    return GrantResult(binding, decision)
+    return GrantResult(binding, decision, sentence)
 
 
 def revoke_scoped_grant(  # noqa: PLR0913 - complete actor and target context is explicit
@@ -478,6 +578,7 @@ def approve_sso_access_request_with_grant(  # noqa: PLR0913
     scope: authorization.BindingScope,
     actor_user_id: UUID,
     reason: str,
+    expected_authority_sentence: str,
 ) -> GrantResult:
     """Activate a verified JIT identity only as one complete grant is created."""
 
@@ -496,6 +597,7 @@ def approve_sso_access_request_with_grant(  # noqa: PLR0913
         scope=scope,
         actor_user_id=actor_user_id,
         reason=reason,
+        expected_authority_sentence=expected_authority_sentence,
         commit=False,
     )
     db.commit()

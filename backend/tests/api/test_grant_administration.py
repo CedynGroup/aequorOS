@@ -126,6 +126,38 @@ def _payload(  # noqa: PLR0913 - each scalar is one indivisible scope dimension
     }
 
 
+def _reviewed_payload(  # noqa: PLR0913
+    client: TestClient,
+    payload: dict[str, object] | None = None,
+    *,
+    role: str = "analyst",
+    institution_id: str = BANK_A,
+    module: str = "liq",
+    sensitivity: str = "confidential",
+    principal_user_id: UUID = GRANTEE,
+    reason: str = "Treasury responsibilities approved by the Head of Treasury",
+) -> dict[str, object]:
+    reviewed = dict(
+        payload
+        or _payload(
+            role=role,
+            institution_id=institution_id,
+            module=module,
+            sensitivity=sensitivity,
+            principal_user_id=principal_user_id,
+            reason=reason,
+        )
+    )
+    preview = client.post(
+        "/api/v1/authorization/bindings/preview",
+        headers=_owner_headers(),
+        json=reviewed,
+    )
+    assert preview.status_code == 200, preview.text
+    reviewed["expected_authority_sentence"] = preview.json()["authority_sentence"]
+    return reviewed
+
+
 def _resource(
     bank_id: str,
     module: Module,
@@ -157,7 +189,7 @@ def test_create_and_list_keep_every_scalar_dimension_exact(
     created = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(),
+        json=_reviewed_payload(grant_client),
     )
     assert created.status_code == 201, created.text
     body = created.json()
@@ -244,13 +276,14 @@ def test_preview_and_persisted_organization_wide_sentences_are_identical(
     )
     assert preview.status_code == 200, preview.text
 
+    previewed_sentence = preview.json()["authority_sentence"]
+    payload["expected_authority_sentence"] = previewed_sentence
     created = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
         json=payload,
     )
     assert created.status_code == 201, created.text
-    previewed_sentence = preview.json()["authority_sentence"]
     assert previewed_sentence == created.json()["binding"]["authority_sentence"]
 
     with _session() as db:
@@ -262,6 +295,89 @@ def test_preview_and_persisted_organization_wide_sentences_are_identical(
         )
         assert audit is not None
         assert audit.details["authority_sentence"] == previewed_sentence
+
+
+def test_stale_review_is_rejected_without_binding_or_audit_mutation(
+    grant_client: TestClient,
+) -> None:
+    payload = _reviewed_payload(grant_client)
+    with _session() as db:
+        member = db.get(User, GRANTEE)
+        assert member is not None
+        member.display_name = "Amma Mensah"
+        db.commit()
+
+    response = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=payload,
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["details"]["message"] == (
+        "The selection changed and must be reviewed again."
+    )
+
+    with _session() as db:
+        assert not list(
+            db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.principal_user_id == GRANTEE
+                )
+            )
+        )
+        audits = list(
+            db.scalars(
+                select(AuditEvent).where(AuditEvent.event_type == "authorization.binding_granted")
+            )
+        )
+        assert audits == []
+
+
+def test_duplicate_effective_grant_is_targetable_and_revoke_removes_equivalent_authority(
+    grant_client: TestClient,
+) -> None:
+    payload = _reviewed_payload(grant_client, role="viewer")
+    first = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=payload,
+    )
+    assert first.status_code == 201, first.text
+    binding = first.json()["binding"]
+
+    duplicate = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=payload,
+    )
+    assert duplicate.status_code == 409, duplicate.text
+    details = duplicate.json()["error"]["details"]
+    assert details["existing_binding_id"] == binding["id"]
+    assert binding["authority_sentence"] in details["message"]
+    assert binding["id"] not in details["message"]
+
+    revoked = grant_client.post(
+        f"/api/v1/authorization/bindings/{binding['id']}/revoke",
+        headers=_owner_headers(),
+        json={"reason": "This exact authority is no longer required"},
+    )
+    assert revoked.status_code == 200, revoked.text
+    with _session() as db:
+        equivalents = [
+            row
+            for row in db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.principal_user_id == GRANTEE,
+                    AuthorizationBinding.role_bundle == "viewer",
+                    AuthorizationBinding.institution_scope == "institution",
+                    AuthorizationBinding.institution_id == BANK_A,
+                    AuthorizationBinding.module_scope == "liq",
+                    AuthorizationBinding.sensitivity_scope == "confidential",
+                )
+            )
+            if grant_administration.binding_is_effective(row)
+        ]
+        assert equivalents == []
 
 
 def test_concurrent_conflicting_grants_serialize_before_sod_decision(
@@ -294,6 +410,13 @@ def test_concurrent_conflicting_grants_serialize_before_sod_decision(
             scope=analyst_scope,
             actor_user_id=USER_1,
             reason="Concurrent analyst assignment",
+            expected_authority_sentence=grant_administration.scoped_authority_sentence(
+                analyst_session,
+                organization_id=ORG_1,
+                principal_user_id=GRANTEE,
+                role_bundle=RoleBundle.ANALYST,
+                scope=analyst_scope,
+            ),
             commit=False,
         )
 
@@ -309,6 +432,15 @@ def test_concurrent_conflicting_grants_serialize_before_sod_decision(
                         scope=account_scope,
                         actor_user_id=USER_1,
                         reason="Concurrent account administration assignment",
+                        expected_authority_sentence=(
+                            grant_administration.scoped_authority_sentence(
+                                account_session,
+                                organization_id=ORG_1,
+                                principal_user_id=GRANTEE,
+                                role_bundle=RoleBundle.ACCOUNT_ADMIN,
+                                scope=account_scope,
+                            )
+                        ),
                     )
                 except grant_administration.SodPolicyBlocked:
                     return "blocked"
@@ -358,12 +490,13 @@ def test_one_request_cannot_fan_out_and_two_combinations_require_two_requests(
     first = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(),
+        json=_reviewed_payload(grant_client),
     )
     second = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(
+        json=_reviewed_payload(
+            grant_client,
             role="approver",
             institution_id=BANK_B,
             module="reg",
@@ -436,7 +569,7 @@ def test_members_are_tenant_scoped_and_no_binding_means_no_authority(
     cross_tenant = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(principal_user_id=USER_2),
+        json={**_payload(principal_user_id=USER_2), "expected_authority_sentence": "unseen"},
     )
     assert cross_tenant.status_code == 404
     assert (
@@ -455,12 +588,13 @@ def test_revoke_ends_current_sign_ins_and_preserves_unrelated_grants(
     first = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(role="viewer"),
+        json=_reviewed_payload(grant_client, role="viewer"),
     ).json()["binding"]
     second = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(
+        json=_reviewed_payload(
+            grant_client,
             role="viewer",
             institution_id=BANK_B,
             module="reg",
@@ -547,7 +681,7 @@ def test_members_distinguish_unattributed_historical_revoker(
     created = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(role="viewer"),
+        json=_reviewed_payload(grant_client, role="viewer"),
     ).json()["binding"]
     revoked = grant_client.post(
         f"/api/v1/authorization/bindings/{created['id']}/revoke",
@@ -563,13 +697,9 @@ def test_members_distinguish_unattributed_historical_revoker(
         binding.revoked_by_id = "revoker-not-recorded-predates-attribution"
         db.commit()
 
-    response = grant_client.get(
-        "/api/v1/organization/members", headers=_owner_headers()
-    )
+    response = grant_client.get("/api/v1/organization/members", headers=_owner_headers())
     assert response.status_code == 200, response.text
-    member = next(
-        row for row in response.json()["members"] if row["user_id"] == str(GRANTEE)
-    )
+    member = next(row for row in response.json()["members"] if row["user_id"] == str(GRANTEE))
     assert member["grants"][0]["revoked_by_name"] == (
         "Revoker not recorded (predates attribution requirement)"
     )
@@ -579,13 +709,17 @@ def test_server_returns_warn_and_block_sod_decisions(grant_client: TestClient) -
     analyst = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(),
+        json=_reviewed_payload(grant_client),
     )
     assert analyst.status_code == 201
     warning = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(role="approver", reason="Independent checker duties"),
+        json=_reviewed_payload(
+            grant_client,
+            role="approver",
+            reason="Independent checker duties",
+        ),
     )
     assert warning.status_code == 201, warning.text
     assert warning.json()["sod_decision"]["outcome"] == "warn"
@@ -596,7 +730,11 @@ def test_server_returns_warn_and_block_sod_decisions(grant_client: TestClient) -
     blocked = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_payload(principal_user_id=USER_1, reason="Owner requests operational authority"),
+        json=_reviewed_payload(
+            grant_client,
+            principal_user_id=USER_1,
+            reason="Owner requests operational authority",
+        ),
     )
     assert blocked.status_code == 409, blocked.text
     decision = blocked.json()["error"]["details"]["sod_decision"]
@@ -629,17 +767,27 @@ def test_sso_approval_activates_identity_only_with_a_complete_grant(
     assert pending["active_grant_count"] == 0
     assert pending["grants"] == []
 
+    approval_payload = {
+        key: value
+        for key, value in _payload(
+            principal_user_id=pending_id,
+            reason="Verified identity approved for liquidity analysis",
+        ).items()
+        if key != "principal_user_id"
+    }
+    preview_payload = {**approval_payload, "principal_user_id": str(pending_id)}
+    preview = grant_client.post(
+        "/api/v1/authorization/bindings/preview",
+        headers=_owner_headers(),
+        json=preview_payload,
+    )
+    assert preview.status_code == 200, preview.text
+    approval_payload["expected_authority_sentence"] = preview.json()["authority_sentence"]
+
     approved = grant_client.post(
         f"/api/v1/auth/sso/access-requests/{pending_id}/approve",
         headers=_owner_headers(),
-        json={
-            key: value
-            for key, value in _payload(
-                principal_user_id=pending_id,
-                reason="Verified identity approved for liquidity analysis",
-            ).items()
-            if key != "principal_user_id"
-        },
+        json=approval_payload,
     )
     assert approved.status_code == 200, approved.text
     assert approved.json()["binding"]["sensitivity_scope"] == "confidential"

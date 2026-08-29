@@ -59,6 +59,8 @@ def grant_conflict(exc: grant_administration.GrantAdministrationError) -> HTTPEx
     }
     if isinstance(exc, grant_administration.SodPolicyBlocked):
         details["sod_decision"] = _sod_read(exc.decision).model_dump(mode="json")
+    if isinstance(exc, grant_administration.DuplicateScopedGrant):
+        details["existing_binding_id"] = str(exc.binding_id)
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=details)
 
 
@@ -94,6 +96,7 @@ def _binding_read(
     users: dict[UUID, User],
     banks: dict[str, Bank],
     organization: Organization,
+    authority_sentence_override: str | None = None,
 ) -> BindingRead:
     principal = users.get(binding.principal_user_id)
     role_bundle = RoleBundle(binding.role_bundle)
@@ -116,18 +119,21 @@ def _binding_read(
         sensitivity_scope=SensitivityScope(binding.sensitivity_scope),
         status=BindingStatus(binding.status),
         effective=effective,
-        authority_sentence=grant_administration.compose_authority_sentence(
-            principal_name=_display_name(principal, str(binding.principal_user_id)),
-            role_bundle=role_bundle,
-            institution_name=(
-                f"every institution in {organization.name}"
-                if binding.institution_scope == InstitutionScope.ORGANIZATION.value
-                else banks[binding.institution_id].name
-                if binding.institution_id is not None and binding.institution_id in banks
-                else str(binding.institution_id)
-            ),
-            module_scope=ModuleScope(binding.module_scope),
-            sensitivity_scope=SensitivityScope(binding.sensitivity_scope),
+        authority_sentence=(
+            authority_sentence_override
+            or grant_administration.compose_authority_sentence(
+                principal_name=_display_name(principal, str(binding.principal_user_id)),
+                role_bundle=role_bundle,
+                institution_name=(
+                    f"every institution in {organization.name}"
+                    if binding.institution_scope == InstitutionScope.ORGANIZATION.value
+                    else banks[binding.institution_id].name
+                    if binding.institution_id is not None and binding.institution_id in banks
+                    else str(binding.institution_id)
+                ),
+                module_scope=ModuleScope(binding.module_scope),
+                sensitivity_scope=SensitivityScope(binding.sensitivity_scope),
+            )
         ),
         effective_permissions=sorted(
             permission.value for permission in ROLE_PERMISSIONS[role_bundle]
@@ -175,7 +181,11 @@ def binding_response(
     users, banks, organization = _presentation_maps(db, organization_id)
     return BindingCreateResponse(
         binding=_binding_read(
-            result.binding, users=users, banks=banks, organization=organization
+            result.binding,
+            users=users,
+            banks=banks,
+            organization=organization,
+            authority_sentence_override=result.authority_sentence,
         ),
         sod_decision=_sod_read(result.sod_decision),
     )
@@ -226,8 +236,7 @@ def list_authorization_bindings(
     users, banks, organization = _presentation_maps(db, ctx.organization_id)
     return BindingListRead(
         bindings=[
-            _binding_read(row, users=users, banks=banks, organization=organization)
-            for row in rows
+            _binding_read(row, users=users, banks=banks, organization=organization) for row in rows
         ]
     )
 
@@ -242,33 +251,20 @@ def preview_authorization_binding(
     db: DbSession,
     ctx: GrantAdminTenant,
 ) -> BindingPreviewRead:
-    member = _member_or_404(db, ctx, payload.principal_user_id)
+    _member_or_404(db, ctx, payload.principal_user_id)
     scope = binding_scope(payload)
     try:
         grant_administration.validate_public_grant(RoleBundle(payload.role_bundle), scope)
+        sentence = grant_administration.scoped_authority_sentence(
+            db,
+            organization_id=ctx.organization_id,
+            principal_user_id=payload.principal_user_id,
+            role_bundle=RoleBundle(payload.role_bundle),
+            scope=scope,
+        )
     except grant_administration.GrantAdministrationError as exc:
         raise grant_conflict(exc) from exc
-    _, banks, organization = _presentation_maps(db, ctx.organization_id)
-    if scope.institution_scope is InstitutionScope.ORGANIZATION:
-        institution_name = f"every institution in {organization.name}"
-    else:
-        bank = banks.get(scope.institution_id or "")
-        if bank is None:
-            raise grant_conflict(
-                grant_administration.GrantAdministrationError(
-                    "institution is not part of the organization"
-                )
-            )
-        institution_name = bank.name
-    return BindingPreviewRead(
-        authority_sentence=grant_administration.compose_authority_sentence(
-            principal_name=_display_name(member, str(member.id)),
-            role_bundle=RoleBundle(payload.role_bundle),
-            institution_name=institution_name,
-            module_scope=scope.module_scope,
-            sensitivity_scope=scope.sensitivity_scope,
-        )
-    )
+    return BindingPreviewRead(authority_sentence=sentence)
 
 
 @router.post(
@@ -293,6 +289,7 @@ def create_authorization_binding(
             scope=binding_scope(payload),
             actor_user_id=ctx.actor_user_id,
             reason=payload.reason,
+            expected_authority_sentence=payload.expected_authority_sentence,
         )
     except (
         grant_administration.GrantAdministrationError,

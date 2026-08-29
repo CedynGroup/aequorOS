@@ -20,16 +20,29 @@ test.describe("scoped grant administration", () => {
 
     // Establish one unrelated row so the browser journey proves revocation is
     // one-binding-only rather than merely observing an empty end state.
+    const unrelatedPayload = {
+      principal_user_id: member.id,
+      role_bundle: "viewer",
+      institution_scope: "institution",
+      institution_id: "BK-SAMP0001",
+      module_scope: "reg",
+      sensitivity_scope: "restricted",
+      reason: "Keep independent regulatory review access",
+    };
+    const unrelatedPreview = await page.request.post(
+      `${API}/authorization/bindings/preview`,
+      {
+        headers: ownerHeaders,
+        data: unrelatedPayload,
+      },
+    );
+    expect(unrelatedPreview.ok()).toBeTruthy();
     const unrelated = await page.request.post(`${API}/authorization/bindings`, {
       headers: ownerHeaders,
       data: {
-        principal_user_id: member.id,
-        role_bundle: "viewer",
-        institution_scope: "institution",
-        institution_id: "BK-SAMP0001",
-        module_scope: "reg",
-        sensitivity_scope: "restricted",
-        reason: "Keep independent regulatory review access",
+        ...unrelatedPayload,
+        expected_authority_sentence: (await unrelatedPreview.json())
+          .authority_sentence,
       },
     });
     expect(unrelated.status()).toBe(201);
