@@ -109,6 +109,18 @@ class BindingStatus(StrEnum):
     REVOKED = "revoked"
 
 
+class OwnerAssignmentStatus(StrEnum):
+    ASSIGNED = "assigned"
+    DESIGNATION_REQUIRED = "designation_required"
+
+
+class OwnerAssignmentBasis(StrEnum):
+    EXACTLY_ONE_ELIGIBLE_ADMIN = "exactly_one_eligible_active_human_administrator"
+    ZERO_ELIGIBLE_ADMINS = "zero_eligible_active_human_administrators"
+    MULTIPLE_ELIGIBLE_ADMINS = "multiple_eligible_active_human_administrators"
+    EXPLICIT_DESIGNATION = "explicit_designation"
+
+
 class RoleBundle(StrEnum):
     """Static bundles only; persisted custom permission catalogs are out of scope."""
 
@@ -117,6 +129,7 @@ class RoleBundle(StrEnum):
     ANALYST = "analyst"
     APPROVER = "approver"
     ACCOUNT_ADMIN = "account_admin"
+    ORG_OWNER = "org_owner"
     INTEGRATION_WRITER = "integration_writer"
 
 
@@ -139,6 +152,11 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
         RoleBundle.APPROVER: frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
         # Account administration is intentionally outside operational bundles.
         RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
+        # Ownership is a distinct authority even though its first bounded
+        # permission vocabulary is intentionally no broader than account
+        # administration. Grant/transfer policy belongs to its later API, which
+        # can distinguish this binding without treating account admins as owners.
+        RoleBundle.ORG_OWNER: frozenset({Permission.ADMINISTER}),
         # Machine principals do not inherit a human Analyst preset or seat.
         RoleBundle.INTEGRATION_WRITER: frozenset({Permission.INGEST}),
     }

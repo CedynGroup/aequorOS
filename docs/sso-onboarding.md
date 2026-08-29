@@ -56,7 +56,7 @@ broken, so register both. Both use the same client, and no additional scopes.
 4. If prompted to configure the consent screen: User type **Internal** (restricts
    sign-in to your Workspace); scopes `openid`, `email`, `profile` only.
 5. Create → note the **Client ID** and **Client secret**.
-6. Hand both to your AequorOS org administrator to enter in
+6. Hand both to your AequorOS account administrator to enter in
    **Settings → Authentication** with Issuer `https://accounts.google.com` and
    your email domain in *Allowed email domains*. Tick *Enable*, Save.
 
@@ -80,7 +80,7 @@ IdP's published issuer (it must serve
 
 ## Who gets in: two provisioning modes
 
-**SSO never grants access by itself:** in both modes, an administrator's
+**SSO never grants access by itself:** in both modes, an account administrator's
 decision is what authorizes a person.
 
 - **Pre-provisioned only (default):** only people who already have an AequorOS
@@ -90,15 +90,18 @@ decision is what authorizes a person.
   verified email is on an **allowed domain** can sign in once to *request*
   access: a deactivated account stub is recorded, they see "an administrator
   must approve your account", and **they get no access at all** until an
-  AequorOS admin approves the request — choosing their role at that moment —
-  in the *Access requests* list on the same settings card. This option cannot
+  AequorOS account administrator approves the request — choosing an Account
+  Admin, Approver, Analyst, or Viewer role at that moment — in the *Access
+  requests* list on the same settings card. Org Owner is never assigned through
+  this flow. This option cannot
   be enabled without at least one allowed domain, so it never opens requests to
   the public. Offboarding still works at your IdP: disable the Google/Entra
   account and sign-in stops.
 
 ## Testing
 
-1. AequorOS admin: Settings → Authentication → Save with *Enable SSO* ticked.
+1. AequorOS account administrator: Settings → Authentication → Save with
+   *Enable SSO* ticked.
 2. Open `https://bank.aequoros.com/login` in a private window — a **Sign in with
    SSO** button appears (within a minute of enabling).
 3. Sign in with a work account that has been provisioned in AequorOS → lands on
@@ -108,7 +111,7 @@ decision is what authorizes a person.
      for this identity";
    - request-access **on** → "administrator must approve" message, a pending
      entry appears under Settings → Authentication → Access requests, and the
-     account works only after an admin approves it with a role.
+     account works only after an account administrator approves it with a role.
 
 ## Security notes your reviewers will ask about
 

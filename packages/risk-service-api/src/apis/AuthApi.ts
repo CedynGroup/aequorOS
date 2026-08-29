@@ -90,7 +90,7 @@ export interface AuthUpdateMeRequest {
  */
 export class AuthApi extends runtime.BaseAPI {
   /**
-   * Activate a requested account with an explicitly chosen role (admin only).
+   * Activate a requested account with an explicitly chosen role (account admin only).
    * Approve Sso Access Request
    */
   async authApproveSsoAccessRequestRaw(
@@ -147,7 +147,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Activate a requested account with an explicitly chosen role (admin only).
+   * Activate a requested account with an explicitly chosen role (account admin only).
    * Approve Sso Access Request
    */
   async authApproveSsoAccessRequest(
@@ -162,7 +162,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * The org\'s OIDC connection (admin). The secret is never returned — only whether one is set.
+   * The org\'s OIDC connection (account administrator). The secret is never returned — only whether one is set.
    * Get Sso Connection
    */
   async authGetSsoConnectionRaw(
@@ -196,7 +196,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * The org\'s OIDC connection (admin). The secret is never returned — only whether one is set.
+   * The org\'s OIDC connection (account administrator). The secret is never returned — only whether one is set.
    * Get Sso Connection
    */
   async authGetSsoConnection(
@@ -207,7 +207,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * JIT sign-ins awaiting approval (deactivated stubs; admin only).
+   * JIT sign-ins awaiting approval (deactivated stubs; account admin only).
    * List Sso Access Requests
    */
   async authListSsoAccessRequestsRaw(
@@ -241,7 +241,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * JIT sign-ins awaiting approval (deactivated stubs; admin only).
+   * JIT sign-ins awaiting approval (deactivated stubs; account admin only).
    * List Sso Access Requests
    */
   async authListSsoAccessRequests(
@@ -390,7 +390,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Create or update the org\'s OIDC connection (admin; secret write-only).
+   * Create or update the org\'s OIDC connection (account admin; secret write-only).
    * Put Sso Connection
    */
   async authPutSsoConnectionRaw(
@@ -437,7 +437,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Create or update the org\'s OIDC connection (admin; secret write-only).
+   * Create or update the org\'s OIDC connection (account admin; secret write-only).
    * Put Sso Connection
    */
   async authPutSsoConnection(
@@ -506,7 +506,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Delete a never-activated request stub (admin only).
+   * Delete a never-activated request stub (account admin only).
    * Reject Sso Access Request
    */
   async authRejectSsoAccessRequestRaw(
@@ -549,7 +549,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Delete a never-activated request stub (admin only).
+   * Delete a never-activated request stub (account admin only).
    * Reject Sso Access Request
    */
   async authRejectSsoAccessRequest(

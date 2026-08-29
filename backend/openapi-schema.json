@@ -33862,12 +33862,12 @@
         "type": "object"
       },
       "SsoAccessRequestApprove": {
-        "description": "Approval is the authorization act \u2014 the admin explicitly picks the role.",
+        "description": "Approval is the authorization act \u2014 the account admin explicitly picks the role.",
         "properties": {
           "role": {
             "default": "viewer",
             "enum": [
-              "admin",
+              "account_admin",
               "approver",
               "analyst",
               "viewer"
@@ -33880,7 +33880,7 @@
         "type": "object"
       },
       "SsoAccessRequestRead": {
-        "description": "A JIT sign-in awaiting admin approval (deactivated account stub).",
+        "description": "A JIT sign-in awaiting account-admin approval (deactivated account stub).",
         "properties": {
           "display_name": {
             "anyOf": [
@@ -39212,7 +39212,7 @@
     },
     "/api/v1/auth/sso/access-requests": {
       "get": {
-        "description": "JIT sign-ins awaiting approval (deactivated stubs; admin only).",
+        "description": "JIT sign-ins awaiting approval (deactivated stubs; account admin only).",
         "operationId": "authListSsoAccessRequests",
         "responses": {
           "200": {
@@ -39303,7 +39303,7 @@
     },
     "/api/v1/auth/sso/access-requests/{user_id}/approve": {
       "post": {
-        "description": "Activate a requested account with an explicitly chosen role (admin only).",
+        "description": "Activate a requested account with an explicitly chosen role (account admin only).",
         "operationId": "authApproveSsoAccessRequest",
         "parameters": [
           {
@@ -39412,7 +39412,7 @@
     },
     "/api/v1/auth/sso/access-requests/{user_id}/reject": {
       "post": {
-        "description": "Delete a never-activated request stub (admin only).",
+        "description": "Delete a never-activated request stub (account admin only).",
         "operationId": "authRejectSsoAccessRequest",
         "parameters": [
           {
@@ -39504,7 +39504,7 @@
     },
     "/api/v1/auth/sso/connection": {
       "get": {
-        "description": "The org's OIDC connection (admin). The secret is never returned \u2014 only\nwhether one is set.",
+        "description": "The org's OIDC connection (account administrator). The secret is never returned \u2014 only\nwhether one is set.",
         "operationId": "authGetSsoConnection",
         "responses": {
           "200": {
@@ -39597,7 +39597,7 @@
         ]
       },
       "put": {
-        "description": "Create or update the org's OIDC connection (admin; secret write-only).",
+        "description": "Create or update the org's OIDC connection (account admin; secret write-only).",
         "operationId": "authPutSsoConnection",
         "requestBody": {
           "content": {

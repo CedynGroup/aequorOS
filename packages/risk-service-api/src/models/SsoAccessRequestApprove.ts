@@ -12,7 +12,7 @@
 
 import { mapValues } from "../runtime";
 /**
- * Approval is the authorization act — the admin explicitly picks the role.
+ * Approval is the authorization act — the account admin explicitly picks the role.
  * @export
  * @interface SsoAccessRequestApprove
  */
@@ -29,7 +29,7 @@ export interface SsoAccessRequestApprove {
  * @export
  */
 export const SsoAccessRequestApproveRoleEnum = {
-  Admin: "admin",
+  AccountAdmin: "account_admin",
   Approver: "approver",
   Analyst: "analyst",
   Viewer: "viewer",

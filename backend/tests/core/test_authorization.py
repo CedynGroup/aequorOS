@@ -59,6 +59,7 @@ ROLE_EXPECTATIONS: tuple[
         frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
     ),
     (PrincipalType.HUMAN, RoleBundle.ACCOUNT_ADMIN, frozenset({Permission.ADMINISTER})),
+    (PrincipalType.HUMAN, RoleBundle.ORG_OWNER, frozenset({Permission.ADMINISTER})),
     (PrincipalType.MACHINE, RoleBundle.INTEGRATION_WRITER, frozenset({Permission.INGEST})),
 )
 

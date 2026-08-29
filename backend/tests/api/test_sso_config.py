@@ -112,6 +112,22 @@ def test_non_admin_cannot_read_or_write_connection(db_client: TestClient) -> Non
         )
 
 
+def test_account_admin_can_manage_account_authentication(
+    db_client: TestClient, vault_key: None
+) -> None:
+    account_admin_headers = headers(roles=("account_admin",))
+    put = db_client.put(
+        "/api/v1/auth/sso/connection",
+        json=_PAYLOAD,
+        headers=account_admin_headers,
+    )
+    assert put.status_code == 200, put.text
+    assert (
+        db_client.get("/api/v1/auth/sso/access-requests", headers=account_admin_headers).status_code
+        == 200
+    )
+
+
 def test_public_status_reflects_enabled_connection(db_client: TestClient, vault_key: None) -> None:
     assert db_client.get("/api/v1/auth/sso/status").json() == {"enabled": False}
     db_client.put("/api/v1/auth/sso/connection", json=_PAYLOAD, headers=headers())

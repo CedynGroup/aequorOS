@@ -30,6 +30,7 @@ type ProvisioningStepName = Literal[
     "kms",
     "sso_stub",
     "first_admin",
+    "first_owner",
     # The institution's own board register (``param_*``). Without it a tenant is
     # provisioned, ingests its whole book, and still cannot produce a single
     # successful calculation run (founder review 2026-08-23).
@@ -136,9 +137,7 @@ class TenantsListRead(ClosedModel):
 
 
 # -- activity feed ----------------------------------------------------------------
-type ActivityKind = Literal[
-    "ingestion_batch", "job", "official_run", "package", "audit_event"
-]
+type ActivityKind = Literal["ingestion_batch", "job", "official_run", "package", "audit_event"]
 
 
 class ActivityItemRead(ClosedModel):

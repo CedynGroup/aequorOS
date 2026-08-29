@@ -40,9 +40,7 @@ def mirror_enabled() -> bool:
     return get_settings().smtp.enabled
 
 
-def enqueue_due_notification_mirror(
-    session: Session, org_id: str, *, now: datetime
-) -> bool:
+def enqueue_due_notification_mirror(session: Session, org_id: str, *, now: datetime) -> bool:
     """Enqueue at most one mirror job per org per hour; no-op when disabled."""
     if not mirror_enabled():
         return False
@@ -56,9 +54,7 @@ def enqueue_due_notification_mirror(
     )
     if existing is not None:
         return False
-    job_queue.enqueue(
-        session, org_id, JOB_TYPE, payload={}, coalesce_key=coalesce_key
-    )
+    job_queue.enqueue(session, org_id, JOB_TYPE, payload={}, coalesce_key=coalesce_key)
     return True
 
 
@@ -88,12 +84,13 @@ def _recipient_emails(session: Session, notification: Notification) -> list[str]
             )
         )
         return [email] if email else []
-    # Org-wide rows mirror to active admins (the accountable inbox owners).
+    # Org-wide rows mirror to active account administrators. ``admin`` remains
+    # only for rolling/test compatibility; migration 202608280045 leaves none.
     return list(
         session.scalars(
             select(User.email).where(
                 User.organization_id == notification.organization_id,
-                User.role == "admin",
+                User.role.in_(("account_admin", "admin")),
                 User.is_active.is_(True),
             )
         )
@@ -129,7 +126,7 @@ def run_notification_email_mirror(session: Session, job: Job) -> None:
             for row in rows:
                 recipients = _recipient_emails(session, row)
                 if not recipients:
-                    # Nothing to deliver to (deactivated user, no admins):
+                    # Nothing to deliver to (deactivated user, no account admins):
                     # stamp it so the outbox cannot jam on the row forever.
                     row.emailed_at = now
                     skipped_no_recipient += 1

@@ -71,11 +71,13 @@ Clients of every institution type sign in from the **same** universal login
    `Savings & Loans` or `Finance House` only for an institution that still holds
    that legacy licence and is transitioning by 31 December 2026. Set currency `GHS`, jurisdiction `GH`, the admin email.
 2. Submit → the `provision_institution` saga creates the Organization (`OR-…`),
-   Bank (`BK-…`), storage bucket, KMS key, SSO stub, and the first admin (one-time
-   password shown once). Selecting the SDI type here is what scopes the modules,
-   requirements and returns.
+   Bank (`BK-…`), storage bucket, KMS key, SSO stub, and the first account
+   administrator (one-time password shown once). In the same transaction it
+   records that necessarily sole active human administrator as Org Owner through
+   an organization-wide binding. Selecting the SDI type here is what scopes the
+   modules, requirements and returns.
 
-## 2. Admin signs in — the scope is applied
+## 2. Account administrator signs in — the scope is applied
 
 Sign in at `bank.aequoros.com` / `:3002`. The SDI now sees the scoped module set
 (Command Center, Risk, Alerts, Liquidity, simplified Capital, Regulatory

@@ -10,7 +10,7 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
   const params = useSearchParams();
   const callbackUrl = params.get('callbackUrl') ?? '/';
   // NextAuth lands failed SSO attempts back here with ?error=. The most common
-  // legitimate case is a recorded access request awaiting admin approval.
+  // legitimate case is a recorded access request awaiting account-admin approval.
   const ssoFailed = Boolean(params.get('error'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

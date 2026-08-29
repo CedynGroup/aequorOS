@@ -21,7 +21,7 @@ from app.api.deps import (
     TenantContext,
     get_current_principal,
     get_tenant_db_session,
-    require_role,
+    require_account_administration,
 )
 from app.core.config import get_settings
 from app.db.session import get_worker_sessionmaker
@@ -138,10 +138,10 @@ def sso_status(db: SystemDb) -> SsoStatusResponse:
     operation_id="authGetSsoConnection",
 )
 def get_sso_connection(
-    ctx: Annotated[TenantContext, Depends(require_role("admin"))],
+    ctx: Annotated[TenantContext, Depends(require_account_administration)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> SsoConnectionResponse | None:
-    """The org's OIDC connection (admin). The secret is never returned — only
+    """The org's OIDC connection (account administrator). The secret is never returned — only
     whether one is set."""
     connection = sso_config.get_connection(db, ctx.organization_id)
     if connection is None:
@@ -163,10 +163,10 @@ def get_sso_connection(
 )
 def put_sso_connection(
     payload: SsoConnectionUpdateRequest,
-    ctx: Annotated[TenantContext, Depends(require_role("admin"))],
+    ctx: Annotated[TenantContext, Depends(require_account_administration)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> SsoConnectionResponse:
-    """Create or update the org's OIDC connection (admin; secret write-only)."""
+    """Create or update the org's OIDC connection (account admin; secret write-only)."""
     connection = sso_config.upsert_connection(
         db,
         organization_id=ctx.organization_id,
@@ -194,10 +194,10 @@ def put_sso_connection(
     operation_id="authListSsoAccessRequests",
 )
 def list_sso_access_requests(
-    ctx: Annotated[TenantContext, Depends(require_role("admin"))],
+    ctx: Annotated[TenantContext, Depends(require_account_administration)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> list[SsoAccessRequestRead]:
-    """JIT sign-ins awaiting approval (deactivated stubs; admin only)."""
+    """JIT sign-ins awaiting approval (deactivated stubs; account admin only)."""
     return [
         SsoAccessRequestRead(
             user_id=user.id,
@@ -217,10 +217,10 @@ def list_sso_access_requests(
 def approve_sso_access_request(
     user_id: UUID,
     payload: SsoAccessRequestApprove,
-    ctx: Annotated[TenantContext, Depends(require_role("admin"))],
+    ctx: Annotated[TenantContext, Depends(require_account_administration)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> SsoAccessRequestRead:
-    """Activate a requested account with an explicitly chosen role (admin only)."""
+    """Activate a requested account with an explicitly chosen role (account admin only)."""
     user = authentication.approve_sso_access_request(
         db, organization_id=ctx.organization_id, user_id=user_id, role=payload.role
     )
@@ -239,10 +239,10 @@ def approve_sso_access_request(
 )
 def reject_sso_access_request(
     user_id: UUID,
-    ctx: Annotated[TenantContext, Depends(require_role("admin"))],
+    ctx: Annotated[TenantContext, Depends(require_account_administration)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> None:
-    """Delete a never-activated request stub (admin only)."""
+    """Delete a never-activated request stub (account admin only)."""
     authentication.reject_sso_access_request(
         db, organization_id=ctx.organization_id, user_id=user_id
     )
