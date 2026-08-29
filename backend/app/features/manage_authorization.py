@@ -38,6 +38,9 @@ from app.services import authorization, grant_administration
 
 router = APIRouter(tags=["authorization"])
 
+_LEGACY_REVOKER_ID = "revoker-not-recorded-predates-attribution"
+_LEGACY_REVOKER_NAME = "Revoker not recorded (predates attribution requirement)"
+
 
 def _sod_read(decision: grant_administration.SodDecision) -> SodDecisionRead:
     return SodDecisionRead(
@@ -72,6 +75,8 @@ def _actor_name(
 ) -> str | None:
     if actor_type is None or actor_id is None:
         return None
+    if actor_type == GrantorType.SYSTEM.value and actor_id == _LEGACY_REVOKER_ID:
+        return _LEGACY_REVOKER_NAME
     if actor_type == GrantorType.SYSTEM.value:
         return "AequorOS system"
     if actor_type == GrantorType.OPERATOR.value:

@@ -471,8 +471,12 @@ function GrantComposer({
   const [step, setStep] = useState<"define" | "review" | "done">("define");
   const [draft, setDraft] = useState<GrantDraft>(() => initialDraft(banks));
   const [saved, setSaved] = useState<BindingCreateResponse | null>(null);
-  const [previewSentence, setPreviewSentence] = useState<string | null>(null);
+  const [previewResult, setPreviewResult] = useState<{
+    key: string;
+    sentence: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const previewKeyRef = useRef("");
   const name = memberName(member);
   const isPendingApproval = member.accessRequestState === "approval_needed";
 
@@ -485,22 +489,52 @@ function GrantComposer({
     sensitivityScope: draft.sensitivityScope,
     reason: draft.reason.trim(),
   };
+  const previewKey = [
+    member.userId,
+    draft.roleBundle,
+    draft.institutionScope,
+    draft.institutionScope === "institution" ? draft.institutionId : "",
+    draft.moduleScope,
+    draft.sensitivityScope,
+  ].join("|");
+  previewKeyRef.current = previewKey;
+  const previewSentence =
+    previewResult?.key === previewKey ? previewResult.sentence : null;
 
-  const preview = useMutation({
+  const { mutate: previewAuthority } = useMutation({
     mutationFn: () =>
       authorizationApi.previewAuthorizationBinding({
         bindingPreviewRequest: {
           ...scope,
+          reason: scope.reason || "Authority sentence preview",
           principalUserId: member.userId,
         },
       }),
-    onSuccess: (result) => {
-      setPreviewSentence(result.authoritySentence);
-      setStep("review");
-    },
-    onError: async (failure) =>
-      setError((await normalizeApiError(failure)).message),
   });
+
+  useEffect(() => {
+    if (step !== "define") return;
+    setError(null);
+    const requestedKey = previewKey;
+    const timeout = window.setTimeout(() => {
+      previewAuthority(undefined, {
+        onSuccess: (result) => {
+          if (previewKeyRef.current === requestedKey) {
+            setPreviewResult({
+              key: requestedKey,
+              sentence: result.authoritySentence,
+            });
+          }
+        },
+        onError: async (failure) => {
+          if (previewKeyRef.current === requestedKey) {
+            setError((await normalizeApiError(failure)).message);
+          }
+        },
+      });
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [previewAuthority, previewKey, step]);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -545,7 +579,7 @@ function GrantComposer({
   const resetForAnother = () => {
     setDraft(initialDraft(banks));
     setSaved(null);
-    setPreviewSentence(null);
+    setPreviewResult(null);
     setError(null);
     setStep("define");
   };
@@ -594,9 +628,9 @@ function GrantComposer({
           className="space-y-5 p-5"
           onSubmit={(event) => {
             event.preventDefault();
-            if (draft.reason.trim()) {
+            if (draft.reason.trim() && previewSentence) {
               setError(null);
-              preview.mutate();
+              setStep("review");
             }
           }}
         >
@@ -689,6 +723,7 @@ function GrantComposer({
               {error}
             </p>
           )}
+          {previewSentence && <SentencePreview sentence={previewSentence} />}
           <div className="flex justify-end gap-3">
             <button
               type="button"
@@ -699,10 +734,10 @@ function GrantComposer({
             </button>
             <button
               type="submit"
-              disabled={!draft.reason.trim() || preview.isPending}
+              disabled={!draft.reason.trim() || !previewSentence}
               className="px-4 py-2.5 btn-primary text-body font-medium disabled:opacity-50"
             >
-              {preview.isPending ? "Preparing review…" : "Review grant"}
+              {previewSentence ? "Review grant" : "Preparing review…"}
             </button>
           </div>
         </form>
@@ -732,7 +767,6 @@ function GrantComposer({
             <button
               type="button"
               onClick={() => {
-                setPreviewSentence(null);
                 setStep("define");
               }}
               className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy hover:bg-surface-muted"

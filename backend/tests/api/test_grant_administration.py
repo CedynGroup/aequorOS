@@ -541,6 +541,40 @@ def test_revoke_ends_current_sign_ins_and_preserves_unrelated_grants(
         assert audit.details["reason"] == "Liquidity responsibilities moved to another officer"
 
 
+def test_members_distinguish_unattributed_historical_revoker(
+    grant_client: TestClient,
+) -> None:
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_payload(role="viewer"),
+    ).json()["binding"]
+    revoked = grant_client.post(
+        f"/api/v1/authorization/bindings/{created['id']}/revoke",
+        headers=_owner_headers(),
+        json={"reason": "Historical revocation"},
+    )
+    assert revoked.status_code == 200, revoked.text
+
+    with _session() as db:
+        binding = db.get(AuthorizationBinding, UUID(created["id"]))
+        assert binding is not None
+        binding.revoked_by_type = "system"
+        binding.revoked_by_id = "revoker-not-recorded-predates-attribution"
+        db.commit()
+
+    response = grant_client.get(
+        "/api/v1/organization/members", headers=_owner_headers()
+    )
+    assert response.status_code == 200, response.text
+    member = next(
+        row for row in response.json()["members"] if row["user_id"] == str(GRANTEE)
+    )
+    assert member["grants"][0]["revoked_by_name"] == (
+        "Revoker not recorded (predates attribution requirement)"
+    )
+
+
 def test_server_returns_warn_and_block_sod_decisions(grant_client: TestClient) -> None:
     analyst = grant_client.post(
         "/api/v1/authorization/bindings",
