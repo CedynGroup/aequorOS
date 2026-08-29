@@ -355,8 +355,16 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   managed in dashboard Settings → Authentication (secret write-only). The backend verifies
   every id_token via OIDC discovery + issuer JWKS (`verify_oidc_id_token`; RS256/ES256,
   `email_verified`, domain allow-list) and links **pre-provisioned** users
-  (`auth_provider='oidc'`) — plus opt-in request-access JIT (`jit_enabled`): an
-  allowed-domain first sign-in records a DEACTIVATED stub + 403 "awaiting approval";
+  (`auth_provider='oidc'`). The uniquely selected enabled connection is the sole tenant
+  authority: its `organization_id` scopes subject lookup, email linking, JIT stubs and
+  issued access/refresh tokens; OIDC subject uniqueness is correspondingly scoped to
+  `(organization_id, auth_provider, sso_subject)`. The public SSO exchange accepts only
+  `id_token`; its retired organization hint survives as compatibility-only input and must
+  exactly match the verified connection or authentication fails generically. Missing or
+  ambiguous issuer/audience routing fails before account lookup; multi-audience tokens
+  require `azp` to name the selected connection's client. Opt-in request-access JIT
+  (`jit_enabled`) means an allowed-domain first sign-in records a DEACTIVATED stub + 403
+  "awaiting approval";
   access exists only after an admin approves with an explicit role
   (`/auth/sso/access-requests`). Never let JIT auto-activate accounts — that was
   rejected 2026-07-20 as a data-leak path until RBAC group-mapping lands. The dashboard's NextAuth loads the client config through

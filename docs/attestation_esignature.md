@@ -184,14 +184,17 @@ records `actor_user_id`, `action ∈ (requested, approved, rejected)`, `reason`,
 ### 1.4 Identity: OIDC → platform user
 
 The bank's own IdP is the authority. `verify_oidc_id_token`
-(`app/core/security.py:199`) performs discovery, fetches the issuer JWKS, and
+(`app/core/security.py`) performs discovery, fetches the issuer JWKS, and
 validates RS256/ES256 with issuer and audience taken **from the stored
 connection row, never from the token**. Trusted claims: `sub`, `email`,
-`email_verified`, `name`. Subject → user mapping is
-`auth_provider='oidc' AND sso_subject=sub AND is_active`, with a first-login
-fallback to exact email match on a pre-provisioned active account
-(`app/services/authentication.py:110`). Opt-in JIT records a **deactivated**
-stub and returns 403 until an admin approves with an explicit role.
+`email_verified`, `name`. The uniquely selected, verified connection is the
+sole organization authority for lookup and issued tokens. Subject → user
+mapping is `organization_id=connection.organization_id AND
+auth_provider='oidc' AND sso_subject=sub AND is_active`, with a first-login
+fallback to exact email match on a pre-provisioned active account in that same
+organization (`app/services/authentication.py`). Opt-in JIT records a
+**deactivated** stub in that organization and returns 403 until an admin
+approves with an explicit role.
 
 **Authentication update (2026-08-25).** Access tokens are HS256, 15-minute TTL,
 carrying `sub` (user UUID), `org`
@@ -206,12 +209,12 @@ closed.
 
 **Stable per-user identifiers available today:**
 
-| Candidate                   | Stable?                                                                                                                                                                             | Verdict for signing                                                                                            |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `users.id` (UUID v4)        | Never rewritten anywhere                                                                                                                                                            | Stable, but **exposed to the browser** and is an internal DB key — unsuitable as a published signer identifier |
-| `users.email`               | No API mutates it, but it is a natural key that changes in real life                                                                                                                | Unsuitable                                                                                                     |
-| `users.sso_subject`         | **Not guaranteed** — the issuer is not stored beside it, the unique index is global `(auth_provider, sso_subject)`, and Entra-style pairwise subjects change if `client_id` rotates | Unsuitable                                                                                                     |
-| Platform IDs (`OR-`, `BK-`) | Permanent, opaque                                                                                                                                                                   | Exist for orgs and banks **only** — there is no per-user equivalent                                            |
+| Candidate                   | Stable?                                                                                                                                                                                           | Verdict for signing                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `users.id` (UUID v4)        | Never rewritten anywhere                                                                                                                                                                          | Stable, but **exposed to the browser** and is an internal DB key — unsuitable as a published signer identifier |
+| `users.email`               | No API mutates it, but it is a natural key that changes in real life                                                                                                                              | Unsuitable                                                                                                     |
+| `users.sso_subject`         | **Not guaranteed** — the issuer is not stored beside it, uniqueness is scoped to `(organization_id, auth_provider, sso_subject)`, and Entra-style pairwise subjects change if `client_id` rotates | Unsuitable                                                                                                     |
+| Platform IDs (`OR-`, `BK-`) | Permanent, opaque                                                                                                                                                                                 | Exist for orgs and banks **only** — there is no per-user equivalent                                            |
 
 At this reviewed baseline there was **no step-up authentication, MFA, ACR, or
 re-authentication concept**. The built attestation system now provides password

@@ -34017,17 +34017,6 @@
             "minLength": 1,
             "title": "Id Token",
             "type": "string"
-          },
-          "organization_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Organization Id"
           }
         },
         "required": [

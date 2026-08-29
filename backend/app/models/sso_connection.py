@@ -40,9 +40,9 @@ class SsoConnection(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     # any domain; the pre-provisioned-user gate still applies either way).
     allowed_email_domains: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    # JIT provisioning: when on, a verified identity from an ALLOWED domain that
-    # has no AequorOS account gets one auto-created as a read-only `viewer`.
-    # Deliberately opt-in and refused unless allowed_email_domains is non-empty —
-    # without the domain gate, any valid public-IdP account would mint a user.
+    # JIT request access: when on, a verified identity from an ALLOWED domain
+    # that has no AequorOS account gets a deactivated `viewer` stub. It receives
+    # no session or authority until an admin approves it with an explicit role.
+    # Deliberately opt-in and refused unless allowed_email_domains is non-empty.
     jit_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     updated_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)

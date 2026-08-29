@@ -111,7 +111,7 @@ def sso_login(payload: SsoLoginRequest, db: SystemDb) -> TokenResponse:
     """Exchange a verified OIDC id_token for AequorOS app tokens."""
     return _tokens(
         authentication.login_with_sso(
-            db, id_token=payload.id_token, organization_id=payload.organization_id
+            db, id_token=payload.id_token, organization_hint=payload.organization_id
         )
     )
 

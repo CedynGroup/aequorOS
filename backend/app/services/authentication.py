@@ -302,16 +302,16 @@ def login_with_password(
 
 
 def _resolve_sso_user(
-    db: Session, subject: str, email: str | None, organization_id: str | None
+    db: Session, subject: str, email: str | None, organization_id: str
 ) -> User | None:
-    # Already linked to this OIDC subject?
+    # The verified connection's organization is mandatory on BOTH resolution
+    # paths.  OIDC subjects and emails are not global tenant identifiers.
     linked_stmt = select(User).where(
+        User.organization_id == organization_id,
         User.auth_provider == "oidc",
         User.sso_subject == subject,
         User.is_active.is_(True),
     )
-    if organization_id is not None:
-        linked_stmt = linked_stmt.where(User.organization_id == organization_id)
     linked = db.scalars(linked_stmt).all()
     if len(linked) == 1:
         return linked[0]
@@ -321,9 +321,11 @@ def _resolve_sso_user(
     # an unknown identity is rejected, so only invited users get in).
     if not email:
         return None
-    email_stmt = select(User).where(User.email == email, User.is_active.is_(True))
-    if organization_id is not None:
-        email_stmt = email_stmt.where(User.organization_id == organization_id)
+    email_stmt = select(User).where(
+        User.organization_id == organization_id,
+        User.email == email,
+        User.is_active.is_(True),
+    )
     matches = db.scalars(email_stmt).all()
     return matches[0] if len(matches) == 1 else None
 
@@ -374,7 +376,7 @@ def login_with_sso(
     db: Session,
     *,
     id_token: str,
-    organization_id: str | None = None,
+    organization_hint: str | None = None,
     settings: AuthSettings | None = None,
 ) -> IssuedTokens:
     """Verify an OIDC id_token against its configured connection, link it to a
@@ -382,7 +384,9 @@ def login_with_sso(
 
     Routing is zero-trust: the token's unverified ``iss``/``aud`` only *select* a
     stored, enabled connection — verification then runs against that connection's
-    issuer JWKS and client id, so a forged header buys nothing.
+    issuer JWKS and client id, so a forged header buys nothing. The verified
+    connection's organization is the sole namespace for account lookup, JIT and
+    issued tokens. ``organization_hint`` is compatibility-only and must match it.
     """
     settings = settings or get_settings().auth
     try:
@@ -390,11 +394,10 @@ def login_with_sso(
     except security.AuthError as exc:
         raise _SSO_INVALID from exc
 
-    audience_hint = hints.get("aud", "")
-    if isinstance(audience_hint, list):  # OIDC allows a list; ours is a single RP
-        audience_hint = audience_hint[0] if audience_hint else ""
     connection = sso_config.find_enabled_by_issuer_audience(
-        db, issuer=str(hints.get("iss", "")), audience=str(audience_hint)
+        db,
+        issuer=str(hints.get("iss", "")),
+        audience=hints.get("aud", ""),
     )
     if connection is None:
         raise _SSO_INVALID
@@ -405,6 +408,12 @@ def login_with_sso(
         )
     except security.AuthError as exc:
         raise _SSO_INVALID from exc
+
+    # Compatibility-only hints never select a tenant.  Check them only after
+    # signature/issuer/audience verification and fail generically on mismatch;
+    # silently overriding in either direction would preserve an authority bug.
+    if organization_hint is not None and organization_hint != connection.organization_id:
+        raise _SSO_INVALID
 
     email = claims.get("email")
     # An unverified email must never link to an account (Google always sends the
@@ -420,15 +429,9 @@ def login_with_sso(
                 detail="This email domain is not allowed for SSO sign-in.",
             )
 
-    resolved_org = organization_id if organization_id is not None else connection.organization_id
-    user = _resolve_sso_user(db, str(claims["sub"]), email, resolved_org)
-    if (
-        user is None
-        and connection.jit_enabled
-        and connection.allowed_email_domains
-        and email
-        and resolved_org == connection.organization_id
-    ):
+    organization_id = connection.organization_id
+    user = _resolve_sso_user(db, str(claims["sub"]), email, organization_id)
+    if user is None and connection.jit_enabled and connection.allowed_email_domains and email:
         # Access-request flow: record (or re-acknowledge) a deactivated stub and
         # refuse the session — approval is an explicit admin act. A previously
         # REJECTED stub becomes a fresh request again (the rejection is cleared).
