@@ -18,10 +18,11 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.security import ACCOUNT_ADMIN_ROLE, ADMIN_ROLE
 from app.models import AuthorizationBinding, OrganizationOwnerAssignment, User
 from app.services import authorization
 
-ELIGIBLE_ADMIN_ROLES = frozenset({"admin", "account_admin"})
+ELIGIBLE_ADMIN_ROLES = frozenset({ADMIN_ROLE, ACCOUNT_ADMIN_ROLE})
 AUTO_ASSIGNMENT_REASON = (
     "Initial Org Owner auto-assignment: exactly one eligible active human administrator existed"
 )

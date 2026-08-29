@@ -109,6 +109,12 @@ class BindingStatus(StrEnum):
     REVOKED = "revoked"
 
 
+class GrantorType(StrEnum):
+    SYSTEM = "system"
+    TENANT_USER = "tenant_user"
+    OPERATOR = "operator"
+
+
 class OwnerAssignmentStatus(StrEnum):
     ASSIGNED = "assigned"
     DESIGNATION_REQUIRED = "designation_required"

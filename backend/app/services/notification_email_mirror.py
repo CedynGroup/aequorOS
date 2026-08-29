@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.security import ACCOUNT_ADMIN_ROLE, ADMIN_ROLE
 from app.models import Job, Notification, User
 from app.services import job_queue
 
@@ -74,7 +75,9 @@ def _pending_rows(session: Session, org_id: str, now: datetime) -> list[Notifica
     )
 
 
-def _recipient_emails(session: Session, notification: Notification) -> list[str]:
+def _recipient_emails(
+    session: Session, notification: Notification, admin_cache: list[str] | None = None
+) -> list[str]:
     if notification.recipient_user_id is not None:
         email = session.scalar(
             select(User.email).where(
@@ -84,13 +87,15 @@ def _recipient_emails(session: Session, notification: Notification) -> list[str]
             )
         )
         return [email] if email else []
-    # Org-wide rows mirror to active account administrators. ``admin`` remains
-    # only for rolling/test compatibility; migration 202608280046 leaves none.
+    # Org-wide rows mirror to active account administrators. The caller may
+    # pass a cached list so the same admin emails are not re-queried per row.
+    if admin_cache is not None:
+        return admin_cache
     return list(
         session.scalars(
             select(User.email).where(
                 User.organization_id == notification.organization_id,
-                User.role.in_(("account_admin", "admin")),
+                User.role.in_((ACCOUNT_ADMIN_ROLE, ADMIN_ROLE)),
                 User.is_active.is_(True),
             )
         )
@@ -117,6 +122,17 @@ def run_notification_email_mirror(session: Session, job: Job) -> None:
     sent = 0
     skipped_no_recipient = 0
     assert settings.smtp_host is not None and settings.smtp_from is not None
+    # Fetch admin emails once for the whole batch so org-wide rows do not
+    # each trigger a separate query for the same recipient list.
+    org_wide_recipients = list(
+        session.scalars(
+            select(User.email).where(
+                User.organization_id == job.organization_id,
+                User.role.in_((ACCOUNT_ADMIN_ROLE, ADMIN_ROLE)),
+                User.is_active.is_(True),
+            )
+        )
+    )
     try:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as client:
             if settings.smtp_starttls:
@@ -124,7 +140,7 @@ def run_notification_email_mirror(session: Session, job: Job) -> None:
             if settings.smtp_username and settings.smtp_password:
                 client.login(settings.smtp_username, settings.smtp_password)
             for row in rows:
-                recipients = _recipient_emails(session, row)
+                recipients = _recipient_emails(session, row, admin_cache=org_wide_recipients)
                 if not recipients:
                     # Nothing to deliver to (deactivated user, no account admins):
                     # stamp it so the outbox cannot jam on the row forever.

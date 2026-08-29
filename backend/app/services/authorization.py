@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime
-from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import select
@@ -21,6 +20,7 @@ from app.core.authorization import (
     BindingGrant,
     BindingStatus,
     ConditionCheck,
+    GrantorType,
     InstitutionScope,
     ModuleScope,
     Permission,
@@ -42,12 +42,6 @@ from app.services import authentication
 
 class AuthorizationInvariantError(ValueError):
     """A requested binding would break the authorization rules."""
-
-
-class GrantorType(StrEnum):
-    SYSTEM = "system"
-    TENANT_USER = "tenant_user"
-    OPERATOR = "operator"
 
 
 @dataclass(frozen=True)
@@ -140,28 +134,35 @@ def _validate_grantor(db: Session, organization_id: str, grantor: GrantorRef) ->
         raise AuthorizationInvariantError("operator grantor is not active")
 
 
-def invalidate_user_authorization(
+def invalidate_user_authorization(  # noqa: PLR0913 - lock optimization is explicit
     db: Session,
     *,
     organization_id: str,
     user_id: UUID,
     reason: str,
     commit: bool = True,
+    locked_user: User | None = None,
 ) -> int:
     """Update the user's authorization version and revoke all their refresh tokens.
 
     Any change to a user's role, scope, status, or security settings must call
     this in the same transaction. The user-row lock is shared with refresh
     token rotation, so a concurrent token refresh cannot skip the revocation.
+    If the caller already holds a FOR UPDATE lock on the user (e.g. from
+    ``create_role_binding``), pass it via ``locked_user`` to avoid a second
+    query.
     """
 
     if not reason.strip():
         raise AuthorizationInvariantError("authorization changes require a reason")
-    user = db.scalar(
-        select(User)
-        .where(User.id == user_id, User.organization_id == organization_id)
-        .with_for_update(key_share=True)
-    )
+    if locked_user is not None:
+        user = locked_user
+    else:
+        user = db.scalar(
+            select(User)
+            .where(User.id == user_id, User.organization_id == organization_id)
+            .with_for_update(key_share=True)
+        )
     if user is None:
         raise AuthorizationInvariantError("principal is not a member of the organization")
     user.authorization_version += 1
@@ -202,10 +203,12 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
     if not grant_reason:
         raise AuthorizationInvariantError("a role binding requires a grant reason")
     principal = db.scalar(
-        select(User).where(
+        select(User)
+        .where(
             User.id == principal_user_id,
             User.organization_id == organization_id,
         )
+        .with_for_update(key_share=True)
     )
     if principal is None:
         raise AuthorizationInvariantError("principal is not a member of the organization")
@@ -249,6 +252,7 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
         user_id=principal_user_id,
         reason=f"role binding granted: {grant_reason}",
         commit=False,
+        locked_user=principal,
     )
     if commit:
         db.commit()
@@ -256,6 +260,21 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
     else:
         db.flush()
     return binding
+
+
+def _deny_with_trace(  # noqa: PLR0913 - the complete decision tuple is explicit
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    conditions: tuple[ConditionCheck, ...],
+    now: datetime | None,
+    reason: str | None = None,
+) -> AuthorizationDecision:
+    """Evaluate with no bindings and optionally override the denial reason."""
+    decision = evaluate_grants(principal, permission, resource, (), conditions=conditions, now=now)
+    if reason is not None:
+        return replace(decision, allowed=False, reason=reason)
+    return decision
 
 
 def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
@@ -277,24 +296,11 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
         )
     )
     if user is None or _principal_type(user) is not principal.principal_type:
-        decision = evaluate_grants(
-            principal,
-            permission,
-            resource,
-            (),
-            conditions=conditions,
-            now=now,
+        return _deny_with_trace(
+            principal, permission, resource, conditions, now, "principal_not_active"
         )
-        return replace(decision, allowed=False, reason="principal_not_active")
     if resource.organization_id != principal.organization_id:
-        return evaluate_grants(
-            principal,
-            permission,
-            resource,
-            (),
-            conditions=conditions,
-            now=now,
-        )
+        return _deny_with_trace(principal, permission, resource, conditions, now)
     if resource.institution_scope is InstitutionScope.INSTITUTION:
         institution = db.scalar(
             select(Bank.id).where(
@@ -303,15 +309,14 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
             )
         )
         if institution is None:
-            decision = evaluate_grants(
+            return _deny_with_trace(
                 principal,
                 permission,
                 resource,
-                (),
-                conditions=conditions,
-                now=now,
+                conditions,
+                now,
+                "resource_institution_not_in_tenant",
             )
-            return replace(decision, allowed=False, reason="resource_institution_not_in_tenant")
     bindings = list(
         db.scalars(
             select(AuthorizationBinding).where(

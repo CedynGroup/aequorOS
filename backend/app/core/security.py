@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # ladder and is authorized only by the explicit account-administration gate.
 ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "examiner", "viewer")
 _ROLE_RANK = {role: rank for rank, role in enumerate(ROLES)}
+ADMIN_ROLE = "admin"
 ACCOUNT_ADMIN_ROLE = "account_admin"
 
 TokenType = Literal["access", "refresh"]

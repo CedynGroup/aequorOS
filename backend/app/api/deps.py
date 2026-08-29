@@ -233,7 +233,7 @@ def require_role(minimum: str):  # noqa: ANN201 - returns a FastAPI dependency c
 def require_account_administration(
     ctx: Annotated[TenantContext, Depends(get_current_principal)],
 ) -> TenantContext:
-    if not set(ctx.roles) & {"admin", security.ACCOUNT_ADMIN_ROLE}:
+    if not set(ctx.roles) & {security.ADMIN_ROLE, security.ACCOUNT_ADMIN_ROLE}:
         authorization_denied(
             reason="insufficient_role",
             required_role=security.ACCOUNT_ADMIN_ROLE,

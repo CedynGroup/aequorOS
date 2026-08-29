@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.authorization import (
     BindingStatus,
+    GrantorType,
     InstitutionScope,
     ModuleScope,
     OwnerAssignmentBasis,
@@ -31,8 +32,6 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
-
-GRANTOR_TYPES: tuple[str, ...] = ("system", "tenant_user", "operator")
 
 
 def _values(values: tuple[str, ...]) -> str:
@@ -97,7 +96,7 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_authorization_bindings_status",
         ),
         CheckConstraint(
-            f"granted_by_type IN ({_values(GRANTOR_TYPES)})",
+            f"granted_by_type IN ({_values(tuple(GrantorType))})",
             name="ck_authorization_bindings_grantor_type",
         ),
         CheckConstraint(

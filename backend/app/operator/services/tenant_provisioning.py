@@ -303,7 +303,7 @@ def _step_first_admin(
         organization_id=organization_id,
         email=payload.admin_email.lower(),
         display_name=payload.admin_full_name,
-        role="account_admin",
+        role=security.ACCOUNT_ADMIN_ROLE,
         auth_provider="password",
         is_active=True,
         password_hash=security.hash_password(one_time_password),

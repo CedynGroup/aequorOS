@@ -53,6 +53,22 @@ _OWNER_BUNDLE_CHECK = (
 )
 
 
+def _enable_rls(table: str) -> None:
+    op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+    op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
+    op.execute(
+        f"CREATE POLICY {table}_tenant_isolation ON {table} FOR ALL "
+        f"USING ((organization_id)::text = {_TENANT_ID_EXPR}) "
+        f"WITH CHECK ((organization_id)::text = {_TENANT_ID_EXPR})"
+    )
+
+
+def _disable_rls(table: str) -> None:
+    op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation ON {table}")
+    op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
+    op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
+
+
 def _candidate_snapshot(row: RowMapping) -> dict[str, str | None]:
     return {
         "user_id": str(row["id"]),
@@ -282,26 +298,8 @@ def upgrade() -> None:
             )
         )
 
-    op.execute(f"ALTER TABLE {_ASSIGNMENTS} ENABLE ROW LEVEL SECURITY")
-    op.execute(f"ALTER TABLE {_ASSIGNMENTS} FORCE ROW LEVEL SECURITY")
-    op.execute(
-        f"""
-        CREATE POLICY {_ASSIGNMENTS}_tenant_isolation ON {_ASSIGNMENTS}
-        FOR ALL
-        USING ((organization_id)::text = {_TENANT_ID_EXPR})
-        WITH CHECK ((organization_id)::text = {_TENANT_ID_EXPR})
-        """
-    )
-    op.execute(f"ALTER TABLE {_ROLE_DEMOTIONS} ENABLE ROW LEVEL SECURITY")
-    op.execute(f"ALTER TABLE {_ROLE_DEMOTIONS} FORCE ROW LEVEL SECURITY")
-    op.execute(
-        f"""
-        CREATE POLICY {_ROLE_DEMOTIONS}_tenant_isolation ON {_ROLE_DEMOTIONS}
-        FOR ALL
-        USING ((organization_id)::text = {_TENANT_ID_EXPR})
-        WITH CHECK ((organization_id)::text = {_TENANT_ID_EXPR})
-        """
-    )
+    _enable_rls(_ASSIGNMENTS)
+    _enable_rls(_ROLE_DEMOTIONS)
 
 
 def downgrade() -> None:
@@ -354,13 +352,9 @@ def downgrade() -> None:
             )
         )
 
-    op.execute(f"DROP POLICY IF EXISTS {_ROLE_DEMOTIONS}_tenant_isolation ON {_ROLE_DEMOTIONS}")
-    op.execute(f"ALTER TABLE {_ROLE_DEMOTIONS} NO FORCE ROW LEVEL SECURITY")
-    op.execute(f"ALTER TABLE {_ROLE_DEMOTIONS} DISABLE ROW LEVEL SECURITY")
+    _disable_rls(_ROLE_DEMOTIONS)
     op.drop_table(_ROLE_DEMOTIONS)
-    op.execute(f"DROP POLICY IF EXISTS {_ASSIGNMENTS}_tenant_isolation ON {_ASSIGNMENTS}")
-    op.execute(f"ALTER TABLE {_ASSIGNMENTS} NO FORCE ROW LEVEL SECURITY")
-    op.execute(f"ALTER TABLE {_ASSIGNMENTS} DISABLE ROW LEVEL SECURITY")
+    _disable_rls(_ASSIGNMENTS)
     op.drop_index("ix_organization_owner_assignments_status", table_name=_ASSIGNMENTS)
     op.drop_table(_ASSIGNMENTS)
     with force_rls_suspended(bind, _BINDINGS):
