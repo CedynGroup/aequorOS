@@ -1,8 +1,7 @@
-"""Initial organization-owner assignment on the scoped-binding authority.
+"""Assign the first organization owner when a new tenant is provisioned.
 
-This service owns the live onboarding case. The one-time migration mirrors the
-same persisted shape in SQL because Alembic revisions must remain executable
-without importing mutable application behavior.
+The one-time backfill migration does the same work in raw SQL because Alembic
+revisions cannot import application code that may change over time.
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ AUTO_ASSIGNMENT_REASON = (
 
 
 class OwnerAssignmentError(ValueError):
-    """The requested initial-owner state would violate the assignment rule."""
+    """The requested owner assignment breaks the assignment rules."""
 
 
 def eligible_admin_candidates(db: Session, organization_id: str) -> list[User]:
@@ -50,7 +49,7 @@ def eligible_admin_candidates(db: Session, organization_id: str) -> list[User]:
 
 
 def candidate_snapshot(user: User) -> dict[str, str | None]:
-    """Stable, directly consumable identity evidence for designation review."""
+    """A snapshot of the user's ID, email, and name for staff to review."""
 
     return {
         "user_id": str(user.id),
@@ -67,11 +66,12 @@ def assign_initial_owner(  # noqa: PLR0913 - provenance is intentionally explici
     granted_by_id: str,
     commit: bool = True,
 ) -> OrganizationOwnerAssignment:
-    """Assign the sole eligible administrator as owner and record the basis.
+    """Assign the single eligible administrator as owner and record why.
 
-    This function never chooses among candidates. Callers must establish the
-    exactly-one invariant before calling; it repeats the complete eligibility
-    query so a stale or hand-picked candidate cannot bypass the rule.
+    This function does not pick between candidates. The caller must first
+    confirm there is exactly one eligible administrator. The function
+    re-checks the eligibility query so a stale or hand-picked candidate
+    cannot bypass the rule.
     """
 
     candidates = eligible_admin_candidates(db, organization_id)

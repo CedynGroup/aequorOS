@@ -1,17 +1,18 @@
-"""Assign initial Org Owners only when the eligible administrator is unambiguous.
+"""Assign the first Org Owner only when exactly one eligible administrator exists.
 
 Revision ID: 202608280046
 Revises: 202608280045
 
-Every organization receives a durable assignment-state row. Exactly one active
-human legacy administrator becomes Org Owner through an auditable scoped
-binding. Zero or multiple candidates receive no binding; their state row names
-the reason and snapshots the candidates for later explicit staff designation.
+Every organization gets a record of its ownership state. If there is exactly
+one active human administrator, that person becomes the Org Owner through a
+binding that records who granted it and why. If there are zero or multiple
+candidates, no owner is assigned; the record says why and lists the candidates
+so staff can make an explicit choice later.
 
-The same transaction converts every legacy ``admin`` scalar role to the
-account-plane-only ``account_admin`` value and advances its authorization
-version. Outstanding refresh families are revoked, so no existing admin token
-can retain the old analyst/approver rank after the migration commits.
+The same transaction changes every legacy ``admin`` role to the
+non-operational ``account_admin`` value and bumps the authorization version.
+All outstanding refresh tokens are revoked, so no existing admin session can
+keep the old analyst or approver rank after the migration runs.
 """
 
 from __future__ import annotations

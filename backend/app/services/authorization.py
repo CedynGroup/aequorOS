@@ -1,9 +1,9 @@
-"""Persistence boundary for scoped authorization and session invalidation.
+"""Database operations for authorization bindings and session invalidation.
 
-No API route exposes these mutations yet.  The service is intentionally ready
-for that later vertical slice: creating a binding validates tenant ownership and
-atomically advances the target principal's authorization version while revoking
-every refresh-token family.
+No API route exposes these operations yet. The service is ready for a future
+admin endpoint: creating a binding checks tenant ownership and updates the
+user's authorization version in the same transaction, which also revokes all
+their refresh tokens.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ from app.services import authentication
 
 
 class AuthorizationInvariantError(ValueError):
-    """A requested binding would violate the authorization authority model."""
+    """A requested binding would break the authorization rules."""
 
 
 class GrantorType(StrEnum):
@@ -148,11 +148,11 @@ def invalidate_user_authorization(
     reason: str,
     commit: bool = True,
 ) -> int:
-    """Atomically advance the authority version and end every refresh family.
+    """Update the user's authorization version and revoke all their refresh tokens.
 
-    Future role, scope, status, and security mutations must call this in their
-    transaction.  The user-row lock is the same serialization point used by
-    refresh rotation, so a concurrent rotation cannot escape the revocation.
+    Any change to a user's role, scope, status, or security settings must call
+    this in the same transaction. The user-row lock is shared with refresh
+    token rotation, so a concurrent token refresh cannot skip the revocation.
     """
 
     if not reason.strip():
@@ -191,10 +191,11 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
     valid_until: datetime | None = None,
     commit: bool = True,
 ) -> AuthorizationBinding:
-    """Create one indivisible grant and invalidate existing sessions.
+    """Create a single binding and invalidate the user's existing sessions.
 
-    This is a service primitive, not a tenant administration surface.  Future
-    endpoints must add delegation and SoD policy before calling it.
+    This is a low-level service function, not a tenant admin API. Future
+    endpoints must add delegation and segregation-of-duties checks before
+    calling it.
     """
 
     grant_reason = reason.strip()
@@ -266,7 +267,7 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
     conditions: tuple[ConditionCheck, ...] = (),
     now: datetime | None = None,
 ) -> AuthorizationDecision:
-    """Resolve authority from persisted bindings only, with an audit-ready trace."""
+    """Check permissions using only stored bindings, returning a trace for audit."""
 
     user = db.scalar(
         select(User).where(
@@ -340,11 +341,11 @@ def observe_shadow_permission(  # noqa: PLR0913 - the observed decision tuple is
     conditions: tuple[ConditionCheck, ...] = (),
     now: datetime | None = None,
 ) -> AuthorizationDecision | None:
-    """Evaluate and emit policy parity while legacy authorization remains authoritative.
+    """Evaluate the binding result and log it for comparison with the legacy check.
 
-    This function never grants or refuses the request.  It gives one real route
-    a stable, queryable rollout signal without silently migrating that route to
-    the binding evaluator.
+    This function never allows or denies the request itself. It gives a real
+    route a way to log what the new binding evaluator would say, so the two
+    can be compared during the rollout without switching the route over.
     """
 
     target_fields = {

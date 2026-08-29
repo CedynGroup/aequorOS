@@ -1,4 +1,4 @@
-"""Normalized, tenant-owned authorization role bindings."""
+"""Database models for tenant-scoped authorization bindings."""
 
 from __future__ import annotations
 
@@ -40,11 +40,12 @@ def _values(values: tuple[str, ...]) -> str:
 
 
 class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
-    """One indivisible principal + bundle + exact-scope grant.
+    """One user, one role bundle, and one exact scope stored as a single row.
 
-    Rows combine with OR.  Every scope column inside one row combines with AND;
-    there are no independent role arrays or scope arrays to form a privilege
-    widening Cartesian product.
+    Multiple bindings for the same user combine with OR: if any one matches,
+    the permission is granted. But every scope field within a single binding
+    must match. There are no separate role or scope arrays that could widen
+    access in unexpected combinations.
     """
 
     __tablename__ = "authorization_bindings"
@@ -168,12 +169,12 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
 
 class OrganizationOwnerAssignment(TimestampMixin, Base):
-    """Durable initial-owner outcome for one organization.
+    """Records whether an organization has an owner and why.
 
-    The owner binding is the authority. This row is the migration/onboarding
-    control record that makes every unresolved organization queryable without
-    reading deploy logs: it says why designation is still required and snapshots
-    the eligible candidates that an operator must choose between.
+    The owner binding is the source of truth for ownership. This row is the
+    control record that makes every unresolved organization findable without
+    reading deploy logs: it says why designation is still needed and lists
+    the eligible candidates that staff must choose between.
     """
 
     __tablename__ = "organization_owner_assignments"
