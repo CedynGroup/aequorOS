@@ -17,24 +17,24 @@ to login and failed external compliance filters.
 79 App Router page entries across the authenticated shell, login, the inspector,
 and dynamic detail routes. The route groups under `app/(app)/`:
 
-| Area | Routes | What it reads |
-|---|---|---|
-| Overview | `/` | cross-module KPIs, live-engine freshness, filing calendar |
-| Liquidity | `/liquidity/*` | LCR, NSFR, monitoring tools, stress, EWI, CFP, submission preview |
-| Basel capital | `/basel/*` | RWA, capital structure, CAR, capital stress |
-| Interest-rate risk | `/irr/*` | repricing gap, EVE/EaR sensitivity, limits, positions |
-| FX | `/fx/*` | net open position, VaR, hedges |
-| FTP | `/ftp/*` | transfer curve, product and branch profitability, rates |
-| Forecasting | `/forecasting/*` | multi-year projection, scenario, optimizer, what-if |
-| Behavioral | `/behavioral` | per-tenant NMD duration, prepayment, deposit stability |
-| Markets | `/markets/*` | published curves, indices, desk determinations |
-| Positions | `/positions/*` | canonical book and record-level lineage |
-| Data Engine | `/data-engine/*` | Excel/CSV, API push, database-direct, T24, market data |
-| Submissions | `/submissions/*` | return generation, validation, certification, approvals, artifacts |
-| Institution | `/institution/*` | profile, board registers, governance |
-| Risk / Alerts | `/risk`, `/alerts` | limit wall, findings, pipeline alerts |
-| Reports | `/reports/*` | ALCO, board pack, ICAAP stress pack, comparisons |
-| Settings | `/settings/*` | profile, authentication (SSO), signing policy, integration keys |
+| Area               | Routes             | What it reads                                                      |
+| ------------------ | ------------------ | ------------------------------------------------------------------ |
+| Overview           | `/`                | cross-module KPIs, live-engine freshness, filing calendar          |
+| Liquidity          | `/liquidity/*`     | LCR, NSFR, monitoring tools, stress, EWI, CFP, submission preview  |
+| Basel capital      | `/basel/*`         | RWA, capital structure, CAR, capital stress                        |
+| Interest-rate risk | `/irr/*`           | repricing gap, EVE/EaR sensitivity, limits, positions              |
+| FX                 | `/fx/*`            | net open position, VaR, hedges                                     |
+| FTP                | `/ftp/*`           | transfer curve, product and branch profitability, rates            |
+| Forecasting        | `/forecasting/*`   | multi-year projection, scenario, optimizer, what-if                |
+| Behavioral         | `/behavioral`      | per-tenant NMD duration, prepayment, deposit stability             |
+| Markets            | `/markets/*`       | published curves, indices, desk determinations                     |
+| Positions          | `/positions/*`     | canonical book and record-level lineage                            |
+| Data Engine        | `/data-engine/*`   | Excel/CSV, API push, database-direct, T24, market data             |
+| Submissions        | `/submissions/*`   | return generation, validation, certification, approvals, artifacts |
+| Institution        | `/institution/*`   | profile, board registers, governance                               |
+| Risk / Alerts      | `/risk`, `/alerts` | limit wall, findings, pipeline alerts                              |
+| Reports            | `/reports/*`       | ALCO, board pack, ICAAP stress pack, comparisons                   |
+| Settings           | `/settings/*`      | profile, authentication (SSO), signing policy, integration keys    |
 
 `app/inspect` is the tenant inspector; `app/api/*` holds the server-only route
 handlers for attestation step-up, auth, and impersonation cookies.
@@ -74,16 +74,16 @@ These are correctness rules, not style preferences. The evidence is
   LCR requirement and nothing at all on NSFR, so any 100% threshold, run-off
   rate, inflow rate or inflow cap in use is a BCBS 238 default. Label these
   "Basel minimum" — never `${regShort()} minimum`, and never "CRD" (the CRD is
-  the *Capital* Requirements Directive and contains none of them).
+  the _Capital_ Requirements Directive and contains none of them).
 - **CET1, Tier 1 and the leverage ratio** are Bank of Ghana CRD requirements —
   6.5% (¶73(a)), 8.0% (¶73(b)) and 6% (¶90), all VERIFIED with locators. The
-  Tier 1 8% coincides numerically with Basel's *total capital* minimum; that is
+  Tier 1 8% coincides numerically with Basel's _total capital_ minimum; that is
   a coincidence, and the 8% a bank is shown is BoG's Tier 1 figure, not the
   Basel one. **But do not label these `${regShort()} minimum` on screen.** The
   control plane seeds no governed row for any of the three (only `car_min`), so
   the number on the payload is the institution's own board register value,
   unclamped — the fixture ships `leverage_min = 3`, which is Basel III's figure
-  and *below* BoG's ¶90 6%. "Regulatory minimum" is the honest label until a
+  and _below_ BoG's ¶90 6%. "Regulatory minimum" is the honest label until a
   governed row exists to clamp against; see `15_known_limitations.md`.
 - **IRRBB** shocks are Basel (BCBS d368/d578). Ghana's IRRBB guideline is a
   February 2026 exposure draft stated effective 1 January 2027.
@@ -114,7 +114,7 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
 
    **The guard has two spellings to police, and so do you (NEW-51).** The wire
    is snake_case (`car_min_pct`) but almost everything in this package consumes
-   the *generated* client, which maps every field to camelCase
+   the _generated_ client, which maps every field to camelCase
    (`json["car_min_pct"] → carMinPct`). The P0-19 rule originally matched only
    the snake_case half, so `num(data?.buffers.carMinPct ?? '10')` sat on the
    Basel overview and the capital planner through the whole remediation
@@ -126,7 +126,7 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
    the rule, not the field name in the OpenAPI schema.
 
    There is also no "harmless" version of this: the negative control that
-   proves the rule uses `?? '13'`, the *correct* Ghanaian figure today, and it
+   proves the rule uses `?? '13'`, the _correct_ Ghanaian figure today, and it
    must still fail. What is wrong is the writing-down — a literal cannot track
    a floor that changes, and it cannot know which tenant it is rendering.
 
@@ -167,6 +167,7 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
    re-rendered as `assessed: false` on `ValidationItem` — a "Not assessed" pill,
    never a stale pass. Do not resolve a disagreement by hiding a panel: the
    point is that all three agree because all three read one number.
+
 2. **A ratio with no denominator is not zero.** Type it `number | null`, return
    `null`, and render the absence. A guarded division falling back to `0`
    produces a measurement nobody measured: it is indistinguishable on screen
@@ -219,6 +220,16 @@ detail calls before** and **22 / 33 / 5 after**, with zero detail polling. Keep
 `lib/api/queryPolicy.test.ts` and `lib/api/queryAuthorityBoundary.test.tsx` green
 when changing query keys, refresh behavior, session authority, or home requests.
 
+Because that panel is below the fold, `DeferredRatioTrendChart` keeps its
+Recharts implementation out of the Command Center's initial JavaScript graph.
+It preserves the panel's fixed geometry with a loading frame, then requests the
+chart when the panel enters a 320 px viewport margin (immediately only when
+`IntersectionObserver` is unavailable). Other chart-heavy routes are not
+deferred by this boundary. The production `build` command runs
+`scripts/assert-home-route-bundle.mjs` after `next build`; the guard fails if a
+Recharts chunk returns to the home entry graph or the deferred chart chunk can
+no longer be identified.
+
 ## Run locally
 
 ```bash
@@ -235,7 +246,7 @@ The backend API must be running (`cd backend && fastapi dev app/main.py --port 8
 pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
 pnpm --filter @aequoros/dashboard lint        # next lint
 pnpm --filter @aequoros/dashboard test        # unit and query-cache policy suites
-pnpm --filter @aequoros/dashboard build       # next build
+pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
 pnpm --filter @aequoros/dashboard e2e         # Playwright (needs object storage)
 ```
 
@@ -292,7 +303,8 @@ reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
 Separate Vercel/Coolify project from the marketing site.
 
 1. Import the monorepo, root directory `backend/dashboard`.
-2. Framework: Next.js. Build: `next build`.
+2. Framework: Next.js. Build: `pnpm build` (Next production build plus the home
+   entry-graph guard described above).
 3. Bind `bank.aequoros.com`.
 4. `NEXT_PUBLIC_LOGIN_URL` is a **build arg** inlined at compile time — changing
    it needs a rebuild, not a restart.
