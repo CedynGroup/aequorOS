@@ -23,7 +23,7 @@ the tenant API).
   but operational endpoint enforcement still uses the legacy role hierarchy.
   Account administration is split out into the non-operational `account_admin`
   role, while initial Org Owner authority is an explicit organization-wide
-  binding. Migration `202608280045` assigns it only for exactly one eligible
+  binding. Migration `202608280046` assigns it only for exactly one eligible
   active human legacy admin; zero/multiple candidates require later staff
   designation. App access and refresh tokens carry `authv`, so authorization
   migrations and later authorization changes can invalidate every session

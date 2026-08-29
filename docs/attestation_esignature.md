@@ -157,7 +157,7 @@ Attestation binds to `RegulatoryRun` only.
 Operational role gating (`app/api/deps.py`; compatibility hierarchy
 `admin ⊃ approver ⊃ analyst ⊃ examiner ⊃ viewer`,
 `app/core/security.py:ROLES`) excludes the separate `account_admin` role;
-migration `202608280045` leaves no persisted legacy `admin`:
+migration `202608280046` leaves no persisted legacy `admin`:
 
 | Action                                                             | Gate                         |
 | ------------------------------------------------------------------ | ---------------------------- |

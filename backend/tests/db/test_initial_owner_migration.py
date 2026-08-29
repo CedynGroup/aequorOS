@@ -306,7 +306,7 @@ def test_initial_owner_migration_handles_zero_one_and_many_without_guessing(  # 
     assert binding[0]["module_scope"] == "account"
     assert binding[0]["sensitivity_scope"] == "all"
     assert binding[0]["granted_by_type"] == "system"
-    assert binding[0]["granted_by_id"] == "migration:202608280045"
+    assert binding[0]["granted_by_id"] == "migration:202608280046"
     assert "exactly one eligible active human administrator" in binding[0]["grant_reason"]
 
     many = _owner_state(migrated_postgres_schema, MANY_ORG)

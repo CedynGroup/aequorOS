@@ -86,7 +86,7 @@ This kernel is shadow-only: Liquidity Monitoring evaluates an exact institution
 target and emits `authz.shadow_decision`, but its legacy authenticated-read
 result remains authoritative even if shadow evaluation denies or fails. No
 endpoint uses the binding result as a gate and no grant API exists. Follow-on
-migration `202608280045` creates an explicit organization-wide `org_owner`
+migration `202608280046` creates an explicit organization-wide `org_owner`
 binding only where an organization had exactly one active human legacy admin;
 zero/multiple-candidate organizations remain unassigned in a queryable
 designation state. It also converts every persisted `admin` to the

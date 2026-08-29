@@ -119,7 +119,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   live: pre-migration/stale tokens 401; every future role/scope/status/security mutation must
   call `authorization.invalidate_user_authorization` in-transaction to bump the user version
   and revoke refresh families.
-  **Initial ownership (built 2026-08-28; migration `202608280045`).** Org Owner is an
+  **Initial ownership (built 2026-08-28; migration `202608280046`).** Org Owner is an
   explicit organization-wide `org_owner` binding. Backfill assigns only when exactly one
   active human legacy admin exists; zero/multiple candidates get no binding and remain
   queryable, with candidate snapshots, in `organization_owner_assignments`. The migration

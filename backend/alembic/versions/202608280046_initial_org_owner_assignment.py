@@ -1,7 +1,7 @@
 """Assign initial Org Owners only when the eligible administrator is unambiguous.
 
-Revision ID: 202608280045
-Revises: 202608250044
+Revision ID: 202608280046
+Revises: 202608280045
 
 Every organization receives a durable assignment-state row. Exactly one active
 human legacy administrator becomes Org Owner through an auditable scoped
@@ -25,8 +25,8 @@ from sqlalchemy.engine import RowMapping
 from alembic import op
 from app.db.session import force_rls_suspended
 
-revision = "202608280045"
-down_revision = "202608250044"
+revision = "202608280046"
+down_revision = "202608280045"
 branch_labels = None
 depends_on = None
 
@@ -34,7 +34,7 @@ _ASSIGNMENTS = "organization_owner_assignments"
 _BINDINGS = "authorization_bindings"
 _ROLE_DEMOTIONS = "initial_admin_role_demotions"
 _TENANT_ID_EXPR = "NULLIF(current_setting('app.organization_id', true), '')"
-_SYSTEM_GRANTOR = "migration:202608280045"
+_SYSTEM_GRANTOR = "migration:202608280046"
 _AUTO_REASON = (
     "Initial Org Owner auto-assignment: exactly one eligible active human administrator existed"
 )

@@ -128,12 +128,12 @@ this human-binding pilot. A shadow-evaluation failure emits
 `shadow_evaluation_failed` at error severity and does not become a route gate.
 
 The institution-target shadow slice itself requires no new migration. Initial
-ownership is the separate migration `202608280045`, described below. Organization
+ownership is the separate migration `202608280046`, described below. Organization
 membership, token `org`, the session's `app.organization_id`, organization-scoped
 foreign keys, and FORCE RLS remain the outer boundary. No tenant grant endpoint
 or binding enforcement is introduced.
 
-## Initial Org Owner assignment (migration 202608280045)
+## Initial Org Owner assignment (migration 202608280046)
 
 Ownership is an organization-wide `org_owner` binding on the Account module,
 with explicit system provenance. The migration considers only users whose
@@ -171,7 +171,7 @@ attestation policy, placement-template mutation, or regulatory submission. This
 avoids grandfathering operational superuser authority while binding enforcement
 remains shadow-only.
 
-Migration `202608280045` records every demoted legacy administrator in the
+Migration `202608280046` records every demoted legacy administrator in the
 FORCE-RLS `initial_admin_role_demotions` table. Downgrade restores and invalidates
 sessions only for those recorded identities. If a post-migration
 `account_admin` exists, downgrade refuses before changing any role or refresh
@@ -187,7 +187,7 @@ authorize it; this slice provides no grant UI or mutation API.
 ## Authorization version and deployment transition
 
 Migration `202608250044` adds `users.authorization_version`, initially `1`, and
-does **not** itself backfill any binding. Follow-on migration `202608280045`
+does **not** itself backfill any binding. Follow-on migration `202608280046`
 performs the explicit initial-owner assignment and account-role split described
 above; it never infers owner authority merely from `account_admin`.
 

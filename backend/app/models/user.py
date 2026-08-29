@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
 # ``admin`` remains admitted only for legacy fixtures/rolling compatibility;
-# migration 202608280045 converts every persisted row to the account-plane-only
+# migration 202608280046 converts every persisted row to the account-plane-only
 # ``account_admin`` role, and every application creation path now uses that value.
 # "examiner" admitted 2026-08-08 (Phase 2 item 7; migration 202608070039).
 USER_ROLES: tuple[str, ...] = (

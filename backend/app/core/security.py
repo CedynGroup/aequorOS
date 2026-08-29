@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # Legacy operational roles, most- to least-privileged. ``admin`` remains in the
 # token vocabulary only so pre-migration/test claims can be decoded, but migration
-# 202608280045 converts every persisted administrator to ``account_admin`` and
+# 202608280046 converts every persisted administrator to ``account_admin`` and
 # invalidates their sessions. ``account_admin`` is deliberately outside this
 # ladder and is authorized only by the explicit account-administration gate.
 ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "examiner", "viewer")
