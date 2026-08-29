@@ -41,45 +41,51 @@ import {
 } from "./GrantTargetInstitutionID";
 
 /**
- * Approval activates identity and creates exactly one complete scoped grant.
+ *
  * @export
- * @interface SsoAccessRequestApprove
+ * @interface BindingCreateRequest
  */
-export interface SsoAccessRequestApprove {
+export interface BindingCreateRequest {
   /**
    *
    * @type {GrantTargetInstitutionID}
-   * @memberof SsoAccessRequestApprove
+   * @memberof BindingCreateRequest
    */
   institutionId?: GrantTargetInstitutionID;
   /**
    *
    * @type {InstitutionScope}
-   * @memberof SsoAccessRequestApprove
+   * @memberof BindingCreateRequest
    */
   institutionScope: InstitutionScope;
   /**
    *
    * @type {ModuleScope}
-   * @memberof SsoAccessRequestApprove
+   * @memberof BindingCreateRequest
    */
   moduleScope: ModuleScope;
   /**
    *
    * @type {string}
-   * @memberof SsoAccessRequestApprove
+   * @memberof BindingCreateRequest
+   */
+  principalUserId: string;
+  /**
+   *
+   * @type {string}
+   * @memberof BindingCreateRequest
    */
   reason: string;
   /**
    *
    * @type {string}
-   * @memberof SsoAccessRequestApprove
+   * @memberof BindingCreateRequest
    */
-  roleBundle: SsoAccessRequestApproveRoleBundleEnum;
+  roleBundle: BindingCreateRequestRoleBundleEnum;
   /**
    *
    * @type {SensitivityScope}
-   * @memberof SsoAccessRequestApprove
+   * @memberof BindingCreateRequest
    */
   sensitivityScope: SensitivityScope;
 }
@@ -87,25 +93,27 @@ export interface SsoAccessRequestApprove {
 /**
  * @export
  */
-export const SsoAccessRequestApproveRoleBundleEnum = {
+export const BindingCreateRequestRoleBundleEnum = {
   Viewer: "viewer",
   Auditor: "auditor",
   Analyst: "analyst",
   Approver: "approver",
   AccountAdmin: "account_admin",
 } as const;
-export type SsoAccessRequestApproveRoleBundleEnum =
-  (typeof SsoAccessRequestApproveRoleBundleEnum)[keyof typeof SsoAccessRequestApproveRoleBundleEnum];
+export type BindingCreateRequestRoleBundleEnum =
+  (typeof BindingCreateRequestRoleBundleEnum)[keyof typeof BindingCreateRequestRoleBundleEnum];
 
 /**
- * Check if a given object implements the SsoAccessRequestApprove interface.
+ * Check if a given object implements the BindingCreateRequest interface.
  */
-export function instanceOfSsoAccessRequestApprove(
+export function instanceOfBindingCreateRequest(
   value: object,
-): value is SsoAccessRequestApprove {
+): value is BindingCreateRequest {
   if (!("institutionScope" in value) || value["institutionScope"] === undefined)
     return false;
   if (!("moduleScope" in value) || value["moduleScope"] === undefined)
+    return false;
+  if (!("principalUserId" in value) || value["principalUserId"] === undefined)
     return false;
   if (!("reason" in value) || value["reason"] === undefined) return false;
   if (!("roleBundle" in value) || value["roleBundle"] === undefined)
@@ -115,16 +123,14 @@ export function instanceOfSsoAccessRequestApprove(
   return true;
 }
 
-export function SsoAccessRequestApproveFromJSON(
-  json: any,
-): SsoAccessRequestApprove {
-  return SsoAccessRequestApproveFromJSONTyped(json, false);
+export function BindingCreateRequestFromJSON(json: any): BindingCreateRequest {
+  return BindingCreateRequestFromJSONTyped(json, false);
 }
 
-export function SsoAccessRequestApproveFromJSONTyped(
+export function BindingCreateRequestFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): SsoAccessRequestApprove {
+): BindingCreateRequest {
   if (json == null) {
     return json;
   }
@@ -136,20 +142,19 @@ export function SsoAccessRequestApproveFromJSONTyped(
         : GrantTargetInstitutionIDFromJSON(json["institution_id"]),
     institutionScope: InstitutionScopeFromJSON(json["institution_scope"]),
     moduleScope: ModuleScopeFromJSON(json["module_scope"]),
+    principalUserId: json["principal_user_id"],
     reason: json["reason"],
     roleBundle: json["role_bundle"],
     sensitivityScope: SensitivityScopeFromJSON(json["sensitivity_scope"]),
   };
 }
 
-export function SsoAccessRequestApproveToJSON(
-  json: any,
-): SsoAccessRequestApprove {
-  return SsoAccessRequestApproveToJSONTyped(json, false);
+export function BindingCreateRequestToJSON(json: any): BindingCreateRequest {
+  return BindingCreateRequestToJSONTyped(json, false);
 }
 
-export function SsoAccessRequestApproveToJSONTyped(
-  value?: SsoAccessRequestApprove | null,
+export function BindingCreateRequestToJSONTyped(
+  value?: BindingCreateRequest | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {
@@ -160,6 +165,7 @@ export function SsoAccessRequestApproveToJSONTyped(
     institution_id: GrantTargetInstitutionIDToJSON(value["institutionId"]),
     institution_scope: InstitutionScopeToJSON(value["institutionScope"]),
     module_scope: ModuleScopeToJSON(value["moduleScope"]),
+    principal_user_id: value["principalUserId"],
     reason: value["reason"],
     role_bundle: value["roleBundle"],
     sensitivity_scope: SensitivityScopeToJSON(value["sensitivityScope"]),

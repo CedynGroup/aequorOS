@@ -128,6 +128,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   analyst/approver ladder. Staff provisioning creates its sole first admin, owner binding, and
   assignment state atomically. Explicit designation mutation/UI remains later staff-plane work:
   a zero-owner tenant has no tenant authority that could authorize its own designation.
+  **Scoped grant administration (built 2026-08-29; migration `202608290047`).**
+  Org Owners administer exactly one indivisible binding per create/revoke through
+  `app/features/manage_authorization.py`; sensitivity is mandatory, institution
+  coverage is exact or explicitly organization-wide, and the server returns its
+  authoritative assignment-time SoD allow/warn/block decision. Mutations audit the
+  complete sentence/scope/reason/actors and invalidate the grantee's sessions in the
+  same transaction. Settings → Members aggregates tenant identities and complete
+  grants; the sentence composer uses only scalar controls. SSO request approval uses
+  that same atomic scoped-grant flow—verified identity alone still has no access.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).
@@ -379,7 +388,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   require `azp` to name the selected connection's client. Opt-in request-access JIT
   (`jit_enabled`) means an allowed-domain first sign-in records a DEACTIVATED stub + 403
   "awaiting approval";
-  access exists only after an admin approves with an explicit role
+  access exists only after an Org Owner approves one complete scoped grant
   (`/auth/sso/access-requests`). Never let JIT auto-activate accounts — that was
   rejected 2026-07-20 as a data-leak path until RBAC group-mapping lands. The dashboard's NextAuth loads the client config through
   `GET /auth/sso/client-config`, gated by `SSO_INTERNAL_KEY` (same value on backend and

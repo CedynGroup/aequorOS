@@ -42,7 +42,7 @@ class SsoConnection(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # JIT request access: when on, a verified identity from an ALLOWED domain
     # that has no AequorOS account gets a deactivated `viewer` stub. It receives
-    # no session or authority until an admin approves it with an explicit role.
+    # no session or authority until an Org Owner approves a complete scoped grant.
     # Deliberately opt-in and refused unless allowed_email_domains is non-empty.
     jit_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     updated_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)

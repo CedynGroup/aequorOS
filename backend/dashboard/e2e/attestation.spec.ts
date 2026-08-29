@@ -32,7 +32,7 @@ test.describe('attestation surfaces', () => {
 
   test('the signer identity is provisioned and shown in Settings', async ({ page }) => {
     await page.goto('/settings');
-    await expect(page.getByRole('heading', { name: 'Users & roles' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your account' })).toBeVisible();
     // The permanent signee ID must be visible and copyable — it is what travels
     // onto a filed document and what an examiner quotes back.
     const signerId = page.getByText(/^SGN-[0-9A-HJKMNP-TV-Z]{16}$/);

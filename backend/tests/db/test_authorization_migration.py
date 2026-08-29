@@ -50,6 +50,7 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
         "ck_authorization_bindings_grant_reason",
         "ck_authorization_bindings_validity_window",
         "ck_authorization_bindings_revocation_state",
+        "ck_authorization_bindings_revoker_type",
         "fk_organization_owner_assignments_owner_tenant",
         "ck_organization_owner_assignments_status",
         "ck_organization_owner_assignments_basis",

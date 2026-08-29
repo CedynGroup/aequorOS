@@ -12,19 +12,13 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { ShieldCheck } from "lucide-react";
-import {
-  SsoAccessRequestApproveRoleEnum,
-  type SsoConnectionResponse,
-} from "@aequoros/risk-service-api";
+import type { SsoConnectionResponse } from "@aequoros/risk-service-api";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import CopyButton from "@/components/ui/CopyButton";
 import StatusPill from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { authApi, normalizeApiError } from "@/lib/api/client";
-import {
-  hasAccountAdministrationRole,
-  ssoApprovalRoleOptions,
-} from "@/lib/api/accountAdministration";
+import { hasAccountAdministrationRole } from "@/lib/api/accountAdministration";
 
 const QUERY_KEY = ["settings", "sso-connection"];
 const REQUESTS_KEY = ["settings", "sso-access-requests"];
@@ -266,8 +260,9 @@ function AuthenticationPanelInner() {
                 Let employees request access on first sign-in
                 <span className="block text-caption text-slate">
                   A sign-in from an allowed domain records a request below —{" "}
-                  <strong>no access is granted</strong> until you approve it
-                  with a role. Requires at least one allowed email domain.
+                  <strong>no access is granted</strong> until you approve one
+                  complete scoped grant. Requires at least one allowed email
+                  domain.
                 </span>
               </span>
             </label>
@@ -289,7 +284,7 @@ function AuthenticationPanelInner() {
               </button>
               <p className="text-caption text-slate">
                 SSO never grants access by itself — accounts are provisioned or
-                approved by an administrator.
+                approved by an administrator with one complete scoped grant.
               </p>
             </div>
           </form>
@@ -301,10 +296,9 @@ function AuthenticationPanelInner() {
   );
 }
 
-const ROLE_OPTIONS = ssoApprovalRoleOptions(SsoAccessRequestApproveRoleEnum);
-
-/** JIT sign-ins awaiting approval. Approval — with an explicit role — is the
- * authorization act; rejection deletes the never-activated stub. */
+/** JIT sign-ins awaiting approval. Members owns the complete scoped-grant
+ * sentence flow; Authentication retains only identity-connection context and
+ * the existing rejection action. */
 function AccessRequests() {
   const queryClient = useQueryClient();
   const requests = useQuery({
@@ -312,24 +306,10 @@ function AccessRequests() {
     queryFn: () => authApi.authListSsoAccessRequests(),
     refetchInterval: 60_000,
   });
-  const [roles, setRoles] = useState<
-    Record<string, SsoAccessRequestApproveRoleEnum>
-  >({});
   const [error, setError] = useState<string | null>(null);
 
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: REQUESTS_KEY });
-  const approve = useMutation({
-    mutationFn: (userId: string) =>
-      authApi.authApproveSsoAccessRequest({
-        userId,
-        ssoAccessRequestApprove: {
-          role: roles[userId] ?? SsoAccessRequestApproveRoleEnum.Viewer,
-        },
-      }),
-    onSuccess: refresh,
-    onError: async (e) => setError((await normalizeApiError(e)).message),
-  });
   const reject = useMutation({
     mutationFn: (userId: string) =>
       authApi.authRejectSsoAccessRequest({ userId }),
@@ -357,34 +337,12 @@ function AccessRequests() {
                 {request.email}
               </p>
             </div>
-            <select
-              aria-label={`Role for ${request.email}`}
-              value={
-                roles[request.userId] ?? SsoAccessRequestApproveRoleEnum.Viewer
-              }
-              onChange={(e) =>
-                setRoles((prev) => ({
-                  ...prev,
-                  [request.userId]: e.target
-                    .value as SsoAccessRequestApproveRoleEnum,
-                }))
-              }
-              className="px-2 py-1.5 border border-border rounded-md bg-surface text-caption text-navy"
+            <a
+              href="#members"
+              className="px-3 py-1.5 btn-primary text-caption font-medium"
             >
-              {ROLE_OPTIONS.map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={approve.isPending}
-              onClick={() => approve.mutate(request.userId)}
-              className="px-3 py-1.5 btn-primary text-caption font-medium disabled:opacity-60"
-            >
-              Approve
-            </button>
+              Review in Members
+            </a>
             <button
               type="button"
               disabled={reject.isPending}

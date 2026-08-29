@@ -17,6 +17,8 @@
     "lib/api/values.test.ts",
     "lib/api/accountAdministration.ts",
     "lib/api/accountAdministration.test.ts",
+    "lib/api/grants.ts",
+    "lib/api/grants.test.ts",
     "lib/api/fail-open-guard.test.ts",
     "lib/api/impersonation.ts",
     "lib/api/QueryAuthorityBoundary.tsx",

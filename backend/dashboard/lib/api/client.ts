@@ -14,6 +14,7 @@ import {
   LiquidityThresholdsApi,
   AttestationApi,
   AuthApi,
+  AuthorizationApi,
   BanksApi,
   BehavioralModelsApi,
   CashflowForecastApi,
@@ -103,6 +104,7 @@ export const configuration = new Configuration({
 });
 
 export const authApi = new AuthApi(configuration);
+export const authorizationApi = new AuthorizationApi(configuration);
 export const attestationApi = new AttestationApi(configuration);
 export const banksApi = new BanksApi(configuration);
 export const behavioralModelsApi = new BehavioralModelsApi(configuration);

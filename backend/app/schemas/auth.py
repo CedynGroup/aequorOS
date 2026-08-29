@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.json_schema import SkipJsonSchema
 
+from app.schemas.authorization import ScopedGrantInput
+
 _BCP47_PATTERN = (
     r"^[A-Za-z]{2,3}(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?"
     r"(?:-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*$"
@@ -154,10 +156,8 @@ class SsoAccessRequestRead(BaseModel):
     requested_at: datetime
 
 
-class SsoAccessRequestApprove(BaseModel):
-    """Approval is the authorization act — the account admin explicitly picks the role."""
-
-    role: Literal["account_admin", "approver", "analyst", "viewer"] = "viewer"
+class SsoAccessRequestApprove(ScopedGrantInput):
+    """Approval activates identity and creates exactly one complete scoped grant."""
 
 
 class SsoClientConfigResponse(BaseModel):

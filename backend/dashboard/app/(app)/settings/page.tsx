@@ -6,8 +6,8 @@
  *     source of truth, managed under Governance → Institution Profile) plus
  *     platform reporting facts from the bank record
  *   · Appearance — real theme toggle (ThemeProvider)
- *   · Users & roles — the signed-in account, its access level, and its permanent
- *     signer identity (SGN-…, monospace with a copy control — §2.5)
+ *   · Members — tenant-scoped identity, lifecycle, and indivisible scoped grants
+ *   · Your account — the signed-in account and its permanent signer identity
  *   · Data & compute — real service health, market-data connections, and the
  *     official-run schedule note (read-only)
  *   · About — engine versions and provenance from persisted regulatory runs
@@ -20,6 +20,7 @@ import { useSession } from 'next-auth/react';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import AuthenticationPanel from '@/components/settings/AuthenticationPanel';
+import MembersPanel from '@/components/settings/MembersPanel';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import CopyButton from '@/components/ui/CopyButton';
 import RunBadge from '@/components/ui/RunBadge';
@@ -94,10 +95,10 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Institution profile, appearance, roles, data & compute"
       />
 
       <div className="px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <MembersPanel />
         <InstitutionProfile
           profile={profile}
           register={register}
@@ -107,7 +108,7 @@ export default function SettingsPage() {
         />
         <div className="space-y-6">
           <AppearancePanel />
-          <UsersRolesPanel />
+          <CurrentAccountPanel />
         </div>
         <AuthenticationPanel />
         <DataComputePanel bankId={bank?.id} />
@@ -308,7 +309,7 @@ function AppearancePanel() {
   );
 }
 
-function UsersRolesPanel() {
+function CurrentAccountPanel() {
   const { data: session } = useSession();
   const { profile } = useUserProfile();
   const email = profile?.email ?? session?.user?.email ?? '';
@@ -325,8 +326,7 @@ function UsersRolesPanel() {
   return (
     <Card>
       <CardHeader
-        title="Users & roles"
-        subtitle="Your signed-in account and access level"
+        title="Your account"
         action={<StatusPill tone="success">You</StatusPill>}
       />
       <CardBody className="p-0">
@@ -350,11 +350,6 @@ function UsersRolesPanel() {
           </li>
         </ul>
         <SignerIdentityRow />
-        <p className="px-5 py-3 border-t border-border-light text-caption text-slate leading-relaxed">
-          Roles are enforced server-side (admin · approver · analyst · viewer);
-          viewer accounts are read-only. Team management for the institution is
-          administered outside this workspace.
-        </p>
       </CardBody>
     </Card>
   );

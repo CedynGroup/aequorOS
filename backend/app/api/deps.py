@@ -252,6 +252,7 @@ def require_account_administration(
 MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
     {
         "require_account_administration",
+        "require_grant_administration",
         "require_role_admin",
         "require_role_approver",
         "require_role_analyst",
@@ -412,6 +413,63 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
 DbSession = Annotated[Session, Depends(get_tenant_db_session)]
 
 
+def require_grant_administration(
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+    db: DbSession,
+) -> TenantContext:
+    """Require the explicit active Org Owner binding from issue #127.
+
+    Scalar account-admin claims are deliberately ignored here.  They retain
+    compatibility access to account configuration, but only the persisted
+    owner binding may create or revoke another person's authority.
+    """
+
+    from app.core.authorization import (  # noqa: PLC0415 - avoid deps/service cycle
+        InstitutionScope,
+        Module,
+        Permission,
+        PrincipalLocator,
+        PrincipalType,
+        ResourceLocator,
+        RoleBundle,
+        Sensitivity,
+    )
+    from app.services import authorization as authorization_service  # noqa: PLC0415
+
+    if ctx.actor_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+        )
+    decision = authorization_service.evaluate_permission(
+        db,
+        PrincipalLocator(ctx.organization_id, ctx.actor_user_id, PrincipalType.HUMAN),
+        Permission.ADMINISTER,
+        ResourceLocator(
+            ctx.organization_id,
+            InstitutionScope.ORGANIZATION,
+            None,
+            Module.ACCOUNT,
+            Sensitivity.RESTRICTED,
+        ),
+    )
+    owner_matched = any(
+        trace.matched and trace.role_bundle is RoleBundle.ORG_OWNER
+        for trace in decision.binding_trace
+    )
+    if not decision.allowed or not owner_matched:
+        authorization_denied(
+            reason="org_owner_binding_required",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action requires Organization Owner authority.",
+        )
+    return ctx
+
+
 def get_approver_tenant_context(
     principal: Annotated[TenantContext, Depends(get_mutation_tenant_context)],
 ) -> TenantContext:
@@ -439,6 +497,7 @@ def get_approver_tenant_context(
 Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
 MutationTenant = Annotated[TenantContext, Depends(get_mutation_tenant_context)]
 ApproverTenant = Annotated[TenantContext, Depends(get_approver_tenant_context)]
+GrantAdminTenant = Annotated[TenantContext, Depends(require_grant_administration)]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 
 

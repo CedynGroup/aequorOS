@@ -418,14 +418,25 @@ def test_jit_records_a_request_and_admin_approval_is_the_gate(
     pending = _access_requests(auth_client, email)
     assert len(pending) == 1
 
-    # Approval — with an explicitly chosen role — is what grants access.
+    # Approval creates one complete scoped binding; verified identity alone had
+    # no access and the scalar role remains compatibility-only Viewer state.
     request_id = pending[0]["user_id"]
     approved = auth_client.post(
         f"/api/v1/auth/sso/access-requests/{request_id}/approve",
-        json={"role": "analyst"},
+        json={
+            "role_bundle": "analyst",
+            "institution_scope": "institution",
+            "institution_id": REAL_BANK_ID,
+            "module_scope": "liq",
+            "sensitivity_scope": "confidential",
+            "reason": "Verified employee approved for liquidity analysis",
+        },
         headers=real_headers(),
     )
     assert approved.status_code == 200, approved.text
+    assert approved.json()["binding"]["role_bundle"] == "analyst"
+    assert approved.json()["binding"]["module_scope"] == "liq"
+    assert approved.json()["binding"]["sensitivity_scope"] == "confidential"
 
     login = auth_client.post("/api/v1/auth/sso", json={"id_token": token})
     assert login.status_code == 200, login.text
@@ -436,7 +447,7 @@ def test_jit_records_a_request_and_admin_approval_is_the_gate(
     assert me.status_code == 200
     body = me.json()
     assert body["email"] == email
-    assert body["role"] == "analyst"  # exactly what the admin granted
+    assert body["role"] == "viewer"  # scalar compatibility state is not the scoped grant
     assert body["organization_id"] == REAL_ORG_ID
     # The request is gone from the queue once approved.
     assert _access_requests(auth_client, email) == []

@@ -2895,6 +2895,316 @@
         ],
         "type": "string"
       },
+      "BindingCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "institution_id": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant target institution ID"
+          },
+          "institution_scope": {
+            "$ref": "#/components/schemas/InstitutionScope"
+          },
+          "module_scope": {
+            "$ref": "#/components/schemas/ModuleScope"
+          },
+          "principal_user_id": {
+            "format": "uuid",
+            "title": "Principal User Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "role_bundle": {
+            "enum": [
+              "viewer",
+              "auditor",
+              "analyst",
+              "approver",
+              "account_admin"
+            ],
+            "title": "Role Bundle",
+            "type": "string"
+          },
+          "sensitivity_scope": {
+            "$ref": "#/components/schemas/SensitivityScope"
+          }
+        },
+        "required": [
+          "role_bundle",
+          "institution_scope",
+          "module_scope",
+          "sensitivity_scope",
+          "reason",
+          "principal_user_id"
+        ],
+        "title": "BindingCreateRequest",
+        "type": "object"
+      },
+      "BindingCreateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/BindingRead"
+          },
+          "sod_decision": {
+            "$ref": "#/components/schemas/SodDecisionRead"
+          }
+        },
+        "required": [
+          "binding",
+          "sod_decision"
+        ],
+        "title": "BindingCreateResponse",
+        "type": "object"
+      },
+      "BindingListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/BindingRead"
+            },
+            "title": "Bindings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bindings"
+        ],
+        "title": "BindingListRead",
+        "type": "object"
+      },
+      "BindingRead": {
+        "additionalProperties": false,
+        "properties": {
+          "authority_sentence": {
+            "title": "Authority Sentence",
+            "type": "string"
+          },
+          "effective": {
+            "title": "Effective",
+            "type": "boolean"
+          },
+          "effective_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Effective Permissions",
+            "type": "array"
+          },
+          "grant_reason": {
+            "title": "Grant Reason",
+            "type": "string"
+          },
+          "granted_at": {
+            "format": "date-time",
+            "title": "Granted At",
+            "type": "string"
+          },
+          "granted_by_id": {
+            "title": "Granted By Id",
+            "type": "string"
+          },
+          "granted_by_name": {
+            "title": "Granted By Name",
+            "type": "string"
+          },
+          "granted_by_type": {
+            "$ref": "#/components/schemas/GrantorType"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "institution_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Binding institution ID"
+          },
+          "institution_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Name"
+          },
+          "institution_scope": {
+            "$ref": "#/components/schemas/InstitutionScope"
+          },
+          "module_scope": {
+            "$ref": "#/components/schemas/ModuleScope"
+          },
+          "principal_name": {
+            "title": "Principal Name",
+            "type": "string"
+          },
+          "principal_user_id": {
+            "format": "uuid",
+            "title": "Principal User Id",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "revoked_by_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By Id"
+          },
+          "revoked_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By Name"
+          },
+          "revoked_by_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantorType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revoked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked Reason"
+          },
+          "role_bundle": {
+            "title": "Role Bundle",
+            "type": "string"
+          },
+          "sensitivity_scope": {
+            "$ref": "#/components/schemas/SensitivityScope"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BindingStatus"
+          },
+          "valid_from": {
+            "format": "date-time",
+            "title": "Valid From",
+            "type": "string"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          }
+        },
+        "required": [
+          "id",
+          "principal_user_id",
+          "principal_name",
+          "role_bundle",
+          "institution_scope",
+          "institution_id",
+          "institution_name",
+          "module_scope",
+          "sensitivity_scope",
+          "status",
+          "effective",
+          "authority_sentence",
+          "effective_permissions",
+          "granted_by_type",
+          "granted_by_id",
+          "granted_by_name",
+          "grant_reason",
+          "granted_at",
+          "valid_from",
+          "valid_until",
+          "revoked_at",
+          "revoked_by_type",
+          "revoked_by_id",
+          "revoked_by_name",
+          "revoked_reason"
+        ],
+        "title": "BindingRead",
+        "type": "object"
+      },
+      "BindingRevokeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "BindingRevokeRequest",
+        "type": "object"
+      },
+      "BindingStatus": {
+        "enum": [
+          "active",
+          "suspended",
+          "revoked"
+        ],
+        "title": "BindingStatus",
+        "type": "string"
+      },
       "Body_uploadIngestionSource": {
         "properties": {
           "file": {
@@ -17637,6 +17947,15 @@
         "title": "FxValidationRead",
         "type": "object"
       },
+      "GrantorType": {
+        "enum": [
+          "system",
+          "tenant_user",
+          "operator"
+        ],
+        "title": "GrantorType",
+        "type": "string"
+      },
       "HealthResponse": {
         "properties": {
           "environment": {
@@ -18976,6 +19295,15 @@
         ],
         "title": "InstitutionProfileRead",
         "type": "object"
+      },
+      "InstitutionScope": {
+        "description": "Whether a binding covers the whole organization or one institution.",
+        "enum": [
+          "organization",
+          "institution"
+        ],
+        "title": "InstitutionScope",
+        "type": "string"
       },
       "InstitutionTypeRead": {
         "additionalProperties": false,
@@ -23860,6 +24188,123 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "MemberListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MemberRead"
+            },
+            "title": "Members",
+            "type": "array"
+          }
+        },
+        "required": [
+          "members"
+        ],
+        "title": "MemberListRead",
+        "type": "object"
+      },
+      "MemberRead": {
+        "additionalProperties": false,
+        "properties": {
+          "access_request_state": {
+            "enum": [
+              "none",
+              "approval_needed",
+              "rejected"
+            ],
+            "title": "Access Request State",
+            "type": "string"
+          },
+          "active_grant_count": {
+            "title": "Active Grant Count",
+            "type": "integer"
+          },
+          "authentication_method": {
+            "enum": [
+              "password",
+              "sso",
+              "service"
+            ],
+            "title": "Authentication Method",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/BindingRead"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "job_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Title"
+          },
+          "last_activity_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Activity At"
+          },
+          "lifecycle_status": {
+            "enum": [
+              "active",
+              "invited",
+              "deactivated"
+            ],
+            "title": "Lifecycle Status",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "display_name",
+          "job_title",
+          "lifecycle_status",
+          "access_request_state",
+          "last_activity_at",
+          "authentication_method",
+          "active_grant_count",
+          "grants"
+        ],
+        "title": "MemberRead",
+        "type": "object"
+      },
       "MinimumCode": {
         "enum": [
           "car",
@@ -23896,6 +24341,27 @@
         ],
         "title": "ModuleReadinessRead",
         "type": "object"
+      },
+      "ModuleScope": {
+        "description": "Which modules a binding covers; ``ALL`` means every module.",
+        "enum": [
+          "all",
+          "liq",
+          "cap",
+          "irrbb",
+          "fx",
+          "ftp",
+          "fcst",
+          "beh",
+          "data",
+          "reg",
+          "risk",
+          "markets",
+          "account",
+          "audit"
+        ],
+        "title": "ModuleScope",
+        "type": "string"
       },
       "NotificationListRead": {
         "additionalProperties": false,
@@ -32743,6 +33209,18 @@
         "title": "SendBackForCorrectionsRequest",
         "type": "object"
       },
+      "SensitivityScope": {
+        "description": "Which data sensitivity levels a binding covers; ``ALL`` means every level.",
+        "enum": [
+          "all",
+          "published",
+          "aggregated",
+          "confidential",
+          "restricted"
+        ],
+        "title": "SensitivityScope",
+        "type": "string"
+      },
       "Severity": {
         "enum": [
           "mild",
@@ -33737,6 +34215,52 @@
         ],
         "type": "string"
       },
+      "SodDecisionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/SodPolicyFindingRead"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "outcome": {
+            "enum": [
+              "allow",
+              "warn",
+              "block"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "findings"
+        ],
+        "title": "SodDecisionRead",
+        "type": "object"
+      },
+      "SodPolicyFindingRead": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "SodPolicyFindingRead",
+        "type": "object"
+      },
       "SourceBookRead": {
         "properties": {
           "rows": {
@@ -33862,20 +34386,55 @@
         "type": "object"
       },
       "SsoAccessRequestApprove": {
-        "description": "Approval is the authorization act \u2014 the account admin explicitly picks the role.",
+        "additionalProperties": false,
+        "description": "Approval activates identity and creates exactly one complete scoped grant.",
         "properties": {
-          "role": {
-            "default": "viewer",
-            "enum": [
-              "account_admin",
-              "approver",
-              "analyst",
-              "viewer"
+          "institution_id": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Role",
+            "title": "Grant target institution ID"
+          },
+          "institution_scope": {
+            "$ref": "#/components/schemas/InstitutionScope"
+          },
+          "module_scope": {
+            "$ref": "#/components/schemas/ModuleScope"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
             "type": "string"
+          },
+          "role_bundle": {
+            "enum": [
+              "viewer",
+              "auditor",
+              "analyst",
+              "approver",
+              "account_admin"
+            ],
+            "title": "Role Bundle",
+            "type": "string"
+          },
+          "sensitivity_scope": {
+            "$ref": "#/components/schemas/SensitivityScope"
           }
         },
+        "required": [
+          "role_bundle",
+          "institution_scope",
+          "module_scope",
+          "sensitivity_scope",
+          "reason"
+        ],
         "title": "SsoAccessRequestApprove",
         "type": "object"
       },
@@ -39303,7 +39862,7 @@
     },
     "/api/v1/auth/sso/access-requests/{user_id}/approve": {
       "post": {
-        "description": "Activate a requested account with an explicitly chosen role (account admin only).",
+        "description": "Approve verified identity and atomically create one complete scoped grant.",
         "operationId": "authApproveSsoAccessRequest",
         "parameters": [
           {
@@ -39332,7 +39891,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SsoAccessRequestRead"
+                  "$ref": "#/components/schemas/BindingCreateResponse"
                 }
               }
             },
@@ -39771,6 +40330,313 @@
         "summary": "Sso Status",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/authorization/bindings": {
+      "get": {
+        "operationId": "listAuthorizationBindings",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "principal_user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Principal User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BindingListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Authorization Bindings",
+        "tags": [
+          "authorization"
+        ]
+      },
+      "post": {
+        "operationId": "createAuthorizationBinding",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindingCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BindingCreateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Authorization Binding",
+        "tags": [
+          "authorization"
+        ]
+      }
+    },
+    "/api/v1/authorization/bindings/{binding_id}/revoke": {
+      "post": {
+        "operationId": "revokeAuthorizationBinding",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "binding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Binding Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindingRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BindingRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Authorization Binding",
+        "tags": [
+          "authorization"
         ]
       }
     },
@@ -75053,6 +75919,92 @@
         "summary": "Mark Notification Read",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/v1/organization/members": {
+      "get": {
+        "operationId": "listOrganizationMembers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Organization Members",
+        "tags": [
+          "authorization"
         ]
       }
     },
