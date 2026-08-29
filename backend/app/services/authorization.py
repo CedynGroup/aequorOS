@@ -1,16 +1,15 @@
-"""Persistence boundary for scoped authorization and session invalidation.
+"""Database operations for authorization bindings and session invalidation.
 
-No API route exposes these mutations yet.  The service is intentionally ready
-for that later vertical slice: creating a binding validates tenant ownership and
-atomically advances the target principal's authorization version while revoking
-every refresh-token family.
+No API route exposes these operations yet. The service is ready for a future
+admin endpoint: creating a binding checks tenant ownership and updates the
+user's authorization version in the same transaction, which also revokes all
+their refresh tokens.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime
-from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import select
@@ -21,6 +20,7 @@ from app.core.authorization import (
     BindingGrant,
     BindingStatus,
     ConditionCheck,
+    GrantorType,
     InstitutionScope,
     ModuleScope,
     Permission,
@@ -41,13 +41,7 @@ from app.services import authentication
 
 
 class AuthorizationInvariantError(ValueError):
-    """A requested binding would violate the authorization authority model."""
-
-
-class GrantorType(StrEnum):
-    SYSTEM = "system"
-    TENANT_USER = "tenant_user"
-    OPERATOR = "operator"
+    """A requested binding would break the authorization rules."""
 
 
 @dataclass(frozen=True)
@@ -140,28 +134,35 @@ def _validate_grantor(db: Session, organization_id: str, grantor: GrantorRef) ->
         raise AuthorizationInvariantError("operator grantor is not active")
 
 
-def invalidate_user_authorization(
+def invalidate_user_authorization(  # noqa: PLR0913 - lock optimization is explicit
     db: Session,
     *,
     organization_id: str,
     user_id: UUID,
     reason: str,
     commit: bool = True,
+    locked_user: User | None = None,
 ) -> int:
-    """Atomically advance the authority version and end every refresh family.
+    """Update the user's authorization version and revoke all their refresh tokens.
 
-    Future role, scope, status, and security mutations must call this in their
-    transaction.  The user-row lock is the same serialization point used by
-    refresh rotation, so a concurrent rotation cannot escape the revocation.
+    Any change to a user's role, scope, status, or security settings must call
+    this in the same transaction. The user-row lock is shared with refresh
+    token rotation, so a concurrent token refresh cannot skip the revocation.
+    If the caller already holds a FOR UPDATE lock on the user (e.g. from
+    ``create_role_binding``), pass it via ``locked_user`` to avoid a second
+    query.
     """
 
     if not reason.strip():
         raise AuthorizationInvariantError("authorization changes require a reason")
-    user = db.scalar(
-        select(User)
-        .where(User.id == user_id, User.organization_id == organization_id)
-        .with_for_update(key_share=True)
-    )
+    if locked_user is not None:
+        user = locked_user
+    else:
+        user = db.scalar(
+            select(User)
+            .where(User.id == user_id, User.organization_id == organization_id)
+            .with_for_update(key_share=True)
+        )
     if user is None:
         raise AuthorizationInvariantError("principal is not a member of the organization")
     user.authorization_version += 1
@@ -189,21 +190,25 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
     reason: str,
     valid_from: datetime | None = None,
     valid_until: datetime | None = None,
+    commit: bool = True,
 ) -> AuthorizationBinding:
-    """Create one indivisible grant and invalidate existing sessions.
+    """Create a single binding and invalidate the user's existing sessions.
 
-    This is a service primitive, not a tenant administration surface.  Future
-    endpoints must add delegation and SoD policy before calling it.
+    This is a low-level service function, not a tenant admin API. Future
+    endpoints must add delegation and segregation-of-duties checks before
+    calling it.
     """
 
     grant_reason = reason.strip()
     if not grant_reason:
         raise AuthorizationInvariantError("a role binding requires a grant reason")
     principal = db.scalar(
-        select(User).where(
+        select(User)
+        .where(
             User.id == principal_user_id,
             User.organization_id == organization_id,
         )
+        .with_for_update(key_share=True)
     )
     if principal is None:
         raise AuthorizationInvariantError("principal is not a member of the organization")
@@ -247,10 +252,29 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
         user_id=principal_user_id,
         reason=f"role binding granted: {grant_reason}",
         commit=False,
+        locked_user=principal,
     )
-    db.commit()
-    db.refresh(binding)
+    if commit:
+        db.commit()
+        db.refresh(binding)
+    else:
+        db.flush()
     return binding
+
+
+def _deny_with_trace(  # noqa: PLR0913 - the complete decision tuple is explicit
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    conditions: tuple[ConditionCheck, ...],
+    now: datetime | None,
+    reason: str | None = None,
+) -> AuthorizationDecision:
+    """Evaluate with no bindings and optionally override the denial reason."""
+    decision = evaluate_grants(principal, permission, resource, (), conditions=conditions, now=now)
+    if reason is not None:
+        return replace(decision, allowed=False, reason=reason)
+    return decision
 
 
 def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
@@ -262,7 +286,7 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
     conditions: tuple[ConditionCheck, ...] = (),
     now: datetime | None = None,
 ) -> AuthorizationDecision:
-    """Resolve authority from persisted bindings only, with an audit-ready trace."""
+    """Check permissions using only stored bindings, returning a trace for audit."""
 
     user = db.scalar(
         select(User).where(
@@ -272,24 +296,11 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
         )
     )
     if user is None or _principal_type(user) is not principal.principal_type:
-        decision = evaluate_grants(
-            principal,
-            permission,
-            resource,
-            (),
-            conditions=conditions,
-            now=now,
+        return _deny_with_trace(
+            principal, permission, resource, conditions, now, "principal_not_active"
         )
-        return replace(decision, allowed=False, reason="principal_not_active")
     if resource.organization_id != principal.organization_id:
-        return evaluate_grants(
-            principal,
-            permission,
-            resource,
-            (),
-            conditions=conditions,
-            now=now,
-        )
+        return _deny_with_trace(principal, permission, resource, conditions, now)
     if resource.institution_scope is InstitutionScope.INSTITUTION:
         institution = db.scalar(
             select(Bank.id).where(
@@ -298,15 +309,14 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
             )
         )
         if institution is None:
-            decision = evaluate_grants(
+            return _deny_with_trace(
                 principal,
                 permission,
                 resource,
-                (),
-                conditions=conditions,
-                now=now,
+                conditions,
+                now,
+                "resource_institution_not_in_tenant",
             )
-            return replace(decision, allowed=False, reason="resource_institution_not_in_tenant")
     bindings = list(
         db.scalars(
             select(AuthorizationBinding).where(
@@ -336,11 +346,11 @@ def observe_shadow_permission(  # noqa: PLR0913 - the observed decision tuple is
     conditions: tuple[ConditionCheck, ...] = (),
     now: datetime | None = None,
 ) -> AuthorizationDecision | None:
-    """Evaluate and emit policy parity while legacy authorization remains authoritative.
+    """Evaluate the binding result and log it for comparison with the legacy check.
 
-    This function never grants or refuses the request.  It gives one real route
-    a stable, queryable rollout signal without silently migrating that route to
-    the binding evaluator.
+    This function never allows or denies the request itself. It gives a real
+    route a way to log what the new binding evaluator would say, so the two
+    can be compared during the rollout without switching the route over.
     """
 
     target_fields = {

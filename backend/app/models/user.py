@@ -17,9 +17,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
-# Kept in sync with app.core.security.ROLES.
+# ``admin`` remains admitted only for legacy fixtures/rolling compatibility;
+# migration 202608280046 converts every persisted row to the account-plane-only
+# ``account_admin`` role, and every application creation path now uses that value.
 # "examiner" admitted 2026-08-08 (Phase 2 item 7; migration 202608070039).
-USER_ROLES: tuple[str, ...] = ("admin", "approver", "analyst", "examiner", "viewer")
+USER_ROLES: tuple[str, ...] = (
+    "admin",
+    "account_admin",
+    "approver",
+    "analyst",
+    "examiner",
+    "viewer",
+)
 # "oidc" covers every external IdP (Google Workspace, Entra, Okta, …) — the
 # connection an identity came through lives in sso_connections, not here.
 AUTH_PROVIDERS: tuple[str, ...] = ("password", "oidc", "service")
@@ -69,7 +78,8 @@ class User(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     timezone: Mapped[str | None] = mapped_column(String(255), nullable=True)
     theme: Mapped[str | None] = mapped_column(String(16), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    # Authorization: one role per user (see app.core.security.has_role hierarchy).
+    # Legacy endpoint compatibility only. Scoped bindings are the new authority;
+    # account_admin is intentionally outside the operational role hierarchy.
     role: Mapped[str] = mapped_column(
         String(16), default="viewer", server_default="viewer", nullable=False
     )

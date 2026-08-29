@@ -20,8 +20,8 @@ An **integration key**, sent as the bearer credential on every request:
 Authorization: Bearer aeq_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
-Your administrator generates the key once in the dashboard (Data Engine →
-API Push → Integration keys). It authenticates your middleware as a
+Your account administrator generates the key once in the dashboard (Data
+Engine → API Push → Integration keys). It authenticates your middleware as a
 dedicated service account with data-push rights only, is shown exactly once
 at generation (the platform stores only a hash), and can be revoked
 instantly from the same screen. Rotate by generating a new key, switching

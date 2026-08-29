@@ -1,4 +1,4 @@
-# Authorization foundation (as built through 2026-08-27)
+# Authorization foundation (as built through 2026-08-28)
 
 This document records the first bounded server-side slice of `docs/rbac.md`.
 The new policy kernel is additive and shadow-only; the authorization-version
@@ -20,8 +20,8 @@ The policy vocabulary lives only in `backend/app/core/authorization.py`:
 - concrete resource modules: LIQ, CAP, IRRBB, FX, FTP, FCST, BEH, DATA, REG,
   Risk, Markets, Account, and Audit;
 - sensitivities: `published`, `aggregated`, `confidential`, and `restricted`;
-- static bundles: Viewer, Auditor, Analyst, Approver, Account Admin, and the
-  machine-only Integration Writer.
+- static bundles: Viewer, Auditor, Analyst, Approver, Account Admin, Org Owner,
+  and the machine-only Integration Writer.
 
 The v1 bundle contents are deliberately narrow:
 
@@ -32,11 +32,17 @@ The v1 bundle contents are deliberately narrow:
 | Analyst            | `view`, `create`, `edit`, `run`, `validate`, `export` |
 | Approver           | `view`, `review`, `approve`                           |
 | Account Admin      | `administer`                                          |
+| Org Owner          | `administer`                                          |
 | Integration Writer | `ingest`                                              |
 
 `configure`, `sign_off`, and `submit` are reserved action names but are not in
 any v1 bundle. Workflow-specific authority for them must be designed explicitly
 rather than inferred from a nearby role.
+
+Org Owner is a distinct binding authority even though the bounded v1 action
+vocabulary currently overlaps Account Admin. The later grant/transfer service
+must distinguish the owner binding; it must not infer ownership from
+`administer` or promote every Account Admin.
 
 No route name, HTTP verb, UI navigation item, or token permission claim creates
 authority. Static bundles are code; v1 has no mutable permission catalog and no
@@ -109,7 +115,7 @@ These return explained denials (`principal_not_active`,
 misleading matching-binding trace rather than allowing a matching row to
 outlive its identity or resource.
 
-## Institution-target slice and migration posture (as built 2026-08-27)
+## Institution-target slice and migration posture (as built 2026-08-28)
 
 `GET /banks/{bank_id}/liquidity-monitoring` is the first real resource path to
 construct an exact institution-scoped locator. For normal tenant app sessions
@@ -121,19 +127,69 @@ integration-key credentials retain their separate lifecycles and are outside
 this human-binding pilot. A shadow-evaluation failure emits
 `shadow_evaluation_failed` at error severity and does not become a route gate.
 
-This slice requires no new migration. It reuses migration `202608250044`'s
-composite institution/organization foreign key and forced-RLS binding table.
-Organization membership, token `org`, the session's `app.organization_id`,
-organization-scoped foreign keys, and FORCE RLS remain the outer boundary. No
-binding backfill, tenant grant endpoint, owner authority, or other RBAC
-administration surface is introduced.
+The institution-target shadow slice itself requires no new migration. Initial
+ownership is the separate migration `202608280046`, described below. Organization
+membership, token `org`, the session's `app.organization_id`, organization-scoped
+foreign keys, and FORCE RLS remain the outer boundary. No tenant grant endpoint
+or binding enforcement is introduced.
+
+## Initial Org Owner assignment (migration 202608280046)
+
+Ownership is an organization-wide `org_owner` binding on the Account module,
+with explicit system provenance. The migration considers only users whose
+legacy role is `admin`, who are active, and whose authentication provider is not
+`service`:
+
+- exactly one eligible administrator is assigned automatically;
+- zero eligible administrators receive no binding; and
+- multiple eligible administrators receive no binding.
+
+Every organization gets one FORCE-RLS `organization_owner_assignments` control
+row. It persists the outcome, basis, candidate count, and an ordered candidate
+snapshot (`user_id`, email, display name), plus the owner user/binding IDs only
+when assigned. This is the ordinary staff-side query for unresolved tenants:
+
+```sql
+SELECT organization_id, basis, eligible_candidates
+FROM organization_owner_assignments
+WHERE status = 'designation_required'
+ORDER BY organization_id;
+```
+
+The operator database role can run that fleet query because it has the same
+cross-tenant BYPASSRLS posture as the rest of the staff console. Tenant sessions
+see only their own row. A partial unique index permits at most one active Org
+Owner binding per organization.
+
+The same migration converts every persisted scalar `admin` to
+`account_admin`, increments `authorization_version`, and revokes outstanding
+refresh families with `authorization_changed`. `account_admin` passes only the
+explicit account-administration gate used by SSO membership and integration-key
+management; the generic `require_role("admin")` dependency remains operational
+and excludes it. It sits outside the analyst/approver ladder and cannot reach
+attestation policy, placement-template mutation, or regulatory submission. This
+avoids grandfathering operational superuser authority while binding enforcement
+remains shadow-only.
+
+Migration `202608280046` records every demoted legacy administrator in the
+FORCE-RLS `initial_admin_role_demotions` table. Downgrade restores and invalidates
+sessions only for those recorded identities. If a post-migration
+`account_admin` exists, downgrade refuses before changing any role or refresh
+family because the historical schema cannot represent that account safely.
+
+The staff provisioning saga creates a new organization and exactly one active
+human account administrator, then creates its owner binding and assignment row
+in the same transaction. Existing zero/multiple-candidate tenants still require
+a later audited operator designation mutation. That action belongs in the staff
+operator plane because a zero-owner tenant has no tenant authority that could
+authorize it; this slice provides no grant UI or mutation API.
 
 ## Authorization version and deployment transition
 
 Migration `202608250044` adds `users.authorization_version`, initially `1`, and
-does **not** backfill any binding. In particular, an existing scalar `admin` is
-not silently made an operational principal, Account Admin, or Org Owner in the
-new model.
+does **not** itself backfill any binding. Follow-on migration `202608280046`
+performs the explicit initial-owner assignment and account-role split described
+above; it never infers owner authority merely from `account_admin`.
 
 Every newly issued access and refresh token carries the authoritative, positive
 integer `authv`. Every normal app-JWT request compares it with the active user
@@ -146,9 +202,10 @@ mutations must do the same.
 
 Tokens issued before this migration have no `authv`. They fail closed for both
 access and refresh, even if their signature and old role claims are valid. The
-safe deployment consequence is a deliberate one-time re-authentication for
-sessions outstanding at deploy time. Existing active users then receive tokens
-at version 1 and retain current product behavior through the legacy hierarchy.
+safe deployment consequence of the foundation migration is a deliberate
+one-time re-authentication for sessions outstanding at deploy time. The initial
+ownership migration advances every legacy admin's version again while moving
+them outside the operational hierarchy, so those sessions also fail closed.
 Integration keys and operator impersonation tokens retain their separate
 credential lifecycles and do not carry `authv`.
 
@@ -174,11 +231,11 @@ response. Two generative suites add coverage beyond the fixed examples:
 
 ## Shadow rollout and next vertical slice
 
-The new evaluator is not an endpoint gate yet. Existing routes keep their
-current rank checks; the new table starts empty, grant CRUD is absent, and no
-current user is broadened or narrowed by a binding. Liquidity Monitoring now
-records legacy-versus-binding decisions for one exact institution target, which
-is evidence for a later enforcement decision rather than enforcement itself.
+The new evaluator is not an endpoint gate yet. Existing operational routes keep
+their current rank checks, grant CRUD is absent, and an owner binding does not
+itself switch any tenant endpoint to enforcement. Liquidity Monitoring records
+legacy-versus-binding decisions for one exact institution target, which is
+evidence for a later enforcement decision rather than enforcement itself.
 
 The next bounded slice may provision governed pilot bindings and review
 parity/denial telemetry before switching any endpoint gate. Role/grant

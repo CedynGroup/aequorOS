@@ -11,7 +11,7 @@ from app.models.attestation import (
     SigningAuthorization,
 )
 from app.models.audit_event import AuditEvent
-from app.models.authorization import AuthorizationBinding
+from app.models.authorization import AuthorizationBinding, OrganizationOwnerAssignment
 from app.models.calculation import (
     CalculationForecastPeriod,
     CalculationRun,
@@ -246,6 +246,7 @@ __all__ = [
     "OperatorInspectorSession",
     "OperatorUser",
     "Organization",
+    "OrganizationOwnerAssignment",
     "TenantStorage",
     "PackageSignaturePlacement",
     "PackageSignatureRecipient",

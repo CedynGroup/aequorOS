@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import get_operator_settings
 from app.models import (
+    AuthorizationBinding,
     Bank,
     OperatorAuditLog,
     Organization,
+    OrganizationOwnerAssignment,
     SsoConnection,
     TenantStorage,
     User,
@@ -57,6 +59,7 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     )
     assert steps["sso_stub"]["status"] == "succeeded"
     assert steps["first_admin"]["status"] == "succeeded"
+    assert steps["first_owner"]["status"] == "succeeded"
     assert steps["readiness"]["status"] == "succeeded"
     assert steps["desk_market_data"]["status"] == "skipped"
     assert "empty-but-wired" in steps["readiness"]["detail"]
@@ -105,8 +108,9 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert sso.enabled is False
     assert sso.jit_enabled is False
 
-    # First admin: active admin, password auth, and the ONE-TIME plaintext
-    # verifies against the stored Argon2id hash.
+    # The saga creates exactly one active human account administrator, so it is
+    # the safe automatic-owner shape. The binding and its auditable basis land
+    # atomically with the account and one-time credential.
     one_time_password = body["admin_one_time_password"]
     assert one_time_password
     admin = operator_db.scalar(
@@ -116,11 +120,37 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
         )
     )
     assert admin is not None
-    assert admin.role == "admin"
+    assert admin.role == "account_admin"
     assert admin.auth_provider == "password"
     assert admin.is_active is True
+    assert admin.authorization_version == 2
     assert admin.password_hash is not None
     assert security.verify_password(one_time_password, admin.password_hash)
+    owner_binding = operator_db.scalar(
+        select(AuthorizationBinding).where(
+            AuthorizationBinding.organization_id == organization_id,
+            AuthorizationBinding.role_bundle == "org_owner",
+        )
+    )
+    assert owner_binding is not None
+    assert owner_binding.principal_user_id == admin.id
+    assert owner_binding.granted_by_type == "system"
+    assert owner_binding.granted_by_id == "tenant_provisioning:dev@aequoros.com"
+    assert "exactly one eligible active human administrator" in owner_binding.grant_reason
+    owner_state = operator_db.get(OrganizationOwnerAssignment, organization_id)
+    assert owner_state is not None
+    assert owner_state.status == "assigned"
+    assert owner_state.basis == "exactly_one_eligible_active_human_administrator"
+    assert owner_state.eligible_candidate_count == 1
+    assert owner_state.eligible_candidates == [
+        {
+            "user_id": str(admin.id),
+            "email": "admin@testbank.example",
+            "display_name": admin.display_name,
+        }
+    ]
+    assert owner_state.owner_user_id == admin.id
+    assert owner_state.owner_binding_id == owner_binding.id
 
     # Audit: the provision action is recorded — WITHOUT the password.
     audit = operator_db.scalar(
@@ -153,9 +183,7 @@ def test_lowercase_currency_is_422(operator_client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_unknown_jurisdiction_is_422(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_unknown_jurisdiction_is_422(operator_client: TestClient, operator_db: Session) -> None:
     response = operator_client.post(
         "/operator/v1/tenants",
         json=provision_payload(jurisdiction_code="ZZ"),
@@ -177,9 +205,7 @@ def test_missing_institution_type_is_schema_level_422(operator_client: TestClien
     assert response.json()["error"]["code"] == "validation_error"
 
 
-def test_unknown_institution_type_is_422(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_unknown_institution_type_is_422(operator_client: TestClient, operator_db: Session) -> None:
     response = operator_client.post(
         "/operator/v1/tenants",
         json=provision_payload(institution_type="not_a_real_licence_class"),

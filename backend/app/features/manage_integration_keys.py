@@ -1,9 +1,9 @@
-"""Integration keys: admin-gated issue/list/revoke for bank middleware.
+"""Integration keys: account-admin-gated issue/list/revoke for bank middleware.
 
 The raw key is returned exactly once at issuance; listing exposes only the
 display prefix and lifecycle metadata. Requests authenticated WITH an
-integration key cannot manage keys (admin role required — service accounts
-are analysts).
+integration key cannot manage keys (account-administration authority required;
+service accounts are outside that gate).
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import DbSession, TenantContext, require_role
+from app.api.deps import DbSession, TenantContext, require_account_administration
 from app.schemas.integration_keys import (
     IntegrationKeyIssued,
     IntegrationKeyIssueRequest,
@@ -25,7 +25,7 @@ from app.services import integration_keys
 
 router = APIRouter(tags=["integration-keys"])
 
-AdminCtx = Annotated[TenantContext, Depends(require_role("admin"))]
+AdminCtx = Annotated[TenantContext, Depends(require_account_administration)]
 
 
 @router.get(

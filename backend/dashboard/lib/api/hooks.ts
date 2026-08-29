@@ -2733,7 +2733,7 @@ export function useMarkAllNotificationsRead() {
 
 // ---------------------------------------------------------------------------
 // Integration keys — generate-once revocable API credentials for bank
-// middleware (admin-only surface; the raw key is returned exactly once).
+// middleware (account-admin-only surface; the raw key is returned exactly once).
 // ---------------------------------------------------------------------------
 
 export function useIntegrationKeys(enabled: boolean) {

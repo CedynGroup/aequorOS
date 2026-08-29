@@ -71,8 +71,8 @@ Verified in `backend/app/api/deps.py`, `app/db/session.py`, and migration
 
 ### 2.1 Authorization transition
 
-Migration `202608250044` adds an initially empty, FORCE-RLS
-`authorization_bindings` table and `users.authorization_version`. Each binding
+Migration `202608250044` adds a FORCE-RLS `authorization_bindings` table and
+`users.authorization_version`. Each binding
 is one indivisible principal/type + static bundle + organization/institution +
 module + sensitivity + provenance + lifecycle tuple. Dimensions inside a row
 AND; independently complete rows OR. The pure evaluator starts denied, accepts
@@ -85,9 +85,15 @@ conditions as global vetoes. Its decision includes an audit-ready trace.
 This kernel is shadow-only: Liquidity Monitoring evaluates an exact institution
 target and emits `authz.shadow_decision`, but its legacy authenticated-read
 result remains authoritative even if shadow evaluation denies or fails. No
-endpoint uses the binding result as a gate, no grant API exists, and the
-migration backfills no binding or implicit Admin/Owner authority. Token version
-enforcement is live: every app access/refresh token requires positive `authv`;
+endpoint uses the binding result as a gate and no grant API exists. Follow-on
+migration `202608280046` creates an explicit organization-wide `org_owner`
+binding only where an organization had exactly one active human legacy admin;
+zero/multiple-candidate organizations remain unassigned in a queryable
+designation state. It also converts every persisted `admin` to the
+account-plane-only `account_admin` role and invalidates their sessions. New
+staff-provisioned tenants create their first account administrator, owner
+binding, and assignment state atomically. Token version enforcement is live:
+every app access/refresh token requires positive `authv`;
 pre-migration or stale tokens return `401`. Every future role, scope, status, or
 security mutation must call
 `services.authorization.invalidate_user_authorization()` in its transaction to

@@ -1,4 +1,4 @@
-"""Normalized, tenant-owned authorization role bindings."""
+"""Database models for tenant-scoped authorization bindings."""
 
 from __future__ import annotations
 
@@ -6,28 +6,32 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     Text,
     Uuid,
 )
+from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.authorization import (
     BindingStatus,
+    GrantorType,
     InstitutionScope,
     ModuleScope,
+    OwnerAssignmentBasis,
+    OwnerAssignmentStatus,
     PrincipalType,
     RoleBundle,
     SensitivityScope,
 )
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
-
-GRANTOR_TYPES: tuple[str, ...] = ("system", "tenant_user", "operator")
 
 
 def _values(values: tuple[str, ...]) -> str:
@@ -35,11 +39,12 @@ def _values(values: tuple[str, ...]) -> str:
 
 
 class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
-    """One indivisible principal + bundle + exact-scope grant.
+    """One user, one role bundle, and one exact scope stored as a single row.
 
-    Rows combine with OR.  Every scope column inside one row combines with AND;
-    there are no independent role arrays or scope arrays to form a privilege
-    widening Cartesian product.
+    Multiple bindings for the same user combine with OR: if any one matches,
+    the permission is granted. But every scope field within a single binding
+    must match. There are no separate role or scope arrays that could widen
+    access in unexpected combinations.
     """
 
     __tablename__ = "authorization_bindings"
@@ -91,7 +96,7 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_authorization_bindings_status",
         ),
         CheckConstraint(
-            f"granted_by_type IN ({_values(GRANTOR_TYPES)})",
+            f"granted_by_type IN ({_values(tuple(GrantorType))})",
             name="ck_authorization_bindings_grantor_type",
         ),
         CheckConstraint(
@@ -123,6 +128,13 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "organization_id",
             "institution_id",
         ),
+        Index(
+            "uq_authorization_bindings_active_org_owner",
+            "organization_id",
+            unique=True,
+            postgresql_where=sql_text("role_bundle = 'org_owner' AND status = 'active'"),
+            sqlite_where=sql_text("role_bundle = 'org_owner' AND status = 'active'"),
+        ),
     )
 
     organization_id: Mapped[str] = mapped_column(
@@ -153,3 +165,76 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class OrganizationOwnerAssignment(TimestampMixin, Base):
+    """Records whether an organization has an owner and why.
+
+    The owner binding is the source of truth for ownership. This row is the
+    control record that makes every unresolved organization findable without
+    reading deploy logs: it says why designation is still needed and lists
+    the eligible candidates that staff must choose between.
+    """
+
+    __tablename__ = "organization_owner_assignments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_user_id", "organization_id"],
+            ["users.id", "users.organization_id"],
+            ondelete="RESTRICT",
+            name="fk_organization_owner_assignments_owner_tenant",
+        ),
+        CheckConstraint(
+            f"status IN ({_values(tuple(OwnerAssignmentStatus))})",
+            name="ck_organization_owner_assignments_status",
+        ),
+        CheckConstraint(
+            f"basis IN ({_values(tuple(OwnerAssignmentBasis))})",
+            name="ck_organization_owner_assignments_basis",
+        ),
+        CheckConstraint(
+            "eligible_candidate_count >= 0",
+            name="ck_organization_owner_assignments_candidate_count",
+        ),
+        CheckConstraint(
+            "(status = 'assigned' AND owner_user_id IS NOT NULL AND "
+            "owner_binding_id IS NOT NULL) OR "
+            "(status = 'designation_required' AND owner_user_id IS NULL AND "
+            "owner_binding_id IS NULL)",
+            name="ck_organization_owner_assignments_resolution",
+        ),
+        CheckConstraint(
+            "(basis = 'exactly_one_eligible_active_human_administrator' AND "
+            "status = 'assigned' AND eligible_candidate_count = 1) OR "
+            "(basis = 'zero_eligible_active_human_administrators' AND "
+            "status = 'designation_required' AND eligible_candidate_count = 0) OR "
+            "(basis = 'multiple_eligible_active_human_administrators' AND "
+            "status = 'designation_required' AND eligible_candidate_count > 1) OR "
+            "(basis = 'explicit_designation' AND status = 'assigned')",
+            name="ck_organization_owner_assignments_basis_count",
+        ),
+        Index(
+            "ix_organization_owner_assignments_status",
+            "status",
+            "organization_id",
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(
+        String(16),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    basis: Mapped[str] = mapped_column(String(64), nullable=False)
+    eligible_candidate_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    eligible_candidates: Mapped[list[dict[str, str | None]]] = mapped_column(
+        JSON, default=list, server_default=sql_text("'[]'"), nullable=False
+    )
+    owner_user_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    owner_binding_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("authorization_bindings.id", ondelete="RESTRICT"),
+        nullable=True,
+        unique=True,
+    )

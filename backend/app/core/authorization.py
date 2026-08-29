@@ -1,9 +1,9 @@
-"""Pure authorization vocabulary and deny-by-default policy evaluation.
+"""Authorization vocabulary and deny-by-default permission evaluation.
 
-This module is deliberately free of SQLAlchemy and FastAPI.  It is the one
-canonical vocabulary for the first scoped-policy rollout and can therefore be
-used by services, tests, workers, and future audit writers without importing an
-HTTP boundary.  Route names and dashboard navigation never imply permission.
+This module has no SQLAlchemy or FastAPI imports on purpose. It defines the
+shared vocabulary for permission checks so that services, tests, workers, and
+audit code can all use it without depending on a web framework. Route names
+and dashboard navigation are never a source of permission.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from uuid import UUID
 
 
 class Permission(StrEnum):
-    """The small, explicit action vocabulary understood by policy v1."""
+    """The set of actions that permission checks can allow or deny."""
 
     VIEW = "view"
     CREATE = "create"
@@ -63,7 +63,7 @@ class Sensitivity(StrEnum):
 
 
 class ModuleScope(StrEnum):
-    """Binding module scope; ``ALL`` is an explicit broad grant."""
+    """Which modules a binding covers; ``ALL`` means every module."""
 
     ALL = "all"
     LIQUIDITY = Module.LIQUIDITY
@@ -82,7 +82,7 @@ class ModuleScope(StrEnum):
 
 
 class SensitivityScope(StrEnum):
-    """Binding sensitivity scope; ``ALL`` is an explicit broad grant."""
+    """Which data sensitivity levels a binding covers; ``ALL`` means every level."""
 
     ALL = "all"
     PUBLISHED = Sensitivity.PUBLISHED
@@ -109,14 +109,33 @@ class BindingStatus(StrEnum):
     REVOKED = "revoked"
 
 
+class GrantorType(StrEnum):
+    SYSTEM = "system"
+    TENANT_USER = "tenant_user"
+    OPERATOR = "operator"
+
+
+class OwnerAssignmentStatus(StrEnum):
+    ASSIGNED = "assigned"
+    DESIGNATION_REQUIRED = "designation_required"
+
+
+class OwnerAssignmentBasis(StrEnum):
+    EXACTLY_ONE_ELIGIBLE_ADMIN = "exactly_one_eligible_active_human_administrator"
+    ZERO_ELIGIBLE_ADMINS = "zero_eligible_active_human_administrators"
+    MULTIPLE_ELIGIBLE_ADMINS = "multiple_eligible_active_human_administrators"
+    EXPLICIT_DESIGNATION = "explicit_designation"
+
+
 class RoleBundle(StrEnum):
-    """Static bundles only; persisted custom permission catalogs are out of scope."""
+    """Fixed role bundles; custom user-defined roles are not supported yet."""
 
     VIEWER = "viewer"
     AUDITOR = "auditor"
     ANALYST = "analyst"
     APPROVER = "approver"
     ACCOUNT_ADMIN = "account_admin"
+    ORG_OWNER = "org_owner"
     INTEGRATION_WRITER = "integration_writer"
 
 
@@ -139,6 +158,11 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
         RoleBundle.APPROVER: frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
         # Account administration is intentionally outside operational bundles.
         RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
+        # Ownership is a distinct authority even though its first bounded
+        # permission vocabulary is intentionally no broader than account
+        # administration. Grant/transfer policy belongs to its later API, which
+        # can distinguish this binding without treating account admins as owners.
+        RoleBundle.ORG_OWNER: frozenset({Permission.ADMINISTER}),
         # Machine principals do not inherit a human Analyst preset or seat.
         RoleBundle.INTEGRATION_WRITER: frozenset({Permission.INGEST}),
     }
@@ -152,7 +176,7 @@ def principal_bundle_compatible(principal_type: PrincipalType, role_bundle: Role
 
 
 class ConditionKind(StrEnum):
-    """Reserved non-bypassable runtime condition hooks."""
+    """Runtime conditions that can block a request regardless of bindings."""
 
     DEMO_MODE = "demo_mode"
     MAKER_CHECKER = "maker_checker"
@@ -169,7 +193,7 @@ class PrincipalLocator:
 
 @dataclass(frozen=True)
 class ResourceLocator:
-    """Canonical attributes a policy decision may match in rollout v1."""
+    """The attributes of a resource that a permission check matches against."""
 
     organization_id: str
     institution_scope: InstitutionScope
@@ -178,11 +202,11 @@ class ResourceLocator:
     sensitivity: Sensitivity
 
     def __post_init__(self) -> None:
-        """Reject ambiguous resource targets before policy evaluation.
+        """Reject unclear resource targets before checking permissions.
 
-        A nullable institution identifier is not itself a scope.  Callers must
-        name whether they are addressing the organization or one institution,
-        using the same explicit vocabulary as persisted bindings.
+        A missing institution ID is not a scope on its own. Callers must say
+        whether they are targeting the whole organization or one specific
+        institution, using the same vocabulary as stored bindings.
         """
 
         if not isinstance(self.institution_scope, InstitutionScope):
@@ -197,7 +221,7 @@ class ResourceLocator:
 
 @dataclass(frozen=True)
 class BindingGrant:
-    """Persistence-neutral form of one indivisible scoped binding."""
+    """An in-memory copy of one stored binding, with all its scope fields."""
 
     binding_id: UUID
     organization_id: str
@@ -216,11 +240,11 @@ class BindingGrant:
 
 @dataclass(frozen=True)
 class ConditionCheck:
-    """Result supplied by a workflow-specific condition hook.
+    """The result of a runtime condition check from a workflow service.
 
-    A false result is a global veto.  It cannot be overcome by another binding,
-    which is what makes demo-mode, maker/checker, step-up, and limit checks
-    non-bypassable without putting workflow state inside RBAC rows.
+    When the check fails, it blocks the request no matter what bindings say.
+    This is how demo-mode, maker-checker, step-up, and approval limits stay
+    enforced without storing workflow state in the binding rows.
     """
 
     kind: ConditionKind
@@ -254,7 +278,7 @@ class AuthorizationDecision:
     condition_trace: tuple[ConditionCheck, ...]
 
     def to_audit_dict(self) -> dict[str, object]:
-        """Return a JSON-ready explanation for future immutable audit events."""
+        """Return a JSON-ready explanation for audit logs."""
 
         return {
             "allowed": self.allowed,
@@ -322,11 +346,12 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
     conditions: Sequence[ConditionCheck] = (),
     now: datetime | None = None,
 ) -> AuthorizationDecision:
-    """OR bindings only after every dimension inside each one matches.
+    """Check whether any binding grants the permission, then apply conditions.
 
-    No matching active binding means deny.  There are intentionally no deny
-    grants in v1; workflow conditions are the only global veto and are supplied
-    as typed, explainable results by their owning services.
+    Each binding must match on every field (organization, institution, module,
+    sensitivity, status) before it counts. Matching bindings combine with OR.
+    If no binding matches, the result is deny. Workflow conditions can block
+    an otherwise-allowed request.
     """
 
     moment = _aware(now or datetime.now(UTC))

@@ -2,7 +2,7 @@
 
 **Status:** implementation spec · **Audience:** dashboard + platform engineers · **Owner:** Eric
 
-> **As-built foundation (updated 2026-08-27):** The additive authorization slices
+> **As-built foundation (updated 2026-08-28):** The additive authorization slices
 > are recorded in the backend
 > [`authorization_foundation.md`](../backend/docs/authorization_foundation.md).
 > It corrects the proposed independent `user_roles`/`user_scopes` shape to
@@ -11,6 +11,8 @@
 > The institution-target slice (2026-08-27) makes resource target scope explicit
 > (organization or one exact institution; `NULL` never broadens) and records
 > shadow decisions on Liquidity Monitoring without changing route enforcement.
+> Migration `202608280046` adds explicit initial Org Owner bindings and splits
+> persisted account administrators out of the operational role hierarchy.
 > This proposal's later UI, role-administration, lifecycle, and broad endpoint
 > rollout sections are not claims that those features are built.
 
@@ -18,8 +20,9 @@ This document specifies how AequorOS grants access to bank users, what each user
 type can see and do, how the three settings surfaces (personal / org-admin /
 vendor-platform) are structured, and how banks invite and onboard their people.
 It is written to be **built incrementally on the auth layer that already exists**
-(JWT sessions, `organization_id` RLS, the legacy
-`admin > approver > analyst > examiner > viewer` hierarchy, and the
+(JWT sessions, `organization_id` RLS, the remaining operational
+`approver > analyst > examiner > viewer` hierarchy, explicit account-admin
+gates, and the
 regulatory-reporting maker-checker trail).
 
 Everything here is grounded in how real treasury/ALM systems (Kyriba, ION, FIS,
@@ -56,10 +59,10 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 | Area                                 | Current state                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                                                                                                                                   |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth                                 | Zero-trust JWT (HS256), Argon2id passwords, **own-OIDC SSO** (no third-party broker; built 2026-07-20), refresh rotation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `app/core/security.py`, `dashboard/auth.ts`                                                                                                                                                             |
-| SSO self-service (single connection) | **BUILT.** Per-org `sso_connections` row: issuer + client id + AES-256-GCM-sealed secret (write-only), allowed email domains, enable toggle — managed by an `admin` in **Settings → Authentication**. Backend verifies id_tokens against the connection issuer's JWKS (discovery-based, RS256/ES256, `email_verified` + domain enforcement); the uniquely selected verified connection is the sole organization authority for subject/email lookup, JIT records, and issued tokens. Ambiguous issuer/audience routing fails closed. Dashboard NextAuth loads the client config through an `SSO_INTERNAL_KEY`-gated internal endpoint. Pre-provisioned users by default; **request-access JIT is BUILT as a per-connection opt-in** (`jit_enabled`): first sign-in from an allowed domain records a **deactivated** stub and returns 403 "awaiting administrator approval" — zero access until an admin approves it with an explicit role via `/auth/sso/access-requests` (list/approve/reject; Settings → Authentication card). Refused at config AND login time without a non-empty domain list. One connection per org / one enabled per deployment — Phase 2 lifts this. | `app/models/sso_connection.py`, `app/services/sso_config.py`, `app/services/authentication.py`, `app/api/v1/auth.py`, `dashboard/components/settings/AuthenticationPanel.tsx`, `docs/sso-onboarding.md` |
+| SSO self-service (single connection) | **BUILT.** Per-org `sso_connections` row: issuer + client id + AES-256-GCM-sealed secret (write-only), allowed email domains, enable toggle — managed by an `account_admin` in **Settings → Authentication**. Backend verifies id_tokens against the connection issuer's JWKS (discovery-based, RS256/ES256, `email_verified` + domain enforcement); the uniquely selected verified connection is the sole organization authority for subject/email lookup, JIT records, and issued tokens. Ambiguous issuer/audience routing fails closed. Dashboard NextAuth loads the client config through an `SSO_INTERNAL_KEY`-gated internal endpoint. Pre-provisioned users by default; **request-access JIT is BUILT as a per-connection opt-in** (`jit_enabled`): first sign-in from an allowed domain records a **deactivated** stub and returns 403 "awaiting administrator approval" — zero access until an account administrator approves it with an explicit non-owner role via `/auth/sso/access-requests` (list/approve/reject; Settings → Authentication card). Refused at config AND login time without a non-empty domain list. One connection per org / one enabled per deployment — Phase 2 lifts this. | `app/models/sso_connection.py`, `app/services/sso_config.py`, `app/services/authentication.py`, `app/api/v1/auth.py`, `dashboard/components/settings/AuthenticationPanel.tsx`, `docs/sso-onboarding.md` |
 | Connection health (bank-IT surface)  | **BUILT** (read-only): Data Engine → Overview aggregates every configured source connection (DB-direct, T24, market-data) with live status, last sync, credential expiry, and plain-language remediation hints                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `dashboard/components/data-engine/ConnectionHealthPanel.tsx`                                                                                                                                            |
-| Legacy roles                         | `admin > approver > analyst > examiner > viewer` (linear rank), one scalar role per user; still the endpoint authority during shadow rollout                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `app/core/security.py:ROLES`, `app/models/user.py:USER_ROLES`                                                                                                                                           |
-| Endpoint enforcement                 | Coarse legacy dependencies enforce viewer/analyst mutation separation and selected approver/admin gates. The new binding evaluator is not an endpoint gate yet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `app/api/deps.py`                                                                                                                                                                                       |
+| Legacy roles                         | The operational rank remains `admin > approver > analyst > examiner > viewer` for compatibility, but migration `202608280046` leaves no persisted `admin`: former admins become `account_admin`, which is outside the ladder.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `app/core/security.py:ROLES`, `app/models/user.py:USER_ROLES`                                                                                                                                           |
+| Endpoint enforcement                 | Coarse legacy dependencies enforce viewer/analyst mutation separation and selected approver gates; SSO membership and integration-key management use a separate account-administration gate. The new binding evaluator is not an endpoint gate yet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `app/api/deps.py`                                                                                                                                                                                       |
 | Tenancy                              | Postgres RLS forced on `app.organization_id`; cross-tenant work runs on the BYPASSRLS `WORKER_DATABASE_URL` role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `app/db/session.py`, CLAUDE.md                                                                                                                                                                          |
 | Maker-checker                        | **Regulatory reporting already has it**: `draft→generated→validated→pending_approval→approved→submitted→acknowledged→…` with an append-only approval trail where **checker ≠ maker is enforced in the service**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `app/models/regulatory_reporting.py` (`PACKAGE_STATUSES`, `APPROVAL_ACTIONS`, `RegulatoryPackageApproval`)                                                                                              |
 | Authorization foundation             | **BUILT, SHADOW-ONLY.** Deny-by-default evaluation over indivisible `authorization_bindings`; explicit organization-or-exact-institution resource targets; exact module, sensitivity, lifecycle, principal-type, and runtime-condition matching. Liquidity Monitoring emits legacy-versus-binding shadow decisions, but no binding CRUD API or binding endpoint gate exists.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `app/core/authorization.py`, `app/services/authorization.py`, `app/features/read_liquidity_monitoring.py`, `backend/docs/authorization_foundation.md`                                                    |
@@ -68,8 +71,9 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 
 ### The gap this spec closes
 
-1. Selected `approver` and `admin` gates exist, but remain coarse legacy-rank
-   checks rather than exact module/resource binding decisions.
+1. Selected `approver` gates remain coarse legacy-rank checks rather than exact
+   module/resource binding decisions; account administration has a separate
+   compatibility gate rather than binding enforcement.
 2. **No tenant grant administration**: no invitations, general user CRUD, role
    assignment UI, or org-admin grant console. The separate staff operator
    console is built but is not a tenant authorization surface.
@@ -286,14 +290,17 @@ deliberately capped to avoid role explosion.
 | **Org Owner**                     | _(top of `admin`)_        | Bank's account owner                         | Org Admin **+** `billing:*`, `org:transfer`, `org:delete`             | cross-tenant anything                           |
 | **Billing Manager**               | _(new, optional)_         | Subscription & seats                         | `billing:*`                                                           | domain data                                     |
 
-**Migration note:** today's single `admin` conflates account-admin with
-operational-super — a segregation-of-duties smell (Snowflake's rule: never mix
-account-management privileges with entity privileges in one role). The
-foundation adds Account Admin as a static binding bundle, but migration
-`202608250044` deliberately creates no bindings and converts no existing
-`admin`. Org Owner is not a foundation bundle. Keep the legacy hierarchy for
-backward compatibility during shadow rollout; a later governed migration must
-make any Admin/Owner mapping explicit.
+**Migration note (as built through 2026-08-28):** today's single `admin`
+conflated account administration with operational superuser authority — a
+segregation-of-duties smell (Snowflake's rule: never mix account-management
+privileges with entity privileges in one role). Foundation migration
+`202608250044` deliberately created no bindings. Migration `202608280046` adds
+the distinct Org Owner bundle and converts every persisted `admin` to the
+account-plane-only scalar `account_admin`, invalidating its sessions so the old
+analyst/approver rank is not grandfathered. Initial ownership is automatic only
+for exactly one active human legacy administrator. Zero/multiple-candidate
+organizations receive no owner binding and are persisted in
+`organization_owner_assignments` for explicit staff designation.
 
 ### 6.2 A user can hold more than one scoped bundle
 
@@ -613,7 +620,7 @@ Separate app/subdomain, **never** mixed into the tenant nav. Runs outside RLS.
 Platform admin
 ├─ Tenants / Organizations   list all banks; create/provision; suspend/offboard; health
 │   └─ Tenant detail          users, plan, feature flags, connections, usage, entitlements
-├─ Provisioning              onboard a bank: seed org + first Org-Owner invite + data-scope + env
+├─ Provisioning              onboard a bank: org + bank + first account admin/Owner binding + data-scope + env
 ├─ Support / Impersonation   "view as" a tenant user (read-only, audited — §11.5)
 ├─ Billing & subscriptions   cross-tenant plans, invoices, seat enforcement
 ├─ Feature flags             per-tenant + global rollout (market-data adapters, ML-ETL, etc.)
@@ -675,7 +682,7 @@ _who may sign in_; provisioning decides _who exists_.
 
 ### 11.4 JIT + SCIM + verified domains
 
-- **JIT** — **BUILT in request-access form** (opt-in `jit_enabled` per connection): first OIDC login from an allowed email domain records a deactivated stub; an admin approves it with an explicit role before any access exists. Phase 2 adds group→role mapping (which can then safely auto-activate). **JIT does not deprovision** → SCIM below is the governance answer.
+- **JIT** — **BUILT in request-access form** (opt-in `jit_enabled` per connection): first OIDC login from an allowed email domain records a deactivated stub; an account administrator approves it with an explicit non-owner role before any access exists. Phase 2 adds group→role mapping (which can then safely auto-activate). **JIT does not deprovision** → SCIM below is the governance answer.
 - **SCIM 2.0** — the IdP syncs create/update/**deactivate** to AequorOS. **Mandatory for bank tenants** — SCIM-driven deprovisioning is the single most-probed enterprise security-questionnaire item. Key on a **stable IdP id (`externalId`/`sub`), never email**, or JIT+SCIM produce duplicate records.
 - **Verified domains** — a tenant verifies a domain via DNS TXT; then auto-suggest membership and/or **enforce SSO** for all users on that domain (domain capture stops shadow personal accounts).
 - **Rule:** JIT creates, SCIM governs, SSO authenticates, verified domains bound the population — all keyed on one stable identifier.
@@ -847,13 +854,13 @@ GET   /orgs/{org}/roles                             roles:read
 POST  /orgs/{org}/roles                             roles:manage    (custom roles — later)
 
 # authentication config
-# BUILT (Phase-1 form, admin-role-gated; migrate to sso:manage when the
+# BUILT (Phase-1 form, account-administration-gated; migrate to sso:manage when the
 # permission layer lands — same handlers, new dependency):
 #   POST /auth/sso                public exchange; body is {id_token} only;
 #                                 verified connection selects the organization
 #   GET  /auth/sso/status         public login-page probe {enabled}
-#   GET  /auth/sso/connection     admin — secret returned only as client_secret_set
-#   PUT  /auth/sso/connection     admin — upsert; client_secret write-only
+#   GET  /auth/sso/connection     account admin — secret returned only as client_secret_set
+#   PUT  /auth/sso/connection     account admin — upsert; client_secret write-only
 #   GET  /auth/sso/client-config  internal (SSO_INTERNAL_KEY header; not in OpenAPI)
 GET/PUT /orgs/{org}/sso                             sso:manage   (Phase 2: multi-connection)
 POST    /orgs/{org}/domains:verify                  sso:manage
@@ -897,8 +904,10 @@ Remaining Phase-0 work is governed pilot binding creation, an evidence-backed
 endpoint enforcement decision, `/auth/me` display capabilities, nav/action
 gating, and default landings
 ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).
-Do not add independent `user_roles`/`user_scopes` tables or implicitly split
-legacy `admin` into Org Admin/Owner.
+Do not add independent `user_roles`/`user_scopes` tables or infer ownership from
+the scalar `account_admin` role. Initial Owner assignment is built only for the
+exactly-one-candidate migration/onboarding cases; explicit designation and
+transfer remain staff-plane work.
 
 **Phase 1 — org admin console + invites.**
 `organizations`/`users` fields, `invitations`, Members table, invite modal, role

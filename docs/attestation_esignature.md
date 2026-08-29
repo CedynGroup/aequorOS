@@ -154,9 +154,10 @@ Attestation binds to `RegulatoryRun` only.
 | `rejected` / `declined` | `superseded`                                              |
 | `superseded`            | _(terminal)_                                              |
 
-Role gating (`app/api/deps.py`; hierarchy
+Operational role gating (`app/api/deps.py`; compatibility hierarchy
 `admin ⊃ approver ⊃ analyst ⊃ examiner ⊃ viewer`,
-`app/core/security.py:ROLES`):
+`app/core/security.py:ROLES`) excludes the separate `account_admin` role;
+migration `202608280046` leaves no persisted legacy `admin`:
 
 | Action                                                             | Gate                         |
 | ------------------------------------------------------------------ | ---------------------------- |
@@ -193,8 +194,8 @@ mapping is `organization_id=connection.organization_id AND
 auth_provider='oidc' AND sso_subject=sub AND is_active`, with a first-login
 fallback to exact email match on a pre-provisioned active account in that same
 organization (`app/services/authentication.py`). Opt-in JIT records a
-**deactivated** stub in that organization and returns 403 until an admin
-approves with an explicit role.
+**deactivated** stub in that organization and returns 403 until an account
+administrator approves with an explicit non-owner role.
 
 **Authentication update (2026-08-25).** Access tokens are HS256, 15-minute TTL,
 carrying `sub` (user UUID), `org`
@@ -412,7 +413,8 @@ lazily at first signature, so that the ID exists before it is ever needed and
 an operator can print a signer roster in advance. Concretely, `ensure_signer_identity(db, ctx, user_id)`
 is called from every path that grants a person access:
 
-1. admin approval of an SSO access request (`approve_sso_access_request`,
+1. account-administrator approval of an SSO access request
+   (`approve_sso_access_request`,
    `app/services/authentication.py:284`);
 2. CLI provisioning (`scripts/create_user.py`, which must be repaired first — G15);
 3. a backfill migration for all existing active users.

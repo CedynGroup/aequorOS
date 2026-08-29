@@ -1,7 +1,7 @@
 """Persist bounded live-module retry classification and schedule.
 
 Revision ID: 202608280045
-Revises: 202608250044
+Revises: 202608270044
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "202608280045"
-down_revision = "202608250044"
+down_revision = "202608270044"
 branch_labels = None
 depends_on = None
 

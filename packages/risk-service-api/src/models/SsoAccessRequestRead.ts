@@ -12,7 +12,7 @@
 
 import { mapValues } from "../runtime";
 /**
- * A JIT sign-in awaiting admin approval (deactivated account stub).
+ * A JIT sign-in awaiting account-admin approval (deactivated account stub).
  * @export
  * @interface SsoAccessRequestRead
  */

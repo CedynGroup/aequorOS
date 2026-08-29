@@ -5,9 +5,9 @@
  * The backend guards every destination a tenant can name, but it cannot reach
  * this process: the dashboard runs `openid-client`/`oauth4webapi` inside its own
  * container, and that library performs its OWN discovery request and its OWN
- * token-endpoint exchange against the same org-admin-settable `issuer`
+ * token-endpoint exchange against the same account-admin-settable `issuer`
  * (`sso_connections.issuer`, Settings → Authentication). A Python-side guard is
- * structurally unable to see those sockets. Without this module an org admin
+ * structurally unable to see those sockets. Without this module an account admin
  * could point the dashboard server at `http://169.254.169.254/…`, at an
  * RFC1918 neighbour, or at a container's own loopback services — and the token
  * exchange is a second server-side fetch to a URL the *discovery document*
@@ -375,7 +375,7 @@ const UNDEPLOYED_ENVS: ReadonlySet<string> = new Set(['local', 'test']);
  * This previously asked `NODE_ENV/APP_ENV === 'production'`, which made the
  * carve-out ACTIVE on **staging** while the docstring claimed byte-for-byte
  * parity with the backend. Staging is a deployed, reachable host running the
- * same containers, so an org admin could point an SSO issuer at
+ * same containers, so an account admin could point an SSO issuer at
  * `http://127.0.0.1:8100/` (the operator control plane) and have the dashboard
  * fetch it — the exact SSRF the backend rule was tightened to close.
  *

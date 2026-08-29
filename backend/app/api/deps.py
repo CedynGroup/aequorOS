@@ -230,10 +230,32 @@ def require_role(minimum: str):  # noqa: ANN201 - returns a FastAPI dependency c
     return _dependency
 
 
+def require_account_administration(
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+) -> TenantContext:
+    if not set(ctx.roles) & {security.ADMIN_ROLE, security.ACCOUNT_ADMIN_ROLE}:
+        authorization_denied(
+            reason="insufficient_role",
+            required_role=security.ACCOUNT_ADMIN_ROLE,
+            held_roles=",".join(ctx.roles),
+            organization_id=ctx.organization_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action requires account-administration authority.",
+        )
+    return ctx
+
+
 # Roles that make a route a guarded mutation when required via ``require_role``.
 # ``examiner``/``viewer`` are read roles: requiring one is not a write gate.
 MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
-    {"require_role_admin", "require_role_approver", "require_role_analyst"}
+    {
+        "require_account_administration",
+        "require_role_admin",
+        "require_role_approver",
+        "require_role_analyst",
+    }
 )
 
 

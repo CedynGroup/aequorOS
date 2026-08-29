@@ -20,10 +20,14 @@ the tenant API).
 - Shadow-only scoped authorization bindings with deny-by-default, explainable
   evaluation and explicit organization-or-exact-institution targets. Liquidity
   Monitoring emits legacy-versus-binding decisions for its institution target,
-  but endpoint enforcement still uses the legacy role hierarchy. App access and
-  refresh tokens carry `authv`, so migration `202608250044` causes a deliberate
-  one-time re-authentication and later authorization changes can invalidate
-  every session immediately. See `docs/authorization_foundation.md`.
+  but operational endpoint enforcement still uses the legacy role hierarchy.
+  Account administration is split out into the non-operational `account_admin`
+  role, while initial Org Owner authority is an explicit organization-wide
+  binding. Migration `202608280046` assigns it only for exactly one eligible
+  active human legacy admin; zero/multiple candidates require later staff
+  designation. App access and refresh tokens carry `authv`, so authorization
+  migrations and later authorization changes can invalidate every session
+  immediately. See `docs/authorization_foundation.md`.
 - Data Engine: Excel/CSV upload, push API, market-data adapters, and the
   database-direct adapter (see the deployment note below)
 - Six calculation modules — liquidity (LCR/NSFR/stress/LMT), Basel capital

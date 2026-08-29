@@ -39,7 +39,7 @@ REPORTING_DATE = date(2026, 3, 31)
 BSD3_DUE_DATE = date(2026, 4, 9)  # monthly_day(9) for the 2026-03-31 period
 
 _ROLE_USERS: tuple[tuple[UUID, str, str, bool], ...] = (
-    (ADMIN_ID, "admin", "demo.admin@example.test", True),
+    (ADMIN_ID, "account_admin", "demo.admin@example.test", True),
     (APPROVER_ID, "approver", "demo.approver@example.test", True),
     (ANALYST_ID, "analyst", "demo.analyst@example.test", True),
     (VIEWER_ID, "viewer", "demo.viewer@example.test", True),
@@ -91,9 +91,10 @@ def test_emit_role_fanout_targets_role_and_higher_active_users(db_session: Sessi
         recipient_role="approver",
     )
     db_session.commit()
-    # Approver fan-out reaches approver + admin only — never analyst/viewer,
-    # never a deactivated approver.
-    assert {row.recipient_user_id for row in rows} == {ADMIN_ID, APPROVER_ID}
+    # Account administration no longer implies operational approval. Fan-out
+    # reaches the approver only — never account admin/analyst/viewer or a
+    # deactivated approver.
+    assert {row.recipient_user_id for row in rows} == {APPROVER_ID}
     assert all(row.severity == "warning" for row in rows)
     assert all(row.read_at is None for row in rows)
 
@@ -280,7 +281,7 @@ def test_approval_request_and_decision_emit_notifications(db_session: Session) -
     )
 
     pending = _notification_rows(db_session, "reporting.package.pending_approval")
-    assert {row.recipient_user_id for row in pending} == {ADMIN_ID, APPROVER_ID}
+    assert {row.recipient_user_id for row in pending} == {APPROVER_ID}
     assert all(row.severity == "warning" for row in pending)
     assert all("LCR-NSFR" in row.title and "2026-03-31" in row.title for row in pending)
     assert all(row.entity_id == str(package.id) for row in pending)
@@ -333,9 +334,9 @@ def test_regulator_decisions_notify_approvers_and_generator(db_session: Session)
         detail={"comments": "Fix the Table 2 maturity balances."},
     )
     rejected = _notification_rows(db_session, "reporting.regulator.rejected")
-    # Approver-class fan-out (admin + approver) plus a direct row for the
-    # generator, who is not approver-class here.
-    assert {row.recipient_user_id for row in rejected} == {ADMIN_ID, APPROVER_ID, DEMO_USER_ID}
+    # Approver-class fan-out plus a direct row for the generator, who is not
+    # approver-class here. Account administration is intentionally excluded.
+    assert {row.recipient_user_id for row in rejected} == {APPROVER_ID, DEMO_USER_ID}
     assert all(row.severity == "warning" for row in rejected)
     assert all("Fix the Table 2 maturity balances." in row.body for row in rejected)
     assert all("LCR-NSFR" in row.title and "2026-03-31" in row.title for row in rejected)
@@ -352,7 +353,7 @@ def test_regulator_decisions_notify_approvers_and_generator(db_session: Session)
         detail={"message": "Return set refused."},
     )
     declined = _notification_rows(db_session, "reporting.regulator.declined")
-    assert {row.recipient_user_id for row in declined} == {ADMIN_ID, APPROVER_ID, DEMO_USER_ID}
+    assert {row.recipient_user_id for row in declined} == {APPROVER_ID, DEMO_USER_ID}
     assert all(row.severity == "critical" for row in declined)
     assert all("Return set refused." in row.body for row in declined)
 
@@ -368,7 +369,7 @@ def test_regulator_decisions_notify_approvers_and_generator(db_session: Session)
         detail={"note": "Received in good order."},
     )
     acknowledged = _notification_rows(db_session, "reporting.regulator.acknowledged")
-    assert {row.recipient_user_id for row in acknowledged} == {ADMIN_ID, APPROVER_ID, DEMO_USER_ID}
+    assert {row.recipient_user_id for row in acknowledged} == {APPROVER_ID, DEMO_USER_ID}
     assert all(row.severity == "info" for row in acknowledged)
 
 

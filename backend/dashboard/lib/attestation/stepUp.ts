@@ -112,7 +112,7 @@ export async function fetchClientConfig(): Promise<OidcClientConfig> {
 /**
  * Read the IdP's discovery document.
  *
- * The URL is derived from the org admin's `issuer`, so it goes through the
+ * The URL is derived from the account admin's `issuer`, so it goes through the
  * egress guard (`lib/outbound`) before it becomes a socket — this runtime is
  * not covered by the backend's Python guard, and an unguarded fetch here aims
  * the dashboard server wherever the issuer points (cloud metadata, an RFC1918

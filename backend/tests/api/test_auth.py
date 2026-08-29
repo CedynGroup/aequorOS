@@ -73,7 +73,7 @@ def prime_admin(real_session: Session) -> Callable[..., User]:
     """Give the real admin a KNOWN password and a clean throttle/profile, inside
     the rolled-back transaction (the primary's row is untouched)."""
 
-    def _prime(role: str = "admin") -> User:
+    def _prime(role: str = "account_admin") -> User:
         real_session.info["organization_id"] = REAL_ORG_ID
         user = real_session.get(User, REAL_USER_ID)
         assert user is not None and user.is_active and user.email == _EMAIL
@@ -283,7 +283,7 @@ def test_sso_linked_account_keeps_password_login(
     (An SSO sign-in flips auth_provider to 'oidc'; password login used to require
     auth_provider == 'password' and locked the account's own fallback out.)
     """
-    prime_admin(role="admin")
+    prime_admin(role="account_admin")
     _configure_sso_connection(real_session)
     _patch_verify(monkeypatch)
     # SSO sign-in links the account (auth_provider becomes 'oidc').
@@ -399,7 +399,7 @@ def test_jit_records_a_request_and_admin_approval_is_the_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Org + connection + the real admin exist; the signing-in employee has NO account.
-    prime_admin(role="admin")
+    prime_admin(role="account_admin")
     _configure_sso_connection(
         real_session, allowed_email_domains=["newbank.example"], jit_enabled=True
     )
@@ -453,7 +453,7 @@ def test_rejected_access_request_is_recorded_not_deleted_and_can_reapply(
     prime_admin: Callable[..., User],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    prime_admin(role="admin")
+    prime_admin(role="account_admin")
     _configure_sso_connection(
         real_session, allowed_email_domains=["newbank.example"], jit_enabled=True
     )
@@ -479,7 +479,7 @@ def test_jit_still_rejects_domains_outside_the_allow_list(
     prime_admin: Callable[..., User],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    prime_admin(role="admin")
+    prime_admin(role="account_admin")
     _configure_sso_connection(
         real_session, allowed_email_domains=["newbank.example"], jit_enabled=True
     )
@@ -498,7 +498,7 @@ def test_jit_without_domain_list_never_creates_accounts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # A hand-edited row (jit on, no domains) must fail closed at login time.
-    prime_admin(role="admin")
+    prime_admin(role="account_admin")
     _configure_sso_connection(real_session, allowed_email_domains=[], jit_enabled=True)
     _patch_verify(monkeypatch)
     email = "anyone@anywhere.example"
