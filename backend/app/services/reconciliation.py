@@ -87,7 +87,7 @@ from app.domain.authority.outcomes import (
 )
 from app.domain.authority.outcomes import outcome as build_outcome
 from app.models import Bank, ReconciliationException
-from app.services import regulatory_parameters
+from app.services import live_refresh_triggers, regulatory_parameters
 from app.services.audit import record_event
 
 # ---------------------------------------------------------------------------
@@ -943,6 +943,12 @@ def grant_exception(  # noqa: PLR0913 - governance needs every field named
             "approval_timestamp": now.isoformat(),
         },
     )
+    live_refresh_triggers.enqueue_bank_change(
+        db,
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        reason=f"reconciliation exception granted:{row.id}",
+    )
     return row
 
 
@@ -990,6 +996,12 @@ def revoke_exception(  # noqa: PLR0913 - governed revocation evidence is explici
             "revoked_by": revoked_by,
             "reason": reason,
         },
+    )
+    live_refresh_triggers.enqueue_bank_change(
+        db,
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        reason=f"reconciliation exception revoked:{row.id}",
     )
     return row
 

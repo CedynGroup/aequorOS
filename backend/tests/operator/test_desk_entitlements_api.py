@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -52,9 +53,7 @@ def _grant_tier(client: TestClient, org_id: str, tier: str = "premium"):  # noqa
 
 def _audit_rows(db: Session, action: str) -> list[OperatorAuditLog]:
     db.expire_all()
-    return list(
-        db.scalars(select(OperatorAuditLog).where(OperatorAuditLog.action == action))
-    )
+    return list(db.scalars(select(OperatorAuditLog).where(OperatorAuditLog.action == action)))
 
 
 # -- the gate --------------------------------------------------------------------
@@ -63,9 +62,7 @@ def test_every_entitlement_route_refuses_without_an_inspection_session(
 ) -> None:
     org_id = _provision(operator_client)
     calls = [
-        operator_client.get(
-            DESK, params={"organization_id": org_id}, headers=operator_headers()
-        ),
+        operator_client.get(DESK, params={"organization_id": org_id}, headers=operator_headers()),
         _grant_tier(operator_client, org_id),
         operator_client.post(
             f"{DESK}/grant-dataset",
@@ -89,9 +86,7 @@ def test_every_entitlement_route_refuses_without_an_inspection_session(
     operator_db.expire_all()
     assert operator_db.scalars(select(MarketDataEntitlement)).all() == []
     entitlement_actions = operator_db.scalars(
-        select(OperatorAuditLog.action).where(
-            OperatorAuditLog.action.like("%entitlement%")
-        )
+        select(OperatorAuditLog.action).where(OperatorAuditLog.action.like("%entitlement%"))
     ).all()
     assert list(entitlement_actions) == []
 
@@ -122,9 +117,7 @@ def test_grant_tier_is_gated_and_audited_against_the_tenant(
     assert rows[0].detail["tier"] == "premium"
 
 
-def test_read_is_gated_and_audited(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_read_is_gated_and_audited(operator_client: TestClient, operator_db: Session) -> None:
     org_id = _provision(operator_client)
     session_id = start_inspection(operator_client, org_id)
     _grant_tier(operator_client, org_id, tier="core")
@@ -171,6 +164,42 @@ def test_grant_dataset_and_revoke_are_gated_and_audited(
         assert [row.target_org for row in rows] == [org_id], action
 
 
+def test_idempotent_retries_do_not_enqueue_refreshes(
+    operator_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+
+    def enqueue(*_args: object, **_kwargs: object) -> list[object]:
+        calls.append("refresh")
+        return []
+
+    monkeypatch.setattr(
+        "app.operator.features.desk.live_refresh_triggers.enqueue_entitlement_change",
+        enqueue,
+    )
+    org_id = _provision(operator_client)
+    start_inspection(operator_client, org_id)
+
+    first = _grant_tier(operator_client, org_id, tier="core")
+    repeated = _grant_tier(operator_client, org_id, tier="core")
+    assert first.status_code == repeated.status_code == 201
+    assert calls == ["refresh"]
+
+    entitlement_id = first.json()["entitlements"][0]["id"]
+    first_revoke = operator_client.post(
+        f"{DESK}/{entitlement_id}/revoke",
+        json={"organization_id": org_id},
+        headers=operator_headers(),
+    )
+    repeated_revoke = operator_client.post(
+        f"{DESK}/{entitlement_id}/revoke",
+        json={"organization_id": org_id},
+        headers=operator_headers(),
+    )
+    assert first_revoke.status_code == repeated_revoke.status_code == 200
+    assert calls == ["refresh", "refresh"]
+
+
 # -- cross-tenant scoping ----------------------------------------------------------
 def test_revoke_cannot_reach_another_tenants_grant(
     operator_client: TestClient, operator_db: Session
@@ -209,9 +238,7 @@ def test_revoke_cannot_reach_another_tenants_grant(
     assert attempt.status_code == 404
     operator_db.expire_all()
     row = operator_db.scalar(
-        select(MarketDataEntitlement).where(
-            MarketDataEntitlement.id == UUID(entitlement_id)
-        )
+        select(MarketDataEntitlement).where(MarketDataEntitlement.id == UUID(entitlement_id))
     )
     assert row is not None and row.status == "active"
     assert _audit_rows(operator_db, "inspector.entitlement.revoke") == []

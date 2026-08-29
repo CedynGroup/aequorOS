@@ -102,10 +102,7 @@ def _draft_determination(client: TestClient) -> dict:
 
 def test_desk_endpoints_require_operator_auth(operator_client: TestClient) -> None:
     assert operator_client.get(f"{BASE}/methodologies").status_code == 401
-    assert (
-        operator_client.post(f"{BASE}/determinations", json={"cob_date": COB}).status_code
-        == 401
-    )
+    assert operator_client.post(f"{BASE}/determinations", json={"cob_date": COB}).status_code == 401
     assert (
         operator_client.get(
             f"{BASE}/methodologies", headers=operator_headers("wrong-token")
@@ -118,8 +115,20 @@ def test_desk_endpoints_require_operator_auth(operator_client: TestClient) -> No
 
 
 def test_methodology_lifecycle_with_dual_control_and_audit(
-    operator_client: TestClient, operator_db: Session
+    operator_client: TestClient,
+    operator_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    refreshes: list[tuple[str, int]] = []
+
+    def enqueue_methodology(_db: Session, *, methodology_code: str, version: int) -> list[object]:
+        refreshes.append((methodology_code, version))
+        return []
+
+    monkeypatch.setattr(
+        "app.operator.features.desk.live_refresh_triggers.enqueue_methodology_change",
+        enqueue_methodology,
+    )
     created = operator_client.post(
         f"{BASE}/methodologies/ensure-default", headers=operator_headers()
     )
@@ -131,9 +140,7 @@ def test_methodology_lifecycle_with_dual_control_and_audit(
     assert "grr_formula" in body["parameters"]
 
     # Idempotent bootstrap: same row, no duplicate.
-    again = operator_client.post(
-        f"{BASE}/methodologies/ensure-default", headers=operator_headers()
-    )
+    again = operator_client.post(f"{BASE}/methodologies/ensure-default", headers=operator_headers())
     assert again.json()["id"] == body["id"]
     listing = operator_client.get(f"{BASE}/methodologies", headers=operator_headers())
     assert listing.json()["total"] == 1
@@ -148,6 +155,7 @@ def test_methodology_lifecycle_with_dual_control_and_audit(
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "approved"
     assert approved.json()["approved_by"] == DEV_EMAIL
+    assert refreshes == [("AEQ-GHS-CURVES", 1)]
 
     # Track 2: the same operator proposes v2 ...
     proposed = operator_client.post(
@@ -307,9 +315,7 @@ def test_list_observations_service_clamps_limit_to_max(
         operator_db, series_code="GHS.SERVICE", limit=10_000
     )
     assert len(page) == observations_service.MAX_PAGE_SIZE == 500
-    assert (
-        observations_service.count_observations(operator_db, series_code="GHS.SERVICE") == 505
-    )
+    assert observations_service.count_observations(operator_db, series_code="GHS.SERVICE") == 505
 
 
 def test_observation_filters_apply_with_count(
@@ -475,9 +481,7 @@ def test_determination_workflow_enforces_maker_checker(
         assert expected in actions
 
 
-def test_determination_package_endpoint(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_determination_package_endpoint(operator_client: TestClient, operator_db: Session) -> None:
     _bootstrap_methodology(operator_client)
     _enter_observation(operator_client)
     # Seed required companion series so completeness is partially populated.
@@ -524,9 +528,7 @@ def test_publish_fans_out_and_audits(
     monkeypatch.setattr(
         "app.adapters.market_data.pull_runner.get_storage_client", lambda: client_storage
     )
-    monkeypatch.setattr(
-        "app.adapters.market_data.cache.get_storage_client", lambda: client_storage
-    )
+    monkeypatch.setattr("app.adapters.market_data.cache.get_storage_client", lambda: client_storage)
 
     organization = Organization(name="Desk Publish Tenant")
     operator_db.add(organization)

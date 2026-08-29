@@ -19,9 +19,7 @@ def _org(db: Session, name: str) -> Organization:
     return row
 
 
-def _approved_curve_definition(
-    db: Session, *, curve_code: str, tier: str
-) -> DeskCurveDefinition:
+def _approved_curve_definition(db: Session, *, curve_code: str, tier: str) -> DeskCurveDefinition:
     row = DeskCurveDefinition(
         curve_code=curve_code,
         version=1,
@@ -93,12 +91,8 @@ def test_core_tier_blocks_sovereign_curves(db_session: Session) -> None:
 
 def test_org_tier_resolves_the_highest_fully_held_tier() -> None:
     assert entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["core"])) == "core"
-    assert (
-        entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["standard"])) == "standard"
-    )
-    assert (
-        entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["premium"])) == "premium"
-    )
+    assert entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["standard"])) == "standard"
+    assert entitlements.org_tier(set(entitlements.ENTITLEMENT_TIERS["premium"])) == "premium"
 
 
 def test_curve_visible_gates_on_definition_tier(db_session: Session) -> None:
@@ -130,13 +124,14 @@ def test_ungoverned_aeq_curve_keeps_name_gate_only(db_session: Session) -> None:
 
 def test_revoke_ends_grant(db_session: Session) -> None:
     org = _org(db_session, "Entitlement Revoke")
-    rows = entitlements.grant_tier(
+    rows, changed = entitlements.grant_tier(
         db_session,
         organization_id=org.id,
         tier="standard",
         effective_from=date(2026, 1, 1),
         granted_by="ops@aequoros.com",
     )
+    assert changed is True
     target = next(r for r in rows if r.dataset_code == "DESK_CURVES_DISCOUNT")
     entitlements.revoke(
         db_session, target.id, organization_id=org.id, revoked_by="ops@aequoros.com"
@@ -144,6 +139,43 @@ def test_revoke_ends_grant(db_session: Session) -> None:
     db_session.commit()
     granted = entitlements.active_datasets(db_session, org.id)
     assert "DESK_CURVES_DISCOUNT" not in granted
+
+
+def test_idempotent_mutations_report_no_persisted_change(db_session: Session) -> None:
+    org = _org(db_session, "Entitlement Idempotency")
+    rows, changed = entitlements.grant_tier(
+        db_session,
+        organization_id=org.id,
+        tier="core",
+        effective_from=date(2026, 1, 1),
+        granted_by="ops@aequoros.com",
+    )
+    assert changed is True
+    repeated, changed = entitlements.grant_tier(
+        db_session,
+        organization_id=org.id,
+        tier="core",
+        effective_from=date(2026, 1, 1),
+        granted_by="ops@aequoros.com",
+    )
+    assert changed is False
+    assert {row.id for row in repeated} == {row.id for row in rows}
+
+    target = rows[0]
+    _, changed = entitlements.revoke(
+        db_session,
+        target.id,
+        organization_id=org.id,
+        revoked_by="ops@aequoros.com",
+    )
+    assert changed is True
+    _, changed = entitlements.revoke(
+        db_session,
+        target.id,
+        organization_id=org.id,
+        revoked_by="ops@aequoros.com",
+    )
+    assert changed is False
 
 
 def test_revoke_refuses_another_tenants_entitlement(db_session: Session) -> None:
@@ -156,13 +188,14 @@ def test_revoke_refuses_another_tenants_entitlement(db_session: Session) -> None
     """
     owner = _org(db_session, "Entitlement Owner")
     bystander = _org(db_session, "Entitlement Bystander")
-    rows = entitlements.grant_tier(
+    rows, changed = entitlements.grant_tier(
         db_session,
         organization_id=owner.id,
         tier="standard",
         effective_from=date(2026, 1, 1),
         granted_by="ops@aequoros.com",
     )
+    assert changed is True
     target = next(r for r in rows if r.dataset_code == "DESK_CURVES_DISCOUNT")
     with pytest.raises(HTTPException) as excinfo:
         entitlements.revoke(

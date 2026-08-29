@@ -50,6 +50,19 @@ class LiveMetric(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "status IN ('green', 'amber', 'red', 'na')",
             name="ck_live_metrics_status",
         ),
+        CheckConstraint(
+            "retry_classification IS NULL OR retry_classification IN "
+            "('structural_unavailable', 'transient_failure')",
+            name="ck_live_metrics_retry_classification",
+        ),
+        CheckConstraint(
+            "retry_attempt_count >= 0",
+            name="ck_live_metrics_retry_attempt_count",
+        ),
+        CheckConstraint(
+            "next_retry_at IS NULL OR retry_classification = 'transient_failure'",
+            name="ck_live_metrics_next_retry_classification",
+        ),
         ForeignKeyConstraint(
             ["bank_id", "organization_id"],
             ["banks.id", "banks.organization_id"],
@@ -68,9 +81,7 @@ class LiveMetric(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "module",
             name="uq_live_metrics_org_bank_module",
         ),
-        Index(
-            "ix_live_metrics_org_bank", "organization_id", "bank_id"
-        ),
+        Index("ix_live_metrics_org_bank", "organization_id", "bank_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -93,6 +104,14 @@ class LiveMetric(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     calculation_generation: Mapped[int] = mapped_column(default=0, nullable=False)
     pipeline_state: Mapped[str] = mapped_column(String(16), default="ready", nullable=False)
     pipeline_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Structural unavailability is a stable result (for example, rating inputs
+    # with no entitled market data). Only true module exceptions are transient
+    # and carry the bounded queue retry schedule persisted here for operators.
+    retry_classification: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    retry_attempt_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
@@ -129,9 +148,7 @@ class CurrentFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral', 'cashflow')",
             name="ck_current_financial_facts_fact_group",
         ),
-        ForeignKeyConstraint(
-            ["bank_id", "organization_id"], ["banks.id", "banks.organization_id"]
-        ),
+        ForeignKeyConstraint(["bank_id", "organization_id"], ["banks.id", "banks.organization_id"]),
         UniqueConstraint(
             "organization_id",
             "bank_id",

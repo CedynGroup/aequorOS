@@ -57,6 +57,7 @@ from app.schemas.market_desk import (
     DeskPublicationRead,
     DeskResearchAdjustmentsPut,
 )
+from app.services import live_refresh_triggers
 from app.services.market_desk import (
     calculation,
     determinations,
@@ -191,9 +192,7 @@ def create_methodology(
     return _methodology_read(row)
 
 
-@router.post(
-    "/methodologies/ensure-default", response_model=DeskMethodologyRead, status_code=201
-)
+@router.post("/methodologies/ensure-default", response_model=DeskMethodologyRead, status_code=201)
 def ensure_default_methodology(db: OperatorDb, operator: Operator) -> DeskMethodologyRead:
     """Idempotent bootstrap of the AEQ-GHS-CURVES v1 draft (service-seeded,
     never a data migration — approval still happens through Track 2)."""
@@ -254,6 +253,11 @@ def approve_methodology_version(
         approved_by=operator.email,
         effective_from=payload.effective_from,
     )
+    refresh_jobs = live_refresh_triggers.enqueue_methodology_change(
+        db,
+        methodology_code=methodology_code,
+        version=version,
+    )
     record_operator_action(
         db,
         operator,
@@ -262,6 +266,7 @@ def approve_methodology_version(
             "methodology_code": methodology_code,
             "version": version,
             "effective_from": payload.effective_from.isoformat(),
+            "live_refreshes_enqueued": len(refresh_jobs),
         },
     )
     db.commit()
@@ -473,13 +478,22 @@ def grant_entitlement_tier(
     Session-gated + audited as ``inspector.entitlement.grant_tier``."""
     org_id = normalize_public_id(payload.organization_id)
     session = require_active_inspection(db, operator, org_id)
-    rows = entitlements.grant_tier(
+    rows, changed = entitlements.grant_tier(
         db,
         organization_id=org_id,
         tier=payload.tier,
         effective_from=payload.effective_from,
         granted_by=operator.email,
         notes=payload.notes,
+    )
+    refresh_jobs = (
+        live_refresh_triggers.enqueue_entitlement_change(
+            db,
+            organization_id=org_id,
+            reason=f"market-data entitlement tier granted:{payload.tier}",
+        )
+        if changed
+        else []
     )
     record_operator_action(
         db,
@@ -491,6 +505,7 @@ def grant_entitlement_tier(
             "tier": payload.tier,
             "effective_from": payload.effective_from.isoformat(),
             "datasets": [r.dataset_code for r in rows],
+            "live_refreshes_enqueued": len(refresh_jobs),
         },
     )
     db.commit()
@@ -510,13 +525,22 @@ def grant_entitlement_dataset(
     Session-gated + audited as ``inspector.entitlement.grant_dataset``."""
     org_id = normalize_public_id(payload.organization_id)
     session = require_active_inspection(db, operator, org_id)
-    row = entitlements.grant_dataset(
+    row, changed = entitlements.grant_dataset(
         db,
         organization_id=org_id,
         dataset_code=payload.dataset_code,
         effective_from=payload.effective_from,
         granted_by=operator.email,
         notes=payload.notes,
+    )
+    refresh_jobs = (
+        live_refresh_triggers.enqueue_entitlement_change(
+            db,
+            organization_id=org_id,
+            reason=f"market-data entitlement granted:{payload.dataset_code}",
+        )
+        if changed
+        else []
     )
     record_operator_action(
         db,
@@ -527,6 +551,7 @@ def grant_entitlement_dataset(
             "session_id": str(session.id),
             "dataset_code": payload.dataset_code,
             "effective_from": payload.effective_from.isoformat(),
+            "live_refreshes_enqueued": len(refresh_jobs),
         },
     )
     db.commit()
@@ -546,8 +571,17 @@ def revoke_entitlement(
     ``inspector.entitlement.revoke``."""
     org_id = normalize_public_id(payload.organization_id)
     session = require_active_inspection(db, operator, org_id)
-    row = entitlements.revoke(
+    row, changed = entitlements.revoke(
         db, entitlement_id, organization_id=org_id, revoked_by=operator.email
+    )
+    refresh_jobs = (
+        live_refresh_triggers.enqueue_entitlement_change(
+            db,
+            organization_id=org_id,
+            reason=f"market-data entitlement revoked:{row.dataset_code}",
+        )
+        if changed
+        else []
     )
     record_operator_action(
         db,
@@ -558,6 +592,7 @@ def revoke_entitlement(
             "session_id": str(session.id),
             "entitlement_id": str(row.id),
             "dataset_code": row.dataset_code,
+            "live_refreshes_enqueued": len(refresh_jobs),
         },
     )
     db.commit()

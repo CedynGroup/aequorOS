@@ -90,13 +90,13 @@ def test_get_live_summary_shape(db_client: TestClient) -> None:
     assert body["reporting_period_id"] is not None
     modules = {module["module"] for module in body["modules"]}
     assert {"liquidity", "capital", "irr", "fx", "ftp", "rating"} <= modules
-    # The live cockpit is always compute-from-latest — never "stale". Drift vs the
-    # last official filing is a governance concept, surfaced by GET /freshness, not
-    # a liveness flag on the treasury view.
+    # This refresh completed after the fixture inputs, so the live cache is not
+    # behind the book. Drift versus the last official filing is separately
+    # surfaced by GET /freshness.
     assert body["is_stale"] is False
 
 
-def test_live_summary_queues_refresh_from_current_facts_without_reporting_period(
+def test_live_summary_is_read_only_with_current_facts_without_reporting_period(
     db_client: TestClient,
 ) -> None:
     _ = db_client
@@ -134,15 +134,14 @@ def test_live_summary_queues_refresh_from_current_facts_without_reporting_period
         response = db_client.get(f"{_BASE}/live-summary", headers=headers())
 
         assert response.status_code == 200, response.text
+        assert response.json()["is_stale"] is False
         job = session.scalar(
             select(Job).where(
                 Job.job_type == "pipeline_refresh",
                 Job.bank_id == SAMPLE_BANK_ID,
             )
         )
-        assert job is not None
-        assert job.payload["as_of_date"] == AS_OF
-        assert job.payload["reason"] == "live-read auto-refresh"
+        assert job is None
     finally:
         session.close()
 

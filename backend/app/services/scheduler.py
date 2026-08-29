@@ -22,7 +22,15 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.db.base import utc_now
-from app.models import Bank, BankReportingPeriod, Job, LiveMetric, RegulatoryRun, User
+from app.models import (
+    Bank,
+    BankReportingPeriod,
+    IngestionBatch,
+    Job,
+    LiveMetric,
+    RegulatoryRun,
+    User,
+)
 from app.services import job_queue
 
 SCHEDULED_TICK = "scheduled_tick"
@@ -47,9 +55,11 @@ def any_scheduling_enabled(settings: Settings) -> bool:
 
 
 def run_tick(session: Session, job: Job) -> None:
-    """Worker handler: enqueue due official runs and market data pulls, then
-    reschedule. Inert (no enqueue, no reschedule) while both official runs and
-    scheduled market data pulls are disabled."""
+    """Run every enabled scheduled feature, then enqueue the next hourly tick.
+
+    Inert (no enqueue and no reschedule) only when every flag recognized by
+    :func:`any_scheduling_enabled` is disabled.
+    """
     settings = get_settings()
     official_enabled = settings.worker.official_run_enabled
     market_data_enabled = settings.market_data.market_data_pull_enabled
@@ -177,18 +187,13 @@ def _enqueue_due_official_runs(
     return enqueued
 
 
-# Refresh once per hourly tick, with slack for tick jitter. The live tier is
-# cheap (zero RegulatoryRun writes), and a fresh computed_at is the point: the
-# dashboard's "Live" pill must mean today, not the last ingestion.
-_LIVE_REFRESH_INTERVAL = timedelta(minutes=55)
-
-
 def _enqueue_due_live_refreshes(session: Session, org_id: str, now: datetime) -> list[Job]:
-    """Enqueue a coalesced live refresh per bank whose live tier has aged out.
+    """Recover only banks whose input generation is newer than their live rows.
 
-    The as-of date is the bank's latest reporting period end — the same period
-    the dashboards read — so the refresh re-derives current facts and stamps a
-    current ``computed_at`` even when no new data has arrived.
+    This scheduled pass is a safety net for a missed authoritative enqueue, not
+    a timer-driven recomputation. A successful structural-unavailable row is as
+    current as any other computed row and stays untouched until ingestion (or a
+    parameter/entitlement mutation) advances its inputs.
     """
     enqueued: list[Job] = []
     banks = list(session.scalars(select(Bank).where(Bank.organization_id == org_id)))
@@ -196,16 +201,26 @@ def _enqueue_due_live_refreshes(session: Session, org_id: str, now: datetime) ->
         period = _latest_period(session, org_id, bank.id)
         if period is None:
             continue
-        last = session.scalar(
-            select(func.max(LiveMetric.computed_at)).where(
+        oldest_live = session.scalar(
+            select(func.min(LiveMetric.computed_at)).where(
                 LiveMetric.organization_id == org_id,
                 LiveMetric.bank_id == bank.id,
             )
         )
-        if last is not None:
-            if last.tzinfo is None:
-                last = last.replace(tzinfo=now.tzinfo)
-            if (now - last) < _LIVE_REFRESH_INTERVAL:
+        if oldest_live is not None:
+            latest_ingest = session.scalar(
+                select(func.max(IngestionBatch.created_at)).where(
+                    IngestionBatch.organization_id == org_id,
+                    IngestionBatch.bank_id == bank.id,
+                )
+            )
+            if latest_ingest is None:
+                continue
+            if oldest_live.tzinfo is None:
+                oldest_live = oldest_live.replace(tzinfo=now.tzinfo)
+            if latest_ingest.tzinfo is None:
+                latest_ingest = latest_ingest.replace(tzinfo=now.tzinfo)
+            if latest_ingest <= oldest_live:
                 continue
         as_of = period.period_end.isoformat()
         enqueued.append(
@@ -214,7 +229,7 @@ def _enqueue_due_live_refreshes(session: Session, org_id: str, now: datetime) ->
                 org_id,
                 "pipeline_refresh",
                 bank_id=bank.id,
-                payload={"as_of_date": as_of},
+                payload={"as_of_date": as_of, "reason": "scheduled input-change recovery"},
                 coalesce_key=f"refresh:{bank.id}:{as_of}",
             )
         )

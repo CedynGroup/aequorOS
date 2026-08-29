@@ -29,8 +29,13 @@ the tenant API).
 - Six calculation modules — liquidity (LCR/NSFR/stress/LMT), Basel capital
   (RWA/CAR/stress), IRRBB, FX, FTP, and balance-sheet forecasting — each a pure
   Decimal engine under `app/domain/` behind an immutable `RegulatoryRun`
-- Live engine: debounced `pipeline_refresh` jobs re-derive facts and update
-  `live_metrics`/`live_findings`; `official_run` jobs mint the immutable filing runs
+- Live engine: authoritative ingestion, market-data, governed-input, entitlement,
+  and reconciliation mutations enqueue debounced `pipeline_refresh` jobs that
+  re-derive facts and update `live_metrics`/`live_findings`; `GET live-summary`
+  is read-only. Structural unavailability remains stable until an input changes,
+  while true module exceptions retry the same job with bounded backoff and persist
+  their classification, attempt count, and next due time. `official_run` jobs mint
+  the immutable filing runs
 - Regulatory reporting: BoG BSD returns generated from the official workbook
   templates, with the templates' own formulas evaluated; PDF/XLSX artifacts
 - Attestation: maker-checker plus PDF e-signature with step-up re-authentication

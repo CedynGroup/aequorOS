@@ -98,6 +98,13 @@ Ingestion is event-driven: an accepted upload or API push enqueues a debounced
 `pipeline_refresh` (coalesced on a `coalesce_key`). Official runs are minted on schedule
 (`OFFICIAL_RUN_ENABLED`, default off) or on demand.
 
+Live-summary reads are strictly observational: unchanged dashboard polls enqueue no job and
+commit no transaction. Accepted ingestion and market-data writes plus governed input,
+entitlement, and reconciliation mutations are the refresh authorities. Successful
+`availability=unavailable` and reconciliation-blocked results remain stable until an input
+changes; only module exceptions retry the same queue row with bounded exponential backoff,
+mirrored on `live_metrics` as classification, attempt count, and `next_retry_at`.
+
 ### Worker visibility is now a health signal, not an assumption (`P0-16`)
 
 `jobs` is FORCE-RLS, and the worker claims across tenants with no organization set — so a
@@ -164,12 +171,12 @@ asserts the working tree is clean for both. The freshness gate runs pre-push
 
 ## 7. Migration chain
 
-96 revisions under `backend/alembic/versions/`. The chain from `202608210026` to the head is
-linear and single-headed (verified by reading `revision`/`down_revision` on every
-`2026082200*` file):
+106 revisions under `backend/alembic/versions/`. The chain from `202608210026` to the head is
+linear and single-headed (verified by reading `revision`/`down_revision` on the revisions):
 
 ```
 202608210026 → 27 → 28 → 29 → 30 → 31 → 32 → 33 → 202608220034
+→ 202608230035 → 36 → 41 → 38 → 39 → 40 → 43 → 42 → 202608250044 → 202608280045
 ```
 
 | Revision | Subject |
@@ -182,6 +189,16 @@ linear and single-headed (verified by reading `revision`/`down_revision` on ever
 | `202608220032` | Reconciliation control tables and seed (`P0-10`) |
 | `202608220033` | Temenos connection reporting currency required (jurisdiction defaults) |
 | `202608220034` | Basel HQLA haircuts and Level-2 caps in the control plane (`P0-8`) |
+| `202608230035` | Canonical withdrawal and system-of-record register |
+| `202608230036` | RLS on implied-rating runs and market-data entitlements |
+| `202608230041` | Durable operator-login lockout |
+| `202608230038` | Database-enforced governance immutability |
+| `202608230039` | Governed-parameter row identity in run provenance |
+| `202608230040` | SDI regulatory return family |
+| `202608230043` | Desk-capture content-digest de-duplication index |
+| `202608230042` | Wider admitted regulatory wire values |
+| `202608250044` | Scoped authorization bindings and authorization-version invalidation |
+| `202608280045` | Persisted live-module retry classification and schedule |
 
 **A transient duplicate revision id at `202608220031` occurred mid-programme and was
 resolved by re-chaining; the chain is single-headed today.**

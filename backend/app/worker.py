@@ -126,9 +126,7 @@ def run_once(
     job_types = job_types or tuple(HANDLERS)
     worker_id = worker_id or _runtime_identity()
     with _new_session() as claim_session:
-        job = job_queue.claim_next(
-            claim_session, utc_now(), job_types, claimed_by=worker_id
-        )
+        job = job_queue.claim_next(claim_session, utc_now(), job_types, claimed_by=worker_id)
         if job is None:
             return False
         organization_id = job.organization_id
@@ -144,7 +142,15 @@ def run_once(
         except Exception as exc:  # noqa: BLE001 - any handler failure retries
             logger.exception("Job %s (%s) failed", job_id, claimed.job_type)
             session.rollback()
-            job_queue.fail_with_retry(session, claimed, str(exc) or type(exc).__name__)
+            job_queue.fail_with_retry(
+                session,
+                claimed,
+                str(exc) or type(exc).__name__,
+                commit=False,
+            )
+            if isinstance(exc, pipeline.TransientLiveRefreshError):
+                pipeline.persist_transient_retry_state(session, claimed, exc)
+            session.commit()
     return True
 
 

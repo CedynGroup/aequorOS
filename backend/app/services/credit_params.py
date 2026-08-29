@@ -27,6 +27,7 @@ from app.schemas.credit_params import (
     EclAssumptionRegisterRead,
     EclAssumptionUpdate,
 )
+from app.services import live_refresh_triggers
 from app.services.audit import record_event
 from app.services.params import get_active_params
 from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
@@ -155,6 +156,12 @@ def update_ecl_register(
             "reason": payload.reason,
         },
     )
+    live_refresh_triggers.enqueue_organization_change(
+        db,
+        organization_id=ctx.organization_id,
+        jurisdiction_code=jurisdiction,
+        reason="ECL assumption register updated",
+    )
     db.commit()
     return get_ecl_register(db, ctx, bank_id, payload.effective_from)
 
@@ -271,6 +278,12 @@ def update_crm_register(
             "collateral_classes": sorted(cls.strip().upper() for cls in payload.haircuts),
             "reason": payload.reason,
         },
+    )
+    live_refresh_triggers.enqueue_organization_change(
+        db,
+        organization_id=ctx.organization_id,
+        jurisdiction_code=jurisdiction,
+        reason="CRM haircut register updated",
     )
     db.commit()
     return get_crm_register(db, ctx, bank_id, payload.effective_from)

@@ -232,7 +232,14 @@ def complete(db: Session, job: Job, progress: dict[str, Any] | None = None) -> J
     return job
 
 
-def fail_with_retry(db: Session, job: Job, error: str, *, now: datetime | None = None) -> Job:
+def fail_with_retry(
+    db: Session,
+    job: Job,
+    error: str,
+    *,
+    now: datetime | None = None,
+    commit: bool = True,
+) -> Job:
     """Requeue the job with exponential backoff, or fail it past max attempts."""
     now = now or utc_now()
     job.error = error
@@ -244,7 +251,10 @@ def fail_with_retry(db: Session, job: Job, error: str, *, now: datetime | None =
     else:
         job.status = "failed"
         job.completed_at = now
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return job
 
 

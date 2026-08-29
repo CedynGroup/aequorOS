@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -74,9 +76,8 @@ def test_run_tick_enqueues_official_and_reschedules_when_enabled(
 def test_run_tick_enqueues_live_refreshes_when_enabled(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """LIVE_REFRESH_ENABLED alone keeps the tick alive and refreshes a bank
-    whose live tier has never been computed — "Live" must mean today, not the
-    last ingestion."""
+    """LIVE_REFRESH_ENABLED keeps the recovery tick alive and initializes a
+    bank whose accepted input has no live materialisation."""
     monkeypatch.setenv("LIVE_REFRESH_ENABLED", "true")
     get_settings.cache_clear()
     materialize_canonical_test_book(db_session)
@@ -99,8 +100,7 @@ def test_run_tick_enqueues_live_refreshes_when_enabled(
 def test_live_refresh_skips_a_fresh_live_tier(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A live tier computed within the interval is left alone — the scheduled
-    refresh exists to cure staleness, not to churn."""
+    """A live tier newer than accepted ingestion is left alone regardless of age."""
     monkeypatch.setenv("LIVE_REFRESH_ENABLED", "true")
     get_settings.cache_clear()
     materialize_canonical_test_book(db_session)
@@ -123,6 +123,46 @@ def test_live_refresh_skips_a_fresh_live_tier(
             status="green",
             metrics={},
             computed_at=utc_now(),
+        )
+    )
+    db_session.commit()
+    _tick_job(db_session)
+    tick = job_queue.claim_next(db_session, utc_now(), ("scheduled_tick",))
+    assert tick is not None
+
+    scheduler.run_tick(db_session, tick)
+
+    assert _count(db_session, "pipeline_refresh") == 0
+    assert tick.progress["live_refreshes_enqueued"] == 0
+    get_settings.cache_clear()
+
+
+def test_live_refresh_timer_does_not_retry_structural_unavailability(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LIVE_REFRESH_ENABLED", "true")
+    get_settings.cache_clear()
+    materialize_canonical_test_book(db_session)
+    period_id = db_session.scalar(
+        select(BankReportingPeriod.id)
+        .where(
+            BankReportingPeriod.organization_id == ORG_1,
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+        )
+        .order_by(BankReportingPeriod.period_end.desc())
+        .limit(1)
+    )
+    assert period_id is not None
+    db_session.add(
+        LiveMetric(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            reporting_period_id=period_id,
+            module="rating",
+            status="na",
+            metrics={"availability": "unavailable"},
+            retry_classification="structural_unavailable",
+            computed_at=utc_now() - timedelta(days=7),
         )
     )
     db_session.commit()

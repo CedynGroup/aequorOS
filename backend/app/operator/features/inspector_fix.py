@@ -28,6 +28,7 @@ from app.schemas.operator import (
     FixRerunIngestionRead,
     FixRerunIngestionRequest,
 )
+from app.services import live_refresh_triggers
 from app.services.public_ids import normalize_public_id
 
 router = APIRouter(prefix="/tenants", tags=["operator-inspector-fix"])
@@ -154,8 +155,15 @@ def fix_config(
     Session-gated + audited as ``inspector.fix.config`` with before + after."""
     organization_id = normalize_public_id(org_id)
     session = require_active_inspection(db, operator, organization_id)
-    result = inspector_fix.apply_config(
-        db, organization_id, payload, approved_by=operator.email
+    result = inspector_fix.apply_config(db, organization_id, payload, approved_by=operator.email)
+    refresh_jobs = (
+        live_refresh_triggers.enqueue_organization_change(
+            db,
+            organization_id=organization_id,
+            reason=f"operator threshold superseded:{result.target_id}",
+        )
+        if result.kind == "threshold_value"
+        else []
     )
     record_operator_action(
         db,
@@ -169,6 +177,7 @@ def fix_config(
             "target_id": result.target_id,
             "before": result.before,
             "after": result.after,
+            "live_refreshes_enqueued": len(refresh_jobs),
         },
     )
     db.commit()
