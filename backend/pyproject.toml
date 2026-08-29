@@ -74,7 +74,7 @@ dev = [
   "hypothesis",
   "httpx",
   "openapi-generator-cli[jdk4py]>=7.13,<7.26",
-  "pre-commit==4.6.1",
+  "pre-commit==4.6.2",
   "pytest",
   "ruff",
 ]
