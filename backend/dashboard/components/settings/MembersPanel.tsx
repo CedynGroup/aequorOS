@@ -484,7 +484,9 @@ function GrantComposer({
     roleBundle: draft.roleBundle,
     institutionScope: draft.institutionScope,
     institutionId:
-      draft.institutionScope === "institution" ? draft.institutionId : undefined,
+      draft.institutionScope === "institution"
+        ? draft.institutionId
+        : undefined,
     moduleScope: draft.moduleScope,
     sensitivityScope: draft.sensitivityScope,
     reason: draft.reason.trim(),

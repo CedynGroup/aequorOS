@@ -24,12 +24,12 @@ different organization from the one that owns that connection.
 
 ## What AequorOS needs from you
 
-| Item | Example |
-|---|---|
-| Issuer URL | `https://accounts.google.com` (Google) · `https://login.microsoftonline.com/{tenant-id}/v2.0` (Entra) |
-| Client ID | issued by your IdP when you register the app |
-| Client secret | issued alongside the client ID — **never email it**; your admin enters it directly in AequorOS (Settings → Authentication), where it is stored encrypted and can never be read back |
-| Allowed email domain(s) | `yourbank.com.gh` |
+| Item                    | Example                                                                                                                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issuer URL              | `https://accounts.google.com` (Google) · `https://login.microsoftonline.com/{tenant-id}/v2.0` (Entra)                                                                               |
+| Client ID               | issued by your IdP when you register the app                                                                                                                                        |
+| Client secret           | issued alongside the client ID — **never email it**; your admin enters it directly in AequorOS (Settings → Authentication), where it is stored encrypted and can never be read back |
+| Allowed email domain(s) | `yourbank.com.gh`                                                                                                                                                                   |
 
 **The redirect URIs you must register in your IdP:**
 
@@ -58,7 +58,7 @@ broken, so register both. Both use the same client, and no additional scopes.
 5. Create → note the **Client ID** and **Client secret**.
 6. Hand both to your AequorOS account administrator to enter in
    **Settings → Authentication** with Issuer `https://accounts.google.com` and
-   your email domain in *Allowed email domains*. Tick *Enable*, Save.
+   your email domain in _Allowed email domains_. Tick _Enable_, Save.
 
 ## Step-by-step: Microsoft Entra ID (Azure AD)
 
@@ -73,10 +73,10 @@ broken, so register both. Both use the same client, and no additional scopes.
 6. Issuer URL is `https://login.microsoftonline.com/{Directory (tenant) ID}/v2.0`.
 7. Enter issuer / client ID / secret in AequorOS **Settings → Authentication** as above.
 
-*Other OIDC IdPs (Okta, Ping, Keycloak, ForgeRock): register a Web/OIDC app with
+_Other OIDC IdPs (Okta, Ping, Keycloak, ForgeRock): register a Web/OIDC app with
 both redirect URIs and `openid email profile` scopes; the Issuer URL is your
 IdP's published issuer (it must serve
-`{issuer}/.well-known/openid-configuration`).*
+`{issuer}/.well-known/openid-configuration`)._
 
 ## Who gets in: two provisioning modes
 
@@ -85,9 +85,9 @@ separate AequorOS decision.
 
 - **Pre-provisioned only (default):** only people who already have an AequorOS
   account can sign in. Tightest control; onboarding each user is an explicit act.
-- **Request access on first sign-in (opt-in):** tick *Let employees request
-  access on first sign-in* in Settings → Authentication. An employee whose
-  verified email is on an **allowed domain** can sign in once to *request*
+- **Request access on first sign-in (opt-in):** tick _Let employees request
+  access on first sign-in_ in Settings → Authentication. An employee whose
+  verified email is on an **allowed domain** can sign in once to _request_
   access: a deactivated account stub is recorded, they see "an administrator
   must approve your account", and **they get no access at all** until an
   AequorOS Organization Owner opens **Settings → Members**, defines one complete
@@ -102,7 +102,7 @@ separate AequorOS decision.
 ## Testing
 
 1. AequorOS account administrator: Settings → Authentication → Save with
-   *Enable SSO* ticked.
+   _Enable SSO_ ticked.
 2. Open `https://bank.aequoros.com/login` in a private window — a **Sign in with
    SSO** button appears (within a minute of enabling).
 3. Sign in with a work account that has been provisioned in AequorOS → lands on
@@ -132,7 +132,7 @@ separate AequorOS decision.
   refused before AequorOS looks up any account.
 - **Secret handling:** the client secret is stored AES-256-GCM-encrypted, is
   write-only through the UI and API, and is scoped — it can only be used to
-  initiate sign-ins against the redirect URI registered in *your* IdP.
+  initiate sign-ins against the redirect URI registered in _your_ IdP.
 - **No password custody:** AequorOS never sees or stores your users' passwords;
   authentication happens entirely on your IdP, including your MFA policy.
 - **Pre-provisioning gate:** a valid corporate identity alone is not enough;

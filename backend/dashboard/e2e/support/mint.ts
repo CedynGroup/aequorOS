@@ -29,14 +29,37 @@ export const E2E_AUTH_SECRET = "e2e-nextauth-secret-not-production-000";
  */
 export const E2E_PASSWORD = "e2e-step-up-password-not-production-000";
 
-export const E2E_USERS: Record<string, { id: string; roles: string[]; authv: number }> = {
+export const E2E_USERS: Record<
+  string,
+  { id: string; roles: string[]; authv: number }
+> = {
   // Initial-owner assignment is the sole bootstrap authorization mutation, so
   // only admin starts at version 2. Grant journeys pass later versions explicitly.
-  admin: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", roles: ["admin"], authv: 2 },
-  approver: { id: "eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2", roles: ["approver"], authv: 1 },
-  analyst: { id: "eeeeeeee-3333-4eee-8eee-eeeeeeeeeee3", roles: ["analyst"], authv: 1 },
-  viewer: { id: "eeeeeeee-4444-4eee-8eee-eeeeeeeeeee4", roles: ["viewer"], authv: 1 },
-  grant_member: { id: "eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5", roles: ["viewer"], authv: 1 },
+  admin: {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    roles: ["admin"],
+    authv: 2,
+  },
+  approver: {
+    id: "eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2",
+    roles: ["approver"],
+    authv: 1,
+  },
+  analyst: {
+    id: "eeeeeeee-3333-4eee-8eee-eeeeeeeeeee3",
+    roles: ["analyst"],
+    authv: 1,
+  },
+  viewer: {
+    id: "eeeeeeee-4444-4eee-8eee-eeeeeeeeeee4",
+    roles: ["viewer"],
+    authv: 1,
+  },
+  grant_member: {
+    id: "eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5",
+    roles: ["viewer"],
+    authv: 1,
+  },
 };
 
 export async function mintBackendToken(

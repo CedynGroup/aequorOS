@@ -17,11 +17,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import CopyButton from "@/components/ui/CopyButton";
 import StatusPill from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
-import {
-  authApi,
-  authorizationApi,
-  normalizeApiError,
-} from "@/lib/api/client";
+import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
 import { hasAccountAdministrationRole } from "@/lib/api/accountAdministration";
 
 const QUERY_KEY = ["settings", "sso-connection"];

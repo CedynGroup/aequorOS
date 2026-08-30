@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
-import {
-  canAddGrantToMember,
-  visibleGrantFragments,
-} from "./grants";
+import { canAddGrantToMember, visibleGrantFragments } from "./grants";
 
 const draft = {
   roleBundle: "analyst",

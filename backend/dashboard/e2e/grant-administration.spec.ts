@@ -48,7 +48,10 @@ test.describe("scoped grant administration", () => {
     expect(unrelated.status()).toBe(201);
 
     await page.goto("/settings");
-    const memberRow = page.locator("li").filter({ hasText: "E2E Grant Member" }).first();
+    const memberRow = page
+      .locator("li")
+      .filter({ hasText: "E2E Grant Member" })
+      .first();
     await expect(memberRow).toContainText("1 grant");
     await expect(memberRow).toContainText(
       "Viewer · Regulatory Reporting · Sample Bank Ltd",
@@ -59,18 +62,28 @@ test.describe("scoped grant administration", () => {
       name: "Add grant for E2E Grant Member",
     });
     await composer.getByLabel("Role bundle").selectOption("analyst");
-    await composer.getByLabel("Institution coverage").selectOption("BK-SAMP0001");
+    await composer
+      .getByLabel("Institution coverage")
+      .selectOption("BK-SAMP0001");
     await composer.getByLabel("Module").selectOption("liq");
     await composer.getByLabel("Sensitivity").selectOption("confidential");
     await composer
       .getByLabel("Reason")
       .fill("Treasury monitoring responsibilities approved for this officer");
-    await expect(composer.getByText(targetSentence, { exact: true })).toBeVisible();
+    await expect(
+      composer.getByText(targetSentence, { exact: true }),
+    ).toBeVisible();
     await composer.getByRole("button", { name: "Review grant" }).click();
-    await expect(composer.getByText(targetSentence, { exact: true })).toBeVisible();
+    await expect(
+      composer.getByText(targetSentence, { exact: true }),
+    ).toBeVisible();
     await composer.getByRole("button", { name: "Grant access" }).click();
-    await expect(composer.getByText("Grant created", { exact: true })).toBeVisible();
-    await expect(composer.getByText(targetSentence, { exact: true })).toBeVisible();
+    await expect(
+      composer.getByText("Grant created", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      composer.getByText(targetSentence, { exact: true }),
+    ).toBeVisible();
 
     const listedAfterGrant = await page.request.get(
       `${API}/authorization/bindings?principal_user_id=${member.id}`,
@@ -117,19 +130,29 @@ test.describe("scoped grant administration", () => {
     expect(beforeRevoke.ok()).toBeTruthy();
 
     await composer.getByRole("button", { name: "Done" }).click();
-    await memberRow.getByRole("button", { name: "View E2E Grant Member" }).click();
+    await memberRow
+      .getByRole("button", { name: "View E2E Grant Member" })
+      .click();
     const detail = page.getByRole("dialog", { name: "E2E Grant Member" });
-    const targetGrant = detail.locator("li").filter({ hasText: targetSentence });
-    await targetGrant.getByRole("button", { name: "Revoke this access" }).click();
+    const targetGrant = detail
+      .locator("li")
+      .filter({ hasText: targetSentence });
+    await targetGrant
+      .getByRole("button", { name: "Revoke this access" })
+      .click();
 
     const revocation = page.getByRole("dialog", { name: "Revoke access" });
-    await expect(revocation.getByText(targetSentence, { exact: true })).toBeVisible();
+    await expect(
+      revocation.getByText(targetSentence, { exact: true }),
+    ).toBeVisible();
     await expect(revocation).toContainText(
       "Their current AequorOS sign-ins end and they will be asked to sign in again. Their other grants stay active.",
     );
     await revocation
       .getByLabel("Reason")
-      .fill("Liquidity monitoring responsibility transferred to another officer");
+      .fill(
+        "Liquidity monitoring responsibility transferred to another officer",
+      );
     await revocation.getByRole("button", { name: "Revoke access" }).click();
 
     const nextAction = await page.request.get(`${API}/auth/me`, {
