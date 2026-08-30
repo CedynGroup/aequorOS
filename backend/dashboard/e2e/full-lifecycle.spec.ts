@@ -32,22 +32,22 @@
  * the API with the minted admin token (PUT channel-configs/orass_sandbox).
  */
 
-import { test, expect, type Browser, type Page } from '@playwright/test';
-import path from 'path';
-import { E2E_API_ORIGIN, E2E_TMP } from '../playwright.config';
-import { mintBackendToken } from './support/mint';
-import { requireObjectStorage } from './support/object-storage';
+import { test, expect, type Browser, type Page } from "@playwright/test";
+import path from "path";
+import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
+import { mintBackendToken } from "./support/mint";
+import { requireObjectStorage } from "./support/object-storage";
 import {
   approveAndSignAsChecker,
   certifyAsPreparer,
   fmtDateGB,
   returnsUrl,
   sendBackAsChecker,
-} from './support/ceremony';
+} from "./support/ceremony";
 
-const SAMPLE_BANK_ID = 'BK-SAMP0001';
-const adminState = path.join(E2E_TMP, 'admin.json');
-const approverState = path.join(E2E_TMP, 'approver.json');
+const SAMPLE_BANK_ID = "BK-SAMP0001";
+const adminState = path.join(E2E_TMP, "admin.json");
+const approverState = path.join(E2E_TMP, "approver.json");
 
 // ---------------------------------------------------------------------------
 // Backend API helpers (admin token minted the same way global-setup does).
@@ -57,19 +57,19 @@ async function api(
   token: string,
   method: string,
   pathName: string,
-  body?: unknown
+  body?: unknown,
 ): Promise<any> {
   const response = await fetch(`${E2E_API_ORIGIN}/api/v1${pathName}`, {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
     throw new Error(
-      `${method} ${pathName} -> ${response.status}: ${await response.text()}`
+      `${method} ${pathName} -> ${response.status}: ${await response.text()}`,
     );
   }
   return response.json();
@@ -78,33 +78,33 @@ async function api(
 let adminToken: string;
 
 /** One reporting date (ISO) per LCR-NSFR journey — never the latest period. */
-const journeyDates = { ack: '', downtime: '', reject: '', sendBack: '' };
+const journeyDates = { ack: "", downtime: "", reject: "", sendBack: "" };
 
 test.beforeAll(async () => {
   requireObjectStorage();
-  adminToken = await mintBackendToken('admin');
+  adminToken = await mintBackendToken("admin");
   const listing = await api(
     adminToken,
-    'GET',
-    `/banks/${SAMPLE_BANK_ID}/reporting-periods`
+    "GET",
+    `/banks/${SAMPLE_BANK_ID}/reporting-periods`,
   );
   const periods: { id: string; period_end: string }[] = listing.periods;
   // Newest first; [0] belongs to the legacy submission-lifecycle journeys.
   const claims: (keyof typeof journeyDates)[] = [
-    'ack',
-    'downtime',
-    'reject',
-    'sendBack',
+    "ack",
+    "downtime",
+    "reject",
+    "sendBack",
   ];
   for (const [index, key] of claims.entries()) {
     const period = periods[index + 1];
     journeyDates[key] = String(period.period_end).slice(0, 10);
     // LCR-NSFR generation pulls from the latest succeeded liquidity baseline run
     // of its reporting period — mint one for each claimed period.
-    await api(adminToken, 'POST', `/banks/${SAMPLE_BANK_ID}/regulatory-runs`, {
-      module: 'liquidity',
+    await api(adminToken, "POST", `/banks/${SAMPLE_BANK_ID}/regulatory-runs`, {
+      module: "liquidity",
       reporting_period_id: period.id,
-      scenario_code: 'baseline',
+      scenario_code: "baseline",
     });
   }
 });
@@ -113,9 +113,9 @@ test.beforeAll(async () => {
 function setSandboxConfig(config: Record<string, unknown>): Promise<unknown> {
   return api(
     adminToken,
-    'PUT',
+    "PUT",
     `/banks/${SAMPLE_BANK_ID}/regulatory-reporting/channel-configs/orass_sandbox`,
-    { config }
+    { config },
   );
 }
 
@@ -130,16 +130,16 @@ function setSandboxConfig(config: Record<string, unknown>): Promise<unknown> {
  * product bug this helper would surface rather than paper over.
  */
 async function generateAndValidate(page: Page, date: string): Promise<void> {
-  await page.goto(returnsUrl('LCR-NSFR', date));
+  await page.goto(returnsUrl("LCR-NSFR", date));
   await expect(
-    page.getByRole('heading', { name: /returns workspace/i })
+    page.getByRole("heading", { name: /returns workspace/i }),
   ).toBeVisible();
 
   await page
-    .getByRole('button', { name: /generate package|regenerate/i })
+    .getByRole("button", { name: /generate package|regenerate/i })
     .first()
     .click();
-  const validate = page.getByRole('button', { name: 'Validate', exact: true });
+  const validate = page.getByRole("button", { name: "Validate", exact: true });
   await expect(validate).toBeEnabled();
   await validate.click();
   await expect(page.getByText(/\bValidated\b/).first()).toBeVisible();
@@ -156,24 +156,24 @@ async function generateAndValidate(page: Page, date: string): Promise<void> {
 async function certifyAndApprove(
   page: Page,
   browser: Browser,
-  date: string
+  date: string,
 ): Promise<void> {
   await generateAndValidate(page, date);
-  await certifyAsPreparer(page, 'LCR-NSFR', date);
+  await certifyAsPreparer(page, "LCR-NSFR", date);
   await approveAndSignAsChecker(browser, approverState, date);
 }
 
 /** Submit the approved, fully certified package through the ORASS sandbox. */
 async function submitViaSandbox(page: Page, date: string): Promise<void> {
-  await page.goto(returnsUrl('LCR-NSFR', date));
+  await page.goto(returnsUrl("LCR-NSFR", date));
   // Cleared to submit is now a claim the screen makes only when the service
   // says so — and it says so because both signatures are on record.
-  await expect(page.getByTestId('attestation-clearance').first()).toHaveText(
-    /^Cleared to submit$/i
+  await expect(page.getByTestId("attestation-clearance").first()).toHaveText(
+    /^Cleared to submit$/i,
   );
-  const submit = page.getByTestId('submit-package');
+  const submit = page.getByTestId("submit-package");
   await expect(submit).toBeEnabled();
-  await page.getByLabel('Channel').selectOption('orass_sandbox');
+  await page.getByLabel("Channel").selectOption("orass_sandbox");
   await submit.click();
 }
 
@@ -181,39 +181,39 @@ async function submitViaSandbox(page: Page, date: string): Promise<void> {
 // Journeys
 // ---------------------------------------------------------------------------
 
-test.describe('full lifecycle', () => {
+test.describe("full lifecycle", () => {
   test.use({ storageState: adminState });
   // Two real certifications per journey: pyHanko signs the document and the
   // export engine re-renders it, and pdf.js renders it again in the browser.
   test.describe.configure({ timeout: 300_000 });
 
-  test('journey 1: certify → approve and sign → submit → poll acknowledges with Rev 1.0', async ({
+  test("journey 1: certify → approve and sign → submit → poll acknowledges with Rev 1.0", async ({
     page,
     browser,
   }) => {
     const date = journeyDates.ack;
-    await setSandboxConfig({ sandbox_behavior: 'ack' });
+    await setSandboxConfig({ sandbox_behavior: "ack" });
 
     await certifyAndApprove(page, browser, date);
     await submitViaSandbox(page, date);
 
     // Submission stamps the ORASS revision — 1.0 for a first submission.
-    await expect(page.getByText('Rev 1.0')).toBeVisible();
+    await expect(page.getByText("Rev 1.0")).toBeVisible();
 
-    const poll = page.getByRole('button', { name: 'Poll status' });
+    const poll = page.getByRole("button", { name: "Poll status" });
     await expect(poll).toBeEnabled();
     await poll.click();
 
     await expect(page.getByText(/Acknowledged by the regulator/)).toBeVisible();
-    await expect(page.getByText('Rev 1.0')).toBeVisible();
+    await expect(page.getByText("Rev 1.0")).toBeVisible();
   });
 
-  test('journey 2: downtime → email fallback → ORASS re-upload → acknowledged', async ({
+  test("journey 2: downtime → email fallback → ORASS re-upload → acknowledged", async ({
     page,
     browser,
   }) => {
     const date = journeyDates.downtime;
-    await setSandboxConfig({ sandbox_behavior: 'ack', downtime: true });
+    await setSandboxConfig({ sandbox_behavior: "ack", downtime: true });
 
     await certifyAndApprove(page, browser, date);
     await submitViaSandbox(page, date);
@@ -221,53 +221,55 @@ test.describe('full lifecycle', () => {
     // The structured channel_downtime 409 surfaces as the guided fallback
     // panel, not a raw error.
     await expect(
-      page.getByText('ORASS downtime — email fallback available')
+      page.getByText("ORASS downtime — email fallback available"),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Use email fallback' }).click();
+    await page.getByRole("button", { name: "Use email fallback" }).click();
 
     // Email submission is provisional (BG/FMD/2026/07): deemed complete only
     // after re-upload through ORASS once functionality is restored. Two
     // indicators: the actionable workspace panel (a <p> title) and the
     // events-feed chip on the email submission event (a <span>, which stays
     // on the historical event even after the re-upload completes).
-    const reuploadPanel = page.locator('p', {
-      hasText: 'Pending ORASS re-upload',
+    const reuploadPanel = page.locator("p", {
+      hasText: "Pending ORASS re-upload",
     });
     await expect(reuploadPanel).toBeVisible();
     await expect(
-      page.locator('span', { hasText: 'Pending ORASS re-upload' })
+      page.locator("span", { hasText: "Pending ORASS re-upload" }),
     ).toBeVisible();
-    const reupload = page.getByRole('button', { name: 'Re-upload via ORASS' });
+    const reupload = page.getByRole("button", { name: "Re-upload via ORASS" });
     await expect(reupload).toBeEnabled();
 
-    await setSandboxConfig({ sandbox_behavior: 'ack', downtime: false });
+    await setSandboxConfig({ sandbox_behavior: "ack", downtime: false });
     await reupload.click();
     await expect(reuploadPanel).toBeHidden();
 
-    const poll = page.getByRole('button', { name: 'Poll status' });
+    const poll = page.getByRole("button", { name: "Poll status" });
     await expect(poll).toBeEnabled();
     await poll.click();
     await expect(page.getByText(/Acknowledged by the regulator/)).toBeVisible();
   });
 
-  test('journey 3: rejection carries supervisor comments and reopens rework', async ({
+  test("journey 3: rejection carries supervisor comments and reopens rework", async ({
     page,
     browser,
   }) => {
     const date = journeyDates.reject;
-    await setSandboxConfig({ sandbox_behavior: 'reject' });
+    await setSandboxConfig({ sandbox_behavior: "reject" });
 
     await certifyAndApprove(page, browser, date);
     await submitViaSandbox(page, date);
 
-    const poll = page.getByRole('button', { name: 'Poll status' });
+    const poll = page.getByRole("button", { name: "Poll status" });
     await expect(poll).toBeEnabled();
     await poll.click();
 
     // Terminal Rejected state + ORASS "View Comments" parity panel carrying
     // the simulated server-side validation rule.
-    await expect(page.getByText('Rejected', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('Supervisor comments')).toBeVisible();
+    await expect(
+      page.getByText("Rejected", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("Supervisor comments")).toBeVisible();
     // The simulated rule id also appears in the events feed / poll detail —
     // the panel copy is one of the matches.
     await expect(page.getByText(/SIM-LQ-104/).first()).toBeVisible();
@@ -275,70 +277,75 @@ test.describe('full lifecycle', () => {
     // Rejected = returned for correction: regeneration stays available to
     // mint the superseding rework version.
     await expect(
-      page.getByText(/regenerate to mint a superseding version/)
+      page.getByText(/regenerate to mint a superseding version/),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Regenerate (new version)' })
+      page.getByRole("button", { name: "Regenerate (new version)" }),
     ).toBeEnabled();
 
     // Hygiene: leave the sandbox on its happy-path default for later specs.
-    await setSandboxConfig({ sandbox_behavior: 'ack' });
+    await setSandboxConfig({ sandbox_behavior: "ack" });
   });
 
-  test('journey 4: the reviewer sends it back with a note, and it is unsubmittable again', async ({
+  test("journey 4: the reviewer sends it back with a note, and it is unsubmittable again", async ({
     page,
     browser,
   }) => {
     const date = journeyDates.sendBack;
-    const note = 'Line 12 double-counts the placement maturing 2 April.';
+    const note = "Line 12 double-counts the placement maturing 2 April.";
 
     await generateAndValidate(page, date);
-    await certifyAsPreparer(page, 'LCR-NSFR', date);
+    await certifyAsPreparer(page, "LCR-NSFR", date);
     await sendBackAsChecker(browser, approverState, date, note);
 
     // Back with the preparer, and genuinely correctable: the certification that
     // froze the figures is withdrawn, the note is on the record, and nothing on
     // the screen claims the return may be filed.
-    await page.goto(returnsUrl('LCR-NSFR', date));
-    await expect(page.getByText('Unsigned').first()).toBeVisible();
-    await expect(page.getByTestId('attestation-clearance').first()).toHaveText(
-      /^Not cleared to submit/i
+    await page.goto(returnsUrl("LCR-NSFR", date));
+    await expect(page.getByText("Unsigned").first()).toBeVisible();
+    await expect(page.getByTestId("attestation-clearance").first()).toHaveText(
+      /^Not cleared to submit/i,
     );
-    await expect(page.getByTestId('submit-package')).toBeDisabled();
+    await expect(page.getByTestId("submit-package")).toBeDisabled();
     await expect(page.getByText(note).first()).toBeVisible();
     // The preparer's signature is history, not deleted — the withdrawn cycle is
     // named rather than silently dropped.
-    await expect(page.getByText(/retained in the append-only trail/i)).toBeVisible();
+    await expect(
+      page.getByText(/retained in the append-only trail/i),
+    ).toBeVisible();
   });
 
-  test.fail('journey 5: institution register drives the LRT corporate pack', async ({
-    page,
-  }) => {
-    await page.goto('/institution');
-    await expect(
-      page.getByRole('heading', { name: 'Institution Profile' })
-    ).toBeVisible();
-    // Seeded corporate register (global-setup PUT institution-profile).
-    await expect(page.getByText('GH-UB-9001')).toBeVisible();
+  test.fail(
+    "journey 5: institution register drives the LRT corporate pack",
+    async ({ page }) => {
+      await page.goto("/institution");
+      await expect(
+        page.getByRole("heading", { name: "Institution Profile" }),
+      ).toBeVisible();
+      // Seeded corporate register (global-setup PUT institution-profile).
+      await expect(page.getByText("GH-UB-9001")).toBeVisible();
 
-    await page.getByRole('link', { name: /Generate LRT packs/ }).click();
-    await expect(page).toHaveURL(/code=LRT-PROFILE/);
-    // Scoped to the fidelity banner paragraph — the return <select> carries
-    // the same text in its LRT-PROFILE option.
-    await expect(
-      page.locator('p', { hasText: 'LRT-PROFILE — Corporate Profile Update pack' })
-    ).toBeVisible();
+      await page.getByRole("link", { name: /Generate LRT packs/ }).click();
+      await expect(page).toHaveURL(/code=LRT-PROFILE/);
+      // Scoped to the fidelity banner paragraph — the return <select> carries
+      // the same text in its LRT-PROFILE option.
+      await expect(
+        page.locator("p", {
+          hasText: "LRT-PROFILE — Corporate Profile Update pack",
+        }),
+      ).toBeVisible();
 
-    const generate = page
-      .getByRole('button', { name: /generate package|regenerate/i })
-      .first();
-    await expect(generate).toBeVisible({ timeout: 5_000 });
-    await generate.click();
-    // The pack pre-fills from the register (no engine runs) and lands in
-    // 'generated' — the stepper appears and validation is offered.
-    await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Validate', exact: true })
-    ).toBeEnabled();
-  });
+      const generate = page
+        .getByRole("button", { name: /generate package|regenerate/i })
+        .first();
+      await expect(generate).toBeVisible({ timeout: 5_000 });
+      await generate.click();
+      // The pack pre-fills from the register (no engine runs) and lands in
+      // 'generated' — the stepper appears and validation is offered.
+      await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Validate", exact: true }),
+      ).toBeEnabled();
+    },
+  );
 });

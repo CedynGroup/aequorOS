@@ -277,7 +277,6 @@ jobs:
       - name: Build production risk-service image
         run: docker build --tag aequoros/risk-service:ci ./backend
 
-
   architecture:
     name: Architecture and CI guards
     runs-on: ubuntu-latest

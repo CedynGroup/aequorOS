@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 // support/ -> e2e/ -> dashboard/ -> backend/, the directory whose .env the
 // FastAPI process loads.
-const BACKEND_DIR = path.join(__dirname, '..', '..', '..');
+const BACKEND_DIR = path.join(__dirname, "..", "..", "..");
 
 /**
  * Refuse a storage-dependent journey before it can burn through its timeouts.
@@ -32,11 +32,11 @@ export function requireObjectStorage(): void {
   //
   // Check the same source the backend reads instead: process.env (CI exports
   // them) falling back to backend/.env (how a developer machine supplies them).
-  const required = ['S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY'];
+  const required = ["S3_ENDPOINT", "S3_ACCESS_KEY", "S3_SECRET_KEY"];
   const fromEnvFile = new Set<string>();
   try {
-    const dotenv = readFileSync(path.join(BACKEND_DIR, '.env'), 'utf8');
-    for (const line of dotenv.split('\n')) {
+    const dotenv = readFileSync(path.join(BACKEND_DIR, ".env"), "utf8");
+    for (const line of dotenv.split("\n")) {
       const key = /^\s*([A-Z0-9_]+)\s*=\s*\S/.exec(line)?.[1];
       if (key) fromEnvFile.add(key);
     }
@@ -44,23 +44,23 @@ export function requireObjectStorage(): void {
     // No .env at all — every key counts as missing, which is the CI case.
   }
   const missing = required.filter(
-    (key) => !process.env[key] && !fromEnvFile.has(key)
+    (key) => !process.env[key] && !fromEnvFile.has(key),
   );
   if (missing.length === 0) return;
   throw new Error(
     [
-      `e2e needs object storage; ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} unset.`,
-      '',
-      'Artifacts are persisted to S3/MinIO when a package is validated, and the',
-      'backend has no filesystem storage mode. Without it packages stay at',
+      `e2e needs object storage; ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} unset.`,
+      "",
+      "Artifacts are persisted to S3/MinIO when a package is validated, and the",
+      "backend has no filesystem storage mode. Without it packages stay at",
       '"generated", so the attestation and lifecycle journeys each wait out a',
-      '60s timeout for a Validated badge that never arrives — seven failures',
-      'and no usable message.',
-      '',
-      'Locally: backend/.env supplies S3_ENDPOINT / S3_ACCESS_KEY /',
-      'S3_SECRET_KEY / S3_BUCKET. Run this journey from a checkout that HAS it',
-      'or start local MinIO; a git worktree does not inherit untracked files.',
-      'In CI: run MinIO as a service container and pass the same four.',
-    ].join('\n')
+      "60s timeout for a Validated badge that never arrives — seven failures",
+      "and no usable message.",
+      "",
+      "Locally: backend/.env supplies S3_ENDPOINT / S3_ACCESS_KEY /",
+      "S3_SECRET_KEY / S3_BUCKET. Run this journey from a checkout that HAS it",
+      "or start local MinIO; a git worktree does not inherit untracked files.",
+      "In CI: run MinIO as a service container and pass the same four.",
+    ].join("\n"),
   );
 }

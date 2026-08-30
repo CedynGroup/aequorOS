@@ -1,18 +1,20 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync } from "node:child_process";
 
 export type E2ERuntimePorts = {
   backend: number;
   dashboard: number;
 };
 
-const PORTS_SELECTED = 'E2E_RUNTIME_PORTS_SELECTED';
+const PORTS_SELECTED = "E2E_RUNTIME_PORTS_SELECTED";
 
 function configuredPort(name: string): number {
   const raw = process.env[name];
   if (!raw) return 0;
   const port = Number(raw);
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error(`${name} must be an integer between 1 and 65535; received ${raw}.`);
+    throw new Error(
+      `${name} must be an integer between 1 and 65535; received ${raw}.`,
+    );
   }
   return port;
 }
@@ -30,15 +32,15 @@ function configuredPort(name: string): number {
  * run.
  */
 export function selectE2ERuntimePorts(): E2ERuntimePorts {
-  if (process.env[PORTS_SELECTED] === '1') {
+  if (process.env[PORTS_SELECTED] === "1") {
     return {
-      backend: configuredPort('E2E_BACKEND_PORT'),
-      dashboard: configuredPort('E2E_DASHBOARD_PORT'),
+      backend: configuredPort("E2E_BACKEND_PORT"),
+      dashboard: configuredPort("E2E_DASHBOARD_PORT"),
     };
   }
 
-  const requestedBackend = configuredPort('E2E_BACKEND_PORT');
-  const requestedDashboard = configuredPort('E2E_DASHBOARD_PORT');
+  const requestedBackend = configuredPort("E2E_BACKEND_PORT");
+  const requestedDashboard = configuredPort("E2E_DASHBOARD_PORT");
   const allocator = String.raw`
     const net = require('node:net');
 
@@ -81,13 +83,13 @@ export function selectE2ERuntimePorts(): E2ERuntimePorts {
   const selected = JSON.parse(
     execFileSync(
       process.execPath,
-      ['-e', allocator, String(requestedBackend), String(requestedDashboard)],
-      { encoding: 'utf8' }
-    )
+      ["-e", allocator, String(requestedBackend), String(requestedDashboard)],
+      { encoding: "utf8" },
+    ),
   ) as E2ERuntimePorts;
 
   process.env.E2E_BACKEND_PORT = String(selected.backend);
   process.env.E2E_DASHBOARD_PORT = String(selected.dashboard);
-  process.env[PORTS_SELECTED] = '1';
+  process.env[PORTS_SELECTED] = "1";
   return selected;
 }

@@ -12,12 +12,12 @@
  * Playwright fails the run if an expected failure unexpectedly passes.
  */
 export const QUARANTINED_JOURNEYS = [
-  'attestation.spec.ts › attestation surfaces › a generated return shows its attestation state as unsigned',
-  'attestation.spec.ts › the certification ceremony › opting in locks submission, and the ceremony enforces what it shows',
-  'attestation.spec.ts › the signing workspace › places typed fields from the palette, and refuses an illegible box',
-  'attestation.spec.ts › the filed document › an unsigned return offers the base export and claims no signature',
-  'full-lifecycle.spec.ts › full lifecycle › journey 5: institution register drives the LRT corporate pack',
-  'submission-lifecycle.spec.ts › submission pipeline › journey 1: authenticated returns workspace generates a package',
-  'submission-lifecycle.spec.ts › submission pipeline › journey 3: history renders the package/version ledger',
-  'submission-lifecycle.spec.ts › submission pipeline › journey 4: a prior version yields its files, its signers, and a diff',
+  "attestation.spec.ts › attestation surfaces › a generated return shows its attestation state as unsigned",
+  "attestation.spec.ts › the certification ceremony › opting in locks submission, and the ceremony enforces what it shows",
+  "attestation.spec.ts › the signing workspace › places typed fields from the palette, and refuses an illegible box",
+  "attestation.spec.ts › the filed document › an unsigned return offers the base export and claims no signature",
+  "full-lifecycle.spec.ts › full lifecycle › journey 5: institution register drives the LRT corporate pack",
+  "submission-lifecycle.spec.ts › submission pipeline › journey 1: authenticated returns workspace generates a package",
+  "submission-lifecycle.spec.ts › submission pipeline › journey 3: history renders the package/version ledger",
+  "submission-lifecycle.spec.ts › submission pipeline › journey 4: a prior version yields its files, its signers, and a diff",
 ] as const;
