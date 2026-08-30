@@ -12,20 +12,20 @@
  * artifacts to S3/MinIO and the backend has no filesystem mode, so the suite
  * silently depends on S3_* reaching it from the untracked backend/.env. That
  * is why it passes on a developer machine and fails in a fresh clone, a git
- * worktree, or CI. e2e/global-setup.ts now refuses to start without it rather
- * than letting seven journeys time out one at a time.
+ * worktree, or CI. The four package-capable specs refuse immediately without
+ * it, while storage-free journeys can still run on a cold worktree.
  *
  * Run: pnpm e2e   (first run: npx playwright install chromium)
  */
 
 import { defineConfig } from "@playwright/test";
 import path from "path";
+import { selectE2ERuntimePorts } from "./e2e/support/runtime-ports";
 
-export const E2E_BACKEND_PORT = Number(process.env.E2E_BACKEND_PORT ?? 8021);
-export const E2E_DASHBOARD_PORT = Number(
-  process.env.E2E_DASHBOARD_PORT ?? 3021,
-);
-export const E2E_BASE_URL = `http://localhost:${E2E_DASHBOARD_PORT}`;
+const runtimePorts = selectE2ERuntimePorts();
+export const E2E_BACKEND_PORT = runtimePorts.backend;
+export const E2E_DASHBOARD_PORT = runtimePorts.dashboard;
+export const E2E_BASE_URL = `http://127.0.0.1:${E2E_DASHBOARD_PORT}`;
 export const E2E_API_ORIGIN = `http://127.0.0.1:${E2E_BACKEND_PORT}`;
 export const E2E_TMP = path.join(__dirname, "e2e", ".tmp");
 // Seals the disposable soft signing keys the ceremony journeys use. The
@@ -45,7 +45,9 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   retries: 0,
   workers: 1, // journeys share one disposable canonical test bank; keep them ordered + isolated
-  reporter: [["list"]],
+  reporter: process.env.CI
+    ? [["./e2e/support/quarantine-reporter.ts"], ["list"]]
+    : [["list"]],
   use: {
     baseURL: E2E_BASE_URL,
     trace: "retain-on-failure",
@@ -58,7 +60,7 @@ export default defineConfig({
         // journeys would otherwise leak across runs and block regeneration.
         `sh -c 'mkdir -p "${E2E_TMP}" && rm -f "${E2E_DB}" "${E2E_DB}-wal" "${E2E_DB}-shm" && ` +
         `PYTHONPATH=. DATABASE_URL="sqlite+pysqlite:///${E2E_DB}" uv run python scripts/e2e_bootstrap.py && ` +
-        `exec uv run uvicorn app.main:app --port ${E2E_BACKEND_PORT} --log-level warning'`,
+        `exec uv run uvicorn app.main:app --host 127.0.0.1 --port ${E2E_BACKEND_PORT} --log-level warning'`,
       cwd: BACKEND_DIR,
       url: `${E2E_API_ORIGIN}/api/health/live`,
       reuseExistingServer: false,
@@ -93,7 +95,7 @@ export default defineConfig({
       },
     },
     {
-      command: `pnpm next dev -p ${E2E_DASHBOARD_PORT}`,
+      command: `pnpm next dev -H 127.0.0.1 -p ${E2E_DASHBOARD_PORT}`,
       cwd: __dirname,
       url: `${E2E_BASE_URL}/login`,
       reuseExistingServer: false,

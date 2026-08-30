@@ -11,6 +11,7 @@ import { test } from '@playwright/test';
 import { mkdirSync } from 'fs';
 import path from 'path';
 import { E2E_TMP } from '../playwright.config';
+import { requireObjectStorage } from './support/object-storage';
 
 const OUT = path.join(__dirname, '.tmp', 'visual-tour');
 
@@ -94,6 +95,7 @@ const ROUTES = [
 
 test.describe('visual tour', () => {
   test.skip(!process.env.VISUAL_TOUR, 'set VISUAL_TOUR=1 to capture');
+  test.beforeAll(() => requireObjectStorage());
   test.use({
     storageState: path.join(E2E_TMP, 'admin.json'),
     colorScheme: 'dark',

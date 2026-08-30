@@ -263,7 +263,7 @@ pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
 pnpm --filter @aequoros/dashboard lint        # next lint
 pnpm --filter @aequoros/dashboard test        # unit and query-cache policy suites
 pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
-pnpm --filter @aequoros/dashboard e2e         # Playwright (needs object storage)
+pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys need S3/MinIO
 ```
 
 Regenerate the API client after any backend contract change:
@@ -272,7 +272,9 @@ Regenerate the API client after any backend contract change:
 ## End-to-end (Playwright)
 
 `playwright.config.ts` boots a **disposable** stack: the FastAPI backend on a
-throwaway sqlite file (deleted and rebuilt every run) plus `next dev` on 3021,
+throwaway sqlite file (deleted and rebuilt every run) plus `next dev`. Both
+servers use OS-selected free ports (optional `E2E_BACKEND_PORT` and
+`E2E_DASHBOARD_PORT` preferences fall back when occupied),
 then `e2e/global-setup.ts` seeds through the API and mints per-role session
 cookies. It never touches the primary database.
 
@@ -283,8 +285,12 @@ diagnosis:
    filesystem mode — so validated packages need a reachable S3/MinIO endpoint.
    Locally it arrives from the untracked `backend/.env` (`S3_ENDPOINT`,
    `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`); a fresh clone, a git worktree
-   or CI has none. `global-setup.ts` refuses to start without it rather than
-   letting seven journeys time out one at a time.
+   or CI has none. The `attestation`, `full-lifecycle`,
+   `submission-lifecycle`, and opt-in `visual-tour` specs refuse immediately
+   without it rather than letting package assertions time out one at a time.
+   Storage-free specs remain runnable without any S3 configuration. CI starts
+   a disposable MinIO with its built-in KMS and runs the standard suite against
+   that real object store.
 2. **Global reference registries.** `scripts/e2e_bootstrap.py` builds the schema
    with `Base.metadata.create_all`, so **no migration runs** — jurisdictions,
    the institution-type registry and the regulatory-parameter control plane are
