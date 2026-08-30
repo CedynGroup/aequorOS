@@ -20,14 +20,16 @@
 
 import { defineConfig } from "@playwright/test";
 import path from "path";
+import { acquireE2ERunLock } from "./e2e/support/runtime-lock";
 import { selectE2ERuntimePorts } from "./e2e/support/runtime-ports";
 
+export const E2E_TMP = path.join(__dirname, "e2e", ".tmp");
+acquireE2ERunLock(E2E_TMP);
 const runtimePorts = selectE2ERuntimePorts();
 export const E2E_BACKEND_PORT = runtimePorts.backend;
 export const E2E_DASHBOARD_PORT = runtimePorts.dashboard;
 export const E2E_BASE_URL = `http://127.0.0.1:${E2E_DASHBOARD_PORT}`;
 export const E2E_API_ORIGIN = `http://127.0.0.1:${E2E_BACKEND_PORT}`;
-export const E2E_TMP = path.join(__dirname, "e2e", ".tmp");
 // Seals the disposable soft signing keys the ceremony journeys use. The
 // software key backend refuses to initialise when APP_ENV is production, so
 // this fixture value cannot reach a deployment.
