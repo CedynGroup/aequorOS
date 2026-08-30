@@ -42,9 +42,10 @@ any v1 bundle. Workflow-specific authority for them must be designed explicitly
 rather than inferred from a nearby role.
 
 Org Owner is a distinct binding authority even though the bounded v1 action
-vocabulary currently overlaps Account Admin. The later grant/transfer service
-must distinguish the owner binding; it must not infer ownership from
-`administer` or promote every Account Admin.
+vocabulary currently overlaps Account Admin. The grant-administration boundary
+requires the owner binding itself; it does not infer ownership from
+`administer` or promote every Account Admin. Owner designation and transfer
+remain later staff-plane work.
 
 No route name, HTTP verb, UI navigation item, or token permission claim creates
 authority. Static bundles are code; v1 has no mutable permission catalog and no
@@ -191,12 +192,18 @@ tenant-side owner designation or transfer action.
 
 ## Scoped grant administration and Members (built 2026-08-29)
 
-`GET/POST /api/v1/authorization/bindings`, the single-binding revoke route, and
-`GET /api/v1/organization/members` require a persisted Org Owner binding through
-the evaluator; scalar account-admin or token claims are insufficient. Create has
-one scalar role bundle, one institution coverage, one module, one sensitivity,
-and one required reason. Arrays are rejected by the closed request schema, so
-two authority combinations require two requests and two binding rows.
+`GET/POST /api/v1/authorization/bindings`,
+`POST /api/v1/authorization/bindings/preview`, the single-binding revoke route,
+and `GET /api/v1/organization/members` require a persisted Org Owner binding
+through the evaluator; scalar account-admin or token claims are insufficient.
+Create has one scalar role bundle, one institution coverage, one module, one
+sensitivity, and one required reason. Arrays are rejected by the closed request
+schema, so two authority combinations require two requests and two binding rows.
+Preview returns the canonical authority sentence; create requires that exact
+sentence and refuses if names or scope presentation changed before commit.
+Members may grant Viewer, Auditor, Analyst, Approver, or Account Admin. Org
+Owner and Integration Writer are not tenant-grantable; Account Admin is valid
+only as organization-wide Account Administration at all sensitivity levels.
 
 The server runs assignment-time separation-of-duties policy and returns the
 authoritative `allow`, `warn`, or `block` decision. C9 account-administration
@@ -221,6 +228,11 @@ member detail, revoke confirmation, completion, and audit evidence. SSO request
 approval uses this same service transaction: verified identity alone has no
 binding-derived authority; approval atomically activates the identity and adds
 exactly one complete binding.
+
+The SSO routes retain their split administration boundary: account
+administrators may list or reject never-activated request stubs, but only an Org
+Owner may call `POST /api/v1/auth/sso/access-requests/{user_id}/approve` because
+approval creates authority.
 
 ## Authorization version and deployment transition
 

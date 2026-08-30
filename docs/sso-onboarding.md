@@ -80,8 +80,8 @@ IdP's published issuer (it must serve
 
 ## Who gets in: two provisioning modes
 
-**SSO never grants access by itself:** in both modes, an account administrator's
-decision is what authorizes a person.
+**SSO never grants access by itself:** in both modes, authorization is a
+separate AequorOS decision.
 
 - **Pre-provisioned only (default):** only people who already have an AequorOS
   account can sign in. Tightest control; onboarding each user is an explicit act.
@@ -90,10 +90,11 @@ decision is what authorizes a person.
   verified email is on an **allowed domain** can sign in once to *request*
   access: a deactivated account stub is recorded, they see "an administrator
   must approve your account", and **they get no access at all** until an
-  AequorOS account administrator approves the request — choosing an Account
-  Admin, Approver, Analyst, or Viewer role at that moment — in the *Access
-  requests* list on the same settings card. Org Owner is never assigned through
-  this flow. This option cannot
+  AequorOS Organization Owner opens **Settings → Members**, defines one complete
+  grant (role, exact institution or organization-wide coverage, module,
+  sensitivity, and reason), reviews the exact authority sentence, and approves
+  it. Identity activation and that one binding are committed together. Org
+  Owner is never assigned through this flow. This option cannot
   be enabled without at least one allowed domain, so it never opens requests to
   the public. Offboarding still works at your IdP: disable the Google/Entra
   account and sign-in stops.
@@ -110,8 +111,9 @@ decision is what authorizes a person.
    - request-access **off** → rejected with "No AequorOS account is provisioned
      for this identity";
    - request-access **on** → "administrator must approve" message, a pending
-     entry appears under Settings → Authentication → Access requests, and the
-     account works only after an account administrator approves it with a role.
+     identity appears under Settings → Members with "SSO approval needed · no
+     access yet", and the account works only after an Organization Owner
+     approves one complete scoped grant.
 
 ## Security notes your reviewers will ask about
 

@@ -13,9 +13,9 @@
 > shadow decisions on Liquidity Monitoring without changing route enforcement.
 > Migration `202608280046` adds explicit initial Org Owner bindings and splits
 > persisted account administrators out of the operational role hierarchy.
-> The scoped grant administration slice is also built: Org Owners can create,
-> list, and revoke one indivisible binding at a time; every mutation is audited
-> and invalidates the grantee's sessions, and Settings → Members renders the
+> The scoped grant administration slice is also built: Org Owners can preview,
+> create, list, and revoke one indivisible binding at a time; every mutation is
+> audited and invalidates the grantee's sessions, and Settings → Members renders the
 > same authority sentence used by review, detail, revoke, and audit evidence.
 > Product-route enforcement remains shadow-only until its separate rollout.
 
@@ -80,12 +80,16 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 2. Invitations, general user CRUD, lifecycle mutations, and bulk actions remain
    unbuilt. Scoped binding administration and the tenant Members aggregation are
    built; the separate staff operator console is not a tenant authorization surface.
-3. **`Organization` is bare** (`{id, name}`) — no domain, plan, SSO config, or settings.
+3. **`Organization` is bare** (`{id, name}`) — no domain, plan, or general
+   settings. Single-connection SSO configuration lives in its built, separate
+   `sso_connections` table.
 4. Endpoint enforcement still uses **one flat legacy role per user**. Exact
-   institution/module/sensitivity bindings now exist and are evaluable, but are
-   shadow-only and have no administration surface; desk/currency scope is not
-   represented yet.
-5. **No SoD engine** beyond the one hand-rolled REG check; no generalized maker-checker on calculation/official runs.
+   institution/module/sensitivity bindings now exist, are evaluable, and have an
+   Org Owner administration surface, but ordinary product routes remain
+   shadow-only; desk/currency scope is not represented yet.
+5. Assignment-time scoped-grant SoD now returns authoritative allow/warn/block
+   decisions, but there is no generalized action-time maker-checker beyond the
+   hand-rolled REG check.
 6. Audit events and read-only operator impersonation exist, but there is no
    generalized authorization-decision audit envelope, SCIM, or seat/plan
    concept. (SSO self-service exists in single-connection form — see §2 above;
@@ -732,6 +736,16 @@ See [§10.1](#101-personal--the-avatar-dropdown-every-user). Show the signed-in 
 
 ### 12.2 Members (users list) table
 
+**Built slice:** tenant identities are sorted by name and show email, lifecycle,
+access state, effective grant count, up to two grant fragments plus `+N more`,
+last activity, and authentication method. Detail shows complete active and
+historical binding evidence. Org Owners can use the scalar Define → Review →
+Done composer, add another independent grant, or revoke one active non-owner
+grant with a reason. SSO requests stay visibly at "approval needed · no access
+yet" until approval creates one complete grant.
+
+**Target additions:**
+
 **Columns:** Name · Email · **Status** badge (Invited / Active / Suspended /
 Deactivated) · **Role(s)** · Scope (entities/desks) · Last active · Auth method
 (SSO / password) · Invited-by · Actions (⋯).
@@ -780,11 +794,12 @@ add `status (invited|active|suspended|deactivated)`, `job_title`,
 endpoint compatibility. `authorization_version` is already built; use it rather
 than adding a second session-generation field.
 
-**`authorization_bindings`** _(BUILT, shadow-only)_: one indivisible row holds
+**`authorization_bindings`** _(BUILT; product enforcement shadow-only)_: one indivisible row holds
 `organization_id, principal_user_id, principal_type, role_bundle,
 institution_scope, institution_id, module_scope, sensitivity_scope,
 granted_by_type, granted_by_id, grant_reason, granted_at, status, valid_from,
-valid_until, revoked_at, revoked_reason`. Composite principal/institution tenant
+valid_until, revoked_at, revoked_by_type, revoked_by_id, revoked_reason`.
+Composite principal/institution tenant
 foreign keys, checks, and FORCE RLS enforce the shape. This table supersedes the
 independent `user_roles`/`user_scopes` proposal, whose arrays could accidentally
 create cross-product authority.
@@ -844,6 +859,7 @@ GET   /auth/me                                    → identity + roles + effecti
 # members (org admin)
 GET   /organization/members                       BUILT: Org Owner; identity + lifecycle + complete grants
 GET   /authorization/bindings                     BUILT: Org Owner; optional principal filter
+POST  /authorization/bindings/preview             BUILT: canonical review sentence for one scalar grant
 POST  /authorization/bindings                     BUILT: one scalar binding + reason + SoD decision
 POST  /authorization/bindings/{id}/revoke         BUILT: one binding + reason; sessions invalidated
 GET   /orgs/{org}/users                           users:read
@@ -869,6 +885,11 @@ POST  /orgs/{org}/roles                             roles:manage    (custom role
 #   GET  /auth/sso/status         public login-page probe {enabled}
 #   GET  /auth/sso/connection     account admin — secret returned only as client_secret_set
 #   PUT  /auth/sso/connection     account admin — upsert; client_secret write-only
+#   GET  /auth/sso/access-requests account admin — list deactivated JIT stubs
+#   POST /auth/sso/access-requests/{user_id}/approve
+#                                 Org Owner — activate + create one complete binding
+#   POST /auth/sso/access-requests/{user_id}/reject
+#                                 account admin — reject the never-activated stub
 #   GET  /auth/sso/client-config  internal (SSO_INTERNAL_KEY header; not in OpenAPI)
 GET/PUT /orgs/{org}/sso                             sso:manage   (Phase 2: multi-connection)
 POST    /orgs/{org}/domains:verify                  sso:manage
@@ -908,9 +929,9 @@ Ship value early; don't block the dashboards on SSO/SCIM.
 The static `ROLE_PERMISSIONS` map, scoped binding table, exact evaluator, and
 `authv` invalidation seam are **BUILT**. The first measured endpoint observation
 is also built on Liquidity Monitoring; it is shadow telemetry, not enforcement.
-Remaining Phase-0 work is governed pilot binding creation, an evidence-backed
-endpoint enforcement decision, `/auth/me` display capabilities, nav/action
-gating, and default landings
+The governed binding-creation and Members slice is built. Remaining Phase-0
+work is an evidence-backed endpoint enforcement decision, `/auth/me` display
+capabilities, nav/action gating, and default landings
 ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).
 Do not add independent `user_roles`/`user_scopes` tables or infer ownership from
 the scalar `account_admin` role. Initial Owner assignment is built only for the
@@ -918,10 +939,11 @@ exactly-one-candidate migration/onboarding cases; explicit designation and
 transfer remain staff-plane work.
 
 **Phase 1 — org admin console + invites.**
-`organizations`/`users` fields, `invitations`, Members table, invite modal, role
-assignment, seat limits, suspend/deactivate, `audit_log` (write path + view).
-Banks can now onboard their own people by email. **The invite modal offers the
-unit presets from §5.1** (Treasury / ALM / Risk / Finance / Credit / Operations
+The Members identity/grant table and scalar grant assignment are built. The
+remaining phase adds `organizations`/`users` fields, `invitations`, invite
+modal, seat limits, suspend/deactivate, and `audit_log` (write path + view).
+Banks will then be able to onboard their own people by email. **The invite modal
+offers the unit presets from §5.1** (Treasury / ALM / Risk / Finance / Credit / Operations
 / Executive / Internal Audit → the §5 persona bundles) so an org admin invites
 "the Head of Credit" without composing grants by hand — presets are bundles,
 not new roles (§6.1).
