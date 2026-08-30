@@ -316,12 +316,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `GET /operator/v1/jobs/stuck-dedup` (fleet board, read) +
   `POST /operator/v1/tenants/{org}/fix/redrive-dedup` (session-gated, audited), and it is
   manual on purpose — the four stranded batches failed for three unrelated reasons.
-- **CI enforces every surface (2026-08-22).** `risk-service.yml` (backend), `dashboard.yml`
-  (typecheck + **lint** + **test** + build) and `web.yml` (`frontend` lint+build, `console`
-  typecheck+test+build). Before this, `frontend/` and `console/` were in no workflow and the
-  dashboard's fail-open guard and SSRF egress guard were unenforced. Each workflow's header
-  comment is its gate inventory — keep it accurate. `console` is deliberately NOT lint-gated
-  (no ESLint dependency or config in that workspace); see ARCHITECTURE.md §8.
+- **CI enforces every surface (2026-08-22; E2E added 2026-08-30).**
+  `risk-service.yml` gates the backend plus the dashboard Playwright journeys against
+  disposable MinIO, `dashboard.yml` gates typecheck + **lint** + **test** + build, and
+  `web.yml` gates `frontend` lint+build and `console` typecheck+test+build. The journey
+  reporter requires at least 20 executions and an exact eight-test expected-failure list
+  for regulator-anchor/fixture drift; discovery mismatch or an unexpected pass fails CI,
+  and issue #151 owns removal. Before these gates, `frontend/` and `console/` were in no
+  workflow and the dashboard's fail-open guard, SSRF egress guard, and browser journeys
+  were unenforced. Each workflow's header comment is its gate inventory — keep it accurate.
+  `console` is deliberately NOT lint-gated (no ESLint dependency or config in that
+  workspace); see ARCHITECTURE.md §8.
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,

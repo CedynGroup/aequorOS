@@ -489,7 +489,7 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 | risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run basedpyright` — or one shot: `mise run risk-service:check`                                                                             |
 | risk-service vs Postgres | `docker compose up -d risk-postgres` then `mise run risk-service:test-postgres` (sets `TEST_DATABASE_URL`)                                                                                             |
 | risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                       |
-| dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` (production build includes the Command Center Recharts deferral guard; e2e: `e2e`, needs object storage from `backend/.env`) |
+| dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` (production build includes the Command Center Recharts deferral guard; package-capable Playwright specs need S3/MinIO, while storage-free specs do not) |
 | marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                      |
 | operator console         | `pnpm --filter @aequoros/console typecheck` · `test` · `build` (no ESLint: the workspace has no ESLint dependency or config)                                                                           |
 | generated client         | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                                                                                                     |
@@ -503,7 +503,7 @@ the regulatory fail-open guard and the browser-runtime SSRF guard were unenforce
 
 | Workflow                             | Jobs                                                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/risk-service.yml` | `static` · `architecture` · `unit` · `postgres` · `postgres-suite` · `api-fresh` · `real-data` (conditional)         |
+| `.github/workflows/risk-service.yml` | `static` · `architecture` · `unit` · `postgres` · `postgres-suite` · `storage` · `journeys` (Playwright + MinIO; exact eight-journey fixture-drift quarantine tracked in #151) · `api-fresh` · `real-data` (conditional) |
 | `.github/workflows/dashboard.yml`    | `dashboard` — client typecheck, dashboard typecheck, lint, test, production build + Command Center entry-graph guard |
 | `.github/workflows/web.yml`          | `frontend` — lint, build · `console` — typecheck, test, build                                                        |
 

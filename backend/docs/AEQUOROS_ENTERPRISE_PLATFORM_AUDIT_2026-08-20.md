@@ -5,6 +5,15 @@
 **This revision:** 2026-08-22 — every finding below re-verified against the current working tree after a twelve-workstream remediation. Status labels, line numbers and counts are as of that date.
 **Scope:** the entire repository — backend source, tests, migrations, dashboard, operator console, marketing site, continuous integration, deployment, and the documentation set.
 
+**Post-audit update (2026-08-30):** the statement below that the browser suite
+runs in no workflow is historical. `.github/workflows/risk-service.yml` now has
+a blocking `journeys` job that starts disposable MinIO with built-in KMS and
+runs the dashboard Playwright suite. Its machine-readable reporter requires at
+least 20 executed journeys and exactly eight expected failures caused by the
+pre-existing regulator-anchor/fixture-snapshot mismatch tracked in issue #151;
+non-quarantined failures, unexpected passes, and quarantine/discovery drift fail
+the gate.
+
 ---
 
 ## 0. How to read this document
@@ -405,7 +414,9 @@ The workflow's `unit` job is a bare `pytest` and the project configuration sets 
 - **25 modules gated on a real-database URL** — the regulatory-return, attestation-workspace, authentication and vendor-connection API surface. The workflow now contains a job for them (`.github/workflows/risk-service.yml:596`), but it is conditioned on a repository variable that is unset, and the job comment says so: "Skipped until a reachable primary-database URL is configured." Documented rather than deleted, which is the right call — but still not running.
 - **The new equivalence suite** (`backend/tests/equivalence/`) is gated the same way. It is the closest thing the repository has to a golden-output control: it asserts that a package binds the same run the generator's own rule selects, and that every headline figure equals that run's metric exactly, with no tolerance granted. It runs nowhere.
 - **No golden output file exists for any generated return** (repository-wide search for `*golden*` under `backend/tests/`: no matches) [M]. The engine suites verify arithmetic against hand-computed values, which is different from pinning a rendered artifact. Systematic drift that preserved the invariants would still ship silently.
-- **The end-to-end browser suite** is in no workflow.
+- **Resolved 2026-08-30:** the end-to-end browser suite was in no workflow at
+  the audit date; it now runs in the blocking `journeys` job described in the
+  post-audit update above.
 - **Tree-wide format checking** is not a gate anywhere, and the workflow names that explicitly so a future format gate is not a surprise.
 
 ### 6.3 The Bank of Ghana return workflow cannot complete

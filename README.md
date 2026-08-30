@@ -134,6 +134,7 @@ and drops its own `risk_service_test_<hex>` schema). The task inventory is in
 # From the repo root — the TypeScript surfaces.
 pnpm --filter @aequoros/dashboard typecheck && pnpm --filter @aequoros/dashboard lint \
   && pnpm --filter @aequoros/dashboard test && pnpm --filter @aequoros/dashboard build
+pnpm --filter @aequoros/dashboard e2e             # disposable stack; package specs need S3/MinIO
 pnpm --filter @aequoros/console typecheck && pnpm --filter @aequoros/console test \
   && pnpm --filter @aequoros/console build          # no lint: no ESLint config in this workspace
 pnpm --filter @aequoros/frontend lint && pnpm --filter @aequoros/frontend build
@@ -144,7 +145,8 @@ mise run risk-service:openapi-client
 mise run risk-service:api-fresh                     # must leave git clean
 ```
 
-The CI gates live in `.github/workflows/`: `risk-service.yml` (backend),
+The CI gates live in `.github/workflows/`: `risk-service.yml` (backend plus the
+MinIO-backed dashboard Playwright journeys),
 `dashboard.yml` (generated client + dashboard) and `web.yml` (marketing site +
 operator console). Each workflow's header comment is its own gate inventory —
 read that comment rather than inferring coverage from the job names. See

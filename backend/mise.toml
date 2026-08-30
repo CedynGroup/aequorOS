@@ -103,10 +103,10 @@ run = "uv run pytest tests/adapters tests/api tests/equivalence tests/features t
 
 # The live S3-compatible backend contract: SSE-KMS at rest, the hash-chained
 # access log, and provisioning/deprovisioning of a per-institution bucket. The
-# suite self-skips when S3_* is unconfigured, which is EVERY CI job today —
-# measured with the credentials blanked: `27 passed, 18 skipped`. So the only
-# storage tests CI has ever run are the pure-config ones; nothing has ever
-# exercised the real object store.
+# suite self-skips when S3_* is unconfigured. Before the dedicated storage and
+# Playwright journey jobs were added, that described every CI job: measured with
+# the credentials blanked, `27 passed, 18 skipped`. The storage job now supplies
+# MinIO with built-in KMS and requires all 45 tests to execute.
 #
 # A MinIO container with its BUILT-IN KMS satisfies all 18 — no KES sidecar is
 # needed, which is what made this look unreachable. Measured against

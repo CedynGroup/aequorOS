@@ -59,7 +59,12 @@ What changed, by workstream (`docs/submission_pipeline_plan.md`):
   `(org,package,kind)` artifact uniqueness; server-side family/date-range package
   filters; downloadable `.eml` downtime bundle; a Playwright e2e suite (hermetic
   backend + minted NextAuth cookies) covering authenticated navigation, live
-  package generation, the deadline board, and role gates.
+  package generation, the deadline board, and role gates. The suite now runs in
+  blocking CI against disposable MinIO. CI requires at least 20 journeys to
+  execute and enforces one exact eight-journey expected-failure list for the
+  pre-existing mismatch between regulator anchors and fixture snapshots; issue
+  #151 tracks the fixture repair, and an unexpected pass or list/discovery drift
+  fails the job.
 
 Migrations `202607240018`–`202607240023` are applied to the primary DB.
 The status vocabulary, channel set, and family set in the sections below are

@@ -276,7 +276,10 @@ throwaway sqlite file (deleted and rebuilt every run) plus `next dev`. Both
 servers use OS-selected free ports (optional `E2E_BACKEND_PORT` and
 `E2E_DASHBOARD_PORT` preferences fall back when occupied),
 then `e2e/global-setup.ts` seeds through the API and mints per-role session
-cookies. It never touches the primary database.
+cookies. The Next.js server uses `.next-e2e`, so it cannot contaminate the
+normal development cache. Because every journey shares the disposable database
+and session files, a worktree-local lock rejects a second concurrent E2E run.
+The stack never touches the primary database.
 
 Three prerequisites are not obvious, and each one has already cost a long
 diagnosis:
@@ -319,6 +322,18 @@ VISUAL_TOUR=1 npx playwright test visual-tour    # full-page screenshot of every
 
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
+
+The blocking `journeys` job in `.github/workflows/risk-service.yml` installs
+Chromium, starts MinIO with its built-in KMS, and runs this same command. CI
+requires at least 20 journeys to execute. Eight package-generation journeys are
+temporarily declared as expected failures because the canonical fixture has no
+exact snapshot for the regulator-selected anchor; the exact list is in
+`e2e/support/quarantine.ts`, and the repair is tracked in
+[#151](https://github.com/CedynGroup/aequorOS/issues/151). The custom reporter
+fails CI for any non-quarantined failure, unexpected quarantine pass, skipped or
+undiscovered quarantine entry, or `test.fail` declaration missing from that
+list. The quarantine is fixture drift, not relaxed product behavior: reporting
+still refuses to substitute an earlier snapshot.
 
 ## Deploy to bank.aequoros.com
 
