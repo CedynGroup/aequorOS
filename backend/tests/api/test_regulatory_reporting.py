@@ -689,9 +689,28 @@ def _all_reporting_obligations(
         offset += body["limit"]
 
 
+def test_calendar_without_pagination_returns_full_horizon(real_client: TestClient) -> None:
+    response = real_client.get(
+        f"{BASE}/reporting-obligations",
+        headers=real_headers(),
+        params={"horizon_months": 3},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    explicitly_paginated = _all_reporting_obligations(real_client, 3)
+
+    assert body["total"] > 100
+    assert body["obligations"] == explicitly_paginated
+    assert body["limit"] == body["total"] == len(body["obligations"])
+    assert body["offset"] == 0
+    assert body["has_more"] is False
+
+
 def test_calendar_lists_obligations_for_all_families(real_client: TestClient) -> None:
     response = real_client.get(
-        f"{BASE}/reporting-obligations", headers=real_headers(), params={"horizon_months": 3}
+        f"{BASE}/reporting-obligations",
+        headers=real_headers(),
+        params={"horizon_months": 3, "limit": 50},
     )
     assert response.status_code == 200, response.text
     body = response.json()

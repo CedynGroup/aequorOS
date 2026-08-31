@@ -208,7 +208,7 @@ export interface ListRegulatoryPackagesRequest {
 export interface ListReportingObligationsRequest {
   bankId: string;
   horizonMonths?: number;
-  limit?: number;
+  limit?: number | null;
   offset?: number;
 }
 

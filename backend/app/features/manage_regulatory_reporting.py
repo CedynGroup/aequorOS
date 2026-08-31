@@ -91,12 +91,12 @@ type PackageStatusFilter = Literal[
     response_model=ReportingObligationListRead,
     operation_id="listReportingObligations",
 )
-def list_reporting_obligations(  # noqa: PLR0913 - tenant scope + bounded page controls
+def list_reporting_obligations(  # noqa: PLR0913 - tenant scope + optional page controls
     bank_id: str,
     db: DbSession,
     ctx: Tenant,
     horizon_months: Annotated[int, Query(ge=1, le=24)] = 3,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ReportingObligationListRead:
     return regulatory_reporting.list_obligations(
