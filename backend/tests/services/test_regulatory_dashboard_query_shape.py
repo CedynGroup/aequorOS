@@ -250,13 +250,34 @@ def _capture_sql(engine: Engine | Connection) -> Iterator[list[str]]:
         _context: object,
         _executemany: bool,
     ) -> None:
-        statements.append(" ".join(statement.lower().split()))
+        normalized = _dashboard_statement(statement)
+        if normalized is not None:
+            statements.append(normalized)
 
     event.listen(engine, "before_cursor_execute", record)
     try:
         yield statements
     finally:
         event.remove(engine, "before_cursor_execute", record)
+
+
+def _dashboard_statement(statement: str) -> str | None:
+    normalized = " ".join(statement.lower().split())
+    # PostgreSQL initializes each tenant transaction with this RLS context
+    # statement. SQLite has no equivalent, and it is session security
+    # plumbing rather than a dashboard read, so keep the cross-dialect
+    # audit count focused on the application queries under test.
+    if normalized.startswith("select set_config('app.organization_id',"):
+        return None
+    return normalized
+
+
+def test_dashboard_query_count_ignores_postgres_rls_session_setup() -> None:
+    assert (
+        _dashboard_statement("SELECT set_config('app.organization_id', %(organization_id)s, true)")
+        is None
+    )
+    assert _dashboard_statement(" SELECT banks.id\nFROM banks ") == ("select banks.id from banks")
 
 
 def _measure[T](db: Session, operation: Callable[[], T]) -> tuple[T, list[str]]:
