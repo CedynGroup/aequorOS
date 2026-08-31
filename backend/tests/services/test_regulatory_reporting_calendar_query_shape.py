@@ -152,6 +152,35 @@ def test_obligation_query_shape_is_constant_as_horizon_grows(
     assert len(short_anchor_sql) == len(long_anchor_sql)
 
 
+def test_obligation_page_is_bounded_but_summary_covers_the_whole_horizon(
+    db_session: Session,
+) -> None:
+    materialize_canonical_test_book(db_session)
+    complete = calendar.list_obligations(db_session, _MAKER, SAMPLE_BANK_ID, 12, as_of=_AS_OF)
+    page = calendar.list_obligations(
+        db_session,
+        _MAKER,
+        SAMPLE_BANK_ID,
+        12,
+        as_of=_AS_OF,
+        limit=50,
+        offset=50,
+    )
+
+    assert page.obligations == complete.obligations[50:100]
+    assert page.total == len(complete.obligations)
+    assert page.limit == 50
+    assert page.offset == 50
+    assert page.has_more is True
+    assert page.summary.overdue == sum(item.rag == "overdue" for item in complete.obligations)
+    assert page.summary.due_soon == sum(item.rag == "due_soon" for item in complete.obligations)
+    assert page.summary.on_track == sum(item.rag == "on_track" for item in complete.obligations)
+    assert page.summary.pending_reupload == sum(
+        item.package_status == "submitted" and item.rag != "on_track"
+        for item in complete.obligations
+    )
+
+
 def test_calendar_links_only_the_current_solo_package(
     db_session: Session,
 ) -> None:

@@ -7,9 +7,14 @@
  * link into the Returns workspace for that return + reporting date.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, TriangleAlert } from 'lucide-react';
+import {
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  TriangleAlert,
+} from 'lucide-react';
 import type { ReportingObligationRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat from '@/components/ui/KpiStat';
@@ -31,6 +36,7 @@ import {
 import { centralBankName, fmtInt } from '@/lib/format';
 
 const HORIZON_OPTIONS = [3, 6, 12];
+const PAGE_SIZE = 25;
 
 /** Whether an obligation is a downtime email submission awaiting ORASS
  * re-upload: submitted but still not satisfying its RAG (BG/FMD/2026/07). */
@@ -50,17 +56,19 @@ export default function RegulatoryCalendarPage() {
   const { bank } = useBankContext();
   const bankId = bank?.id;
   const [horizon, setHorizon] = useState(3);
+  const [offset, setOffset] = useState(0);
 
-  const query = useReportingObligations(bankId, horizon);
+  const query = useReportingObligations(bankId, horizon, PAGE_SIZE, offset);
   const obligations = query.data?.obligations ?? [];
   const asOf = query.data?.asOf;
+  const summary = query.data?.summary;
+  const total = query.data?.total ?? 0;
+  const rangeStart = total === 0 ? 0 : offset + 1;
+  const rangeEnd = Math.min(offset + obligations.length, total);
 
-  const overdue = obligations.filter((o) => o.rag === 'overdue');
-  const dueSoon = obligations.filter((o) => o.rag === 'due_soon');
-  const onTrack = obligations.filter((o) => o.rag === 'on_track');
-  const pendingReupload = obligations.filter(isPendingReupload);
+  const pageOverdue = obligations.filter((o) => o.rag === 'overdue');
 
-  const columns: Column<ReportingObligationRead>[] = [
+  const columns = useMemo<Column<ReportingObligationRead>[]>(() => [
     {
       key: 'return',
       header: 'Return',
@@ -147,7 +155,7 @@ export default function RegulatoryCalendarPage() {
           <span className="text-caption text-slate">Not generated</span>
         ),
     },
-  ];
+  ], []);
 
   return (
     <>
@@ -165,7 +173,10 @@ export default function RegulatoryCalendarPage() {
             Horizon
             <select
               value={horizon}
-              onChange={(e) => setHorizon(Number(e.target.value))}
+              onChange={(e) => {
+                setHorizon(Number(e.target.value));
+                setOffset(0);
+              }}
               className="rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
             >
               {HORIZON_OPTIONS.map((months) => (
@@ -187,39 +198,69 @@ export default function RegulatoryCalendarPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiStat
               label="Overdue"
-              value={overdue.length}
-              status={overdue.length > 0 ? 'crit' : 'ok'}
+              value={summary?.overdue ?? 0}
+              status={(summary?.overdue ?? 0) > 0 ? 'crit' : 'ok'}
               hint="Deadline passed without a completed submission"
             />
             <KpiStat
               label="Due soon"
-              value={dueSoon.length}
-              status={dueSoon.length > 0 ? 'warn' : 'ok'}
+              value={summary?.dueSoon ?? 0}
+              status={(summary?.dueSoon ?? 0) > 0 ? 'warn' : 'ok'}
               hint="Due within 7 days"
             />
             <KpiStat
               label="On track"
-              value={onTrack.length}
+              value={summary?.onTrack ?? 0}
               status="ok"
               hint="Submitted, acknowledged, or not yet near deadline"
             />
             <KpiStat
               label="Pending ORASS re-upload"
-              value={pendingReupload.length}
-              status={pendingReupload.length > 0 ? 'warn' : 'ok'}
+              value={summary?.pendingReupload ?? 0}
+              status={(summary?.pendingReupload ?? 0) > 0 ? 'warn' : 'ok'}
               hint="Downtime email submissions awaiting ORASS (BG/FMD/2026/07)"
             />
           </div>
 
           <SectionCard
             title="Reporting obligations"
-            subtitle={`Registry obligations for the next ${horizon} months — click a row to open its Returns workspace`}
+            subtitle={`Registry obligations for the next ${horizon} months — showing ${rangeStart}–${rangeEnd} of ${total} by due date`}
             noPadding
             footer={
-              <span className="inline-flex items-start gap-1.5 max-w-3xl leading-relaxed">
-                <CalendarClock size={11} className="mt-0.5 shrink-0" aria-hidden />
-                {PENALTY_FOOTNOTE}
-              </span>
+              <div className="flex items-center justify-between gap-3 flex-wrap w-full">
+                <span className="inline-flex items-start gap-1.5 max-w-3xl leading-relaxed">
+                  <CalendarClock size={11} className="mt-0.5 shrink-0" aria-hidden />
+                  {PENALTY_FOOTNOTE}
+                </span>
+                <nav
+                  aria-label="Reporting obligations pages"
+                  className="flex items-center gap-2"
+                >
+                  <span className="font-mono text-micro tnum" aria-live="polite">
+                    {rangeStart}–{rangeEnd} of {total}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={offset === 0 || query.isFetching}
+                    onClick={() =>
+                      setOffset((current) => Math.max(0, current - PAGE_SIZE))
+                    }
+                    className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
+                  >
+                    <ChevronLeft size={11} aria-hidden />
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!query.data?.hasMore || query.isFetching}
+                    onClick={() => setOffset((current) => current + PAGE_SIZE)}
+                    className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate disabled:opacity-50 disabled:hover:text-slate disabled:hover:border-border"
+                  >
+                    Next
+                    <ChevronRight size={11} aria-hidden />
+                  </button>
+                </nav>
+              </div>
             }
           >
             {obligations.length === 0 ? (
@@ -234,6 +275,7 @@ export default function RegulatoryCalendarPage() {
                 columns={columns}
                 rows={obligations}
                 density="compact"
+                scrollLabel="Reporting obligations"
                 rowClassName={(o) =>
                   o.rag === 'overdue' ? 'bg-critical-light/20' : ''
                 }
@@ -244,13 +286,13 @@ export default function RegulatoryCalendarPage() {
             )}
           </SectionCard>
 
-          {overdue.length > 0 && asOf && (
+          {pageOverdue.length > 0 && asOf && (
             <SectionCard
-              title="Indicative penalty exposure — overdue returns"
+              title="Indicative penalty exposure — overdue returns on this page"
               subtitle="Act 930 s.93(3) · units × GH¢12/unit (Fines (Penalty Units) Act 572) · indicative only"
             >
               <ul className="space-y-2">
-                {overdue.map((o) => {
+                {pageOverdue.map((o) => {
                   const days = daysOverdue(o.dueDate, asOf);
                   const penalty = indicativePenaltyGhs(days);
                   return (

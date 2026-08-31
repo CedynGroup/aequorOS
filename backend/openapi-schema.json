@@ -29628,8 +29628,17 @@
             ],
             "title": "Coverage Note"
           },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
           "horizon_months": {
             "title": "Horizon Months",
+            "type": "integer"
+          },
+          "limit": {
+            "minimum": 0.0,
+            "title": "Limit",
             "type": "integer"
           },
           "obligations": {
@@ -29638,13 +29647,31 @@
             },
             "title": "Obligations",
             "type": "array"
+          },
+          "offset": {
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReportingObligationSummaryRead"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
           "bank_id",
           "as_of",
           "horizon_months",
-          "obligations"
+          "obligations",
+          "summary",
+          "total",
+          "limit",
+          "offset",
+          "has_more"
         ],
         "title": "ReportingObligationListRead",
         "type": "object"
@@ -29753,6 +29780,40 @@
           "rag"
         ],
         "title": "ReportingObligationRead",
+        "type": "object"
+      },
+      "ReportingObligationSummaryRead": {
+        "additionalProperties": false,
+        "description": "Whole-horizon counts, independent of the requested result page.",
+        "properties": {
+          "due_soon": {
+            "minimum": 0.0,
+            "title": "Due Soon",
+            "type": "integer"
+          },
+          "on_track": {
+            "minimum": 0.0,
+            "title": "On Track",
+            "type": "integer"
+          },
+          "overdue": {
+            "minimum": 0.0,
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "pending_reupload": {
+            "minimum": 0.0,
+            "title": "Pending Reupload",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "overdue",
+          "due_soon",
+          "on_track",
+          "pending_reupload"
+        ],
+        "title": "ReportingObligationSummaryRead",
         "type": "object"
       },
       "ReportingSettingsPut": {
@@ -60282,6 +60343,29 @@
               "maximum": 24,
               "minimum": 1,
               "title": "Horizon Months",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
               "type": "integer"
             }
           }

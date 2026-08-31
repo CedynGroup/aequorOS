@@ -669,6 +669,26 @@ def _expected_rag(item: dict[str, Any], as_of: date) -> set[str]:
     return {"on_track"}
 
 
+def _all_reporting_obligations(
+    real_client: TestClient, horizon_months: int
+) -> list[dict[str, Any]]:
+    obligations: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        response = real_client.get(
+            f"{BASE}/reporting-obligations",
+            headers=real_headers(),
+            params={"horizon_months": horizon_months, "limit": 100, "offset": offset},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        obligations.extend(body["obligations"])
+        if not body["has_more"]:
+            assert len(obligations) == body["total"]
+            return obligations
+        offset += body["limit"]
+
+
 def test_calendar_lists_obligations_for_all_families(real_client: TestClient) -> None:
     response = real_client.get(
         f"{BASE}/reporting-obligations", headers=real_headers(), params={"horizon_months": 3}
@@ -677,8 +697,13 @@ def test_calendar_lists_obligations_for_all_families(real_client: TestClient) ->
     body = response.json()
     assert body["bank_id"] == REAL_BANK_ID
     assert body["horizon_months"] == 3
+    assert body["limit"] == 50
+    assert body["offset"] == 0
+    assert body["has_more"] is True
+    assert len(body["obligations"]) == body["limit"]
+    assert sum(body["summary"][key] for key in ("overdue", "due_soon", "on_track")) == body["total"]
     as_of = date.fromisoformat(body["as_of"])
-    obligations = body["obligations"]
+    obligations = _all_reporting_obligations(real_client, 3)
     assert obligations
     # Exactly the periodic registry — the event-driven corporate LRT packs and
     # the stress pack never become calendar obligations; every official BoG BSD
@@ -731,9 +756,7 @@ def test_calendar_lists_obligations_for_all_families(real_client: TestClient) ->
         for item in weekly
     )
 
-    wider = real_client.get(
-        f"{BASE}/reporting-obligations", headers=real_headers(), params={"horizon_months": 12}
-    ).json()["obligations"]
+    wider = _all_reporting_obligations(real_client, 12)
     # Periodic returns expand with the horizon; the fixed daily window does not.
     assert len(wider) > len(obligations)
     assert len([item for item in wider if item["frequency"] == "daily"]) == len(dbk)
@@ -772,9 +795,7 @@ def test_template_gated_returns_appear_in_calendar_but_refuse_generation(
     with template_pending instead of inventing a layout. (BSD-MONTHLY was the
     same gate for the balance-sheet/P&L pack until the official BSD workbooks
     landed; BSD2/BSD7A now generate for real — see test_bog_forms_framework.)"""
-    obligations = real_client.get(
-        f"{BASE}/reporting-obligations", headers=real_headers(), params={"horizon_months": 6}
-    ).json()["obligations"]
+    obligations = _all_reporting_obligations(real_client, 6)
     codes = {item["return_code"] for item in obligations}
     assert "LAS-QUARTERLY" in codes
     assert "BSD-MONTHLY" not in codes  # retired placeholder
@@ -1387,11 +1408,7 @@ def test_reporting_settings_endpoints_round_trip_and_shift_due_dates(
     assert isinstance(before.json()["deadline_overrides"], dict)
     without_override = [
         item
-        for item in real_client.get(
-            f"{BASE}/reporting-obligations",
-            headers=real_headers(),
-            params={"horizon_months": 1},
-        ).json()["obligations"]
+        for item in _all_reporting_obligations(real_client, 1)
         if item["return_code"] == "CAR-RWA"
     ]
     assert without_override
@@ -1403,9 +1420,7 @@ def test_reporting_settings_endpoints_round_trip_and_shift_due_dates(
     stored = real_client.get(url, headers=real_headers())
     assert stored.json()["deadline_overrides"] == {"CAR-RWA": 21}
 
-    obligations = real_client.get(
-        f"{BASE}/reporting-obligations", headers=real_headers(), params={"horizon_months": 1}
-    ).json()["obligations"]
+    obligations = _all_reporting_obligations(real_client, 1)
     car_rwa = [item for item in obligations if item["return_code"] == "CAR-RWA"]
     assert car_rwa and all(item["due_date"].endswith("-21") for item in car_rwa)
     # The override moves the deadline, never the reporting date or the count.

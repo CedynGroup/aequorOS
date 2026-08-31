@@ -25,6 +25,13 @@ import {
   ReportingObligationReadToJSON,
   ReportingObligationReadToJSONTyped,
 } from "./ReportingObligationRead";
+import type { ReportingObligationSummaryRead } from "./ReportingObligationSummaryRead";
+import {
+  ReportingObligationSummaryReadFromJSON,
+  ReportingObligationSummaryReadFromJSONTyped,
+  ReportingObligationSummaryReadToJSON,
+  ReportingObligationSummaryReadToJSONTyped,
+} from "./ReportingObligationSummaryRead";
 
 /**
  *
@@ -52,16 +59,46 @@ export interface ReportingObligationListRead {
   coverageNote?: CoverageNote;
   /**
    *
+   * @type {boolean}
+   * @memberof ReportingObligationListRead
+   */
+  hasMore: boolean;
+  /**
+   *
    * @type {number}
    * @memberof ReportingObligationListRead
    */
   horizonMonths: number;
   /**
    *
+   * @type {number}
+   * @memberof ReportingObligationListRead
+   */
+  limit: number;
+  /**
+   *
    * @type {Array<ReportingObligationRead>}
    * @memberof ReportingObligationListRead
    */
   obligations: Array<ReportingObligationRead>;
+  /**
+   *
+   * @type {number}
+   * @memberof ReportingObligationListRead
+   */
+  offset: number;
+  /**
+   *
+   * @type {ReportingObligationSummaryRead}
+   * @memberof ReportingObligationListRead
+   */
+  summary: ReportingObligationSummaryRead;
+  /**
+   *
+   * @type {number}
+   * @memberof ReportingObligationListRead
+   */
+  total: number;
 }
 
 /**
@@ -72,10 +109,15 @@ export function instanceOfReportingObligationListRead(
 ): value is ReportingObligationListRead {
   if (!("asOf" in value) || value["asOf"] === undefined) return false;
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
+  if (!("hasMore" in value) || value["hasMore"] === undefined) return false;
   if (!("horizonMonths" in value) || value["horizonMonths"] === undefined)
     return false;
+  if (!("limit" in value) || value["limit"] === undefined) return false;
   if (!("obligations" in value) || value["obligations"] === undefined)
     return false;
+  if (!("offset" in value) || value["offset"] === undefined) return false;
+  if (!("summary" in value) || value["summary"] === undefined) return false;
+  if (!("total" in value) || value["total"] === undefined) return false;
   return true;
 }
 
@@ -100,10 +142,15 @@ export function ReportingObligationListReadFromJSONTyped(
       json["coverage_note"] == null
         ? undefined
         : CoverageNoteFromJSON(json["coverage_note"]),
+    hasMore: json["has_more"],
     horizonMonths: json["horizon_months"],
+    limit: json["limit"],
     obligations: (json["obligations"] as Array<any>).map(
       ReportingObligationReadFromJSON,
     ),
+    offset: json["offset"],
+    summary: ReportingObligationSummaryReadFromJSON(json["summary"]),
+    total: json["total"],
   };
 }
 
@@ -125,9 +172,14 @@ export function ReportingObligationListReadToJSONTyped(
     as_of: value["asOf"].toISOString().substring(0, 10),
     bank_id: value["bankId"],
     coverage_note: CoverageNoteToJSON(value["coverageNote"]),
+    has_more: value["hasMore"],
     horizon_months: value["horizonMonths"],
+    limit: value["limit"],
     obligations: (value["obligations"] as Array<any>).map(
       ReportingObligationReadToJSON,
     ),
+    offset: value["offset"],
+    summary: ReportingObligationSummaryReadToJSON(value["summary"]),
+    total: value["total"],
   };
 }
