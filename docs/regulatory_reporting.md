@@ -167,7 +167,11 @@ distinct artifact kind that is never filed and never signed), `csv`. Rendering:
   `list_return_anchors` (the per-return picker the Returns workspace binds to). Both surfaces
   link only the current solo package for each anchor and batch those package reads into one query,
   plus at most one submission-event query for pending ORASS re-uploads; horizon growth does not
-  increase their SQL query count. The contract is pinned by
+  increase their SQL query count. Obligations are due-date ordered and may be sliced with
+  `limit`/`offset` after the complete horizon is built. `summary` (overdue, due soon, on track,
+  and pending ORASS re-upload), `total`, and `has_more` describe the complete horizon, not just
+  the returned page. Omitting `limit` preserves the original full-horizon response. The contract
+  is pinned by
   `tests/services/test_regulatory_reporting_calendar_query_shape.py`.
 
 ### 5a. Reporting date vs data arrival (corrected 2026-08-23)
@@ -206,8 +210,10 @@ date required, the nearest earlier computed date, and the remedy.
 
 ## 6. API (`app/features/manage_regulatory_reporting.py`)
 
-listReportingObligations (calendar), listReturnAnchors (per-return reporting dates + data
-coverage), listRegulatoryPackages, createRegulatoryPackage (generate),
+listReportingObligations (calendar; `horizon_months` 1–24, optional `limit` 1–100 and zero-based
+`offset`; response includes whole-horizon `summary`/`total` plus `limit`/`offset`/`has_more`),
+listReturnAnchors (per-return reporting dates + data coverage), listRegulatoryPackages,
+createRegulatoryPackage (generate),
 getRegulatoryPackage, validateRegulatoryPackage, requestPackageApproval, decidePackageApproval,
 exportRegulatoryPackage (kind → artifact download), submitRegulatoryPackage (channel),
 listSubmissionEvents, listReturnTemplates (registry + fidelity), get/putChannelConfig
@@ -215,7 +221,9 @@ listSubmissionEvents, listReturnTemplates (registry + fidelity), get/putChannelC
 
 ## 7. UI (Governance → Regulatory Reporting, route `/submissions` retained)
 
-Tabs: **Calendar** (deadline board, RAG, next obligations) · **Returns** (family workspaces:
+Tabs: **Calendar** (deadline board, RAG, next obligations; due-date-ordered 25-row pages with a
+labelled keyboard-operable pager; KPI counts remain whole-horizon, while overdue penalty detail
+names and covers the current page) · **Returns** (family workspaces:
 generate → preview vs prior period → validate → approvals → export xlsx/csv/pdf → submit) ·
 **Approvals** (checker queue) · **History** (packages + submission events, filters, downloads) ·
 **Templates** (registry with fidelity grades + preview) · **Channel settings** (ORASS sandbox

@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * Regulatory Reporting — Calendar (hub landing). The deadline board: every
- * registry obligation in the horizon with its RAG grade, linked package
- * state, and an Act 930 penalty-exposure note for overdue rows. Rows deep-
- * link into the Returns workspace for that return + reporting date.
+ * Regulatory Reporting — Calendar (hub landing). The paged deadline board shows
+ * due-date-ordered registry obligations while its KPI summary covers the entire
+ * selected horizon. Each row carries its RAG grade, linked package state, and an
+ * Act 930 penalty-exposure note; rows deep-link into the Returns workspace.
  */
 
 import { useMemo, useState } from 'react';

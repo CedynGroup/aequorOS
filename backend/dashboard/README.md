@@ -203,12 +203,13 @@ and explicit-period dashboard reads have distinct stable keys. The root
 authority changes, including entry to or exit from staff inspection; ordinary
 access-token rotation deliberately keeps the same cache.
 
-Heavy liquidity, capital, IRRBB, FX, FTP, and live-snapshot payloads do not use
-fixed polling. They refresh on mount/window focus, after a relevant accepted
-mutation or completed pipeline job, and when the cheap live-summary generation
-or freshness official-run signal changes for that module. Live summary,
-freshness, and alerts retain a 20-second cadence with stable ±10% cache-scope jitter;
-notifications retain 60 seconds with the same jitter. A failed initial signal
+Heavy liquidity, capital, IRRBB, FX, FTP, regulatory calendar, and live-snapshot
+payloads do not use fixed polling. They refresh on mount/window focus, after a
+relevant accepted mutation or completed pipeline job, and when the cheap
+live-summary generation or freshness official-run signal changes for that
+module. Live summary, freshness, and alerts retain a 20-second cadence with
+stable ±10% cache-scope jitter; notifications retain 60 seconds with the same
+jitter. A failed initial signal
 does not block an otherwise available detail response. These signal requests are
 observational: in particular, an unchanged live-summary poll performs no enqueue
 and no commit. Recalculation comes from accepted input/governance mutations, a
@@ -222,6 +223,18 @@ fixture records the bounded-idle improvement as **23 resources / 44 calls / 21
 detail calls before** and **22 / 33 / 5 after**, with zero detail polling. Keep
 `lib/api/queryPolicy.test.ts` and `lib/api/queryAuthorityBoundary.test.tsx` green
 when changing query keys, refresh behavior, session authority, or home requests.
+
+The regulatory calendar uses 25-row server pages through the native `DataTable`.
+The server computes the complete due-date-ordered horizon and its KPI summary in
+one pass before slicing, so paging never changes the headline overdue, due-soon,
+on-track, or pending-re-upload counts. Five-sample local Playwright profiling on
+the synthetic fixture measured **236 rows / 1,652 data cells before and 25 / 175
+after** at the default three-month horizon, and **644 / 4,508 before and 25 / 175
+after** at twelve months. The roughly 200 ms long task reproduced in all five
+twelve-month baseline samples and in none of the five paginated samples; neither
+horizon produced a post-change long task. Keep the native table/column semantics,
+row focus, Tab traversal, Enter activation, and labelled keyboard pager when
+changing this surface.
 
 Because that panel is below the fold, `DeferredRatioTrendChart` keeps its
 Recharts implementation out of the Command Center's initial JavaScript graph.
