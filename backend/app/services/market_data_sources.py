@@ -365,6 +365,9 @@ def _curve_sources_by_date(
     source: str,
     dates: list[date],
 ) -> dict[date, tuple[str, ...]]:
+    if source != "bank":
+        resolved = resolve_source_systems(source, set())
+        return dict.fromkeys(dates, resolved)
     source_rows = db.execute(
         select(
             CanonicalYieldCurve.source_system,

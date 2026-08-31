@@ -43,6 +43,13 @@ _MODULES = {
     "fx": regulatory_fx,
     "ftp": regulatory_ftp,
 }
+_FULL_HTTP_QUERY_COUNTS = {
+    "liquidity": 14,
+    "capital": 15,
+    "irr": 16,
+    "fx": 12,
+    "ftp": 12,
+}
 
 
 def _legacy_trend(  # noqa: PLR0912, PLR0915 - faithful five-module legacy oracle
@@ -436,7 +443,7 @@ def test_trend_uses_one_bulk_call_per_request_resource(
 
 @pytest.mark.parametrize("module_name", _MODULES)
 def test_record_full_http_dashboard_query_count(db_client: TestClient, module_name: str) -> None:
-    """Record the audit-style count; scaling is enforced by the trend budget."""
+    """Pin the audit-style count; scaling is enforced by the trend budget."""
     with get_sessionmaker()() as session:
         materialize_canonical_test_book(session)
         session.commit()
@@ -458,6 +465,7 @@ def test_record_full_http_dashboard_query_count(db_client: TestClient, module_na
 
     assert response.status_code == 200, response.text
     print(f"{module_name}: full HTTP dashboard SQL={len(statements)}")
+    assert len(statements) == _FULL_HTTP_QUERY_COUNTS[module_name]
 
 
 @pytest.mark.parametrize(
