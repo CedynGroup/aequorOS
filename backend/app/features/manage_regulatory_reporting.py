@@ -128,9 +128,7 @@ def list_return_anchors(
     reporting periods, which are a consequence of data arrival rather than a
     filing calendar (``services/regulatory_reporting/anchors.py``).
     """
-    return regulatory_reporting.list_return_anchors(
-        db, ctx, bank_id, return_code, horizon_months
-    )
+    return regulatory_reporting.list_return_anchors(db, ctx, bank_id, return_code, horizon_months)
 
 
 @router.get(
