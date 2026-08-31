@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -68,7 +68,12 @@ def _seed_bank(db: Session, organization_id: str = ORG_1) -> str:
 
 
 def _meta(
-    db: Session, bank_id: str, *, source_system: str, organization_id: str = ORG_1
+    db: Session,
+    bank_id: str,
+    *,
+    source_system: str,
+    organization_id: str = ORG_1,
+    as_of: date = AS_OF,
 ) -> dict[str, Any]:
     batch = IngestionBatch(
         organization_id=organization_id,
@@ -77,7 +82,7 @@ def _meta(
         adapter_version="1.0",
         extraction_mode="full",
         status="accepted",
-        as_of_date=AS_OF,
+        as_of_date=as_of,
     )
     db.add(batch)
     db.flush()
@@ -93,7 +98,7 @@ def _meta(
     return {
         "organization_id": organization_id,
         "bank_id": bank_id,
-        "as_of_date": AS_OF,
+        "as_of_date": as_of,
         "ingested_at": NOW,
         "source_system": source_system,
         "ingestion_batch_id": batch.id,
@@ -111,12 +116,20 @@ def _seed_curve(  # noqa: PLR0913 - a fixture knob per curve identity axis
     rates: dict[int, str],
     curve_type: str = "sovereign",
     organization_id: str = ORG_1,
+    as_of: date = AS_OF,
+    currency: str = "GHS",
 ) -> None:
-    meta = _meta(db, bank_id, source_system=source_system, organization_id=organization_id)
+    meta = _meta(
+        db,
+        bank_id,
+        source_system=source_system,
+        organization_id=organization_id,
+        as_of=as_of,
+    )
     curve = CanonicalYieldCurve(
         **meta,
         source_reference=f"{source_system}/{curve_name}",
-        currency="GHS",
+        currency=currency,
         curve_name=curve_name,
         curve_type=curve_type,
     )
@@ -401,6 +414,64 @@ def test_prefetched_curves_match_scalar_resolvers_for_every_requested_date(
         assert prefetched.discount[as_of] == market_data_sources.preferred_discount_curve(
             db_session, ORG_1, bank_id, "GHS", as_of, now=NOW
         )
+
+
+def test_prefetched_curve_payload_stays_bounded_with_long_history(
+    db_session: Session,
+) -> None:
+    bank_id = _seed_bank(db_session)
+    for days_ago in range(180, 0, -1):
+        _seed_curve(
+            db_session,
+            bank_id,
+            curve_name=f"GHS.HISTORY.{days_ago}",
+            source_system="MANUAL_UPLOAD",
+            rates={3: "0.20", 12: "0.21"},
+            as_of=AS_OF - timedelta(days=days_ago),
+        )
+        _seed_curve(
+            db_session,
+            bank_id,
+            curve_name=f"USD.HISTORY.{days_ago}",
+            source_system="MANUAL_UPLOAD",
+            rates={3: "0.04", 12: "0.05"},
+            as_of=AS_OF - timedelta(days=days_ago),
+            currency="USD",
+        )
+    _seed_curve(
+        db_session,
+        bank_id,
+        curve_name="GHS.CURRENT",
+        source_system="MANUAL_UPLOAD",
+        rates={3: "0.24", 12: "0.25"},
+    )
+    point_parameter_counts: list[int] = []
+
+    def capture_points(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        if "from canonical_yield_curve_points" in statement.lower():
+            point_parameter_counts.append(len(parameters))  # type: ignore[arg-type]
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", capture_points)
+    try:
+        prefetched = market_data_sources.prefetch_preferred_curves(
+            db_session, ORG_1, bank_id, "GHS", [AS_OF], now=NOW
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_points)
+
+    scalar = market_data_sources.preferred_projection_curve(
+        db_session, ORG_1, bank_id, "GHS", AS_OF, now=NOW
+    )
+    assert prefetched.projection[AS_OF] == scalar
+    assert point_parameter_counts == [4]
 
 
 def test_preferred_fx_spot_source_filter_and_fallback(db_session: Session) -> None:

@@ -91,7 +91,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -414,6 +414,83 @@ def _net_own_funds(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> 
 def net_own_funds(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> Decimal:
     """The signed Act 930 s.29 Net Own Funds denominator for SDI consumers."""
     return _net_own_funds(db, ctx, bank, as_of)
+
+
+def prefetch_net_own_funds(
+    db: Session, ctx: TenantContext, bank: Bank, as_of_dates: list[date]
+) -> dict[date, Decimal]:
+    """Resolve request-scoped SDI Net Own Funds without per-date queries."""
+    dates = sorted(set(as_of_dates))
+    if not dates:
+        return {}
+    scope = (
+        CanonicalReferenceRow.organization_id == ctx.organization_id,
+        CanonicalReferenceRow.bank_id == bank.id,
+        CanonicalReferenceRow.dataset_kind == "capital_structure",
+    )
+    generation_queries = []
+    for as_of in dates:
+        winner = (
+            select(
+                CanonicalReferenceRow.as_of_date.label("as_of_date"),
+                CanonicalReferenceRow.ingestion_batch_id.label("ingestion_batch_id"),
+            )
+            .where(*scope, CanonicalReferenceRow.as_of_date <= as_of)
+            .order_by(
+                CanonicalReferenceRow.as_of_date.desc(),
+                CanonicalReferenceRow.created_at.desc(),
+                CanonicalReferenceRow.id.desc(),
+            )
+            .limit(1)
+            .subquery()
+        )
+        generation_queries.append(
+            select(
+                literal(as_of).label("requested_date"),
+                winner.c.as_of_date,
+                winner.c.ingestion_batch_id,
+            )
+        )
+    generations = list(db.execute(union_all(*generation_queries)).all())
+    selected_generations = {
+        (generation_date, batch_id) for _, generation_date, batch_id in generations
+    }
+    if not selected_generations:
+        return dict.fromkeys(dates, _ZERO)
+
+    generation_scope = or_(
+        *(
+            and_(
+                CanonicalReferenceRow.as_of_date == generation_date,
+                CanonicalReferenceRow.ingestion_batch_id == batch_id,
+            )
+            for generation_date, batch_id in selected_generations
+        )
+    )
+    rows = list(
+        db.scalars(
+            select(CanonicalReferenceRow).where(
+                *scope,
+                generation_scope,
+            )
+        )
+    )
+    totals_by_generation: dict[tuple[date, object], Decimal] = {}
+    for row in rows:
+        key = (row.as_of_date, row.ingestion_batch_id)
+        totals_by_generation[key] = totals_by_generation.get(key, _ZERO) + signed_component_amount(
+            row.payload or {}
+        )
+
+    generation_by_date: dict[date, tuple[date, object]] = {}
+    for as_of, generation_date, batch_id in generations:
+        generation_by_date[as_of] = (generation_date, batch_id)
+    return {
+        as_of: totals_by_generation.get(generation_by_date[as_of], _ZERO)
+        if as_of in generation_by_date
+        else _ZERO
+        for as_of in dates
+    }
 
 
 def resolve_bucket_map(db: Session, bank: Bank, as_of: date) -> tuple[dict[str, str], str]:

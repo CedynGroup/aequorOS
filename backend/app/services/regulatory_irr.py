@@ -167,6 +167,7 @@ class _IrrDashboardBatch:
     policy_scope: regulatory_parameters.PolicyScope
     projection_curves: dict[date, CurveView | None]
     discount_curves: dict[date, CurveView | None]
+    sdi_net_own_funds: dict[date, Decimal]
 
 
 @dataclass(frozen=True)
@@ -845,6 +846,11 @@ def _prefetch_dashboard_batch(
         policy_scope.currency,
         dates,
     )
+    sdi_net_own_funds = (
+        sdi_capital.prefetch_net_own_funds(db, ctx, bank, dates)
+        if policy_scope.institution_class == "sdi"
+        else {}
+    )
     return _IrrDashboardBatch(
         runs=regulatory_dashboard_batching.latest_succeeded_baseline_runs(
             db,
@@ -870,6 +876,7 @@ def _prefetch_dashboard_batch(
         policy_scope=policy_scope,
         projection_curves=preferred_curves.projection,
         discount_curves=preferred_curves.discount,
+        sdi_net_own_funds=sdi_net_own_funds,
     )
 
 
@@ -929,7 +936,7 @@ def _compute_inline_from_batch(
     facts = [fact for fact in period_facts if fact.fact_group in _IRR_FACT_GROUPS]
     active = _irr_params_from_batch(db, ctx, bank, period.period_end, batch)
     tier1 = (
-        sdi_capital.net_own_funds(db, ctx, bank, period.period_end)
+        batch.sdi_net_own_funds[period.period_end]
         if batch.policy_scope.institution_class == "sdi"
         else _tier1_from_facts(period_facts)
     )

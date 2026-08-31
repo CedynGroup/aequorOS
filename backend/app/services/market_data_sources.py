@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, union_all
 
 from app.models import (
     Bank,
@@ -358,6 +358,99 @@ class PrefetchedPreferredCurves:
     discount: dict[date, CurveView | None]
 
 
+def _curve_sources_by_date(
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    source: str,
+    dates: list[date],
+) -> dict[date, tuple[str, ...]]:
+    source_rows = db.execute(
+        select(
+            CanonicalYieldCurve.source_system,
+            func.min(CanonicalYieldCurve.as_of_date).label("first_seen"),
+        )
+        .where(
+            CanonicalYieldCurve.organization_id == organization_id,
+            CanonicalYieldCurve.bank_id == bank_id,
+            CanonicalYieldCurve.as_of_date <= dates[-1],
+            CanonicalYieldCurve.superseded_by.is_(None),
+            CanonicalYieldCurve.withdrawn_at.is_(None),
+            CanonicalYieldCurve.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+        )
+        .group_by(CanonicalYieldCurve.source_system)
+    ).tuples()
+    source_first_seen: dict[str, date] = {
+        source_system: first_seen for source_system, first_seen in source_rows
+    }
+    return {
+        as_of: resolve_source_systems(
+            source,
+            {
+                source_system
+                for source_system, first_seen in source_first_seen.items()
+                if first_seen <= as_of
+            },
+        )
+        for as_of in dates
+    }
+
+
+def _winning_curve_ids(
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    currency: str,
+    selected_sources_by_date: dict[date, tuple[str, ...]],
+) -> set[UUID]:
+    discount_name = market_data.desk_discount_curve_name(currency)
+    projection_name = desk_projection_curve_name(currency)
+    selectors: set[tuple[date, tuple[str, ...] | None, str | None, str | None]] = set()
+    for as_of, selected_sources in selected_sources_by_date.items():
+        source_scopes: tuple[tuple[str, ...] | None, ...] = (
+            (selected_sources, None) if selected_sources else (None,)
+        )
+        for source_systems in source_scopes:
+            selectors.update(
+                {
+                    (as_of, source_systems, projection_name, None),
+                    (as_of, source_systems, None, None),
+                    (as_of, source_systems, discount_name, None),
+                    (as_of, source_systems, None, market_data.DISCOUNT_CURVE_TYPE),
+                }
+            )
+
+    winner_queries = []
+    for as_of, source_systems, curve_name, curve_type in selectors:
+        winner = (
+            select(CanonicalYieldCurve.id.label("curve_id"))
+            .where(
+                CanonicalYieldCurve.organization_id == organization_id,
+                CanonicalYieldCurve.bank_id == bank_id,
+                CanonicalYieldCurve.currency == currency,
+                CanonicalYieldCurve.as_of_date <= as_of,
+                CanonicalYieldCurve.superseded_by.is_(None),
+                CanonicalYieldCurve.withdrawn_at.is_(None),
+                CanonicalYieldCurve.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            )
+            .order_by(
+                CanonicalYieldCurve.as_of_date.desc(),
+                CanonicalYieldCurve.ingested_at.desc(),
+                CanonicalYieldCurve.id.desc(),
+            )
+            .limit(1)
+        )
+        if source_systems is not None:
+            winner = winner.where(CanonicalYieldCurve.source_system.in_(source_systems))
+        if curve_name is not None:
+            winner = winner.where(CanonicalYieldCurve.curve_name == curve_name)
+        if curve_type is not None:
+            winner = winner.where(CanonicalYieldCurve.curve_type == curve_type)
+        winner_subquery = winner.subquery()
+        winner_queries.append(select(winner_subquery.c.curve_id))
+    return set(db.scalars(union_all(*winner_queries)))
+
+
 def prefetch_preferred_curves(  # noqa: PLR0913 - one bounded request scope
     db: Session,
     organization_id: str,
@@ -379,16 +472,33 @@ def prefetch_preferred_curves(  # noqa: PLR0913 - one bounded request scope
     if not dates:
         return PrefetchedPreferredCurves(projection={}, discount={})
     choice = load_preference(db, organization_id, bank_id).curves
+    currency = currency.upper()
+    selected_sources_by_date = _curve_sources_by_date(
+        db,
+        organization_id,
+        bank_id,
+        choice.source,
+        dates,
+    )
+    discount_name = market_data.desk_discount_curve_name(currency)
+    projection_name = desk_projection_curve_name(currency)
+    curve_ids = _winning_curve_ids(
+        db,
+        organization_id,
+        bank_id,
+        currency,
+        selected_sources_by_date,
+    )
+    if not curve_ids:
+        empty = dict.fromkeys(dates)
+        return PrefetchedPreferredCurves(projection=empty.copy(), discount=empty)
     curves = list(
         db.scalars(
             select(CanonicalYieldCurve)
             .where(
                 CanonicalYieldCurve.organization_id == organization_id,
                 CanonicalYieldCurve.bank_id == bank_id,
-                CanonicalYieldCurve.as_of_date <= dates[-1],
-                CanonicalYieldCurve.superseded_by.is_(None),
-                CanonicalYieldCurve.withdrawn_at.is_(None),
-                CanonicalYieldCurve.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+                CanonicalYieldCurve.id.in_(curve_ids),
             )
             .order_by(
                 CanonicalYieldCurve.as_of_date.desc(),
@@ -397,11 +507,6 @@ def prefetch_preferred_curves(  # noqa: PLR0913 - one bounded request scope
             )
         )
     )
-    if not curves:
-        empty = dict.fromkeys(dates)
-        return PrefetchedPreferredCurves(projection=empty.copy(), discount=empty)
-
-    curve_ids = [curve.id for curve in curves]
     point_rows = db.execute(
         select(
             CanonicalYieldCurvePoint.yield_curve_id,
@@ -426,6 +531,7 @@ def prefetch_preferred_curves(  # noqa: PLR0913 - one bounded request scope
 
     overlays: list[MarketDataOverlay] = []
     if choice.overlay:
+        curve_names = {curve.curve_name for curve in curves}
         overlays = list(
             db.scalars(
                 select(MarketDataOverlay)
@@ -433,15 +539,18 @@ def prefetch_preferred_curves(  # noqa: PLR0913 - one bounded request scope
                     MarketDataOverlay.organization_id == organization_id,
                     MarketDataOverlay.bank_id == bank_id,
                     MarketDataOverlay.base_ref_kind == "curve",
+                    MarketDataOverlay.base_curve_name.in_(curve_names),
                     MarketDataOverlay.superseded_by.is_(None),
                     MarketDataOverlay.effective_from <= dates[-1],
+                    or_(
+                        MarketDataOverlay.effective_to.is_(None),
+                        MarketDataOverlay.effective_to >= dates[0],
+                    ),
                 )
                 .order_by(MarketDataOverlay.created_at)
             )
         )
     resolved_now = now or market_data.utc_now()
-    discount_name = market_data.desk_discount_curve_name(currency)
-    projection_name = desk_projection_curve_name(currency)
 
     def get_view(
         as_of: date,
@@ -508,8 +617,7 @@ def prefetch_preferred_curves(  # noqa: PLR0913 - one bounded request scope
     projection_result: dict[date, CurveView | None] = {}
     discount_result: dict[date, CurveView | None] = {}
     for as_of in dates:
-        present = {curve.source_system for curve in curves if curve.as_of_date <= as_of}
-        selected_sources = resolve_source_systems(choice.source, present)
+        selected_sources = selected_sources_by_date[as_of]
         for result, resolver in (
             (projection_result, projection_view),
             (discount_result, discount_view),

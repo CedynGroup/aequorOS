@@ -13,7 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.db.session import get_sessionmaker
-from app.models import Bank, BankReportingPeriod
+from app.models import (
+    Bank,
+    BankReportingPeriod,
+    CanonicalReferenceRow,
+    IngestionBatch,
+    LineageRecord,
+)
 from app.services import (
     regulatory_capital,
     regulatory_ftp,
@@ -283,6 +289,75 @@ def test_trend_query_count_stays_flat_as_periods_accumulate(
         db_session, lambda: service._build_trend(db_session, _CTX, bank, periods)
     )
     print(f"{module_name}: trend SQL one={len(one_statements)} all={len(all_statements)}")
+    assert len(all_statements) <= len(one_statements) + 1
+
+
+def test_sdi_irr_trend_batches_net_own_funds_and_matches_scalar_path(
+    db_session: Session,
+) -> None:
+    materialize_canonical_test_book(db_session)
+    bank = db_session.scalar(select(Bank).where(Bank.id == SAMPLE_BANK_ID))
+    periods = list(
+        db_session.scalars(
+            select(BankReportingPeriod)
+            .where(BankReportingPeriod.bank_id == SAMPLE_BANK_ID)
+            .order_by(BankReportingPeriod.period_end)
+        )
+    )
+    assert bank is not None
+    bank.institution_type = "savings_and_loans"
+    batch = IngestionBatch(
+        organization_id=DEMO_ORG_ID,
+        bank_id=bank.id,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=periods[0].period_end,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=DEMO_ORG_ID,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="sdi-irr-query-shape",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    db_session.add_all(
+        [
+            CanonicalReferenceRow(
+                organization_id=DEMO_ORG_ID,
+                bank_id=bank.id,
+                ingestion_batch_id=batch.id,
+                lineage_id=lineage.id,
+                dataset_kind="capital_structure",
+                as_of_date=periods[0].period_end,
+                row_index=index,
+                source_reference=f"sdi-irr/{index}",
+                payload={"amount_ghs": amount, "tier": tier},
+            )
+            for index, (amount, tier) in enumerate(
+                (("80000000", "cet1"), ("5000000", "cet1_deduction"))
+            )
+        ]
+    )
+    db_session.flush()
+
+    one, one_statements = _measure(
+        db_session,
+        lambda: regulatory_irr._build_trend(db_session, _CTX, bank, periods[:1]),
+    )
+    all_points, all_statements = _measure(
+        db_session,
+        lambda: regulatory_irr._build_trend(db_session, _CTX, bank, periods),
+    )
+    scalar_points = _legacy_trend("irr", db_session, bank, periods)
+
+    assert one
+    assert all_points == scalar_points
     assert len(all_statements) <= len(one_statements) + 1
 
 

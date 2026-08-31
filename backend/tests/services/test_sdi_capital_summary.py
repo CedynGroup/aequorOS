@@ -45,7 +45,9 @@ def _bank(db: Session, *, institution_type: str = "savings_and_loans") -> Bank:
     return bank
 
 
-def _batch_lineage(db: Session, bank: Bank, ref: str) -> tuple[IngestionBatch, LineageRecord]:
+def _batch_lineage(
+    db: Session, bank: Bank, ref: str, *, as_of: date = _AS_OF
+) -> tuple[IngestionBatch, LineageRecord]:
     batch = IngestionBatch(
         organization_id=ORG_1,
         bank_id=bank.id,
@@ -53,7 +55,7 @@ def _batch_lineage(db: Session, bank: Bank, ref: str) -> tuple[IngestionBatch, L
         adapter_version="1.0",
         extraction_mode="full",
         status="accepted",
-        as_of_date=_AS_OF,
+        as_of_date=as_of,
     )
     db.add(batch)
     db.flush()
@@ -69,9 +71,15 @@ def _batch_lineage(db: Session, bank: Bank, ref: str) -> tuple[IngestionBatch, L
     return batch, lineage
 
 
-def _seed_capital(db: Session, bank: Bank, rows: list[tuple[str, str, str]]) -> None:
+def _seed_capital(
+    db: Session,
+    bank: Bank,
+    rows: list[tuple[str, str, str]],
+    *,
+    as_of: date = _AS_OF,
+) -> None:
     """rows: (component, amount_ghs, tier)."""
-    batch, lineage = _batch_lineage(db, bank, "s29-capital")
+    batch, lineage = _batch_lineage(db, bank, "s29-capital", as_of=as_of)
     for i, (component, amount, tier) in enumerate(rows):
         db.add(
             CanonicalReferenceRow(
@@ -80,7 +88,7 @@ def _seed_capital(db: Session, bank: Bank, rows: list[tuple[str, str, str]]) -> 
                 ingestion_batch_id=batch.id,
                 lineage_id=lineage.id,
                 dataset_kind="capital_structure",
-                as_of_date=_AS_OF,
+                as_of_date=as_of,
                 row_index=i,
                 source_reference=f"CS/{i}",
                 payload={"capital_component": component, "amount_ghs": amount, "tier": tier},
@@ -193,6 +201,42 @@ def test_deduction_tier_subtracts_from_net_own_funds(db_session: Session) -> Non
     assert summary.net_own_funds_ghs == Decimal("15000000")  # 20 - 5
 
 
+def test_prefetched_net_own_funds_matches_latest_generation_arithmetic(
+    db_session: Session,
+) -> None:
+    sdi = _bank(db_session)
+    may_end = date(2026, 5, 31)
+    _seed_capital(
+        db_session,
+        sdi,
+        [("paid_up_capital", "10000000", "cet1"), ("goodwill", "2000000", "cet1_deduction")],
+        as_of=may_end,
+    )
+    _seed_capital(
+        db_session,
+        sdi,
+        [("paid_up_capital", "20000000", "cet1")],
+    )
+    _seed_capital(
+        db_session,
+        sdi,
+        [("paid_up_capital", "30000000", "cet1"), ("goodwill", "5000000", "cet1_deduction")],
+    )
+    dates = [may_end, date(2026, 6, 15), _AS_OF, date(2026, 7, 31)]
+
+    prefetched = sdi_capital.prefetch_net_own_funds(db_session, _CTX, sdi, dates)
+
+    assert prefetched == {
+        as_of: sdi_capital.net_own_funds(db_session, _CTX, sdi, as_of) for as_of in dates
+    }
+    assert prefetched == {
+        may_end: Decimal("8000000"),
+        date(2026, 6, 15): Decimal("8000000"),
+        _AS_OF: Decimal("25000000"),
+        date(2026, 7, 31): Decimal("25000000"),
+    }
+
+
 def test_below_floor_flags_red(db_session: Session) -> None:
     sdi = _bank(db_session)
     _seed_capital(db_session, sdi, [("paid_up_capital", "5000000", "CET1")])
@@ -231,9 +275,7 @@ def test_capital_assurance_marks_unconfirmed_inputs_as_provisional(db_session: S
     _seed_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
     _seed_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])
 
-    assurance = sdi_capital_assurance.get_sdi_capital_assurance(
-        db_session, _CTX, sdi, _AS_OF
-    )
+    assurance = sdi_capital_assurance.get_sdi_capital_assurance(db_session, _CTX, sdi, _AS_OF)
 
     assert assurance.current.car_pct == Decimal("20.00")
     assert assurance.current.assessment_status == "provisional"
@@ -279,9 +321,7 @@ def test_capital_assurance_reconciles_explicitly_mapped_gl_components(
     _seed_positions(db_session, sdi, [("LN/1", "LOAN", "100000000")])
     db_session.flush()
 
-    assurance = sdi_capital_assurance.get_sdi_capital_assurance(
-        db_session, _CTX, sdi, _AS_OF
-    )
+    assurance = sdi_capital_assurance.get_sdi_capital_assurance(db_session, _CTX, sdi, _AS_OF)
 
     assert assurance.mapped_gl_capital_ghs == Decimal("20000000")
     assert assurance.capital_to_gl_difference_ghs == Decimal("0")
