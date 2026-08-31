@@ -528,6 +528,22 @@ immutable `RegulatoryRun` persistence (snapshot + SHA-256 hash + versioned metri
 validations), bank + reporting-period scoping, effective-dated `param_*` inputs, and a
 `get_<module>_dashboard` with stored-run-first + inline-fallback.
 
+The five detailed regulatory dashboards (liquidity, capital, IRR, FX, and FTP) batch that
+fallback path per request. They load candidate succeeded baseline runs and financial facts
+once, then reuse effective-dated tenant parameters, governed policy generations, market-data
+curves, and SDI Net Own Funds from request-local, fully scoped collections. Every collection
+is constrained by the applicable organization, institution, jurisdiction or policy scope,
+market-data scope, and effective date; none is shared across requests or tenants. The 13-point
+trend therefore has effectively flat query growth while retaining stored-run precedence and
+the existing calculation engines. Audit-style full-HTTP query counts fell from 331 to 14
+(liquidity), 494 to 15 (capital), 164 to 16 (IRR), and 73 to 12 for both FX and FTP.
+`backend/tests/services/test_regulatory_dashboard_query_shape.py` pins those counts, one bulk
+load per request resource, flat one-versus-twelve-period growth, and byte-identical serialized
+dashboard responses against the former per-period path.
+
+This is intermediate read-through batching, not the persisted trend read model. That read model
+remains architectural debt; the Command Center contract and polling policy are unchanged.
+
 | #   | Module         | Engine                                               | Key endpoints                                  |
 | --- | -------------- | ---------------------------------------------------- | ---------------------------------------------- |
 | 1   | Liquidity      | LCR / NSFR / stress                                  | `/banks/{id}/liquidity/*`, `/submissions/bsd3` |
