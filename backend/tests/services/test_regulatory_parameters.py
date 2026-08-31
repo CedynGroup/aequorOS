@@ -160,6 +160,14 @@ def test_a_later_generation_supersedes_the_seed(db_session: Session) -> None:
     assert rp.resolve_decimal(db_session, sdi, "car_min", as_of=date(2026, 6, 30)) == Decimal("10")
     assert rp.resolve_decimal(db_session, sdi, "car_min", as_of=date(2027, 6, 30)) == Decimal("12")
 
+    prefetched = rp.PrefetchedParameterResolver.load(
+        db_session,
+        sdi,
+        as_of_dates=[date(2026, 6, 30), date(2027, 6, 30)],
+    )
+    assert prefetched.resolve("car_min", as_of=date(2026, 6, 30)).decimal == Decimal("10")
+    assert prefetched.resolve("car_min", as_of=date(2027, 6, 30)).decimal == Decimal("12")
+
 
 def test_draft_rows_are_invisible_to_the_resolver(db_session: Session) -> None:
     sdi = _bank(db_session, institution_type="finance_house")

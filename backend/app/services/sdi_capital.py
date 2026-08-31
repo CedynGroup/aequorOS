@@ -441,7 +441,11 @@ _EXPLICITLY_OUT = ("", "false", "none", "null", "excluded", "not_applicable", "0
 
 
 def _resolve_composition_row(
-    db: Session, bank: Bank, as_of: date
+    db: Session,
+    bank: Bank,
+    as_of: date,
+    *,
+    resolver: rp.PrefetchedParameterResolver | None = None,
 ) -> tuple[dict[str, str], str, str | None]:
     """``(composition, source, confirmation_status)`` from the control plane.
 
@@ -451,7 +455,11 @@ def _resolve_composition_row(
     published instrument" are different questions, and the official filing gate
     (:func:`assert_scope_filable`) has to ask both.
     """
-    resolved = rp.try_resolve(db, bank, COMPOSITION_PARAM, as_of=as_of)
+    resolved = (
+        resolver.try_resolve(COMPOSITION_PARAM, as_of=as_of)
+        if resolver is not None
+        else rp.try_resolve(db, bank, COMPOSITION_PARAM, as_of=as_of)
+    )
     if resolved is not None and isinstance(resolved.value_json, Mapping):
         governed: dict[str, str] = {}
         for key, value in resolved.value_json.items():
@@ -564,7 +572,13 @@ def default_rwa_scope() -> SdiRwaScope:
     )
 
 
-def resolve_rwa_scope(db: Session, bank: Bank, as_of: date) -> SdiRwaScope:
+def resolve_rwa_scope(
+    db: Session,
+    bank: Bank,
+    as_of: date,
+    *,
+    resolver: rp.PrefetchedParameterResolver | None = None,
+) -> SdiRwaScope:
     """Resolve the governed RWA scope, percentages and all — the ONE entry point.
 
     Every SDI capital path calls this and none restates it. Refuses rather than
@@ -574,7 +588,7 @@ def resolve_rwa_scope(db: Session, bank: Bank, as_of: date) -> SdiRwaScope:
     :class:`SdiCapitalPolicyUnresolved` — a total missing a declared component is
     not a total.
     """
-    composition, source, confirmation = _resolve_composition_row(db, bank, as_of)
+    composition, source, confirmation = _resolve_composition_row(db, bank, as_of, resolver=resolver)
     charges: dict[str, Decimal] = {}
     pending: list[str] = []
     for risk_class in sorted(composition):
@@ -590,7 +604,11 @@ def resolve_rwa_scope(db: Session, bank: Bank, as_of: date) -> SdiRwaScope:
             continue
         if measurement == MEASURE_PCT_OF_CREDIT_RWA and risk_class != RISK_CLASS_CREDIT:
             code = charge_param_code(risk_class)
-            resolved = rp.try_resolve(db, bank, code, as_of=as_of)
+            resolved = (
+                resolver.try_resolve(code, as_of=as_of)
+                if resolver is not None
+                else rp.try_resolve(db, bank, code, as_of=as_of)
+            )
             charge = resolved.normalized_value if resolved is not None else None
             if resolved is None or charge is None:
                 raise _policy_unresolved(

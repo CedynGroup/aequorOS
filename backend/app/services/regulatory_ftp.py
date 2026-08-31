@@ -86,7 +86,11 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,
 )
-from app.services import filing_reconciliation, regulatory_parameters
+from app.services import (
+    filing_reconciliation,
+    regulatory_dashboard_batching,
+    regulatory_parameters,
+)
 from app.services.audit import record_event
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409, current_snapshot, load_current_facts
@@ -94,7 +98,7 @@ from app.services.live_types import (
     LiveModuleResult,
     findings_from_validations,
 )
-from app.services.params import get_active_params
+from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
 ENGINE_VERSION = "regulatory-ftp-v1.0.0"
@@ -164,6 +168,14 @@ class _FtpParams:
 
 
 @dataclass(frozen=True)
+class _FtpDashboardBatch:
+    runs: dict[UUID, RegulatoryRun]
+    facts: dict[UUID, list[BankFinancialFact]]
+    thresholds: PrefetchedActiveParams[ParamCapitalThreshold]
+    shocks: PrefetchedActiveParams[ParamStressShock]
+
+
+@dataclass(frozen=True)
 class _FtpAnalysis:
     scenario_code: str
     curve: CurveResult
@@ -209,11 +221,8 @@ def get_ftp_dashboard(
         else _get_period_or_404(db, ctx, bank, reporting_period_id)
     )
 
-    latest_run = (
-        _latest_succeeded_baseline_run(db, ctx, bank, period.id)
-        if reporting_period_id is not None
-        else None
-    )
+    batch = _prefetch_dashboard_batch(db, ctx, bank, periods, extra_period=period)
+    latest_run = batch.runs.get(period.id) if reporting_period_id is not None else None
     if latest_run is not None:
         metrics = _metrics_from_run(latest_run)
         curve = _curve_from_run(latest_run)
@@ -231,7 +240,7 @@ def get_ftp_dashboard(
         ]
         stored = True
     else:
-        analysis = _compute_inline_or_409(db, ctx, bank, period)
+        analysis = _compute_inline_or_409(db, ctx, bank, period, batch=batch)
         metrics = _metrics_from_analysis(analysis)
         curve = _curve_from_analysis(analysis)
         products = _products_from_analysis(analysis)
@@ -258,7 +267,7 @@ def get_ftp_dashboard(
         products=products,
         branches=branches,
         nmd_segments=nmd_segments,
-        trend=_build_trend(db, ctx, bank, periods),
+        trend=_build_trend(db, ctx, bank, periods, batch=batch),
         validations=validations,
         live=live_block(db, ctx, bank.id, MODULE_FTP),
     )
@@ -359,9 +368,7 @@ def _create_and_execute(
     return get_regulatory_run(db, ctx, bank.id, run_id)
 
 
-def _load_ltp_draws(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> dict[str, Decimal]:
+def _load_ltp_draws(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> dict[str, Decimal]:
     """Expected stressed draw per committed-facility family (¶48(b)): the
     liquidity combined-scenario runoff parameters, keyed by facility family."""
     return {
@@ -947,11 +954,18 @@ _TREND_MAX_POINTS = 13
 
 
 def _build_trend(
-    db: Session, ctx: TenantContext, bank: Bank, periods: list[BankReportingPeriod]
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    batch: _FtpDashboardBatch | None = None,
 ) -> list[FtpTrendPointRead]:
+    trend_periods = periods[-_TREND_MAX_POINTS:]
+    batch = batch or _prefetch_dashboard_batch(db, ctx, bank, trend_periods)
     points: list[FtpTrendPointRead] = []
-    for period in periods[-_TREND_MAX_POINTS:]:
-        run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    for period in trend_periods:
+        run = batch.runs.get(period.id)
         if run is not None:
             metrics = run.metrics
             points.append(
@@ -967,7 +981,7 @@ def _build_trend(
             )
             continue
         try:
-            analysis = _compute_inline(db, ctx, bank, period)
+            analysis = _compute_inline_from_batch(period, batch)
         except (MissingParameterError, FtpComputationError, FtpRunError):
             continue
         points.append(
@@ -982,6 +996,92 @@ def _build_trend(
             )
         )
     return points
+
+
+def _prefetch_dashboard_batch(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    extra_period: BankReportingPeriod | None = None,
+) -> _FtpDashboardBatch:
+    candidates = [*periods[-_TREND_MAX_POINTS:]]
+    if extra_period is not None and all(item.id != extra_period.id for item in candidates):
+        candidates.append(extra_period)
+    period_ids = [period.id for period in candidates]
+    dates = [period.period_end for period in candidates]
+    return _FtpDashboardBatch(
+        runs=regulatory_dashboard_batching.latest_succeeded_baseline_runs(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            module=MODULE_FTP,
+            scenario_code=BASELINE_SCENARIO,
+            reporting_period_ids=period_ids,
+        ),
+        facts=regulatory_dashboard_batching.facts_by_period(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            reporting_period_ids=period_ids,
+            fact_groups=_FTP_FACT_GROUPS,
+        ),
+        thresholds=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, dates
+        ),
+        shocks=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamStressShock, dates
+        ),
+    )
+
+
+def _ftp_params_from_batch(batch: _FtpDashboardBatch, as_of: date) -> _FtpParams | None:
+    thresholds = {
+        row.threshold_code: Decimal(str(row.value_pct)) for row in batch.thresholds.active_on(as_of)
+    }
+    if any(code not in thresholds for code in _REQUIRED_THRESHOLDS):
+        return None
+    scenario_shocks: dict[str, dict[str, Decimal]] = {}
+    for row in batch.shocks.active_on(as_of):
+        if row.module != MODULE_FTP:
+            continue
+        scenario_shocks.setdefault(row.scenario_code, {})[row.shock_key] = Decimal(
+            str(row.shock_value)
+        )
+    rates_up = scenario_shocks.get(SCENARIO_RATES_UP, {})
+    funding = scenario_shocks.get(SCENARIO_FUNDING_STRESS, {})
+    if SHOCK_CURVE_SHIFT_BP not in rates_up or SHOCK_FUNDING_ADD_BP not in funding:
+        return None
+    return _FtpParams(
+        target_roe_pct=thresholds[TARGET_ROE],
+        min_product_margin_pct=thresholds[MIN_PRODUCT_MARGIN],
+        liquidity_premium_max_bps=thresholds[LIQUIDITY_PREMIUM_MAX],
+        funding_spread_max_bps=thresholds[FUNDING_SPREAD_MAX],
+        nmd_core_min_pct=thresholds[NMD_CORE_MIN],
+        nmd_core_max_pct=thresholds[NMD_CORE_MAX],
+        curve_shift_bp=rates_up[SHOCK_CURVE_SHIFT_BP],
+        funding_spread_add_bps=funding[SHOCK_FUNDING_ADD_BP],
+    )
+
+
+def _ltp_draws_from_batch(batch: _FtpDashboardBatch, as_of: date) -> dict[str, Decimal]:
+    return {
+        row.shock_key.removeprefix(_LTP_RUNOFF_PREFIX): Decimal(str(row.shock_value))
+        for row in batch.shocks.active_on(as_of)
+        if row.module == "liquidity"
+        and row.scenario_code == _LTP_STRESS_SCENARIO
+        and row.shock_key.startswith(_LTP_RUNOFF_PREFIX)
+    }
+
+
+def _compute_inline_from_batch(
+    period: BankReportingPeriod, batch: _FtpDashboardBatch
+) -> _FtpAnalysis:
+    facts = batch.facts.get(period.id, [])
+    active = _ftp_params_from_batch(batch, period.period_end)
+    draws = _ltp_draws_from_batch(batch, period.period_end)
+    return _run_analysis(BASELINE_SCENARIO, facts, active, draws)
 
 
 def _compute_inline(
@@ -1012,16 +1112,23 @@ def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its f
     shift_bp = shocks.get(SHOCK_CURVE_SHIFT_BP, Decimal(0)) + shocks.get(
         SHOCK_FUNDING_ADD_BP, Decimal(0)
     )
-    return _run_analysis(
-        scenario_code, facts, active, draws, shift_override=shift_bp / _HUNDRED
-    )
+    return _run_analysis(scenario_code, facts, active, draws, shift_override=shift_bp / _HUNDRED)
 
 
 def _compute_inline_or_409(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    *,
+    batch: _FtpDashboardBatch | None = None,
 ) -> _FtpAnalysis:
     try:
-        return _compute_inline(db, ctx, bank, period)
+        return (
+            _compute_inline_from_batch(period, batch)
+            if batch is not None
+            else _compute_inline(db, ctx, bank, period)
+        )
     except MissingParameterError as exc:
         raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except FtpRunError as exc:

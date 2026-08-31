@@ -9,7 +9,7 @@ byte-identical to today.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -350,6 +350,57 @@ def test_preferred_projection_curve_graceful_fallback_flag(db_session: Session) 
     assert view.attribution.fell_back is True
     assert view.attribution.requested_source == "bank"
     assert view.attribution.served_source == "BLOOMBERG"
+
+
+def test_prefetched_curves_match_scalar_resolvers_for_every_requested_date(
+    db_session: Session,
+) -> None:
+    """The bounded IRR request loader preserves both curve-selection contracts."""
+    bank_id = _seed_bank(db_session)
+    _seed_curve(
+        db_session,
+        bank_id,
+        curve_name="AEQ.GHS.SOV.ZERO",
+        curve_type="zero",
+        source_system="AEQUOR_DESK",
+        rates={3: "0.24", 12: "0.25"},
+    )
+    _seed_curve(
+        db_session,
+        bank_id,
+        curve_name="AEQ.GHS.OIS",
+        curve_type="discount",
+        source_system="AEQUOR_DESK",
+        rates={3: "0.22", 12: "0.23"},
+    )
+    db_session.commit()
+    for curve_name, bps in (("AEQ.GHS.SOV.ZERO", "50"), ("AEQ.GHS.OIS", "25")):
+        market_data_overlays.create_overlay(
+            db_session,
+            CTX,
+            bank_id,
+            MarketDataOverlayCreate(
+                base_ref_kind="curve",
+                base_curve_name=curve_name,
+                adjustment_type="additive_bps",
+                value=Decimal(bps),
+                component_tag="other",
+                effective_from=AS_OF,
+            ),
+        )
+    dates = [AS_OF, AS_OF + timedelta(days=1)]
+
+    prefetched = market_data_sources.prefetch_preferred_curves(
+        db_session, ORG_1, bank_id, "GHS", dates, now=NOW
+    )
+
+    for as_of in dates:
+        assert prefetched.projection[as_of] == market_data_sources.preferred_projection_curve(
+            db_session, ORG_1, bank_id, "GHS", as_of, now=NOW
+        )
+        assert prefetched.discount[as_of] == market_data_sources.preferred_discount_curve(
+            db_session, ORG_1, bank_id, "GHS", as_of, now=NOW
+        )
 
 
 def test_preferred_fx_spot_source_filter_and_fallback(db_session: Session) -> None:

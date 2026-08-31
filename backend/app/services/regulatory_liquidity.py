@@ -87,7 +87,12 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryValidationRead,
     RunEvidenceRead,
 )
-from app.services import filing_reconciliation, regulatory_parameters, withdrawal_impact
+from app.services import (
+    filing_reconciliation,
+    regulatory_dashboard_batching,
+    regulatory_parameters,
+    withdrawal_impact,
+)
 from app.services.audit import record_event
 from app.services.institution_types import institution_class as _resolve_institution_class
 from app.services.jurisdictions import base_currency, regulator_name
@@ -98,7 +103,7 @@ from app.services.live_types import (
     findings_from_validations,
     worst_status,
 )
-from app.services.params import get_active_params
+from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 
 #: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR under the
 #: rule stated on ``regulatory_capital.ENGINE_VERSION``: the Basel HQLA control
@@ -173,6 +178,16 @@ class _ActiveLiquidityParams:
     #: plane (enterprise audit P0-8). Partial by design — see
     #: ``regulatory_parameters.HqlaParameters``.
     hqla: regulatory_parameters.HqlaParameters
+
+
+@dataclass(frozen=True)
+class _LiquidityDashboardBatch:
+    runs: dict[UUID, RegulatoryRun]
+    facts: dict[UUID, list[BankFinancialFact]]
+    runoff: PrefetchedActiveParams[ParamLcrRunoffRate]
+    nsfr: PrefetchedActiveParams[ParamNsfrWeight]
+    thresholds: PrefetchedActiveParams[ParamCapitalThreshold]
+    governed: regulatory_parameters.PrefetchedParameterResolver
 
 
 def create_liquidity_run(
@@ -274,11 +289,8 @@ def get_liquidity_dashboard(
     else:
         period = _get_period_or_404(db, ctx, bank, reporting_period_id)
 
-    latest_run = (
-        _latest_succeeded_baseline_run(db, ctx, bank, period.id)
-        if reporting_period_id is not None
-        else None
-    )
+    batch = _prefetch_dashboard_batch(db, ctx, bank, periods, extra_period=period)
+    latest_run = batch.runs.get(period.id) if reporting_period_id is not None else None
     sections: dict[str, list[LiquidityDashboardLineRead]]
     if latest_run is not None:
         metrics = _metrics_from_run(db, latest_run)
@@ -294,7 +306,7 @@ def get_liquidity_dashboard(
         ]
         stored = True
     else:
-        lcr, nsfr, params = _compute_inline_or_409(db, ctx, bank, period)
+        lcr, nsfr, params = _compute_inline_or_409(db, ctx, bank, period, batch=batch)
         metrics = _metrics_from_results(lcr, nsfr)
         sections = {}
         for item in (*lcr.line_items, *nsfr.line_items):
@@ -320,7 +332,7 @@ def get_liquidity_dashboard(
         ]
         stored = False
 
-    trend = _build_trend(db, ctx, bank, periods)
+    trend = _build_trend(db, ctx, bank, periods, batch=batch)
     return LiquidityDashboardRead(
         bank=BankRead.model_validate(bank, from_attributes=True),
         period=BankReportingPeriodRead.model_validate(period, from_attributes=True),
@@ -587,9 +599,7 @@ def _create_and_execute(
         else {}
     )
     currency_ladders = _currency_ladders(db, ctx, bank, period.period_end)
-    snapshot = _build_snapshot(
-        bank, period, scenario_code, facts, active, shocks, currency_ladders
-    )
+    snapshot = _build_snapshot(bank, period, scenario_code, facts, active, shocks, currency_ladders)
 
     run = RegulatoryRun(
         organization_id=ctx.organization_id,
@@ -954,7 +964,6 @@ def _validation_rows(
     )
 
 
-
 def _currency_gap_validations(
     currency_gaps: CurrencyGapResult, mismatch_limit: Decimal | None
 ) -> list[tuple[str, bool, str, str]]:
@@ -1106,11 +1115,18 @@ _TREND_MAX_POINTS = 13
 
 
 def _build_trend(
-    db: Session, ctx: TenantContext, bank: Bank, periods: list[BankReportingPeriod]
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    batch: _LiquidityDashboardBatch | None = None,
 ) -> list[LiquidityTrendPointRead]:
+    trend_periods = periods[-_TREND_MAX_POINTS:]
+    batch = batch or _prefetch_dashboard_batch(db, ctx, bank, trend_periods)
     points: list[LiquidityTrendPointRead] = []
-    for period in periods[-_TREND_MAX_POINTS:]:
-        run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    for period in trend_periods:
+        run = batch.runs.get(period.id)
         if run is not None:
             metrics = _scalar_metrics(run)
             points.append(
@@ -1125,7 +1141,7 @@ def _build_trend(
             )
             continue
         try:
-            lcr, nsfr, _params = _compute_inline(db, ctx, bank, period)
+            lcr, nsfr, _params = _compute_inline_from_batch(bank, period, batch)
         except (MissingParameterError, LiquidityComputationError, LiquidityRunError):
             continue
         points.append(
@@ -1139,6 +1155,97 @@ def _build_trend(
             )
         )
     return points
+
+
+def _prefetch_dashboard_batch(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    extra_period: BankReportingPeriod | None = None,
+) -> _LiquidityDashboardBatch:
+    trend_periods = periods[-_TREND_MAX_POINTS:]
+    candidates = [*trend_periods]
+    if extra_period is not None and all(item.id != extra_period.id for item in candidates):
+        candidates.append(extra_period)
+    period_ids = [period.id for period in candidates]
+    dates = [period.period_end for period in candidates]
+    return _LiquidityDashboardBatch(
+        runs=regulatory_dashboard_batching.latest_succeeded_baseline_runs(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            module=MODULE_LIQUIDITY,
+            scenario_code=BASELINE_SCENARIO,
+            reporting_period_ids=period_ids,
+        ),
+        facts=regulatory_dashboard_batching.facts_by_period(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            reporting_period_ids=period_ids,
+            fact_groups=_LIQUIDITY_FACT_GROUPS,
+        ),
+        runoff=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamLcrRunoffRate, dates
+        ),
+        nsfr=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamNsfrWeight, dates
+        ),
+        thresholds=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, dates
+        ),
+        governed=regulatory_parameters.PrefetchedParameterResolver.load(
+            db, bank, as_of_dates=dates
+        ),
+    )
+
+
+def _active_params_from_batch(
+    batch: _LiquidityDashboardBatch, as_of: date
+) -> _ActiveLiquidityParams:
+    runoff_rows = batch.runoff.active_on(as_of)
+    nsfr_rows = batch.nsfr.active_on(as_of)
+    threshold_rows = batch.thresholds.active_on(as_of)
+    outflow_rates: dict[str, Decimal] = {}
+    inflow_rates: dict[str, Decimal] = {}
+    for row in runoff_rows:
+        target = outflow_rates if row.flow_direction == "outflow" else inflow_rates
+        target[row.category] = Decimal(str(row.rate_pct))
+    asf_weights: dict[str, Decimal] = {}
+    rsf_weights: dict[str, Decimal] = {}
+    for row in nsfr_rows:
+        target = asf_weights if row.side == "asf" else rsf_weights
+        target[row.category] = Decimal(str(row.weight_pct))
+    return _ActiveLiquidityParams(
+        outflow_rates=outflow_rates,
+        inflow_rates=inflow_rates,
+        asf_weights=asf_weights,
+        rsf_weights=rsf_weights,
+        thresholds={row.threshold_code: Decimal(str(row.value_pct)) for row in threshold_rows},
+        hqla=batch.governed.resolve_hqla_parameters(as_of=as_of),
+    )
+
+
+def _compute_inline_from_batch(
+    bank: Bank, period: BankReportingPeriod, batch: _LiquidityDashboardBatch
+) -> tuple[LcrResult, NsfrResult, LiquidityParams]:
+    facts = batch.facts.get(period.id, [])
+    if not facts:
+        raise LiquidityRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    active = _active_params_from_batch(batch, period.period_end)
+    engine_params = _engine_params(active)
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    return (
+        compute_lcr(engine_facts, engine_params),
+        compute_nsfr(engine_facts, engine_params),
+        engine_params,
+    )
 
 
 def _compute_inline(
@@ -1162,10 +1269,19 @@ def _compute_inline(
 
 
 def _compute_inline_or_409(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    *,
+    batch: _LiquidityDashboardBatch | None = None,
 ) -> tuple[LcrResult, NsfrResult, LiquidityParams]:
     try:
-        return _compute_inline(db, ctx, bank, period)
+        return (
+            _compute_inline_from_batch(bank, period, batch)
+            if batch is not None
+            else _compute_inline(db, ctx, bank, period)
+        )
     except MissingParameterError as exc:
         raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except LiquidityRunError as exc:
@@ -1187,9 +1303,7 @@ def current_input_hash(
         return None
     active = _load_active_params(db, ctx, bank, period.period_end)
     currency_ladders = _currency_ladders(db, ctx, bank, period.period_end)
-    snapshot = _build_snapshot(
-        bank, period, BASELINE_SCENARIO, facts, active, {}, currency_ladders
-    )
+    snapshot = _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active, {}, currency_ladders)
     return _snapshot_hash(snapshot)
 
 
@@ -1343,7 +1457,6 @@ def _engine_params(active: _ActiveLiquidityParams) -> LiquidityParams:
     )
 
 
-
 # --- Per-currency contractual ladders (Phase 2 item 2; FRM 16-17) -----------
 #
 # Five LMTD horizons in cedi equivalents from the canonical book — the same
@@ -1359,9 +1472,7 @@ _CCY_DEMAND_DEPOSITS = ("CURRENT", "CALL", "SAVINGS")
 _CCY_STATUSES = ("accepted", "warning")
 
 
-def _ladder_bucket_index(
-    maturity: date | None, as_of: date, *, on_demand: bool
-) -> int:
+def _ladder_bucket_index(maturity: date | None, as_of: date, *, on_demand: bool) -> int:
     if maturity is None:
         return 0 if on_demand else len(_LADDER_HORIZON_DAYS) - 1
     days = (maturity - as_of).days
@@ -1415,9 +1526,7 @@ def _currency_ladders(
             kind == "DEPOSIT"
             and (snapshot.deposit_account_type or "").upper() in _CCY_DEMAND_DEPOSITS
         )
-        index = _ladder_bucket_index(
-            snapshot.contractual_maturity, as_of_date, on_demand=on_demand
-        )
+        index = _ladder_bucket_index(snapshot.contractual_maturity, as_of_date, on_demand=on_demand)
         ladder = ladders.setdefault(
             position.currency,
             {
