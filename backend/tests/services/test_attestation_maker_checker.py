@@ -65,7 +65,6 @@ from tests.services.test_attestation_workspace import (
     _signature_count,
 )
 
-
 #: The analyst has no ``approver`` platform role — the identity the entitlement
 #: gate must refuse.
 ANALYST = TenantContext(
