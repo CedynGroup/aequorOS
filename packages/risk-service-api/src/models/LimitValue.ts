@@ -13,34 +13,34 @@
 /**
  *
  * @export
- * @interface Value1
+ * @interface LimitValue
  */
-export type Value1 = string | null;
+export type LimitValue = string | null;
 
 /**
- * Check if a given object implements the Value1 interface.
+ * Check if a given object implements the LimitValue interface.
  */
-export function instanceOfValue1(value: unknown): value is Value1 {
+export function instanceOfLimitValue(value: unknown): value is LimitValue {
   return typeof value === "string" || value === null;
 }
 
-export function Value1FromJSON(json: any): Value1 {
-  return Value1FromJSONTyped(json, false);
+export function LimitValueFromJSON(json: any): LimitValue {
+  return LimitValueFromJSONTyped(json, false);
 }
 
-export function Value1FromJSONTyped(
+export function LimitValueFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): Value1 {
+): LimitValue {
   return json;
 }
 
-export function Value1ToJSON(json: any): Value1 {
-  return Value1ToJSONTyped(json, false);
+export function LimitValueToJSON(json: any): LimitValue {
+  return LimitValueToJSONTyped(json, false);
 }
 
-export function Value1ToJSONTyped(
-  value?: Value1 | null,
+export function LimitValueToJSONTyped(
+  value?: LimitValue | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   return value;

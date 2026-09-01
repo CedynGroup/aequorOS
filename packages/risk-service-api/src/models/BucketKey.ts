@@ -13,34 +13,34 @@
 /**
  *
  * @export
- * @interface Value1
+ * @interface BucketKey
  */
-export type Value1 = string | null;
+export type BucketKey = string | null;
 
 /**
- * Check if a given object implements the Value1 interface.
+ * Check if a given object implements the BucketKey interface.
  */
-export function instanceOfValue1(value: unknown): value is Value1 {
+export function instanceOfBucketKey(value: unknown): value is BucketKey {
   return typeof value === "string" || value === null;
 }
 
-export function Value1FromJSON(json: any): Value1 {
-  return Value1FromJSONTyped(json, false);
+export function BucketKeyFromJSON(json: any): BucketKey {
+  return BucketKeyFromJSONTyped(json, false);
 }
 
-export function Value1FromJSONTyped(
+export function BucketKeyFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): Value1 {
+): BucketKey {
   return json;
 }
 
-export function Value1ToJSON(json: any): Value1 {
-  return Value1ToJSONTyped(json, false);
+export function BucketKeyToJSON(json: any): BucketKey {
+  return BucketKeyToJSONTyped(json, false);
 }
 
-export function Value1ToJSONTyped(
-  value?: Value1 | null,
+export function BucketKeyToJSONTyped(
+  value?: BucketKey | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   return value;

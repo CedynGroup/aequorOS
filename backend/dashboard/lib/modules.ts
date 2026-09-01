@@ -93,7 +93,8 @@ const SDI_HIDDEN_SUBROUTES: readonly string[] = [
 ];
 
 const SDI_ONLY_SUBROUTES: readonly string[] = [
-  '/basel/exposures',
+  // (empty since credit PR-3 — /basel/exposures redirects to /credit/concentration;
+  // the mechanism stays for the next class-scoped subroute.)
 ];
 
 /**

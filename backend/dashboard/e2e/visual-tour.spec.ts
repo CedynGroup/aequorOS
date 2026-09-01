@@ -28,6 +28,7 @@ const ROUTES = [
   '/behavioral/prepayment',
   '/credit',
   '/credit/book',
+  '/credit/concentration',
   '/data-engine',
   '/data-engine/adapters',
   '/data-engine/api',

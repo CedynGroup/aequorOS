@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query, status
 
 from app.api.deps import DbSession, MutationTenant, Tenant
 from app.schemas.regulatory_credit import (
+    CreditConcentrationRead,
     CreditDashboardRead,
     CreditLoanFacetsRead,
     CreditLoansPageRead,
@@ -95,3 +96,17 @@ def get_credit_loan_facets(
     ctx: Tenant,
 ) -> CreditLoanFacetsRead:
     return regulatory_credit.get_credit_loan_facets(db, ctx, bank_id)
+
+
+@router.get(
+    "/banks/{bank_id}/credit/concentration",
+    response_model=CreditConcentrationRead,
+    operation_id="getCreditConcentration",
+)
+def get_credit_concentration(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+) -> CreditConcentrationRead:
+    """The standing concentration monitor over the current credit book."""
+    return regulatory_credit.get_credit_concentration(db, ctx, bank_id)

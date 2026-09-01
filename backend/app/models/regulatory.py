@@ -289,6 +289,68 @@ class ParamCapitalThreshold(RegulatoryParameterMixin, Base):
     value_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
 
 
+class ParamConcentrationLimit(RegulatoryParameterMixin, Base):
+    """Board credit-concentration limits (BoG Concentration Guidelines, Sept 2025).
+
+    The Guidelines require a Board limit structure per concentration dimension
+    (§D: limits defined against capital or total assets, with breach
+    escalation) but prescribe NO numeric values — so this register starts
+    EMPTY and every row is a Board decision with the mixin's approval
+    evidence. An absent limit renders "Not set" on the monitor, never an
+    invented number. ``bucket_key`` scopes a limit to one named bucket (a
+    single employer, a named sector); NULL applies the limit to the
+    dimension's largest bucket.
+    """
+
+    __tablename__ = "param_concentration_limit"
+    __table_args__ = (
+        CheckConstraint(
+            "dimension IN ('single_name', 'sector', 'geography', 'product', "
+            "'collateral', 'funding', 'employer')",
+            name="ck_param_concentration_limit_dimension",
+        ),
+        CheckConstraint(
+            "limit_kind IN ('share_of_book_pct', 'share_of_capital_pct', 'hhi')",
+            name="ck_param_concentration_limit_kind",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "dimension",
+            "limit_kind",
+            "bucket_key",
+            "effective_from",
+            name="uq_param_concentration_limit_scope",
+        ),
+    )
+
+    dimension: Mapped[str] = mapped_column(String(24), nullable=False)
+    limit_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    bucket_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: Percent for the share kinds; the raw index value (0-10,000) for ``hhi``.
+    value: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+
+
+class ParamCreditThreshold(RegulatoryParameterMixin, Base):
+    """Board credit early-warning trigger levels (watch/action bands the credit
+    EWIs compare against). Starts EMPTY for the same reason as the
+    concentration limits: no instrument prescribes the values."""
+
+    __tablename__ = "param_credit_threshold"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "threshold_code",
+            "effective_from",
+            name="uq_param_credit_threshold_scope",
+        ),
+    )
+
+    threshold_code: Mapped[str] = mapped_column(String(60), nullable=False)
+    value_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+
+
 class ParamLiquidityThreshold(RegulatoryParameterMixin, Base):
     """LMTD 2026 ¶11(b)–(e): the Board-set internal threshold register.
 

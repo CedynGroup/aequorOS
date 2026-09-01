@@ -12,6 +12,10 @@
 
 import * as runtime from "../runtime";
 import type {
+  ConcentrationLimitRegisterRead,
+  ConcentrationLimitUpdate,
+  CreditThresholdRegisterRead,
+  CreditThresholdUpdate,
   CrmHaircutRegisterRead,
   CrmHaircutUpdate,
   EclAssumptionRegisterRead,
@@ -19,6 +23,14 @@ import type {
   ErrorResponse,
 } from "../models/index";
 import {
+  ConcentrationLimitRegisterReadFromJSON,
+  ConcentrationLimitRegisterReadToJSON,
+  ConcentrationLimitUpdateFromJSON,
+  ConcentrationLimitUpdateToJSON,
+  CreditThresholdRegisterReadFromJSON,
+  CreditThresholdRegisterReadToJSON,
+  CreditThresholdUpdateFromJSON,
+  CreditThresholdUpdateToJSON,
   CrmHaircutRegisterReadFromJSON,
   CrmHaircutRegisterReadToJSON,
   CrmHaircutUpdateFromJSON,
@@ -31,6 +43,16 @@ import {
   ErrorResponseToJSON,
 } from "../models/index";
 
+export interface GetConcentrationLimitRegisterRequest {
+  bankId: string;
+  asOf?: Date | null;
+}
+
+export interface GetCreditThresholdRegisterRequest {
+  bankId: string;
+  asOf?: Date | null;
+}
+
 export interface GetCrmHaircutRegisterRequest {
   bankId: string;
   asOf?: Date | null;
@@ -39,6 +61,16 @@ export interface GetCrmHaircutRegisterRequest {
 export interface GetEclAssumptionRegisterRequest {
   bankId: string;
   asOf?: Date | null;
+}
+
+export interface UpdateConcentrationLimitRegisterRequest {
+  bankId: string;
+  concentrationLimitUpdate: ConcentrationLimitUpdate;
+}
+
+export interface UpdateCreditThresholdRegisterRequest {
+  bankId: string;
+  creditThresholdUpdate: CreditThresholdUpdate;
 }
 
 export interface UpdateCrmHaircutRegisterRequest {
@@ -55,6 +87,134 @@ export interface UpdateEclAssumptionRegisterRequest {
  *
  */
 export class CreditParamsApi extends runtime.BaseAPI {
+  /**
+   * Get Concentration Limit Register
+   */
+  async getConcentrationLimitRegisterRaw(
+    requestParameters: GetConcentrationLimitRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ConcentrationLimitRegisterRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getConcentrationLimitRegister().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/concentration-limits`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ConcentrationLimitRegisterReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Concentration Limit Register
+   */
+  async getConcentrationLimitRegister(
+    requestParameters: GetConcentrationLimitRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ConcentrationLimitRegisterRead> {
+    const response = await this.getConcentrationLimitRegisterRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Get Credit Threshold Register
+   */
+  async getCreditThresholdRegisterRaw(
+    requestParameters: GetCreditThresholdRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CreditThresholdRegisterRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getCreditThresholdRegister().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["asOf"] != null) {
+      queryParameters["as_of"] = (requestParameters["asOf"] as any)
+        .toISOString()
+        .substring(0, 10);
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/credit-thresholds`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CreditThresholdRegisterReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Credit Threshold Register
+   */
+  async getCreditThresholdRegister(
+    requestParameters: GetCreditThresholdRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CreditThresholdRegisterRead> {
+    const response = await this.getCreditThresholdRegisterRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Get Crm Haircut Register
    */
@@ -177,6 +337,146 @@ export class CreditParamsApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<EclAssumptionRegisterRead> {
     const response = await this.getEclAssumptionRegisterRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Update Concentration Limit Register
+   */
+  async updateConcentrationLimitRegisterRaw(
+    requestParameters: UpdateConcentrationLimitRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ConcentrationLimitRegisterRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling updateConcentrationLimitRegister().',
+      );
+    }
+
+    if (requestParameters["concentrationLimitUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "concentrationLimitUpdate",
+        'Required parameter "concentrationLimitUpdate" was null or undefined when calling updateConcentrationLimitRegister().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/concentration-limits`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ConcentrationLimitUpdateToJSON(
+          requestParameters["concentrationLimitUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ConcentrationLimitRegisterReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Update Concentration Limit Register
+   */
+  async updateConcentrationLimitRegister(
+    requestParameters: UpdateConcentrationLimitRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ConcentrationLimitRegisterRead> {
+    const response = await this.updateConcentrationLimitRegisterRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Update Credit Threshold Register
+   */
+  async updateCreditThresholdRegisterRaw(
+    requestParameters: UpdateCreditThresholdRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CreditThresholdRegisterRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling updateCreditThresholdRegister().',
+      );
+    }
+
+    if (requestParameters["creditThresholdUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "creditThresholdUpdate",
+        'Required parameter "creditThresholdUpdate" was null or undefined when calling updateCreditThresholdRegister().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/credit-thresholds`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: CreditThresholdUpdateToJSON(
+          requestParameters["creditThresholdUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CreditThresholdRegisterReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Update Credit Threshold Register
+   */
+  async updateCreditThresholdRegister(
+    requestParameters: UpdateCreditThresholdRegisterRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CreditThresholdRegisterRead> {
+    const response = await this.updateCreditThresholdRegisterRaw(
       requestParameters,
       initOverrides,
     );

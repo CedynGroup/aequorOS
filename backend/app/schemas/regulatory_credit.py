@@ -12,6 +12,7 @@ limit when the control-plane row is unseeded — never a fabricated zero.
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -135,3 +136,96 @@ class CreditLoanFacetsRead(ClosedModel):
     products: list[CreditFacetCountRead]
     branches: list[CreditFacetCountRead]
     sectors: list[CreditFacetCountRead]
+
+
+# --- concentration monitor (credit PR-3) -----------------------------------
+
+
+class ConcentrationBucketRead(ClosedModel):
+    key: str
+    exposure_ghs: Decimal
+    loan_count: int
+    share_of_book_pct: Decimal
+    #: ``null`` when no capital base resolves — not computable, never 0.
+    share_of_capital_pct: Decimal | None = None
+    limit_value: Decimal | None = None
+    #: share_of_book_pct | share_of_capital_pct when a limit applies.
+    limit_kind: str | None = None
+    #: within_limit | above_limit | not_set | not_computable
+    limit_status: str
+    utilization_pct: Decimal | None = None
+
+
+class ConcentrationDimensionRead(ClosedModel):
+    dimension: str
+    #: Herfindahl–Hirschman index on the 0–10,000 basis, over STATED exposure.
+    hhi: Decimal
+    bucket_count: int
+    #: Share of the total book that states this dimension at all.
+    coverage_pct: Decimal
+    stated_exposure_ghs: Decimal
+    buckets: list[ConcentrationBucketRead]
+    hhi_limit: Decimal | None = None
+    hhi_status: str
+
+
+class CreditConcentrationRead(ClosedModel):
+    as_of: str
+    total_book_ghs: Decimal
+    #: The regime-scoped denominator (SDI: Act 930 s.29 Net Own Funds; bank:
+    #: Tier 1 from current capital components); ``null`` when unresolvable.
+    capital_base_ghs: Decimal | None = None
+    #: 'net_own_funds' | 'tier1' — what the capital basis IS, so the UI labels
+    #: the column truthfully per regime.
+    capital_basis: str
+    dimensions: list[ConcentrationDimensionRead]
+    breaches: list[ConcentrationBucketRead]
+    #: Board limit rows active at ``as_of`` (empty = none configured yet).
+    limit_count: int
+
+
+class ConcentrationLimitRead(ClosedModel):
+    dimension: str
+    limit_kind: str
+    bucket_key: str | None = None
+    value: Decimal
+    effective_from: str
+    approved_by: str
+
+
+class ConcentrationLimitEntry(ClosedModel):
+    dimension: str
+    limit_kind: str
+    bucket_key: str | None = None
+    value: Decimal
+
+
+class ConcentrationLimitRegisterRead(ClosedModel):
+    as_of: str
+    limits: list[ConcentrationLimitRead]
+
+
+class ConcentrationLimitUpdate(ClosedModel):
+    effective_from: date
+    approved_by: str
+    reason: str
+    limits: list[ConcentrationLimitEntry]
+
+
+class CreditThresholdRead(ClosedModel):
+    threshold_code: str
+    value_pct: Decimal
+    effective_from: str
+    approved_by: str
+
+
+class CreditThresholdRegisterRead(ClosedModel):
+    as_of: str
+    thresholds: list[CreditThresholdRead]
+
+
+class CreditThresholdUpdate(ClosedModel):
+    effective_from: date
+    approved_by: str
+    reason: str
+    thresholds: dict[str, Decimal]

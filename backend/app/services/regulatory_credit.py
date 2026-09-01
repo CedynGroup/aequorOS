@@ -75,7 +75,7 @@ from app.services import regulatory_parameters as rp
 from app.services.audit import record_event
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409
-from app.services.live_types import LiveModuleResult, findings_from_validations
+from app.services.live_types import LiveFindingSpec, LiveModuleResult, findings_from_validations
 from app.services.loan_classification import LoanClassificationReport, classify_loan_book
 from app.services.regulatory_liquidity import get_regulatory_run
 
@@ -393,6 +393,10 @@ def compute_live(
     findings = findings_from_validations(
         tuple(_validation_rows(report, limit_pct, restriction_pct)), npl_status
     )
+    concentration = _concentration_or_none(db, ctx, bank, as_of)
+    single = concentration.dimension("single_name") if concentration is not None else None
+    sector = concentration.dimension("sector") if concentration is not None else None
+    employer = concentration.dimension("employer") if concentration is not None else None
     metrics = {
         "gross_loans_ghs": str(result.total_exposure_ghs),
         "loan_count": str(report.loan_count),
@@ -410,6 +414,15 @@ def compute_live(
         "par_90_pct": _opt(par.get("par_90")),
         "par_180_pct": _opt(par.get("par_180")),
         "par_360_pct": _opt(par.get("par_360")),
+        "sector_hhi": _opt(sector.hhi if sector is not None else None),
+        "employer_hhi": _opt(
+            employer.hhi if employer is not None and employer.bucket_count > 0 else None
+        ),
+        "largest_single_name_share_pct": _opt(
+            single.buckets[0].share_of_book_pct
+            if single is not None and single.buckets
+            else None
+        ),
         "grades": [
             {
                 "grade": bucket.grade,
@@ -421,6 +434,24 @@ def compute_live(
             for bucket in result.buckets
         ],
     }
+    if concentration is not None and concentration.breaches:
+        findings = (
+            *findings,
+            *(
+                LiveFindingSpec(
+                    rule_id=f"concentration_limit_{_breach_dimension(concentration, breach)}",
+                    severity="high",
+                    message=(
+                        f"{breach.key} is above its Board concentration limit "
+                        f"({breach.utilization_pct}% of limit)"
+                        if breach.utilization_pct is not None
+                        else f"{breach.key} is above its Board concentration limit"
+                    ),
+                    metric="largest_single_name_share_pct",
+                )
+                for breach in concentration.breaches
+            ),
+        )
     return LiveModuleResult(
         metrics=metrics,
         status=npl_status,
@@ -429,6 +460,24 @@ def compute_live(
         findings=findings,
         source_as_of_date=as_of,
     )
+
+
+def _concentration_or_none(db: Session, ctx: TenantContext, bank: Bank, as_of: date):
+    """The standing monitor, or ``None`` when there is nothing to measure —
+    concentration must never take the whole live credit view down."""
+    from app.services import credit_concentration  # noqa: PLC0415 - service cycle
+
+    try:
+        return credit_concentration.monitor(db, ctx, bank, as_of)
+    except ModuleDataUnavailable:
+        return None
+
+
+def _breach_dimension(result: Any, breach: Any) -> str:
+    for dimension in result.dimensions:
+        if breach in dimension.buckets:
+            return dimension.dimension
+    return "single_name"
 
 
 def _opt(value: Decimal | None) -> str | None:
@@ -734,6 +783,15 @@ def get_credit_dashboard(
         pending_parameters=list(report.pending_parameters),
         live=live_block(db, ctx, bank.id, MODULE_CREDIT),
     )
+
+
+def get_credit_concentration(db: Session, ctx: TenantContext, bank_id: str):
+    """The standing concentration monitor read (credit PR-3)."""
+    from app.services import credit_concentration  # noqa: PLC0415 - service cycle
+
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
+    return credit_concentration.concentration_read(db, ctx, bank, period.period_end)
 
 
 # ---------------------------------------------------------------------------

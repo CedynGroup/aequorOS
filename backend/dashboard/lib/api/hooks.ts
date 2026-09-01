@@ -340,6 +340,7 @@ const capitalInvalidatePrefixes = [
   'credit-dashboard',
   'credit-loans',
   'credit-loans-facets',
+  'credit-concentration',
   'cap-rwa',
   'cap-structure',
   'reg-runs',
@@ -552,6 +553,32 @@ export function useCreditLoanFacets(bankId: string | undefined) {
     queryFn: () => apiCall(() => regulatoryCreditApi.getCreditLoanFacets({ bankId: bankId! })),
     enabled: Boolean(bankId),
     staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreditConcentration(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-concentration', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditConcentrationRaw({
+          bankId: bankId!,
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'The concentration monitor is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
 

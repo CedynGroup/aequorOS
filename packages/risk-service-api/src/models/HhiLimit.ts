@@ -13,34 +13,34 @@
 /**
  *
  * @export
- * @interface Value1
+ * @interface HhiLimit
  */
-export type Value1 = string | null;
+export type HhiLimit = string | null;
 
 /**
- * Check if a given object implements the Value1 interface.
+ * Check if a given object implements the HhiLimit interface.
  */
-export function instanceOfValue1(value: unknown): value is Value1 {
+export function instanceOfHhiLimit(value: unknown): value is HhiLimit {
   return typeof value === "string" || value === null;
 }
 
-export function Value1FromJSON(json: any): Value1 {
-  return Value1FromJSONTyped(json, false);
+export function HhiLimitFromJSON(json: any): HhiLimit {
+  return HhiLimitFromJSONTyped(json, false);
 }
 
-export function Value1FromJSONTyped(
+export function HhiLimitFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): Value1 {
+): HhiLimit {
   return json;
 }
 
-export function Value1ToJSON(json: any): Value1 {
-  return Value1ToJSONTyped(json, false);
+export function HhiLimitToJSON(json: any): HhiLimit {
+  return HhiLimitToJSONTyped(json, false);
 }
 
-export function Value1ToJSONTyped(
-  value?: Value1 | null,
+export function HhiLimitToJSONTyped(
+  value?: HhiLimit | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   return value;

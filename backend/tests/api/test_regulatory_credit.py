@@ -159,3 +159,61 @@ def test_credit_module_is_gracefully_empty_without_a_loan_book(db_client: TestCl
         body = response.json()
         assert body.get("available") is False
         assert body.get("error_code")
+
+
+def test_concentration_monitor_measures_dimensions_with_honest_coverage(
+    db_client: TestClient,
+) -> None:
+    _seed_and_refresh(db_client)
+    response = db_client.get(f"{_BASE}/credit/concentration", headers=headers())
+    assert response.status_code == 200, response.text
+    body = response.json()
+    dimensions = {d["dimension"]: d for d in body["dimensions"]}
+    assert set(dimensions) == {
+        "single_name",
+        "sector",
+        "geography",
+        "product",
+        "collateral",
+        "employer",
+    }
+    # No employer attributes on the fixture book: zero buckets, zero coverage —
+    # and no fabricated "Unknown" bucket.
+    employer = dimensions["employer"]
+    assert employer["bucket_count"] == 0
+    assert Decimal(employer["coverage_pct"]) == 0
+    # Single name always covers the whole book (every row has an identity).
+    assert Decimal(dimensions["single_name"]["coverage_pct"]) == 100
+    # No Board limits configured yet: every bucket reads not_set, none breach.
+    assert body["limit_count"] == 0
+    assert body["breaches"] == []
+    statuses = {
+        bucket["limit_status"]
+        for dimension in body["dimensions"]
+        for bucket in dimension["buckets"]
+    }
+    assert statuses <= {"not_set"}
+    assert body["capital_basis"] in {"tier1", "net_own_funds"}
+
+
+def test_concentration_limits_register_roundtrip(db_client: TestClient) -> None:
+    _seed_and_refresh(db_client)
+    put = db_client.put(
+        f"{_BASE}/concentration-limits",
+        headers=headers(),
+        json={
+            "effective_from": "2026-01-01",
+            "approved_by": "Board Credit Committee",
+            "reason": "Initial limit structure per the concentration guidelines",
+            "limits": [
+                {"dimension": "single_name", "limit_kind": "share_of_capital_pct", "value": "25"},
+                {"dimension": "employer", "limit_kind": "share_of_book_pct", "value": "20"},
+            ],
+        },
+    )
+    assert put.status_code == 200, put.text
+    register = put.json()
+    assert len(register["limits"]) == 2
+
+    monitor = db_client.get(f"{_BASE}/credit/concentration", headers=headers()).json()
+    assert monitor["limit_count"] == 2

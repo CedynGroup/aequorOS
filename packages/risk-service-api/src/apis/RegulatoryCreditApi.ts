@@ -12,6 +12,7 @@
 
 import * as runtime from "../runtime";
 import type {
+  CreditConcentrationRead,
   CreditDashboardRead,
   CreditLoanFacetsRead,
   CreditLoansPageRead,
@@ -20,6 +21,8 @@ import type {
   RegulatoryRunBatchRead,
 } from "../models/index";
 import {
+  CreditConcentrationReadFromJSON,
+  CreditConcentrationReadToJSON,
   CreditDashboardReadFromJSON,
   CreditDashboardReadToJSON,
   CreditLoanFacetsReadFromJSON,
@@ -33,6 +36,10 @@ import {
   RegulatoryRunBatchReadFromJSON,
   RegulatoryRunBatchReadToJSON,
 } from "../models/index";
+
+export interface GetCreditConcentrationRequest {
+  bankId: string;
+}
 
 export interface GetCreditDashboardRequest {
   bankId: string;
@@ -62,6 +69,66 @@ export interface RunAllCreditScenariosRequest {
  *
  */
 export class RegulatoryCreditApi extends runtime.BaseAPI {
+  /**
+   * The standing concentration monitor over the current credit book.
+   * Get Credit Concentration
+   */
+  async getCreditConcentrationRaw(
+    requestParameters: GetCreditConcentrationRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CreditConcentrationRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getCreditConcentration().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/credit/concentration`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CreditConcentrationReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The standing concentration monitor over the current credit book.
+   * Get Credit Concentration
+   */
+  async getCreditConcentration(
+    requestParameters: GetCreditConcentrationRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CreditConcentrationRead> {
+    const response = await this.getCreditConcentrationRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Get Credit Dashboard
    */
