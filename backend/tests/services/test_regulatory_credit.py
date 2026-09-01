@@ -13,6 +13,8 @@ from app.models import (
     Bank,
     BankReportingPeriod,
     CanonicalLoanEvent,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
     IngestionBatch,
     LineageRecord,
     RegulatoryRun,
@@ -245,3 +247,98 @@ def test_activity_read_groups_events_by_type_and_month(db_session: Session) -> N
     june = next(flow for flow in read.monthly_flows if flow.month == "2026-06")
     assert june.write_offs_ghs == Decimal("250")
     assert june.recoveries_ghs == Decimal("40")
+
+
+def _seed_prior_month_book(db_session: Session) -> None:
+    """A minimal prior-month LOAN book (May month-end) mirroring three of the
+    fixture's June loans plus one that will 'depart'."""
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=date_type(2026, 5, 31),
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="prior-month-book",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    common = {
+        "organization_id": ORG_1,
+        "bank_id": SAMPLE_BANK_ID,
+        "as_of_date": date_type(2026, 5, 31),
+        "source_system": "EXCEL_CSV",
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+    # Loans that also exist in the June fixture (same source refs), so they
+    # MATCH across the two dates, plus one May-only loan that departs.
+    refs = {
+        "LOAN/1": ("1000000", 0, 1),
+        # Performing in May (60 DPD, stage 2); the June fixture carries this
+        # facility at stage 3 → a performing→npl flow.
+        "LOAN/6": ("3200000", 60, 2),
+        "MAY-ONLY": ("500000", 0, 1),
+    }
+    for ref, (balance, dpd, stage) in refs.items():
+        position = db_session.scalar(
+            select(CanonicalPosition).where(
+                CanonicalPosition.source_reference == ref,
+                CanonicalPosition.superseded_by.is_(None),
+            )
+        )
+        if position is None:
+            position = CanonicalPosition(
+                **common, source_reference=ref, position_type="LOAN", currency="GHS"
+            )
+            db_session.add(position)
+            db_session.flush()
+        db_session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=ref,
+                position_id=position.id,
+                balance=Decimal(balance),
+                ifrs9_stage=stage,
+                attributes={"balance_ghs": balance, "days_past_due": dpd},
+            )
+        )
+    db_session.commit()
+
+
+def test_migration_view_flows_between_two_month_ends(db_session: Session) -> None:
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    _seed_prior_month_book(db_session)
+    read = regulatory_credit.get_credit_migration(db_session, CTX, SAMPLE_BANK_ID)
+    assert read.available is True
+    assert read.opening_as_of == "2026-05-31"
+    # The May-only loan departed; June-only fixture loans entered.
+    assert read.exit_loan_count == 1
+    assert read.entry_loan_count >= 1
+    # LOAN/GHS/NPL was performing in May (60 DPD) and is stage-3/NPL in June:
+    # a performing→npl flow must exist.
+    flows = {(cell.from_state, cell.to_state) for cell in read.matrix}
+    assert ("performing", "npl") in flows
+    # Roll rates only cover matched loans with DPD on both dates.
+    assert all(cell.rate_pct >= 0 for cell in read.roll_rates)
+
+
+def test_migration_without_a_prior_month_is_soft_unavailable(db_session: Session) -> None:
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    read = regulatory_credit.get_credit_migration(db_session, CTX, SAMPLE_BANK_ID)
+    assert read.available is False
+    assert "previous month" in (read.reason or "")
+    assert read.matrix == []

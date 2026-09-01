@@ -18,13 +18,13 @@ import {
   ApprovalDecisionToJSON,
   ApprovalDecisionToJSONTyped,
 } from "./ApprovalDecision";
-import type { Reason1 } from "./Reason1";
+import type { Reason2 } from "./Reason2";
 import {
-  Reason1FromJSON,
-  Reason1FromJSONTyped,
-  Reason1ToJSON,
-  Reason1ToJSONTyped,
-} from "./Reason1";
+  Reason2FromJSON,
+  Reason2FromJSONTyped,
+  Reason2ToJSON,
+  Reason2ToJSONTyped,
+} from "./Reason2";
 
 /**
  *
@@ -40,10 +40,10 @@ export interface PackageApprovalDecisionCreate {
   action: ApprovalDecision;
   /**
    *
-   * @type {Reason1}
+   * @type {Reason2}
    * @memberof PackageApprovalDecisionCreate
    */
-  reason?: Reason1;
+  reason?: Reason2;
 }
 
 /**
@@ -73,7 +73,7 @@ export function PackageApprovalDecisionCreateFromJSONTyped(
     ...json,
     action: ApprovalDecisionFromJSON(json["action"]),
     reason:
-      json["reason"] == null ? undefined : Reason1FromJSON(json["reason"]),
+      json["reason"] == null ? undefined : Reason2FromJSON(json["reason"]),
   };
 }
 
@@ -93,6 +93,6 @@ export function PackageApprovalDecisionCreateToJSONTyped(
 
   return {
     action: ApprovalDecisionToJSON(value["action"]),
-    reason: Reason1ToJSON(value["reason"]),
+    reason: Reason2ToJSON(value["reason"]),
   };
 }

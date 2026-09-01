@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.capital import loan_classification as engine
+from app.domain.credit.restructure import restructure_holds_npl
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
 from app.services import institution_types, jurisdictions
 from app.services import regulatory_parameters as rp
@@ -157,6 +158,11 @@ class LoanClassificationReport:
     #: Specific provisions held ÷ NPL exposure, as a percentage. ``None`` when
     #: provisions are unstated OR the book has no NPL exposure to cover.
     provision_coverage_pct: Decimal | None = None
+    #: Facilities carrying the ingested ``restructured`` flag.
+    restructured_count: int = 0
+    restructured_exposure_ghs: Decimal = _ZERO
+    #: Restructured facilities the Notice ¶12 cure rule holds non-performing.
+    restructure_held_count: int = 0
 
     @property
     def has_pending_parameters(self) -> bool:
@@ -180,9 +186,21 @@ def _coerce_dpd(value: Any) -> int | None:
     return days if days >= 0 else None
 
 
+@dataclass(frozen=True)
+class _RestructureState:
+    restructured: bool
+    payments_met: int | None
+    repayment_frequency: str | None
+
+
 def _load_loan_exposures(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> tuple[list[engine.LoanExposure], int, list[tuple[Decimal | None, Decimal | None]]]:
+) -> tuple[
+    list[engine.LoanExposure],
+    int,
+    list[tuple[Decimal | None, Decimal | None]],
+    list[_RestructureState],
+]:
     """Current-generation LOAN exposures for ``as_of`` (+ unconverted count).
 
     Exposure is the GHS balance: ``attributes.balance_ghs`` when present, else
@@ -211,6 +229,7 @@ def _load_loan_exposures(
     base_currency = jurisdictions.base_currency(bank)
     exposures: list[engine.LoanExposure] = []
     provisions: list[tuple[Decimal | None, Decimal | None]] = []
+    restructures: list[_RestructureState] = []
     unconverted = 0
     for snapshot, position in records:
         attributes = snapshot.attributes or {}
@@ -234,7 +253,19 @@ def _load_loan_exposures(
                 _dec_or_none(attributes.get("interest_in_suspense_ghs")),
             )
         )
-    return exposures, unconverted, provisions
+        restructures.append(
+            _RestructureState(
+                restructured=str(attributes.get("restructured", "")).strip().lower()
+                in ("true", "1", "yes"),
+                payments_met=_coerce_dpd(attributes.get("payments_met_since_restructure")),
+                repayment_frequency=(
+                    str(attributes.get("repayment_frequency")).strip().lower()
+                    if attributes.get("repayment_frequency")
+                    else None
+                ),
+            )
+        )
+    return exposures, unconverted, provisions, restructures
 
 
 def _dec_or_none(value: Any) -> Decimal | None:
@@ -374,6 +405,33 @@ def _provisions_held(
     )
 
 
+def _restructure_holds(
+    db: Session, bank: Bank, restructures: list[_RestructureState], as_of: date
+) -> list[bool]:
+    """Per-loan Notice ¶12 holds, from the governed cure counts.
+
+    Unseeded cure parameters hold EVERY restructured facility: the cure is an
+    evidence-based release from non-performing status, and with no governed
+    count there is no basis to release — conservative, never invented.
+    """
+    if not any(state.restructured for state in restructures):
+        return [False] * len(restructures)
+    cure = rp.try_resolve(db, bank, "restructure_cure_payments", as_of=as_of)
+    cure_semi = rp.try_resolve(db, bank, "restructure_cure_payments_semi_annual", as_of=as_of)
+    if cure is None or cure_semi is None:
+        return [state.restructured for state in restructures]
+    return [
+        restructure_holds_npl(
+            restructured=state.restructured,
+            payments_met=state.payments_met,
+            repayment_frequency=state.repayment_frequency,
+            cure_payments=cure.decimal,
+            cure_payments_semi_annual=cure_semi.decimal,
+        )
+        for state in restructures
+    ]
+
+
 def classify_loan_book(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> LoanClassificationReport:
@@ -387,8 +445,9 @@ def classify_loan_book(
     values, provenance = _resolve_parameters(db, bank, institution_class, as_of)
     grid = engine.grid_from_params(institution_class, values)
 
-    exposures, unconverted, provisions = _load_loan_exposures(db, ctx, bank, as_of)
-    result = engine.classify_book(exposures, grid)
+    exposures, unconverted, provisions, restructures = _load_loan_exposures(db, ctx, bank, as_of)
+    holds = _restructure_holds(db, bank, restructures, as_of)
+    result = engine.classify_book(exposures, grid, restructure_holds=holds)
     raw_dpd_exposures = _load_raw_dpd_exposures(db, ctx, bank, as_of)
     held = _provisions_held(result.loans, provisions)
     coverage: Decimal | None = None
@@ -415,4 +474,14 @@ def classify_loan_book(
         pending_parameters=pending,
         provisions_held=held,
         provision_coverage_pct=coverage,
+        restructured_count=sum(1 for state in restructures if state.restructured),
+        restructured_exposure_ghs=sum(
+            (
+                exposure.exposure_ghs
+                for exposure, state in zip(exposures, restructures, strict=True)
+                if state.restructured
+            ),
+            _ZERO,
+        ),
+        restructure_held_count=sum(1 for flag in holds if flag),
     )

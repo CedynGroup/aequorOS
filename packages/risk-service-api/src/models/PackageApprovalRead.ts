@@ -18,13 +18,13 @@ import {
   ApprovalActionToJSON,
   ApprovalActionToJSONTyped,
 } from "./ApprovalAction";
-import type { Reason2 } from "./Reason2";
+import type { Reason } from "./Reason";
 import {
-  Reason2FromJSON,
-  Reason2FromJSONTyped,
-  Reason2ToJSON,
-  Reason2ToJSONTyped,
-} from "./Reason2";
+  ReasonFromJSON,
+  ReasonFromJSONTyped,
+  ReasonToJSON,
+  ReasonToJSONTyped,
+} from "./Reason";
 
 /**
  *
@@ -58,10 +58,10 @@ export interface PackageApprovalRead {
   occurredAt: Date;
   /**
    *
-   * @type {Reason2}
+   * @type {Reason}
    * @memberof PackageApprovalRead
    */
-  reason: Reason2;
+  reason: Reason;
 }
 
 /**
@@ -97,7 +97,7 @@ export function PackageApprovalReadFromJSONTyped(
     actorUserId: json["actor_user_id"],
     id: json["id"],
     occurredAt: new Date(json["occurred_at"]),
-    reason: Reason2FromJSON(json["reason"]),
+    reason: ReasonFromJSON(json["reason"]),
   };
 }
 
@@ -118,6 +118,6 @@ export function PackageApprovalReadToJSONTyped(
     actor_user_id: value["actorUserId"],
     id: value["id"],
     occurred_at: value["occurredAt"].toISOString(),
-    reason: Reason2ToJSON(value["reason"]),
+    reason: ReasonToJSON(value["reason"]),
   };
 }

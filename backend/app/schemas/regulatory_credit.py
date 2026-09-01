@@ -110,6 +110,8 @@ class CreditLoanRead(ClosedModel):
     provision_required_ghs: Decimal
     #: Provision the bank states it holds on this loan; None = not stated.
     provision_held_ghs: Decimal | None = None
+    #: The ingested ``restructured`` flag.
+    restructured: bool = False
     interest_rate: Decimal | None = None
     contractual_maturity: str | None = None
     origination_date: str | None = None
@@ -261,3 +263,40 @@ class CreditActivityRead(ClosedModel):
     disbursement_count: int
     repayment_count: int
     monthly_flows: list[MonthlyFlowRead]
+
+
+# --- monthly migration (credit PR-5) ---------------------------------------
+
+
+class MigrationCellRead(ClosedModel):
+    from_state: str
+    to_state: str
+    exposure_ghs: Decimal
+    loan_count: int
+
+
+class RollRateCellRead(ClosedModel):
+    from_bucket: str
+    to_bucket: str
+    exposure_ghs: Decimal
+    loan_count: int
+    #: Exposure-weighted share of the from-bucket's matched opening exposure.
+    rate_pct: Decimal
+
+
+class CreditMigrationRead(ClosedModel):
+    as_of: str
+    #: False = insufficient history (one month-end only); a soft state with a
+    #: reason, never the module-unavailable envelope.
+    available: bool
+    reason: str | None = None
+    opening_as_of: str | None = None
+    opening_total_ghs: Decimal | None = None
+    closing_total_ghs: Decimal | None = None
+    matrix: list[MigrationCellRead] = []
+    entries: list[MigrationCellRead] = []
+    exits: list[MigrationCellRead] = []
+    roll_rates: list[RollRateCellRead] = []
+    matched_loan_count: int = 0
+    entry_loan_count: int = 0
+    exit_loan_count: int = 0

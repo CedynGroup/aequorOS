@@ -17,6 +17,7 @@ import type {
   CreditDashboardRead,
   CreditLoanFacetsRead,
   CreditLoansPageRead,
+  CreditMigrationRead,
   CreditScenarioBatchCreate,
   ErrorResponse,
   RegulatoryRunBatchRead,
@@ -32,6 +33,8 @@ import {
   CreditLoanFacetsReadToJSON,
   CreditLoansPageReadFromJSON,
   CreditLoansPageReadToJSON,
+  CreditMigrationReadFromJSON,
+  CreditMigrationReadToJSON,
   CreditScenarioBatchCreateFromJSON,
   CreditScenarioBatchCreateToJSON,
   ErrorResponseFromJSON,
@@ -54,6 +57,10 @@ export interface GetCreditDashboardRequest {
 }
 
 export interface GetCreditLoanFacetsRequest {
+  bankId: string;
+}
+
+export interface GetCreditMigrationRequest {
   bankId: string;
 }
 
@@ -311,6 +318,66 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<CreditLoanFacetsRead> {
     const response = await this.getCreditLoanFacetsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Month-over-month state migration and DPD roll rates.
+   * Get Credit Migration
+   */
+  async getCreditMigrationRaw(
+    requestParameters: GetCreditMigrationRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CreditMigrationRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getCreditMigration().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/credit/migration`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CreditMigrationReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Month-over-month state migration and DPD roll rates.
+   * Get Credit Migration
+   */
+  async getCreditMigration(
+    requestParameters: GetCreditMigrationRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CreditMigrationRead> {
+    const response = await this.getCreditMigrationRaw(
       requestParameters,
       initOverrides,
     );

@@ -20,6 +20,7 @@ from app.schemas.regulatory_credit import (
     CreditDashboardRead,
     CreditLoanFacetsRead,
     CreditLoansPageRead,
+    CreditMigrationRead,
     CreditScenarioBatchCreate,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
@@ -125,3 +126,17 @@ def get_credit_activity(
 ) -> CreditActivityRead:
     """Restructures, write-offs, recoveries and cures over the trailing year."""
     return regulatory_credit.get_credit_activity(db, ctx, bank_id)
+
+
+@router.get(
+    "/banks/{bank_id}/credit/migration",
+    response_model=CreditMigrationRead,
+    operation_id="getCreditMigration",
+)
+def get_credit_migration(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+) -> CreditMigrationRead:
+    """Month-over-month state migration and DPD roll rates."""
+    return regulatory_credit.get_credit_migration(db, ctx, bank_id)

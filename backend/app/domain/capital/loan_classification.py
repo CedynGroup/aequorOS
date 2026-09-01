@@ -50,6 +50,9 @@ UNCLASSIFIED = "unclassified"
 BASIS_DAYS_PAST_DUE = "days_past_due"
 BASIS_STAGE_PROXY = "stage_proxy"
 BASIS_UNCLASSIFIED = "unclassified"
+#: Held at the entry NPL grade by the restructure cure rule (Notice
+#: BG/GOV/SEC/2025/23 ¶12), regardless of days-past-due.
+BASIS_RESTRUCTURE_HOLD = "restructure_hold"
 
 #: The grades that are non-performing under BOTH grids (the NPL cutoff is
 #: substandard-and-worse for banks and SDIs alike; OLEM is a watch grade,
@@ -349,8 +352,31 @@ def _classify_one(exposure: LoanExposure, grid: ClassificationGrid) -> Classifie
     )
 
 
+def _apply_hold(
+    classified: ClassifiedLoan, grid: ClassificationGrid, *, held: bool
+) -> ClassifiedLoan:
+    """Floor a restructured, uncured loan at the entry NPL grade."""
+    if not held:
+        return classified
+    entry = grid.entry_npl_grade
+    order = grid.grades
+    # Already at or beyond the entry NPL grade by its own delinquency: keep it.
+    if classified.grade in order and order.index(classified.grade) >= order.index(entry):
+        return classified
+    band = grid.band_for_grade(entry)
+    return ClassifiedLoan(
+        grade=entry,
+        exposure_ghs=classified.exposure_ghs,
+        provision_required_ghs=_money(classified.exposure_ghs * band.provision_rate),
+        non_performing=True,
+        classification_basis=BASIS_RESTRUCTURE_HOLD,
+    )
+
+
 def classify_book(
-    exposures: Sequence[LoanExposure], grid: ClassificationGrid
+    exposures: Sequence[LoanExposure],
+    grid: ClassificationGrid,
+    restructure_holds: Sequence[bool] | None = None,
 ) -> ClassificationResult:
     """Classify a loan book, roll up per grade, and compute the NPL ratio.
 
@@ -358,8 +384,24 @@ def classify_book(
     non-performing grades (substandard and worse); the ratio is NPL / total.
     Loans with neither a DPD nor a stage sit in the ``unclassified`` bucket —
     included in total exposure but in neither the performing nor the NPL leg.
+
+    ``restructure_holds`` (position-aligned with ``exposures``) applies the
+    Notice 2025/23 ¶12 cure rule: a held loan lands at the grid's ENTRY NPL
+    grade (never better) with ``classification_basis="restructure_hold"``,
+    unless its own delinquency already classifies it WORSE — the hold is a
+    floor, not a cap.
     """
-    loans = tuple(_classify_one(exposure, grid) for exposure in exposures)
+    if restructure_holds is not None and len(restructure_holds) != len(exposures):
+        msg = "restructure_holds must align positionally with exposures"
+        raise LoanClassificationError(msg)
+    loans = tuple(
+        _apply_hold(
+            _classify_one(exposure, grid),
+            grid,
+            held=bool(restructure_holds[index]) if restructure_holds is not None else False,
+        )
+        for index, exposure in enumerate(exposures)
+    )
 
     counts: dict[str, int] = {}
     exposures_by_grade: dict[str, Decimal] = {}

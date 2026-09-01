@@ -29,6 +29,7 @@ const ROUTES = [
   '/credit',
   '/credit/book',
   '/credit/concentration',
+  '/credit/delinquency',
   '/credit/activity',
   '/data-engine',
   '/data-engine/adapters',

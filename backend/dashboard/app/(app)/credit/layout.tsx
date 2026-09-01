@@ -3,6 +3,7 @@ import ModuleTabs from '@/components/shell/ModuleTabs';
 const tabs = [
   { href: '/credit', label: 'Overview' },
   { href: '/credit/book', label: 'Loan Book' },
+  { href: '/credit/delinquency', label: 'Delinquency & Migration' },
   { href: '/credit/concentration', label: 'Concentration' },
   { href: '/credit/activity', label: 'Activity' },
 ];

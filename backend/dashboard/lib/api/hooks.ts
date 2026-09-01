@@ -342,6 +342,7 @@ const capitalInvalidatePrefixes = [
   'credit-loans-facets',
   'credit-concentration',
   'credit-activity',
+  'credit-migration',
   'cap-rwa',
   'cap-structure',
   'reg-runs',
@@ -597,6 +598,32 @@ export function useCreditActivity(bankId: string | undefined) {
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
             payload.reason ?? 'Loan-book activity is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCreditMigration(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-migration', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditMigrationRaw({ bankId: bankId! });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        // Only the MODULE-unavailable envelope hard-fails; the migration
+        // payload's own available=false (insufficient history) renders inline.
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Migration is not available yet.',
             payload.error_code
           );
         }

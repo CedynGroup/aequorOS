@@ -180,6 +180,12 @@ export interface CreditLoanRead {
   provisionRequiredGhs: string;
   /**
    *
+   * @type {boolean}
+   * @memberof CreditLoanRead
+   */
+  restructured?: boolean;
+  /**
+   *
    * @type {Sector}
    * @memberof CreditLoanRead
    */
@@ -274,6 +280,8 @@ export function CreditLoanReadFromJSONTyped(
         ? undefined
         : ProvisionHeldGhsFromJSON(json["provision_held_ghs"]),
     provisionRequiredGhs: json["provision_required_ghs"],
+    restructured:
+      json["restructured"] == null ? undefined : json["restructured"],
     sector: json["sector"] == null ? undefined : SectorFromJSON(json["sector"]),
     sourceReference: json["source_reference"],
   };
@@ -309,6 +317,7 @@ export function CreditLoanReadToJSONTyped(
     product_code: ProductCodeToJSON(value["productCode"]),
     provision_held_ghs: ProvisionHeldGhsToJSON(value["provisionHeldGhs"]),
     provision_required_ghs: value["provisionRequiredGhs"],
+    restructured: value["restructured"],
     sector: SectorToJSON(value["sector"]),
     source_reference: value["sourceReference"],
   };

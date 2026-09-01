@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { Reason1 } from "./Reason1";
+import {
+  Reason1FromJSON,
+  Reason1FromJSONTyped,
+  Reason1ToJSON,
+  Reason1ToJSONTyped,
+} from "./Reason1";
 import type { LiquidityReviewAction } from "./LiquidityReviewAction";
 import {
   LiquidityReviewActionFromJSON,
@@ -18,13 +25,6 @@ import {
   LiquidityReviewActionToJSON,
   LiquidityReviewActionToJSONTyped,
 } from "./LiquidityReviewAction";
-import type { Reason } from "./Reason";
-import {
-  ReasonFromJSON,
-  ReasonFromJSONTyped,
-  ReasonToJSON,
-  ReasonToJSONTyped,
-} from "./Reason";
 
 /**
  *
@@ -40,10 +40,10 @@ export interface LiquidityFindingReview {
   action: LiquidityReviewAction;
   /**
    *
-   * @type {Reason}
+   * @type {Reason1}
    * @memberof LiquidityFindingReview
    */
-  reason?: Reason;
+  reason?: Reason1;
 }
 
 /**
@@ -72,7 +72,8 @@ export function LiquidityFindingReviewFromJSONTyped(
   return {
     ...json,
     action: LiquidityReviewActionFromJSON(json["action"]),
-    reason: json["reason"] == null ? undefined : ReasonFromJSON(json["reason"]),
+    reason:
+      json["reason"] == null ? undefined : Reason1FromJSON(json["reason"]),
   };
 }
 
@@ -92,6 +93,6 @@ export function LiquidityFindingReviewToJSONTyped(
 
   return {
     action: LiquidityReviewActionToJSON(value["action"]),
-    reason: ReasonToJSON(value["reason"]),
+    reason: Reason1ToJSON(value["reason"]),
   };
 }

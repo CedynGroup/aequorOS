@@ -9838,6 +9838,11 @@
             "title": "Provision Required Ghs",
             "type": "string"
           },
+          "restructured": {
+            "default": false,
+            "title": "Restructured",
+            "type": "boolean"
+          },
           "sector": {
             "anyOf": [
               {
@@ -10016,6 +10021,118 @@
           "dpd_covered_count"
         ],
         "title": "CreditMetricsRead",
+        "type": "object"
+      },
+      "CreditMigrationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "closing_total_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closing Total Ghs"
+          },
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MigrationCellRead"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "entry_loan_count": {
+            "default": 0,
+            "title": "Entry Loan Count",
+            "type": "integer"
+          },
+          "exit_loan_count": {
+            "default": 0,
+            "title": "Exit Loan Count",
+            "type": "integer"
+          },
+          "exits": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MigrationCellRead"
+            },
+            "title": "Exits",
+            "type": "array"
+          },
+          "matched_loan_count": {
+            "default": 0,
+            "title": "Matched Loan Count",
+            "type": "integer"
+          },
+          "matrix": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MigrationCellRead"
+            },
+            "title": "Matrix",
+            "type": "array"
+          },
+          "opening_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opening As Of"
+          },
+          "opening_total_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opening Total Ghs"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "roll_rates": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RollRateCellRead"
+            },
+            "title": "Roll Rates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "available"
+        ],
+        "title": "CreditMigrationRead",
         "type": "object"
       },
       "CreditScenarioBatchCreate": {
@@ -24948,6 +25065,36 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "MigrationCellRead": {
+        "additionalProperties": false,
+        "properties": {
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "from_state": {
+            "title": "From State",
+            "type": "string"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "to_state": {
+            "title": "To State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_state",
+          "to_state",
+          "exposure_ghs",
+          "loan_count"
+        ],
+        "title": "MigrationCellRead",
+        "type": "object"
+      },
       "MinimumCode": {
         "enum": [
           "car",
@@ -31589,6 +31736,42 @@
           "confirmation_status"
         ],
         "title": "RiskWeightBandRead",
+        "type": "object"
+      },
+      "RollRateCellRead": {
+        "additionalProperties": false,
+        "properties": {
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "from_bucket": {
+            "title": "From Bucket",
+            "type": "string"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "rate_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rate Pct",
+            "type": "string"
+          },
+          "to_bucket": {
+            "title": "To Bucket",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_bucket",
+          "to_bucket",
+          "exposure_ghs",
+          "loan_count",
+          "rate_pct"
+        ],
+        "title": "RollRateCellRead",
         "type": "object"
       },
       "RunEvidenceRead": {
@@ -45091,6 +45274,104 @@
           }
         ],
         "summary": "Get Credit Loan Facets",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/migration": {
+      "get": {
+        "description": "Month-over-month state migration and DPD roll rates.",
+        "operationId": "getCreditMigration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditMigrationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Migration",
         "tags": [
           "regulatory-credit"
         ]

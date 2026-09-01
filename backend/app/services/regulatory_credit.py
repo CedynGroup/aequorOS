@@ -36,11 +36,12 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
+from app.domain.credit.migration import LoanState, compute_migration
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -62,10 +63,13 @@ from app.schemas.regulatory_credit import (
     CreditLoanRead,
     CreditLoansPageRead,
     CreditMetricsRead,
+    CreditMigrationRead,
     CreditScenarioBatchCreate,
     CreditValidationRead,
     LoanEventRead,
+    MigrationCellRead,
     MonthlyFlowRead,
+    RollRateCellRead,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead, RegulatoryRunRead
 from app.schemas.sdi import (
@@ -941,6 +945,8 @@ def _classified_loan_rows(
                 classification_basis=classified.classification_basis,
                 provision_required_ghs=classified.provision_required_ghs,
                 provision_held_ghs=_dec_or_none(attributes.get("ecl_provision_ghs")),
+                restructured=str(attributes.get("restructured", "")).strip().lower()
+                in ("true", "1", "yes"),
                 interest_rate=(
                     Decimal(str(snapshot.interest_rate))
                     if snapshot.interest_rate is not None
@@ -1143,4 +1149,118 @@ def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> Credit
             )
             for month, amounts in sorted(monthly.items())
         ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# monthly migration (credit PR-5)
+# ---------------------------------------------------------------------------
+
+_ROLL_BAND_EDGES: tuple[tuple[str, int, int | None], ...] = (
+    ("current", 0, 0),
+    ("1_29", 1, 29),
+    ("30_59", 30, 59),
+    ("60_89", 60, 89),
+    ("90_179", 90, 179),
+    ("180_359", 180, 359),
+    ("360_plus", 360, None),
+)
+
+
+def _dpd_bucket(days_past_due: int | None) -> str | None:
+    if days_past_due is None:
+        return None
+    for code, low, high in _ROLL_BAND_EDGES:
+        if days_past_due >= low and (high is None or days_past_due <= high):
+            return code
+    return None
+
+
+def _loan_states(rows: list[CreditLoanRead]) -> list[LoanState]:
+    return [
+        LoanState(
+            loan_key=row.source_reference,
+            exposure_ghs=row.exposure_ghs,
+            dpd_bucket=_dpd_bucket(row.days_past_due),
+            non_performing=row.non_performing,
+            restructured_performing=row.restructured and not row.non_performing,
+        )
+        for row in rows
+    ]
+
+
+def _previous_month_end_as_of(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> date | None:
+    """The latest LOAN-book as-of strictly before the current month."""
+    month_start = as_of.replace(day=1)
+    return db.scalar(
+        select(func.max(CanonicalPositionSnapshot.as_of_date))
+        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+        .where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date < month_start,
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPosition.position_type == "LOAN",
+        )
+    )
+
+
+def get_credit_migration(db: Session, ctx: TenantContext, bank_id: str) -> CreditMigrationRead:
+    """The Notice 2025/23 Appendix II monthly migration view.
+
+    Insufficient history is a SOFT state inside the payload (``available``
+    False + reason), not the module-unavailable envelope — one missing prior
+    month must not take the whole credit view down.
+    """
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
+    as_of = period.period_end
+    opening_as_of = _previous_month_end_as_of(db, ctx, bank, as_of)
+    if opening_as_of is None:
+        return CreditMigrationRead(
+            as_of=as_of.isoformat(),
+            available=False,
+            reason="Grade migration needs a loan book from the previous month; only one "
+            "month-end is ingested so far. The matrix fills in from the next month-end.",
+        )
+    closing_rows = _classified_loan_rows(db, ctx, bank, as_of)
+    opening_rows = _classified_loan_rows(db, ctx, bank, opening_as_of)
+    result = compute_migration(_loan_states(opening_rows), _loan_states(closing_rows))
+
+    def cells(items: tuple) -> list[MigrationCellRead]:
+        return [
+            MigrationCellRead(
+                from_state=cell.from_state,
+                to_state=cell.to_state,
+                exposure_ghs=cell.exposure_ghs,
+                loan_count=cell.loan_count,
+            )
+            for cell in items
+        ]
+
+    return CreditMigrationRead(
+        as_of=as_of.isoformat(),
+        available=True,
+        opening_as_of=opening_as_of.isoformat(),
+        opening_total_ghs=result.opening_total_ghs,
+        closing_total_ghs=result.closing_total_ghs,
+        matrix=cells(result.matrix),
+        entries=cells(result.entries),
+        exits=cells(result.exits),
+        roll_rates=[
+            RollRateCellRead(
+                from_bucket=cell.from_bucket,
+                to_bucket=cell.to_bucket,
+                exposure_ghs=cell.exposure_ghs,
+                loan_count=cell.loan_count,
+                rate_pct=cell.rate_pct,
+            )
+            for cell in result.roll_rates
+        ],
+        matched_loan_count=result.matched_loan_count,
+        entry_loan_count=result.entry_loan_count,
+        exit_loan_count=result.exit_loan_count,
     )
