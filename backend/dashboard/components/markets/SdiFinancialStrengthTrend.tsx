@@ -113,8 +113,11 @@ function Line({
 
 export default function SdiFinancialStrengthTrend({
   snapshots,
+  className,
 }: {
   snapshots: LiveSnapshotRead[];
+  /** Layout hook for side-by-side placement (e.g. "h-full"). */
+  className?: string;
 }) {
   const points = useMemo(() => snapshots.map(toPoint), [snapshots]);
   const assessed = points.filter((point) => point.composite !== null);
@@ -141,7 +144,9 @@ export default function SdiFinancialStrengthTrend({
   const componentCodes = Object.keys(last.components);
 
   return (
-    <div className="border border-border bg-surface-raised rounded-lg overflow-hidden">
+    <div
+      className={`border border-border bg-surface-raised rounded-lg overflow-hidden flex flex-col ${className ?? ''}`}
+    >
       <div className="px-5 py-4 border-b border-border flex items-baseline justify-between gap-4 flex-wrap">
         <div>
           <p className="text-body font-medium text-navy">Assessment trend</p>
@@ -196,7 +201,7 @@ export default function SdiFinancialStrengthTrend({
         </div>
       ) : null}
 
-      <div className="px-5 py-3 border-t border-border bg-surface">
+      <div className="mt-auto px-5 py-3 border-t border-border bg-surface">
         {migrations.length > 0 ? (
           <div className="space-y-1">
             <p className="text-micro text-slate">Grade migrations</p>
