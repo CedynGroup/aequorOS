@@ -59,6 +59,7 @@ from app.features.run_calculations import router as calculations_router
 from app.features.run_forecasting import router as forecasting_router
 from app.features.run_implied_rating import router as implied_rating_router
 from app.features.run_regulatory_capital import router as regulatory_capital_router
+from app.features.run_regulatory_credit import router as regulatory_credit_router
 from app.features.run_regulatory_ftp import router as regulatory_ftp_router
 from app.features.run_regulatory_fx import router as regulatory_fx_router
 from app.features.run_regulatory_irr import router as regulatory_irr_router
@@ -96,6 +97,7 @@ v1_router.include_router(regulatory_capital_router)
 # of the SDI module set, so an SDI tenant is rejected at the API, not merely in
 # the nav. A universal bank has all modules and is unaffected.
 v1_router.include_router(regulatory_irr_router, dependencies=[require_module_access("irrbb")])
+v1_router.include_router(regulatory_credit_router, dependencies=[require_module_access("credit")])
 v1_router.include_router(regulatory_fx_router, dependencies=[require_module_access("fx")])
 v1_router.include_router(regulatory_ftp_router, dependencies=[require_module_access("ftp")])
 v1_router.include_router(regulatory_reporting_router)

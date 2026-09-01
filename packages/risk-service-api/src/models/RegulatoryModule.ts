@@ -17,12 +17,15 @@
 export const RegulatoryModule = {
   Liquidity: "liquidity",
   Capital: "capital",
+  Credit: "credit",
   Forecast: "forecast",
   Optimizer: "optimizer",
   Whatif: "whatif",
   Irr: "irr",
   Fx: "fx",
   Ftp: "ftp",
+  ReverseStress: "reverse_stress",
+  EnterpriseStress: "enterprise_stress",
 } as const;
 export type RegulatoryModule =
   (typeof RegulatoryModule)[keyof typeof RegulatoryModule];

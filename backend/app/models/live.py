@@ -29,8 +29,8 @@ from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
 # The live Treasury/ALM surfaces. Rating is a cheap live scorecard over the
 # canonical book, current market data, and the other live module outputs.
-LIVE_MODULES = ("liquidity", "capital", "irr", "fx", "ftp", "rating", "forecast")
-_MODULE_CHECK = "module IN ('liquidity', 'capital', 'irr', 'fx', 'ftp', 'rating', 'forecast')"
+LIVE_MODULES = ("liquidity", "capital", "credit", "irr", "fx", "ftp", "rating", "forecast")
+_MODULE_CHECK = "module IN (" + ", ".join(f"'{module}'" for module in LIVE_MODULES) + ")"
 
 
 class LiveMetric(UuidV4PrimaryKeyMixin, TimestampMixin, Base):

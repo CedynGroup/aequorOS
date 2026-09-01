@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { SdiLoanClassificationReadProvisionsHeld } from "./SdiLoanClassificationReadProvisionsHeld";
-import {
-  SdiLoanClassificationReadProvisionsHeldFromJSON,
-  SdiLoanClassificationReadProvisionsHeldFromJSONTyped,
-  SdiLoanClassificationReadProvisionsHeldToJSON,
-  SdiLoanClassificationReadProvisionsHeldToJSONTyped,
-} from "./SdiLoanClassificationReadProvisionsHeld";
 import type { ProvisionCoveragePct } from "./ProvisionCoveragePct";
 import {
   ProvisionCoveragePctFromJSON,
@@ -32,6 +25,13 @@ import {
   DelinquencyBucketReadToJSON,
   DelinquencyBucketReadToJSONTyped,
 } from "./DelinquencyBucketRead";
+import type { CreditMetricsReadProvisionsHeld } from "./CreditMetricsReadProvisionsHeld";
+import {
+  CreditMetricsReadProvisionsHeldFromJSON,
+  CreditMetricsReadProvisionsHeldFromJSONTyped,
+  CreditMetricsReadProvisionsHeldToJSON,
+  CreditMetricsReadProvisionsHeldToJSONTyped,
+} from "./CreditMetricsReadProvisionsHeld";
 import type { LoanGradeBucketRead } from "./LoanGradeBucketRead";
 import {
   LoanGradeBucketReadFromJSON,
@@ -127,10 +127,10 @@ export interface SdiLoanClassificationRead {
   provisionCoveragePct?: ProvisionCoveragePct;
   /**
    *
-   * @type {SdiLoanClassificationReadProvisionsHeld}
+   * @type {CreditMetricsReadProvisionsHeld}
    * @memberof SdiLoanClassificationRead
    */
-  provisionsHeld?: SdiLoanClassificationReadProvisionsHeld;
+  provisionsHeld?: CreditMetricsReadProvisionsHeld;
   /**
    *
    * @type {number}
@@ -244,9 +244,7 @@ export function SdiLoanClassificationReadFromJSONTyped(
     provisionsHeld:
       json["provisions_held"] == null
         ? undefined
-        : SdiLoanClassificationReadProvisionsHeldFromJSON(
-            json["provisions_held"],
-          ),
+        : CreditMetricsReadProvisionsHeldFromJSON(json["provisions_held"]),
     stageProxyCount: json["stage_proxy_count"],
     totalExposureGhs: json["total_exposure_ghs"],
     totalProvisionRequiredGhs: json["total_provision_required_ghs"],
@@ -287,7 +285,7 @@ export function SdiLoanClassificationReadToJSONTyped(
     provision_coverage_pct: ProvisionCoveragePctToJSON(
       value["provisionCoveragePct"],
     ),
-    provisions_held: SdiLoanClassificationReadProvisionsHeldToJSON(
+    provisions_held: CreditMetricsReadProvisionsHeldToJSON(
       value["provisionsHeld"],
     ),
     stage_proxy_count: value["stageProxyCount"],

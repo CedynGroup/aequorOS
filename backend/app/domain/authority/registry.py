@@ -2353,6 +2353,24 @@ REGISTRY.register_all(
 
 _CREDIT_ENGINE = "app.domain.capital.loan_classification:classify_book"
 
+#: Every figure the credit run persists as a RegulatoryMetricResult, plus the
+#: legacy ``npl_ratio`` fraction id the SDI read-side already serves. One list
+#: for both regimes: registration says who OWNS a figure when it exists — a
+#: metric a class does not emit (OLEM for an SDI) simply never appears.
+_CREDIT_METRIC_IDS = (
+    "npl_ratio",
+    "npl_ratio_pct",
+    "gross_loans_ghs",
+    "npl_exposure_ghs",
+    "total_provision_required_ghs",
+    "provision_held_ghs",
+    "provision_coverage_pct",
+    "par_30_pct",
+    "par_60_pct",
+    "par_90_pct",
+    "unclassified_exposure_ghs",
+)
+
 REGISTRY.register_all(
     [
         MetricAuthority(
@@ -2381,7 +2399,7 @@ REGISTRY.register_all(
                 "dpd_doubtful_min",
                 "dpd_loss_min",
             ),
-            authoritative_run_type=None,
+            authoritative_run_type="credit",
             reporting_mappings=("BSD5A", "BSD8"),
             expected_tolerance=Decimal("0"),
             approved_alternate_methodologies=("nbfi_four_grade_classification",),
@@ -2389,9 +2407,11 @@ REGISTRY.register_all(
             advisory_designation=AdvisoryDesignation.FILED,
             authority_reference="BoG loan classification (5-grade: standard/olem/substandard/"
             "doubtful/loss)",
-            notes="Same engine as the SDI grid; the GRADE SET and provisioning rates differ.",
+            notes="Same engine as the SDI grid; the GRADE SET and provisioning rates differ. "
+            "Sealed by RegulatoryRun(module='credit') from credit PR-2; the NPL prudential "
+            "ceiling is Notice BG/GOV/SEC/2025/23 (npl_limit_pct).",
         )
-        for metric_id in ("npl_ratio", "total_provision_required_ghs")
+        for metric_id in _CREDIT_METRIC_IDS
     ]
 )
 
@@ -2421,7 +2441,7 @@ REGISTRY.register_all(
                 "dpd_doubtful_min",
                 "dpd_loss_min",
             ),
-            authoritative_run_type=None,
+            authoritative_run_type="credit",
             reporting_mappings=(),
             expected_tolerance=Decimal("0"),
             approved_alternate_methodologies=("bog_five_grade_classification",),
@@ -2429,9 +2449,11 @@ REGISTRY.register_all(
             advisory_designation=AdvisoryDesignation.SUPERVISORY_MONITORING,
             authority_reference="NBFI Business Rules 2000, rules 17-19 (4-grade: standard/"
             "substandard/doubtful/loss)",
-            notes="No OLEM grade; provisioning rates 0/20/50/100 rather than 1/10/25/50/100.",
+            notes="No OLEM grade; provisioning rates 0/20/50/100 rather than 1/10/25/50/100. "
+            "Sealed by RegulatoryRun(module='credit'); flips to FILED when the NPL-MONTHLY "
+            "return registers (credit PR-6).",
         )
-        for metric_id in ("npl_ratio", "total_provision_required_ghs")
+        for metric_id in _CREDIT_METRIC_IDS
     ]
 )
 

@@ -39,7 +39,7 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint(
             "module IN ('liquidity', 'capital', 'forecast', 'optimizer', 'whatif', "
-            "'irr', 'fx', 'ftp', 'reverse_stress', 'enterprise_stress')",
+            "'irr', 'fx', 'ftp', 'reverse_stress', 'enterprise_stress', 'credit')",
             name="ck_regulatory_runs_module",
         ),
         CheckConstraint(

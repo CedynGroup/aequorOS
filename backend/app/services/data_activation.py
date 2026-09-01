@@ -38,6 +38,7 @@ from app.schemas.data_activation import (
 )
 from app.schemas.forecasting import ForecastRunCreate
 from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
+from app.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.schemas.regulatory_ftp import FtpScenarioBatchCreate
 from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_irr import IrrScenarioBatchCreate
@@ -46,6 +47,7 @@ from app.services import (
     implied_rating,
     module_scope,
     regulatory_capital,
+    regulatory_credit,
     regulatory_forecasting,
     regulatory_ftp,
     regulatory_fx,
@@ -168,7 +170,15 @@ def official_module_scope(
 
 #: Every module the official filing tier knows how to run, in run order. The
 #: subset an institution actually runs is decided by ``module_scope``.
-OFFICIAL_MODULES: tuple[str, ...] = ("liquidity", "capital", "irr", "fx", "ftp", "forecast")
+OFFICIAL_MODULES: tuple[str, ...] = (
+    "liquidity",
+    "capital",
+    "credit",
+    "irr",
+    "fx",
+    "ftp",
+    "forecast",
+)
 
 
 def _run_all_modules(
@@ -195,6 +205,16 @@ def _run_all_modules(
                     db, ctx, bank_id, CapitalScenarioBatchCreate(reporting_period_id=period_id)
                 ).runs,
                 lambda metrics: f"CAR {_pct(metrics, 'car_pct')}",
+            ),
+        ),
+        (
+            "credit",
+            lambda: _batch_outcome(
+                "credit",
+                regulatory_credit.run_all_credit_scenarios(
+                    db, ctx, bank_id, CreditScenarioBatchCreate(reporting_period_id=period_id)
+                ).runs,
+                lambda metrics: f"NPL {_pct(metrics, 'npl_ratio_pct')}",
             ),
         ),
         (

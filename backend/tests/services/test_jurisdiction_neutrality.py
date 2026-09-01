@@ -31,6 +31,10 @@ _CURRENCY_NEUTRAL_MODULES = (
     "app/services/regulatory_liquidity.py",
     "app/services/regulatory_fx.py",
     "app/services/regulatory_irr.py",
+    # Credit module (credit PR-2): the loan book's prudential narrative must
+    # resolve regulator/currency through the jurisdiction services.
+    "app/services/regulatory_credit.py",
+    "app/services/loan_classification.py",
     "app/services/fact_derivation.py",
     # Phase 2 calculation/workflow modules join the guard (2026-08-08):
     # narrative in these must resolve currency/regulator through the

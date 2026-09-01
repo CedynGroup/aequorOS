@@ -23,6 +23,7 @@ import {
   FileCheck2,
   Settings,
   ArrowRight,
+  BookOpenCheck,
 } from 'lucide-react';
 
 type Item = {
@@ -58,6 +59,8 @@ const items: Item[] = [
   { id: 'fx', label: 'FX Risk — Net Open Position', hint: 'Module 03', href: '/fx', icon: DollarSign, group: 'Modules', keywords: 'nop currency exposure usd gbp eur cedi' },
   { id: 'fx-scenarios', label: 'FX — Scenario Workbench', href: '/fx/scenarios', icon: DollarSign, group: 'Modules', keywords: 'depreciation shock workbench scenario' },
 
+  { id: 'credit', label: 'Credit — Portfolio Quality', hint: 'Module', href: '/credit', icon: BookOpenCheck, group: 'Modules', keywords: 'npl loans provisions classification asset quality par' },
+  { id: 'credit-book', label: 'Credit — Loan Book', hint: 'Module', href: '/credit/book', icon: BookOpenCheck, group: 'Modules', keywords: 'loans blotter borrower dpd grade classified' },
   { id: 'basel', label: 'Basel Capital — Capital Dashboard', hint: 'Module 04', href: '/basel', icon: ShieldCheck, group: 'Modules', keywords: 'car cet1 tier capital adequacy', institutionScope: 'bank' },
   { id: 'sdi-loan-book', label: 'Regulatory Capital — Loan Book', href: '/basel/loan-book', icon: ShieldCheck, group: 'Modules', keywords: 'sdi nbfi loans classification provisions', institutionScope: 'sdi' },
   { id: 'sdi-exposures', label: 'Regulatory Capital — Large Exposures', href: '/basel/exposures', icon: ShieldCheck, group: 'Modules', keywords: 'sdi obligor connected group net own funds limits', institutionScope: 'sdi' },

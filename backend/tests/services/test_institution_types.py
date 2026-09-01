@@ -209,9 +209,17 @@ def test_seed_catalogue_matches_the_migration_chain_end_state() -> None:
     """
     created = _load_migration("202608190018_institution_types_registry.py")
     widened = _load_migration("202608210026_sdi_module_set_expand.py")
+    credit = _load_migration("202609010046_credit_default_module.py")
 
     # Replay the chain: 202608190018 inserts, 202608210026 rewrites the SDI
-    # module set on every 'sdi'-class row.
+    # module set on every 'sdi'-class row, 202609010046 inserts 'credit' after
+    # 'capital' on every row.
+    def _with_credit(modules: list[str]) -> list[str]:
+        if credit.MODULE in modules:
+            return modules
+        anchor = modules.index("capital") + 1 if "capital" in modules else len(modules)
+        return [*modules[:anchor], credit.MODULE, *modules[anchor:]]
+
     replayed = {}
     for (
         code,
@@ -233,7 +241,7 @@ def test_seed_catalogue_matches_the_migration_chain_end_state() -> None:
             "large_exposure_limit_pct": Decimal(large_exposure),
             "single_obligor_limit_pct": Decimal(single_obligor),
             "liquidity_binding": liquidity_binding_,
-            "default_modules": (
+            "default_modules": _with_credit(
                 list(widened._SDI_MODULES) if institution_class_ == "sdi" else list(modules)
             ),
         }

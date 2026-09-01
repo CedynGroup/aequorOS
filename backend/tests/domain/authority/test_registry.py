@@ -271,9 +271,22 @@ def test_multi_authority_metrics_is_the_headline_output() -> None:
         "car_pct",
         "lcr_pct",
         "nsfr_pct",
-        "npl_ratio",
-        "total_provision_required_ghs",
         "total_rwa_ghs",
+        # Every credit metric is deliberately dual-authority: the same figure is
+        # owned by the bank 5-grade methodology under CRD and the NBFI 4-grade
+        # methodology under Act 930 s.29 (credit PR-2) — one engine, two legal
+        # grids, never one methodology across both regimes.
+        "npl_ratio",
+        "npl_ratio_pct",
+        "gross_loans_ghs",
+        "npl_exposure_ghs",
+        "total_provision_required_ghs",
+        "provision_held_ghs",
+        "provision_coverage_pct",
+        "par_30_pct",
+        "par_60_pct",
+        "par_90_pct",
+        "unclassified_exposure_ghs",
     }
     for metric_id, entries in collisions.items():
         methodologies = [entry.methodology_id for entry in entries]

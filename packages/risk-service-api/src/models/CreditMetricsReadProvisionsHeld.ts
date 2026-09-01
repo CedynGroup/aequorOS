@@ -22,47 +22,47 @@ import {
 /**
  *
  * @export
- * @interface SdiLoanClassificationReadProvisionsHeld
+ * @interface CreditMetricsReadProvisionsHeld
  */
-export interface SdiLoanClassificationReadProvisionsHeld {
+export interface CreditMetricsReadProvisionsHeld {
   /**
    *
    * @type {string}
-   * @memberof SdiLoanClassificationReadProvisionsHeld
+   * @memberof CreditMetricsReadProvisionsHeld
    */
   generalGhs: string;
   /**
    *
    * @type {string}
-   * @memberof SdiLoanClassificationReadProvisionsHeld
+   * @memberof CreditMetricsReadProvisionsHeld
    */
   interestInSuspenseGhs: string;
   /**
    *
    * @type {string}
-   * @memberof SdiLoanClassificationReadProvisionsHeld
+   * @memberof CreditMetricsReadProvisionsHeld
    */
   specificGhs: string;
   /**
    *
    * @type {number}
-   * @memberof SdiLoanClassificationReadProvisionsHeld
+   * @memberof CreditMetricsReadProvisionsHeld
    */
   statedLoanCount: number;
   /**
    *
    * @type {string}
-   * @memberof SdiLoanClassificationReadProvisionsHeld
+   * @memberof CreditMetricsReadProvisionsHeld
    */
   totalGhs: string;
 }
 
 /**
- * Check if a given object implements the SdiLoanClassificationReadProvisionsHeld interface.
+ * Check if a given object implements the CreditMetricsReadProvisionsHeld interface.
  */
-export function instanceOfSdiLoanClassificationReadProvisionsHeld(
+export function instanceOfCreditMetricsReadProvisionsHeld(
   value: object,
-): value is SdiLoanClassificationReadProvisionsHeld {
+): value is CreditMetricsReadProvisionsHeld {
   if (!("generalGhs" in value) || value["generalGhs"] === undefined)
     return false;
   if (
@@ -78,16 +78,16 @@ export function instanceOfSdiLoanClassificationReadProvisionsHeld(
   return true;
 }
 
-export function SdiLoanClassificationReadProvisionsHeldFromJSON(
+export function CreditMetricsReadProvisionsHeldFromJSON(
   json: any,
-): SdiLoanClassificationReadProvisionsHeld {
-  return SdiLoanClassificationReadProvisionsHeldFromJSONTyped(json, false);
+): CreditMetricsReadProvisionsHeld {
+  return CreditMetricsReadProvisionsHeldFromJSONTyped(json, false);
 }
 
-export function SdiLoanClassificationReadProvisionsHeldFromJSONTyped(
+export function CreditMetricsReadProvisionsHeldFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): SdiLoanClassificationReadProvisionsHeld {
+): CreditMetricsReadProvisionsHeld {
   if (json == null) {
     return json;
   }
@@ -100,14 +100,14 @@ export function SdiLoanClassificationReadProvisionsHeldFromJSONTyped(
   };
 }
 
-export function SdiLoanClassificationReadProvisionsHeldToJSON(
+export function CreditMetricsReadProvisionsHeldToJSON(
   json: any,
-): SdiLoanClassificationReadProvisionsHeld {
-  return SdiLoanClassificationReadProvisionsHeldToJSONTyped(json, false);
+): CreditMetricsReadProvisionsHeld {
+  return CreditMetricsReadProvisionsHeldToJSONTyped(json, false);
 }
 
-export function SdiLoanClassificationReadProvisionsHeldToJSONTyped(
-  value?: SdiLoanClassificationReadProvisionsHeld | null,
+export function CreditMetricsReadProvisionsHeldToJSONTyped(
+  value?: CreditMetricsReadProvisionsHeld | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {

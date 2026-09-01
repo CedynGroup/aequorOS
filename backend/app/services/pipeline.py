@@ -41,6 +41,7 @@ from app.services import (
     implied_rating,
     module_scope,
     regulatory_capital,
+    regulatory_credit,
     regulatory_forecasting,
     regulatory_ftp,
     regulatory_fx,
@@ -75,6 +76,7 @@ _CHEAP_MODULES: tuple[tuple[str, _ComputeLive], ...] = (
     ("fx", regulatory_fx.compute_live),
     ("ftp", regulatory_ftp.compute_live),
     ("rating", implied_rating.compute_live),
+    ("credit", regulatory_credit.compute_live),
     ("forecast", regulatory_forecasting.compute_live),
 )
 
@@ -100,6 +102,7 @@ _MODULE_SCOPE_KEY: dict[str, str] = {
 #: tier can never disagree with the registry about who a metric belongs to.
 _MODULE_METRIC_FAMILY: dict[str, MetricFamily] = {
     "forecast": MetricFamily.FORECAST,
+    "credit": MetricFamily.CREDIT,
 }
 
 

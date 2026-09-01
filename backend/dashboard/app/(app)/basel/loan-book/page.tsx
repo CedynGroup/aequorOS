@@ -1,9 +1,10 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { useBankContext } from '@/components/shell/BankContext';
-import SdiLoanBookView from '@/components/basel/SdiLoanBookView';
-
-export default function SdiLoanBookPage() {
-  const { bank } = useBankContext();
-  return <SdiLoanBookView bankId={bank?.id} />;
+/**
+ * Superseded by the Credit module (credit PR-2): the loan book is a
+ * first-class module for both institution classes, not a capital sub-page.
+ * The redirect keeps bookmarks and palette history working.
+ */
+export default function SdiLoanBookRedirect() {
+  redirect('/credit');
 }

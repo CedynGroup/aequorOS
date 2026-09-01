@@ -26,6 +26,8 @@ const ROUTES = [
   '/behavioral/deposit-stability',
   '/behavioral/nmd-duration',
   '/behavioral/prepayment',
+  '/credit',
+  '/credit/book',
   '/data-engine',
   '/data-engine/adapters',
   '/data-engine/api',

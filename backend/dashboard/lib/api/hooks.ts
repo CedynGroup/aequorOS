@@ -95,6 +95,7 @@ import {
   regulatoryCapitalApi,
   regulatoryFtpApi,
   regulatoryFxApi,
+  regulatoryCreditApi,
   regulatoryIrrApi,
   regulatoryLiquidityApi,
   regulatoryReportingApi,
@@ -336,6 +337,9 @@ const liquidityInvalidatePrefixes = [
 
 const capitalInvalidatePrefixes = [
   'cap-dashboard',
+  'credit-dashboard',
+  'credit-loans',
+  'credit-loans-facets',
   'cap-rwa',
   'cap-structure',
   'reg-runs',
@@ -460,6 +464,114 @@ export function useIrrDashboard(
     },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Credit / Loan Book (credit PR-2)
+// ---------------------------------------------------------------------------
+
+export function useCreditDashboard(
+  bankId: string | undefined,
+  periodId?: string | undefined
+) {
+  return useQuery({
+    queryKey: ['credit-dashboard', bankId, periodId],
+    queryFn: () =>
+      apiCall(async () => {
+        // The credit service answers HTTP 200 with an availability envelope
+        // when no loan book has been ingested; detect it before the generated
+        // deserializer expects the dashboard arrays.
+        const response = await regulatoryCreditApi.getCreditDashboardRaw({
+          bankId: bankId!,
+          reportingPeriodId: periodId,
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'The credit view is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export type CreditLoanFilters = {
+  limit?: number;
+  offset?: number;
+  grade?: string;
+  product?: string;
+  branch?: string;
+  q?: string;
+};
+
+export function useCreditLoansPage(
+  bankId: string | undefined,
+  filters: CreditLoanFilters
+) {
+  return useQuery({
+    queryKey: [
+      'credit-loans',
+      bankId,
+      filters.limit ?? 100,
+      filters.offset ?? 0,
+      filters.grade ?? null,
+      filters.product ?? null,
+      filters.branch ?? null,
+      filters.q ?? null,
+    ],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryCreditApi.listCreditLoans({
+          bankId: bankId!,
+          limit: filters.limit,
+          offset: filters.offset,
+          grade: filters.grade,
+          product: filters.product,
+          branch: filters.branch,
+          q: filters.q,
+        })
+      ),
+    enabled: Boolean(bankId),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreditLoanFacets(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-loans-facets', bankId],
+    queryFn: () => apiCall(() => regulatoryCreditApi.getCreditLoanFacets({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useRunAllCreditScenarios(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { reportingPeriodId: string }) =>
+      apiCall(() =>
+        regulatoryCreditApi.runAllCreditScenarios({
+          bankId: bankId!,
+          creditScenarioBatchCreate: { reportingPeriodId: payload.reportingPeriodId },
+        })
+      ),
+    onSuccess: () => {
+      ['credit-dashboard', 'credit-loans', 'reg-runs', 'reg-run', 'freshness'].forEach(
+        (prefix) => {
+          void queryClient.invalidateQueries({ queryKey: [prefix] });
+        }
+      );
+    },
   });
 }
 
