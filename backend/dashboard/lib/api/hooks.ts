@@ -41,6 +41,7 @@ import type {
   CashflowHorizon,
   CertifyAndSendRequest,
   ChannelCode,
+  CreditThresholdUpdate,
   CrmHaircutUpdate,
   EclAssumptionUpdate,
   EwiRegisterPut,
@@ -95,6 +96,7 @@ import {
   regulatoryCapitalApi,
   regulatoryFtpApi,
   regulatoryFxApi,
+  regulatoryCreditApi,
   regulatoryIrrApi,
   regulatoryLiquidityApi,
   regulatoryReportingApi,
@@ -336,6 +338,13 @@ const liquidityInvalidatePrefixes = [
 
 const capitalInvalidatePrefixes = [
   'cap-dashboard',
+  'credit-dashboard',
+  'credit-loans',
+  'credit-loans-facets',
+  'credit-concentration',
+  'credit-activity',
+  'credit-migration',
+  'credit-vintages',
   'cap-rwa',
   'cap-structure',
   'reg-runs',
@@ -460,6 +469,240 @@ export function useIrrDashboard(
     },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Credit / Loan Book (credit PR-2)
+// ---------------------------------------------------------------------------
+
+export function useCreditDashboard(
+  bankId: string | undefined,
+  periodId?: string | undefined
+) {
+  return useQuery({
+    queryKey: ['credit-dashboard', bankId, periodId],
+    queryFn: () =>
+      apiCall(async () => {
+        // The credit service answers HTTP 200 with an availability envelope
+        // when no loan book has been ingested; detect it before the generated
+        // deserializer expects the dashboard arrays.
+        const response = await regulatoryCreditApi.getCreditDashboardRaw({
+          bankId: bankId!,
+          reportingPeriodId: periodId,
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'The credit view is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export type CreditLoanFilters = {
+  limit?: number;
+  offset?: number;
+  grade?: string;
+  product?: string;
+  branch?: string;
+  q?: string;
+};
+
+export function useCreditLoansPage(
+  bankId: string | undefined,
+  filters: CreditLoanFilters
+) {
+  return useQuery({
+    queryKey: [
+      'credit-loans',
+      bankId,
+      filters.limit ?? 100,
+      filters.offset ?? 0,
+      filters.grade ?? null,
+      filters.product ?? null,
+      filters.branch ?? null,
+      filters.q ?? null,
+    ],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryCreditApi.listCreditLoans({
+          bankId: bankId!,
+          limit: filters.limit,
+          offset: filters.offset,
+          grade: filters.grade,
+          product: filters.product,
+          branch: filters.branch,
+          q: filters.q,
+        })
+      ),
+    enabled: Boolean(bankId),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreditLoanFacets(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-loans-facets', bankId],
+    queryFn: () => apiCall(() => regulatoryCreditApi.getCreditLoanFacets({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreditConcentration(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-concentration', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditConcentrationRaw({
+          bankId: bankId!,
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'The concentration monitor is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCreditActivity(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-activity', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditActivityRaw({ bankId: bankId! });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Loan-book activity is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCreditMigration(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-migration', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditMigrationRaw({ bankId: bankId! });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        // Only the MODULE-unavailable envelope hard-fails; the migration
+        // payload's own available=false (insufficient history) renders inline.
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Migration is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCreditVintages(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-vintages', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditVintagesRaw({ bankId: bankId! });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Vintages are not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCreditPd(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-pd', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditPdRaw({ bankId: bankId! });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        // Only the MODULE-unavailable envelope hard-fails; the PD payload's
+        // own available=false (thin history) renders inline with its reason.
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'PD estimates are not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useRunAllCreditScenarios(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { reportingPeriodId: string }) =>
+      apiCall(() =>
+        regulatoryCreditApi.runAllCreditScenarios({
+          bankId: bankId!,
+          creditScenarioBatchCreate: { reportingPeriodId: payload.reportingPeriodId },
+        })
+      ),
+    onSuccess: () => {
+      ['credit-dashboard', 'credit-loans', 'reg-runs', 'reg-run', 'freshness'].forEach(
+        (prefix) => {
+          void queryClient.invalidateQueries({ queryKey: [prefix] });
+        }
+      );
+    },
   });
 }
 
@@ -3561,6 +3804,35 @@ export function useEclAssumptionRegister(bankId: string | undefined) {
     queryKey: ['ecl-assumptions', bankId],
     queryFn: () => apiCall(() => creditParamsApi.getEclAssumptionRegister({ bankId: bankId! })),
     enabled: Boolean(bankId),
+  });
+}
+
+export function useCreditThresholdRegister(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-thresholds', bankId],
+    queryFn: () =>
+      apiCall(() => creditParamsApi.getCreditThresholdRegister({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useUpdateCreditThresholdRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreditThresholdUpdate) =>
+      apiCall(() =>
+        creditParamsApi.updateCreditThresholdRegister({
+          bankId: bankId!,
+          creditThresholdUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['credit-thresholds', bankId] });
+      // The four Board comparisons ride the credit validations/findings, so
+      // every credit read that shows them refreshes (the server also enqueues
+      // a live refresh for the alerts surface).
+      void queryClient.invalidateQueries({ queryKey: ['credit-dashboard', bankId] });
+    },
   });
 }
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
@@ -10,6 +10,7 @@ from app.schemas.regulatory_liquidity import (
     Bsd3PreviewRead,
     LiquidityDashboardRead,
     LiquidityScenarioBatchCreate,
+    RegulatoryModule,
     RegulatoryRunBatchRead,
     RegulatoryRunCreate,
     RegulatoryRunListRead,
@@ -64,8 +65,9 @@ def list_regulatory_runs(  # noqa: PLR0913
     db: DbSession,
     ctx: Tenant,
     module: Annotated[
-        Literal["liquidity", "capital", "forecast", "optimizer", "whatif", "irr", "fx", "ftp"]
-        | None,
+        # The full RegulatoryModule vocabulary — kept in step with the schema
+        # literal so every persisted run type is filterable in the registry.
+        RegulatoryModule | None,
         Query(),
     ] = None,
     reporting_period_id: Annotated[UUID | None, Query()] = None,

@@ -23,6 +23,7 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  BookOpenCheck,
 } from 'lucide-react';
 import Logo from './Logo';
 import { centralBankName } from '@/lib/format';
@@ -62,6 +63,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [
       { href: '/irr', label: 'IRRBB', icon: Activity },
       { href: '/liquidity', label: 'Liquidity', icon: Droplet },
+      { href: '/credit', label: 'Credit', icon: BookOpenCheck },
       { href: '/fx', label: 'FX', icon: DollarSign },
       { href: '/basel', label: 'Basel Capital', sdiLabel: 'Regulatory Capital', icon: ShieldCheck },
       { href: '/ftp', label: 'FTP', icon: GitBranch },

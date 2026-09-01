@@ -7,7 +7,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 type LiveStatus = Literal["green", "amber", "red", "na"]
-type LiveModule = Literal["liquidity", "capital", "irr", "fx", "ftp", "rating", "forecast"]
+type LiveModule = Literal[
+    "liquidity", "capital", "credit", "irr", "fx", "ftp", "rating", "forecast"
+]
 type AlertSeverity = Literal["low", "medium", "high", "critical"]
 
 

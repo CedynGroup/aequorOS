@@ -25,6 +25,7 @@ import { LIVE_MODULE_LABELS } from '@/components/live/moduleDisplay';
 const SHORT_MODULE_LABELS: Record<LiveModule, string> = {
   liquidity: 'Liquidity',
   capital: 'Capital',
+  credit: 'Credit',
   irr: 'IRR',
   fx: 'FX',
   ftp: 'FTP',
@@ -70,7 +71,7 @@ export default function FreshnessStrip({
     >
       {freshness.isLoading ? (
         <div
-          className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-px bg-border-light"
+          className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-8 gap-px bg-border-light"
           aria-busy="true"
         >
           {[0, 1, 2, 3, 4, 5, 6].map((i) => (
@@ -86,7 +87,7 @@ export default function FreshnessStrip({
           the first refresh.
         </p>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-px bg-border-light">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-8 gap-px bg-border-light">
           {modules.map((m) => (
             <div key={m.module} className="bg-surface-raised px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">

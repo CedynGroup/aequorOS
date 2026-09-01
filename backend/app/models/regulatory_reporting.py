@@ -74,6 +74,9 @@ RETURN_FAMILIES = (
     "stress",
     "bsd",
     "sdi",
+    # The credit / NPL family (Notice BG/GOV/SEC/2025/23; credit PR-6,
+    # migration 202609010050).
+    "credit",
 )
 RETURN_FREQUENCIES = ("weekly", "monthly", "quarterly", "semiannual", "annual", "daily")
 RETURN_BASES = ("solo", "consolidated")

@@ -329,6 +329,14 @@ EXPECTED_GOVERNED = {
     "narrow_to_total_deposits",
     "broad_to_total_deposits",
     "balance_identity_tolerance_pct",
+    # Credit PR-2 (Notice BG/GOV/SEC/2025/23): NPL prudential ceiling, the
+    # dividend-restriction trigger, and the restructured-loan cure counts.
+    # Ceilings tighten DOWN; the cure counts are floors (more consecutive
+    # payments before a cure = stricter).
+    "npl_limit_pct",
+    "npl_dividend_restriction_pct",
+    "restructure_cure_payments",
+    "restructure_cure_payments_semi_annual",
 }
 
 
@@ -362,15 +370,13 @@ def test_clamp_overrides_covers_every_governed_code_not_just_car_min() -> None:
     floors were actually clamped anywhere; the other sixteen codes were declared
     in the direction map and never enforced."""
     tenant = {code: Decimal("1") for code in governed_codes()}
+    # Every ceiling gets a LOOSER tenant value so the clamp has work to do
+    # (a floor's tenant=1 is already looser than control=50).
     tenant.update(
         {
             code: Decimal("99")
-            for code in (
-                "single_obligor_limit_pct",
-                "large_exposure_limit_pct",
-                "related_party_limit_pct",
-                "balance_identity_tolerance_pct",
-            )
+            for code in governed_codes()
+            if direction_for(code) is Direction.CEILING
         }
     )
     control: dict[str, Decimal | None] = {

@@ -94,7 +94,7 @@ def _successful_run(period_id, module: str, metrics: dict[str, str]) -> Regulato
     )
 
 
-def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_session) -> None:
+def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_session) -> None:  # noqa: PLR0915 - one deliberate sealed->live->credit-switch journey over a single fixture
     db_session.add_all(
         [
             Organization(id=ORG_ID, name="Rating integration tenant"),
@@ -297,6 +297,37 @@ def test_rating_run_snapshots_canonical_facts_calculations_and_market_data(db_se
     assert live.metrics["key_driver_down"]
     assert live.input_hash is not None
     assert db_session.query(ImpliedRatingRun).count() == 1
+
+    # Credit PR-9 evidence switch: once the credit module has computed, its
+    # governed classification REPLACES the past-due-90 / general-provision
+    # proxies for npl_pct and provision_coverage_pct (everything above this
+    # line proved the proxies hold byte-identically without it), and the credit
+    # payload enters the snapshot so the rating's input hash moves with it.
+    hash_before_credit = live.input_hash
+    db_session.add(
+        LiveMetric(
+            organization_id=ORG_ID,
+            bank_id=BANK_ID,
+            reporting_period_id=period.id,
+            module="credit",
+            metrics={"npl_ratio_pct": "9.87", "provision_coverage_pct": "61.5"},
+            status="amber",
+            computed_from_input_hash="credit-live-hash",
+            computed_at=datetime(2026, 4, 1, tzinfo=UTC),
+        )
+    )
+    db_session.commit()
+    bank = db_session.get(Bank, BANK_ID)
+    assert bank is not None
+    _, _, _, snapshot, ratios, _ = implied_rating._live_calculation(  # noqa: SLF001
+        db_session, CTX, bank, period
+    )
+    assert ratios["npl_pct"] == "9.87"
+    assert ratios["provision_coverage_pct"] == "61.5"
+    assert snapshot["live_module_metrics"]["credit"]["npl_ratio_pct"] == "9.87"
+    relive = implied_rating.compute_live(db_session, CTX, bank, period)
+    assert relive.input_hash is not None
+    assert relive.input_hash != hash_before_credit
 
 
 def test_sdi_live_rating_refuses_the_bank_scorecard_until_its_methodology_is_approved(

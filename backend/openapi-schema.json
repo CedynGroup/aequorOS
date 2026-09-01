@@ -361,6 +361,7 @@
         "enum": [
           "liquidity",
           "capital",
+          "credit",
           "irr",
           "fx",
           "ftp",
@@ -9124,6 +9125,295 @@
         "title": "ComponentHealth",
         "type": "object"
       },
+      "ConcentrationBucketRead": {
+        "additionalProperties": false,
+        "properties": {
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "limit_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Kind"
+          },
+          "limit_status": {
+            "title": "Limit Status",
+            "type": "string"
+          },
+          "limit_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Value"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "share_of_book_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Share Of Book Pct",
+            "type": "string"
+          },
+          "share_of_capital_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Of Capital Pct"
+          },
+          "utilization_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilization Pct"
+          }
+        },
+        "required": [
+          "key",
+          "exposure_ghs",
+          "loan_count",
+          "share_of_book_pct",
+          "limit_status"
+        ],
+        "title": "ConcentrationBucketRead",
+        "type": "object"
+      },
+      "ConcentrationDimensionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket_count": {
+            "title": "Bucket Count",
+            "type": "integer"
+          },
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/ConcentrationBucketRead"
+            },
+            "title": "Buckets",
+            "type": "array"
+          },
+          "coverage_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Coverage Pct",
+            "type": "string"
+          },
+          "dimension": {
+            "title": "Dimension",
+            "type": "string"
+          },
+          "hhi": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Hhi",
+            "type": "string"
+          },
+          "hhi_limit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hhi Limit"
+          },
+          "hhi_status": {
+            "title": "Hhi Status",
+            "type": "string"
+          },
+          "stated_exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stated Exposure Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dimension",
+          "hhi",
+          "bucket_count",
+          "coverage_pct",
+          "stated_exposure_ghs",
+          "buckets",
+          "hhi_status"
+        ],
+        "title": "ConcentrationDimensionRead",
+        "type": "object"
+      },
+      "ConcentrationLimitEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "bucket_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket Key"
+          },
+          "dimension": {
+            "title": "Dimension",
+            "type": "string"
+          },
+          "limit_kind": {
+            "title": "Limit Kind",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "dimension",
+          "limit_kind",
+          "value"
+        ],
+        "title": "ConcentrationLimitEntry",
+        "type": "object"
+      },
+      "ConcentrationLimitRead": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "bucket_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket Key"
+          },
+          "dimension": {
+            "title": "Dimension",
+            "type": "string"
+          },
+          "effective_from": {
+            "title": "Effective From",
+            "type": "string"
+          },
+          "limit_kind": {
+            "title": "Limit Kind",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dimension",
+          "limit_kind",
+          "value",
+          "effective_from",
+          "approved_by"
+        ],
+        "title": "ConcentrationLimitRead",
+        "type": "object"
+      },
+      "ConcentrationLimitRegisterRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "limits": {
+            "items": {
+              "$ref": "#/components/schemas/ConcentrationLimitRead"
+            },
+            "title": "Limits",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "limits"
+        ],
+        "title": "ConcentrationLimitRegisterRead",
+        "type": "object"
+      },
+      "ConcentrationLimitUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "limits": {
+            "items": {
+              "$ref": "#/components/schemas/ConcentrationLimitEntry"
+            },
+            "title": "Limits",
+            "type": "array"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "effective_from",
+          "approved_by",
+          "reason",
+          "limits"
+        ],
+        "title": "ConcentrationLimitUpdate",
+        "type": "object"
+      },
       "ConnectionMode": {
         "enum": [
           "OFS",
@@ -9139,6 +9429,1001 @@
           "FLEXCUBE"
         ],
         "type": "string"
+      },
+      "CreditActivityRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "disbursement_count": {
+            "title": "Disbursement Count",
+            "type": "integer"
+          },
+          "monthly_flows": {
+            "items": {
+              "$ref": "#/components/schemas/MonthlyFlowRead"
+            },
+            "title": "Monthly Flows",
+            "type": "array"
+          },
+          "recoveries": {
+            "items": {
+              "$ref": "#/components/schemas/LoanEventRead"
+            },
+            "title": "Recoveries",
+            "type": "array"
+          },
+          "repayment_count": {
+            "title": "Repayment Count",
+            "type": "integer"
+          },
+          "restructures": {
+            "items": {
+              "$ref": "#/components/schemas/LoanEventRead"
+            },
+            "title": "Restructures",
+            "type": "array"
+          },
+          "window_start": {
+            "title": "Window Start",
+            "type": "string"
+          },
+          "write_offs": {
+            "items": {
+              "$ref": "#/components/schemas/LoanEventRead"
+            },
+            "title": "Write Offs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "window_start",
+          "restructures",
+          "write_offs",
+          "recoveries",
+          "disbursement_count",
+          "repayment_count",
+          "monthly_flows"
+        ],
+        "title": "CreditActivityRead",
+        "type": "object"
+      },
+      "CreditConcentrationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "breaches": {
+            "items": {
+              "$ref": "#/components/schemas/ConcentrationBucketRead"
+            },
+            "title": "Breaches",
+            "type": "array"
+          },
+          "capital_base_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Base Ghs"
+          },
+          "capital_basis": {
+            "title": "Capital Basis",
+            "type": "string"
+          },
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/ConcentrationDimensionRead"
+            },
+            "title": "Dimensions",
+            "type": "array"
+          },
+          "limit_count": {
+            "title": "Limit Count",
+            "type": "integer"
+          },
+          "total_book_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Book Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of",
+          "total_book_ghs",
+          "capital_basis",
+          "dimensions",
+          "breaches",
+          "limit_count"
+        ],
+        "title": "CreditConcentrationRead",
+        "type": "object"
+      },
+      "CreditDashboardRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/BankRead"
+          },
+          "delinquency_buckets": {
+            "items": {
+              "$ref": "#/components/schemas/DelinquencyBucketRead"
+            },
+            "title": "Delinquency Buckets",
+            "type": "array"
+          },
+          "grades": {
+            "items": {
+              "$ref": "#/components/schemas/LoanGradeBucketRead"
+            },
+            "title": "Grades",
+            "type": "array"
+          },
+          "institution_class": {
+            "title": "Institution Class",
+            "type": "string"
+          },
+          "latest_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Run Id"
+          },
+          "live": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveModuleView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/CreditMetricsRead"
+          },
+          "pending_parameters": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Parameters",
+            "type": "array"
+          },
+          "period": {
+            "$ref": "#/components/schemas/BankReportingPeriodRead"
+          },
+          "portfolio_at_risk": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioAtRiskRead"
+            },
+            "title": "Portfolio At Risk",
+            "type": "array"
+          },
+          "stored": {
+            "title": "Stored",
+            "type": "boolean"
+          },
+          "validations": {
+            "items": {
+              "$ref": "#/components/schemas/CreditValidationRead"
+            },
+            "title": "Validations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank",
+          "period",
+          "stored",
+          "institution_class",
+          "metrics",
+          "grades",
+          "delinquency_buckets",
+          "portfolio_at_risk",
+          "validations",
+          "pending_parameters"
+        ],
+        "title": "CreditDashboardRead",
+        "type": "object"
+      },
+      "CreditFacetCountRead": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ],
+        "title": "CreditFacetCountRead",
+        "type": "object"
+      },
+      "CreditLoanFacetsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/CreditFacetCountRead"
+            },
+            "title": "Branches",
+            "type": "array"
+          },
+          "grades": {
+            "items": {
+              "$ref": "#/components/schemas/CreditFacetCountRead"
+            },
+            "title": "Grades",
+            "type": "array"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/CreditFacetCountRead"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "sectors": {
+            "items": {
+              "$ref": "#/components/schemas/CreditFacetCountRead"
+            },
+            "title": "Sectors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "grades",
+          "products",
+          "branches",
+          "sectors"
+        ],
+        "title": "CreditLoanFacetsRead",
+        "type": "object"
+      },
+      "CreditLoanRead": {
+        "additionalProperties": false,
+        "description": "One loan on the blotter, classified under the tenant's grid.",
+        "properties": {
+          "branch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch Id"
+          },
+          "classification_basis": {
+            "title": "Classification Basis",
+            "type": "string"
+          },
+          "contractual_maturity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contractual Maturity"
+          },
+          "counterparty_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Name"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "days_past_due": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Past Due"
+          },
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "grade": {
+            "title": "Grade",
+            "type": "string"
+          },
+          "ifrs9_stage": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ifrs9 Stage"
+          },
+          "interest_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest Rate"
+          },
+          "non_performing": {
+            "title": "Non Performing",
+            "type": "boolean"
+          },
+          "origination_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origination Date"
+          },
+          "product_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Code"
+          },
+          "provision_held_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision Held Ghs"
+          },
+          "provision_required_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Provision Required Ghs",
+            "type": "string"
+          },
+          "restructured": {
+            "default": false,
+            "title": "Restructured",
+            "type": "boolean"
+          },
+          "sector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sector"
+          },
+          "source_reference": {
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_reference",
+          "currency",
+          "exposure_ghs",
+          "grade",
+          "non_performing",
+          "classification_basis",
+          "provision_required_ghs"
+        ],
+        "title": "CreditLoanRead",
+        "type": "object"
+      },
+      "CreditLoansPageRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "filtered": {
+            "title": "Filtered",
+            "type": "integer"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CreditLoanRead"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "as_of",
+          "total",
+          "filtered",
+          "limit",
+          "offset",
+          "rows"
+        ],
+        "title": "CreditLoansPageRead",
+        "type": "object"
+      },
+      "CreditMetricsRead": {
+        "additionalProperties": false,
+        "description": "The headline portfolio-quality figures.",
+        "properties": {
+          "dpd_covered_count": {
+            "title": "Dpd Covered Count",
+            "type": "integer"
+          },
+          "gross_loans_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Gross Loans Ghs",
+            "type": "string"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "npl_exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Npl Exposure Ghs",
+            "type": "string"
+          },
+          "npl_limit_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Npl Limit Pct"
+          },
+          "npl_ratio_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Npl Ratio Pct",
+            "type": "string"
+          },
+          "npl_restriction_level_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Npl Restriction Level Pct"
+          },
+          "npl_status": {
+            "$ref": "#/components/schemas/CreditStatus",
+            "default": "na"
+          },
+          "provision_coverage_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision Coverage Pct"
+          },
+          "provisions_held": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProvisionsHeldRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stage_proxy_count": {
+            "title": "Stage Proxy Count",
+            "type": "integer"
+          },
+          "total_provision_required_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Provision Required Ghs",
+            "type": "string"
+          },
+          "unclassified_count": {
+            "title": "Unclassified Count",
+            "type": "integer"
+          },
+          "unclassified_exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unclassified Exposure Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gross_loans_ghs",
+          "loan_count",
+          "npl_exposure_ghs",
+          "npl_ratio_pct",
+          "total_provision_required_ghs",
+          "unclassified_exposure_ghs",
+          "unclassified_count",
+          "stage_proxy_count",
+          "dpd_covered_count"
+        ],
+        "title": "CreditMetricsRead",
+        "type": "object"
+      },
+      "CreditMigrationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "closing_total_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closing Total Ghs"
+          },
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MigrationCellRead"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "entry_loan_count": {
+            "default": 0,
+            "title": "Entry Loan Count",
+            "type": "integer"
+          },
+          "exit_loan_count": {
+            "default": 0,
+            "title": "Exit Loan Count",
+            "type": "integer"
+          },
+          "exits": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MigrationCellRead"
+            },
+            "title": "Exits",
+            "type": "array"
+          },
+          "matched_loan_count": {
+            "default": 0,
+            "title": "Matched Loan Count",
+            "type": "integer"
+          },
+          "matrix": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MigrationCellRead"
+            },
+            "title": "Matrix",
+            "type": "array"
+          },
+          "opening_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opening As Of"
+          },
+          "opening_total_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opening Total Ghs"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "roll_rates": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RollRateCellRead"
+            },
+            "title": "Roll Rates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "available"
+        ],
+        "title": "CreditMigrationRead",
+        "type": "object"
+      },
+      "CreditPdRead": {
+        "additionalProperties": false,
+        "properties": {
+          "advisory_statement": {
+            "title": "Advisory Statement",
+            "type": "string"
+          },
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "ecl_suggestions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EclSuggestionRead"
+            },
+            "title": "Ecl Suggestions",
+            "type": "array"
+          },
+          "exited_loan_months": {
+            "default": 0,
+            "title": "Exited Loan Months",
+            "type": "integer"
+          },
+          "matched_loan_months": {
+            "default": 0,
+            "title": "Matched Loan Months",
+            "type": "integer"
+          },
+          "min_loan_months": {
+            "default": 0,
+            "title": "Min Loan Months",
+            "type": "integer"
+          },
+          "month_pairs_observed": {
+            "default": 0,
+            "title": "Month Pairs Observed",
+            "type": "integer"
+          },
+          "overall": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PdEstimateRead"
+            },
+            "title": "Overall",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "segments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PdEstimateRead"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Start"
+          }
+        },
+        "required": [
+          "as_of",
+          "available",
+          "advisory_statement"
+        ],
+        "title": "CreditPdRead",
+        "type": "object"
+      },
+      "CreditScenarioBatchCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "reporting_period_id": {
+            "format": "uuid",
+            "title": "Reporting Period Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reporting_period_id"
+        ],
+        "title": "CreditScenarioBatchCreate",
+        "type": "object"
+      },
+      "CreditStatus": {
+        "enum": [
+          "green",
+          "amber",
+          "red",
+          "na"
+        ],
+        "type": "string"
+      },
+      "CreditThresholdRead": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "effective_from": {
+            "title": "Effective From",
+            "type": "string"
+          },
+          "threshold_code": {
+            "title": "Threshold Code",
+            "type": "string"
+          },
+          "value_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "threshold_code",
+          "value_pct",
+          "effective_from",
+          "approved_by"
+        ],
+        "title": "CreditThresholdRead",
+        "type": "object"
+      },
+      "CreditThresholdRegisterRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "thresholds": {
+            "items": {
+              "$ref": "#/components/schemas/CreditThresholdRead"
+            },
+            "title": "Thresholds",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "thresholds"
+        ],
+        "title": "CreditThresholdRegisterRead",
+        "type": "object"
+      },
+      "CreditThresholdUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "thresholds": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ]
+            },
+            "title": "Thresholds",
+            "type": "object"
+          }
+        },
+        "required": [
+          "effective_from",
+          "approved_by",
+          "reason",
+          "thresholds"
+        ],
+        "title": "CreditThresholdUpdate",
+        "type": "object"
+      },
+      "CreditValidationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/RegulatoryValidationSeverity"
+          }
+        },
+        "required": [
+          "rule_code",
+          "passed",
+          "severity",
+          "message"
+        ],
+        "title": "CreditValidationRead",
+        "type": "object"
+      },
+      "CreditVintagesRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "cohorts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/VintageCohortRead"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          },
+          "months_observed": {
+            "default": 0,
+            "title": "Months Observed",
+            "type": "integer"
+          },
+          "origination_coverage_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origination Coverage Pct"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "as_of",
+          "available"
+        ],
+        "title": "CreditVintagesRead",
+        "type": "object"
       },
       "CrmHaircutRead": {
         "additionalProperties": false,
@@ -10812,6 +12097,37 @@
           "reason"
         ],
         "title": "EclAssumptionUpdate",
+        "type": "object"
+      },
+      "EclSuggestionRead": {
+        "additionalProperties": false,
+        "description": "A SUGGESTED ECL-register row. The platform never writes it \u2014 the Board\nadopts (or ignores) it through the ordinary approver-gated register PUT.",
+        "properties": {
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "segment": {
+            "title": "Segment",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "integer"
+          },
+          "suggested_pd_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Suggested Pd Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "segment",
+          "stage",
+          "suggested_pd_pct",
+          "basis"
+        ],
+        "title": "EclSuggestionRead",
         "type": "object"
       },
       "EmailFallbackAttachmentRead": {
@@ -21203,6 +22519,7 @@
         "enum": [
           "liquidity",
           "capital",
+          "credit",
           "irr",
           "fx",
           "ftp",
@@ -21553,6 +22870,69 @@
           "computed_at"
         ],
         "title": "LiveSummaryRead",
+        "type": "object"
+      },
+      "LoanEventRead": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "amount_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Ghs"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "event_date": {
+            "title": "Event Date",
+            "type": "string"
+          },
+          "event_subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Subtype"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "position_source_reference": {
+            "title": "Position Source Reference",
+            "type": "string"
+          },
+          "source_reference": {
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_reference",
+          "event_type",
+          "event_date",
+          "position_source_reference",
+          "amount",
+          "currency"
+        ],
+        "title": "LoanEventRead",
         "type": "object"
       },
       "LoanGradeBucketRead": {
@@ -22771,7 +24151,8 @@
                 "gl_account",
                 "counterparty",
                 "product",
-                "position"
+                "position",
+                "loan_event"
               ]
             },
             "title": "Field Mappings",
@@ -23860,6 +25241,36 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "MigrationCellRead": {
+        "additionalProperties": false,
+        "properties": {
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "from_state": {
+            "title": "From State",
+            "type": "string"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "to_state": {
+            "title": "To State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_state",
+          "to_state",
+          "exposure_ghs",
+          "loan_count"
+        ],
+        "title": "MigrationCellRead",
+        "type": "object"
+      },
       "MinimumCode": {
         "enum": [
           "car",
@@ -23895,6 +25306,32 @@
           "reasons"
         ],
         "title": "ModuleReadinessRead",
+        "type": "object"
+      },
+      "MonthlyFlowRead": {
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "recoveries_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Recoveries Ghs",
+            "type": "string"
+          },
+          "write_offs_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Write Offs Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "write_offs_ghs",
+          "recoveries_ghs"
+        ],
+        "title": "MonthlyFlowRead",
         "type": "object"
       },
       "NotificationListRead": {
@@ -25319,6 +26756,76 @@
           "legal_entity"
         ],
         "type": "string"
+      },
+      "PdEstimateRead": {
+        "additionalProperties": false,
+        "properties": {
+          "defaults_observed": {
+            "title": "Defaults Observed",
+            "type": "integer"
+          },
+          "grade": {
+            "title": "Grade",
+            "type": "string"
+          },
+          "loan_months": {
+            "title": "Loan Months",
+            "type": "integer"
+          },
+          "monthly_hazard_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Hazard Pct"
+          },
+          "not_estimable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Estimable Reason"
+          },
+          "pd_12m_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pd 12M Pct"
+          },
+          "segment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment"
+          }
+        },
+        "required": [
+          "grade",
+          "loan_months",
+          "defaults_observed"
+        ],
+        "title": "PdEstimateRead",
+        "type": "object"
       },
       "Pillar2AddOn": {
         "additionalProperties": false,
@@ -26865,6 +28372,45 @@
         "title": "ProjectionYearRead",
         "type": "object"
       },
+      "ProvisionsHeldRead": {
+        "additionalProperties": false,
+        "description": "Provisions the bank HOLDS (stated on ingested loans), split by the\napplied classification. Present only when at least one loan states a\nprovision \u2014 an unstated book carries ``null``, never a fabricated zero.",
+        "properties": {
+          "general_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "General Ghs",
+            "type": "string"
+          },
+          "interest_in_suspense_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Interest In Suspense Ghs",
+            "type": "string"
+          },
+          "specific_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Specific Ghs",
+            "type": "string"
+          },
+          "stated_loan_count": {
+            "title": "Stated Loan Count",
+            "type": "integer"
+          },
+          "total_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "specific_ghs",
+          "general_ghs",
+          "total_ghs",
+          "interest_in_suspense_ghs",
+          "stated_loan_count"
+        ],
+        "title": "ProvisionsHeldRead",
+        "type": "object"
+      },
       "PushBatchOpen": {
         "properties": {
           "as_of_date": {
@@ -26983,7 +28529,8 @@
                 "gl_account",
                 "counterparty",
                 "product",
-                "position"
+                "position",
+                "loan_event"
               ]
             },
             "title": "Entities",
@@ -27836,12 +29383,15 @@
         "enum": [
           "liquidity",
           "capital",
+          "credit",
           "forecast",
           "optimizer",
           "whatif",
           "irr",
           "fx",
-          "ftp"
+          "ftp",
+          "reverse_stress",
+          "enterprise_stress"
         ],
         "type": "string"
       },
@@ -29356,6 +30906,7 @@
             "enum": [
               "liquidity",
               "capital",
+              "credit",
               "irr",
               "fx",
               "ftp",
@@ -30161,7 +31712,8 @@
           "dbk",
           "stress",
           "bsd",
-          "sdi"
+          "sdi",
+          "credit"
         ],
         "type": "string"
       },
@@ -30431,6 +31983,42 @@
           "confirmation_status"
         ],
         "title": "RiskWeightBandRead",
+        "type": "object"
+      },
+      "RollRateCellRead": {
+        "additionalProperties": false,
+        "properties": {
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "from_bucket": {
+            "title": "From Bucket",
+            "type": "string"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "rate_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Rate Pct",
+            "type": "string"
+          },
+          "to_bucket": {
+            "title": "To Bucket",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_bucket",
+          "to_bucket",
+          "exposure_ghs",
+          "loan_count",
+          "rate_pct"
+        ],
+        "title": "RollRateCellRead",
         "type": "object"
       },
       "RunEvidenceRead": {
@@ -32583,6 +34171,28 @@
             },
             "title": "Portfolio At Risk",
             "type": "array"
+          },
+          "provision_coverage_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision Coverage Pct"
+          },
+          "provisions_held": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProvisionsHeldRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "stage_proxy_count": {
             "title": "Stage Proxy Count",
@@ -36320,6 +37930,70 @@
           "chain_broken_at"
         ],
         "title": "VerificationReportRead",
+        "type": "object"
+      },
+      "VintageCohortRead": {
+        "additionalProperties": false,
+        "properties": {
+          "cohort": {
+            "title": "Cohort",
+            "type": "string"
+          },
+          "initial_exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Initial Exposure Ghs",
+            "type": "string"
+          },
+          "initial_loan_count": {
+            "title": "Initial Loan Count",
+            "type": "integer"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/VintagePointRead"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cohort",
+          "initial_exposure_ghs",
+          "initial_loan_count",
+          "points"
+        ],
+        "title": "VintageCohortRead",
+        "type": "object"
+      },
+      "VintagePointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "months_on_book": {
+            "title": "Months On Book",
+            "type": "integer"
+          },
+          "par30_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Par30 Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "months_on_book",
+          "exposure_ghs",
+          "par30_pct",
+          "loan_count"
+        ],
+        "title": "VintagePointRead",
         "type": "object"
       },
       "VoidAttestationRequest": {
@@ -42883,6 +44557,1437 @@
         "summary": "Get Cashflow History",
         "tags": [
           "cashflow-forecast"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/concentration-limits": {
+      "get": {
+        "operationId": "getConcentrationLimitRegister",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConcentrationLimitRegisterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Concentration Limit Register",
+        "tags": [
+          "credit-params"
+        ]
+      },
+      "put": {
+        "operationId": "updateConcentrationLimitRegister",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConcentrationLimitUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConcentrationLimitRegisterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Concentration Limit Register",
+        "tags": [
+          "credit-params"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit-thresholds": {
+      "get": {
+        "operationId": "getCreditThresholdRegister",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditThresholdRegisterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Threshold Register",
+        "tags": [
+          "credit-params"
+        ]
+      },
+      "put": {
+        "operationId": "updateCreditThresholdRegister",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditThresholdUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditThresholdRegisterRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Credit Threshold Register",
+        "tags": [
+          "credit-params"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/activity": {
+      "get": {
+        "description": "Restructures, write-offs, recoveries and cures over the trailing year.",
+        "operationId": "getCreditActivity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditActivityRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Activity",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/concentration": {
+      "get": {
+        "description": "The standing concentration monitor over the current credit book.",
+        "operationId": "getCreditConcentration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditConcentrationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Concentration",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/dashboard": {
+      "get": {
+        "operationId": "getCreditDashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reporting_period_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Period Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditDashboardRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Dashboard",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/loans": {
+      "get": {
+        "operationId": "listCreditLoans",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "grade",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Grade"
+            }
+          },
+          {
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product"
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditLoansPageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Credit Loans",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/loans/facets": {
+      "get": {
+        "operationId": "getCreditLoanFacets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditLoanFacetsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Loan Facets",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/migration": {
+      "get": {
+        "description": "Month-over-month state migration and DPD roll rates.",
+        "operationId": "getCreditMigration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditMigrationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Migration",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/pd": {
+      "get": {
+        "description": "Migration-implied 12-month PDs (ADVISORY - never filed, never adopted\ninto any register by the platform).",
+        "operationId": "getCreditPd",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditPdRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Pd",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/run-all-scenarios": {
+      "post": {
+        "operationId": "runAllCreditScenarios",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditScenarioBatchCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegulatoryRunBatchRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run All Credit Scenarios",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/vintages": {
+      "get": {
+        "description": "Cohort PAR30+ curves by origination month and months on book.",
+        "operationId": "getCreditVintages",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditVintagesRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Vintages",
+        "tags": [
+          "regulatory-credit"
         ]
       }
     },
@@ -59420,17 +62525,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "liquidity",
-                    "capital",
-                    "forecast",
-                    "optimizer",
-                    "whatif",
-                    "irr",
-                    "fx",
-                    "ftp"
-                  ],
-                  "type": "string"
+                  "$ref": "#/components/schemas/RegulatoryModule"
                 },
                 {
                   "type": "null"
@@ -60618,6 +63713,7 @@
               "enum": [
                 "liquidity",
                 "capital",
+                "credit",
                 "irr",
                 "fx",
                 "ftp",

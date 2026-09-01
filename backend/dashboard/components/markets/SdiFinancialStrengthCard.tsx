@@ -57,9 +57,14 @@ export default function SdiFinancialStrengthCard({
   const omitted = Array.isArray(metrics.omitted_components)
     ? (metrics.omitted_components as string[])
     : [];
-  const limitations = Array.isArray(metrics.limitations)
-    ? (metrics.limitations as string[])
-    : [];
+  const limitations = (
+    Array.isArray(metrics.limitations) ? (metrics.limitations as string[]) : []
+  ).filter(
+    // The card states the advisory scope itself (footer, first line); the
+    // backend ships the same sentence inside `limitations`, and printing it
+    // twice reads as boilerplate rather than a warning.
+    (limitation) => !limitation.toLowerCase().includes('not an agency rating')
+  );
   const version = metrics.methodology_version;
   const grade =
     typeof metrics.rating_grade === 'string' ? metrics.rating_grade : undefined;

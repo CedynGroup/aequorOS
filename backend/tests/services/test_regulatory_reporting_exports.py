@@ -577,6 +577,18 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
         },
         "lrt_capital": {"shareholder_register", "capital_summary", "capital_checklist"},
         "lrt_product": {"products", "product_checklist"},
+        # Credit PR-6: the Notice 2025/23 monthly NPL report. Only npl_levels
+        # and headline_comparative are unconditional; migration needs a prior
+        # month-end book and the three event tables need ingested loan events -
+        # the template marks those sections optional.
+        "npl_monthly": {
+            "npl_levels",
+            "credit_migration",
+            "write_offs",
+            "recoveries",
+            "restructuring",
+            "headline_comparative",
+        },
     }
     # Official BoG BSD forms: the bog_form generator emits exactly one section
     # per official sheet (sheet_<name>), which is what its templates reference —

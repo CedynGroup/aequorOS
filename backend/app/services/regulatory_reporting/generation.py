@@ -2453,6 +2453,7 @@ def _generate_stress_pack(
 snapshot_row = _row
 snapshot_section = _section
 snapshot_total = _total
+headline_comparative_section = _headline_comparative_section
 build_envelope = _envelope
 baseline_run_or_409 = _baseline_run_or_409
 source_run_entry = _source_run_entry
@@ -2467,6 +2468,7 @@ from app.services.regulatory_reporting.bog_forms.generation import BOG_GENERATOR
 from app.services.regulatory_reporting.dbk_generation import DBK_GENERATORS  # noqa: E402
 from app.services.regulatory_reporting.le_generation import LE_GENERATORS  # noqa: E402
 from app.services.regulatory_reporting.lrt_generation import LRT_GENERATORS  # noqa: E402
+from app.services.regulatory_reporting.npl_generation import NPL_GENERATORS  # noqa: E402
 
 _GENERATORS = {
     "liquidity": _generate_liquidity,
@@ -2480,6 +2482,7 @@ _GENERATORS = {
     "stress_pack": _generate_stress_pack,
     "template_pending": _generate_template_pending,
     **LRT_GENERATORS,
+    **NPL_GENERATORS,
     **LE_GENERATORS,
     **DBK_GENERATORS,
     **BOG_GENERATORS,

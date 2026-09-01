@@ -17,6 +17,7 @@ type ActivationRunStatus = Literal["succeeded", "partial", "failed"]
 type ActivationModule = Literal[
     "liquidity",
     "capital",
+    "credit",
     "irr",
     "fx",
     "ftp",

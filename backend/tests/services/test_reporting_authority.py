@@ -789,11 +789,14 @@ def test_an_eligible_sdi_return_is_not_silently_excluded(db_session: Session) ->
 
     resolved = eligibility.resolve_eligibility(db_session, ctx, sdi, as_of=_AS_OF)
     assert resolved.coverage_note() is None
+    # NPL-MONTHLY (credit PR-6) applies to BOTH classes, so it appears here
+    # AND on the bank calendar below.
     assert {definition.code for definition in resolved.eligible_definitions()} == {
         "SDI-LMT-MONTHLY",
         "SDI-LE-MONTHLY",
         "SDI-STRESS-ANNUAL",
         "SDI-IRRBB-QUARTERLY",
+        "NPL-MONTHLY",
     }
 
     obligations = calendar.list_obligations(db_session, ctx, sdi.id, as_of=_AS_OF)
@@ -802,6 +805,7 @@ def test_an_eligible_sdi_return_is_not_silently_excluded(db_session: Session) ->
         "SDI-LE-MONTHLY",
         "SDI-STRESS-ANNUAL",
         "SDI-IRRBB-QUARTERLY",
+        "NPL-MONTHLY",
     }
     assert obligations.coverage_note is None
 
@@ -886,4 +890,4 @@ def test_every_registered_return_declares_its_eligibility_dimensions() -> None:
         assert definition.regulator == "BOG", definition.code
     coverage = eligibility.registry_class_coverage()
     assert coverage["bank"] == len(REGISTRY) - 4
-    assert coverage["sdi"] == 4
+    assert coverage["sdi"] == 5  # + NPL-MONTHLY (both-class, credit PR-6)

@@ -11,7 +11,20 @@ from app.schemas.banks import BankRead, BankReportingPeriodRead
 from app.schemas.live import LiveModuleView
 
 type RegulatoryModule = Literal[
-    "liquidity", "capital", "forecast", "optimizer", "whatif", "irr", "fx", "ftp"
+    "liquidity",
+    "capital",
+    "credit",
+    "forecast",
+    "optimizer",
+    "whatif",
+    "irr",
+    "fx",
+    "ftp",
+    # Pre-existing contract gap closed alongside the credit addition: both run
+    # types persist RegulatoryRun rows but were absent from this literal, so the
+    # Reports run registry could not name or filter them.
+    "reverse_stress",
+    "enterprise_stress",
 ]
 type LiquidityScenarioCode = Literal[
     "baseline", "idiosyncratic", "market_wide", "combined", "usd_funding_stress"

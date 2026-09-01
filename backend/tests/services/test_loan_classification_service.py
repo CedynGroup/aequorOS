@@ -58,7 +58,9 @@ def _make_bank(db: Session, *, institution_type: str) -> Bank:
 
 
 def _seed_loans(
-    db: Session, bank: Bank, loans: list[tuple[str, str, int | None, int | None]]
+    db: Session,
+    bank: Bank,
+    loans: list[tuple],  # (ref, balance_ghs, days_past_due, ifrs9_stage[, extra_attributes])
 ) -> None:
     """Insert a minimal LOAN book: (ref, balance_ghs, days_past_due, ifrs9_stage)."""
     batch = IngestionBatch(
@@ -90,7 +92,7 @@ def _seed_loans(
         "lineage_id": lineage.id,
         "validation_status": "accepted",
     }
-    for ref, balance, dpd, stage in loans:
+    for ref, balance, dpd, stage, *rest in loans:
         position = CanonicalPosition(
             **common, source_reference=ref, position_type="LOAN", currency="GHS"
         )
@@ -99,6 +101,8 @@ def _seed_loans(
         attributes: dict[str, object] = {"balance_ghs": balance}
         if dpd is not None:
             attributes["days_past_due"] = dpd
+        if rest:
+            attributes.update(rest[0])
         db.add(
             CanonicalPositionSnapshot(
                 **common,
@@ -267,3 +271,111 @@ def test_unseeded_required_parameter_fails_loud(db_session: Session) -> None:
     db_session.flush()
     with pytest.raises(rp.RegulatoryParameterError, match="prov_substandard"):
         svc.classify_loan_book(db_session, CTX, bank, AS_OF)
+
+
+def test_provisions_held_split_by_applied_grade_with_coverage(db_session: Session) -> None:
+    """Held provisions split on the grid's OWN classification, and coverage is
+    specific ÷ NPL exposure — numerator and denominator on the same footing."""
+    bank = _make_bank(db_session, institution_type="savings_and_loans")
+    _seed_loans(
+        db_session,
+        bank,
+        [
+            ("PERF", "100000", 0, 1, {"ecl_provision_ghs": "1000"}),
+            ("NPL-1", "50000", 200, None, {"ecl_provision_ghs": "25000"}),
+            # NPL with NO stated provision: excluded from held, still in the denominator.
+            ("NPL-2", "30000", 400, None),
+            ("SUSP", "20000", 0, 1, {"interest_in_suspense_ghs": "700"}),
+        ],
+    )
+    report = svc.classify_loan_book(db_session, CTX, bank, AS_OF)
+    held = report.provisions_held
+    assert held is not None
+    assert held.specific_ghs == Decimal("25000")
+    assert held.general_ghs == Decimal("1000")
+    assert held.interest_in_suspense_ghs == Decimal("700")
+    assert held.stated_loan_count == 2
+    assert report.result.npl_exposure_ghs == Decimal("80000")
+    assert report.provision_coverage_pct == Decimal("25000") / Decimal("80000") * Decimal("100")
+
+
+def test_provisions_unstated_book_reports_none_never_zero(db_session: Session) -> None:
+    bank = _make_bank(db_session, institution_type="savings_and_loans")
+    _seed_loans(db_session, bank, [("A", "100000", 0, 1), ("B", "50000", 200, None)])
+    report = svc.classify_loan_book(db_session, CTX, bank, AS_OF)
+    assert report.provisions_held is None
+    assert report.provision_coverage_pct is None
+
+
+def test_coverage_is_none_when_there_is_no_npl_exposure(db_session: Session) -> None:
+    """A fully performing book with stated provisions has no NPL to cover:
+    coverage is not-applicable (None), not infinity and not 100%."""
+    bank = _make_bank(db_session, institution_type="savings_and_loans")
+    _seed_loans(db_session, bank, [("A", "100000", 0, 1, {"ecl_provision_ghs": "500"})])
+    report = svc.classify_loan_book(db_session, CTX, bank, AS_OF)
+    assert report.provisions_held is not None
+    assert report.provisions_held.general_ghs == Decimal("500")
+    assert report.provision_coverage_pct is None
+
+
+def test_restructured_uncured_facility_is_held_npl_and_cured_one_is_released(
+    db_session: Session,
+) -> None:
+    """Notice 2025/23 ¶12 through the service: a restructured loan with 5 of 6
+    payments stays NPL regardless of a clean DPD; at 6 it classifies on its own
+    delinquency again; a bullet never cures; unstated evidence holds."""
+    bank = _make_bank(db_session, institution_type="savings_and_loans")
+    _seed_loans(
+        db_session,
+        bank,
+        [
+            (
+                "HELD",
+                "100000",
+                0,
+                1,
+                {
+                    "restructured": "true",
+                    "payments_met_since_restructure": 5,
+                    "repayment_frequency": "monthly",
+                },
+            ),
+            (
+                "CURED",
+                "50000",
+                0,
+                1,
+                {
+                    "restructured": "true",
+                    "payments_met_since_restructure": 6,
+                    "repayment_frequency": "monthly",
+                },
+            ),
+            (
+                "BULLET",
+                "20000",
+                0,
+                1,
+                {
+                    "restructured": "true",
+                    "payments_met_since_restructure": 99,
+                    "repayment_frequency": "bullet",
+                },
+            ),
+            ("PLAIN", "30000", 0, 1),
+        ],
+    )
+    report = svc.classify_loan_book(db_session, CTX, bank, AS_OF)
+    # The loader orders by source_reference (alphabetical).
+    by_ref = dict(zip(["BULLET", "CURED", "HELD", "PLAIN"], report.result.loans, strict=True))
+    assert by_ref["HELD"].non_performing
+    assert by_ref["HELD"].classification_basis == "restructure_hold"
+    # The SDI grid's entry NPL grade carries a 20% provision: 100,000 × 20%.
+    assert by_ref["HELD"].provision_required_ghs == Decimal("20000.0000")
+    assert by_ref["BULLET"].classification_basis == "restructure_hold"
+    assert not by_ref["CURED"].non_performing
+    assert by_ref["BULLET"].non_performing
+    assert not by_ref["PLAIN"].non_performing
+    assert report.restructured_count == 3
+    assert report.restructure_held_count == 2
+    assert report.restructured_exposure_ghs == Decimal("170000")

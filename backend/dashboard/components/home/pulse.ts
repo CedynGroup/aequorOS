@@ -54,6 +54,7 @@ export function fixed(value: number, decimals: number): string {
 export const DEFAULT_MODULE_ORDER: LiveModule[] = [
   'liquidity',
   'capital',
+  'credit',
   'irr',
   'fx',
   'ftp',
@@ -154,6 +155,7 @@ export function usePulseCards(
   const fx = useFxDashboard(scoped('fx') ? dataBankId : undefined);
   const ftp = useFtpDashboard(scoped('ftp') ? dataBankId : undefined);
   const liveSummary = useLiveSummary(bankId);
+  const creditLive = liveSummary.data?.modules.find((module) => module.module === 'credit');
   const ratingLive = liveSummary.data?.modules.find((module) => module.module === 'rating');
   const forecastLive = liveSummary.data?.modules.find((module) => module.module === 'forecast');
 
@@ -165,6 +167,7 @@ export function usePulseCards(
   const ladders = {
     liquidity: useLiveSnapshots(ladderId('liquidity'), 'liquidity'),
     capital: useLiveSnapshots(ladderId('capital'), 'capital'),
+    credit: useLiveSnapshots(ladderId('credit'), 'credit'),
     irr: useLiveSnapshots(ladderId('irr'), 'irr'),
     fx: useLiveSnapshots(ladderId('fx'), 'fx'),
     ftp: useLiveSnapshots(ladderId('ftp'), 'ftp'),
@@ -218,6 +221,27 @@ export function usePulseCards(
             cap.data.metrics.leverageStatus
           ))
         : 'na',
+    },
+    credit: {
+      module: 'credit',
+      isLoading: liveSummary.isLoading,
+      error: liveSummary.error,
+      ...(creditLive && {
+        metricLabel: 'NPL Ratio',
+        value: fixed(num(creditLive.metrics.npl_ratio_pct), 2),
+        unit: '%',
+        hint:
+          creditLive.metrics.npl_limit_pct != null
+            ? `Prudential limit ${fixed(num(creditLive.metrics.npl_limit_pct), 0)}% · PAR 30+ ${
+                creditLive.metrics.par_30_pct != null
+                  ? `${fixed(num(creditLive.metrics.par_30_pct), 2)}%`
+                  : '—'
+              }`
+            : 'Prudential limit not assessed',
+        computedAt: creditLive.computedAt,
+        basisNote: 'current live calculation',
+      }),
+      status: (creditLive?.status ?? 'na') as CardStatus,
     },
     irr: {
       module: 'irr',

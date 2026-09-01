@@ -35,12 +35,16 @@ const MODULE_FILTERS: { code: RegulatoryModule | null; label: string }[] = [
   { code: null, label: 'All modules' },
   { code: 'liquidity', label: 'Liquidity' },
   { code: 'capital', label: 'Capital' },
+  { code: 'credit', label: 'Credit' },
   { code: 'irr', label: 'IRRBB' },
   { code: 'fx', label: 'FX' },
   { code: 'ftp', label: 'FTP' },
   { code: 'forecast', label: 'Forecast' },
   { code: 'optimizer', label: 'Optimizer' },
   { code: 'whatif', label: 'What-if' },
+  // Closed alongside the credit addition: both run types existed with no filter.
+  { code: 'reverse_stress', label: 'Reverse Stress' },
+  { code: 'enterprise_stress', label: 'Enterprise Stress' },
 ];
 
 type StatusFilter = 'all' | 'succeeded' | 'failed';

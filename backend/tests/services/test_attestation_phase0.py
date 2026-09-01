@@ -351,8 +351,10 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
     """
     generators = generation._GENERATORS  # pyright: ignore[reportPrivateUsage]
     # 39 bank returns + the 4 SDI reports added 2026-08-22 (family "sdi":
-    # SDI-LMT-MONTHLY, SDI-IRRBB-QUARTERLY, SDI-LE-MONTHLY, SDI-STRESS-ANNUAL).
-    assert len(REGISTRY) == 43  # noqa: PLR2004
+    # SDI-LMT-MONTHLY, SDI-IRRBB-QUARTERLY, SDI-LE-MONTHLY, SDI-STRESS-ANNUAL)
+    # + NPL-MONTHLY (family "credit", 2026-09-01) - the Notice 2025/23 monthly
+    # NPL report, the first return both institution classes file.
+    assert len(REGISTRY) == 44  # noqa: PLR2004
     assert sum(1 for d in REGISTRY.values() if d.family == "bsd") == 23  # noqa: PLR2004
     assert sum(1 for d in REGISTRY.values() if d.family == "sdi") == 4  # noqa: PLR2004
     for definition in REGISTRY.values():

@@ -51,6 +51,7 @@ from app.domain.ingestion.contracts import (
     ExtractionResult,
     GlAccountData,
     HealthStatus,
+    LoanEventData,
     MappingConfig,
     PositionData,
     ProductData,
@@ -69,7 +70,9 @@ ADAPTER_VERSION = "1.0"
 
 _MONEY_FIELDS = frozenset({"balance", "notional"})
 _RATE_FIELDS = frozenset({"interest_rate", "rate_spread"})
-_DATE_FIELDS = frozenset({"origination_date", "contractual_maturity", "next_repricing_date"})
+_DATE_FIELDS = frozenset(
+    {"origination_date", "contractual_maturity", "next_repricing_date", "event_date"}
+)
 _INT_FIELDS = frozenset({"ifrs9_stage", "behavioral_maturity_months"})
 _BOOL_FIELDS = frozenset(
     {
@@ -90,6 +93,7 @@ _DATA_MODELS: dict[EntityType, type[BaseModel]] = {
     "counterparty": CounterpartyData,
     "product": ProductData,
     "position": PositionData,
+    "loan_event": LoanEventData,
 }
 
 
@@ -282,6 +286,7 @@ class ApiPushAdapter(SourceAdapter):
             "counterparty": result.counterparties,
             "product": result.products,
             "position": result.positions,
+            "loan_event": result.loan_events,
         }
         reference_fields = {
             mapping.dataset_kind: mapping.fields

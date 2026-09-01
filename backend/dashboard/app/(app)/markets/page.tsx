@@ -235,7 +235,50 @@ export default function MarketsPage() {
     if (tab === 'overview') {
       return (
         <div className="space-y-6">
-          {!isReproduction && (
+          {!isReproduction &&
+          sdiFinancialStrength &&
+          liveRating &&
+          liveRating.metrics.availability !== 'unavailable' &&
+          ratingLadder.data?.snapshots?.length ? (
+            // SDI with an assessed history: the current assessment and how it
+            // got here sit side by side — one read, no scrolling between them.
+            // Agency observations (a thin strip, often empty for an SDI) moves
+            // to a full-width row beneath instead of holding a whole column.
+            <div className="space-y-5">
+              <Section
+                title="Credit monitor"
+                subtitle="Live internal assessment derived from Treasury and ALM inputs"
+              >
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-stretch">
+                  <SdiFinancialStrengthCard rating={liveRating} />
+                  <SdiFinancialStrengthTrend
+                    snapshots={ratingLadder.data.snapshots}
+                    className="h-full"
+                  />
+                </div>
+              </Section>
+              <Section
+                title="Agency observations"
+                subtitle="Market ratings used to frame the sovereign and counterparty context"
+              >
+                {data.ratings.length > 0 ? (
+                  <RatingsStrip ratings={data.ratings} />
+                ) : (
+                  <div className="border border-border bg-surface-raised px-5 py-4 text-caption text-slate rounded-lg">
+                    No agency observations are available on the selected source.
+                  </div>
+                )}
+              </Section>
+            </div>
+          ) : null}
+
+          {!isReproduction &&
+          !(
+            sdiFinancialStrength &&
+            liveRating &&
+            liveRating.metrics.availability !== 'unavailable' &&
+            ratingLadder.data?.snapshots?.length
+          ) && (
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.85fr)] gap-5 items-start">
               <Section
                 title="Credit monitor"
@@ -246,16 +289,11 @@ export default function MarketsPage() {
                   // An SDI gets its OWN card: AEQ-GH-SDI-FS releases component
                   // scores, not the bank scorecard's grade / PD / sovereign
                   // ceiling, so ImpliedRatingCard would render an empty grade
-                  // block and read as a broken rating.
+                  // block and read as a broken rating. (An SDI WITH an assessed
+                  // trend renders in the side-by-side block above; this branch
+                  // is the no-history-yet case.)
                   sdiFinancialStrength ? (
-                    <div className="space-y-4">
-                      <SdiFinancialStrengthCard rating={liveRating} />
-                      {ratingLadder.data?.snapshots?.length ? (
-                        <SdiFinancialStrengthTrend
-                          snapshots={ratingLadder.data.snapshots}
-                        />
-                      ) : null}
-                    </div>
+                    <SdiFinancialStrengthCard rating={liveRating} />
                   ) : (
                     <ImpliedRatingCard rating={liveRating} />
                   )

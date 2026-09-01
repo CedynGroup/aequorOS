@@ -29,8 +29,8 @@ from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
 
 # The live Treasury/ALM surfaces. Rating is a cheap live scorecard over the
 # canonical book, current market data, and the other live module outputs.
-LIVE_MODULES = ("liquidity", "capital", "irr", "fx", "ftp", "rating", "forecast")
-_MODULE_CHECK = "module IN ('liquidity', 'capital', 'irr', 'fx', 'ftp', 'rating', 'forecast')"
+LIVE_MODULES = ("liquidity", "capital", "credit", "irr", "fx", "ftp", "rating", "forecast")
+_MODULE_CHECK = "module IN (" + ", ".join(f"'{module}'" for module in LIVE_MODULES) + ")"
 
 
 class LiveMetric(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
@@ -145,7 +145,8 @@ class CurrentFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "'lcr_inflow', 'market_risk', 'operational_income', 'capital_component', "
             "'deposit_behavior', 'irr_position', 'irr_swap', 'fx_position', "
             "'fx_return_history', 'fx_hedge', 'ftp_curve_point', 'ftp_product', "
-            "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral', 'cashflow')",
+            "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral', "
+            "'provision_held', 'cashflow')",
             name="ck_current_financial_facts_fact_group",
         ),
         ForeignKeyConstraint(["bank_id", "organization_id"], ["banks.id", "banks.organization_id"]),

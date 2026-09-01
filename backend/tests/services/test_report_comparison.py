@@ -394,3 +394,58 @@ def test_other_tenant_run_is_not_visible(db_session: Session) -> None:
     with pytest.raises(HTTPException) as exc:
         report_comparison.build_comparison(db_session, CTX, other_bank, req)
     assert exc.value.status_code == 404
+
+
+def test_credit_module_comparison_judges_the_notice_metrics(db_session: Session) -> None:
+    """Credit PR-9: a credit-vs-credit period comparison judges the Notice
+    2025/23 figures with the right directions — NPL/PAR/concentration up is
+    adverse, recoveries up favorable, raw balances neutral — grouped under
+    Asset quality / Credit, with honest keys skipped when a side lacks them."""
+    bank_id = _bank(db_session)
+    mar = _period(db_session, bank_id, date(2026, 3, 31), "2026-Q1")
+    jun = _period(db_session, bank_id, date(2026, 6, 30), "2026-Q2")
+    _run(
+        db_session,
+        bank_id,
+        mar,
+        {
+            "npl_ratio_pct": "8.2",
+            "par_30_pct": "11.0",
+            "provision_coverage_pct": "58.0",
+            "gross_loans_ghs": "9000000",
+            "recovery_12m_ghs": "40000",
+            "employer_hhi": "900",
+        },
+        module="credit",
+        created_at=datetime(2026, 4, 5, 10, tzinfo=UTC),
+    )
+    _run(
+        db_session,
+        bank_id,
+        jun,
+        {
+            "npl_ratio_pct": "9.6",
+            "par_30_pct": "10.0",
+            "provision_coverage_pct": "61.0",
+            "gross_loans_ghs": "9500000",
+            "recovery_12m_ghs": "65000",
+            "employer_hhi": "1250",
+        },
+        module="credit",
+        created_at=datetime(2026, 7, 5, 10, tzinfo=UTC),
+    )
+    db_session.commit()
+
+    req = ReportComparisonRequest(mode="period", module="credit", left=mar, right=jun)
+    result = report_comparison.build_comparison(db_session, CTX, bank_id, req)
+
+    assert _line(result, "npl_ratio_pct").favorability == "adverse"
+    assert _line(result, "par_30_pct").favorability == "favorable"  # PAR fell
+    assert _line(result, "provision_coverage_pct").favorability == "favorable"
+    assert _line(result, "recovery_12m_ghs").favorability == "favorable"
+    assert _line(result, "employer_hhi").favorability == "adverse"
+    assert _line(result, "gross_loans_ghs").favorability == "neutral"
+
+    sections = {group.title for group in result.groups}
+    assert "Asset quality" in sections
+    assert "Credit" in sections  # module-section fallback for the raw keys

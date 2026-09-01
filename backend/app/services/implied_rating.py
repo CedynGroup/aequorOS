@@ -12,7 +12,7 @@ import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 
@@ -497,6 +497,10 @@ class _RatingSources:
     # reporting periods (most recent first) for the §2.2 weaker-of convention.
     annual_ratio_history: list[dict[str, Decimal]]
     support_uplift_notches: int
+    # The credit module's metrics (live payload or sealed baseline run) when it
+    # has computed; None otherwise. OPTIONAL by design - the scorecard predates
+    # the credit module and must keep rating tenants where it has not run.
+    credit: dict[str, Any] | None = None
 
 
 def ensure_default_methodology(db: Session) -> DeskMethodology:
@@ -637,6 +641,20 @@ def _latest_succeeded_metrics(
     if run is None:
         raise _missing(f"a successful baseline {module} run for the reporting period")
     return dict(run.metrics)
+
+
+def _optional_metric(metrics: dict[str, Any] | None, code: str) -> Decimal | None:
+    """A dependency figure that may honestly be absent (module not run, value
+    unstated). Missing/None/non-numeric all mean "no figure" - never zero."""
+    if not metrics:
+        return None
+    value = metrics.get(code)
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
 
 
 def _get_metric(metrics: dict[str, Any], code: str, module: str) -> Decimal:
@@ -1174,6 +1192,19 @@ def _rating_inputs(
         "eve_sensitivity_pct": abs(_get_metric(sources.irr, "worst_eve_change_pct_tier1", "irr")),
         "fx_nop_pct": _get_metric(sources.fx, "nop_pct_tier1", "fx"),
     }
+    # Credit PR-9 evidence switch: when the credit module has computed, its
+    # governed classification is the authority for the NPL ratio and provision
+    # coverage - the past-due-90 bucket and the general-provisions capital
+    # component are only PROXIES for those figures. Byte-identical fallback
+    # when the module has no figure (no loan book, provisions unstated).
+    # Applied BEFORE the conservative basis so the weaker-of convention judges
+    # the governed current value.
+    credit_npl = _optional_metric(sources.credit, "npl_ratio_pct")
+    if credit_npl is not None:
+        ratio_values["npl_pct"] = credit_npl
+    credit_coverage = _optional_metric(sources.credit, "provision_coverage_pct")
+    if credit_coverage is not None:
+        ratio_values["provision_coverage_pct"] = credit_coverage
     # §2.2: fold the three-year-average / latest weaker-of choice into the
     # problem-loan and profitability ratios before scoring (capital untouched).
     conservative_basis = _apply_conservative_basis(ratio_values, sources.annual_ratio_history)
@@ -1250,6 +1281,17 @@ def _live_calculation(
         raise _missing("current canonical-derived financial facts")
     source_as_of_date = facts[0].source_as_of_date
     dependencies = _live_dependency_metrics(db, ctx, bank)
+    credit_row = db.scalar(
+        select(LiveMetric).where(
+            LiveMetric.organization_id == ctx.organization_id,
+            LiveMetric.bank_id == bank.id,
+            LiveMetric.module == "credit",
+        )
+    )
+    if credit_row is not None:
+        # Lands in the snapshot's live_module_metrics, so the rating's input
+        # hash goes stale when the credit evidence moves.
+        dependencies["credit"] = dict(credit_row.metrics)
     sovereign = _current_sovereign(db, ctx.organization_id, bank.id, source_as_of_date)
     ceiling = _normalize_grade(sovereign["rating"])
     environment, environment_source = _operating_environment(
@@ -1276,6 +1318,7 @@ def _live_calculation(
             parameters=methodology.parameters,
             annual_ratio_history=history,
             support_uplift_notches=uplift,
+            credit=dependencies.get("credit"),
         )
     )
     engine_methodology = _methodology(methodology.parameters)
@@ -1478,6 +1521,12 @@ def run(
     liquidity = _latest_succeeded_metrics(db, ctx.organization_id, bank_id, period.id, "liquidity")
     irr = _latest_succeeded_metrics(db, ctx.organization_id, bank_id, period.id, "irr")
     fx = _latest_succeeded_metrics(db, ctx.organization_id, bank_id, period.id, "fx")
+    try:
+        # Optional: a sealed credit baseline upgrades the NPL/coverage evidence;
+        # its absence keeps the pre-credit proxies byte-identical.
+        credit = _latest_succeeded_metrics(db, ctx.organization_id, bank_id, period.id, "credit")
+    except HTTPException:
+        credit = None
     sovereign = _current_sovereign(db, ctx.organization_id, bank_id, period.period_end)
     ceiling = _normalize_grade(sovereign["rating"])
     environment, environment_source = _operating_environment(
@@ -1507,6 +1556,7 @@ def run(
             parameters=methodology.parameters,
             annual_ratio_history=history,
             support_uplift_notches=effective_uplift,
+            credit=credit,
         )
     )
     engine_methodology = _methodology(methodology.parameters)
@@ -1536,7 +1586,15 @@ def run(
             }
             for fact in facts
         ],
-        "regulatory_metrics": {"capital": capital, "liquidity": liquidity, "irr": irr, "fx": fx},
+        "regulatory_metrics": {
+            "capital": capital,
+            "liquidity": liquidity,
+            "irr": irr,
+            "fx": fx,
+            # None when no sealed credit baseline exists for the period - the
+            # snapshot then proves the rating was scored on the proxies.
+            "credit": credit,
+        },
         "sovereign_rating": sovereign,
         "operating_environment": {"score": str(environment), **environment_source},
         "derived_ratios_pct": ratios,

@@ -17,6 +17,7 @@ export type ModuleKey =
   | 'alerts'
   | 'liquidity'
   | 'capital'
+  | 'credit'
   | 'regulatory_reporting'
   | 'data_engine'
   | 'institution'
@@ -45,6 +46,7 @@ const ROUTE_MODULES: ReadonlyArray<readonly [string, ModuleKey]> = [
   ['/liquidity', 'liquidity'],
   ['/fx', 'fx'],
   ['/basel', 'capital'],
+  ['/credit', 'credit'],
   ['/ftp', 'ftp'],
   ['/forecasting', 'forecasting'],
   ['/behavioral', 'behavioral'],
@@ -91,7 +93,8 @@ const SDI_HIDDEN_SUBROUTES: readonly string[] = [
 ];
 
 const SDI_ONLY_SUBROUTES: readonly string[] = [
-  '/basel/exposures',
+  // (empty since credit PR-3 — /basel/exposures redirects to /credit/concentration;
+  // the mechanism stays for the next class-scoped subroute.)
 ];
 
 /**
@@ -108,6 +111,9 @@ export const CORE_MODULES: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
   'alerts',
   'liquidity',
   'capital',
+  // Credit joined every institution type's default set (credit PR-2,
+  // migration 202609010046) — both classes lend, so it is core.
+  'credit',
   'regulatory_reporting',
   'data_engine',
   'institution',

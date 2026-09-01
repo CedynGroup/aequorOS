@@ -221,6 +221,7 @@ BANK_MODULES: tuple[str, ...] = (
     "alerts",
     "liquidity",
     "capital",
+    "credit",
     "regulatory_reporting",
     "data_engine",
     "institution",

@@ -65,6 +65,7 @@ MODULE_SCOPE_KEY: dict[str, str] = {
     "fx": "fx",
     "ftp": "ftp",
     "rating": "markets",
+    "credit": "credit",
     "implied_rating": "markets",
     "forecast": "forecasting",
 }
@@ -74,6 +75,7 @@ MODULE_SCOPE_KEY: dict[str, str] = {
 #: module key onto the metric family to look up there.
 MODULE_METRIC_FAMILY: dict[str, MetricFamily] = {
     "forecast": MetricFamily.FORECAST,
+    "credit": MetricFamily.CREDIT,
 }
 
 #: (module, institution_class) pairs where the class is entitled to the module

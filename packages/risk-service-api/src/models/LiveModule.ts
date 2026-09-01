@@ -17,6 +17,7 @@
 export const LiveModule = {
   Liquidity: "liquidity",
   Capital: "capital",
+  Credit: "credit",
   Irr: "irr",
   Fx: "fx",
   Ftp: "ftp",

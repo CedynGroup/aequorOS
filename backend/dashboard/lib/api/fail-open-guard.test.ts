@@ -65,6 +65,7 @@ const SCANNED_DIRS = [
   'components/stress',
   'components/liquidity',
   'components/basel',
+  'components/credit',
   'components/irr',
   'components/fx',
   'components/ftp',

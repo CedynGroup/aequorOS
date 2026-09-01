@@ -74,6 +74,11 @@ _REVERSE = "reverse_stress_frontier"
 _TABLE1 = "lmtd_table1_ratio"
 _ECL = "ifrs9_pd_lgd_ead"
 _GRADES = "bog_five_grade_classification"
+_GRADES4 = "nbfi_four_grade_classification"
+_NPL_MONTHLY_TEST = (
+    "tests/services/test_regulatory_credit.py::"
+    "test_npl_monthly_return_generates_from_the_sealed_run"
+)
 
 
 def _rows(
@@ -250,6 +255,30 @@ LEDGER: dict[Claim, tuple[Coverage, str]] = {
         "Same for the reverse-stress frontier figures in Appendix II.",
         "ICAAP-STRESS-APPENDIX2", _REVERSE,
         ("capital_breach_multiplier", "liquidity_breach_multiplier"),
+    ),
+    # -- credit PR-6/PR-9: the NPL-MONTHLY levels table ----------------------
+    **_rows(
+        Coverage.PROVEN_ELSEWHERE,
+        f"{_NPL_MONTHLY_TEST} asserts the levels rows (total_gross_loans_ghs, "
+        "npl_stock_ghs, npl_ratio_pct) EQUAL the sealed baseline credit run's "
+        "metrics on the 5-grade fixture book.",
+        "NPL-MONTHLY", _GRADES,
+        ("gross_loans_ghs", "npl_exposure_ghs", "npl_ratio_pct"),
+    ),
+    **_rows(
+        Coverage.UNPROVEN,
+        "The return prints provision_specific_ghs - a COMPONENT of provisions held - "
+        "and derives coverage/net-NPL in-form from it; the generation test asserts "
+        "presence of the coverage row, not equality to the run's provision figures.",
+        "NPL-MONTHLY", _GRADES, ("provision_held_ghs", "provision_coverage_pct"),
+    ),
+    **_rows(
+        Coverage.UNPROVEN,
+        "The NPL-MONTHLY generation test runs over the bank-class fixture book; no "
+        "SDI-book generation asserts these equal a sealed 4-grade credit run yet.",
+        "NPL-MONTHLY", _GRADES4,
+        ("gross_loans_ghs", "npl_exposure_ghs", "npl_ratio_pct",
+         "provision_held_ghs", "provision_coverage_pct"),
     ),
     **_rows(
         Coverage.UNPROVEN,

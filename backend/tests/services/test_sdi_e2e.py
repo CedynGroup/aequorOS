@@ -156,6 +156,9 @@ def test_sdi_end_to_end_engine_slice(db_session: Session) -> None:
         "SDI-LE-MONTHLY",
         "SDI-STRESS-ANNUAL",
         "SDI-IRRBB-QUARTERLY",
+        # Credit PR-6: the Notice 2025/23 monthly NPL report binds SDIs too -
+        # the one return family an SDI shares with a bank by design.
+        "NPL-MONTHLY",
     }
 
 

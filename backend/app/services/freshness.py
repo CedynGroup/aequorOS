@@ -22,6 +22,7 @@ from app.schemas.live import BankFreshnessRead, FreshnessModuleRead
 from app.services import (
     implied_rating,
     regulatory_capital,
+    regulatory_credit,
     regulatory_ftp,
     regulatory_fx,
     regulatory_irr,
@@ -32,6 +33,7 @@ from app.services import (
 _BASELINE_SCENARIO = {
     "liquidity": "baseline",
     "capital": "baseline",
+    "credit": "baseline",
     "irr": "baseline",
     "fx": "baseline",
     "ftp": "baseline",
@@ -41,12 +43,13 @@ _HashFn = Callable[[Session, TenantContext, Bank, BankReportingPeriod], str | No
 _CURRENT_HASH: dict[str, _HashFn] = {
     "liquidity": regulatory_liquidity.current_input_hash,
     "capital": regulatory_capital.current_input_hash,
+    "credit": regulatory_credit.current_input_hash,
     "irr": regulatory_irr.current_input_hash,
     "fx": regulatory_fx.current_input_hash,
     "ftp": regulatory_ftp.current_input_hash,
     "rating": implied_rating.current_input_hash,
 }
-_MODULES = ("liquidity", "capital", "irr", "fx", "ftp", "rating", "forecast")
+_MODULES = ("liquidity", "capital", "credit", "irr", "fx", "ftp", "rating", "forecast")
 
 
 def get_bank_freshness(

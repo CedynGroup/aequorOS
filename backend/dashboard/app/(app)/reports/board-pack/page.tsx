@@ -35,6 +35,7 @@ import { useLatestRunsByModule } from '@/components/reports/hooks';
 import {
   useBankAlerts,
   useCapitalDashboard,
+  useCreditDashboard,
   useFtpDashboard,
   useFxDashboard,
   useIrrDashboard,
@@ -69,6 +70,7 @@ export default function BoardPackPage() {
   const scope = useModuleScope();
   const liq = useLiquidityDashboard(bankId, periodId);
   const cap = useCapitalDashboard(bankId, periodId);
+  const credit = useCreditDashboard(bankId, periodId);
   const irr = useIrrDashboard(isHrefVisible('/irr/limits', scope) ? bankId : undefined, periodId);
   const fx = useFxDashboard(isHrefVisible('/fx/limits', scope) ? bankId : undefined, periodId);
   const ftp = useFtpDashboard(isHrefVisible('/ftp/products', scope) ? bankId : undefined, periodId);
@@ -387,6 +389,62 @@ export default function BoardPackPage() {
                   {
                     label: 'Total regulatory capital',
                     value: fmtCurrency(num(cap.data.metrics.totalCapitalGhs)),
+                  },
+                ]}
+              />
+            )}
+          </QueryBoundary>
+        </BoardPage>
+
+        <BoardPage>
+          <QueryBoundary
+            isLoading={credit.isLoading}
+            error={credit.error}
+            onRetry={() => credit.refetch()}
+            skeleton={<SkeletonTable rows={4} />}
+          >
+            {credit.data && (
+              <ModuleBrief
+                name="Credit / Loan Book"
+                code="03"
+                statusTone={statusTone(credit.data.metrics.nplStatus ?? 'na')}
+                statusLabel={`NPL ${labelize(credit.data.metrics.nplStatus ?? 'na')}`}
+                validations={{
+                  total: credit.data.validations.length,
+                  failed: credit.data.validations.filter((v) => !v.passed).length,
+                }}
+                run={byModule.get('credit')}
+                computedAt={credit.data.live?.computedAt}
+                rows={[
+                  {
+                    label: 'NPL ratio',
+                    hint:
+                      credit.data.metrics.nplLimitPct != null
+                        ? `${centralBankName()} ceiling ${fmtNum(num(credit.data.metrics.nplLimitPct), 0)}%`
+                        : 'Prudential ceiling not configured',
+                    value: fmtPct(num(credit.data.metrics.nplRatioPct), 2),
+                    tone: statusTone(credit.data.metrics.nplStatus ?? 'na'),
+                    toneLabel: labelize(credit.data.metrics.nplStatus ?? 'na'),
+                  },
+                  {
+                    label: 'Non-performing exposure',
+                    value: fmtCurrency(num(credit.data.metrics.nplExposureGhs)),
+                  },
+                  {
+                    label: 'Provision coverage',
+                    hint: 'Specific provisions held ÷ NPL',
+                    value:
+                      credit.data.metrics.provisionCoveragePct != null
+                        ? fmtPct(num(credit.data.metrics.provisionCoveragePct), 2)
+                        : '—',
+                  },
+                  {
+                    label: 'Gross loan book',
+                    value: fmtCurrency(num(credit.data.metrics.grossLoansGhs)),
+                  },
+                  {
+                    label: 'Provisions required',
+                    value: fmtCurrency(num(credit.data.metrics.totalProvisionRequiredGhs)),
                   },
                 ]}
               />

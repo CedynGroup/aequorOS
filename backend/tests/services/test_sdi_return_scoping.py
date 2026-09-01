@@ -51,6 +51,9 @@ def test_sdi_returns_are_explicitly_scoped_and_bank_returns_remain_isolated() ->
         "SDI-LE-MONTHLY",
         "SDI-STRESS-ANNUAL",
         "SDI-IRRBB-QUARTERLY",
+        # Credit PR-6: the Notice 2025/23 monthly NPL report binds banks AND
+        # SDIs - the deliberate first return family the two classes share.
+        "NPL-MONTHLY",
     }
     assert all(
         definition.institution_classes == ("bank",)
@@ -76,8 +79,11 @@ def test_savings_and_loans_sees_only_its_sdi_return_calendar(db_session: Session
         "SDI-LE-MONTHLY",
         "SDI-STRESS-ANNUAL",
         "SDI-IRRBB-QUARTERLY",
+        # Credit PR-6: the Notice 2025/23 monthly NPL report binds banks AND
+        # SDIs - the deliberate first return family the two classes share.
+        "NPL-MONTHLY",
     }
-    assert {obligation.return_family for obligation in result.obligations} == {"sdi"}
+    assert {obligation.return_family for obligation in result.obligations} == {"sdi", "credit"}
     assert result.coverage_note is None
 
 
@@ -91,6 +97,9 @@ def test_finance_house_sees_the_same_sdi_return_calendar(db_session: Session) ->
         "SDI-LE-MONTHLY",
         "SDI-STRESS-ANNUAL",
         "SDI-IRRBB-QUARTERLY",
+        # Credit PR-6: the Notice 2025/23 monthly NPL report binds banks AND
+        # SDIs - the deliberate first return family the two classes share.
+        "NPL-MONTHLY",
     }
 
 
