@@ -5,6 +5,7 @@ const tabs = [
   { href: '/credit/book', label: 'Loan Book' },
   { href: '/credit/delinquency', label: 'Delinquency & Migration' },
   { href: '/credit/concentration', label: 'Concentration' },
+  { href: '/credit/vintages', label: 'Vintages' },
   { href: '/credit/activity', label: 'Activity' },
 ];
 

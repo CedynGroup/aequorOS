@@ -391,3 +391,79 @@ def test_npl_monthly_refuses_without_a_sealed_credit_run(db_session: Session) ->
             RegulatoryPackageCreate(return_code="NPL-MONTHLY", reporting_date=FIXTURE_AS_OF),
         )
     assert raised.value.status_code == 409
+
+
+def test_vintages_build_cohorts_with_origination_coverage(db_session: Session) -> None:
+    """Three seeded month-ends → cohort curves; the fixture loans carrying an
+    origination date form cohorts, and coverage discloses the rest."""
+    from datetime import date as dt
+
+    period = _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    _seed_prior_month_book(db_session)
+    # A third month-end (April) so the availability floor is met.
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=dt(2026, 4, 30),
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="april-book",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    position = db_session.scalar(
+        select(CanonicalPosition).where(
+            CanonicalPosition.source_reference == "LOAN/1",
+            CanonicalPosition.superseded_by.is_(None),
+        )
+    )
+    assert position is not None
+    if position.origination_date is None:
+        position.origination_date = dt(2026, 1, 15)
+    db_session.add(
+        CanonicalPositionSnapshot(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            as_of_date=dt(2026, 4, 30),
+            source_system="EXCEL_CSV",
+            ingestion_batch_id=batch.id,
+            lineage_id=lineage.id,
+            validation_status="accepted",
+            source_reference="LOAN/1",
+            position_id=position.id,
+            balance=Decimal("990000"),
+            ifrs9_stage=1,
+            attributes={"balance_ghs": "990000", "days_past_due": 0},
+        )
+    )
+    db_session.commit()
+
+    read = regulatory_credit.get_credit_vintages(db_session, CTX, SAMPLE_BANK_ID)
+    assert read.available is True
+    assert read.months_observed == 3
+    jan = next((c for c in read.cohorts if c.cohort == "2026-01"), None)
+    assert jan is not None
+    # LOAN/1 observed at April (MOB 3), May (4) and June (5).
+    ages = {p.months_on_book for p in jan.points}
+    assert {3, 4, 5} <= ages
+    assert read.origination_coverage_pct is not None
+
+
+def test_vintages_below_three_months_is_soft_unavailable(db_session: Session) -> None:
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    read = regulatory_credit.get_credit_vintages(db_session, CTX, SAMPLE_BANK_ID)
+    assert read.available is False
+    assert "three month-end" in (read.reason or "")

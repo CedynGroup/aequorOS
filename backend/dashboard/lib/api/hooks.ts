@@ -343,6 +343,7 @@ const capitalInvalidatePrefixes = [
   'credit-concentration',
   'credit-activity',
   'credit-migration',
+  'credit-vintages',
   'cap-rwa',
   'cap-structure',
   'reg-runs',
@@ -624,6 +625,30 @@ export function useCreditMigration(bankId: string | undefined) {
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
             payload.reason ?? 'Migration is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCreditVintages(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-vintages', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditVintagesRaw({ bankId: bankId! });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Vintages are not available yet.',
             payload.error_code
           );
         }

@@ -22,6 +22,7 @@ from app.schemas.regulatory_credit import (
     CreditLoansPageRead,
     CreditMigrationRead,
     CreditScenarioBatchCreate,
+    CreditVintagesRead,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
 from app.services import regulatory_credit
@@ -140,3 +141,17 @@ def get_credit_migration(
 ) -> CreditMigrationRead:
     """Month-over-month state migration and DPD roll rates."""
     return regulatory_credit.get_credit_migration(db, ctx, bank_id)
+
+
+@router.get(
+    "/banks/{bank_id}/credit/vintages",
+    response_model=CreditVintagesRead,
+    operation_id="getCreditVintages",
+)
+def get_credit_vintages(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+) -> CreditVintagesRead:
+    """Cohort PAR30+ curves by origination month and months on book."""
+    return regulatory_credit.get_credit_vintages(db, ctx, bank_id)

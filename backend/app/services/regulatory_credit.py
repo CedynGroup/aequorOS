@@ -66,10 +66,13 @@ from app.schemas.regulatory_credit import (
     CreditMigrationRead,
     CreditScenarioBatchCreate,
     CreditValidationRead,
+    CreditVintagesRead,
     LoanEventRead,
     MigrationCellRead,
     MonthlyFlowRead,
     RollRateCellRead,
+    VintageCohortRead,
+    VintagePointRead,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead, RegulatoryRunRead
 from app.schemas.sdi import (
@@ -1267,4 +1270,151 @@ def get_credit_migration(db: Session, ctx: TenantContext, bank_id: str) -> Credi
         matched_loan_count=result.matched_loan_count,
         entry_loan_count=result.entry_loan_count,
         exit_loan_count=result.exit_loan_count,
+    )
+
+
+# ---------------------------------------------------------------------------
+# vintages (credit PR-7)
+# ---------------------------------------------------------------------------
+
+#: How many month-end books the vintage view reads back from the as-of.
+_VINTAGE_WINDOW_MONTHS = 36
+#: The minimum distinct month-ends before curves mean anything.
+_VINTAGE_MIN_MONTHS = 3
+
+
+def _month_end_as_ofs(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> list[date]:
+    """The latest LOAN-book as-of per calendar month, newest window first."""
+    rows = db.execute(
+        select(CanonicalPositionSnapshot.as_of_date)
+        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+        .where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date <= as_of,
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPosition.position_type == "LOAN",
+        )
+        .distinct()
+    ).scalars()
+    latest_per_month: dict[str, date] = {}
+    for value in rows:
+        key = value.strftime("%Y-%m")
+        if key not in latest_per_month or value > latest_per_month[key]:
+            latest_per_month[key] = value
+    ordered = sorted(latest_per_month.values(), reverse=True)
+    return ordered[:_VINTAGE_WINDOW_MONTHS]
+
+
+def _months_between(cohort: date, observed: date) -> int:
+    return (observed.year - cohort.year) * 12 + (observed.month - cohort.month)
+
+
+def get_credit_vintages(db: Session, ctx: TenantContext, bank_id: str) -> CreditVintagesRead:
+    """Cohort curves over the ingested month-end history.
+
+    Loans without an origination date belong to no cohort — excluded and
+    disclosed as coverage, never grouped as "Unknown". Fewer than three
+    month-end books is a SOFT unavailable state inside the payload.
+    """
+    from app.domain.credit.vintage import (  # noqa: PLC0415 - keeps the heavy import local
+        VintageObservation,
+        compute_vintages,
+    )
+
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
+    as_ofs = _month_end_as_ofs(db, ctx, bank, period.period_end)
+    if len(as_ofs) < _VINTAGE_MIN_MONTHS:
+        return CreditVintagesRead(
+            as_of=period.period_end.isoformat(),
+            available=False,
+            reason=(
+                "Vintage curves need at least three month-end loan books; "
+                f"{len(as_ofs)} are ingested so far. Curves fill in as month-ends land."
+            ),
+        )
+
+    observations: list[VintageObservation] = []
+    with_origination = _ZERO
+    total_exposure = _ZERO
+    for observed in as_ofs:
+        records = db.execute(
+            select(
+                CanonicalPositionSnapshot.source_reference,
+                CanonicalPositionSnapshot.balance,
+                CanonicalPositionSnapshot.attributes,
+                CanonicalPosition.origination_date,
+                CanonicalPosition.currency,
+            )
+            .join(
+                CanonicalPosition,
+                CanonicalPositionSnapshot.position_id == CanonicalPosition.id,
+            )
+            .where(
+                CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+                CanonicalPositionSnapshot.bank_id == bank.id,
+                CanonicalPositionSnapshot.as_of_date == observed,
+                CanonicalPositionSnapshot.superseded_by.is_(None),
+                CanonicalPositionSnapshot.withdrawn_at.is_(None),
+                CanonicalPositionSnapshot.validation_status.in_(
+                    _INCLUDED_VALIDATION_STATUSES
+                ),
+                CanonicalPosition.position_type == "LOAN",
+            )
+        ).all()
+        base_ccy = jurisdictions.base_currency(bank)
+        for reference, balance, attributes, origination, currency in records:
+            attrs = attributes or {}
+            exposure = _dec_or_none(attrs.get("balance_ghs"))
+            if exposure is None:
+                exposure = Decimal(str(balance or 0)) if currency == base_ccy else _ZERO
+            if observed == as_ofs[0]:
+                total_exposure += exposure
+            if origination is None:
+                continue
+            if observed == as_ofs[0]:
+                with_origination += exposure
+            dpd = _int_or_none(attrs.get("days_past_due"))
+            observations.append(
+                VintageObservation(
+                    loan_key=reference,
+                    cohort=origination.strftime("%Y-%m"),
+                    months_on_book=_months_between(origination, observed),
+                    exposure_ghs=exposure,
+                    par30=dpd is not None and dpd >= 30,
+                )
+            )
+
+    result = compute_vintages(observations)
+    coverage = (
+        (with_origination / total_exposure * _HUNDRED)
+        if total_exposure > _ZERO
+        else _ZERO
+    )
+    return CreditVintagesRead(
+        as_of=period.period_end.isoformat(),
+        available=True,
+        months_observed=len(as_ofs),
+        origination_coverage_pct=coverage,
+        cohorts=[
+            VintageCohortRead(
+                cohort=cohort.cohort,
+                initial_exposure_ghs=cohort.initial_exposure_ghs,
+                initial_loan_count=cohort.initial_loan_count,
+                points=[
+                    VintagePointRead(
+                        months_on_book=point.months_on_book,
+                        exposure_ghs=point.exposure_ghs,
+                        par30_pct=point.par30_pct,
+                        loan_count=point.loan_count,
+                    )
+                    for point in cohort.points
+                ],
+            )
+            for cohort in result.cohorts
+        ],
     )

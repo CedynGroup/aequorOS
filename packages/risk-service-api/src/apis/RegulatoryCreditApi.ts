@@ -19,6 +19,7 @@ import type {
   CreditLoansPageRead,
   CreditMigrationRead,
   CreditScenarioBatchCreate,
+  CreditVintagesRead,
   ErrorResponse,
   RegulatoryRunBatchRead,
 } from "../models/index";
@@ -37,6 +38,8 @@ import {
   CreditMigrationReadToJSON,
   CreditScenarioBatchCreateFromJSON,
   CreditScenarioBatchCreateToJSON,
+  CreditVintagesReadFromJSON,
+  CreditVintagesReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
   RegulatoryRunBatchReadFromJSON,
@@ -61,6 +64,10 @@ export interface GetCreditLoanFacetsRequest {
 }
 
 export interface GetCreditMigrationRequest {
+  bankId: string;
+}
+
+export interface GetCreditVintagesRequest {
   bankId: string;
 }
 
@@ -378,6 +385,66 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<CreditMigrationRead> {
     const response = await this.getCreditMigrationRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Cohort PAR30+ curves by origination month and months on book.
+   * Get Credit Vintages
+   */
+  async getCreditVintagesRaw(
+    requestParameters: GetCreditVintagesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CreditVintagesRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getCreditVintages().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/credit/vintages`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CreditVintagesReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Cohort PAR30+ curves by origination month and months on book.
+   * Get Credit Vintages
+   */
+  async getCreditVintages(
+    requestParameters: GetCreditVintagesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CreditVintagesRead> {
+    const response = await this.getCreditVintagesRaw(
       requestParameters,
       initOverrides,
     );

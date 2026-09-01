@@ -10280,6 +10280,61 @@
         "title": "CreditValidationRead",
         "type": "object"
       },
+      "CreditVintagesRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "cohorts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/VintageCohortRead"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          },
+          "months_observed": {
+            "default": 0,
+            "title": "Months Observed",
+            "type": "integer"
+          },
+          "origination_coverage_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origination Coverage Pct"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "as_of",
+          "available"
+        ],
+        "title": "CreditVintagesRead",
+        "type": "object"
+      },
       "CrmHaircutRead": {
         "additionalProperties": false,
         "properties": {
@@ -37686,6 +37741,70 @@
         "title": "VerificationReportRead",
         "type": "object"
       },
+      "VintageCohortRead": {
+        "additionalProperties": false,
+        "properties": {
+          "cohort": {
+            "title": "Cohort",
+            "type": "string"
+          },
+          "initial_exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Initial Exposure Ghs",
+            "type": "string"
+          },
+          "initial_loan_count": {
+            "title": "Initial Loan Count",
+            "type": "integer"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/VintagePointRead"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cohort",
+          "initial_exposure_ghs",
+          "initial_loan_count",
+          "points"
+        ],
+        "title": "VintageCohortRead",
+        "type": "object"
+      },
+      "VintagePointRead": {
+        "additionalProperties": false,
+        "properties": {
+          "exposure_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exposure Ghs",
+            "type": "string"
+          },
+          "loan_count": {
+            "title": "Loan Count",
+            "type": "integer"
+          },
+          "months_on_book": {
+            "title": "Months On Book",
+            "type": "integer"
+          },
+          "par30_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Par30 Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "months_on_book",
+          "exposure_ghs",
+          "par30_pct",
+          "loan_count"
+        ],
+        "title": "VintagePointRead",
+        "type": "object"
+      },
       "VoidAttestationRequest": {
         "additionalProperties": false,
         "properties": {
@@ -45480,6 +45599,104 @@
           }
         ],
         "summary": "Run All Credit Scenarios",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/vintages": {
+      "get": {
+        "description": "Cohort PAR30+ curves by origination month and months on book.",
+        "operationId": "getCreditVintages",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditVintagesRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Vintages",
         "tags": [
           "regulatory-credit"
         ]

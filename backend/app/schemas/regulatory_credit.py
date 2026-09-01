@@ -300,3 +300,31 @@ class CreditMigrationRead(ClosedModel):
     matched_loan_count: int = 0
     entry_loan_count: int = 0
     exit_loan_count: int = 0
+
+
+# --- vintages (credit PR-7) -------------------------------------------------
+
+
+class VintagePointRead(ClosedModel):
+    months_on_book: int
+    exposure_ghs: Decimal
+    par30_pct: Decimal
+    loan_count: int
+
+
+class VintageCohortRead(ClosedModel):
+    cohort: str
+    initial_exposure_ghs: Decimal
+    initial_loan_count: int
+    points: list[VintagePointRead]
+
+
+class CreditVintagesRead(ClosedModel):
+    as_of: str
+    #: False = fewer than three month-end books (soft, with a reason).
+    available: bool
+    reason: str | None = None
+    months_observed: int = 0
+    #: Share of the latest book carrying an origination date (cohort coverage).
+    origination_coverage_pct: Decimal | None = None
+    cohorts: list[VintageCohortRead] = []
