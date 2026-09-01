@@ -26,13 +26,21 @@ from app.domain.ingestion.constants import (
     SourceSystem,
 )
 
-EntityType = Literal["gl_account", "counterparty", "product", "position"]
-ENTITY_TYPES: tuple[EntityType, ...] = ("gl_account", "counterparty", "product", "position")
+EntityType = Literal["gl_account", "counterparty", "product", "position", "loan_event"]
+ENTITY_TYPES: tuple[EntityType, ...] = (
+    "gl_account",
+    "counterparty",
+    "product",
+    "position",
+    "loan_event",
+)
 
 # Raw records are either one of the canonical entity types or a reference-
 # dataset row ("reference"), which is preserved as a payload dict instead of
 # being translated field-by-field.
-RecordKind = Literal["gl_account", "counterparty", "product", "position", "reference"]
+RecordKind = Literal[
+    "gl_account", "counterparty", "product", "position", "loan_event", "reference"
+]
 
 
 class AdapterIdentity(BaseModel):
@@ -307,6 +315,30 @@ class TranslationFailureData(BaseModel):
     error_message: str
 
 
+class LoanEventData(BaseModel):
+    """One loan-book movement, in source-reference terms (credit PR-4).
+
+    ``position_source_reference`` names the facility the event belongs to —
+    resolved against the batch OR previously ingested state (an event usually
+    arrives after the loan). ``amount_ghs`` is the bank's own reporting-unit
+    conversion; absent for a base-currency event it falls back to ``amount``,
+    absent for a foreign-currency one it stays None (never invented).
+    """
+
+    source_reference: str
+    source_locator: str
+    #: A Literal, not str: an unknown movement type must fail TRANSLATION
+    #: (invalid_record) rather than land and violate the table CHECK.
+    event_type: Literal["DISBURSEMENT", "REPAYMENT", "WRITE_OFF", "RECOVERY", "RESTRUCTURE"]
+    event_subtype: str | None = None
+    event_date: date
+    position_source_reference: str
+    amount: Decimal
+    currency: str
+    amount_ghs: Decimal | None = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
 class CanonicalRecords(BaseModel):
     """Everything one translation pass produced, not yet validated."""
 
@@ -314,6 +346,7 @@ class CanonicalRecords(BaseModel):
     counterparties: list[CounterpartyData] = Field(default_factory=list)
     products: list[ProductData] = Field(default_factory=list)
     positions: list[PositionData] = Field(default_factory=list)
+    loan_events: list[LoanEventData] = Field(default_factory=list)
     reference_rows: list[ReferenceRowData] = Field(default_factory=list)
     failures: list[TranslationFailureData] = Field(default_factory=list)
 
@@ -324,6 +357,7 @@ class CanonicalRecords(BaseModel):
             + len(self.counterparties)
             + len(self.products)
             + len(self.positions)
+            + len(self.loan_events)
             + len(self.reference_rows)
         )
 

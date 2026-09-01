@@ -341,6 +341,7 @@ const capitalInvalidatePrefixes = [
   'credit-loans',
   'credit-loans-facets',
   'credit-concentration',
+  'credit-activity',
   'cap-rwa',
   'cap-structure',
   'reg-runs',
@@ -572,6 +573,30 @@ export function useCreditConcentration(bankId: string | undefined) {
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
             payload.reason ?? 'The concentration monitor is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
+export function useCreditActivity(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-activity', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditActivityRaw({ bankId: bankId! });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Loan-book activity is not available yet.',
             payload.error_code
           );
         }

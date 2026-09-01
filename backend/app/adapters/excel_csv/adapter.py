@@ -42,6 +42,7 @@ from app.domain.ingestion.contracts import (
     ExtractionResult,
     GlAccountData,
     HealthStatus,
+    LoanEventData,
     MappingConfig,
     PositionData,
     ProductData,
@@ -60,7 +61,9 @@ ADAPTER_VERSION = "1.0"
 
 _MONEY_FIELDS = frozenset({"balance", "notional"})
 _RATE_FIELDS = frozenset({"interest_rate", "rate_spread"})
-_DATE_FIELDS = frozenset({"origination_date", "contractual_maturity", "next_repricing_date"})
+_DATE_FIELDS = frozenset(
+    {"origination_date", "contractual_maturity", "next_repricing_date", "event_date"}
+)
 _INT_FIELDS = frozenset({"ifrs9_stage", "behavioral_maturity_months"})
 _BOOL_FIELDS = frozenset(
     {
@@ -77,6 +80,7 @@ _DATA_MODELS: dict[EntityType, type] = {
     "counterparty": CounterpartyData,
     "product": ProductData,
     "position": PositionData,
+    "loan_event": LoanEventData,
 }
 
 _NORMALIZE = re.compile(r"[^a-z0-9]+")
@@ -261,6 +265,7 @@ class ExcelCsvAdapter(SourceAdapter):
             "counterparty": result.counterparties,
             "product": result.products,
             "position": result.positions,
+            "loan_event": result.loan_events,
         }
         dayfirst = bool(mapping_config.options.get("dayfirst", True))
         reference_fields = {

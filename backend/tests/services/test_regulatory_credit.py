@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import date as date_type
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod, RegulatoryRun
+from app.models import (
+    Bank,
+    BankReportingPeriod,
+    CanonicalLoanEvent,
+    IngestionBatch,
+    LineageRecord,
+    RegulatoryRun,
+)
 from app.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.services import fact_derivation, regulatory_credit
 from tests.api.helpers import ORG_1, USER_1
@@ -99,9 +107,141 @@ def test_a_failed_run_is_persisted_data_not_an_exception(db_session: Session) ->
     batch = regulatory_credit.run_all_credit_scenarios(
         db_session, CTX, SAMPLE_BANK_ID, CreditScenarioBatchCreate(reporting_period_id=period.id)
     )
-    run = db_session.scalar(
-        select(RegulatoryRun).where(RegulatoryRun.id == batch.runs[0].id)
-    )
+    run = db_session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == batch.runs[0].id))
     assert run is not None
     assert run.status == "failed"
     assert run.error_code == "no_loan_book"
+
+
+def _seed_events(db_session: Session, events: list[dict]) -> None:
+    """Insert loan events through the canonical model, batch-style."""
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="API_PUSH",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=FIXTURE_AS_OF,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="credit-events-test",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    for event in events:
+        db_session.add(
+            CanonicalLoanEvent(
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                as_of_date=FIXTURE_AS_OF,
+                source_system="API_PUSH",
+                ingestion_batch_id=batch.id,
+                lineage_id=lineage.id,
+                validation_status="accepted",
+                source_reference=event["ref"],
+                event_type=event["type"],
+                event_subtype=event.get("subtype"),
+                event_date=date_type.fromisoformat(event["date"]),
+                position_source_reference=event.get("position", "LOAN/GHS/PERF"),
+                amount=Decimal(event["amount"]),
+                currency=event.get("currency", "GHS"),
+                amount_ghs=None,
+                attributes={},
+            )
+        )
+    db_session.commit()
+
+
+def test_trailing_flows_window_and_fx_absence_discipline(db_session: Session) -> None:
+    """12-month totals: inside-window events sum; an event outside the window
+    is excluded; an unconverted FX event contributes nothing (never invented);
+    a type with NO events reports None, not zero."""
+    period = _prepare(db_session)
+    bank = _bank(db_session)
+    _seed_events(
+        db_session,
+        [
+            {
+                "ref": "E1",
+                "type": "WRITE_OFF",
+                "subtype": "non_wilful",
+                "date": "2026-06-01",
+                "amount": "1000",
+            },
+            {
+                "ref": "E2",
+                "type": "WRITE_OFF",
+                "subtype": "wilful",
+                "date": "2026-01-10",
+                "amount": "500",
+            },
+            # Outside the trailing year ending at the fixture as-of.
+            {
+                "ref": "E3",
+                "type": "WRITE_OFF",
+                "subtype": "wilful",
+                "date": "2024-01-01",
+                "amount": "99999",
+            },
+            # Foreign currency with no stated conversion: excluded, not invented.
+            {
+                "ref": "E4",
+                "type": "WRITE_OFF",
+                "subtype": "wilful",
+                "date": "2026-06-02",
+                "amount": "777",
+                "currency": "USD",
+            },
+        ],
+    )
+    live = regulatory_credit.compute_live(db_session, CTX, bank, period)
+    assert Decimal(live.metrics["write_off_12m_ghs"]) == Decimal("1500")
+    assert live.metrics["recovery_12m_ghs"] is None
+
+
+def test_activity_read_groups_events_by_type_and_month(db_session: Session) -> None:
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    _seed_events(
+        db_session,
+        [
+            {
+                "ref": "A1",
+                "type": "RESTRUCTURE",
+                "subtype": "moratorium",
+                "date": "2026-05-30",
+                "amount": "100",
+            },
+            {
+                "ref": "A2",
+                "type": "WRITE_OFF",
+                "subtype": "non_wilful",
+                "date": "2026-06-15",
+                "amount": "250",
+            },
+            {
+                "ref": "A3",
+                "type": "RECOVERY",
+                "subtype": "unsecured",
+                "date": "2026-06-20",
+                "amount": "40",
+            },
+            {"ref": "A4", "type": "DISBURSEMENT", "date": "2026-06-01", "amount": "5000"},
+        ],
+    )
+    read = regulatory_credit.get_credit_activity(db_session, CTX, SAMPLE_BANK_ID)
+    assert [event.source_reference for event in read.restructures] == ["A1"]
+    assert [event.source_reference for event in read.write_offs] == ["A2"]
+    assert [event.source_reference for event in read.recoveries] == ["A3"]
+    assert read.disbursement_count == 1
+    june = next(flow for flow in read.monthly_flows if flow.month == "2026-06")
+    assert june.write_offs_ghs == Decimal("250")
+    assert june.recoveries_ghs == Decimal("40")

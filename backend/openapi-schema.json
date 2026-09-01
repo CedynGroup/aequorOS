@@ -9430,6 +9430,67 @@
         ],
         "type": "string"
       },
+      "CreditActivityRead": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "disbursement_count": {
+            "title": "Disbursement Count",
+            "type": "integer"
+          },
+          "monthly_flows": {
+            "items": {
+              "$ref": "#/components/schemas/MonthlyFlowRead"
+            },
+            "title": "Monthly Flows",
+            "type": "array"
+          },
+          "recoveries": {
+            "items": {
+              "$ref": "#/components/schemas/LoanEventRead"
+            },
+            "title": "Recoveries",
+            "type": "array"
+          },
+          "repayment_count": {
+            "title": "Repayment Count",
+            "type": "integer"
+          },
+          "restructures": {
+            "items": {
+              "$ref": "#/components/schemas/LoanEventRead"
+            },
+            "title": "Restructures",
+            "type": "array"
+          },
+          "window_start": {
+            "title": "Window Start",
+            "type": "string"
+          },
+          "write_offs": {
+            "items": {
+              "$ref": "#/components/schemas/LoanEventRead"
+            },
+            "title": "Write Offs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "window_start",
+          "restructures",
+          "write_offs",
+          "recoveries",
+          "disbursement_count",
+          "repayment_count",
+          "monthly_flows"
+        ],
+        "title": "CreditActivityRead",
+        "type": "object"
+      },
       "CreditConcentrationRead": {
         "additionalProperties": false,
         "properties": {
@@ -22518,6 +22579,69 @@
         "title": "LiveSummaryRead",
         "type": "object"
       },
+      "LoanEventRead": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "amount_ghs": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Ghs"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "event_date": {
+            "title": "Event Date",
+            "type": "string"
+          },
+          "event_subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Subtype"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "position_source_reference": {
+            "title": "Position Source Reference",
+            "type": "string"
+          },
+          "source_reference": {
+            "title": "Source Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_reference",
+          "event_type",
+          "event_date",
+          "position_source_reference",
+          "amount",
+          "currency"
+        ],
+        "title": "LoanEventRead",
+        "type": "object"
+      },
       "LoanGradeBucketRead": {
         "additionalProperties": false,
         "properties": {
@@ -23734,7 +23858,8 @@
                 "gl_account",
                 "counterparty",
                 "product",
-                "position"
+                "position",
+                "loan_event"
               ]
             },
             "title": "Field Mappings",
@@ -24858,6 +24983,32 @@
           "reasons"
         ],
         "title": "ModuleReadinessRead",
+        "type": "object"
+      },
+      "MonthlyFlowRead": {
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "recoveries_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Recoveries Ghs",
+            "type": "string"
+          },
+          "write_offs_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Write Offs Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "write_offs_ghs",
+          "recoveries_ghs"
+        ],
+        "title": "MonthlyFlowRead",
         "type": "object"
       },
       "NotificationListRead": {
@@ -27985,7 +28136,8 @@
                 "gl_account",
                 "counterparty",
                 "product",
-                "position"
+                "position",
+                "loan_event"
               ]
             },
             "title": "Entities",
@@ -44349,6 +44501,104 @@
         "summary": "Update Credit Threshold Register",
         "tags": [
           "credit-params"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/activity": {
+      "get": {
+        "description": "Restructures, write-offs, recoveries and cures over the trailing year.",
+        "operationId": "getCreditActivity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditActivityRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Activity",
+        "tags": [
+          "regulatory-credit"
         ]
       }
     },

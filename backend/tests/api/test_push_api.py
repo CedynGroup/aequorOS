@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy import text as sql_text
 
 from app.db.session import get_sessionmaker
-from app.models import CanonicalGlAccount, CanonicalReferenceRow
+from app.models import CanonicalGlAccount, CanonicalLoanEvent, CanonicalReferenceRow
 from app.services.push_ingestion import IDENTITY_MAPPING_NAME
 from tests.api.helpers import ORG_1, ORG_2, headers
 from tests.api.test_ingestion import seed_bank
@@ -439,3 +439,109 @@ class TestPushTenantIsolation:
             ).status_code
             == 404
         )
+
+
+LOAN_EVENTS = [
+    {
+        "source_reference": "EVT-WO-001",
+        "event_type": "WRITE_OFF",
+        "event_subtype": "non_wilful",
+        "event_date": "2026-06-15",
+        "position_source_reference": "LN-0001",
+        "amount": "250000",
+        "currency": "GHS",
+        "attributes": {"bog_approval_reference": "BOG/WO/2026/041", "fully_provisioned": "true"},
+    },
+    {
+        "source_reference": "EVT-RC-001",
+        "event_type": "RECOVERY",
+        "event_subtype": "property_collateral",
+        "event_date": "2026-06-20",
+        "position_source_reference": "LN-0001",
+        "amount": "40000",
+        "currency": "GHS",
+        "attributes": {"related_writeoff_reference": "EVT-WO-001"},
+    },
+    {
+        "source_reference": "EVT-RS-001",
+        "event_type": "RESTRUCTURE",
+        "event_subtype": "maturity_extension",
+        "event_date": "2026-05-30",
+        # An event may reference a facility from an EARLIER batch or, as here,
+        # one unknown to the platform — a warning, never a hard block.
+        "position_source_reference": "LN-UNKNOWN",
+        "amount": "100000",
+        "currency": "GHS",
+    },
+]
+
+
+class TestLoanEvents:
+    def test_loan_events_land_supersede_and_flag_unknown_facilities(
+        self, db_client: TestClient
+    ) -> None:
+        """The loan-events plane end to end through the push API (credit PR-4):
+        events land as canonical rows; an unknown facility reference degrades
+        to a warning; a re-push of one event's reference supersedes THAT event
+        without touching its siblings."""
+        bank_id = seed_bank(db_client)
+        opened = open_push(db_client, bank_id, "events-1")
+        push_id = opened.json()["push_batch_id"]
+        staged = stage(
+            db_client,
+            bank_id,
+            push_id,
+            {"entities": {"position": POSITIONS, "loan_event": LOAN_EVENTS}},
+        )
+        assert staged.status_code == 200, staged.text
+        assert staged.json()["records_staged"]["loan_event"] == 3
+        committed = commit(db_client, bank_id, push_id)
+        assert committed.status_code == 201, committed.text
+
+        rows = _org_scoped_rows(CanonicalLoanEvent, CanonicalLoanEvent.source_reference)
+        current = [r for r in rows if r.superseded_by is None]
+        assert {r.source_reference for r in current} == {"EVT-WO-001", "EVT-RC-001", "EVT-RS-001"}
+        by_ref = {r.source_reference: r for r in current}
+        assert by_ref["EVT-WO-001"].event_type == "WRITE_OFF"
+        assert by_ref["EVT-WO-001"].event_subtype == "non_wilful"
+        assert by_ref["EVT-WO-001"].validation_status == "accepted"
+        # The unknown-facility event is flagged, not blocked.
+        assert by_ref["EVT-RS-001"].validation_status == "warning"
+
+        # Re-push corrects ONE event by reference; the siblings stay current.
+        corrected = dict(LOAN_EVENTS[0], amount="260000")
+        reopened = open_push(db_client, bank_id, "events-2")
+        second_id = reopened.json()["push_batch_id"]
+        assert (
+            stage(
+                db_client,
+                bank_id,
+                second_id,
+                {"entities": {"loan_event": [corrected]}},
+            ).status_code
+            == 200
+        )
+        assert commit(db_client, bank_id, second_id).status_code == 201
+
+        rows = _org_scoped_rows(CanonicalLoanEvent, CanonicalLoanEvent.source_reference)
+        current = [r for r in rows if r.superseded_by is None and r.withdrawn_at is None]
+        assert len(current) == 3
+        amounts = {r.source_reference: r.amount for r in current}
+        assert str(amounts["EVT-WO-001"]).startswith("260000")
+        superseded = [r for r in rows if r.superseded_by is not None]
+        assert {r.source_reference for r in superseded} == {"EVT-WO-001"}
+
+    def test_unknown_event_type_is_rejected_at_translation(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        opened = open_push(db_client, bank_id, "events-bad")
+        push_id = opened.json()["push_batch_id"]
+        bad = dict(LOAN_EVENTS[0], source_reference="EVT-BAD", event_type="FORGIVENESS")
+        stage(db_client, bank_id, push_id, {"entities": {"loan_event": [bad]}})
+        committed = commit(db_client, bank_id, push_id)
+        assert committed.status_code == 201, committed.text
+
+        rows = _org_scoped_rows(CanonicalLoanEvent, CanonicalLoanEvent.source_reference)
+        # An unknown movement type fails TRANSLATION (LoanEventData's Literal):
+        # the row never lands, and the batch records an invalid_record failure
+        # instead of persisting something the table CHECK would refuse.
+        assert not [r for r in rows if r.source_reference == "EVT-BAD"]

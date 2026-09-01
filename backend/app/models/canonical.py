@@ -336,6 +336,62 @@ class CanonicalPosition(CanonicalMetadataMixin, Base):
     origination_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
+class CanonicalLoanEvent(CanonicalMetadataMixin, Base):
+    """One loan-book MOVEMENT: disbursement, repayment, write-off, recovery or
+    restructure (credit PR-4).
+
+    Positions/snapshots hold stocks; this table holds the flows BoG Notice
+    BG/GOV/SEC/2025/23 reports monthly and BSD8's movement schedule asks for.
+    Events are cumulative history — each one is its own row with its own
+    ``source_reference``, ingested through the ordinary batch machinery with
+    lineage, supersession and withdrawal (re-pushing an event's reference
+    corrects it; withdrawing removes it from the current generation while the
+    evidence stays). ``position_source_reference`` links to the facility in
+    source-reference terms — deliberately not a foreign key, because the event
+    routinely arrives in a later batch than the loan and must not dangle when
+    the loan's row is superseded by a re-push.
+    """
+
+    __tablename__ = "canonical_loan_events"
+    __table_args__ = (
+        CheckConstraint(
+            "event_type IN ('DISBURSEMENT', 'REPAYMENT', 'WRITE_OFF', 'RECOVERY', "
+            "'RESTRUCTURE')",
+            name="ck_canonical_loan_events_event_type",
+        ),
+        _current_generation_unique(
+            "canonical_loan_events",
+            "organization_id",
+            "bank_id",
+            "source_system",
+            "source_reference",
+        ),
+        Index(
+            "ix_canonical_loan_events_current_org_bank_date",
+            "organization_id",
+            "bank_id",
+            "event_date",
+            postgresql_where=sql_text(CURRENT_GENERATION_SQL),
+            sqlite_where=sql_text(CURRENT_GENERATION_SQL),
+        ),
+        *canonical_constraints("canonical_loan_events"),
+    )
+
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    #: Validator-enforced per-type vocabulary (constants.LOAN_EVENT_SUBTYPES).
+    event_subtype: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    event_date: Mapped[date] = mapped_column(Date, nullable=False)
+    position_source_reference: Mapped[str] = mapped_column(String(255), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(28, 6), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    #: The bank's own reporting-unit conversion; None = unconverted FX, never
+    #: invented.
+    amount_ghs: Mapped[Decimal | None] = mapped_column(Numeric(28, 6), nullable=True)
+    attributes: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+
+
 class CanonicalReferenceRow(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     """One row of a module-facing reference dataset, preserved as ingested.
 

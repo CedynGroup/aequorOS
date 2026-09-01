@@ -45,6 +45,7 @@ from app.models import (
     Bank,
     BankReportingPeriod,
     CanonicalCounterparty,
+    CanonicalLoanEvent,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
@@ -54,6 +55,7 @@ from app.models import (
 )
 from app.schemas.banks import BankRead, BankReportingPeriodRead
 from app.schemas.regulatory_credit import (
+    CreditActivityRead,
     CreditDashboardRead,
     CreditFacetCountRead,
     CreditLoanFacetsRead,
@@ -62,6 +64,8 @@ from app.schemas.regulatory_credit import (
     CreditMetricsRead,
     CreditScenarioBatchCreate,
     CreditValidationRead,
+    LoanEventRead,
+    MonthlyFlowRead,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead, RegulatoryRunRead
 from app.schemas.sdi import (
@@ -70,7 +74,7 @@ from app.schemas.sdi import (
     PortfolioAtRiskRead,
     ProvisionsHeldRead,
 )
-from app.services import filing_reconciliation
+from app.services import filing_reconciliation, jurisdictions
 from app.services import regulatory_parameters as rp
 from app.services.audit import record_event
 from app.services.live_block import live_block
@@ -393,6 +397,7 @@ def compute_live(
     findings = findings_from_validations(
         tuple(_validation_rows(report, limit_pct, restriction_pct)), npl_status
     )
+    flows = _trailing_flow_totals(db, ctx, bank, as_of)
     concentration = _concentration_or_none(db, ctx, bank, as_of)
     single = concentration.dimension("single_name") if concentration is not None else None
     sector = concentration.dimension("sector") if concentration is not None else None
@@ -414,6 +419,8 @@ def compute_live(
         "par_90_pct": _opt(par.get("par_90")),
         "par_180_pct": _opt(par.get("par_180")),
         "par_360_pct": _opt(par.get("par_360")),
+        "write_off_12m_ghs": _opt(flows["WRITE_OFF"]),
+        "recovery_12m_ghs": _opt(flows["RECOVERY"]),
         "sector_hhi": _opt(sector.hhi if sector is not None else None),
         "employer_hhi": _opt(
             employer.hhi if employer is not None and employer.bucket_count > 0 else None
@@ -1028,3 +1035,112 @@ def _require_actor(ctx: TenantContext) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="An acting user is required to mint official runs",
         )
+
+
+# ---------------------------------------------------------------------------
+# loan events / activity (credit PR-4)
+# ---------------------------------------------------------------------------
+
+
+def _load_events(
+    db: Session, ctx: TenantContext, bank: Bank, *, start: date, end: date
+) -> list[CanonicalLoanEvent]:
+    """Current-generation loan events with event_date in [start, end]."""
+    return list(
+        db.scalars(
+            select(CanonicalLoanEvent)
+            .where(
+                CanonicalLoanEvent.organization_id == ctx.organization_id,
+                CanonicalLoanEvent.bank_id == bank.id,
+                CanonicalLoanEvent.superseded_by.is_(None),
+                CanonicalLoanEvent.withdrawn_at.is_(None),
+                CanonicalLoanEvent.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+                CanonicalLoanEvent.event_date >= start,
+                CanonicalLoanEvent.event_date <= end,
+            )
+            .order_by(CanonicalLoanEvent.event_date, CanonicalLoanEvent.source_reference)
+        )
+    )
+
+
+def _event_amount_ghs(event: CanonicalLoanEvent, base_ccy: str) -> Decimal | None:
+    """The event's reporting-unit amount; None = unconverted FX, never invented."""
+    if event.amount_ghs is not None:
+        return Decimal(str(event.amount_ghs))
+    if event.currency == base_ccy:
+        return Decimal(str(event.amount))
+    return None
+
+
+def _trailing_flow_totals(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> dict[str, Decimal | None]:
+    """Trailing-12-month write-off / recovery totals, or None when NO event of
+    that type exists in the window (absence is disclosed, not zeroed —
+    a book whose events are not yet ingested has UNKNOWN flows)."""
+    from datetime import timedelta  # noqa: PLC0415 - stdlib, local to the window math
+
+    base_ccy = jurisdictions.base_currency(bank)
+    events = _load_events(db, ctx, bank, start=as_of - timedelta(days=365), end=as_of)
+    totals: dict[str, Decimal | None] = {"WRITE_OFF": None, "RECOVERY": None}
+    for event in events:
+        if event.event_type not in totals:
+            continue
+        amount = _event_amount_ghs(event, base_ccy)
+        if amount is None:
+            continue
+        current = totals[event.event_type]
+        totals[event.event_type] = amount if current is None else current + amount
+    return totals
+
+
+def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> CreditActivityRead:
+    """Restructures, write-offs, recoveries and monthly aggregates."""
+    from datetime import timedelta  # noqa: PLC0415
+
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
+    as_of = period.period_end
+    base_ccy = jurisdictions.base_currency(bank)
+    events = _load_events(db, ctx, bank, start=as_of - timedelta(days=365), end=as_of)
+
+    def read(event: CanonicalLoanEvent) -> LoanEventRead:
+        return LoanEventRead(
+            source_reference=event.source_reference,
+            event_type=event.event_type,
+            event_subtype=event.event_subtype,
+            event_date=event.event_date.isoformat(),
+            position_source_reference=event.position_source_reference,
+            amount=Decimal(str(event.amount)),
+            currency=event.currency,
+            amount_ghs=_event_amount_ghs(event, base_ccy),
+        )
+
+    monthly: dict[str, dict[str, Decimal]] = {}
+    for event in events:
+        if event.event_type not in ("WRITE_OFF", "RECOVERY"):
+            continue
+        amount = _event_amount_ghs(event, base_ccy)
+        if amount is None:
+            continue
+        month = event.event_date.strftime("%Y-%m")
+        bucket = monthly.setdefault(month, {"WRITE_OFF": _ZERO, "RECOVERY": _ZERO})
+        bucket[event.event_type] += amount
+
+    return CreditActivityRead(
+        as_of=as_of.isoformat(),
+        window_start=(as_of - timedelta(days=365)).isoformat(),
+        restructures=[read(e) for e in events if e.event_type == "RESTRUCTURE"],
+        write_offs=[read(e) for e in events if e.event_type == "WRITE_OFF"],
+        recoveries=[read(e) for e in events if e.event_type == "RECOVERY"],
+        disbursement_count=sum(1 for e in events if e.event_type == "DISBURSEMENT"),
+        repayment_count=sum(1 for e in events if e.event_type == "REPAYMENT"),
+        monthly_flows=[
+            MonthlyFlowRead(
+                month=month,
+                write_offs_ghs=amounts["WRITE_OFF"],
+                recoveries_ghs=amounts["RECOVERY"],
+            )
+            for month, amounts in sorted(monthly.items())
+        ],
+    )

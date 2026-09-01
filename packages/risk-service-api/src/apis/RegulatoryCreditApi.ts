@@ -12,6 +12,7 @@
 
 import * as runtime from "../runtime";
 import type {
+  CreditActivityRead,
   CreditConcentrationRead,
   CreditDashboardRead,
   CreditLoanFacetsRead,
@@ -21,6 +22,8 @@ import type {
   RegulatoryRunBatchRead,
 } from "../models/index";
 import {
+  CreditActivityReadFromJSON,
+  CreditActivityReadToJSON,
   CreditConcentrationReadFromJSON,
   CreditConcentrationReadToJSON,
   CreditDashboardReadFromJSON,
@@ -36,6 +39,10 @@ import {
   RegulatoryRunBatchReadFromJSON,
   RegulatoryRunBatchReadToJSON,
 } from "../models/index";
+
+export interface GetCreditActivityRequest {
+  bankId: string;
+}
 
 export interface GetCreditConcentrationRequest {
   bankId: string;
@@ -69,6 +76,66 @@ export interface RunAllCreditScenariosRequest {
  *
  */
 export class RegulatoryCreditApi extends runtime.BaseAPI {
+  /**
+   * Restructures, write-offs, recoveries and cures over the trailing year.
+   * Get Credit Activity
+   */
+  async getCreditActivityRaw(
+    requestParameters: GetCreditActivityRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CreditActivityRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getCreditActivity().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/credit/activity`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CreditActivityReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Restructures, write-offs, recoveries and cures over the trailing year.
+   * Get Credit Activity
+   */
+  async getCreditActivity(
+    requestParameters: GetCreditActivityRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CreditActivityRead> {
+    const response = await this.getCreditActivityRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * The standing concentration monitor over the current credit book.
    * Get Credit Concentration

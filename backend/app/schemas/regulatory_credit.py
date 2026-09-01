@@ -229,3 +229,35 @@ class CreditThresholdUpdate(ClosedModel):
     approved_by: str
     reason: str
     thresholds: dict[str, Decimal]
+
+
+# --- loan events / activity (credit PR-4) ----------------------------------
+
+
+class LoanEventRead(ClosedModel):
+    source_reference: str
+    event_type: str
+    event_subtype: str | None = None
+    event_date: str
+    position_source_reference: str
+    amount: Decimal
+    currency: str
+    #: Reporting-unit amount; ``null`` = unconverted foreign currency.
+    amount_ghs: Decimal | None = None
+
+
+class MonthlyFlowRead(ClosedModel):
+    month: str
+    write_offs_ghs: Decimal
+    recoveries_ghs: Decimal
+
+
+class CreditActivityRead(ClosedModel):
+    as_of: str
+    window_start: str
+    restructures: list[LoanEventRead]
+    write_offs: list[LoanEventRead]
+    recoveries: list[LoanEventRead]
+    disbursement_count: int
+    repayment_count: int
+    monthly_flows: list[MonthlyFlowRead]

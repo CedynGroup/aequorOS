@@ -321,6 +321,35 @@ value overrides the counterparty's for that facility.
 | `obs_category` / `obs_status` | `LC_GUARANTEE`, `COMMITMENT_UNDRAWN` | `obs_category` extends the LMT values above with `acceptance` · `endorsement` · `other_obligation`; `obs_status` ∈ `performing` · `non_performing` | BSD2 Annex 16 rows 6–10 × E:H (FX / cedi × performing / non-performing); Annex 16 `I11` ties to BSD2 `D282` when every LC/guarantee carries both | Contingent-liability class and performance status. |
 | `balance_ghs` / `notional_ghs` | any foreign-currency position | number (cedi equivalent at `as_of_date`) | every `positions.sum` line of BSD2 (Foreign column "converted into cedis"), BSD1, BSD4, BSD8, BSD14 weights, module fact derivation | The bank's own cedi equivalent; when absent the platform converts at its preferred period-end spot (raw balance if none). Send it for every FX position. |
 
+### Loan events (`loan_event`) — the loan-book movement plane
+
+Positions and snapshots are STOCKS; loan events are the FLOWS the Bank of
+Ghana's Notice BG/GOV/SEC/2025/23 reports monthly (write-offs split
+wilful/non-wilful, recoveries by collateral class, restructuring activity by
+measure) and BSD8's movement schedule asks for. Push them under the
+`"loan_event"` entities key, or upload a sheet/file named `loan_events`
+(template: `onboarding/sample_bank/loan_events_template.csv`). Events are
+cumulative history: each event is its own row with its own
+`source_reference`; re-pushing a reference corrects THAT event (supersession),
+and history never needs re-sending wholesale.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `source_reference` | yes | The event's own stable id in the source system. |
+| `event_type` | yes | `DISBURSEMENT` · `REPAYMENT` · `WRITE_OFF` · `RECOVERY` · `RESTRUCTURE`. An unknown type fails translation. |
+| `event_subtype` | per type | WRITE_OFF: `wilful` · `non_wilful` (Notice Appendix II 3a/3b). RECOVERY: `property_collateral` · `non_property_collateral` · `unsecured`. RESTRUCTURE: `interest_only` · `reduced_payment` · `moratorium` · `arrears_capitalization` · `rate_reduction` · `maturity_extension` · `assisted_sale` · `rescheduled`. An unknown subtype lands flagged `warning`. |
+| `event_date` | yes | The business date the movement happened. |
+| `position_source_reference` | yes | The facility, in source-reference terms. May reference a loan from an earlier batch; an unknown reference lands flagged `warning`, never blocked (the loan file and the events file legitimately arrive separately). |
+| `amount` | yes | Positive movement amount in `currency`. |
+| `currency` | yes | ISO 4217. |
+| `amount_ghs` | no | The bank's own reporting-unit conversion. Absent on a base-currency event it falls back to `amount`; absent on a foreign-currency one the event is excluded from reporting-unit totals — never converted at an invented rate. |
+| `attributes.bog_approval_reference` | write-offs | The BoG write-off approval reference (Notice ¶9 / Appendix I). |
+| `attributes.fully_provisioned` | write-offs | Whether the facility was fully provisioned at write-off. |
+| `attributes.related_writeoff_reference` | recoveries | The write-off event this recovery relates to. |
+| `attributes.repayment_frequency` | restructures | `monthly` · `quarterly` · `semi_annual` · `bullet` — drives the cure rule (6 consecutive payments; 4 for semi-annual; bullet cures only at settlement). |
+| `attributes.scheduled_amount_ghs` | restructures | The revised scheduled payment. |
+
+
 CSV / workbook upload path: the same keys are captured from a sheet whose
 column headers are `attributes.<key>` (e.g. `attributes.sector`,
 `attributes.bog_classification`) — no mapping-config change is needed; a
