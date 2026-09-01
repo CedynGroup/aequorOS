@@ -375,17 +375,24 @@ def _asset_quality_evidence(
         ),
         None,
     )
+    # Provisions HELD are carried since credit PR-1: classify_loan_book splits
+    # the stated ecl_provision_ghs by the APPLIED grade and reports coverage
+    # (specific held ÷ NPL). A book that states no provisions still reports
+    # coverage UNAVAILABLE — absent is not zero, and it is never equated to
+    # the requirement (which would score every book at exactly 100%).
+    coverage = _dec(report.provision_coverage_pct)
     return [
         RatioEvidence("npl_pct", npl_pct, "loan_classification.npl_ratio"),
-        # Provisions HELD genuinely are not a derived fact — the engine computes
-        # what is REQUIRED. Equating the two would score every book at exactly
-        # 100% coverage, so it stays unavailable until the impairment allowance
-        # is carried through as a fact.
         RatioEvidence(
             "provision_coverage_pct",
-            None,
-            "unsourced",
-            f"provisions HELD are not a derived fact; required is GHS {required:,.0f}",
+            coverage,
+            "loan_classification.provisions_held" if coverage is not None else "unsourced",
+            None
+            if coverage is not None
+            else (
+                "no loan states ecl_provision_ghs, so provisions HELD are unknown; "
+                f"required is GHS {required:,.0f}"
+            ),
         ),
         RatioEvidence(
             "par30_pct",
