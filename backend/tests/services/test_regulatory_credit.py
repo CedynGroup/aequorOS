@@ -20,6 +20,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
     RegulatoryRun,
+    RegulatoryValidation,
 )
 from app.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
@@ -532,3 +533,195 @@ def test_pd_estimates_from_matched_migrations(
     assert suggestion.stage == 1
     assert suggestion.suggested_pd_pct == Decimal("99.9756")
     assert "month pairs" in suggestion.basis
+
+
+# --- Board threshold wiring (closing the write-only register gap) -----------
+
+
+def _set_thresholds(db_session: Session, thresholds: dict[str, Decimal]) -> None:
+    from app.schemas.regulatory_credit import CreditThresholdUpdate  # noqa: PLC0415
+    from app.services import credit_params  # noqa: PLC0415
+
+    credit_params.update_credit_threshold_register(
+        db_session,
+        CTX,
+        SAMPLE_BANK_ID,
+        CreditThresholdUpdate(
+            effective_from=date_type(2026, 1, 1),
+            approved_by="Board",
+            reason="EWI wiring test",
+            thresholds=thresholds,
+        ),
+    )
+
+
+def test_board_thresholds_unset_is_disclosed_not_silent(db_session: Session) -> None:
+    """An empty register must not silently skip the four comparisons: the
+    dashboard carries a PASSED info row saying they are not evaluated, and no
+    threshold finding reaches the live plane."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    dashboard = regulatory_credit.get_credit_dashboard(db_session, CTX, SAMPLE_BANK_ID)
+    rows = {row.rule_code: row for row in dashboard.validations}
+    assert rows["board_thresholds_configured"].passed is True
+    assert "not evaluated" in rows["board_thresholds_configured"].message
+    assert not any(
+        row.rule_code.startswith(("npl_within_board", "provision_coverage_meets"))
+        for row in dashboard.validations
+    )
+
+
+def test_board_threshold_breaches_become_findings_on_both_tiers(
+    db_session: Session,
+) -> None:
+    """Configured thresholds evaluate everywhere the rows flow: the dashboard
+    validations, the LIVE findings (alerts), and the sealed run's persisted
+    RegulatoryValidation rows. The trigger is set below the fixture's NPL
+    ratio (breach), the coverage floor above its coverage (breach), the
+    restructured watch present, and the employer EWI set on a book with no
+    stated employers - which must FAIL with the reason, not skip."""
+    period = _prepare(db_session)
+    _set_thresholds(
+        db_session,
+        {
+            "npl_board_trigger_pct": Decimal("0.01"),
+            "provision_coverage_floor_pct": Decimal("999"),
+            "restructured_ratio_watch_pct": Decimal("50"),
+            "employer_par30_ewi_pct": Decimal("10"),
+        },
+    )
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+
+    dashboard = regulatory_credit.get_credit_dashboard(db_session, CTX, SAMPLE_BANK_ID)
+    rows = {row.rule_code: row for row in dashboard.validations}
+    assert rows["npl_within_board_trigger"].passed is False
+    assert "Board early-warning trigger" in rows["npl_within_board_trigger"].message
+    assert rows["provision_coverage_meets_floor"].passed is False
+    assert "restructured_ratio_within_watch" in rows
+    assert rows["employer_par30_within_ewi"].passed is False
+    assert "no loan states an employer" in rows["employer_par30_within_ewi"].message
+    assert "board_thresholds_configured" not in rows
+
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    live = regulatory_credit.compute_live(db_session, CTX, bank, period)
+    live_rules = {finding.rule_id for finding in live.findings}
+    assert {
+        "npl_within_board_trigger",
+        "provision_coverage_meets_floor",
+        "employer_par30_within_ewi",
+    } <= live_rules
+
+    batch = regulatory_credit.run_all_credit_scenarios(
+        db_session, CTX, SAMPLE_BANK_ID, CreditScenarioBatchCreate(reporting_period_id=period.id)
+    )
+    assert batch.runs[0].status == "succeeded"
+    persisted = {
+        row.rule_code
+        for row in db_session.scalars(
+            select(RegulatoryValidation).where(
+                RegulatoryValidation.run_id == batch.runs[0].id
+            )
+        )
+    }
+    assert {
+        "npl_within_board_trigger",
+        "provision_coverage_meets_floor",
+        "restructured_ratio_within_watch",
+        "employer_par30_within_ewi",
+    } <= persisted
+
+
+def test_board_thresholds_enter_the_input_hash(db_session: Session) -> None:
+    """Thresholds drive outputs, so setting them must flip freshness: the
+    value-based snapshot hash changes when the register gains rows (and NOT
+    before - an empty register leaves existing hashes byte-identical)."""
+    period = _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    before = regulatory_credit.current_input_hash(db_session, CTX, bank, period)
+    assert before is not None
+    _set_thresholds(db_session, {"npl_board_trigger_pct": Decimal("8")})
+    after = regulatory_credit.current_input_hash(db_session, CTX, bank, period)
+    assert after is not None
+    assert after != before
+
+
+def test_employer_par30_ewi_names_the_breaching_employer(db_session: Session) -> None:
+    """With stated employers, the EWI evaluates per employer: the delinquent
+    employer breaches and is NAMED; the current one does not."""
+    period = _prepare(db_session)
+    _set_thresholds(db_session, {"employer_par30_ewi_pct": Decimal("10")})
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=FIXTURE_AS_OF,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="employer-book",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    for ref, dpd, employer in (
+        ("LOAN/EMP/1", 60, "Ghana Health Service"),
+        ("LOAN/EMP/2", 0, "Volta River Authority"),
+    ):
+        position = CanonicalPosition(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            as_of_date=FIXTURE_AS_OF,
+            source_system="EXCEL_CSV",
+            ingestion_batch_id=batch.id,
+            lineage_id=lineage.id,
+            validation_status="accepted",
+            source_reference=ref,
+            position_type="LOAN",
+            currency="GHS",
+        )
+        db_session.add(position)
+        db_session.flush()
+        db_session.add(
+            CanonicalPositionSnapshot(
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                as_of_date=FIXTURE_AS_OF,
+                source_system="EXCEL_CSV",
+                ingestion_batch_id=batch.id,
+                lineage_id=lineage.id,
+                validation_status="accepted",
+                source_reference=ref,
+                position_id=position.id,
+                balance=Decimal("100000"),
+                ifrs9_stage=1,
+                attributes={
+                    "balance_ghs": "100000",
+                    "days_past_due": dpd,
+                    "employer": employer,
+                },
+            )
+        )
+    db_session.commit()
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+
+    dashboard = regulatory_credit.get_credit_dashboard(db_session, CTX, SAMPLE_BANK_ID)
+    rows = {row.rule_code: row for row in dashboard.validations}
+    ewi = rows["employer_par30_within_ewi"]
+    assert ewi.passed is False
+    assert "Ghana Health Service" in ewi.message
+    assert "Volta River Authority" not in ewi.message
+    _ = period

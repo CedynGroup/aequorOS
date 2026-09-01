@@ -50,6 +50,7 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    ParamCreditThreshold,
     RegulatoryMetricResult,
     RegulatoryRun,
     RegulatoryValidation,
@@ -91,6 +92,7 @@ from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409
 from app.services.live_types import LiveFindingSpec, LiveModuleResult, findings_from_validations
 from app.services.loan_classification import LoanClassificationReport, classify_loan_book
+from app.services.params import get_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
 ENGINE_VERSION = "regulatory-credit-v1.0.0"
@@ -260,6 +262,211 @@ def _validation_rows(
 # ---------------------------------------------------------------------------
 
 
+def _board_thresholds(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> dict[str, Decimal]:
+    """The Board's own early-warning levels (ParamCreditThreshold register).
+
+    EMPTY by design until the Board sets them — no BoG instrument prescribes
+    the values, so nothing is defaulted and nothing is evaluated in absence.
+    """
+    return {
+        row.threshold_code: Decimal(str(row.value_pct))
+        for row in get_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamCreditThreshold, as_of
+        )
+    }
+
+
+def _employer_par30_stats(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> tuple[list[tuple[str, Decimal]], int]:
+    """Per-employer PAR30%, worst first, over loans that STATE an employer.
+
+    (employer, par30_pct) rows plus the covered loan count. Loans without the
+    documented ``attributes.employer`` key are excluded and the caller
+    discloses the coverage — an unstated employer is never grouped."""
+    records = db.execute(
+        select(CanonicalPositionSnapshot)
+        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
+        .where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            CanonicalPositionSnapshot.as_of_date == as_of,
+            CanonicalPositionSnapshot.superseded_by.is_(None),
+            CanonicalPositionSnapshot.withdrawn_at.is_(None),
+            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPosition.position_type == "LOAN",
+        )
+    ).scalars()
+    totals: dict[str, Decimal] = {}
+    par30: dict[str, Decimal] = {}
+    covered = 0
+    for snapshot in records:
+        attributes = snapshot.attributes or {}
+        employer = str(attributes.get("employer") or "").strip()
+        if not employer:
+            continue
+        balance = _dec_or_none(attributes.get("balance_ghs"))
+        if balance is None:
+            balance = Decimal(str(snapshot.balance or 0))
+        if balance <= 0:
+            continue
+        covered += 1
+        totals[employer] = totals.get(employer, _ZERO) + balance
+        dpd = _int_or_none(attributes.get("days_past_due"))
+        if dpd is not None and dpd >= 30:
+            par30[employer] = par30.get(employer, _ZERO) + balance
+    rows = [
+        (employer, (par30.get(employer, _ZERO) / total * _HUNDRED))
+        for employer, total in totals.items()
+        if total > 0
+    ]
+    rows.sort(key=lambda item: (-item[1], item[0]))
+    return rows, covered
+
+
+def _board_threshold_rows(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date, report: LoanClassificationReport
+) -> list[tuple[str, bool, str, str]]:
+    """The four Board early-warning comparisons (credit PR-3 register, wired
+    2026-09-01). Every configured threshold is evaluated on both computation
+    tiers; a threshold whose input cannot be measured FAILS with the reason —
+    a board that asked for a watch level it cannot see should see that."""
+    thresholds = _board_thresholds(db, ctx, bank, as_of)
+    if not thresholds:
+        return [
+            (
+                "board_thresholds_configured",
+                True,
+                "info",
+                "No Board credit early-warning thresholds are configured; the four "
+                "watch-level comparisons are not evaluated. They are the "
+                "institution's own levels — no regulatory instrument prescribes "
+                "values — and are set through the credit parameters register.",
+            )
+        ]
+    rows: list[tuple[str, bool, str, str]] = []
+    ratio_pct = report.result.npl_ratio * _HUNDRED
+    trigger = thresholds.get("npl_board_trigger_pct")
+    if trigger is not None:
+        breached = ratio_pct > trigger
+        rows.append(
+            (
+                "npl_within_board_trigger",
+                not breached,
+                "warning",
+                (
+                    f"NPL ratio {ratio_pct:.2f}% is within the Board early-warning "
+                    f"trigger of {trigger}%."
+                    if not breached
+                    else f"NPL ratio {ratio_pct:.2f}% is above the Board early-warning "
+                    f"trigger of {trigger}%."
+                ),
+            )
+        )
+    floor = thresholds.get("provision_coverage_floor_pct")
+    if floor is not None:
+        coverage = report.provision_coverage_pct
+        if coverage is None:
+            rows.append(
+                (
+                    "provision_coverage_meets_floor",
+                    False,
+                    "warning",
+                    f"The Board set a provision-coverage floor of {floor}%, but no loan "
+                    "states a held provision (ecl_provision_ghs), so coverage cannot be "
+                    "demonstrated. Unknown is not compliant.",
+                )
+            )
+        else:
+            met = coverage >= floor
+            rows.append(
+                (
+                    "provision_coverage_meets_floor",
+                    met,
+                    "warning",
+                    (
+                        f"Provision coverage {coverage:.2f}% meets the Board floor of "
+                        f"{floor}%."
+                        if met
+                        else f"Provision coverage {coverage:.2f}% is below the Board "
+                        f"floor of {floor}%."
+                    ),
+                )
+            )
+    watch = thresholds.get("restructured_ratio_watch_pct")
+    if watch is not None:
+        total = report.result.total_exposure_ghs
+        restructured_pct = (
+            report.restructured_exposure_ghs / total * _HUNDRED if total > 0 else _ZERO
+        )
+        breached = restructured_pct > watch
+        rows.append(
+            (
+                "restructured_ratio_within_watch",
+                not breached,
+                "warning",
+                (
+                    f"Restructured exposure is {restructured_pct:.2f}% of the book, "
+                    f"within the Board watch level of {watch}%."
+                    if not breached
+                    else f"Restructured exposure is {restructured_pct:.2f}% of the book, "
+                    f"above the Board watch level of {watch}%."
+                ),
+            )
+        )
+    ewi = thresholds.get("employer_par30_ewi_pct")
+    if ewi is not None:
+        employer_rows, covered = _employer_par30_stats(db, ctx, bank, as_of)
+        if not employer_rows:
+            rows.append(
+                (
+                    "employer_par30_within_ewi",
+                    False,
+                    "warning",
+                    f"The Board set an employer PAR30 early-warning level of {ewi}%, but "
+                    "no loan states an employer, so the check-off book cannot be "
+                    "monitored. Ingest the employer attribute "
+                    "(docs/API_INTEGRATION.md §3.4).",
+                )
+            )
+        else:
+            breaching = [(name, pct) for name, pct in employer_rows if pct > ewi]
+            if breaching:
+                shown = ", ".join(f"{name} ({pct:.1f}%)" for name, pct in breaching[:5])
+                more = f" and {len(breaching) - 5} more" if len(breaching) > 5 else ""
+                message = (
+                    f"{len(breaching)} employer(s) exceed the {ewi}% PAR30 "
+                    f"early-warning level: {shown}{more}. "
+                    f"{covered} loan(s) state an employer."
+                )
+            else:
+                message = (
+                    f"Every stated employer's PAR30 is within the {ewi}% early-warning "
+                    f"level ({len(employer_rows)} employer(s) over {covered} loan(s))."
+                )
+            rows.append(("employer_par30_within_ewi", not breaching, "warning", message))
+    return rows
+
+
+def _all_validation_rows(  # noqa: PLR0913 - the two row sources' combined arity
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    report: LoanClassificationReport,
+    limit_pct: Decimal | None,
+    restriction_pct: Decimal | None,
+) -> list[tuple[str, bool, str, str]]:
+    """The ONE findings source for all three consumers (live tier, sealed run,
+    dashboard): classification/prudential rows + the Board threshold rows."""
+    return [
+        *_validation_rows(report, limit_pct, restriction_pct),
+        *_board_threshold_rows(db, ctx, bank, as_of, report),
+    ]
+
+
 def _load_snapshot_rows(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> list[dict[str, Any]]:
@@ -293,6 +500,12 @@ def _load_snapshot_rows(
                 "suspense": _str_or_none(attributes.get("interest_in_suspense_ghs")),
             }
         )
+        employer = _str_or_none(attributes.get("employer"))
+        if employer is not None:
+            # Conditional on purpose: the employer PAR30 EWI reads this input,
+            # but a book with no stated employers must hash byte-identically
+            # to its pre-wiring value.
+            rows[-1]["employer"] = employer
     return rows
 
 
@@ -313,7 +526,7 @@ def _build_snapshot(  # noqa: PLR0913 - mirrors the sibling modules' snapshot ar
         resolved = rp.try_resolve(db, bank, code, as_of=as_of)
         if resolved is not None:
             parameters[code] = str(resolved.decimal)
-    return {
+    snapshot: dict[str, Any] = {
         "schema": INPUT_SCHEMA_VERSION,
         "bank_id": bank.id,
         "currency": bank.currency,
@@ -323,6 +536,15 @@ def _build_snapshot(  # noqa: PLR0913 - mirrors the sibling modules' snapshot ar
         "parameters": dict(sorted(parameters.items())),
         "loans": _load_snapshot_rows(db, ctx, bank, as_of),
     }
+    thresholds = _board_thresholds(db, ctx, bank, as_of)
+    if thresholds:
+        # Board thresholds drive validation/finding outputs, so they belong in
+        # the value-based hash. Omitted when empty: existing hashes stay
+        # byte-identical until a board sets levels.
+        snapshot["board_thresholds"] = {
+            code: str(value) for code, value in sorted(thresholds.items())
+        }
+    return snapshot
 
 
 def _snapshot_hash(snapshot: dict[str, Any]) -> str:
@@ -387,6 +609,10 @@ def _live_metrics_payload(
     if report.provision_coverage_pct is not None:
         metrics["provision_coverage_pct"] = str(report.provision_coverage_pct)
     metrics["restructured_exposure_ghs"] = str(report.restructured_exposure_ghs)
+    if result.total_exposure_ghs > 0:
+        metrics["restructured_ratio_pct"] = str(
+            report.restructured_exposure_ghs / result.total_exposure_ghs * _HUNDRED
+        )
     metrics["restructured_count"] = str(report.restructured_count)
     metrics["restructure_held_count"] = str(report.restructure_held_count)
     return metrics
@@ -409,7 +635,8 @@ def compute_live(
     held = report.provisions_held
     snapshot = _build_snapshot(db, ctx, bank, as_of, BASELINE_SCENARIO, report)
     findings = findings_from_validations(
-        tuple(_validation_rows(report, limit_pct, restriction_pct)), npl_status
+        tuple(_all_validation_rows(db, ctx, bank, as_of, report, limit_pct, restriction_pct)),
+        npl_status,
     )
     flows = _trailing_flow_totals(db, ctx, bank, as_of)
     concentration = _concentration_or_none(db, ctx, bank, as_of)
@@ -435,6 +662,11 @@ def compute_live(
         "par_360_pct": _opt(par.get("par_360")),
         "write_off_12m_ghs": _opt(flows["WRITE_OFF"]),
         "recovery_12m_ghs": _opt(flows["RECOVERY"]),
+        "restructured_ratio_pct": _opt(
+            report.restructured_exposure_ghs / result.total_exposure_ghs * _HUNDRED
+            if result.total_exposure_ghs > 0
+            else None
+        ),
         "sector_hhi": _opt(sector.hhi if sector is not None else None),
         "employer_hhi": _opt(
             employer.hhi if employer is not None and employer.bucket_count > 0 else None
@@ -596,7 +828,9 @@ def _create_and_execute(
         if prefailure is not None:
             raise prefailure
         assert report is not None
-        _persist_success(db, ctx, run, report, limit_pct, restriction_pct, npl_status)
+        _persist_success(
+            db, ctx, bank, period.period_end, run, report, limit_pct, restriction_pct, npl_status
+        )
     except CreditRunError as exc:
         _persist_failure(db, ctx, run.id, exc)
     except rp.RegulatoryParameterError as exc:
@@ -615,6 +849,8 @@ def _create_and_execute(
 def _persist_success(  # noqa: PLR0913 - one call site; the analysis tuple spread
     db: Session,
     ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
     run: RegulatoryRun,
     report: LoanClassificationReport,
     limit_pct: Decimal | None,
@@ -659,7 +895,10 @@ def _persist_success(  # noqa: PLR0913 - one call site; the analysis tuple sprea
             )
         )
     for position, (rule_code, passed, severity, message) in enumerate(
-        _validation_rows(report, limit_pct, restriction_pct), start=1
+        _all_validation_rows(
+            db, ctx, bank, as_of, report, limit_pct, restriction_pct
+        ),
+        start=1,
     ):
         db.add(
             RegulatoryValidation(
@@ -797,8 +1036,8 @@ def get_credit_dashboard(
                 severity=severity,  # type: ignore[arg-type]
                 message=message,
             )
-            for rule_code, passed, severity, message in _validation_rows(
-                report, limit_pct, restriction_pct
+            for rule_code, passed, severity, message in _all_validation_rows(
+                db, ctx, bank, period.period_end, report, limit_pct, restriction_pct
             )
         ],
         pending_parameters=list(report.pending_parameters),

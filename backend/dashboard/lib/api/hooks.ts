@@ -41,6 +41,7 @@ import type {
   CashflowHorizon,
   CertifyAndSendRequest,
   ChannelCode,
+  CreditThresholdUpdate,
   CrmHaircutUpdate,
   EclAssumptionUpdate,
   EwiRegisterPut,
@@ -3803,6 +3804,35 @@ export function useEclAssumptionRegister(bankId: string | undefined) {
     queryKey: ['ecl-assumptions', bankId],
     queryFn: () => apiCall(() => creditParamsApi.getEclAssumptionRegister({ bankId: bankId! })),
     enabled: Boolean(bankId),
+  });
+}
+
+export function useCreditThresholdRegister(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-thresholds', bankId],
+    queryFn: () =>
+      apiCall(() => creditParamsApi.getCreditThresholdRegister({ bankId: bankId! })),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useUpdateCreditThresholdRegister(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreditThresholdUpdate) =>
+      apiCall(() =>
+        creditParamsApi.updateCreditThresholdRegister({
+          bankId: bankId!,
+          creditThresholdUpdate: payload,
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['credit-thresholds', bankId] });
+      // The four Board comparisons ride the credit validations/findings, so
+      // every credit read that shows them refreshes (the server also enqueues
+      // a live refresh for the alerts surface).
+      void queryClient.invalidateQueries({ queryKey: ['credit-dashboard', bankId] });
+    },
   });
 }
 
