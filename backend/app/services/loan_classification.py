@@ -76,6 +76,31 @@ class PortfolioAtRisk:
 
 
 @dataclass(frozen=True)
+class ProvisionsHeld:
+    """Provisions the bank actually HOLDS, split by the applied classification.
+
+    Built only when at least one loan STATES ``ecl_provision_ghs`` — a book with
+    no stated provisions yields ``None`` on the report, and coverage is reported
+    unavailable rather than 0% (absent is not zero). ``specific_ghs`` is the
+    held provision on loans the grid classified non-performing; splitting by the
+    APPLIED grade keeps the coverage ratio's numerator and denominator on the
+    same classification, even where an ingested ``bog_classification`` disagrees
+    with the DPD-derived grade (the fact plane's ``provision_held`` split uses
+    the ingested view — a divergence between them is a data-quality signal).
+    """
+
+    specific_ghs: Decimal
+    general_ghs: Decimal
+    interest_in_suspense_ghs: Decimal
+    #: Loans that stated a provision amount (coverage disclosure).
+    stated_loan_count: int
+
+    @property
+    def total_ghs(self) -> Decimal:
+        return self.specific_ghs + self.general_ghs
+
+
+@dataclass(frozen=True)
 class _DpdExposure:
     exposure_ghs: Decimal
     days_past_due: int
@@ -127,6 +152,11 @@ class LoanClassificationReport:
     parameters: tuple[ParameterProvenance, ...]
     #: Param codes whose value is still pending BoG/internal confirmation.
     pending_parameters: tuple[str, ...]
+    #: Provisions HELD (stated on the book), or ``None`` when no loan states one.
+    provisions_held: ProvisionsHeld | None = None
+    #: Specific provisions held ÷ NPL exposure, as a percentage. ``None`` when
+    #: provisions are unstated OR the book has no NPL exposure to cover.
+    provision_coverage_pct: Decimal | None = None
 
     @property
     def has_pending_parameters(self) -> bool:
@@ -152,12 +182,16 @@ def _coerce_dpd(value: Any) -> int | None:
 
 def _load_loan_exposures(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> tuple[list[engine.LoanExposure], int]:
+) -> tuple[list[engine.LoanExposure], int, list[tuple[Decimal | None, Decimal | None]]]:
     """Current-generation LOAN exposures for ``as_of`` (+ unconverted count).
 
     Exposure is the GHS balance: ``attributes.balance_ghs`` when present, else
     the base-currency ``balance`` for a base-currency loan, else zero for a
     foreign-currency loan without an ingested conversion (counted, flagged).
+
+    The third element is position-aligned ``(ecl_provision_ghs,
+    interest_in_suspense_ghs)`` — each ``None`` when the loan does not state it,
+    so the caller can tell an unstated provision from a stated zero.
     """
     records = db.execute(
         select(CanonicalPositionSnapshot, CanonicalPosition)
@@ -176,6 +210,7 @@ def _load_loan_exposures(
 
     base_currency = jurisdictions.base_currency(bank)
     exposures: list[engine.LoanExposure] = []
+    provisions: list[tuple[Decimal | None, Decimal | None]] = []
     unconverted = 0
     for snapshot, position in records:
         attributes = snapshot.attributes or {}
@@ -193,7 +228,13 @@ def _load_loan_exposures(
                 ifrs9_stage=snapshot.ifrs9_stage,
             )
         )
-    return exposures, unconverted
+        provisions.append(
+            (
+                _dec_or_none(attributes.get("ecl_provision_ghs")),
+                _dec_or_none(attributes.get("interest_in_suspense_ghs")),
+            )
+        )
+    return exposures, unconverted, provisions
 
 
 def _dec_or_none(value: Any) -> Decimal | None:
@@ -302,6 +343,37 @@ def _resolve_parameters(
     return values, tuple(provenance)
 
 
+def _provisions_held(
+    loans: tuple[engine.ClassifiedLoan, ...],
+    provisions: list[tuple[Decimal | None, Decimal | None]],
+) -> ProvisionsHeld | None:
+    """Roll up stated provisions, split by the APPLIED classification."""
+    specific = _ZERO
+    general = _ZERO
+    suspense = _ZERO
+    stated = 0
+    any_value = False
+    for loan, (provision, interest) in zip(loans, provisions, strict=True):
+        if provision is not None:
+            stated += 1
+            any_value = True
+            if loan.non_performing:
+                specific += provision
+            else:
+                general += provision
+        if interest is not None:
+            any_value = True
+            suspense += interest
+    if not any_value:
+        return None
+    return ProvisionsHeld(
+        specific_ghs=specific,
+        general_ghs=general,
+        interest_in_suspense_ghs=suspense,
+        stated_loan_count=stated,
+    )
+
+
 def classify_loan_book(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> LoanClassificationReport:
@@ -315,9 +387,13 @@ def classify_loan_book(
     values, provenance = _resolve_parameters(db, bank, institution_class, as_of)
     grid = engine.grid_from_params(institution_class, values)
 
-    exposures, unconverted = _load_loan_exposures(db, ctx, bank, as_of)
+    exposures, unconverted, provisions = _load_loan_exposures(db, ctx, bank, as_of)
     result = engine.classify_book(exposures, grid)
     raw_dpd_exposures = _load_raw_dpd_exposures(db, ctx, bank, as_of)
+    held = _provisions_held(result.loans, provisions)
+    coverage: Decimal | None = None
+    if held is not None and result.npl_exposure_ghs > _ZERO:
+        coverage = held.specific_ghs / result.npl_exposure_ghs * Decimal("100")
 
     pending = tuple(item.param_code for item in provenance if item.is_pending)
     return LoanClassificationReport(
@@ -337,4 +413,6 @@ def classify_loan_book(
         portfolio_at_risk=_portfolio_at_risk(raw_dpd_exposures, result.total_exposure_ghs),
         parameters=provenance,
         pending_parameters=pending,
+        provisions_held=held,
+        provision_coverage_pct=coverage,
     )

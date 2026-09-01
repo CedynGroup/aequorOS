@@ -73,6 +73,19 @@ class PortfolioAtRiskRead(ClosedModel):
     ratio: Decimal
 
 
+class ProvisionsHeldRead(ClosedModel):
+    """Provisions the bank HOLDS (stated on ingested loans), split by the
+    applied classification. Present only when at least one loan states a
+    provision — an unstated book carries ``null``, never a fabricated zero."""
+
+    specific_ghs: Decimal
+    general_ghs: Decimal
+    total_ghs: Decimal
+    interest_in_suspense_ghs: Decimal
+    #: Loans that stated a provision amount (coverage disclosure).
+    stated_loan_count: int
+
+
 class SdiLoanClassificationRead(ClosedModel):
     as_of: str
     #: 'bank' (5-grade) or 'sdi' (NBFI 4-grade) — which grid was applied.
@@ -95,6 +108,11 @@ class SdiLoanClassificationRead(ClosedModel):
     portfolio_at_risk: list[PortfolioAtRiskRead]
     #: Param codes whose value is still pending BoG/internal confirmation.
     pending_parameters: list[str]
+    #: Provisions HELD against the book; ``null`` when no loan states one.
+    provisions_held: ProvisionsHeldRead | None = None
+    #: Specific provisions held ÷ NPL exposure (%); ``null`` when provisions are
+    #: unstated or there is no NPL exposure to cover.
+    provision_coverage_pct: Decimal | None = None
 
 
 class RiskWeightBandRead(ClosedModel):

@@ -62,13 +62,33 @@ export default function SdiLoanBookView({ bankId }: { bankId: string | undefined
       >
         {data ? (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
               <KpiStat label="Loans assessed" value={String(data.loan_count)} status="ok" />
               <KpiStat label="NPL ratio" value={`${(num(data.npl_ratio) * 100).toFixed(2)}%`} status={num(data.npl_ratio) > 0 ? 'warn' : 'ok'} />
               <KpiStat label="NPL exposure" value={fmtCurrency(num(data.npl_exposure_ghs))} status={num(data.npl_exposure_ghs) > 0 ? 'warn' : 'ok'} />
               <KpiStat label="PAR 30+" value={par30 ? `${(num(par30.ratio) * 100).toFixed(2)}%` : '—'} status={par30 && num(par30.ratio) > 0 ? 'warn' : 'ok'} hint="Raw DPD exposure ÷ gross loan book" />
               <KpiStat label="PAR 90+" value={par90 ? `${(num(par90.ratio) * 100).toFixed(2)}%` : '—'} status={par90 && num(par90.ratio) > 0 ? 'crit' : 'ok'} hint="Raw DPD exposure ÷ gross loan book" />
               <KpiStat label="Provision required" value={fmtCurrency(num(data.total_provision_required_ghs))} status="ok" />
+              <KpiStat
+                label="Provision coverage"
+                value={
+                  data.provision_coverage_pct !== null
+                    ? `${num(data.provision_coverage_pct).toFixed(1)}%`
+                    : data.provisions_held !== null
+                      ? 'Not applicable'
+                      : '—'
+                }
+                status={
+                  data.provision_coverage_pct !== null && num(data.provision_coverage_pct) < 100
+                    ? 'warn'
+                    : 'ok'
+                }
+                hint={
+                  data.provisions_held !== null
+                    ? `Specific provisions held ÷ NPL exposure · stated on ${data.provisions_held.stated_loan_count} loans`
+                    : 'No loan states a held provision; coverage is unavailable, not zero'
+                }
+              />
             </div>
             <SectionCard title="Classification and provisioning" subtitle={isSdi ? 'NBFI 4-grade classification: Standard, Sub-standard, Doubtful, and Loss; non-performing at 90 days past due.' : 'BoG 5-grade classification including OLEM; non-performing at 90 days past due.'} noPadding>
               <DataTable columns={columns} rows={data.buckets} density="compact" />

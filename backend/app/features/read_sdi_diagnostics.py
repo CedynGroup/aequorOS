@@ -22,6 +22,7 @@ from app.schemas.sdi import (
     LoanGradeBucketRead,
     ModuleReadinessRead,
     PortfolioAtRiskRead,
+    ProvisionsHeldRead,
     RiskWeightBandRead,
     SdiCapitalAssuranceRead,
     SdiCapitalChecksRead,
@@ -53,9 +54,7 @@ from app.services import (
 router = APIRouter(tags=["sdi-diagnostics"])
 
 
-def _effective_as_of(
-    db: DbSession, ctx: TenantContext, bank: Bank, requested: date | None
-) -> date:
+def _effective_as_of(db: DbSession, ctx: TenantContext, bank: Bank, requested: date | None) -> date:
     """Resolve the as-of date: the caller's, else the LATEST ingested data date
     (not ``date.today()`` — an S&L's core-banking feed lags the calendar, so a
     diagnostic keyed on today would read an empty future). Falls back to today
@@ -182,6 +181,18 @@ def _loan_classification_read(
             for metric in report.portfolio_at_risk
         ],
         pending_parameters=list(report.pending_parameters),
+        provisions_held=(
+            ProvisionsHeldRead(
+                specific_ghs=report.provisions_held.specific_ghs,
+                general_ghs=report.provisions_held.general_ghs,
+                total_ghs=report.provisions_held.total_ghs,
+                interest_in_suspense_ghs=report.provisions_held.interest_in_suspense_ghs,
+                stated_loan_count=report.provisions_held.stated_loan_count,
+            )
+            if report.provisions_held is not None
+            else None
+        ),
+        provision_coverage_pct=report.provision_coverage_pct,
     )
 
 

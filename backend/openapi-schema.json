@@ -26865,6 +26865,45 @@
         "title": "ProjectionYearRead",
         "type": "object"
       },
+      "ProvisionsHeldRead": {
+        "additionalProperties": false,
+        "description": "Provisions the bank HOLDS (stated on ingested loans), split by the\napplied classification. Present only when at least one loan states a\nprovision \u2014 an unstated book carries ``null``, never a fabricated zero.",
+        "properties": {
+          "general_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "General Ghs",
+            "type": "string"
+          },
+          "interest_in_suspense_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Interest In Suspense Ghs",
+            "type": "string"
+          },
+          "specific_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Specific Ghs",
+            "type": "string"
+          },
+          "stated_loan_count": {
+            "title": "Stated Loan Count",
+            "type": "integer"
+          },
+          "total_ghs": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Ghs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "specific_ghs",
+          "general_ghs",
+          "total_ghs",
+          "interest_in_suspense_ghs",
+          "stated_loan_count"
+        ],
+        "title": "ProvisionsHeldRead",
+        "type": "object"
+      },
       "PushBatchOpen": {
         "properties": {
           "as_of_date": {
@@ -32583,6 +32622,28 @@
             },
             "title": "Portfolio At Risk",
             "type": "array"
+          },
+          "provision_coverage_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provision Coverage Pct"
+          },
+          "provisions_held": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProvisionsHeldRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "stage_proxy_count": {
             "title": "Stage Proxy Count",

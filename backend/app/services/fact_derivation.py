@@ -258,6 +258,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
+from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.ftp.engine import CurvePoint, CurveResult, build_curve
 from app.models import (
     Bank,
@@ -831,6 +832,7 @@ def _derive_specs(
     specs.extend(_derive_loan_exposure(loan_rows, groups))
     specs.extend(_derive_ecl_exposure(loan_rows, groups))
     specs.extend(_derive_crm_collateral(loan_rows, groups))
+    specs.extend(_derive_provision_held(loan_rows, groups))
     specs.extend(_derive_securities(securities, cash_amounts, groups))
     specs.extend(_derive_off_balance(canonical, groups))
     specs.extend(_derive_lcr_inflows(canonical, loan_rows, groups))
@@ -2426,6 +2428,88 @@ def _derive_ecl_exposure(loan_rows: list[_LoanRow], groups: list[GroupResult]) -
                 "no staged EAD buckets exist. The capital run uses INGESTED provisions "
                 "instead of a modelled ECL — the impairment figure is the bank's own, not "
                 "this platform's.",
+            )
+        )
+    return specs
+
+
+def _derive_provision_held(loan_rows: list[_LoanRow], groups: list[GroupResult]) -> list[_FactSpec]:
+    """Provisions the bank actually HOLDS against its loan book (PR credit-1).
+
+    Reads the documented ``ecl_provision_ghs`` and ``interest_in_suspense_ghs``
+    attribute conventions (docs/API_INTEGRATION.md §3.4) — the same values BSD8
+    and the LE return already consume — and derives three categories:
+
+    * ``specific``            — provisions on non-performing loans (ingested
+      ``bog_classification`` in substandard/doubtful/loss, else IFRS 9 stage 3);
+    * ``general``             — provisions on everything else, including loans
+      whose classification cannot be told (understating coverage is the
+      conservative direction — an unknown never inflates the coverage ratio);
+    * ``interest_in_suspense``— cumulative suspended interest.
+
+    ABSENT IS NOT ZERO. The raw attribute is read (never ``_PositionRow.ecl_ghs``,
+    whose loader zero-defaults): a book where no loan states a provision derives
+    NOTHING and the group is reported ``skipped``, so provision coverage is
+    *unavailable* downstream rather than a fabricated 0% — the same discipline as
+    ``_derive_ecl_exposure``. This is the fact that finally makes
+    ``provision_coverage_pct`` computable (report_comparison declares it with no
+    producer; sdi_rating reports it as unavailable for exactly this reason).
+    """
+    specific = _ZERO
+    general = _ZERO
+    suspense = _ZERO
+    any_provision = False
+    any_suspense = False
+    for loan in loan_rows:
+        attributes = loan.row.attributes
+        provision = _dec_or_none(attributes.get("ecl_provision_ghs"))
+        if provision is not None:
+            any_provision = True
+            grade = normalise_bog_classification(attributes.get("bog_classification"))
+            non_performing = (
+                grade in NPL_GRADES
+                if grade is not None
+                else loan.row.ifrs9_stage == 3
+            )
+            if non_performing:
+                specific += provision
+            else:
+                general += provision
+        interest = _dec_or_none(attributes.get("interest_in_suspense_ghs"))
+        if interest is not None:
+            any_suspense = True
+            suspense += interest
+
+    specs: list[_FactSpec] = []
+    if any_provision:
+        for category, amount in (("specific", specific), ("general", general)):
+            specs.append(
+                _FactSpec(
+                    fact_group="provision_held",
+                    category=category,
+                    amount=amount,
+                    derived_from="LOAN ecl_provision_ghs split by NPL classification",
+                )
+            )
+    if any_suspense:
+        specs.append(
+            _FactSpec(
+                fact_group="provision_held",
+                category="interest_in_suspense",
+                amount=suspense,
+                derived_from="LOAN interest_in_suspense_ghs attribute convention",
+            )
+        )
+    if specs:
+        groups.append(GroupResult(group="provision_held", status="derived", rows=len(specs)))
+    else:
+        groups.append(
+            GroupResult(
+                group="provision_held",
+                status="skipped",
+                note="Not computable: no LOAN position states ecl_provision_ghs or "
+                "interest_in_suspense_ghs, so provisions HELD are unknown and provision "
+                "coverage is reported unavailable — never a fabricated zero.",
             )
         )
     return specs

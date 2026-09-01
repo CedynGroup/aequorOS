@@ -98,6 +98,16 @@ export type SdiLoanClassification = {
   delinquency_buckets: DelinquencyBucket[];
   portfolio_at_risk: PortfolioAtRisk[];
   pending_parameters: string[];
+  // Provisions the bank HOLDS (stated on ingested loans). null = no loan
+  // states a provision — rendered as unavailable, never as 0.
+  provisions_held: {
+    specific_ghs: string;
+    general_ghs: string;
+    total_ghs: string;
+    interest_in_suspense_ghs: string;
+    stated_loan_count: number;
+  } | null;
+  provision_coverage_pct: string | null;
 };
 
 export type RiskWeightBand = {

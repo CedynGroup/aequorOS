@@ -51,6 +51,40 @@ BASIS_DAYS_PAST_DUE = "days_past_due"
 BASIS_STAGE_PROXY = "stage_proxy"
 BASIS_UNCLASSIFIED = "unclassified"
 
+#: The grades that are non-performing under BOTH grids (the NPL cutoff is
+#: substandard-and-worse for banks and SDIs alike; OLEM is a watch grade,
+#: not an NPL).
+NPL_GRADES: tuple[str, ...] = (SUBSTANDARD, DOUBTFUL, LOSS)
+
+#: Ingested ``bog_classification`` spellings → this engine's grade vocabulary.
+#: "current" is the Guide's word for a performing loan — mapped to STANDARD.
+#: The alias keys are compared with spaces/hyphens/underscores stripped.
+_CLASSIFICATION_ALIASES: dict[str, str] = {
+    "current": STANDARD,
+    "standard": STANDARD,
+    "olem": OLEM,
+    "otherloansespeciallymentioned": OLEM,
+    "especiallymentioned": OLEM,
+    "substandard": SUBSTANDARD,
+    "doubtful": DOUBTFUL,
+    "loss": LOSS,
+}
+
+
+def normalise_bog_classification(value: object) -> str | None:
+    """``"Sub-standard"`` → ``"substandard"``; unknown / empty → ``None``.
+
+    The single spelling authority for the ingested ``bog_classification``
+    attribute (docs/API_INTEGRATION.md §3.4). ``None`` means *not stated* —
+    the caller falls back to its own signal (IFRS 9 stage, DPD), never to
+    "performing".
+    """
+    if value in (None, ""):
+        return None
+    token = "".join(str(value).lower().split()).replace("-", "").replace("_", "")
+    return _CLASSIFICATION_ALIASES.get(token)
+
+
 _STAGE_IMPAIRED = 3
 
 _ZERO = Decimal("0")
