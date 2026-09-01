@@ -31466,7 +31466,8 @@
           "dbk",
           "stress",
           "bsd",
-          "sdi"
+          "sdi",
+          "credit"
         ],
         "type": "string"
       },

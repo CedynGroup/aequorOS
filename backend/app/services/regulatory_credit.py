@@ -377,8 +377,12 @@ def _live_metrics_payload(
     if report.provisions_held is not None:
         metrics["provision_held_ghs"] = str(report.provisions_held.total_ghs)
         metrics["provision_specific_ghs"] = str(report.provisions_held.specific_ghs)
+        metrics["provision_general_ghs"] = str(report.provisions_held.general_ghs)
     if report.provision_coverage_pct is not None:
         metrics["provision_coverage_pct"] = str(report.provision_coverage_pct)
+    metrics["restructured_exposure_ghs"] = str(report.restructured_exposure_ghs)
+    metrics["restructured_count"] = str(report.restructured_count)
+    metrics["restructure_held_count"] = str(report.restructure_held_count)
     return metrics
 
 

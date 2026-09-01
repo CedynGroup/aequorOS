@@ -22,6 +22,7 @@ type ReturnFamily = Literal[
     "stress",
     "bsd",
     "sdi",
+    "credit",
 ]
 type ReturnFrequency = Literal["weekly", "monthly", "quarterly", "semiannual", "annual", "daily"]
 type ReturnBasis = Literal["solo", "consolidated"]

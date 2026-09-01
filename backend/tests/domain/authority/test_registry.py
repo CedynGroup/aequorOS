@@ -442,6 +442,7 @@ _ENGINE_VERSION_MODULES = (
     "app.services.enterprise_stress",
     "app.services.implied_rating",
     "app.services.regulatory_capital",
+    "app.services.regulatory_credit",
     "app.services.regulatory_forecasting",
     "app.services.regulatory_ftp",
     "app.services.regulatory_fx",

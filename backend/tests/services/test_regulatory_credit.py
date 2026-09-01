@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import date as date_type
 from decimal import Decimal
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,7 +22,9 @@ from app.models import (
     RegulatoryRun,
 )
 from app.schemas.regulatory_credit import CreditScenarioBatchCreate
+from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import fact_derivation, regulatory_credit
+from app.services.regulatory_reporting import generation as reporting_generation
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
@@ -342,3 +346,48 @@ def test_migration_without_a_prior_month_is_soft_unavailable(db_session: Session
     assert read.available is False
     assert "previous month" in (read.reason or "")
     assert read.matrix == []
+
+
+def test_npl_monthly_return_generates_from_the_sealed_run(db_session: Session) -> None:
+    """The NPL-MONTHLY package (credit PR-6): levels from the sealed baseline
+    credit run; event-driven sections omitted WITH the omission stated when no
+    events are ingested; migration omitted on a single month-end."""
+    period = _prepare(db_session)
+    batch = regulatory_credit.run_all_credit_scenarios(
+        db_session, CTX, SAMPLE_BANK_ID, CreditScenarioBatchCreate(reporting_period_id=period.id)
+    )
+    assert batch.runs[0].status == "succeeded"
+
+    package = reporting_generation.generate_package(
+        db_session,
+        CTX,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(return_code="NPL-MONTHLY", reporting_date=FIXTURE_AS_OF),
+    )
+    snapshot = package.snapshot
+    sections = {section["code"]: section for section in snapshot["sections"]}
+    levels = {row["code"]: row for row in sections["npl_levels"]["rows"]}
+    assert Decimal(levels["total_gross_loans_ghs"]["value"]) > 0
+    assert Decimal(levels["npl_ratio_pct"]["value"]) > 0
+    # PR-1 fixture states provisions, so coverage rows are present.
+    assert "npl_coverage_pct" in levels
+
+    metadata = snapshot["metadata"]
+    omissions = " ".join(metadata["omissions"])
+    assert "migration" in omissions.lower()
+    assert "write-off" in omissions.lower()
+    assert metadata["baseline_credit_input_hash"] == batch.runs[0].input_hash
+    assert "credit_migration" not in sections
+    assert "write_offs" not in sections
+
+
+def test_npl_monthly_refuses_without_a_sealed_credit_run(db_session: Session) -> None:
+    _prepare(db_session)
+    with pytest.raises(HTTPException) as raised:
+        reporting_generation.generate_package(
+            db_session,
+            CTX,
+            SAMPLE_BANK_ID,
+            RegulatoryPackageCreate(return_code="NPL-MONTHLY", reporting_date=FIXTURE_AS_OF),
+        )
+    assert raised.value.status_code == 409

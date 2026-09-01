@@ -390,11 +390,9 @@ _ACKNOWLEDGED_PENDING_FILED: dict[str, str] = {
         "(registry.py::_fx). The engine and its parameters are governed; the legal basis "
         "for the limits is not."
     ),
-    "bog_five_grade_classification": (
-        "calculation_version carries the sentinel: the five-grade classification is BoG's "
-        "and cited, but no engine ENGINE_VERSION governs the generation of the figure, so "
-        "a methodology change to classify_book would move a filed number silently."
-    ),
+    # bog_five_grade_classification left this register in credit PR-6: the
+    # credit run's ENGINE_VERSION now governs the figure, so the sentinel — and
+    # its acknowledgement — are gone together.
 }
 
 
