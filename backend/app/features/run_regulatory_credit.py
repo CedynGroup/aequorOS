@@ -21,6 +21,7 @@ from app.schemas.regulatory_credit import (
     CreditLoanFacetsRead,
     CreditLoansPageRead,
     CreditMigrationRead,
+    CreditPdRead,
     CreditScenarioBatchCreate,
     CreditVintagesRead,
 )
@@ -155,3 +156,18 @@ def get_credit_vintages(
 ) -> CreditVintagesRead:
     """Cohort PAR30+ curves by origination month and months on book."""
     return regulatory_credit.get_credit_vintages(db, ctx, bank_id)
+
+
+@router.get(
+    "/banks/{bank_id}/credit/pd",
+    response_model=CreditPdRead,
+    operation_id="getCreditPd",
+)
+def get_credit_pd(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+) -> CreditPdRead:
+    """Migration-implied 12-month PDs (ADVISORY - never filed, never adopted
+    into any register by the platform)."""
+    return regulatory_credit.get_credit_pd(db, ctx, bank_id)

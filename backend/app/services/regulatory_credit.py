@@ -64,12 +64,15 @@ from app.schemas.regulatory_credit import (
     CreditLoansPageRead,
     CreditMetricsRead,
     CreditMigrationRead,
+    CreditPdRead,
     CreditScenarioBatchCreate,
     CreditValidationRead,
     CreditVintagesRead,
+    EclSuggestionRead,
     LoanEventRead,
     MigrationCellRead,
     MonthlyFlowRead,
+    PdEstimateRead,
     RollRateCellRead,
     VintageCohortRead,
     VintagePointRead,
@@ -1417,4 +1420,148 @@ def get_credit_vintages(db: Session, ctx: TenantContext, bank_id: str) -> Credit
             )
             for cohort in result.cohorts
         ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# migration-implied PD (credit PR-8; ADVISORY)
+# ---------------------------------------------------------------------------
+
+#: Consecutive month-end pairs required before hazards are worth pooling.
+_PD_MIN_MONTH_PAIRS = 6
+
+ADVISORY_PD_STATEMENT = (
+    "Advisory estimate - no regulatory authority and no back-testing evidence yet. "
+    "PDs are implied from this institution's own observed monthly grade-to-NPL "
+    "migrations (matched loans only; loans that left the book between month-ends "
+    "are excluded and counted, because a departure does not say whether the loan "
+    "repaid or was written off). A PD becomes usable for provisioning only when "
+    "the Board adopts it into the ECL assumption register through the ordinary "
+    "approval path - the platform never adopts it for you."
+)
+
+
+def get_credit_pd(db: Session, ctx: TenantContext, bank_id: str) -> CreditPdRead:
+    """12-month PDs implied by the institution's own monthly migrations.
+
+    Pure estimator: :mod:`app.domain.credit.pd`. Observations are matched
+    performing loan-months over consecutive month-end book pairs; the closing
+    book decides whether the loan ENTERED non-performing. Thin history is a
+    SOFT state inside the payload, and every released figure carries its
+    evidence base. Nothing here writes to any register - the ECL suggestions
+    are display-only rows the approver may adopt by hand.
+    """
+    from app.domain.credit.pd import (  # noqa: PLC0415 - keeps the heavy import local
+        DEFAULT_MIN_LOAN_MONTHS,
+        TransitionObservation,
+        estimate_pd,
+    )
+
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
+    ordered = sorted(_month_end_as_ofs(db, ctx, bank, period.period_end))
+    pairs = [
+        (opening, closing)
+        for opening, closing in zip(ordered, ordered[1:], strict=False)
+        if _months_between(opening, closing) == 1
+    ]
+    if len(pairs) < _PD_MIN_MONTH_PAIRS:
+        return CreditPdRead(
+            as_of=period.period_end.isoformat(),
+            available=False,
+            advisory_statement=ADVISORY_PD_STATEMENT,
+            reason=(
+                f"Migration-implied PDs need at least {_PD_MIN_MONTH_PAIRS} consecutive "
+                f"month-end pairs of the loan book; {len(pairs)} "
+                f"{'is' if len(pairs) == 1 else 'are'} ingested so far. "
+                "Estimates fill in as month-ends land."
+            ),
+            month_pairs_observed=len(pairs),
+            min_loan_months=DEFAULT_MIN_LOAN_MONTHS,
+        )
+
+    books: dict[date, list[CreditLoanRead]] = {}
+
+    def book(as_of: date) -> list[CreditLoanRead]:
+        if as_of not in books:
+            books[as_of] = _classified_loan_rows(db, ctx, bank, as_of)
+        return books[as_of]
+
+    by_grade: list[TransitionObservation] = []
+    by_segment: list[TransitionObservation] = []
+    pooled: list[TransitionObservation] = []
+    exited = 0
+    for opening_as_of, closing_as_of in pairs:
+        closing = {row.source_reference: row for row in book(closing_as_of)}
+        for row in book(opening_as_of):
+            if row.non_performing:
+                continue
+            after = closing.get(row.source_reference)
+            if after is None:
+                exited += 1
+                continue
+            defaulted = after.non_performing
+            by_grade.append(
+                TransitionObservation(grade=row.grade, segment=None, defaulted=defaulted)
+            )
+            pooled.append(
+                TransitionObservation(grade="performing", segment=None, defaulted=defaulted)
+            )
+            if row.product_code:
+                by_segment.append(
+                    TransitionObservation(
+                        grade=row.grade, segment=row.product_code, defaulted=defaulted
+                    )
+                )
+                pooled.append(
+                    TransitionObservation(
+                        grade="performing", segment=row.product_code, defaulted=defaulted
+                    )
+                )
+
+    def reads(observations: list[TransitionObservation]) -> list[PdEstimateRead]:
+        return [
+            PdEstimateRead(
+                grade=estimate.grade,
+                segment=estimate.segment,
+                loan_months=estimate.loan_months,
+                defaults_observed=estimate.defaults_observed,
+                monthly_hazard_pct=estimate.monthly_hazard_pct,
+                pd_12m_pct=estimate.pd_12m_pct,
+                not_estimable_reason=estimate.not_estimable_reason,
+            )
+            for estimate in estimate_pd(
+                observations, min_loan_months=DEFAULT_MIN_LOAN_MONTHS
+            ).estimates
+        ]
+
+    suggestions: list[EclSuggestionRead] = []
+    for estimate in estimate_pd(pooled, min_loan_months=DEFAULT_MIN_LOAN_MONTHS).estimates:
+        if estimate.pd_12m_pct is None:
+            continue
+        suggestions.append(
+            EclSuggestionRead(
+                segment=estimate.segment or "ALL",
+                stage=1,
+                suggested_pd_pct=estimate.pd_12m_pct,
+                basis=(
+                    f"{estimate.defaults_observed} defaults in {estimate.loan_months} matched "
+                    f"performing loan-months over {len(pairs)} month pairs "
+                    f"({pairs[0][0].isoformat()} to {pairs[-1][1].isoformat()})."
+                ),
+            )
+        )
+
+    return CreditPdRead(
+        as_of=period.period_end.isoformat(),
+        available=True,
+        advisory_statement=ADVISORY_PD_STATEMENT,
+        window_start=pairs[0][0].isoformat(),
+        month_pairs_observed=len(pairs),
+        matched_loan_months=len(by_grade),
+        exited_loan_months=exited,
+        min_loan_months=DEFAULT_MIN_LOAN_MONTHS,
+        overall=reads(by_grade),
+        segments=reads(by_segment),
+        ecl_suggestions=suggestions,
     )

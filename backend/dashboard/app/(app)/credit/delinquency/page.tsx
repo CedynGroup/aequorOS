@@ -9,12 +9,13 @@ import type { Column } from '@/components/ui/DataTable';
 import type { PortfolioAtRiskRead } from '@aequoros/risk-service-api';
 import CreditWorkspace from '@/components/credit/CreditWorkspace';
 import MigrationMatrix from '@/components/credit/MigrationMatrix';
+import PdPanel from '@/components/credit/PdPanel';
 import RollRateHeatmap from '@/components/credit/RollRateHeatmap';
 import DataTable from '@/components/ui/DataTable';
 import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
 import { useBankContext } from '@/components/shell/BankContext';
-import { useCreditMigration } from '@/lib/api/hooks';
+import { useCreditMigration, useCreditPd } from '@/lib/api/hooks';
 import { num } from '@/lib/api/values';
 import { fmtCurrency, fmtInt } from '@/lib/format';
 
@@ -39,6 +40,7 @@ const parColumns: Column<PortfolioAtRiskRead>[] = [
 export default function CreditDelinquencyPage() {
   const { bank } = useBankContext();
   const migration = useCreditMigration(bank?.id);
+  const pd = useCreditPd(bank?.id);
 
   return (
     <CreditWorkspace
@@ -104,6 +106,8 @@ export default function CreditDelinquencyPage() {
                 <p className="text-body text-slate leading-relaxed">{matrix.reason}</p>
               </SectionCard>
             ) : null}
+
+            {pd.data ? <PdPanel pd={pd.data} /> : null}
           </>
         );
       }}

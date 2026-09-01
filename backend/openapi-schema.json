@@ -10135,6 +10135,96 @@
         "title": "CreditMigrationRead",
         "type": "object"
       },
+      "CreditPdRead": {
+        "additionalProperties": false,
+        "properties": {
+          "advisory_statement": {
+            "title": "Advisory Statement",
+            "type": "string"
+          },
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "ecl_suggestions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EclSuggestionRead"
+            },
+            "title": "Ecl Suggestions",
+            "type": "array"
+          },
+          "exited_loan_months": {
+            "default": 0,
+            "title": "Exited Loan Months",
+            "type": "integer"
+          },
+          "matched_loan_months": {
+            "default": 0,
+            "title": "Matched Loan Months",
+            "type": "integer"
+          },
+          "min_loan_months": {
+            "default": 0,
+            "title": "Min Loan Months",
+            "type": "integer"
+          },
+          "month_pairs_observed": {
+            "default": 0,
+            "title": "Month Pairs Observed",
+            "type": "integer"
+          },
+          "overall": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PdEstimateRead"
+            },
+            "title": "Overall",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "segments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PdEstimateRead"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Start"
+          }
+        },
+        "required": [
+          "as_of",
+          "available",
+          "advisory_statement"
+        ],
+        "title": "CreditPdRead",
+        "type": "object"
+      },
       "CreditScenarioBatchCreate": {
         "additionalProperties": false,
         "properties": {
@@ -12007,6 +12097,37 @@
           "reason"
         ],
         "title": "EclAssumptionUpdate",
+        "type": "object"
+      },
+      "EclSuggestionRead": {
+        "additionalProperties": false,
+        "description": "A SUGGESTED ECL-register row. The platform never writes it \u2014 the Board\nadopts (or ignores) it through the ordinary approver-gated register PUT.",
+        "properties": {
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "segment": {
+            "title": "Segment",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "integer"
+          },
+          "suggested_pd_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Suggested Pd Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "segment",
+          "stage",
+          "suggested_pd_pct",
+          "basis"
+        ],
+        "title": "EclSuggestionRead",
         "type": "object"
       },
       "EmailFallbackAttachmentRead": {
@@ -26635,6 +26756,76 @@
           "legal_entity"
         ],
         "type": "string"
+      },
+      "PdEstimateRead": {
+        "additionalProperties": false,
+        "properties": {
+          "defaults_observed": {
+            "title": "Defaults Observed",
+            "type": "integer"
+          },
+          "grade": {
+            "title": "Grade",
+            "type": "string"
+          },
+          "loan_months": {
+            "title": "Loan Months",
+            "type": "integer"
+          },
+          "monthly_hazard_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Hazard Pct"
+          },
+          "not_estimable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Estimable Reason"
+          },
+          "pd_12m_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pd 12M Pct"
+          },
+          "segment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment"
+          }
+        },
+        "required": [
+          "grade",
+          "loan_months",
+          "defaults_observed"
+        ],
+        "title": "PdEstimateRead",
+        "type": "object"
       },
       "Pillar2AddOn": {
         "additionalProperties": false,
@@ -45492,6 +45683,104 @@
           }
         ],
         "summary": "Get Credit Migration",
+        "tags": [
+          "regulatory-credit"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/credit/pd": {
+      "get": {
+        "description": "Migration-implied 12-month PDs (ADVISORY - never filed, never adopted\ninto any register by the platform).",
+        "operationId": "getCreditPd",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditPdRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Credit Pd",
         "tags": [
           "regulatory-credit"
         ]

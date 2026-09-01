@@ -328,3 +328,47 @@ class CreditVintagesRead(ClosedModel):
     #: Share of the latest book carrying an origination date (cohort coverage).
     origination_coverage_pct: Decimal | None = None
     cohorts: list[VintageCohortRead] = []
+
+
+# --- migration-implied PD (credit PR-8; ADVISORY) ---------------------------
+
+
+class PdEstimateRead(ClosedModel):
+    grade: str
+    #: None = pooled across segments; otherwise the product code.
+    segment: str | None = None
+    loan_months: int
+    defaults_observed: int
+    monthly_hazard_pct: Decimal | None = None
+    pd_12m_pct: Decimal | None = None
+    #: None = estimated; otherwise why no figure is released for this cell.
+    not_estimable_reason: str | None = None
+
+
+class EclSuggestionRead(ClosedModel):
+    """A SUGGESTED ECL-register row. The platform never writes it — the Board
+    adopts (or ignores) it through the ordinary approver-gated register PUT."""
+
+    segment: str
+    stage: int
+    suggested_pd_pct: Decimal
+    basis: str
+
+
+class CreditPdRead(ClosedModel):
+    as_of: str
+    #: False = not enough consecutive month-end pairs yet (soft, with reason).
+    available: bool
+    advisory_statement: str
+    reason: str | None = None
+    window_start: str | None = None
+    month_pairs_observed: int = 0
+    matched_loan_months: int = 0
+    #: Performing loans that left the book between month-ends — excluded from
+    #: the hazard (repayment and write-off are indistinguishable here) and
+    #: disclosed instead of guessed.
+    exited_loan_months: int = 0
+    min_loan_months: int = 0
+    overall: list[PdEstimateRead] = []
+    segments: list[PdEstimateRead] = []
+    ecl_suggestions: list[EclSuggestionRead] = []

@@ -18,6 +18,7 @@ import type {
   CreditLoanFacetsRead,
   CreditLoansPageRead,
   CreditMigrationRead,
+  CreditPdRead,
   CreditScenarioBatchCreate,
   CreditVintagesRead,
   ErrorResponse,
@@ -36,6 +37,8 @@ import {
   CreditLoansPageReadToJSON,
   CreditMigrationReadFromJSON,
   CreditMigrationReadToJSON,
+  CreditPdReadFromJSON,
+  CreditPdReadToJSON,
   CreditScenarioBatchCreateFromJSON,
   CreditScenarioBatchCreateToJSON,
   CreditVintagesReadFromJSON,
@@ -64,6 +67,10 @@ export interface GetCreditLoanFacetsRequest {
 }
 
 export interface GetCreditMigrationRequest {
+  bankId: string;
+}
+
+export interface GetCreditPdRequest {
   bankId: string;
 }
 
@@ -385,6 +392,66 @@ export class RegulatoryCreditApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<CreditMigrationRead> {
     const response = await this.getCreditMigrationRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Migration-implied 12-month PDs (ADVISORY - never filed, never adopted into any register by the platform).
+   * Get Credit Pd
+   */
+  async getCreditPdRaw(
+    requestParameters: GetCreditPdRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<CreditPdRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getCreditPd().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/credit/pd`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      CreditPdReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Migration-implied 12-month PDs (ADVISORY - never filed, never adopted into any register by the platform).
+   * Get Credit Pd
+   */
+  async getCreditPd(
+    requestParameters: GetCreditPdRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<CreditPdRead> {
+    const response = await this.getCreditPdRaw(
       requestParameters,
       initOverrides,
     );

@@ -74,6 +74,7 @@ class _Records:
     counterparties: tuple[_Record, ...] = ()
     products: tuple[_Record, ...] = ()
     positions: tuple[_Record, ...] = ()
+    loan_events: tuple[_Record, ...] = ()
 
 
 def test_unvalidated_records_are_counted_per_entity_type() -> None:

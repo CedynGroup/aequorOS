@@ -659,6 +659,32 @@ export function useCreditVintages(bankId: string | undefined) {
   });
 }
 
+export function useCreditPd(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ['credit-pd', bankId],
+    queryFn: () =>
+      apiCall(async () => {
+        const response = await regulatoryCreditApi.getCreditPdRaw({ bankId: bankId! });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        // Only the MODULE-unavailable envelope hard-fails; the PD payload's
+        // own available=false (thin history) renders inline with its reason.
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'PD estimates are not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      }),
+    enabled: Boolean(bankId),
+    refetchInterval: DASHBOARD_REFETCH_MS,
+  });
+}
+
 export function useRunAllCreditScenarios(bankId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({

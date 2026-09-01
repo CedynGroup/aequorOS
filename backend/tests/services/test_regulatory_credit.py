@@ -367,7 +367,19 @@ def test_npl_monthly_return_generates_from_the_sealed_run(db_session: Session) -
     snapshot = package.snapshot
     sections = {section["code"]: section for section in snapshot["sections"]}
     levels = {row["code"]: row for row in sections["npl_levels"]["rows"]}
-    assert Decimal(levels["total_gross_loans_ghs"]["value"]) > 0
+    # The levels table EQUALS the sealed run's metrics - the equivalence the
+    # declared-divergence ledger cites (PROVEN_ELSEWHERE for the 5-grade book).
+    run_metrics = batch.runs[0].metrics
+    assert run_metrics is not None
+    assert Decimal(levels["total_gross_loans_ghs"]["value"]) == Decimal(
+        str(run_metrics["gross_loans_ghs"])
+    )
+    assert Decimal(levels["npl_stock_ghs"]["value"]) == Decimal(
+        str(run_metrics["npl_exposure_ghs"])
+    )
+    assert Decimal(levels["npl_ratio_pct"]["value"]) == Decimal(
+        str(run_metrics["npl_ratio_pct"])
+    )
     assert Decimal(levels["npl_ratio_pct"]["value"]) > 0
     # PR-1 fixture states provisions, so coverage rows are present.
     assert "npl_coverage_pct" in levels
@@ -466,3 +478,57 @@ def test_vintages_below_three_months_is_soft_unavailable(db_session: Session) ->
     read = regulatory_credit.get_credit_vintages(db_session, CTX, SAMPLE_BANK_ID)
     assert read.available is False
     assert "three month-end" in (read.reason or "")
+
+
+def test_pd_below_the_pair_floor_is_soft_unavailable(db_session: Session) -> None:
+    """One month-end = zero consecutive pairs → the PD view refuses softly,
+    still carrying the advisory statement and the evidence floor."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    read = regulatory_credit.get_credit_pd(db_session, CTX, SAMPLE_BANK_ID)
+    assert read.available is False
+    assert "month-end pairs" in (read.reason or "")
+    assert read.month_pairs_observed == 0
+    assert read.min_loan_months == 30
+    assert "Advisory" in read.advisory_statement
+    assert read.ecl_suggestions == []
+
+
+def test_pd_estimates_from_matched_migrations(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Over the May→June pair (floors relaxed to make one pair evidence):
+    LOAN/6 was performing in May and is NPL in June → its grade shows a 100%
+    implied PD; LOAN/1 stayed performing → zero defaults is NOT-estimable,
+    never 0.00%; MAY-ONLY departed → excluded and counted. The pooled cell
+    becomes the single suggested ALL/stage-1 register row — a suggestion the
+    platform never writes anywhere."""
+    from app.domain.credit import pd as pd_module  # noqa: PLC0415
+
+    monkeypatch.setattr(regulatory_credit, "_PD_MIN_MONTH_PAIRS", 1)
+    monkeypatch.setattr(pd_module, "DEFAULT_MIN_LOAN_MONTHS", 1)
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    _seed_prior_month_book(db_session)
+
+    read = regulatory_credit.get_credit_pd(db_session, CTX, SAMPLE_BANK_ID)
+    assert read.available is True
+    assert read.month_pairs_observed == 1
+    assert read.matched_loan_months == 2
+    assert read.exited_loan_months == 1
+
+    defaulted = [e for e in read.overall if e.defaults_observed == 1]
+    assert len(defaulted) == 1
+    assert defaulted[0].pd_12m_pct == Decimal("100.0000")
+    survived = [e for e in read.overall if e.defaults_observed == 0]
+    assert survived and all(e.pd_12m_pct is None for e in survived)
+    assert all("absence of evidence" in (e.not_estimable_reason or "") for e in survived)
+
+    # 2 pooled performing loan-months, 1 default → h=50% → 1−0.5¹² = 99.9756%.
+    assert len(read.ecl_suggestions) == 1
+    suggestion = read.ecl_suggestions[0]
+    assert suggestion.segment == "ALL"
+    assert suggestion.stage == 1
+    assert suggestion.suggested_pd_pct == Decimal("99.9756")
+    assert "month pairs" in suggestion.basis
