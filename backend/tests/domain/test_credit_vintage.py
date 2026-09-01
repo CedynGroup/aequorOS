@@ -50,5 +50,7 @@ def test_the_triangle_carries_the_hand_numbers_with_holes_kept() -> None:
     assert jan.initial_loan_count == 2
 
     mar = next(c for c in result.cohorts if c.cohort == "2026-03")
-    assert mar.point_at(0) is not None and mar.point_at(0).par30_pct == Decimal("0")
+    mar_start = mar.point_at(0)
+    assert mar_start is not None
+    assert mar_start.par30_pct == Decimal("0")
     assert result.observation_count == 6

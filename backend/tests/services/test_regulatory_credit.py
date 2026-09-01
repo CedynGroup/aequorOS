@@ -396,9 +396,8 @@ def test_npl_monthly_refuses_without_a_sealed_credit_run(db_session: Session) ->
 def test_vintages_build_cohorts_with_origination_coverage(db_session: Session) -> None:
     """Three seeded month-ends → cohort curves; the fixture loans carrying an
     origination date form cohorts, and coverage discloses the rest."""
-    from datetime import date as dt
-
-    period = _prepare(db_session)
+    dt = date_type
+    _prepare(db_session)
     fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
     _seed_prior_month_book(db_session)
     # A third month-end (April) so the availability floor is met.
