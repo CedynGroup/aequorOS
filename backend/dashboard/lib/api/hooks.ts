@@ -197,12 +197,29 @@ export function useLiquidityDashboard(
     queryKey: dashboardQueryKey('liq-dashboard', scope, bankId, semantic),
     queryFn: async () => {
       await waitForInitialDashboardSignals(queryClient, scope, bankId);
-      return apiCall(() =>
-        regulatoryLiquidityApi.getLiquidityDashboard({
+      return apiCall(async () => {
+        // The service returns HTTP 200 with an availability envelope when a
+        // governed input refuses. Detect it BEFORE generated-client
+        // deserialization, which would throw on the unexpected shape and be
+        // reported as "could not reach the risk service" — a false
+        // backend-down message.
+        const response = await regulatoryLiquidityApi.getLiquidityDashboardRaw({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
-      );
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Liquidity analysis is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      });
     },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
@@ -221,12 +238,29 @@ export function useCapitalDashboard(
     queryKey: dashboardQueryKey('cap-dashboard', scope, bankId, semantic),
     queryFn: async () => {
       await waitForInitialDashboardSignals(queryClient, scope, bankId);
-      return apiCall(() =>
-        regulatoryCapitalApi.getCapitalDashboard({
+      return apiCall(async () => {
+        // The service returns HTTP 200 with an availability envelope when a
+        // governed input refuses. Detect it BEFORE generated-client
+        // deserialization, which would throw on the unexpected shape and be
+        // reported as "could not reach the risk service" — a false
+        // backend-down message.
+        const response = await regulatoryCapitalApi.getCapitalDashboardRaw({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
-      );
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'Capital analysis is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      });
     },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
@@ -740,12 +774,29 @@ export function useFxDashboard(
     ),
     queryFn: async () => {
       await waitForInitialDashboardSignals(queryClient, scope, bankId);
-      return apiCall(() =>
-        regulatoryFxApi.getFxDashboard({
+      return apiCall(async () => {
+        // The FX service returns HTTP 200 with an availability envelope when a
+        // governed input refuses (e.g. a data-quality block on the net open
+        // position). Detect it BEFORE generated-client deserialization, which
+        // would throw on the unexpected shape and be reported as "could not
+        // reach the risk service" — a false backend-down message.
+        const response = await regulatoryFxApi.getFxDashboardRaw({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
-      );
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'FX analysis is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      });
     },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,
@@ -786,12 +837,29 @@ export function useFtpDashboard(
     ),
     queryFn: async () => {
       await waitForInitialDashboardSignals(queryClient, scope, bankId);
-      return apiCall(() =>
-        regulatoryFtpApi.getFtpDashboard({
+      return apiCall(async () => {
+        // The service returns HTTP 200 with an availability envelope when a
+        // governed input refuses. Detect it BEFORE generated-client
+        // deserialization, which would throw on the unexpected shape and be
+        // reported as "could not reach the risk service" — a false
+        // backend-down message.
+        const response = await regulatoryFtpApi.getFtpDashboardRaw({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
-      );
+        });
+        const payload = (await response.raw.clone().json()) as {
+          available?: boolean;
+          error_code?: string;
+          reason?: string;
+        };
+        if (payload.available === false && payload.error_code) {
+          throw new ModuleUnavailableError(
+            payload.reason ?? 'FTP analysis is not available yet.',
+            payload.error_code
+          );
+        }
+        return response.value();
+      });
     },
     enabled: Boolean(bankId),
     ...HEAVY_DASHBOARD_QUERY_POLICY,

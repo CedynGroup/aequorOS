@@ -202,24 +202,36 @@ async function main(): Promise<void> {
     getBankPeriodFacts: response('facts', {}),
   });
   mock(clients.regulatoryLiquidityApi, {
-    getLiquidityDashboard: async ({ reportingPeriodId }: { reportingPeriodId?: string }) => {
+    // Reads the raw envelope (like IRR/FX) so an HTTP 200 {available:false}
+    // renders as a module-unavailable panel instead of a false backend error.
+    getLiquidityDashboardRaw: async ({
+      reportingPeriodId,
+    }: {
+      reportingPeriodId?: string;
+    }) => {
       const name = reportingPeriodId
         ? `liq-dashboard:${reportingPeriodId}`
         : 'liq-dashboard';
       counts.set(name, (counts.get(name) ?? 0) + 1);
       if (!reportingPeriodId && currentDetailGate) await currentDetailGate;
-      return { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
+      const body = { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
+      return { raw: new Response('{}'), value: async () => body };
     },
     runAllLiquidityScenarios: response('liq-mutation', {}),
   });
   mock(clients.regulatoryCapitalApi, {
-    getCapitalDashboard: async ({ reportingPeriodId }: { reportingPeriodId?: string }) => {
+    getCapitalDashboardRaw: async ({
+      reportingPeriodId,
+    }: {
+      reportingPeriodId?: string;
+    }) => {
       const name = reportingPeriodId
         ? `cap-dashboard:${reportingPeriodId}`
         : 'cap-dashboard';
       counts.set(name, (counts.get(name) ?? 0) + 1);
       if (!reportingPeriodId && currentDetailGate) await currentDetailGate;
-      return { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
+      const body = { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
+      return { raw: new Response('{}'), value: async () => body };
     },
   });
   mock(clients.regulatoryIrrApi, {
@@ -232,10 +244,21 @@ async function main(): Promise<void> {
     },
   });
   mock(clients.regulatoryFxApi, {
-    getFxDashboard: response('fx-dashboard', {}),
+    // FX reads the raw envelope (like IRR) so an HTTP 200 {available:false}
+    // renders as a module-unavailable panel instead of a false backend error.
+    getFxDashboardRaw: async () => {
+      counts.set('fx-dashboard', (counts.get('fx-dashboard') ?? 0) + 1);
+      return {
+        raw: new Response('{}'),
+        value: async () => ({}),
+      };
+    },
   });
   mock(clients.regulatoryFtpApi, {
-    getFtpDashboard: response('ftp-dashboard', {}),
+    getFtpDashboardRaw: async () => {
+      counts.set('ftp-dashboard', (counts.get('ftp-dashboard') ?? 0) + 1);
+      return { raw: new Response('{}'), value: async () => ({}) };
+    },
   });
   mock(clients.liveEngineApi, {
     getLiveSummary: liveSummary,
