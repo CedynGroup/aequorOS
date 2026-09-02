@@ -17,7 +17,7 @@ const roles = [
 type Status = 'idle' | 'submitting' | 'success' | 'error';
 
 const inputClasses =
-  'w-full rounded-md border border-border-light bg-white px-4 py-3 text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40 transition disabled:opacity-60 disabled:cursor-not-allowed';
+  'w-full rounded border border-[#C9CDD8] bg-white px-4 py-3 text-ink placeholder:text-text-muted focus:border-action focus:outline-none focus:ring-2 focus:ring-action/30 transition disabled:opacity-60 disabled:cursor-not-allowed';
 
 export default function ContactForm() {
   const [status, setStatus] = useState<Status>('idle');
@@ -72,7 +72,7 @@ export default function ContactForm() {
       <div
         role="status"
         aria-live="polite"
-        className="bg-white border border-border-light border-l-4 border-l-accent rounded-lg p-8 shadow-sm"
+        className="bg-white border border-hairline rounded-md p-8"
       >
         <div className="flex items-start gap-3">
           <CheckCircle2

@@ -60,6 +60,7 @@ from app.models import (
     Bank,
     CanonicalCounterparty,
     CanonicalGlAccount,
+    CanonicalLoanEvent,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
@@ -413,13 +414,16 @@ def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orches
         )
 
     batch.status = "validating"
-    known_counterparties, known_products, known_gl_accounts = _known_references(db, ctx, bank)
+    known_counterparties, known_products, known_gl_accounts, known_positions = _known_references(
+        db, ctx, bank
+    )
     context = ValidationContext(
         as_of_date=payload.as_of_date,
         prior_balances=_prior_balances(db, ctx, bank, payload.as_of_date),
         known_counterparties=known_counterparties,
         known_products=known_products,
         known_gl_accounts=known_gl_accounts,
+        known_positions=known_positions,
     )
     outcome = run_validation(
         records,
@@ -1290,6 +1294,8 @@ def _unvalidated_records(
         count("product", product.source_reference)
     for position in records.positions:
         count("position", position.source_reference)
+    for event in records.loan_events:
+        count("loan_event", event.source_reference)
     return missing
 
 
@@ -1344,6 +1350,8 @@ def _tables_breakdown(
         count_status("product", product.source_reference, product.source_locator)
     for position in records.positions:
         count_status("position", position.source_reference, position.source_locator)
+    for event in records.loan_events:
+        count_status("loan_event", event.source_reference, event.source_locator)
     for row in records.reference_rows:
         count_status("reference_row", f"{row.dataset_kind}:{row.row_index}", row.source_locator)
 
@@ -1480,7 +1488,7 @@ def _lineage(  # noqa: PLR0913 - mirrors record_event's shape
 
 def _known_references(
     db: Session, ctx: TenantContext, bank: Bank
-) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+) -> tuple[frozenset[str], frozenset[str], frozenset[str], frozenset[str]]:
     """Current-generation canonical references already ingested for the bank."""
 
     def current(column, model) -> frozenset[str]:
@@ -1499,6 +1507,7 @@ def _known_references(
         current(CanonicalCounterparty.source_reference, CanonicalCounterparty),
         current(CanonicalProduct.product_code, CanonicalProduct),
         current(CanonicalGlAccount.account_code, CanonicalGlAccount),
+        current(CanonicalPosition.source_reference, CanonicalPosition),
     )
 
 
@@ -1769,6 +1778,35 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
         supersede(current_snapshots, position.id, snapshot)
         new_snapshots.append(snapshot)
 
+    # Loan events: cumulative history, superseded per source_reference on a
+    # re-push (correcting one event replaces THAT event; history never needs
+    # re-sending wholesale). The facility link stays in source-reference terms.
+    current_events = current_by_key(
+        CanonicalLoanEvent.source_reference,
+        CanonicalLoanEvent,
+        CanonicalLoanEvent.source_system == batch.source_system,
+    )
+    new_events: list[CanonicalLoanEvent] = []
+    for data in records.loan_events:
+        event_row = CanonicalLoanEvent(
+            id=new_uuid7(),
+            as_of_date=batch.as_of_date,
+            source_system=batch.source_system,
+            source_reference=data.source_reference,
+            validation_status=status_of("loan_event", data.source_reference),
+            event_type=data.event_type,
+            event_subtype=data.event_subtype,
+            event_date=data.event_date,
+            position_source_reference=data.position_source_reference,
+            amount=data.amount,
+            currency=data.currency,
+            amount_ghs=data.amount_ghs,
+            attributes=data.attributes,
+            **common,
+        )
+        supersede(current_events, data.source_reference, event_row)
+        new_events.append(event_row)
+
     # Reference rows are batch-scoped; they share the batch's VALIDATION
     # lineage node like every other record of the batch (one node per batch,
     # not per row — cheap and consistent).
@@ -1805,6 +1843,7 @@ def _persist_canonical(  # noqa: PLR0913, PLR0915
     db.add_all(new_positions)
     db.flush()
     db.add_all(new_snapshots)
+    db.add_all(new_events)
     db.add_all(new_references)
     db.flush()
 

@@ -101,6 +101,8 @@ HIGHER_BETTER: frozenset[str] = frozenset(
         "asf_total_ghs",
         "provision_coverage_pct",
         "npl_coverage_pct",
+        # Credit: cash recovered on written-off facilities.
+        "recovery_12m_ghs",
         # Profitability, margin & contribution.
         "avg_roe_pct",
         "roe_pct",
@@ -132,9 +134,24 @@ LOWER_BETTER: frozenset[str] = frozenset(
         "npl_ratio_pct",
         "npl_pct",
         "gross_npl_ratio_pct",
+        "net_npl_ratio_pct",
         "past_due_pct",
         "par30_pct",
         "par90_pct",
+        # Credit module PAR keys (Notice 2025/23 outstanding-balance basis).
+        "par_30_pct",
+        "par_60_pct",
+        "par_90_pct",
+        "par_180_pct",
+        "par_360_pct",
+        "npl_exposure_ghs",
+        "olem_exposure_ghs",
+        "restructured_ratio_pct",
+        "unclassified_exposure_ghs",
+        # Credit concentration - a bigger single-name share or HHI is riskier.
+        "largest_single_name_share_pct",
+        "sector_hhi",
+        "employer_hhi",
         # Expected credit loss — larger allowances mean worse asset quality.
         "ecl_total_ghs",
         "ecl_general_ghs",
@@ -237,6 +254,30 @@ _LABELS: dict[str, str] = {
     "avg_roe_pct": "Average ROE",
     "ecl_total_ghs": "Total expected credit loss",
     "npl_ratio_pct": "NPL ratio",
+    # credit module
+    "gross_loans_ghs": "Gross loan book",
+    "npl_exposure_ghs": "Non-performing exposure",
+    "net_npl_ratio_pct": "Net NPL ratio",
+    "olem_exposure_ghs": "OLEM exposure",
+    "par_30_pct": "PAR 30",
+    "par_60_pct": "PAR 60",
+    "par_90_pct": "PAR 90",
+    "par_180_pct": "PAR 180",
+    "par_360_pct": "PAR 360",
+    "provision_required_ghs": "Provisions required",
+    "provision_held_ghs": "Provisions held",
+    "provision_general_ghs": "General provisions held",
+    "provision_coverage_pct": "Provision coverage",
+    "restructured_exposure_ghs": "Restructured exposure",
+    "restructured_ratio_pct": "Restructured ratio",
+    "restructure_held_count": "Restructured facilities still held NPL",
+    "unclassified_exposure_ghs": "Unclassified exposure",
+    "write_off_12m_ghs": "Write-offs (trailing 12m)",
+    "recovery_12m_ghs": "Recoveries (trailing 12m)",
+    "largest_single_name_share_pct": "Largest single-name share",
+    "sector_hhi": "Sector concentration (HHI)",
+    "employer_hhi": "Employer concentration (HHI)",
+    "loan_count": "Loan count",
 }
 
 # Finer sections within a module; unmapped keys fall back to the module section.
@@ -267,6 +308,17 @@ _SECTION_BY_KEY: dict[str, str] = {
     "ecl_stage2_ghs": "Capital resources & provisions",
     "ecl_stage3_ghs": "Capital resources & provisions",
     "npl_ratio_pct": "Asset quality",
+    # credit module: quality ratios group under Asset quality; the rest fall
+    # back to the module section ("Credit").
+    "net_npl_ratio_pct": "Asset quality",
+    "npl_exposure_ghs": "Asset quality",
+    "olem_exposure_ghs": "Asset quality",
+    "par_30_pct": "Asset quality",
+    "par_60_pct": "Asset quality",
+    "par_90_pct": "Asset quality",
+    "par_180_pct": "Asset quality",
+    "par_360_pct": "Asset quality",
+    "provision_coverage_pct": "Asset quality",
     # liquidity
     "lcr_pct": "Liquidity ratios",
     "nsfr_pct": "Liquidity ratios",
@@ -337,6 +389,7 @@ _SECTION_BY_KEY: dict[str, str] = {
 
 _MODULE_SECTION: dict[str, str] = {
     "capital": "Capital",
+    "credit": "Credit",
     "liquidity": "Liquidity",
     "irr": "Interest-rate risk",
     "fx": "FX risk",

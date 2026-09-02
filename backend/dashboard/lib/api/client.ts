@@ -8,6 +8,7 @@
 
 import {
   CreditParamsApi,
+  RegulatoryCreditApi,
   IntegrationKeysApi,
   LiquidityCfpApi,
   LiquidityMonitoringApi,
@@ -128,6 +129,7 @@ export const liquidityCfpApi = new LiquidityCfpApi(configuration);
 export const liquidityMonitoringApi = new LiquidityMonitoringApi(configuration);
 export const liquidityThresholdsApi = new LiquidityThresholdsApi(configuration);
 export const creditParamsApi = new CreditParamsApi(configuration);
+export const regulatoryCreditApi = new RegulatoryCreditApi(configuration);
 export const reverseStressApi = new ReverseStressApi(configuration);
 export const scenarioWorkbenchApi = new ScenarioWorkbenchApi(configuration);
 export const windowAnalyticsApi = new WindowAnalyticsApi(configuration);

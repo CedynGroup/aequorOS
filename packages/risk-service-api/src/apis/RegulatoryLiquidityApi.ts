@@ -16,6 +16,7 @@ import type {
   ErrorResponse,
   LiquidityDashboardRead,
   LiquidityScenarioBatchCreate,
+  RegulatoryModule,
   RegulatoryRunBatchRead,
   RegulatoryRunCreate,
   RegulatoryRunListRead,
@@ -30,6 +31,8 @@ import {
   LiquidityDashboardReadToJSON,
   LiquidityScenarioBatchCreateFromJSON,
   LiquidityScenarioBatchCreateToJSON,
+  RegulatoryModuleFromJSON,
+  RegulatoryModuleToJSON,
   RegulatoryRunBatchReadFromJSON,
   RegulatoryRunBatchReadToJSON,
   RegulatoryRunCreateFromJSON,
@@ -62,7 +65,7 @@ export interface GetRegulatoryRunRequest {
 
 export interface ListRegulatoryRunsRequest {
   bankId: string;
-  module?: ListRegulatoryRunsModuleEnum;
+  module?: RegulatoryModule | null;
   reportingPeriodId?: string | null;
   scenarioCode?: string | null;
   limit?: number;
@@ -500,19 +503,3 @@ export class RegulatoryLiquidityApi extends runtime.BaseAPI {
     return await response.value();
   }
 }
-
-/**
- * @export
- */
-export const ListRegulatoryRunsModuleEnum = {
-  Liquidity: "liquidity",
-  Capital: "capital",
-  Forecast: "forecast",
-  Optimizer: "optimizer",
-  Whatif: "whatif",
-  Irr: "irr",
-  Fx: "fx",
-  Ftp: "ftp",
-} as const;
-export type ListRegulatoryRunsModuleEnum =
-  (typeof ListRegulatoryRunsModuleEnum)[keyof typeof ListRegulatoryRunsModuleEnum];

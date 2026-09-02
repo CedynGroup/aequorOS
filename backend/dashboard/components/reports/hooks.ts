@@ -20,6 +20,7 @@ import { fmtDateUTC } from '@/lib/api/values';
 export const MODULE_HREFS: Record<string, string> = {
   liquidity: '/liquidity',
   capital: '/basel',
+  credit: '/credit',
   irr: '/irr',
   fx: '/fx',
   ftp: '/ftp',
@@ -34,6 +35,7 @@ export const MODULE_HREFS: Record<string, string> = {
 export const MODULE_LABELS: Record<string, string> = {
   liquidity: 'Liquidity',
   capital: 'Basel Capital',
+  credit: 'Credit',
   irr: 'IRRBB',
   fx: 'FX Risk',
   ftp: 'FTP',

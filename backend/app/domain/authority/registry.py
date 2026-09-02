@@ -2353,6 +2353,62 @@ REGISTRY.register_all(
 
 _CREDIT_ENGINE = "app.domain.capital.loan_classification:classify_book"
 
+#: Every figure the credit run persists as a RegulatoryMetricResult, plus the
+#: legacy ``npl_ratio`` fraction id the SDI read-side already serves. One list
+#: for both regimes: registration says who OWNS a figure when it exists — a
+#: metric a class does not emit (OLEM for an SDI) simply never appears.
+#:
+#: Reporting mappings are PER METRIC because they are claims, and the
+#: declared-divergence ledger (tests/equivalence) classifies every one: the
+#: NPL-MONTHLY levels table carries exactly gross loans, the NPL stock, the
+#: ratio and the provisions-held/coverage rows; the PAR measures and the
+#: unclassified balance reach NO return today (module views only), and
+#: claiming a mapping they do not have failed the gate — so they claim none.
+_CREDIT_METRIC_IDS = (
+    "npl_ratio",
+    "npl_ratio_pct",
+    "gross_loans_ghs",
+    "npl_exposure_ghs",
+    "total_provision_required_ghs",
+    "provision_held_ghs",
+    "provision_coverage_pct",
+    "par_30_pct",
+    "par_60_pct",
+    "par_90_pct",
+    "unclassified_exposure_ghs",
+)
+
+_CREDIT_NPL_MONTHLY_IDS = frozenset(
+    {
+        "gross_loans_ghs",
+        "npl_exposure_ghs",
+        "npl_ratio_pct",
+        "provision_held_ghs",
+        "provision_coverage_pct",
+    }
+)
+
+#: The pre-credit-module BSD claims: BSD5A/BSD8 bind classification-grid data
+#: through their own line maps for these two figures (ledgered UNPROVEN).
+_CREDIT_BSD_IDS = frozenset({"npl_ratio", "total_provision_required_ghs"})
+
+
+def _credit_mappings(metric_id: str, *, bank: bool) -> tuple[str, ...]:
+    mappings: tuple[str, ...] = ()
+    if bank and metric_id in _CREDIT_BSD_IDS:
+        mappings += ("BSD5A", "BSD8")
+    if metric_id in _CREDIT_NPL_MONTHLY_IDS:
+        mappings += ("NPL-MONTHLY",)
+    return mappings
+
+
+def _credit_designation(metric_id: str, *, bank: bool) -> AdvisoryDesignation:
+    """FILED exactly where a return carries the figure; the rest of the sealed
+    credit metrics are board/supervisor analytics until a return binds them."""
+    if _credit_mappings(metric_id, bank=bank):
+        return AdvisoryDesignation.FILED
+    return AdvisoryDesignation.SUPERVISORY_MONITORING
+
 REGISTRY.register_all(
     [
         MetricAuthority(
@@ -2363,12 +2419,12 @@ REGISTRY.register_all(
             regulator=_BOG,
             regime=Regime.CRD_BASEL,
             methodology_id="bog_five_grade_classification",
-            return_family="bsd",
+            return_family="bsd",  # BSD5A/BSD8 remain the bank's classification returns
             effective_from=_EPOCH,
             canonical_inputs=("position:canonical_loan", "fact:days_past_due", "fact:ifrs9_stage"),
             policy_resolver=_PARAMS_CONTROL,
             calculation_engine=_CREDIT_ENGINE,
-            calculation_version=EXTERNAL_REGULATORY_VERIFICATION_REQUIRED,
+            calculation_version="regulatory-credit-v1.0.0",
             parameter_set=(
                 "prov_standard",
                 "prov_olem",
@@ -2381,17 +2437,19 @@ REGISTRY.register_all(
                 "dpd_doubtful_min",
                 "dpd_loss_min",
             ),
-            authoritative_run_type=None,
-            reporting_mappings=("BSD5A", "BSD8"),
+            authoritative_run_type="credit",
+            reporting_mappings=_credit_mappings(metric_id, bank=True),
             expected_tolerance=Decimal("0"),
             approved_alternate_methodologies=("nbfi_four_grade_classification",),
             forbidden_alternative_sources=_FORBID_CASE_PLANE,
-            advisory_designation=AdvisoryDesignation.FILED,
+            advisory_designation=_credit_designation(metric_id, bank=True),
             authority_reference="BoG loan classification (5-grade: standard/olem/substandard/"
             "doubtful/loss)",
-            notes="Same engine as the SDI grid; the GRADE SET and provisioning rates differ.",
+            notes="Same engine as the SDI grid; the GRADE SET and provisioning rates differ. "
+            "Sealed by RegulatoryRun(module='credit') from credit PR-2; the NPL prudential "
+            "ceiling is Notice BG/GOV/SEC/2025/23 (npl_limit_pct).",
         )
-        for metric_id in ("npl_ratio", "total_provision_required_ghs")
+        for metric_id in _CREDIT_METRIC_IDS
     ]
 )
 
@@ -2405,12 +2463,12 @@ REGISTRY.register_all(
             regulator=_BOG,
             regime=Regime.ACT930_S29,
             methodology_id="nbfi_four_grade_classification",
-            return_family=None,
+            return_family="credit",
             effective_from=_EPOCH,
             canonical_inputs=("position:canonical_loan", "fact:days_past_due", "fact:ifrs9_stage"),
             policy_resolver=_PARAMS_CONTROL,
             calculation_engine=_CREDIT_ENGINE,
-            calculation_version=EXTERNAL_REGULATORY_VERIFICATION_REQUIRED,
+            calculation_version="regulatory-credit-v1.0.0",
             parameter_set=(
                 "prov_standard",
                 "prov_substandard",
@@ -2421,17 +2479,21 @@ REGISTRY.register_all(
                 "dpd_doubtful_min",
                 "dpd_loss_min",
             ),
-            authoritative_run_type=None,
-            reporting_mappings=(),
+            authoritative_run_type="credit",
+            reporting_mappings=_credit_mappings(metric_id, bank=False),
             expected_tolerance=Decimal("0"),
             approved_alternate_methodologies=("bog_five_grade_classification",),
             forbidden_alternative_sources=_FORBID_CASE_PLANE,
-            advisory_designation=AdvisoryDesignation.SUPERVISORY_MONITORING,
+            # FILED since credit PR-6 for the figures the NPL-MONTHLY return
+            # (Notice 2025/23, in force) actually carries for an SDI.
+            advisory_designation=_credit_designation(metric_id, bank=False),
             authority_reference="NBFI Business Rules 2000, rules 17-19 (4-grade: standard/"
             "substandard/doubtful/loss)",
-            notes="No OLEM grade; provisioning rates 0/20/50/100 rather than 1/10/25/50/100.",
+            notes="No OLEM grade; provisioning rates 0/20/50/100 rather than 1/10/25/50/100. "
+            "Sealed by RegulatoryRun(module='credit'); flips to FILED when the NPL-MONTHLY "
+            "return registers (credit PR-6).",
         )
-        for metric_id in ("npl_ratio", "total_provision_required_ghs")
+        for metric_id in _CREDIT_METRIC_IDS
     ]
 )
 
@@ -2469,6 +2531,45 @@ REGISTRY.register_all(
         )
         for metric_id in ("ecl_total_ghs", "ecl_general_ghs", "ecl_specific_ghs")
     ]
+)
+
+
+# --- CREDIT: migration-implied loan-book PD (advisory only; credit PR-8) ---
+
+REGISTRY.register(
+    MetricAuthority(
+        metric_id="credit_pd_12m_pct",
+        metric_family=MetricFamily.CREDIT,
+        institution_class=InstitutionClass.ALL,
+        jurisdiction=_GH,
+        regulator="internal",
+        regime=Regime.ADVISORY_INTERNAL,
+        methodology_id="aequoros_migration_implied_pd",
+        return_family=None,
+        effective_from=_EPOCH,
+        canonical_inputs=("position:canonical_loan", "fact:days_past_due", "fact:ifrs9_stage"),
+        policy_resolver=_PARAMS_CONTROL,
+        calculation_engine="app.domain.credit.pd:estimate_pd",
+        calculation_version="regulatory-credit-v1.0.0",
+        parameter_set=(),
+        authoritative_run_type=None,
+        reporting_mappings=(),
+        expected_tolerance=Decimal("0"),
+        forbidden_alternative_sources=_FORBID_CASE_PLANE + _FORBID_CLIENT,
+        advisory_designation=AdvisoryDesignation.ADVISORY_ONLY,
+        authority_reference=(
+            "Internal AequorOS methodology (pooled monthly grade-to-NPL hazard, annualised) - "
+            "no external regulatory authority. No BoG instrument prescribes a PD methodology "
+            "for a loan book's internal analytics, and none is claimed."
+        ),
+        notes=(
+            "Served ONLY by GET /banks/{id}/credit/pd (regulatory_credit.get_credit_pd). "
+            "Never sealed into a RegulatoryRun, never a live-plane key, feeds no return. "
+            "Founder-directed first PD model (2026-09-01): the estimator exists to build "
+            "the evidence base; its outputs surface as SUGGESTED ParamEclAssumption rows "
+            "the approver may adopt by hand - the platform never writes the register."
+        ),
+    )
 )
 
 
@@ -2524,6 +2625,11 @@ def _rating(metric_id: str, *, engine: str, notes: str = "") -> MetricAuthority:
             "live:liquidity",
             "live:irr",
             "live:fx",
+            # OPTIONAL since credit PR-9: when the credit module has computed,
+            # its governed npl_ratio_pct / provision_coverage_pct replace the
+            # past-due-90 and general-provision fact proxies (sealed path reads
+            # the sealed credit baseline). Absent -> proxies, byte-identical.
+            "live:credit",
             "reference:sovereign_counterparty_rating",
             "param:desk_methodology.AEQ-GHS-BANK-PD",
         ),

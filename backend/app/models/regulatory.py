@@ -116,7 +116,8 @@ class BankFinancialFact(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "'lcr_inflow', 'market_risk', 'operational_income', 'capital_component', "
             "'deposit_behavior', 'irr_position', 'irr_swap', 'fx_position', "
             "'fx_return_history', 'fx_hedge', 'ftp_curve_point', 'ftp_product', "
-            "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral', 'cashflow')",
+            "'ftp_branch', 'ftp_nmd', 'ecl_exposure', 'crm_collateral', "
+            "'provision_held', 'cashflow')",
             name="ck_bank_financial_facts_fact_group",
         ),
         ForeignKeyConstraint(
@@ -285,6 +286,68 @@ class ParamCapitalThreshold(RegulatoryParameterMixin, Base):
     threshold_code: Mapped[str] = mapped_column(String(40), nullable=False)
     # Numeric(12, 6) rather than Numeric(9, 6): threshold values such as the
     # 1250 (12.5x expressed as a percent) RWA multiplier exceed Numeric(9, 6).
+    value_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+
+
+class ParamConcentrationLimit(RegulatoryParameterMixin, Base):
+    """Board credit-concentration limits (BoG Concentration Guidelines, Sept 2025).
+
+    The Guidelines require a Board limit structure per concentration dimension
+    (§D: limits defined against capital or total assets, with breach
+    escalation) but prescribe NO numeric values — so this register starts
+    EMPTY and every row is a Board decision with the mixin's approval
+    evidence. An absent limit renders "Not set" on the monitor, never an
+    invented number. ``bucket_key`` scopes a limit to one named bucket (a
+    single employer, a named sector); NULL applies the limit to the
+    dimension's largest bucket.
+    """
+
+    __tablename__ = "param_concentration_limit"
+    __table_args__ = (
+        CheckConstraint(
+            "dimension IN ('single_name', 'sector', 'geography', 'product', "
+            "'collateral', 'funding', 'employer')",
+            name="ck_param_concentration_limit_dimension",
+        ),
+        CheckConstraint(
+            "limit_kind IN ('share_of_book_pct', 'share_of_capital_pct', 'hhi')",
+            name="ck_param_concentration_limit_kind",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "dimension",
+            "limit_kind",
+            "bucket_key",
+            "effective_from",
+            name="uq_param_concentration_limit_scope",
+        ),
+    )
+
+    dimension: Mapped[str] = mapped_column(String(24), nullable=False)
+    limit_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    bucket_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: Percent for the share kinds; the raw index value (0-10,000) for ``hhi``.
+    value: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+
+
+class ParamCreditThreshold(RegulatoryParameterMixin, Base):
+    """Board credit early-warning trigger levels (watch/action bands the credit
+    EWIs compare against). Starts EMPTY for the same reason as the
+    concentration limits: no instrument prescribes the values."""
+
+    __tablename__ = "param_credit_threshold"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "threshold_code",
+            "effective_from",
+            name="uq_param_credit_threshold_scope",
+        ),
+    )
+
+    threshold_code: Mapped[str] = mapped_column(String(60), nullable=False)
     value_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
 
 

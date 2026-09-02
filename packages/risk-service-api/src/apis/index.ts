@@ -38,6 +38,7 @@ export * from "./NotificationsApi";
 export * from "./OrganizationApi";
 export * from "./ReconciliationApi";
 export * from "./RegulatoryCapitalApi";
+export * from "./RegulatoryCreditApi";
 export * from "./RegulatoryFtpApi";
 export * from "./RegulatoryFxApi";
 export * from "./RegulatoryIrrApi";

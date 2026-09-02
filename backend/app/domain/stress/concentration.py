@@ -48,6 +48,11 @@ DIM_SECTOR = "sector"
 DIM_GEOGRAPHY = "geography"
 DIM_PRODUCT = "product"
 DIM_COLLATERAL = "collateral"
+#: Employer of the borrower (payroll / check-off lending). Added for the
+#: standing credit-concentration monitor (credit PR-3); informational here —
+#: no stress loss and no Pillar-2 charge — so every existing stress output is
+#: byte-identical when the field is absent.
+DIM_EMPLOYER = "employer"
 DIM_FUNDING = "funding"
 
 
@@ -92,6 +97,10 @@ class ConcentrationExposure:
     geography: str | None = None
     product: str | None = None
     collateral_type: str | None = None
+    #: Borrower's employer for payroll/check-off lending (``attributes.employer``);
+    #: ``None`` = not stated, the exposure simply does not contribute to the
+    #: employer dimension.
+    employer: str | None = None
     on_balance: bool = True
 
 
@@ -242,6 +251,7 @@ def compute_concentration(inputs: ConcentrationInputs) -> ConcentrationResult:
             (DIM_GEOGRAPHY, "geography"),
             (DIM_PRODUCT, "product"),
             (DIM_COLLATERAL, "collateral_type"),
+            (DIM_EMPLOYER, "employer"),
         )
     )
 

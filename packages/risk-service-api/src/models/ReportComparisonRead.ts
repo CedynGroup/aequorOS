@@ -98,6 +98,7 @@ export type ReportComparisonReadModeEnum =
 export const ReportComparisonReadModuleEnum = {
   Liquidity: "liquidity",
   Capital: "capital",
+  Credit: "credit",
   Irr: "irr",
   Fx: "fx",
   Ftp: "ftp",

@@ -1,218 +1,144 @@
 import type { Metadata } from 'next';
-import SectionLabel from '@/components/SectionLabel';
-import TeamMember from '@/components/TeamMember';
-import ProductFrame from '@/components/ProductFrame';
+import Image from 'next/image';
+import Kicker from '@/components/Kicker';
+import PageHeader from '@/components/PageHeader';
 import { LinkButton } from '@/components/Button';
-import { team } from '@/lib/team';
-import { heroScreen } from '@/lib/product-screens';
 
 export const metadata: Metadata = {
   title: 'Company — AequorOS',
   description:
-    'AequorOS builds Treasury and ALM infrastructure for African banks. Founded in 2025 with a live product platform, working across Winchester, VA and Accra, Ghana. Meet the founder and CTO.',
+    'Founded in 2025, working between Accra and Winchester, Virginia. The product is built and running; the first design-partner conversations are underway.',
 };
 
-const statusCards = [
+const team = [
   {
-    title: 'Platform',
-    status: 'LIVE',
-    body: 'End-to-end product: Data Engine, six ALM engines, and regulatory reporting — the working UI is shown publicly on this site, running on a synthetic bank profile.',
+    name: 'Eric Inkoom Danso',
+    role: 'Founder & CEO · Winchester, VA / Accra',
+    photo: '/images/founder.jpg',
+    bio: "Quantitative analyst in capital markets and economic risk: Basel regulatory capital, RWA modeling, derivatives, and stress testing. Dual master's in Quantitative Finance and Risk Analysis, RPI. Two prior products shipped and live.",
+    linkedin: 'https://linkedin.com/in/eidanso',
+    linkedinLabel: 'linkedin.com/in/eidanso',
   },
   {
-    title: 'Data Engine',
-    status: 'LIVE',
-    body: 'File upload and secure API push are available today, and Oracle read-only extraction ships in the standard deployment. Other database backends and core-banking adapters are built and tested but need a driver-carrying deployment image and vendor onboarding.',
-  },
-  {
-    title: 'Regulatory reporting',
-    status: 'LIVE',
-    body: 'Bank of Ghana BSD prudential returns generated in the regulator’s own workbook layouts, export-ready to Excel, CSV, and PDF for officer review and signature. CBN and SARB share the same engine on the roadmap.',
-  },
-  {
-    title: 'Pilot banks',
-    status: 'IN DISCUSSION',
-    body: 'We are in conversation with a first cohort of design-partner banks. No bank is in production on the platform yet, and no return has been filed with the Bank of Ghana.',
+    name: 'Dela Anthonio',
+    role: 'Chief Technology Officer · Washington DC area',
+    photo: '/images/dela.jpg',
+    bio: 'Software engineer focused on scalable backend systems and modernizing critical infrastructure without disrupting production. Computer Science, Virginia Tech. Leads architecture, platform engineering, and reliability.',
+    linkedin: 'https://linkedin.com/in/delaanthonio',
+    linkedinLabel: 'linkedin.com/in/delaanthonio',
   },
 ];
 
 export default function CompanyPage() {
   return (
     <>
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-24 lg:py-28">
-          <div className="max-w-4xl">
-            <SectionLabel>OUR COMPANY</SectionLabel>
-            <h1 className="mt-6 font-serif font-bold text-navy text-4xl md:text-5xl lg:text-6xl leading-[1.1]">
-              Treasury and risk infrastructure, built for African banks.
-            </h1>
-            <p className="mt-8 text-text-muted text-lg leading-relaxed max-w-[720px]">
-              Founded in 2025, working across Winchester, Virginia and Accra,
-              Ghana. The product is built and running — Data Engine through
-              regulatory returns — and we&apos;re in conversation with our first
-              design-partner banks.
+      <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16">
+        <PageHeader
+          kicker="The company"
+          title="Why we're building this."
+          lede="Founded in 2025, working between Accra and Winchester, Virginia. The product is built and running; the first design-partner conversations are underway."
+        />
+
+        {/* Mission */}
+        <div className="grid md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] gap-8 md:gap-20 pb-16 md:pb-20">
+          <h2 className="font-serif font-medium text-[28px] md:text-[34px] leading-[1.15] tracking-tight">
+            Africa&apos;s banks deserve infrastructure built for their world.
+          </h2>
+          <div className="flex flex-col gap-4">
+            <p className="text-[16.5px] leading-[1.7] text-ink-soft">
+              Africa&apos;s banking sector manages more than two trillion
+              dollars in assets, largely on infrastructure designed for a
+              different context: large institutions, stable currencies, mature
+              regulatory regimes. The tools never quite fit, so most banks fell
+              back on spreadsheets and consultants.
+            </p>
+            <p className="text-[16.5px] leading-[1.7] text-ink-soft">
+              We think a mid-tier African bank deserves the computational
+              backbone a Tier 1 institution takes for granted, at a price it
+              can justify. A bank that can see its liquidity, capital, and risk
+              clearly can lend more, serve more customers, and stand firmer
+              through a shock.
             </p>
           </div>
         </div>
-      </section>
 
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pb-16 md:pb-20 lg:pb-24">
-          <div className="grid lg:grid-cols-[1fr,1fr] gap-12 lg:gap-16 items-start">
-            <div>
-              <SectionLabel>MISSION</SectionLabel>
-              <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-                Why we&apos;re building this.
-              </h2>
-              <div className="mt-8 space-y-6 text-text-primary text-base md:text-lg leading-relaxed max-w-[800px]">
-                <p>
-                  Africa&apos;s banking sector manages over $2 trillion in
-                  assets and serves hundreds of millions of customers. But the
-                  infrastructure banks rely on to manage that capital was built
-                  for a different context — large, slow-moving institutions in
-                  stable currencies under mature regulatory frameworks.
-                </p>
-                <p>
-                  African banks need something different: tools that are
-                  affordable, quick to stand up, and built for volatile
-                  currencies, fast-moving regulation, and the core banking
-                  systems that actually run finance on the continent.
-                </p>
-                <p>
-                  When a mid-tier African bank can manage liquidity, capital,
-                  and risk with infrastructure it can afford, it can extend more
-                  credit, serve more customers, and hold up better through a
-                  shock. That is how the financial system gets stronger.
-                </p>
-              </div>
-            </div>
-
-            <aside className="bg-navy-deep text-white rounded-lg p-8 md:p-10 border-l-4 border-accent lg:sticky lg:top-24">
-              <p className="font-serif italic text-white text-xl md:text-2xl leading-relaxed">
-                &ldquo;African banks are being asked for Tier 1 rigor with
-                spreadsheet tools. We build the computational backbone that lets
-                them manage liquidity, capital, and risk safely — at a price a
-                mid-tier bank can actually afford.&rdquo;
-              </p>
-              <p className="mt-6 text-ice-blue text-sm">
-                Eric Inkoom Danso, Founder &amp; CEO
-              </p>
-              <a
-                href="https://linkedin.com/in/eidanso"
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 inline-block text-accent text-sm font-medium hover:underline"
-              >
-                linkedin.com/in/eidanso
-              </a>
-            </aside>
-          </div>
+        {/* Founder pull quote */}
+        <div className="pb-16 md:pb-20">
+          <blockquote className="bg-navy-deep rounded-md px-8 md:px-14 py-12 flex flex-col gap-4">
+            <p className="font-serif text-xl md:text-[27px] leading-[1.4] text-white max-w-4xl">
+              &ldquo;African banks are being asked for Tier 1 rigor with
+              spreadsheet tools. We build the computational backbone that lets
+              them manage liquidity, capital, and risk safely &mdash; at a
+              price a mid-tier bank can actually afford.&rdquo;
+            </p>
+            <cite className="not-italic text-sm text-white/65">
+              Eric Inkoom Danso · Founder &amp; CEO
+            </cite>
+          </blockquote>
         </div>
-      </section>
 
-      {/* Product proof on company page for Google/transparency reviewers */}
-      <section className="bg-soft-bg">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20">
-          <div className="max-w-3xl mb-10">
-            <SectionLabel>THE PRODUCT</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              A working platform, not a pitch-deck mockup.
+        {/* Team */}
+        <div className="pb-16 md:pb-20">
+          <div className="flex flex-col gap-3.5 mb-10 max-w-2xl">
+            <Kicker>The team</Kicker>
+            <h2 className="font-serif font-medium text-3xl md:text-[38px] leading-[1.12] tracking-tight">
+              Verifiable on LinkedIn, reachable by email.
             </h2>
-            <p className="mt-4 text-text-muted text-lg leading-relaxed">
-              The product interface is public on this domain — no login required
-              to evaluate what we&apos;ve built.
-            </p>
           </div>
-          <div className="max-w-5xl">
-            <ProductFrame
-              screen={heroScreen}
-              tone="light"
-              showCaption
-              sizes="(max-width: 1024px) 100vw, 1024px"
-            />
-          </div>
-          <div className="mt-8">
-            <LinkButton href="/product#product-ui" variant="secondary-on-light">
-              Browse full product UI
-            </LinkButton>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <SectionLabel>{team.length > 1 ? 'TEAM' : 'FOUNDER'}</SectionLabel>
-          <p className="mt-4 text-text-muted max-w-2xl leading-relaxed">
-            Core team, verifiable on LinkedIn. We build in public enough for a
-            bank or partner to know who they are talking to.
-          </p>
-          <div className="mt-10 space-y-16 lg:space-y-24">
+          <div className="grid md:grid-cols-2 gap-7">
             {team.map((member) => (
-              <TeamMember key={member.name} member={member} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-soft-bg">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <SectionLabel>WHERE WE ARE</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Product built. Pilots in discussion.
-            </h2>
-          </div>
-
-          <div className="mt-12 grid gap-6 md:grid-cols-2">
-            {statusCards.map((card) => (
-              <article
-                key={card.title}
-                className="bg-white border border-border-light border-l-4 border-l-accent rounded-lg p-7"
+              <div
+                key={member.name}
+                className="bg-white border border-hairline rounded-md p-7 md:p-8 flex flex-col sm:flex-row gap-6"
               >
-                <div className="flex items-baseline justify-between gap-4">
-                  <h3 className="font-serif font-bold text-navy text-xl">
-                    {card.title}
-                  </h3>
-                  <span className="text-accent text-xs font-semibold tracking-[0.15em]">
-                    {card.status}
-                  </span>
+                <Image
+                  src={member.photo}
+                  alt={member.name}
+                  width={120}
+                  height={120}
+                  sizes="120px"
+                  className="h-[120px] w-[120px] rounded-md object-cover shrink-0"
+                />
+                <div className="flex flex-col gap-2">
+                  <p className="text-[19px] font-semibold text-ink">
+                    {member.name}
+                  </p>
+                  <p className="text-[13.5px] text-text-muted">{member.role}</p>
+                  <p className="text-[14.5px] leading-[1.6] text-ink-soft">
+                    {member.bio}
+                  </p>
+                  <a
+                    href={member.linkedin}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[13.5px] font-medium text-action hover:text-action-dark transition-colors"
+                  >
+                    {member.linkedinLabel}
+                  </a>
                 </div>
-                <p className="mt-4 text-text-primary leading-relaxed">
-                  {card.body}
-                </p>
-              </article>
+              </div>
             ))}
           </div>
-
-          <div className="mt-10 flex flex-col sm:flex-row gap-4">
-            <LinkButton href="/contact" variant="primary">
-              Request a demo
-            </LinkButton>
-            <LinkButton href="/product" variant="secondary-on-light">
-              See the product
-            </LinkButton>
-          </div>
         </div>
-      </section>
 
-      <section className="bg-navy-deep text-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20 md:py-24">
-          <div className="max-w-[800px] mx-auto text-center">
-            <h2 className="font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
+        {/* Status + join */}
+        <div className="border-t border-hairline pt-14 pb-24 flex flex-col md:flex-row md:items-center md:justify-between gap-10">
+          <div className="flex flex-col gap-2.5 max-w-2xl">
+            <h2 className="font-serif font-medium text-[28px] md:text-[34px] leading-[1.15] tracking-tight">
               Join us early.
             </h2>
-            <p className="mt-6 text-ice-blue text-lg leading-relaxed">
-              We&apos;re looking for design-partner banks, advisors, engineers,
-              and investors who want to build the financial infrastructure
-              African banks have been waiting for.
+            <p className="text-[16px] leading-[1.65] text-ink-soft">
+              The working platform is public on this site; pilots are in
+              discussion. We&apos;re looking for design-partner banks,
+              advisors, engineers, and investors who want to build this with
+              us.
             </p>
-            <div className="mt-10 flex justify-center">
-              <LinkButton href="/contact" variant="primary-on-dark">
-                Request a demo
-              </LinkButton>
-            </div>
           </div>
+          <LinkButton href="/contact" variant="primary" className="shrink-0">
+            Start a conversation
+          </LinkButton>
         </div>
-      </section>
+      </div>
     </>
   );
 }

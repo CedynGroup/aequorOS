@@ -69,6 +69,7 @@ def default_validation_config() -> ValidationConfig:
             RuleConfig(name="structural_duplicate_source_references", severity="ERROR"),
             RuleConfig(name="structural_unresolved_references", severity="ERROR"),
             RuleConfig(name="structural_unknown_counterparty", severity="WARNING"),
+            RuleConfig(name="loan_event_integrity", severity="WARNING"),
             RuleConfig(
                 name="position_rate_bounds",
                 severity="ERROR",
@@ -106,6 +107,7 @@ class ValidationContext:
     known_counterparties: frozenset[str] = frozenset()
     known_products: frozenset[str] = frozenset()
     known_gl_accounts: frozenset[str] = frozenset()
+    known_positions: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -262,6 +264,7 @@ def _record_keys(records: CanonicalRecords) -> list[tuple[str, str]]:
     keys.extend(("counterparty", record.source_reference) for record in records.counterparties)
     keys.extend(("product", record.source_reference) for record in records.products)
     keys.extend(("position", record.source_reference) for record in records.positions)
+    keys.extend(("loan_event", record.source_reference) for record in records.loan_events)
     # Reference rows carry no per-field rules yet, but they participate in
     # record statuses so batch counters (accepted/blocked) include them.
     keys.extend(
@@ -599,10 +602,72 @@ def _rule_lmtd_classification_coverage(
     return findings
 
 
+def _rule_loan_event_integrity(
+    records: CanonicalRecords,
+    rule: RuleConfig,
+    context: ValidationContext,
+    outcome: ValidationOutcome,
+) -> list[Finding]:
+    """Loan-event vocabulary + linkage (credit PR-4).
+
+    * ``event_type`` must be in ``LOAN_EVENT_TYPES``; a typed subtype must be
+      in that type's vocabulary (the Notice 2025/23 classifications).
+    * ``amount`` must be positive — an event is a movement, and a signed or
+      zero movement is a data error, not a convention.
+    * The referenced facility must exist in this batch or previously ingested
+      state; unknown references degrade to the rule's severity (an event file
+      routinely arrives in a later batch than its loan, so the DEFAULT is
+      WARNING, unlike position references).
+    """
+    _ = outcome
+    from app.domain.ingestion.constants import (  # noqa: PLC0415 - avoids a module cycle
+        LOAN_EVENT_SUBTYPES,
+        LOAN_EVENT_TYPES,
+    )
+
+    known_positions = {
+        record.source_reference for record in records.positions
+    } | context.known_positions
+    findings: list[Finding] = []
+    for event in records.loan_events:
+        problems: list[str] = []
+        if event.event_type not in LOAN_EVENT_TYPES:
+            problems.append(f"unknown event_type {event.event_type!r}")
+        else:
+            vocabulary = LOAN_EVENT_SUBTYPES.get(event.event_type)
+            if event.event_subtype is not None and vocabulary is not None and (
+                event.event_subtype not in vocabulary
+            ):
+                problems.append(
+                    f"unknown {event.event_type} subtype {event.event_subtype!r}"
+                )
+        if event.amount <= 0:
+            problems.append(f"non-positive amount {event.amount}")
+        if known_positions and event.position_source_reference not in known_positions:
+            problems.append(
+                f"references facility {event.position_source_reference!r} not found in "
+                "this batch or previously ingested state"
+            )
+        if problems:
+            findings.append(
+                Finding(
+                    rule=rule.name,
+                    category="STRUCTURAL",
+                    severity=rule.severity,
+                    entity_type="loan_event",
+                    source_reference=event.source_reference,
+                    source_locator=event.source_locator,
+                    detail="; ".join(problems),
+                )
+            )
+    return findings
+
+
 _RULES = {
     "structural_duplicate_source_references": _rule_duplicate_source_references,
     "structural_unknown_counterparty": _rule_unknown_counterparty,
     "structural_unresolved_references": _rule_unresolved_references,
+    "loan_event_integrity": _rule_loan_event_integrity,
     "position_rate_bounds": _rule_position_rate_bounds,
     "currency_iso_4217": _rule_currency_iso_4217,
     "maturity_not_before_as_of": _rule_maturity_not_before_as_of,

@@ -247,6 +247,43 @@ def test_the_evidence_ledger_is_populated_from_the_sdi_authorities(
     assert any(item.available for item in evidence.values())
 
 
+def test_provision_coverage_evidence_is_real_since_credit_pr1(
+    db_session: Session,
+) -> None:
+    """Before credit PR-1 provisions HELD were not a derived figure and the
+    coverage evidence was pinned unavailable unconditionally. Both honest
+    outcomes must now exist: a book that states no ecl_provision_ghs still
+    reports coverage UNAVAILABLE with the reason (absent is not zero), and a
+    book that does state provisions yields a real coverage sourced from the
+    classification engine's provisions-held split - not the requirement."""
+    from tests.factories.canonical import (  # noqa: PLC0415
+        FIXTURE_AS_OF,
+        seed_canonical_fixture,
+    )
+
+    materialize_canonical_test_book(db_session)
+    bank = _sdi_bank(db_session)
+    evidence = {
+        item.code: item
+        for item in sdi_rating.collect_evidence(db_session, CTX, bank, AS_OF)
+    }
+    unstated = evidence["provision_coverage_pct"]
+    assert unstated.value is None
+    assert "no loan states ecl_provision_ghs" in (unstated.note or "")
+
+    seed_canonical_fixture(
+        db_session, organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID
+    )
+    db_session.flush()
+    evidence = {
+        item.code: item
+        for item in sdi_rating.collect_evidence(db_session, CTX, bank, FIXTURE_AS_OF)
+    }
+    coverage = evidence["provision_coverage_pct"]
+    assert coverage.value is not None
+    assert coverage.source == "loan_classification.provisions_held"
+
+
 def test_an_approved_methodology_produces_discriminating_component_scores(
     db_session: Session,
 ) -> None:

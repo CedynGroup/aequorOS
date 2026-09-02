@@ -447,6 +447,31 @@ SEED_PARAMETERS: tuple[ParamSpec, ...] = (
         "BoG loan classification (5-grade)",
         "confirmed",
     ),
+    # --- NPL prudential limits (Notice BG/GOV/SEC/2025/23, Aug 2025) -------
+    # The NPL-ratio ceiling (10%, compliance by end-Dec 2026) and the level at
+    # which dividend/bonus/loan-growth restrictions apply immediately (15%)
+    # bind banks AND SDIs alike, so both classes carry the same rows. The
+    # restructure cure counts implement ¶12: a restructured facility stays
+    # non-performing until 6 consecutive full repayments (4 for semi-annual
+    # schedules; a bullet cures only at full settlement — structural, unseeded).
+    *(
+        ParamSpec(
+            "institution_class",
+            klass,
+            code,
+            value,
+            unit,
+            "BoG Notice BG/GOV/SEC/2025/23 (Regulatory Measures to Reduce NPLs)",
+            "confirmed",
+        )
+        for klass in ("bank", "sdi")
+        for code, value, unit in (
+            ("npl_limit_pct", "10", "percent"),
+            ("npl_dividend_restriction_pct", "15", "percent"),
+            ("restructure_cure_payments", "6", "count"),
+            ("restructure_cure_payments_semi_annual", "4", "count"),
+        )
+    ),
     # --- loan-classification DPD boundaries (days) -------------------------
     ParamSpec(
         "institution_class",

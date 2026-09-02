@@ -1,79 +1,78 @@
 import Image from 'next/image';
 import type { ProductScreen } from '@/lib/product-screens';
 
-type Tone = 'dark' | 'light';
+type Variant = 'chrome-dark' | 'plain';
 
 type Props = {
   screen: ProductScreen;
   priority?: boolean;
-  tone?: Tone;
-  /** Show title + caption under the frame */
-  showCaption?: boolean;
+  /**
+   * 'chrome-dark' — browser-chrome treatment for the homepage hero on the navy
+   * band. 'plain' — hairline card with a soft shadow, the redesign's standard
+   * treatment everywhere else.
+   */
+  variant?: Variant;
   className?: string;
-  sizes?: string;
+  /** Must describe the layout slot exactly — one width fetched per view. */
+  sizes: string;
 };
 
 /**
- * Browser-chrome product capture — the primary proof surface for bank and
- * compliance reviewers who need to see a launched interface without logging in.
+ * Product capture — the site's proof surface. Captions live at call sites so
+ * each one appears exactly once across the site.
  */
 export default function ProductFrame({
   screen,
   priority = false,
-  tone = 'dark',
-  showCaption = false,
+  variant = 'plain',
   className = '',
-  sizes = '(max-width: 768px) 100vw, (max-width: 1280px) 90vw, 1100px',
+  sizes,
 }: Props) {
-  const chrome =
-    tone === 'dark'
-      ? 'bg-navy-deep border-white/10 shadow-2xl shadow-black/40'
-      : 'bg-white border-border-light shadow-xl shadow-navy/10';
-  const bar =
-    tone === 'dark'
-      ? 'bg-black/35 border-white/10'
-      : 'bg-soft-bg border-border-light';
-  const dot = tone === 'dark' ? 'bg-white/25' : 'bg-text-muted/30';
-  const urlText = tone === 'dark' ? 'text-ice-blue/70' : 'text-text-muted';
+  if (variant === 'chrome-dark') {
+    return (
+      <figure className={className}>
+        <div className="rounded-t-lg overflow-hidden border border-white/[0.18] border-b-0 shadow-[0_-18px_60px_rgba(0,0,0,0.35)]">
+          <div
+            className="flex items-center gap-2 h-[34px] px-3.5 bg-[#17202F] border-b border-white/[0.08]"
+            aria-hidden
+          >
+            <span className="h-[9px] w-[9px] rounded-full bg-white/[0.18]" />
+            <span className="h-[9px] w-[9px] rounded-full bg-white/[0.18]" />
+            <span className="ml-2 truncate text-[11.5px] text-white/45">
+              bank.aequoros.com · {screen.label}
+            </span>
+          </div>
+          <Image
+            src={screen.src}
+            alt={screen.alt}
+            width={2880}
+            height={1800}
+            priority={priority}
+            placeholder="blur"
+            blurDataURL={screen.blurDataURL}
+            sizes={sizes}
+            className="block w-full h-auto"
+          />
+        </div>
+      </figure>
+    );
+  }
 
   return (
     <figure className={className}>
-      <div className={`rounded-xl overflow-hidden border ${chrome}`}>
-        <div
-          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 border-b ${bar}`}
-          aria-hidden
-        >
-          <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
-          <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
-          <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
-          <span
-            className={`ml-2 sm:ml-3 flex-1 truncate rounded-md px-2.5 py-1 text-[11px] sm:text-xs font-medium ${urlText} ${
-              tone === 'dark' ? 'bg-white/5' : 'bg-white border border-border-light'
-            }`}
-          >
-            bank.aequoros.com · {screen.label}
-          </span>
-        </div>
+      <div className="rounded-lg overflow-hidden border border-[#DDDACF] shadow-[0_12px_40px_rgba(15,24,69,0.10)]">
         <Image
           src={screen.src}
           alt={screen.alt}
           width={2880}
           height={1800}
           priority={priority}
+          placeholder="blur"
+          blurDataURL={screen.blurDataURL}
           sizes={sizes}
-          className="w-full h-auto block"
+          className="block w-full h-auto"
         />
       </div>
-      {showCaption && (
-        <figcaption className="mt-4 max-w-3xl">
-          <p className="font-serif font-bold text-navy text-lg sm:text-xl">
-            {screen.title}
-          </p>
-          <p className="mt-2 text-text-muted text-sm sm:text-base leading-relaxed">
-            {screen.caption}
-          </p>
-        </figcaption>
-      )}
     </figure>
   );
 }

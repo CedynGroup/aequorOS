@@ -12,6 +12,7 @@ import { fmtPct } from '@/lib/format';
 export const LIVE_MODULE_LABELS: Record<LiveModule, string> = {
   liquidity: 'Liquidity',
   capital: 'Capital',
+  credit: 'Credit',
   irr: 'Interest Rate Risk',
   fx: 'FX Risk',
   ftp: 'Transfer Pricing',
@@ -22,6 +23,7 @@ export const LIVE_MODULE_LABELS: Record<LiveModule, string> = {
 export const LIVE_MODULE_HREFS: Record<LiveModule, string> = {
   liquidity: '/liquidity/monitoring',
   capital: '/basel',
+  credit: '/credit',
   irr: '/irr/limits',
   fx: '/fx/limits',
   ftp: '/ftp/products',
@@ -35,6 +37,7 @@ export type LivePrimaryMetric = { label: string; value: string };
 const PRIMARY_METRIC: Record<LiveModule, { key: string; label: string }> = {
   liquidity: { key: 'lcr_pct', label: 'LCR' },
   capital: { key: 'car_pct', label: 'CAR' },
+  credit: { key: 'npl_ratio_pct', label: 'NPL ratio' },
   irr: { key: 'eve_limit_pct', label: 'ΔEVE / Tier 1' },
   fx: { key: 'nop_pct_tier1', label: 'NOP / Tier 1' },
   ftp: { key: 'portfolio_nim_pct', label: 'Portfolio NIM' },

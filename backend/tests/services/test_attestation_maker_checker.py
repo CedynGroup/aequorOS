@@ -380,6 +380,14 @@ def test_a_missing_policy_does_not_disable_the_control(
     ``default_policy`` — preparer AND approver, signature required — so the
     preparer's certification still leaves the approver outstanding and the
     package unreleased.
+
+    This is the only case in this file that reaches object storage, and it needs
+    the in-memory client to say so. Every other case relaxes the policy, so no
+    signed PDF is produced and no storage client is ever built; here the strict
+    default means one is. Without the fixture the test resolves REAL storage —
+    which passes on a developer's machine, where ``.env`` configures MinIO, and
+    fails in CI, where nothing does. Reaching a live backend from the hermetic
+    suite is the defect either way.
     """
     monkeypatch.setattr(
         "app.services.attestation.artifact_signing.get_storage_client",

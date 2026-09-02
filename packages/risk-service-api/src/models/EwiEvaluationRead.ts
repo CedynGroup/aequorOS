@@ -46,13 +46,6 @@ import {
   EwiStatusToJSON,
   EwiStatusToJSONTyped,
 } from "./EwiStatus";
-import type { Value } from "./Value";
-import {
-  ValueFromJSON,
-  ValueFromJSONTyped,
-  ValueToJSON,
-  ValueToJSONTyped,
-} from "./Value";
 import type { EwiDirection } from "./EwiDirection";
 import {
   EwiDirectionFromJSON,
@@ -74,6 +67,13 @@ import {
   RecoveryPlanReferenceToJSON,
   RecoveryPlanReferenceToJSONTyped,
 } from "./RecoveryPlanReference";
+import type { Value1 } from "./Value1";
+import {
+  Value1FromJSON,
+  Value1FromJSONTyped,
+  Value1ToJSON,
+  Value1ToJSONTyped,
+} from "./Value1";
 import type { Detail } from "./Detail";
 import {
   DetailFromJSON,
@@ -168,10 +168,10 @@ export interface EwiEvaluationRead {
   unit: EwiUnit;
   /**
    *
-   * @type {Value}
+   * @type {Value1}
    * @memberof EwiEvaluationRead
    */
-  value?: Value;
+  value?: Value1;
   /**
    *
    * @type {WatchThreshold}
@@ -234,7 +234,7 @@ export function EwiEvaluationReadFromJSONTyped(
         : RecoveryPlanReferenceFromJSON(json["recovery_plan_reference"]),
     status: EwiStatusFromJSON(json["status"]),
     unit: EwiUnitFromJSON(json["unit"]),
-    value: json["value"] == null ? undefined : ValueFromJSON(json["value"]),
+    value: json["value"] == null ? undefined : Value1FromJSON(json["value"]),
     watchThreshold:
       json["watch_threshold"] == null
         ? undefined
@@ -270,7 +270,7 @@ export function EwiEvaluationReadToJSONTyped(
     ),
     status: EwiStatusToJSON(value["status"]),
     unit: EwiUnitToJSON(value["unit"]),
-    value: ValueToJSON(value["value"]),
+    value: Value1ToJSON(value["value"]),
     watch_threshold: WatchThresholdToJSON(value["watchThreshold"]),
   };
 }

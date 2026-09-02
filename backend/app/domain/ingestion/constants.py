@@ -358,3 +358,37 @@ TemenosConnectionStatus = Literal[
     "REPLACED_PENDING_DELETION",
     "DISABLED",
 ]
+
+# --- loan events (credit PR-4) ---------------------------------------------
+#: The loan-book FLOW vocabulary. Positions/snapshots hold stocks; these are
+#: the movements BoG Notice BG/GOV/SEC/2025/23 reports monthly (write-offs,
+#: recoveries, restructures) plus the disbursement/repayment legs BSD8's
+#: movement schedule asks for.
+LOAN_EVENT_TYPES: tuple[str, ...] = (
+    "DISBURSEMENT",
+    "REPAYMENT",
+    "WRITE_OFF",
+    "RECOVERY",
+    "RESTRUCTURE",
+)
+
+#: Per-type ``event_subtype`` vocabularies (validator-enforced, not a DB CHECK —
+#: the notice's classifications will grow). A type absent from this map takes
+#: no subtype.
+LOAN_EVENT_SUBTYPES: dict[str, tuple[str, ...]] = {
+    # Notice 2025/23 Appendix II 3a/3b split.
+    "WRITE_OFF": ("wilful", "non_wilful"),
+    # Appendix II table 4: recovery source.
+    "RECOVERY": ("property_collateral", "non_property_collateral", "unsecured"),
+    # Appendix II table 5: the eight restructure measures.
+    "RESTRUCTURE": (
+        "interest_only",
+        "reduced_payment",
+        "moratorium",
+        "arrears_capitalization",
+        "rate_reduction",
+        "maturity_extension",
+        "assisted_sale",
+        "rescheduled",
+    ),
+}

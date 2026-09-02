@@ -1,290 +1,401 @@
-import SectionLabel from '@/components/SectionLabel';
-import StatCard from '@/components/StatCard';
+import Link from 'next/link';
+import Kicker from '@/components/Kicker';
 import ProductFrame from '@/components/ProductFrame';
-import FeatureScreenGrid from '@/components/FeatureScreenGrid';
 import { LinkButton } from '@/components/Button';
-import {
-  heroScreen,
-  homepageFeatureScreens,
-} from '@/lib/product-screens';
+import { heroScreen, homepageFeatureScreens } from '@/lib/product-screens';
+
+const statusChips = [
+  { dot: 'bg-live', label: 'Platform live' },
+  { dot: 'bg-accent', label: 'Bank of Ghana return formats' },
+  { dot: 'bg-watch', label: 'Pilot cohort forming' },
+];
+
+const timeline = [
+  {
+    date: 'SEPT 2025',
+    text: 'Credit concentration guidelines issued for banks, savings & loans, and finance houses.',
+    terminal: false,
+  },
+  {
+    date: 'FEB 2026',
+    text: 'ICAAP, stress-testing, and two liquidity directives published for exposure.',
+    terminal: false,
+  },
+  {
+    date: 'DEC 2026',
+    text: 'NPL ratios must reach 10% or below. Board concentration frameworks due.',
+    terminal: false,
+  },
+  {
+    date: '1 JAN 2027',
+    text: 'Stated effective date across the new directives. Tier 1 rigor, every institution.',
+    terminal: true,
+  },
+];
+
+const engines = [
+  { name: 'Liquidity', href: '/product#module-liquidity' },
+  { name: 'Capital', href: '/product#module-capital' },
+  { name: 'Credit', href: '/product#module-credit' },
+  { name: 'Interest-rate risk', href: '/product#module-irr' },
+  { name: 'FX', href: '/product#module-fx' },
+  { name: 'FTP', href: '/product#module-ftp' },
+  { name: 'Forecasting', href: '/product#module-forecasting' },
+];
+
+const ledger = [
+  {
+    dot: 'bg-live',
+    title: 'LIVE TODAY',
+    rows: [
+      'Data Engine with file upload and secure API push',
+      'Seven calculation engines on one canonical book',
+      'Bank of Ghana BSD returns, generated and export-ready',
+      'Full audit trail, lineage, and reproducible runs',
+    ],
+  },
+  {
+    dot: 'bg-watch',
+    title: 'SET UP PER BANK',
+    rows: [
+      'Direct core-banking extracts, mapped to your chart of accounts during onboarding',
+      'Market-data vendor feeds, enabled after vendor onboarding checks',
+      "Behavioral models tuned to your institution's own history",
+    ],
+  },
+  {
+    dot: 'bg-accent',
+    title: "WHAT'S NEXT",
+    rows: [
+      'A first cohort of design-partner banks, onboarding now',
+      'Independent security audit ahead of production banking data',
+      'Nigeria (CBN) and South Africa (SARB) return formats on the same engine',
+    ],
+  },
+];
 
 export default function HomePage() {
   return (
     <>
-      {/* Hero — product-first */}
-      <section className="bg-navy-deep text-white overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pt-16 md:pt-20 lg:pt-24 pb-12 md:pb-16">
-          <div className="max-w-3xl">
-            <SectionLabel>BUILT FOR AFRICA · PILOTING IN GHANA</SectionLabel>
-            <h1 className="mt-6 font-serif font-bold text-white text-4xl md:text-5xl lg:text-6xl leading-[1.05] tracking-tight">
-              Treasury and ALM infrastructure for African banks.
-            </h1>
-            <p className="mt-6 text-ice-blue text-lg md:text-xl leading-relaxed max-w-[620px]">
-              Cloud-native balance sheet management, regulatory capital and
-              liquidity reporting, and risk modeling — fed by file upload, a
-              secure push API, or a read-only extract from the core your bank
-              already runs.
-            </p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-4">
-              <LinkButton href="/contact" variant="primary-on-dark">
-                Request a demo
-              </LinkButton>
-              <LinkButton href="/product#product-ui" variant="secondary">
-                See the product
-              </LinkButton>
-            </div>
-            <p className="mt-6 text-sm text-ice-blue/70">
-              Working platform · Data Engine, six ALM engines, and Bank of
-              Ghana return formats · onboarding our first design-partner banks
-            </p>
-          </div>
-
-          <div className="mt-12 md:mt-14 max-w-5xl">
-            <ProductFrame
-              screen={heroScreen}
-              priority
-              tone="dark"
-              sizes="(max-width: 1024px) 100vw, 1024px"
-            />
-            <p className="mt-4 text-sm text-ice-blue/60">
-              {heroScreen.title} — working product UI on a synthetic mid-tier
-              bank profile (Ghana pilot).
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Problem */}
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
-            <div>
-              <SectionLabel>THE GAP WE ADDRESS</SectionLabel>
-              <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-                African banks manage billions in assets using spreadsheets.
-              </h2>
-              <div className="mt-8 space-y-5 text-text-primary text-base md:text-lg leading-relaxed">
-                <p>
-                  Mid-tier banks across Ghana, Nigeria, Kenya, and South Africa
-                  still run Asset-Liability Management on Excel workbooks and
-                  quarterly Big 4 engagements. Global ALM vendors price at
-                  $50–200K+ per year and take six to eighteen months to
-                  implement — out of reach for the banks that sit between Tier 1
-                  institutions and village cooperatives.
-                </p>
-                <p>
-                  Meanwhile Basel III is tightening, local currencies are
-                  volatile, and central banks demand real stress testing and
-                  monthly prudential reporting. The gap between what regulators
-                  expect and what banks can deliver is widening.
-                </p>
+      {/* ============ Hero — the one dark band ============ */}
+      <section className="relative overflow-hidden bg-navy-deep text-white">
+        <svg
+          width="520"
+          height="520"
+          viewBox="0 0 520 520"
+          aria-hidden
+          className="pointer-events-none absolute -right-32 -top-40 opacity-[0.06]"
+        >
+          <path d="M260 0 L520 520 H400 L260 220 L120 520 H0 Z" fill="#4FC3F7" />
+        </svg>
+        <div className="relative max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pt-14 md:pt-20">
+          <div className="grid lg:grid-cols-[minmax(0,10fr)_minmax(0,11fr)] gap-12 lg:gap-14 items-end">
+            <div className="flex flex-col gap-7 pb-14 lg:pb-24">
+              <div className="flex flex-wrap gap-2.5">
+                {statusChips.map((chip) => (
+                  <span
+                    key={chip.label}
+                    className="inline-flex items-center gap-2 h-[30px] px-3.5 rounded-full border border-white/[0.22] text-[12.5px] font-medium text-white/85"
+                  >
+                    <span className={`h-[7px] w-[7px] rounded-full ${chip.dot}`} />
+                    {chip.label}
+                  </span>
+                ))}
               </div>
+              <h1 className="font-serif font-medium text-[42px] md:text-[56px] lg:text-[64px] leading-[1.06] tracking-tight">
+                Treasury and ALM infrastructure for African banks.
+              </h1>
+              <p className="text-lg leading-relaxed text-white/[0.78] max-w-[560px]">
+                AequorOS turns core banking data into risk numbers, board
+                answers, and central-bank returns. Feed it a file, a push API,
+                or a read-only view of the core you already run. Every figure
+                shows its work.
+              </p>
+              <div className="flex flex-wrap items-center gap-3.5">
+                <LinkButton href="/contact" variant="primary-on-dark">
+                  Request a demo
+                </LinkButton>
+                <LinkButton href="/product" variant="secondary">
+                  See the product live
+                </LinkButton>
+              </div>
+              <p className="text-[13.5px] text-white/50">
+                The full product interface is public on this site. No login, no
+                form.
+              </p>
             </div>
-            <div className="space-y-4">
-              <StatCard
-                number="$200–400K"
-                label="Annual Big 4 consulting spend per bank on stress testing and Basel compliance"
+            <Link
+              href="/product"
+              className="hidden lg:block -mb-px"
+            >
+              <ProductFrame
+                screen={heroScreen}
+                variant="chrome-dark"
+                priority
+                sizes="(max-width: 1024px) 100vw, 640px"
               />
-              <StatCard
-                number="14 days"
-                label="Bank of Ghana deadline for monthly prudential returns after the reporting date — 9 days for weekly returns"
-              />
-              <StatCard
-                number="$50–200K+"
-                label="Annual cost of global ALM vendors — priced for Tier 1, not mid-tier budgets"
-              />
-            </div>
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Product proof — public UI, no login */}
-      <section className="bg-soft-bg" id="product-proof">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <SectionLabel>THE PRODUCT</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              A launched platform — not a waitlist.
+      {/* ============ The problem ============ */}
+      <section className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pt-20 md:pt-24 pb-16 md:pb-20">
+        <div className="grid md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] gap-10 md:gap-20">
+          <div className="flex flex-col gap-5">
+            <Kicker>The gap</Kicker>
+            <h2 className="font-serif font-medium text-3xl md:text-[42px] leading-[1.12] tracking-tight">
+              Billions under management. Spreadsheets under the hood.
             </h2>
-            <p className="mt-5 text-text-muted text-lg leading-relaxed">
-              From core data to regulatory return on one governed path. Every
-              screen below is the working product interface.
+          </div>
+          <div className="flex flex-col gap-4 md:pt-12">
+            <p className="text-[17px] leading-[1.7] text-ink-soft">
+              Across Ghana, Nigeria, and Kenya, mid-tier banks still run
+              asset-liability management on Excel workbooks and an annual
+              consulting engagement. The global vendors that solve this charge
+              Tier 1 prices and take the better part of a year to install. So
+              the banks in the middle make do.
+            </p>
+            <p className="text-[17px] leading-[1.7] text-ink-soft">
+              Regulators are done waiting. Basel discipline, monthly prudential
+              returns, and real stress testing are landing on every
+              deposit-taking institution, on dates already published in
+              circulars and exposure drafts.
             </p>
           </div>
-          <div className="mt-12">
-            <FeatureScreenGrid screens={homepageFeatureScreens} />
-          </div>
         </div>
       </section>
 
-      {/* What's live */}
-      <section className="bg-navy text-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <SectionLabel>WHAT&apos;S LIVE TODAY</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-              Connect. Calculate. Report. Automatically.
+      {/* ============ Regulator timeline ============ */}
+      <section className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pb-20 md:pb-24">
+        <div className="bg-white border border-hairline rounded-md p-8 md:p-12">
+          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 mb-10">
+            <h2 className="font-serif font-medium text-2xl md:text-3xl tracking-tight">
+              Bank of Ghana has set the clock.
             </h2>
+            <p className="text-[13.5px] text-text-muted">
+              Public instruments and exposure drafts, as published
+            </p>
           </div>
-
-          <div className="mt-12 grid gap-px bg-white/10 rounded-lg overflow-hidden md:grid-cols-2">
-            {[
-              {
-                title: 'Data Engine',
-                body: 'File upload and secure API push are available now. Database, core-banking, and market-data integrations are configured per bank and enabled only after deployment and vendor onboarding are verified.',
-              },
-              {
-                title: 'Six ALM engines',
-                body: 'Liquidity, capital, interest-rate risk, FX, FTP, and balance-sheet forecasting recompute on every accepted load — deterministic where regulators need them to be.',
-              },
-              {
-                title: 'Regulatory returns',
-                body: 'Bank of Ghana BSD prudential returns generated in the regulator’s own workbook formats and exported to Excel, CSV, or PDF, ready for an officer to review and sign. Ghana is the pilot; other African regulators share the same engine.',
-              },
-              {
-                title: 'Audit by construction',
-                body: 'Immutable snapshots, full lineage, and value-based reproducibility so a past return can be regenerated exactly, figure by figure — evidence you can put in front of an examiner, not a reconstructed spreadsheet.',
-              },
-            ].map((item) => (
-              <div key={item.title} className="bg-navy p-8">
-                <h3 className="font-serif font-bold text-white text-xl leading-snug">
-                  {item.title}
-                </h3>
-                <p className="mt-3 text-ice-blue/90 leading-relaxed">
-                  {item.body}
+          <div className="relative hidden md:block">
+            <div className="absolute left-1.5 right-1.5 top-[7px] h-[3px] bg-hairline" />
+            <div className="relative grid grid-cols-4 gap-8">
+              {timeline.map((item) => (
+                <span
+                  key={item.date}
+                  className={
+                    item.terminal
+                      ? 'h-[17px] w-[17px] rounded-full bg-kicker border-[3px] border-white'
+                      : 'mt-0.5 h-[13px] w-[13px] rounded-full bg-navy-deep'
+                  }
+                />
+              ))}
+            </div>
+          </div>
+          <div className="grid md:grid-cols-4 gap-6 md:gap-8 md:mt-7">
+            {timeline.map((item) => (
+              <div key={item.date} className="flex flex-col gap-2">
+                <p
+                  className={`text-[13px] font-semibold tracking-[0.04em] ${
+                    item.terminal ? 'text-kicker' : 'text-navy-deep'
+                  }`}
+                >
+                  {item.date}
+                </p>
+                <p className="text-[14.5px] leading-[1.55] text-ink-soft">
+                  {item.text}
                 </p>
               </div>
             ))}
           </div>
-          <div className="mt-10">
-            <LinkButton href="/product" variant="primary-on-dark">
-              Explore the platform
-            </LinkButton>
+          <p className="mt-9 pt-6 border-t border-stone font-serif italic text-[15px] text-text-muted">
+            A bank that waits for the deadline will meet it in a spreadsheet.
+          </p>
+        </div>
+      </section>
+
+      {/* ============ One governed path ============ */}
+      <section className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pb-20 md:pb-28">
+        <div className="flex flex-col gap-4 mb-12 max-w-2xl">
+          <Kicker>What it is</Kicker>
+          <h2 className="font-serif font-medium text-3xl md:text-[42px] leading-[1.12] tracking-tight">
+            One governed path from core to return.
+          </h2>
+          <p className="text-[17px] leading-relaxed text-ink-soft">
+            Data lands once. Everything downstream recomputes automatically,
+            and every number can be traced back to the load that produced it.
+          </p>
+        </div>
+        <div className="flex flex-col xl:flex-row xl:items-stretch gap-4 xl:gap-0">
+          <div className="xl:w-[230px] bg-white border border-hairline rounded-md p-6 flex flex-col gap-2.5">
+            <p className="text-xs font-semibold tracking-[0.06em] text-text-muted">
+              YOUR SOURCES
+            </p>
+            <p className="text-[15px] font-medium">Core banking extract</p>
+            <p className="text-[15px] font-medium">File upload</p>
+            <p className="text-[15px] font-medium">Secure push API</p>
+          </div>
+          <FlowArrow />
+          <div className="xl:w-[225px] bg-navy-deep rounded-md p-6 flex flex-col gap-2.5">
+            <p className="text-xs font-semibold tracking-[0.06em] text-accent">
+              DATA ENGINE
+            </p>
+            <p className="text-[15px] font-medium text-white">
+              Normalize and validate
+            </p>
+            <p className="text-[15px] font-medium text-white">Canonical model</p>
+            <p className="text-[15px] font-medium text-white">Full lineage</p>
+          </div>
+          <FlowArrow />
+          <div className="flex-1 bg-white border border-hairline rounded-md p-6 flex flex-col gap-3.5">
+            <p className="text-xs font-semibold tracking-[0.06em] text-text-muted">
+              SEVEN ENGINES
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {engines.map((engine) => (
+                <Link
+                  key={engine.name}
+                  href={engine.href}
+                  className="inline-flex h-9 items-center justify-center rounded border border-hairline text-[13.5px] font-medium transition-colors hover:border-navy-deep"
+                >
+                  {engine.name}
+                </Link>
+              ))}
+            </div>
+            <p className="text-[13.5px] text-text-muted">
+              Recomputed on every accepted load. Deterministic where regulators
+              require it.
+            </p>
+          </div>
+          <FlowArrow />
+          <div className="xl:w-[230px] bg-white border border-hairline rounded-md p-6 flex flex-col gap-2.5">
+            <p className="text-xs font-semibold tracking-[0.06em] text-text-muted">
+              THE OUTPUT
+            </p>
+            <p className="text-[15px] font-medium">BoG returns, sign-ready</p>
+            <p className="text-[15px] font-medium">Board packs</p>
+            <p className="text-[15px] font-medium">ALCO views</p>
           </div>
         </div>
       </section>
 
-      {/* Why AequorOS */}
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <SectionLabel>WHY AEQUOROS</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Built for mid-tier African banks — not adapted from Tier 1.
-            </h2>
-          </div>
-
-          <div className="mt-12 grid md:grid-cols-3 gap-8">
-            {[
-              {
-                num: '01',
-                title: 'Priced for this market',
-                body: 'SaaS economics for mid-tier budgets — a fraction of global ALM licenses that were never designed for this segment.',
-              },
-              {
-                num: '02',
-                title: 'Weeks, not quarters',
-                body: 'No six-to-eighteen-month program: a bank starts producing numbers from its first data load. Bank of Ghana return formats ship today; Nigeria (CBN) and South Africa (SARB) are next on the same engine.',
-              },
-              {
-                num: '03',
-                title: 'Built for local reality',
-                body: 'Cores African banks actually run, behavioral models tuned per institution, and reporting in each central bank’s formats — not a European template with a currency flag.',
-              },
-            ].map((col) => (
-              <div
-                key={col.num}
-                className="bg-soft-bg border border-border-light rounded-lg p-8 border-t-[3px] border-t-accent"
-              >
-                <p className="font-serif text-accent text-6xl leading-none">
-                  {col.num}
-                </p>
-                <h3 className="mt-6 font-serif font-bold text-navy text-2xl">
-                  {col.title}
-                </h3>
-                <p className="mt-4 text-text-primary leading-relaxed">
-                  {col.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Why now */}
-      <section className="bg-soft-bg">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <SectionLabel>WHY NOW</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Three forces converging.
-            </h2>
-          </div>
-
-          <div className="mt-12 space-y-10">
-            {[
-              {
-                num: '01',
-                title: 'Regulatory tightening',
-                body: 'Ghana alone put ICAAP, stress testing and two liquidity directives out for exposure in February 2026, all stated effective 1 January 2027. Mid-tier banks are being handed Tier 1 rigor on a dated schedule, while still on Excel.',
-              },
-              {
-                num: '02',
-                title: 'Macroeconomic stress',
-                body: 'Persistent currency depreciation, inflation spikes, and rising sovereign yields mean banks need continuous risk management — not a quarterly consulting snapshot.',
-              },
-              {
-                num: '03',
-                title: 'Infrastructure finally fits',
-                body: 'Cloud and modern data stacks make enterprise-grade ALM deployable at SaaS prices. AequorOS keeps regulatory calculations deterministic and examiner-defensible.',
-              },
-            ].map((row) => (
-              <div
-                key={row.num}
-                className="grid md:grid-cols-[auto,1fr] gap-6 md:gap-10 items-start border-l-4 border-accent pl-6 md:pl-8"
-              >
-                <div className="font-serif font-bold text-accent text-6xl leading-none w-24">
-                  {row.num}
-                </div>
-                <div>
-                  <h3 className="font-serif font-bold text-navy text-2xl">
-                    {row.title}
-                  </h3>
-                  <p className="mt-3 text-text-primary text-base md:text-lg leading-relaxed max-w-3xl">
-                    {row.body}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Closing CTA */}
-      <section className="bg-navy-deep text-white">
+      {/* ============ Product screens ============ */}
+      <section className="bg-stone">
         <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20 md:py-24">
-          <div className="max-w-[800px] mx-auto text-center">
-            <SectionLabel>TALK TO US</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-              Ready for a walkthrough on a bank like yours?
-            </h2>
-            <p className="mt-6 text-ice-blue text-lg leading-relaxed">
-              Thirty minutes with a Treasury or Risk leader: Data Engine, live
-              calculations, and regulatory returns. We&apos;re onboarding a first
-              cohort of design-partner banks and respond to every serious
-              inquiry.
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-              <LinkButton href="/contact" variant="primary-on-dark">
-                Request a demo
-              </LinkButton>
-              <LinkButton href="/product#product-ui" variant="secondary">
-                Browse the product UI
-              </LinkButton>
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-12">
+            <div className="flex flex-col gap-3.5 max-w-2xl">
+              <Kicker>Proof, not promises</Kicker>
+              <h2 className="font-serif font-medium text-3xl md:text-[42px] leading-[1.12] tracking-tight">
+                The working product, in public.
+              </h2>
+              <p className="text-[17px] leading-relaxed text-ink-soft">
+                These screens are the live platform running a synthetic
+                Ghanaian bank. Browse all of it without an account.
+              </p>
             </div>
+            <Link
+              href="/product"
+              className="text-[15px] font-semibold text-action hover:text-action-dark transition-colors shrink-0"
+            >
+              Browse the product interface &rarr;
+            </Link>
+          </div>
+          <div className="grid md:grid-cols-2 gap-9">
+            {homepageFeatureScreens.map((screen, i) => (
+              <Link
+                key={screen.id}
+                href={screen.id === 'data-engine' ? '/product#data-engine' : '/product#governance'}
+                className="flex flex-col gap-4 group"
+              >
+                <ProductFrame
+                  screen={screen}
+                  priority={i === 0}
+                  sizes="(max-width: 768px) 100vw, 620px"
+                  className="transition-transform group-hover:-translate-y-0.5"
+                />
+                <p className="text-sm leading-relaxed">
+                  <span className="font-semibold text-ink">{screen.title}</span>{' '}
+                  <span className="text-text-muted">{screen.caption}</span>
+                </p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ============ Where we are, plainly ============ */}
+      <section className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20 md:py-24">
+        <div className="flex flex-col gap-3.5 mb-12 max-w-2xl">
+          <Kicker>Straight answers</Kicker>
+          <h2 className="font-serif font-medium text-3xl md:text-[42px] leading-[1.12] tracking-tight">
+            Where we are, plainly.
+          </h2>
+        </div>
+        <div className="grid md:grid-cols-3 gap-7">
+          {ledger.map((col) => (
+            <div
+              key={col.title}
+              className="bg-white border border-hairline rounded-md p-7 flex flex-col gap-4"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className={`h-[9px] w-[9px] rounded-full ${col.dot}`} />
+                <p className="text-[13px] font-semibold tracking-[0.06em] text-ink">
+                  {col.title}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {col.rows.map((row) => (
+                  <p key={row} className="text-[15px] leading-normal text-ink-soft">
+                    {row}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-7 font-serif italic text-[15px] text-text-muted">
+          We would rather you hear this from us than find it in diligence.
+        </p>
+      </section>
+
+      {/* ============ Closing CTA ============ */}
+      <section className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 pb-24 md:pb-28">
+        <div className="border-t border-hairline pt-16 md:pt-20 flex flex-col items-center gap-5 text-center">
+          <h2 className="font-serif font-medium text-4xl md:text-[52px] leading-[1.1] tracking-tight max-w-3xl">
+            Bring us your hardest reporting month.
+          </h2>
+          <p className="text-lg leading-relaxed text-ink-soft max-w-xl">
+            Thirty minutes with your Treasury or Risk lead. We will walk the
+            platform against the workflows your bank actually runs.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-4">
+            <LinkButton href="/contact" variant="primary">
+              Request a demo
+            </LinkButton>
+            <Link
+              href="/product"
+              className="text-[15px] font-medium text-action hover:text-action-dark transition-colors"
+            >
+              Or browse the product first
+            </Link>
           </div>
         </div>
       </section>
     </>
+  );
+}
+
+function FlowArrow() {
+  return (
+    <div className="flex items-center justify-center px-2.5 py-1 rotate-90 xl:rotate-0 self-center">
+      <svg width="28" height="14" viewBox="0 0 28 14" aria-hidden>
+        <path
+          d="M0 7 H22 M17 1.5 L23.5 7 L17 12.5"
+          stroke="#B9BDC9"
+          strokeWidth="2"
+          fill="none"
+        />
+      </svg>
+    </div>
   );
 }

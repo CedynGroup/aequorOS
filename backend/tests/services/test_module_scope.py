@@ -29,7 +29,16 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
-EVERY_MODULE = ("liquidity", "capital", "irr", "fx", "ftp", "forecast", "implied_rating")
+EVERY_MODULE = (
+    "liquidity",
+    "capital",
+    "credit",
+    "irr",
+    "fx",
+    "ftp",
+    "forecast",
+    "implied_rating",
+)
 
 
 def _bank(db: Session) -> Bank:
@@ -127,7 +136,7 @@ def test_official_run_scope_matches_the_module_authority(db_session: Session) ->
     in_scope, out_of_scope = data_activation.official_module_scope(
         db_session, MAKER, SAMPLE_BANK_ID
     )
-    assert in_scope == ["capital", "irr", "implied_rating"]
+    assert in_scope == ["capital", "credit", "irr", "implied_rating"]
     assert set(out_of_scope) == {"liquidity", "fx", "ftp", "forecast"}
 
     _as_class(db_session, "universal_bank")
@@ -149,5 +158,5 @@ def test_both_tiers_read_one_authority(db_session: Session) -> None:
     bank = _as_class(db_session, "savings_and_loans")
     live = {module for module, _ in pipeline._scoped_modules(db_session, bank)}
     official, _ = data_activation.official_module_scope(db_session, MAKER, SAMPLE_BANK_ID)
-    shared = {"liquidity", "capital", "irr", "fx", "ftp", "forecast"}
+    shared = {"liquidity", "capital", "credit", "irr", "fx", "ftp", "forecast"}
     assert live & shared == set(official) & shared

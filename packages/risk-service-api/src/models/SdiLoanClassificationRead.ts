@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { ProvisionCoveragePct } from "./ProvisionCoveragePct";
+import {
+  ProvisionCoveragePctFromJSON,
+  ProvisionCoveragePctFromJSONTyped,
+  ProvisionCoveragePctToJSON,
+  ProvisionCoveragePctToJSONTyped,
+} from "./ProvisionCoveragePct";
 import type { DelinquencyBucketRead } from "./DelinquencyBucketRead";
 import {
   DelinquencyBucketReadFromJSON,
@@ -18,6 +25,13 @@ import {
   DelinquencyBucketReadToJSON,
   DelinquencyBucketReadToJSONTyped,
 } from "./DelinquencyBucketRead";
+import type { CreditMetricsReadProvisionsHeld } from "./CreditMetricsReadProvisionsHeld";
+import {
+  CreditMetricsReadProvisionsHeldFromJSON,
+  CreditMetricsReadProvisionsHeldFromJSONTyped,
+  CreditMetricsReadProvisionsHeldToJSON,
+  CreditMetricsReadProvisionsHeldToJSONTyped,
+} from "./CreditMetricsReadProvisionsHeld";
 import type { LoanGradeBucketRead } from "./LoanGradeBucketRead";
 import {
   LoanGradeBucketReadFromJSON,
@@ -105,6 +119,18 @@ export interface SdiLoanClassificationRead {
    * @memberof SdiLoanClassificationRead
    */
   portfolioAtRisk: Array<PortfolioAtRiskRead>;
+  /**
+   *
+   * @type {ProvisionCoveragePct}
+   * @memberof SdiLoanClassificationRead
+   */
+  provisionCoveragePct?: ProvisionCoveragePct;
+  /**
+   *
+   * @type {CreditMetricsReadProvisionsHeld}
+   * @memberof SdiLoanClassificationRead
+   */
+  provisionsHeld?: CreditMetricsReadProvisionsHeld;
   /**
    *
    * @type {number}
@@ -211,6 +237,14 @@ export function SdiLoanClassificationReadFromJSONTyped(
     portfolioAtRisk: (json["portfolio_at_risk"] as Array<any>).map(
       PortfolioAtRiskReadFromJSON,
     ),
+    provisionCoveragePct:
+      json["provision_coverage_pct"] == null
+        ? undefined
+        : ProvisionCoveragePctFromJSON(json["provision_coverage_pct"]),
+    provisionsHeld:
+      json["provisions_held"] == null
+        ? undefined
+        : CreditMetricsReadProvisionsHeldFromJSON(json["provisions_held"]),
     stageProxyCount: json["stage_proxy_count"],
     totalExposureGhs: json["total_exposure_ghs"],
     totalProvisionRequiredGhs: json["total_provision_required_ghs"],
@@ -247,6 +281,12 @@ export function SdiLoanClassificationReadToJSONTyped(
     pending_parameters: value["pendingParameters"],
     portfolio_at_risk: (value["portfolioAtRisk"] as Array<any>).map(
       PortfolioAtRiskReadToJSON,
+    ),
+    provision_coverage_pct: ProvisionCoveragePctToJSON(
+      value["provisionCoveragePct"],
+    ),
+    provisions_held: CreditMetricsReadProvisionsHeldToJSON(
+      value["provisionsHeld"],
     ),
     stage_proxy_count: value["stageProxyCount"],
     total_exposure_ghs: value["totalExposureGhs"],

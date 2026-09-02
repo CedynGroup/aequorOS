@@ -25,7 +25,7 @@ class ClosedModel(BaseModel):
 ComparisonMode = Literal["version", "period"]
 #: The engine module a run belongs to (``RegulatoryRun.module``). This is the
 #: "return family" the two sides must share to be comparable.
-ComparisonModule = Literal["liquidity", "capital", "irr", "fx", "ftp", "forecast"]
+ComparisonModule = Literal["liquidity", "capital", "credit", "irr", "fx", "ftp", "forecast"]
 #: How the UI should format a line's figures — and whether its delta is money.
 LineUnit = Literal["ccy", "pct", "ratio", "count"]
 LineDirection = Literal["up", "down", "flat"]

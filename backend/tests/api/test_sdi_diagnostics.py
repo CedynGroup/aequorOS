@@ -88,6 +88,10 @@ def test_sdi_loan_classification_returns_raw_dpd_buckets(db_client) -> None:  # 
         "par_180",
         "par_360",
     }
+    # An empty book states no provisions: held is null and coverage is null —
+    # the wire never fabricates a zero for an unstated figure.
+    assert body["provisions_held"] is None
+    assert body["provision_coverage_pct"] is None
 
 
 def test_universal_bank_loan_classification_uses_neutral_endpoint(db_client) -> None:  # noqa: ANN001

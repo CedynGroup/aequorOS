@@ -63,9 +63,7 @@ STRESS_RUN_GATED = {"ICAAP-STRESS-APPENDIX2"}
 # Derived from the registry rather than listed, so a future class-scoped return is
 # covered the day it is added instead of silently dropping out of the proof.
 CLASS_GATED = {
-    code
-    for code, definition in REGISTRY.items()
-    if "bank" not in definition.institution_classes
+    code for code, definition in REGISTRY.items() if "bank" not in definition.institution_classes
 }
 
 
@@ -149,12 +147,17 @@ def test_every_registered_return_generates_and_exports_end_to_end(
     )
 
     # The production official-run sweep: 22 scenarios + forecast.
-    outcomes = data_activation.run_official_modules(
-        db_session, MAKER, SAMPLE_BANK_ID, period_id
-    )
+    outcomes = data_activation.run_official_modules(db_session, MAKER, SAMPLE_BANK_ID, period_id)
     by_module = {outcome.module: outcome for outcome in outcomes}
     assert set(by_module) == {
-        "liquidity", "capital", "irr", "fx", "ftp", "forecast", "implied_rating",
+        "liquidity",
+        "capital",
+        "credit",
+        "irr",
+        "fx",
+        "ftp",
+        "forecast",
+        "implied_rating",
     }  # fmt: skip
     # implied_rating (PD remediation) joined the sweep after this proof was
     # written: it REFUSES by design when no GHANA_SOVEREIGN rating has been

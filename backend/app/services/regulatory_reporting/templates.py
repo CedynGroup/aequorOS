@@ -1733,6 +1733,108 @@ _STRESS_PACK_CITATION = (
     "AequorOS's own standardized Board/ALCO artifact, not a published BoG template"
 )
 
+_NPL_MONTHLY_CITATION = (
+    "BoG Notice BG/GOV/SEC/2025/23 (Aug 2025), Appendix II — Monthly Regulatory "
+    "Reporting of NPL"
+)
+
+_NPL_MONTHLY_TEMPLATE = ReturnTemplate(
+    template_id="aeq-npl-monthly-v1",
+    return_code="NPL-MONTHLY",
+    title="Monthly Non-Performing Loans Report",
+    fidelity="PARTIAL",
+    source_citation=_NPL_MONTHLY_CITATION,
+    sections=(
+        SectionLayout(
+            section_code="npl_levels",
+            layout_id="npl_levels_appendix2_t1",
+            sheet_title="NPL Level and Flows",
+            columns=(_CODE, _ITEM, ColumnSpec("value", "Value", "auto")),
+            fidelity="CONFIRMED",
+            source_citation=f"{_NPL_MONTHLY_CITATION} — table 1 (NPL level and flows)",
+            notes=(
+                "Level figures come from the sealed baseline credit run for the "
+                "reporting period (the same classification the platform files "
+                "everywhere else). Coverage and net-NPL rows appear only when the "
+                "book states held provisions — an unstated provision is reported "
+                "as unavailable, never as zero.",
+            ),
+        ),
+        SectionLayout(
+            section_code="credit_migration",
+            layout_id="npl_migration_appendix2_t2",
+            sheet_title="Credit Migration Over the Month",
+            columns=(
+                ColumnSpec("code", "From \u2192 To", "text"),
+                _ITEM,
+                ColumnSpec("value", "Exposure (GHS '000)", "ghs"),
+                ColumnSpec("loan_count", "Loans", "number"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_NPL_MONTHLY_CITATION} — table 2 (credit migration)",
+            notes=(
+                "Flows between the prior month-end book and this one, at closing "
+                "exposure; departures at opening exposure. Requires two consecutive "
+                "month-end books — with one month ingested the section is omitted "
+                "and the omission is stated in the metadata, never zero-filled.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="write_offs",
+            layout_id="npl_write_offs_appendix2_t3",
+            sheet_title="Write-offs (Wilful / Non-wilful)",
+            columns=(_CODE, _ITEM, ColumnSpec("value", "Amount (GHS '000)", "ghs")),
+            fidelity="CONFIRMED",
+            source_citation=f"{_NPL_MONTHLY_CITATION} — tables 3a-3c (monthly write-offs)",
+            notes=(
+                "From ingested loan events (event_type WRITE_OFF, subtype wilful / "
+                "non_wilful) in the reporting month. Omitted until the institution "
+                "ingests loan events — write-offs the platform has not been told "
+                "about are unknown, not zero.",
+            ),
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="recoveries",
+            layout_id="npl_recoveries_appendix2_t4",
+            sheet_title="Cash Recovery from NPLs",
+            columns=(_CODE, _ITEM, ColumnSpec("value", "Amount (GHS '000)", "ghs")),
+            fidelity="CONFIRMED",
+            source_citation=f"{_NPL_MONTHLY_CITATION} — table 4 (cash recovery)",
+            optional=True,
+        ),
+        SectionLayout(
+            section_code="restructuring",
+            layout_id="npl_restructuring_appendix2_t5",
+            sheet_title="Restructuring Activity",
+            columns=(
+                _CODE,
+                _ITEM,
+                ColumnSpec("value", "Amount (GHS '000)", "ghs"),
+                ColumnSpec("loan_count", "Facilities", "number"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=f"{_NPL_MONTHLY_CITATION} — table 5 (restructuring activity)",
+            notes=(
+                "Stock rows come from the classified book (the ingested "
+                "restructured flag under the \u00b612 cure rule); activity rows "
+                "from RESTRUCTURE loan events in the month, by measure.",
+            ),
+            optional=True,
+        ),
+        _HEADLINE_COMPARATIVE,
+    ),
+    notes=(
+        "The prudential NPL limit (10% of gross loans; restrictions at 15%) "
+        "binds from end-December 2026 under the notice. This report renders the "
+        "platform's own sealed classification; sections whose source data the "
+        "institution has not ingested are omitted with the omission stated, "
+        "never zero-filled.",
+        _T_MINUS_1_NOTE,
+    ),
+)
+
 _STRESS_PACK_TEMPLATE = ReturnTemplate(
     template_id="aeq-stress-pack-v1",
     return_code="STRESS-PACK",
@@ -2329,6 +2431,7 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _ICAAP_STRESS_APPENDIX2_TEMPLATE,
         _SDI_STRESS_TEMPLATE,
         _STRESS_PACK_TEMPLATE,
+        _NPL_MONTHLY_TEMPLATE,
         _LAS_QUARTERLY_TEMPLATE,
         _LRT_PROFILE_TEMPLATE,
         _LRT_OUTLET_TEMPLATE,

@@ -42,6 +42,8 @@ type ReturnFamily = Literal[
     # Specialised deposit-taking institution reports compiled from published
     # BoG directive appendices. These are never aliases for BSD forms.
     "sdi",
+    # The credit / NPL family (Notice BG/GOV/SEC/2025/23; credit PR-6).
+    "credit",
 ]
 type ReturnFrequency = Literal["weekly", "monthly", "quarterly", "semiannual", "annual", "daily"]
 type ChannelCode = Literal["orass_sandbox", "email", "manual"]
@@ -511,6 +513,40 @@ REGISTRY: dict[str, ReturnDefinition] = {
             # for an SDI comes from the governed Act 930 s.29 calculation - the
             # s29 authority, never the bank CRD one.
             declared_methodologies=(("net_own_funds_ghs", "act930_s29_nof_rwa"),),
+        ),
+        ReturnDefinition(
+            code="NPL-MONTHLY",
+            family="credit",
+            title="Monthly Non-Performing Loans Report (Notice 2025/23 Appendix II)",
+            directive_citation=(
+                "BoG Notice BG/GOV/SEC/2025/23 (Regulatory Measures to Reduce "
+                "Non-Performing Loans in Banks, SDIs and NBFIs, Aug 2025) — Appendix "
+                "II Monthly Regulatory Reporting of NPL: NPL level and flows, credit "
+                "migration over the month, write-offs (wilful / non-wilful) with "
+                "recoveries, cash recovery from NPLs, and restructuring activity. "
+                "The prudential NPL limit (10%) binds from end-December 2026; the "
+                "notice is IN FORCE and applies to banks and SDIs alike."
+            ),
+            frequency="monthly",
+            # The notice mandates monthly reporting but publishes no day count.
+            # Provisional 9-day rule (the LE precedent) until the institution's
+            # ORASS obligation confirms it.
+            deadline_rule=monthly_day(9),
+            generator="npl_monthly",
+            template_id="aeq-npl-monthly-v1",
+            fidelity="PARTIAL",
+            institution_classes=("bank", "sdi"),
+            jurisdictions=("GH",),
+            prerequisites=("run:credit:baseline",),
+            required_data=("canonical_positions", "canonical_loan_events"),
+            supports_working_copy=True,
+            # One figure, two legal grids: the bank 5-grade under CRD and the
+            # NBFI 4-grade under Act 930 s.29 own npl_ratio_pct for their own
+            # class. declared_methodologies is a per-metric MAP and cannot
+            # express a class-conditional declaration (two pairs for one
+            # metric_id collapse to the last), so nothing is declared here —
+            # the sealed credit run's provenance and the WS-A registry carry
+            # the class-scoped ownership instead of a mis-declared single pick.
         ),
         ReturnDefinition(
             code="ICAAP-STRESS",

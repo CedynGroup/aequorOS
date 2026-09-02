@@ -39,7 +39,7 @@ from app.services.audit import record_event
 _MODULE_ORDER = {
     module: index
     for index, module in enumerate(
-        ("liquidity", "capital", "irr", "fx", "ftp", "rating", "forecast")
+        ("liquidity", "capital", "credit", "irr", "fx", "ftp", "rating", "forecast")
     )
 }
 

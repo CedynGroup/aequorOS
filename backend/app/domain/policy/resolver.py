@@ -479,6 +479,13 @@ PARAMETER_DIRECTION: dict[str, str] = {
     "single_obligor_limit_pct": Direction.CEILING.value,
     "large_exposure_limit_pct": Direction.CEILING.value,
     "related_party_limit_pct": Direction.CEILING.value,
+    # NPL prudential ceilings (Notice 2025/23 — a board may only tighten DOWN)
+    "npl_limit_pct": Direction.CEILING.value,
+    "npl_dividend_restriction_pct": Direction.CEILING.value,
+    # Restructure cure counts: MORE consecutive payments before a cure is the
+    # stricter reading, so a board override may only raise them.
+    "restructure_cure_payments": Direction.FLOOR.value,
+    "restructure_cure_payments_semi_annual": Direction.FLOOR.value,
     # provisioning minima (a board may only over-provide)
     "prov_standard": Direction.FLOOR.value,
     "prov_olem": Direction.FLOOR.value,

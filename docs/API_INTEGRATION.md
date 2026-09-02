@@ -303,6 +303,9 @@ value overrides the counterparty's for that facility.
 | `ecl_provision_ghs` | `LOAN` | number (cedi) | BSD8 row 21 (item 13 provisions) × C:G and Annexure column O; BSD5A (via BSD8); the capital / ECL engines and the large-exposure return (position-level allowance) | Impairment allowance held against the facility. |
 | `crm_collateral_ghs` / `crm_collateral_class` | `LOAN` | see the CRM table above | BSD8 row 18 (item 11 allowable security — classes `CASH`, `SOVEREIGN_DEBT`) and Annexure columns L / M | (as documented above) |
 | `branch_id` | any | string | BSD8-Annexure column C (Branch) | Booking branch of the facility. |
+| `employer` | `LOAN` | string — the employer's name, one spelling per employer | Credit module concentration monitor (employer dimension), employer delinquency EWI | The borrower's employer for payroll / check-off lending. The defining risk of a payroll book is one employer failing to remit deductions, so the monitor treats employer as a first-class concentration dimension (BoG Credit Concentration Guidelines, Sept 2025, §17(c)). Loans without it are excluded from the employer view and disclosed as coverage — never grouped as "Unknown". Do NOT put the employer in the counterparty's `group_reference`: that field means BoG connected-party grouping, and an employer is not a co-obligor. |
+| `repayment_source` | `LOAN` | `payroll_deduction` · `cagd_checkoff` · `employer_checkoff` · `standing_order` · `direct_debit` · `cash` · `other` | Credit module segmentation | How the facility actually repays. `cagd_checkoff` is the Controller & Accountant-General payroll deduction scheme; `employer_checkoff` a private employer's. |
+| `employer_sector` | `LOAN` | one of the 63 BSD4 sector keys | Credit module (employer dimension enrichment) | The employer's own industry, when it differs from the loan's `sector` (a salary loan carries `services.salary_credit`; the employer may be a mine or a hospital). Optional. |
 | `institution_class` | positions with an `NBFI` counterparty (or the counterparty) | `rural_bank` · `discount_house` · `savings_and_loans` · `credit_union` · `building_society` · `other_depository` · `other_financial` · `other` | BSD2 rows 23, 25–28, 49–51, 86–89, 105–108, 172–174, 181–183, 191; BSD1 (discount-house call money); BSD4 OTHER DEPOSITORY (R:U, the first six values) vs OTHER FINANCIAL (V:Y) | The Guide's split of non-bank financial institutions into depository vs other. |
 | `instrument` | `SECURITY_HOLDING`, `CASH`, `OTHER_ASSET`, `OTHER_LIABILITY`, `INTERBANK_BORROWING`, `DEPOSIT` | `fx_notes_coins` · `cheques_for_clearing` · `repo_receivable` · `repo_payable` · `tbill` · `tbill_other` · `gog_bond` · `gog_bond_other` · `gog_stock` · `ggilb` · `tor_bond` · `bog_bill` · `bog_bond` · `bog_bond_other` · `bog_other` · `cocoa_bill` · `grains_bill` · `cotton_bill` · `bill` · `finsap_bond` · `ssnit_educational_bond` · `term_borrowing` · `bond_issued` · `certificate_of_deposit` · `special_deposit` · `margin_against_contingent` · `tor_margin_account` | BSD2 rows 7, 19, 33, 36–39, 41–46, 54–56, 74–78, 80–81, 143–144, 186, 190–193, 275, 277; BSD1 rows for bills / bonds / CDs / special deposits / margins; BSD5A; BSD14 column K (`certificate_of_deposit`) | Names the official instrument line a security / balance belongs to. |
 | `tenor_days` / `tenor_years` / `tenor` | `SECURITY_HOLDING`, `INTERBANK_PLACEMENT`, `INTERBANK_BORROWING` | integer days (`28`, `56`, `91`, `182`) / integer years (`1`, `2`, `3`) / `call` | BSD2 rows 36–46, 76–77, 80 (bill / bond tenor) and 25, 180–183 (`tenor=call`); BSD1 | Original tenor of the paper; `call` marks money at call. |
@@ -317,6 +320,35 @@ value overrides the counterparty's for that facility.
 | `facility_type` | `LOAN` | `scheduled` · `unscheduled` · `overdraft` · `acceptance` · `other` | BSD2 Annex 4 rows 8–11 × B:F | Guide Annex 4 facility categories (the annex total ties to BSD2 `D68` only when every LOAN carries one). |
 | `obs_category` / `obs_status` | `LC_GUARANTEE`, `COMMITMENT_UNDRAWN` | `obs_category` extends the LMT values above with `acceptance` · `endorsement` · `other_obligation`; `obs_status` ∈ `performing` · `non_performing` | BSD2 Annex 16 rows 6–10 × E:H (FX / cedi × performing / non-performing); Annex 16 `I11` ties to BSD2 `D282` when every LC/guarantee carries both | Contingent-liability class and performance status. |
 | `balance_ghs` / `notional_ghs` | any foreign-currency position | number (cedi equivalent at `as_of_date`) | every `positions.sum` line of BSD2 (Foreign column "converted into cedis"), BSD1, BSD4, BSD8, BSD14 weights, module fact derivation | The bank's own cedi equivalent; when absent the platform converts at its preferred period-end spot (raw balance if none). Send it for every FX position. |
+
+### Loan events (`loan_event`) — the loan-book movement plane
+
+Positions and snapshots are STOCKS; loan events are the FLOWS the Bank of
+Ghana's Notice BG/GOV/SEC/2025/23 reports monthly (write-offs split
+wilful/non-wilful, recoveries by collateral class, restructuring activity by
+measure) and BSD8's movement schedule asks for. Push them under the
+`"loan_event"` entities key, or upload a sheet/file named `loan_events`
+(template: `onboarding/sample_bank/loan_events_template.csv`). Events are
+cumulative history: each event is its own row with its own
+`source_reference`; re-pushing a reference corrects THAT event (supersession),
+and history never needs re-sending wholesale.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `source_reference` | yes | The event's own stable id in the source system. |
+| `event_type` | yes | `DISBURSEMENT` · `REPAYMENT` · `WRITE_OFF` · `RECOVERY` · `RESTRUCTURE`. An unknown type fails translation. |
+| `event_subtype` | per type | WRITE_OFF: `wilful` · `non_wilful` (Notice Appendix II 3a/3b). RECOVERY: `property_collateral` · `non_property_collateral` · `unsecured`. RESTRUCTURE: `interest_only` · `reduced_payment` · `moratorium` · `arrears_capitalization` · `rate_reduction` · `maturity_extension` · `assisted_sale` · `rescheduled`. An unknown subtype lands flagged `warning`. |
+| `event_date` | yes | The business date the movement happened. |
+| `position_source_reference` | yes | The facility, in source-reference terms. May reference a loan from an earlier batch; an unknown reference lands flagged `warning`, never blocked (the loan file and the events file legitimately arrive separately). |
+| `amount` | yes | Positive movement amount in `currency`. |
+| `currency` | yes | ISO 4217. |
+| `amount_ghs` | no | The bank's own reporting-unit conversion. Absent on a base-currency event it falls back to `amount`; absent on a foreign-currency one the event is excluded from reporting-unit totals — never converted at an invented rate. |
+| `attributes.bog_approval_reference` | write-offs | The BoG write-off approval reference (Notice ¶9 / Appendix I). |
+| `attributes.fully_provisioned` | write-offs | Whether the facility was fully provisioned at write-off. |
+| `attributes.related_writeoff_reference` | recoveries | The write-off event this recovery relates to. |
+| `attributes.repayment_frequency` | restructures | `monthly` · `quarterly` · `semi_annual` · `bullet` — drives the cure rule (6 consecutive payments; 4 for semi-annual; bullet cures only at settlement). |
+| `attributes.scheduled_amount_ghs` | restructures | The revised scheduled payment. |
+
 
 CSV / workbook upload path: the same keys are captured from a sheet whose
 column headers are `attributes.<key>` (e.g. `attributes.sector`,
