@@ -53873,7 +53873,7 @@
             "name": "module",
             "required": true,
             "schema": {
-              "pattern": "^(liquidity|capital|irr|fx|ftp|rating|forecast)$",
+              "pattern": "^(liquidity|capital|credit|irr|fx|ftp|rating|forecast)$",
               "title": "Module",
               "type": "string"
             }

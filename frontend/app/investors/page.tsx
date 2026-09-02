@@ -22,9 +22,9 @@ const thesis = [
   },
 ];
 
-const pitchDeckUrl = process.env.NEXT_PUBLIC_INVESTOR_PITCH_DECK_URL ?? '#';
+const pitchDeckUrl = process.env.NEXT_PUBLIC_INVESTOR_PITCH_DECK_URL ?? null;
 const financialModelUrl =
-  process.env.NEXT_PUBLIC_INVESTOR_FINANCIAL_MODEL_URL ?? '#';
+  process.env.NEXT_PUBLIC_INVESTOR_FINANCIAL_MODEL_URL ?? null;
 
 export default function InvestorsPage() {
   return (
@@ -62,21 +62,31 @@ export default function InvestorsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3.5 shrink-0">
+            {pitchDeckUrl ? (
+              <a
+                href={pitchDeckUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-12 items-center rounded bg-white px-6 text-[14.5px] font-semibold text-navy-deep hover:bg-ice-blue transition-colors"
+              >
+                Pitch deck
+              </a>
+            ) : null}
+            {financialModelUrl ? (
+              <a
+                href={financialModelUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-12 items-center rounded border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
+              >
+                Financial model
+              </a>
+            ) : null}
             <a
-              href={pitchDeckUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-12 items-center rounded bg-white px-6 text-[14.5px] font-semibold text-navy-deep hover:bg-ice-blue transition-colors"
-            >
-              Pitch deck
-            </a>
-            <a
-              href={financialModelUrl}
-              target="_blank"
-              rel="noreferrer"
+              href="mailto:eric@aequoros.com"
               className="inline-flex h-12 items-center rounded border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
             >
-              Financial model
+              Request the materials
             </a>
           </div>
         </div>
