@@ -1,165 +1,86 @@
 import type { Metadata } from 'next';
-import SectionLabel from '@/components/SectionLabel';
-import { LinkButton } from '@/components/Button';
+import PageHeader from '@/components/PageHeader';
 
 export const metadata: Metadata = {
-  title: 'Investor Materials — AequorOS',
+  title: 'Investors — AequorOS',
   description:
-    'Access the AequorOS pitch deck and financial model. We are raising a $500K seed for 10–12 months of runway to onboard 1–2 pilot banks — Treasury and ALM infrastructure for African banks.',
+    'AequorOS is raising a $500K seed round: Treasury and ALM infrastructure for African banks, starting from a working product. Pitch deck and financial model available.',
 };
 
-const materials = [
+const thesis = [
   {
-    label: 'PITCH DECK',
-    title: 'Investor Presentation',
-    description:
-      'Overview of the problem, solution, market opportunity, business model, team, and fundraising ask.',
-    fileType: 'PDF',
-    href: process.env.NEXT_PUBLIC_INVESTOR_PITCH_DECK_URL ?? '#',
+    label: 'WORKING PRODUCT',
+    body: "Seven calculation engines, a governed data spine, and Bank of Ghana returns generated in the regulator's own formats. The interface is public on this site.",
   },
   {
-    label: 'FINANCIAL MODEL',
-    title: 'Five-Year Financial Model',
-    description:
-      'Revenue projections, unit economics, headcount plan, and 10–12 month use-of-funds breakdown.',
-    fileType: 'Excel',
-    href: process.env.NEXT_PUBLIC_INVESTOR_FINANCIAL_MODEL_URL ?? '#',
+    label: 'REGULATORY TAILWIND',
+    body: "Ghana's new prudential directives carry a stated effective date of 1 January 2027, and other African regulators are moving the same way. Compliance is the wedge.",
+  },
+  {
+    label: 'FOUNDER-LED',
+    body: 'A quantitative-risk founder and a systems CTO, both verifiable on LinkedIn. Ghanaian roots, US market discipline, building in public.',
   },
 ];
 
+const pitchDeckUrl = process.env.NEXT_PUBLIC_INVESTOR_PITCH_DECK_URL ?? '#';
+const financialModelUrl =
+  process.env.NEXT_PUBLIC_INVESTOR_FINANCIAL_MODEL_URL ?? '#';
+
 export default function InvestorsPage() {
   return (
-    <>
-      {/* Hero */}
-      <section className="bg-navy-deep text-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20 md:py-28">
-          <div className="max-w-3xl">
-            <SectionLabel>INVESTOR MATERIALS</SectionLabel>
-            <h1 className="mt-6 font-serif font-bold text-white text-4xl md:text-5xl lg:text-6xl leading-[1.1]">
-              We are raising a $500K seed round.
-            </h1>
-            <p className="mt-8 text-ice-blue text-lg md:text-xl leading-relaxed max-w-[600px]">
-              AequorOS builds cloud-native Treasury and ALM infrastructure for
-              mid-tier African banks. The product is live — Data Engine through
-              six ALM engines and Bank of Ghana regulatory returns, with the
-              working interface shown publicly on this site. This raise funds
-              10–12 months of runway to land and run 1–2 design-partner banks.
+    <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16">
+      <PageHeader
+        kicker="Investors"
+        title="The balance-sheet layer for African banking."
+        lede="Two trillion dollars in assets, thousands of institutions, and a regulatory wave that makes modern ALM mandatory rather than optional. We are building the infrastructure those banks will run on, starting from a working product rather than a deck."
+        maxWidth="max-w-4xl"
+      />
+
+      <div className="grid md:grid-cols-3 gap-6 pb-14">
+        {thesis.map((item) => (
+          <div
+            key={item.label}
+            className="bg-white border border-hairline rounded-md p-7 flex flex-col gap-2.5"
+          >
+            <p className="text-[13px] font-semibold tracking-[0.06em] text-text-muted">
+              {item.label}
             </p>
+            <p className="text-[15px] leading-[1.6] text-ink-soft">{item.body}</p>
           </div>
-        </div>
-      </section>
+        ))}
+      </div>
 
-      {/* Materials */}
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <SectionLabel>DOCUMENTS</SectionLabel>
-          <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-            Access our materials directly.
-          </h2>
-          <p className="mt-4 text-text-muted text-base md:text-lg leading-relaxed max-w-[600px]">
-            Both documents open in Google Drive. No sign-in required.
-          </p>
-
-          <div className="mt-12 grid gap-6 md:grid-cols-2">
-            {materials.map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                target="_blank"
-                rel="noreferrer"
-                className="group flex flex-col justify-between bg-white border border-border-light border-l-4 border-l-accent rounded-lg p-8 hover:shadow-md transition-shadow"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-accent text-xs font-semibold tracking-[0.15em]">
-                      {item.label}
-                    </span>
-                    <span className="text-text-muted text-xs font-medium uppercase tracking-wide border border-border-light rounded px-2 py-0.5">
-                      {item.fileType}
-                    </span>
-                  </div>
-                  <h3 className="mt-4 font-serif font-bold text-navy text-xl group-hover:text-accent transition-colors">
-                    {item.title}
-                  </h3>
-                  <p className="mt-3 text-text-primary leading-relaxed text-sm md:text-base">
-                    {item.description}
-                  </p>
-                </div>
-                <div className="mt-8 flex items-center gap-2 text-accent text-sm font-semibold">
-                  Open in Google Drive
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    className="transition-transform group-hover:translate-x-1"
-                  >
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
-                </div>
-              </a>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Round details */}
-      <section className="bg-soft-bg">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <SectionLabel>THE RAISE</SectionLabel>
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            {[
-              { stat: '$500K', label: 'Seed round target' },
-              {
-                stat: '10–12 mo',
-                label: 'Runway to land and support 1–2 pilot banks',
-              },
-              {
-                stat: 'Product live',
-                label: 'Current stage · onboarding design partners',
-              },
-            ].map(({ stat, label }) => (
-              <div
-                key={label}
-                className="bg-white border border-border-light rounded-lg p-8"
-              >
-                <p className="font-serif font-bold text-navy text-4xl">{stat}</p>
-                <p className="mt-3 text-text-muted text-sm leading-relaxed">
-                  {label}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="bg-navy-deep text-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20 md:py-24">
-          <div className="max-w-[800px] mx-auto text-center">
-            <h2 className="font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-              Ready to talk?
+      <div className="pb-24">
+        <div className="bg-navy-deep rounded-md px-8 md:px-12 py-10 md:py-11 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+          <div className="flex flex-col gap-2 max-w-2xl">
+            <h2 className="font-serif font-medium text-[26px] md:text-[30px] tracking-tight text-white">
+              Raising our seed round.
             </h2>
-            <p className="mt-6 text-ice-blue text-lg leading-relaxed">
-              Reach out directly to the founder. We respond to every
-              serious inquiry.
+            <p className="text-[15.5px] leading-relaxed text-white/[0.72]">
+              The deck and the financial model are available on request, and
+              the best diligence is the product itself.
             </p>
-            <div className="mt-10 flex justify-center">
-              <LinkButton href="/contact" variant="primary-on-dark">
-                Start a conversation
-              </LinkButton>
-            </div>
+          </div>
+          <div className="flex flex-wrap gap-3.5 shrink-0">
+            <a
+              href={pitchDeckUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-12 items-center rounded bg-white px-6 text-[14.5px] font-semibold text-navy-deep hover:bg-ice-blue transition-colors"
+            >
+              Pitch deck
+            </a>
+            <a
+              href={financialModelUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-12 items-center rounded border border-white/35 px-6 text-[14.5px] font-medium text-white hover:bg-white/10 transition-colors"
+            >
+              Financial model
+            </a>
           </div>
         </div>
-      </section>
-    </>
+      </div>
+    </div>
   );
 }

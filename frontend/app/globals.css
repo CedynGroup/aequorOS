@@ -18,8 +18,8 @@ html {
 }
 
 body {
-  color: var(--text-primary);
-  background: #ffffff;
+  color: #16203a;
+  background: #fbfaf7;
   font-feature-settings: 'ss01', 'cv11';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

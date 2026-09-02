@@ -8,7 +8,8 @@ import './globals.css';
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-fraunces',
-  weight: ['400', '600', '700'],
+  weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
   display: 'swap',
 });
 
@@ -56,7 +57,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
-      <body className="font-sans bg-white text-text-primary antialiased">
+      <body className="font-sans bg-paper text-ink antialiased">
         <Navigation />
         <main>{children}</main>
         <Footer />
