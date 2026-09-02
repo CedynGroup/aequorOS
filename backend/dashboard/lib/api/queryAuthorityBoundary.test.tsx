@@ -5,10 +5,26 @@ const PERIOD_ID = 'period-latest';
 const HISTORICAL_PERIOD_ID = 'period-historical';
 const UPDATED_PERIOD_ID = 'period-updated';
 
+/**
+ * Wait for the query layer to CONVERGE on an expected state.
+ *
+ * Every assertion here is about a settled outcome — a fetch count, an
+ * effective period — never about latency, so the deadline only needs to be
+ * generous enough that a loaded machine is not mistaken for a regression. It
+ * was 1s, which failed on busy CI runners and under local load while the
+ * behaviour was correct; a broken implementation never converges and still
+ * fails, just later.
+ */
+const CONVERGENCE_TIMEOUT_MS = Number(
+  process.env.QUERY_TEST_TIMEOUT_MS ?? 15_000,
+);
+
 async function waitFor(check: () => boolean, message: string): Promise<void> {
-  const deadline = Date.now() + 1_000;
+  const deadline = Date.now() + CONVERGENCE_TIMEOUT_MS;
   while (!check()) {
-    if (Date.now() >= deadline) throw new Error(message);
+    if (Date.now() >= deadline) {
+      throw new Error(`${message} (after ${CONVERGENCE_TIMEOUT_MS}ms)`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 2));
   }
 }

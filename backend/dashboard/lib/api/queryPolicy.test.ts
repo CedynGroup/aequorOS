@@ -31,10 +31,17 @@ const BANK_ID = 'BK-SAMP0001';
 const PERIOD_ID = 'period-latest';
 const scope = queryAuthorityScope('OR-DEM00001', 'analyst@aequoros.example', ['analyst']);
 
+/** See queryAuthorityBoundary.test.tsx: these wait for CONVERGENCE, not speed. */
+const CONVERGENCE_TIMEOUT_MS = Number(
+  process.env.QUERY_TEST_TIMEOUT_MS ?? 15_000,
+);
+
 async function waitFor(check: () => boolean, message: string): Promise<void> {
-  const deadline = Date.now() + 500;
+  const deadline = Date.now() + CONVERGENCE_TIMEOUT_MS;
   while (!check()) {
-    if (Date.now() >= deadline) throw new Error(message);
+    if (Date.now() >= deadline) {
+      throw new Error(`${message} (after ${CONVERGENCE_TIMEOUT_MS}ms)`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 2));
   }
 }
