@@ -17,7 +17,7 @@ from alembic import op
 from app.db.session import force_rls_suspended
 
 revision = "202608290047"
-down_revision = "202608280046"
+down_revision = "202609010050"
 branch_labels = None
 depends_on = None
 
