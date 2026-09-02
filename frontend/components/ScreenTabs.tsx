@@ -18,6 +18,7 @@ export type ScreenTabItem = {
  */
 export default function ScreenTabs({ items }: { items: ScreenTabItem[] }) {
   const [activeIdx, setActiveIdx] = useState(0);
+  if (items.length === 0) return null;
   const active = items[activeIdx] ?? items[0];
   const screen = screenById(active.screenId);
 
@@ -30,6 +31,7 @@ export default function ScreenTabs({ items }: { items: ScreenTabItem[] }) {
             <button
               key={item.tab}
               type="button"
+              aria-pressed={selected}
               onClick={() => setActiveIdx(idx)}
               className={`inline-flex h-10 items-center rounded px-4 text-[14px] font-medium border transition-colors ${
                 selected
@@ -45,6 +47,7 @@ export default function ScreenTabs({ items }: { items: ScreenTabItem[] }) {
       <div className="flex flex-col lg:flex-row-reverse gap-10 lg:gap-16 items-center">
         {screen ? (
           <ProductFrame
+            key={screen.id}
             screen={screen}
             sizes="(max-width: 1024px) 100vw, 660px"
             className="w-full lg:w-[660px] shrink-0"

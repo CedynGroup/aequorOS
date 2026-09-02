@@ -14,6 +14,8 @@ type Module = {
   body: string;
   /** Screen shown beside the copy; absent = placeholder panel. */
   screenId?: string;
+  /** Sub-line shown in the placeholder when no screen is available. */
+  placeholderHint?: string;
 };
 
 const modules: Module[] = [
@@ -60,7 +62,7 @@ const modules: Module[] = [
     eyebrow: 'MODULE · FX RISK',
     title: 'Open positions, limits, and hedges in one view.',
     body: 'Net open position monitoring against single-currency and aggregate limits, historical-simulation and stressed VaR, and IFRS 9 hedge-effectiveness testing on regional pairs.',
-    screenId: 'fx',
+    placeholderHint: 'NOP by currency · VaR · hedge effectiveness',
   },
   {
     id: 'ftp',
@@ -117,6 +119,7 @@ export default function ModuleShowcase() {
         <div className="flex flex-col lg:flex-row-reverse gap-10 lg:gap-16 items-center">
           {screen ? (
             <ProductFrame
+              key={screen.id}
               screen={screen}
               sizes="(max-width: 1024px) 100vw, 660px"
               className="w-full lg:w-[660px] shrink-0"
@@ -131,11 +134,13 @@ export default function ModuleShowcase() {
                 className="rounded-md"
               />
               <p className="text-sm font-semibold text-text-muted">
-                [ Credit module screenshot — captured at retake ]
+                {active.name} — capture pending
               </p>
-              <p className="text-[12.5px] text-text-muted/80">
-                NPL monitor · classification grid · concentration
-              </p>
+              {active.placeholderHint ? (
+                <p className="text-[12.5px] text-text-muted/80">
+                  {active.placeholderHint}
+                </p>
+              ) : null}
             </div>
           )}
           <div className="flex flex-col gap-4">
@@ -165,6 +170,7 @@ export default function ModuleShowcase() {
                 <button
                   key={module.id}
                   type="button"
+                  aria-pressed={selected}
                   onClick={() => {
                     setActiveId(module.id);
                     window.history.replaceState(null, '', `#module-${module.id}`);

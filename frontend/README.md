@@ -16,11 +16,12 @@ product interface is shown on-site at `/product#product-ui`.
 
 ## Design system
 
-The marketing design system (palette, type ramp, components, rules) is
-documented as a self-contained style tile at
-`docs/collateral/marketing-style-tile.html` — open it in any browser. The
-Tailwind tokens in `tailwind.config.ts` are the implementation of that tile;
-change them together.
+The marketing design system's source of truth is the token set in
+`tailwind.config.ts` (palette, type ramp) together with the shared components
+in `components/` (`Kicker`, `PageHeader`, `Button`, `ProductFrame`,
+`ScreenTabs`, `ModuleShowcase`). A rendered style-tile reference is generated
+locally under `docs/collateral/` (that path is gitignored — client
+collateral), so regenerate it there rather than expecting it in the repo.
 
 ## Get started
 
