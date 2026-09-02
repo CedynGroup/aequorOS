@@ -62,7 +62,7 @@ const modules: Module[] = [
     eyebrow: 'MODULE · FX RISK',
     title: 'Open positions, limits, and hedges in one view.',
     body: 'Net open position monitoring against single-currency and aggregate limits, historical-simulation and stressed VaR, and IFRS 9 hedge-effectiveness testing on regional pairs.',
-    placeholderHint: 'NOP by currency · VaR · hedge effectiveness',
+    screenId: 'fx',
   },
   {
     id: 'ftp',
