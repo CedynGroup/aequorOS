@@ -96,9 +96,15 @@ def list_live_snapshots(
     bank_id: str,
     db: DbSession,
     ctx: Tenant,
-    # 'rating' (implied-rating / credit assessment) is a first-class live module the
-    # Command Center pulse requests a ladder for — omitting it 422'd every tenant.
-    module: Annotated[str, Query(pattern="^(liquidity|capital|irr|fx|ftp|rating|forecast)$")],
+    # Every module the Command Center pulse draws a sparkline for must be listed
+    # here: the pulse requests one ladder per live module, so a module missing
+    # from this pattern 422s on every dashboard load ('rating' did, then
+    # 'credit' did when the credit module shipped). Keep it in step with
+    # components/home/pulse.ts.
+    module: Annotated[
+        str,
+        Query(pattern="^(liquidity|capital|credit|irr|fx|ftp|rating|forecast)$"),
+    ],
     days: Annotated[int, Query(ge=2, le=120)] = 45,
 ) -> LiveSnapshotListRead:
     """Plane-2 daily ladder: past days are EOD closes, today is the live edge."""
