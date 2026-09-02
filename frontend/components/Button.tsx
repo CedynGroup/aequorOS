@@ -8,17 +8,17 @@ type Variant =
   | 'secondary-on-light';
 
 const base =
-  'inline-flex items-center justify-center rounded-md px-6 py-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2';
+  'inline-flex items-center justify-center rounded px-6 h-12 text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2';
 
 const variants: Record<Variant, string> = {
   primary:
-    'bg-accent text-navy-deep hover:bg-accent/90 focus-visible:ring-offset-white',
+    'bg-navy-deep text-white hover:bg-navy focus-visible:ring-offset-white',
   'primary-on-dark':
-    'bg-accent text-navy-deep hover:bg-accent/90 focus-visible:ring-offset-navy-deep',
+    'bg-white text-navy-deep hover:bg-ice-blue focus-visible:ring-offset-navy-deep',
   secondary:
-    'border border-white text-white hover:bg-white hover:text-navy-deep focus-visible:ring-offset-navy-deep',
+    'border border-white/35 text-white hover:bg-white/10 focus-visible:ring-offset-navy-deep',
   'secondary-on-light':
-    'border border-navy/20 text-navy hover:border-navy hover:bg-navy hover:text-white focus-visible:ring-offset-white',
+    'border border-[#C9CDD8] text-ink hover:border-navy-deep focus-visible:ring-offset-white',
 };
 
 type CommonProps = {

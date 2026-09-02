@@ -12,7 +12,15 @@ product interface is shown on-site at `/product#product-ui`.
 - TypeScript
 - Tailwind CSS v3
 - Fraunces + Inter via `next/font/google`
-- Deploy: Vercel
+- Deploy: Coolify (apex domain, behind Cloudflare)
+
+## Design system
+
+The marketing design system (palette, type ramp, components, rules) is
+documented as a self-contained style tile at
+`docs/collateral/marketing-style-tile.html` — open it in any browser. The
+Tailwind tokens in `tailwind.config.ts` are the implementation of that tile;
+change them together.
 
 ## Get started
 

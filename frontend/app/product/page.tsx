@@ -1,370 +1,141 @@
 import type { Metadata } from 'next';
-import { Check } from 'lucide-react';
-import SectionLabel from '@/components/SectionLabel';
-import ModuleCard from '@/components/ModuleCard';
-import ProductFrame from '@/components/ProductFrame';
-import ProductGallery from '@/components/ProductGallery';
-import { LinkButton } from '@/components/Button';
-import { heroScreen, screenById } from '@/lib/product-screens';
+import Link from 'next/link';
+import Kicker from '@/components/Kicker';
+import PageHeader from '@/components/PageHeader';
+import ModuleShowcase from '@/components/ModuleShowcase';
+import ScreenTabs from '@/components/ScreenTabs';
 
 export const metadata: Metadata = {
   title: 'Product — AequorOS',
   description:
-    'Live Treasury and ALM platform for African banks: Data Engine, liquidity, capital, IRRBB, FX, FTP, forecasting, and Bank of Ghana regulatory returns — with the working product interface shown publicly.',
+    'Ingestion, seven calculation engines, and regulatory reporting on one auditable spine. Browse the working product interface — no login required.',
 };
 
-const modules = [
-  {
-    number: '01',
-    name: 'Liquidity Risk',
-    description:
-      'Basel LCR and NSFR plus cash-flow forecasting at portfolio and institution level, recalculated automatically as new data lands.',
-    detail:
-      'Shock-scenario liquidity stress on the same engine. ML cash-flow views are labeled separately from regulatory ratios, and Basel parameters are labeled as Basel wherever a local rule has not been published.',
-    screenId: 'liquidity',
-  },
-  {
-    number: '02',
-    name: 'Regulatory Capital',
-    description:
-      'RWA under the Basel III standardized approach, capital stack and ratios, and pre-built Bank of Ghana BSD prudential returns.',
-    detail:
-      'CET1 / Tier 1 / CAR headroom against regulatory floors, with multi-quarter capital stress paths.',
-    screenId: 'basel',
-  },
-  {
-    number: '03',
-    name: 'Balance Sheet Forecasting',
-    description:
-      'Multi-year projection and scenario planning against macro assumptions, run as immutable, reproducible snapshots.',
-    detail:
-      'What-if lab re-runs the real regulatory engines under shock — base vs stressed paths with breach flags.',
-    screenId: 'forecasting-whatif',
-  },
-  {
-    number: '04',
-    name: 'Interest Rate Risk',
-    description:
-      'Repricing-gap and duration analysis, EVE, and Earnings-at-Risk across the six Basel IRRBB shock scenarios.',
-    detail:
-      'Interest-rate-swap decomposition included. Deterministic, and every figure traces back to the inputs that produced it.',
-    screenId: 'irr',
-  },
-  {
-    number: '05',
-    name: 'Funds Transfer Pricing',
-    description:
-      'Matched-maturity transfer-pricing curves, NMD behavioral modeling, and product- and branch-level profitability.',
-    detail:
-      'Core/volatile deposit splits driven by reviewed behavioral duration — not folklore spreads.',
-    screenId: 'ftp',
-  },
-  {
-    number: '06',
-    name: 'FX Risk',
-    description:
-      'Net-open-position monitoring against limits, historical-simulation and stressed VaR, and IFRS 9 hedge-effectiveness testing.',
-    detail:
-      'Regional currency pairs and BoG-style single-currency and aggregate NOP limits.',
-    screenId: 'fx',
-  },
-];
-
-const steps = [
-  {
-    n: '1',
-    title: 'Connect',
-    body: 'The Data Engine ingests file uploads and secure API pushes today. Oracle read-only extraction ships in the standard deployment; SQL Server, JDBC/ODBC and Snowflake are built and tested but need a deployment image carrying their drivers. Market-data vendor feeds are configured per institution and enabled only after vendor onboarding.',
-  },
-  {
-    n: '2',
-    title: 'Calculate',
-    body: 'Accepted loads normalize into an auditable model and trigger liquidity, capital, IRR, FX, FTP, and forecasting. Deterministic where regulation demands it; ML only where it improves forecasting and is clearly labeled.',
-  },
-  {
-    n: '3',
-    title: 'Report',
-    body: 'ALCO outputs and Bank of Ghana BSD returns generate in the regulator’s own workbook layouts and export to Excel, CSV, and PDF for officer review and signature — every figure traceable to the source input that produced it.',
-  },
-];
-
-const infrastructure = [
-  'Cloud-native; Python/FastAPI backend, TypeScript front end',
-  'PostgreSQL canonical store with row-level tenant isolation',
-  'Per-institution, cloud-based object storage',
-  'Immutable, versioned snapshots with full data lineage',
-  'No SOC 2, ISO or other third-party certification today — independent audit is planned before production banking data',
-];
-
-const security = [
-  'Encryption in transit and at rest',
-  'Role-based access control (RBAC)',
-  'Immutable lineage on every canonical record; audit trail on every review and mutation',
-  'Value-based reproducibility for point-in-time regulatory submissions',
-  'Per-tenant isolation enforced at the database (row-level security)',
-];
-
 export default function ProductPage() {
-  const dataEngine = screenById('data-engine')!;
-  const submissions = screenById('submissions')!;
-  const lineage = screenById('positions-lineage')!;
-
   return (
-    <>
-      {/* Hero */}
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20">
-          <div className="max-w-4xl">
-            <SectionLabel>THE PLATFORM</SectionLabel>
-            <h1 className="mt-6 font-serif font-bold text-navy text-4xl md:text-5xl lg:text-6xl leading-[1.1]">
-              From core data to a signed regulatory return, in one platform.
-            </h1>
-            <p className="mt-8 text-text-muted text-lg leading-relaxed max-w-[720px]">
-              Ingestion, ALM calculation, and regulatory reporting on a single
-              auditable data spine. Banks adopt the full platform or start with
-              the workflows most critical to their operations.
-            </p>
-            <div className="mt-8 flex flex-col sm:flex-row gap-4">
-              <LinkButton href="/contact" variant="primary">
-                Request a demo
-              </LinkButton>
-              <LinkButton href="#product-ui" variant="secondary-on-light">
-                Browse product UI
-              </LinkButton>
-            </div>
-          </div>
-          <div className="mt-12 max-w-5xl">
-            <ProductFrame
-              screen={heroScreen}
-              priority
-              tone="light"
-              showCaption
-              sizes="(max-width: 1024px) 100vw, 1024px"
-            />
-          </div>
-        </div>
-      </section>
+    <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16">
+      <PageHeader
+        kicker="The platform"
+        title="From first file to signed return."
+        lede="Ingestion, seven calculation engines, and regulatory reporting on one auditable spine. Start with the workflow that hurts most; adopt the rest when your team is ready."
+      />
+
+      {/* Compact pipeline strip */}
+      <div className="mb-16 md:mb-20 bg-navy-deep rounded-md px-6 md:px-8 py-5 flex flex-wrap items-center gap-3.5">
+        <span className="text-sm font-semibold text-white">Core data</span>
+        <StripArrow />
+        <span className="text-sm font-semibold text-accent">Data Engine</span>
+        <StripArrow />
+        <span className="text-sm font-semibold text-white">Seven engines</span>
+        <StripArrow />
+        <span className="text-sm font-semibold text-white">Signed returns</span>
+        <span className="ml-auto hidden md:inline text-[13px] text-white/60">
+          Every figure traceable to its source load
+        </span>
+      </div>
+
+      {/* Module showcase: click an engine in the index, its row opens above */}
+      <ModuleShowcase />
 
       {/* Data Engine */}
-      <section className="bg-navy-deep text-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
-            <div>
-              <SectionLabel>THE DATA ENGINE</SectionLabel>
-              <h2 className="mt-6 font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-                Connect the source you have. Normalize everything.
-              </h2>
-              <div className="mt-6 space-y-5 text-ice-blue text-base md:text-lg leading-relaxed">
-                <p>
-                  Most of the work in bank ALM is getting messy core-banking
-                  data into a clean, trustworthy shape. AequorOS does this with
-                  a source-agnostic Data Engine: connect, normalize,
-                  de-duplicate, resolve references, land an auditable canonical
-                  model — then trigger downstream calculations automatically.
-                </p>
-                <p>
-                  Where a source is unusual, the mapping is configured for that
-                  bank. It is never hard-coded into the product.
-                </p>
-              </div>
-              <ul className="mt-8 space-y-4">
-                {[
-                  'File upload and secure API push, source-agnostic',
-                  'Oracle read-only extraction in the standard deployment; other database backends need a driver-carrying image',
-                  'Core-banking and market-data adapters configured per institution, enabled only after network and vendor onboarding checks',
-                  'Per-institution mapping — no custom product forks',
-                  'Immutable canonical model with end-to-end lineage',
-                  'Automatic recalculation on every accepted data load',
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-3">
-                    <Check
-                      size={20}
-                      className="text-accent shrink-0 mt-0.5"
-                      aria-hidden
-                    />
-                    <span className="text-white leading-relaxed">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <ProductFrame
-              screen={dataEngine}
-              tone="dark"
-              showCaption={false}
-              sizes="(max-width: 1024px) 100vw, 560px"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Modules with UI */}
-      <section className="bg-soft-bg">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <SectionLabel>THE WORKFLOWS</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Six engines on one live spine.
+      <section id="data-engine" className="pb-20 md:pb-24 scroll-mt-24">
+        <div className="border-t border-hairline pt-14 md:pt-16">
+          <div className="flex flex-col gap-3.5 mb-8 max-w-2xl">
+            <Kicker>The data plane</Kicker>
+            <h2 className="font-serif font-medium text-3xl md:text-[38px] leading-[1.12] tracking-tight">
+              Connect the source you have. Normalize everything.
             </h2>
-            <p className="mt-5 text-text-muted text-lg leading-relaxed">
-              Liquidity, capital, forecasting, interest-rate risk, FTP, and FX
-              share one auditable canonical model — each with its working
-              product interface below.
-            </p>
           </div>
-          <div className="mt-12 grid gap-6 md:gap-8 md:grid-cols-2">
-            {modules.map((m) => (
-              <ModuleCard
-                key={m.number}
-                number={m.number}
-                name={m.name}
-                description={m.description}
-                detail={m.detail}
-                screen={screenById(m.screenId)}
-              />
-            ))}
-          </div>
+          <ScreenTabs
+            items={[
+              {
+                tab: 'Ingestion & health',
+                eyebrow: 'DATA ENGINE · INGESTION',
+                title: 'Every load lands in an auditable canonical model.',
+                body: 'File upload, secure API push, or a read-only extract from the core your bank already runs. Where a source is unusual, the mapping is configured for that bank — never hard-coded into the product. Downstream calculations trigger automatically on every accepted load.',
+                screenId: 'data-engine',
+              },
+              {
+                tab: 'Behavioral models',
+                eyebrow: 'DATA ENGINE · BEHAVIORAL',
+                title: 'Assumptions your institution can stand behind.',
+                body: 'Per-institution behavioral models for non-maturity deposits and prepayment, reviewed and versioned before any engine consumes them. Core/volatile splits come from evidence, not folklore.',
+                screenId: 'behavioral',
+              },
+              {
+                tab: 'Positions & lineage',
+                eyebrow: 'DATA ENGINE · LINEAGE',
+                title: 'Every figure answers for itself.',
+                body: 'The canonical position book behind every module calculation. Each number traces back to its source input, batch, and timestamp; corrections supersede prior records, and nothing is silently overwritten.',
+                screenId: 'positions-lineage',
+              },
+            ]}
+          />
         </div>
       </section>
 
-      {/* Submissions + lineage proof */}
-      <section className="bg-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <SectionLabel>REGULATORY &amp; AUDIT</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
+      {/* Governance */}
+      <section id="governance" className="pb-20 md:pb-24 scroll-mt-24">
+        <div className="border-t border-hairline pt-14 md:pt-16">
+          <div className="flex flex-col gap-3.5 mb-8 max-w-2xl">
+            <Kicker>Governance</Kicker>
+            <h2 className="font-serif font-medium text-3xl md:text-[38px] leading-[1.12] tracking-tight">
               Returns you can defend. Lineage you can show.
             </h2>
           </div>
-          <div className="mt-12 grid gap-10 lg:grid-cols-2">
-            <ProductFrame screen={submissions} tone="light" showCaption />
-            <ProductFrame screen={lineage} tone="light" showCaption />
-          </div>
+          <ScreenTabs
+            items={[
+              {
+                tab: 'Regulatory reporting',
+                eyebrow: 'GOVERNANCE · REGULATORY REPORTING',
+                title: 'Sealed runs, export-ready returns.',
+                body: "Bank of Ghana returns generated from immutable calculation runs in the regulator's own workbook layouts, exported to Excel, CSV, and PDF for officer review and signature.",
+                screenId: 'submissions',
+              },
+              {
+                tab: 'Reports',
+                eyebrow: 'GOVERNANCE · REPORTS',
+                title: 'One library for every official number.',
+                body: 'Run freshness per module, return packages with their provenance, saved analyses, and a print-ready executive board pack — composed from live figures, formatted for the boardroom.',
+                screenId: 'reports',
+              },
+              {
+                tab: 'Institution profile',
+                eyebrow: 'GOVERNANCE · INSTITUTION PROFILE',
+                title: 'The registers behind the numbers.',
+                body: "Your institution's parties, products, outlets, and Board-governed parameter registers, each change carrying approval evidence and an audit trail.",
+                screenId: 'institution',
+              },
+            ]}
+          />
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="bg-soft-bg">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <SectionLabel>HOW IT WORKS</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              How AequorOS fits into a bank&apos;s operations.
-            </h2>
-          </div>
+      {/* Closing row */}
+      <div className="border-t border-hairline pt-12 pb-24 flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+        <h2 className="font-serif font-medium text-[26px] md:text-[30px] leading-[1.15] tracking-tight">
+          Ready to run it on your bank&apos;s questions?
+        </h2>
+        <Link
+          href="/contact"
+          className="inline-flex h-12 items-center rounded bg-navy-deep px-6 text-[15px] font-semibold text-white hover:bg-navy transition-colors shrink-0"
+        >
+          Request a demo
+        </Link>
+      </div>
+    </div>
+  );
+}
 
-          <div className="mt-12 grid gap-8 md:grid-cols-3">
-            {steps.map((s) => (
-              <div key={s.n} className="border-l-4 border-accent pl-6 py-2">
-                <div className="w-12 h-12 rounded-md bg-navy-deep text-white font-serif font-bold text-xl flex items-center justify-center">
-                  {s.n}
-                </div>
-                <h3 className="mt-5 font-serif font-bold text-navy text-2xl">
-                  {s.title}
-                </h3>
-                <p className="mt-3 text-text-primary leading-relaxed">
-                  {s.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Interactive product UI gallery — public proof */}
-      <section
-        id="product-ui"
-        className="bg-white scroll-mt-20"
-      >
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl mb-10">
-            <SectionLabel>PRODUCT INTERFACE</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Browse the working product — no login required.
-            </h2>
-            <p className="mt-5 text-text-muted text-lg leading-relaxed">
-              Captures from the live platform on a synthetic mid-tier African
-              universal bank profile (Ghana pilot). This is the product surface
-              Treasury and Risk teams evaluate in a demo.
-            </p>
-          </div>
-          <ProductGallery />
-        </div>
-      </section>
-
-      {/* Technical foundation */}
-      <section className="bg-soft-bg">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-16 md:py-20 lg:py-24">
-          <div className="max-w-3xl">
-            <SectionLabel>TECHNICAL FOUNDATION</SectionLabel>
-            <h2 className="mt-6 font-serif font-bold text-navy text-3xl md:text-4xl leading-tight">
-              Built for a bank IT review.
-            </h2>
-          </div>
-
-          <div className="mt-12 grid gap-10 md:grid-cols-2">
-            <div className="bg-white border border-border-light border-l-4 border-l-accent rounded-lg p-8">
-              <h3 className="font-serif font-bold text-navy text-2xl">
-                Infrastructure
-              </h3>
-              <ul className="mt-6 space-y-4">
-                {infrastructure.map((item) => (
-                  <li key={item} className="flex items-start gap-3">
-                    <Check
-                      size={20}
-                      className="text-accent shrink-0 mt-0.5"
-                      aria-hidden
-                    />
-                    <span className="text-text-primary leading-relaxed">
-                      {item}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="bg-white border border-border-light border-l-4 border-l-accent rounded-lg p-8">
-              <h3 className="font-serif font-bold text-navy text-2xl">
-                Security and governance
-              </h3>
-              <ul className="mt-6 space-y-4">
-                {security.map((item) => (
-                  <li key={item} className="flex items-start gap-3">
-                    <Check
-                      size={20}
-                      className="text-accent shrink-0 mt-0.5"
-                      aria-hidden
-                    />
-                    <span className="text-text-primary leading-relaxed">
-                      {item}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Closing CTA */}
-      <section className="bg-navy-deep text-white">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 lg:px-16 py-20 md:py-24">
-          <div className="max-w-[800px] mx-auto text-center">
-            <h2 className="font-serif font-bold text-white text-3xl md:text-4xl leading-tight">
-              Ready to run it on your bank&apos;s questions?
-            </h2>
-            <p className="mt-6 text-ice-blue text-lg leading-relaxed">
-              Book a 30-minute walkthrough with a Treasury or Risk leader. We
-              walk the live platform — Data Engine, calculations, and regulatory
-              returns — against the workflows your bank actually runs.
-            </p>
-            <div className="mt-10 flex justify-center">
-              <LinkButton href="/contact" variant="primary-on-dark">
-                Request a demo
-              </LinkButton>
-            </div>
-          </div>
-        </div>
-      </section>
-    </>
+function StripArrow() {
+  return (
+    <svg width="22" height="12" viewBox="0 0 22 12" aria-hidden>
+      <path
+        d="M0 6 H16 M12 1 L18 6 L12 11"
+        stroke="rgba(255,255,255,0.4)"
+        strokeWidth="2"
+        fill="none"
+      />
+    </svg>
   );
 }
