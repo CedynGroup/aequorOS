@@ -87,7 +87,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,
 )
-from app.services import filing_reconciliation
+from app.services import filing_reconciliation, regulatory_dashboard_batching
 from app.services.audit import record_event
 from app.services.jurisdictions import base_currency
 from app.services.live_block import live_block
@@ -97,7 +97,7 @@ from app.services.live_types import (
     findings_from_validations,
     worst_status,
 )
-from app.services.params import get_active_params
+from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
 ENGINE_VERSION = "regulatory-fx-v1.0.0"
@@ -167,6 +167,14 @@ class _FxParams:
 
 
 @dataclass(frozen=True)
+class _FxDashboardBatch:
+    runs: dict[UUID, RegulatoryRun]
+    facts: dict[UUID, list[BankFinancialFact]]
+    thresholds: PrefetchedActiveParams[ParamCapitalThreshold]
+    shocks: PrefetchedActiveParams[ParamStressShock]
+
+
+@dataclass(frozen=True)
 class _FxAnalysis:
     nop: NopResult
     var: VarResult
@@ -211,11 +219,8 @@ def get_fx_dashboard(
         else _get_period_or_404(db, ctx, bank, reporting_period_id)
     )
 
-    latest_run = (
-        _latest_succeeded_baseline_run(db, ctx, bank, period.id)
-        if reporting_period_id is not None
-        else None
-    )
+    batch = _prefetch_dashboard_batch(db, ctx, bank, periods, extra_period=period)
+    latest_run = batch.runs.get(period.id) if reporting_period_id is not None else None
     if latest_run is not None:
         metrics = _metrics_from_run(latest_run)
         positions = _positions_from_run(latest_run)
@@ -233,7 +238,7 @@ def get_fx_dashboard(
         ]
         stored = True
     else:
-        analysis = _compute_inline_or_409(db, ctx, bank, period)
+        analysis = _compute_inline_or_409(db, ctx, bank, period, batch=batch)
         metrics = _metrics_from_analysis(analysis)
         positions = _positions_from_analysis(analysis)
         standalone_vars = _standalone_from_analysis(analysis)
@@ -262,7 +267,7 @@ def get_fx_dashboard(
         standalone_vars=standalone_vars,
         hedges=hedges,
         scenarios=scenarios,
-        trend=_build_trend(db, ctx, bank, periods),
+        trend=_build_trend(db, ctx, bank, periods, batch=batch),
         validations=validations,
         live=live_block(db, ctx, bank.id, MODULE_FX),
     )
@@ -889,11 +894,18 @@ _TREND_MAX_POINTS = 13
 
 
 def _build_trend(
-    db: Session, ctx: TenantContext, bank: Bank, periods: list[BankReportingPeriod]
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    batch: _FxDashboardBatch | None = None,
 ) -> list[FxTrendPointRead]:
+    trend_periods = periods[-_TREND_MAX_POINTS:]
+    batch = batch or _prefetch_dashboard_batch(db, ctx, bank, trend_periods)
     points: list[FxTrendPointRead] = []
-    for period in periods[-_TREND_MAX_POINTS:]:
-        run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    for period in trend_periods:
+        run = batch.runs.get(period.id)
         if run is not None:
             metrics = run.metrics
             points.append(
@@ -909,7 +921,7 @@ def _build_trend(
             )
             continue
         try:
-            analysis = _compute_inline(db, ctx, bank, period)
+            analysis = _compute_inline_from_batch(db, ctx, bank, period, batch)
         except (MissingParameterError, FxComputationError, FxRunError, NotComputable):
             continue
         points.append(
@@ -924,6 +936,103 @@ def _build_trend(
             )
         )
     return points
+
+
+def _prefetch_dashboard_batch(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    extra_period: BankReportingPeriod | None = None,
+) -> _FxDashboardBatch:
+    candidates = [*periods[-_TREND_MAX_POINTS:]]
+    if extra_period is not None and all(item.id != extra_period.id for item in candidates):
+        candidates.append(extra_period)
+    period_ids = [period.id for period in candidates]
+    dates = [period.period_end for period in candidates]
+    return _FxDashboardBatch(
+        runs=regulatory_dashboard_batching.latest_succeeded_baseline_runs(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            module=MODULE_FX,
+            scenario_code=BASELINE_SCENARIO,
+            reporting_period_ids=period_ids,
+        ),
+        facts=regulatory_dashboard_batching.facts_by_period(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            reporting_period_ids=period_ids,
+            fact_groups=(*_FX_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP),
+        ),
+        thresholds=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, dates
+        ),
+        shocks=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamStressShock, dates
+        ),
+    )
+
+
+def _fx_params_from_batch(batch: _FxDashboardBatch, as_of: date) -> _FxParams | None:
+    thresholds = {
+        row.threshold_code: Decimal(str(row.value_pct)) for row in batch.thresholds.active_on(as_of)
+    }
+    if any(code not in thresholds for code in _REQUIRED_THRESHOLDS):
+        return None
+    scenario_shocks: dict[str, dict[str, Decimal]] = {}
+    for row in batch.shocks.active_on(as_of):
+        if row.module != MODULE_FX:
+            continue
+        scenario_shocks.setdefault(row.scenario_code, {})[row.shock_key] = Decimal(
+            str(row.shock_value)
+        )
+    depreciation_shocks: dict[str, Decimal] = {}
+    for code in _DEPRECIATION_SCENARIOS:
+        scenario = scenario_shocks.get(code)
+        if scenario is None or SHOCK_DEPRECIATION not in scenario:
+            return None
+        depreciation_shocks[code] = scenario[SHOCK_DEPRECIATION]
+    crisis = scenario_shocks.get(SCENARIO_CRISIS, {})
+    if any(
+        key not in crisis
+        for key in (SHOCK_CORRELATION_UPLIFT, SHOCK_CRISIS_START, SHOCK_CRISIS_END)
+    ):
+        return None
+    return _FxParams(
+        single_limit_pct=thresholds[NOP_SINGLE_LIMIT],
+        aggregate_limit_pct=thresholds[NOP_AGGREGATE_LIMIT],
+        var_confidence_pct=thresholds[VAR_CONFIDENCE],
+        hedge_r2_min_pct=thresholds[HEDGE_R2_MIN],
+        hedge_offset_low_pct=thresholds[HEDGE_OFFSET_LOW],
+        hedge_offset_high_pct=thresholds[HEDGE_OFFSET_HIGH],
+        depreciation_shocks=depreciation_shocks,
+        crisis_window=(int(crisis[SHOCK_CRISIS_START]), int(crisis[SHOCK_CRISIS_END])),
+        correlation_uplift=crisis[SHOCK_CORRELATION_UPLIFT],
+    )
+
+
+def _compute_inline_from_batch(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    batch: _FxDashboardBatch,
+) -> _FxAnalysis:
+    period_facts = batch.facts.get(period.id, [])
+    facts = [fact for fact in period_facts if fact.fact_group in _FX_FACT_GROUPS]
+    active = _fx_params_from_batch(batch, period.period_end)
+    return _run_analysis(
+        db,
+        ctx,
+        bank,
+        period,
+        facts,
+        active,
+        tier1=_tier1_from_facts(period_facts),
+    )
 
 
 @dataclass(frozen=True)
@@ -1002,10 +1111,19 @@ def _compute_inline(
 
 
 def _compute_inline_or_409(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    *,
+    batch: _FxDashboardBatch | None = None,
 ) -> _FxAnalysis:
     try:
-        return _compute_inline(db, ctx, bank, period)
+        return (
+            _compute_inline_from_batch(db, ctx, bank, period, batch)
+            if batch is not None
+            else _compute_inline(db, ctx, bank, period)
+        )
     except MissingParameterError as exc:
         raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except NotComputable as exc:

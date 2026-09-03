@@ -93,6 +93,7 @@ from app.schemas.regulatory_liquidity import (
 )
 from app.services import (
     filing_reconciliation,
+    regulatory_dashboard_batching,
     regulatory_parameters,
     sdi_capital,
     sdi_capital_checks,
@@ -108,7 +109,7 @@ from app.services.live_types import (
     findings_from_validations,
     worst_status,
 )
-from app.services.params import get_active_params
+from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 from app.services.regulatory_liquidity import get_regulatory_run, preview_note
 
 #: Bumped 2026-08-22 (forensic re-audit D-5) from ``v1.0.0``. MAJOR, because the
@@ -226,6 +227,17 @@ class _ActiveCapitalParams:
 
 
 @dataclass(frozen=True)
+class _CapitalDashboardBatch:
+    runs: dict[UUID, RegulatoryRun]
+    facts: dict[UUID, list[BankFinancialFact]]
+    weights: PrefetchedActiveParams[ParamRiskWeight]
+    thresholds: PrefetchedActiveParams[ParamCapitalThreshold]
+    crm: PrefetchedActiveParams[ParamCrmHaircut]
+    ecl: PrefetchedActiveParams[ParamEclAssumption]
+    governed: regulatory_parameters.PrefetchedParameterResolver
+
+
+@dataclass(frozen=True)
 class CapitalScenarioAnalysis:
     """One scenario's computed capital picture — engine outputs only."""
 
@@ -339,11 +351,9 @@ def get_capital_dashboard(
     else:
         period = _get_period_or_404(db, ctx, bank, reporting_period_id)
 
-    latest_run = (
-        _latest_succeeded_baseline_run(db, ctx, bank, period.id)
-        if reporting_period_id is not None
-        else None
-    )
+    batch = _prefetch_dashboard_batch(db, ctx, bank, periods, extra_period=period)
+    latest_run = batch.runs.get(period.id) if reporting_period_id is not None else None
+    active = _active_params_from_batch(db, ctx, bank, period.period_end, batch)
     if latest_run is not None:
         metrics = _metrics_from_run(db, latest_run)
         sections = _sections_from_run(db, latest_run)
@@ -358,7 +368,9 @@ def get_capital_dashboard(
         ]
         stored = True
     else:
-        rwa, ratios, engine_params = _compute_inline_or_409(db, ctx, bank, period)
+        rwa, ratios, engine_params = _compute_inline_or_409(
+            db, ctx, bank, period, batch=batch, active=active
+        )
         metrics = _metrics_from_results(rwa, ratios)
         sections = _sections_from_engine(rwa, ratios)
         validations = [
@@ -374,7 +386,6 @@ def get_capital_dashboard(
         ]
         stored = False
 
-    active = _load_active_params(db, ctx, bank, period.period_end)
     return CapitalDashboardRead(
         bank=BankRead.model_validate(bank, from_attributes=True),
         period=BankReportingPeriodRead.model_validate(period, from_attributes=True),
@@ -389,7 +400,7 @@ def get_capital_dashboard(
             credit_lines=sections.get("credit_rwa", []),
         ),
         capital_structure=_structure_from_lines(sections.get("capital_component", [])),
-        trend=_build_trend(db, ctx, bank, periods),
+        trend=_build_trend(db, ctx, bank, periods, batch=batch),
         buffers=_buffers_or_409(active, metrics.car_pct),
         validations=validations,
         live=live_block(db, ctx, bank.id, MODULE_CAPITAL),
@@ -709,9 +720,7 @@ def _modeled_ecl(
         segment, _, stage_token = fact.category.rpartition(":stage")
         if not segment or not stage_token.isdigit():
             continue
-        exposures.append(
-            EclExposure(segment=segment, stage=int(stage_token), ead=fact.amount)
-        )
+        exposures.append(EclExposure(segment=segment, stage=int(stage_token), ead=fact.amount))
     if not exposures or not active.ecl_assumptions:
         return None
     pd_multiplier = shocks.get("ecl_pd_multiplier")
@@ -1201,11 +1210,18 @@ _TREND_MAX_POINTS = 13
 
 
 def _build_trend(
-    db: Session, ctx: TenantContext, bank: Bank, periods: list[BankReportingPeriod]
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    batch: _CapitalDashboardBatch | None = None,
 ) -> list[CapitalTrendPointRead]:
+    trend_periods = periods[-_TREND_MAX_POINTS:]
+    batch = batch or _prefetch_dashboard_batch(db, ctx, bank, trend_periods)
     points: list[CapitalTrendPointRead] = []
-    for period in periods[-_TREND_MAX_POINTS:]:
-        run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    for period in trend_periods:
+        run = batch.runs.get(period.id)
         if run is not None:
             metrics = _decimal_metrics(run)
             points.append(
@@ -1221,7 +1237,7 @@ def _build_trend(
             )
             continue
         try:
-            _rwa, ratios, _params = _compute_inline(db, ctx, bank, period)
+            _rwa, ratios, _params = _compute_inline_from_batch(db, ctx, bank, period, batch)
         except (MissingParameterError, CapitalComputationError, CapitalRunError):
             continue
         points.append(
@@ -1236,6 +1252,120 @@ def _build_trend(
             )
         )
     return points
+
+
+def _prefetch_dashboard_batch(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    extra_period: BankReportingPeriod | None = None,
+) -> _CapitalDashboardBatch:
+    candidates = [*periods[-_TREND_MAX_POINTS:]]
+    if extra_period is not None and all(item.id != extra_period.id for item in candidates):
+        candidates.append(extra_period)
+    period_ids = [period.id for period in candidates]
+    dates = [period.period_end for period in candidates]
+    return _CapitalDashboardBatch(
+        runs=regulatory_dashboard_batching.latest_succeeded_baseline_runs(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            module=MODULE_CAPITAL,
+            scenario_code=BASELINE_SCENARIO,
+            reporting_period_ids=period_ids,
+        ),
+        facts=regulatory_dashboard_batching.facts_by_period(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            reporting_period_ids=period_ids,
+            fact_groups=_CAPITAL_FACT_GROUPS,
+        ),
+        weights=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamRiskWeight, dates
+        ),
+        thresholds=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, dates
+        ),
+        crm=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, dates
+        ),
+        ecl=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, dates
+        ),
+        governed=regulatory_parameters.PrefetchedParameterResolver.load(
+            db, bank, as_of_dates=dates
+        ),
+    )
+
+
+def _active_params_from_batch(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    batch: _CapitalDashboardBatch,
+) -> _ActiveCapitalParams:
+    weight_rows = batch.weights.active_on(as_of)
+    threshold_rows = batch.thresholds.active_on(as_of)
+    crm_rows = batch.crm.active_on(as_of)
+    ecl_rows = batch.ecl.active_on(as_of)
+    crm_haircuts = dict(DEFAULT_CRM_HAIRCUTS)
+    crm_haircuts.update({row.collateral_class: Decimal(str(row.haircut_pct)) for row in crm_rows})
+    car_min_param = batch.governed.try_resolve("car_min", as_of=as_of)
+    thresholds = batch.governed.clamp_overrides(
+        {row.threshold_code: Decimal(str(row.value_pct)) for row in threshold_rows},
+        as_of=as_of,
+    ).values
+    institution_class = batch.governed.scope.institution_class
+    rwa_scope = (
+        sdi_capital.resolve_rwa_scope(db, bank, as_of, resolver=batch.governed)
+        if institution_class == "sdi"
+        else None
+    )
+    return _ActiveCapitalParams(
+        risk_weights={row.risk_weight_code: Decimal(str(row.weight_pct)) for row in weight_rows},
+        thresholds=thresholds,
+        crm_haircuts=crm_haircuts,
+        ecl_assumptions=tuple(
+            EclAssumption(
+                segment=row.segment,
+                stage=row.stage,
+                pd_pct=Decimal(str(row.pd_pct)),
+                lgd_pct=Decimal(str(row.lgd_pct)),
+            )
+            for row in ecl_rows
+        ),
+        institution_class=institution_class,
+        car_min_fallback=car_min_param.value if car_min_param is not None else None,
+        rwa_scope=rwa_scope,
+    )
+
+
+def _compute_inline_from_batch(  # noqa: PLR0913 - explicit request scope plus optional reuse
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    batch: _CapitalDashboardBatch,
+    *,
+    active: _ActiveCapitalParams | None = None,
+) -> tuple[RwaResult, CapitalRatiosResult, CapitalParams]:
+    facts = batch.facts.get(period.id, [])
+    if not facts:
+        raise CapitalRunError(
+            "financial_facts_missing",
+            "The reporting period has no financial facts to analyze.",
+            {"reporting_period_id": str(period.id)},
+        )
+    active = active or _active_params_from_batch(db, ctx, bank, period.period_end, batch)
+    engine_params = _engine_params(active)
+    engine_facts = tuple(_to_engine_fact(fact) for fact in facts)
+    rwa = compute_rwa(engine_facts, engine_params)
+    ratios = compute_capital_ratios(engine_facts, rwa, engine_params)
+    return rwa, ratios, engine_params
 
 
 def _compute_inline(
@@ -1256,11 +1386,21 @@ def _compute_inline(
     return rwa, ratios, engine_params
 
 
-def _compute_inline_or_409(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves named inputs
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    *,
+    batch: _CapitalDashboardBatch | None = None,
+    active: _ActiveCapitalParams | None = None,
 ) -> tuple[RwaResult, CapitalRatiosResult, CapitalParams]:
     try:
-        return _compute_inline(db, ctx, bank, period)
+        return (
+            _compute_inline_from_batch(db, ctx, bank, period, batch, active=active)
+            if batch is not None
+            else _compute_inline(db, ctx, bank, period)
+        )
     except MissingParameterError as exc:
         raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except CapitalRunError as exc:
@@ -1628,9 +1768,7 @@ def _load_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, as_of
     )
     crm_haircuts = dict(DEFAULT_CRM_HAIRCUTS)
-    crm_haircuts.update(
-        {row.collateral_class: Decimal(str(row.haircut_pct)) for row in crm_rows}
-    )
+    crm_haircuts.update({row.collateral_class: Decimal(str(row.haircut_pct)) for row in crm_rows})
     # The institution class selects the capital regime; the control-plane CAR
     # floor is the fallback used only when the tenant has no board threshold row
     # (docs/sdi.md §4.2, §7 Phase E). ``try_resolve`` is None for a jurisdiction

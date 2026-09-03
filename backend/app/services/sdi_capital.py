@@ -91,7 +91,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -416,6 +416,83 @@ def net_own_funds(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> D
     return _net_own_funds(db, ctx, bank, as_of)
 
 
+def prefetch_net_own_funds(
+    db: Session, ctx: TenantContext, bank: Bank, as_of_dates: list[date]
+) -> dict[date, Decimal]:
+    """Resolve request-scoped SDI Net Own Funds without per-date queries."""
+    dates = sorted(set(as_of_dates))
+    if not dates:
+        return {}
+    scope = (
+        CanonicalReferenceRow.organization_id == ctx.organization_id,
+        CanonicalReferenceRow.bank_id == bank.id,
+        CanonicalReferenceRow.dataset_kind == "capital_structure",
+    )
+    generation_queries = []
+    for as_of in dates:
+        winner = (
+            select(
+                CanonicalReferenceRow.as_of_date.label("as_of_date"),
+                CanonicalReferenceRow.ingestion_batch_id.label("ingestion_batch_id"),
+            )
+            .where(*scope, CanonicalReferenceRow.as_of_date <= as_of)
+            .order_by(
+                CanonicalReferenceRow.as_of_date.desc(),
+                CanonicalReferenceRow.created_at.desc(),
+                CanonicalReferenceRow.id.desc(),
+            )
+            .limit(1)
+            .subquery()
+        )
+        generation_queries.append(
+            select(
+                literal(as_of).label("requested_date"),
+                winner.c.as_of_date,
+                winner.c.ingestion_batch_id,
+            )
+        )
+    generations = list(db.execute(union_all(*generation_queries)).all())
+    selected_generations = {
+        (generation_date, batch_id) for _, generation_date, batch_id in generations
+    }
+    if not selected_generations:
+        return dict.fromkeys(dates, _ZERO)
+
+    generation_scope = or_(
+        *(
+            and_(
+                CanonicalReferenceRow.as_of_date == generation_date,
+                CanonicalReferenceRow.ingestion_batch_id == batch_id,
+            )
+            for generation_date, batch_id in selected_generations
+        )
+    )
+    rows = list(
+        db.scalars(
+            select(CanonicalReferenceRow).where(
+                *scope,
+                generation_scope,
+            )
+        )
+    )
+    totals_by_generation: dict[tuple[date, object], Decimal] = {}
+    for row in rows:
+        key = (row.as_of_date, row.ingestion_batch_id)
+        totals_by_generation[key] = totals_by_generation.get(key, _ZERO) + signed_component_amount(
+            row.payload or {}
+        )
+
+    generation_by_date: dict[date, tuple[date, object]] = {}
+    for as_of, generation_date, batch_id in generations:
+        generation_by_date[as_of] = (generation_date, batch_id)
+    return {
+        as_of: totals_by_generation.get(generation_by_date[as_of], _ZERO)
+        if as_of in generation_by_date
+        else _ZERO
+        for as_of in dates
+    }
+
+
 def resolve_bucket_map(db: Session, bank: Bank, as_of: date) -> tuple[dict[str, str], str]:
     """The governed position-type → risk-weight-bucket map and its source.
 
@@ -441,7 +518,11 @@ _EXPLICITLY_OUT = ("", "false", "none", "null", "excluded", "not_applicable", "0
 
 
 def _resolve_composition_row(
-    db: Session, bank: Bank, as_of: date
+    db: Session,
+    bank: Bank,
+    as_of: date,
+    *,
+    resolver: rp.PrefetchedParameterResolver | None = None,
 ) -> tuple[dict[str, str], str, str | None]:
     """``(composition, source, confirmation_status)`` from the control plane.
 
@@ -451,7 +532,11 @@ def _resolve_composition_row(
     published instrument" are different questions, and the official filing gate
     (:func:`assert_scope_filable`) has to ask both.
     """
-    resolved = rp.try_resolve(db, bank, COMPOSITION_PARAM, as_of=as_of)
+    resolved = (
+        resolver.try_resolve(COMPOSITION_PARAM, as_of=as_of)
+        if resolver is not None
+        else rp.try_resolve(db, bank, COMPOSITION_PARAM, as_of=as_of)
+    )
     if resolved is not None and isinstance(resolved.value_json, Mapping):
         governed: dict[str, str] = {}
         for key, value in resolved.value_json.items():
@@ -564,7 +649,13 @@ def default_rwa_scope() -> SdiRwaScope:
     )
 
 
-def resolve_rwa_scope(db: Session, bank: Bank, as_of: date) -> SdiRwaScope:
+def resolve_rwa_scope(
+    db: Session,
+    bank: Bank,
+    as_of: date,
+    *,
+    resolver: rp.PrefetchedParameterResolver | None = None,
+) -> SdiRwaScope:
     """Resolve the governed RWA scope, percentages and all — the ONE entry point.
 
     Every SDI capital path calls this and none restates it. Refuses rather than
@@ -574,7 +665,7 @@ def resolve_rwa_scope(db: Session, bank: Bank, as_of: date) -> SdiRwaScope:
     :class:`SdiCapitalPolicyUnresolved` — a total missing a declared component is
     not a total.
     """
-    composition, source, confirmation = _resolve_composition_row(db, bank, as_of)
+    composition, source, confirmation = _resolve_composition_row(db, bank, as_of, resolver=resolver)
     charges: dict[str, Decimal] = {}
     pending: list[str] = []
     for risk_class in sorted(composition):
@@ -590,7 +681,11 @@ def resolve_rwa_scope(db: Session, bank: Bank, as_of: date) -> SdiRwaScope:
             continue
         if measurement == MEASURE_PCT_OF_CREDIT_RWA and risk_class != RISK_CLASS_CREDIT:
             code = charge_param_code(risk_class)
-            resolved = rp.try_resolve(db, bank, code, as_of=as_of)
+            resolved = (
+                resolver.try_resolve(code, as_of=as_of)
+                if resolver is not None
+                else rp.try_resolve(db, bank, code, as_of=as_of)
+            )
             charge = resolved.normalized_value if resolved is not None else None
             if resolved is None or charge is None:
                 raise _policy_unresolved(

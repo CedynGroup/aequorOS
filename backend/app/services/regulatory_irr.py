@@ -100,6 +100,7 @@ from app.services import (
     institution_types,
     jurisdictions,
     market_data_sources,
+    regulatory_dashboard_batching,
     regulatory_parameters,
     sdi_capital,
 )
@@ -110,7 +111,8 @@ from app.services.live_types import (
     LiveModuleResult,
     findings_from_validations,
 )
-from app.services.params import get_active_params
+from app.services.market_data import CurveView
+from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
 ENGINE_VERSION = "regulatory-irr-v1.0.0"
@@ -154,6 +156,18 @@ class _IrrParams:
     # discounts on ``curve`` and results stay byte-identical to the
     # single-curve engine (the hermetic sample seed publishes no desk curves).
     discount_curve: dict[Decimal, Decimal] | None = None
+
+
+@dataclass(frozen=True)
+class _IrrDashboardBatch:
+    runs: dict[UUID, RegulatoryRun]
+    facts: dict[UUID, list[BankFinancialFact]]
+    shocks: PrefetchedActiveParams[ParamStressShock]
+    thresholds: PrefetchedActiveParams[ParamCapitalThreshold]
+    policy_scope: regulatory_parameters.PolicyScope
+    projection_curves: dict[date, CurveView | None]
+    discount_curves: dict[date, CurveView | None]
+    sdi_net_own_funds: dict[date, Decimal]
 
 
 @dataclass(frozen=True)
@@ -212,11 +226,8 @@ def get_irr_dashboard(
         else _get_period_or_404(db, ctx, bank, reporting_period_id)
     )
 
-    latest_run = (
-        _latest_succeeded_baseline_run(db, ctx, bank, period.id)
-        if reporting_period_id is not None
-        else None
-    )
+    batch = _prefetch_dashboard_batch(db, ctx, bank, periods, extra_period=period)
+    latest_run = batch.runs.get(period.id) if reporting_period_id is not None else None
     if latest_run is not None:
         metrics = _metrics_from_run(latest_run)
         gap_table = _gap_table_from_run(latest_run)
@@ -232,7 +243,7 @@ def get_irr_dashboard(
         ]
         stored = True
     else:
-        analysis = _compute_inline_or_409(db, ctx, bank, period)
+        analysis = _compute_inline_or_409(db, ctx, bank, period, batch=batch)
         metrics = _metrics_from_analysis(analysis)
         gap_table = _gap_table_from_analysis(analysis)
         eve_scenarios = _eve_scenarios_from_analysis(analysis)
@@ -255,7 +266,7 @@ def get_irr_dashboard(
         metrics=metrics,
         gap_table=gap_table,
         eve_scenarios=eve_scenarios,
-        trend=_build_trend(db, ctx, bank, periods),
+        trend=_build_trend(db, ctx, bank, periods, batch=batch),
         validations=validations,
         live=live_block(db, ctx, bank.id, MODULE_IRR),
     )
@@ -768,11 +779,18 @@ _TREND_MAX_POINTS = 13
 
 
 def _build_trend(
-    db: Session, ctx: TenantContext, bank: Bank, periods: list[BankReportingPeriod]
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    batch: _IrrDashboardBatch | None = None,
 ) -> list[IrrTrendPointRead]:
+    trend_periods = periods[-_TREND_MAX_POINTS:]
+    batch = batch or _prefetch_dashboard_batch(db, ctx, bank, trend_periods)
     points: list[IrrTrendPointRead] = []
-    for period in periods[-_TREND_MAX_POINTS:]:
-        run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    for period in trend_periods:
+        run = batch.runs.get(period.id)
         if run is not None:
             metrics = run.metrics
             points.append(
@@ -788,7 +806,7 @@ def _build_trend(
             )
             continue
         try:
-            analysis = _compute_inline(db, ctx, bank, period)
+            analysis = _compute_inline_from_batch(db, ctx, bank, period, batch)
         except (MissingParameterError, IrrComputationError, IrrRunError, UnsupportedShockError):
             continue
         points.append(
@@ -803,6 +821,126 @@ def _build_trend(
             )
         )
     return points
+
+
+def _prefetch_dashboard_batch(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    periods: list[BankReportingPeriod],
+    *,
+    extra_period: BankReportingPeriod | None = None,
+) -> _IrrDashboardBatch:
+    candidates = [*periods[-_TREND_MAX_POINTS:]]
+    if extra_period is not None and all(item.id != extra_period.id for item in candidates):
+        candidates.append(extra_period)
+    period_ids = [period.id for period in candidates]
+    dates = [period.period_end for period in candidates]
+    policy_scope = regulatory_parameters.policy_scope(
+        db, bank, as_of=min(dates) if dates else date.today()
+    )
+    preferred_curves = market_data_sources.prefetch_preferred_curves(
+        db,
+        ctx.organization_id,
+        bank.id,
+        policy_scope.currency,
+        dates,
+    )
+    sdi_net_own_funds = (
+        sdi_capital.prefetch_net_own_funds(db, ctx, bank, dates)
+        if policy_scope.institution_class == "sdi"
+        else {}
+    )
+    return _IrrDashboardBatch(
+        runs=regulatory_dashboard_batching.latest_succeeded_baseline_runs(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            module=MODULE_IRR,
+            scenario_code=BASELINE_SCENARIO,
+            reporting_period_ids=period_ids,
+        ),
+        facts=regulatory_dashboard_batching.facts_by_period(
+            db,
+            organization_id=ctx.organization_id,
+            bank=bank,
+            reporting_period_ids=period_ids,
+            fact_groups=(*_IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP),
+        ),
+        shocks=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamStressShock, dates
+        ),
+        thresholds=prefetch_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, dates
+        ),
+        policy_scope=policy_scope,
+        projection_curves=preferred_curves.projection,
+        discount_curves=preferred_curves.discount,
+        sdi_net_own_funds=sdi_net_own_funds,
+    )
+
+
+def _irr_params_from_batch(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    batch: _IrrDashboardBatch,
+) -> _IrrParams | None:
+    shock_rows = [row for row in batch.shocks.active_on(as_of) if row.module == MODULE_IRR]
+    curve: dict[Decimal, Decimal] = {}
+    scenario_shocks: dict[str, dict[str, Decimal]] = {}
+    for row in shock_rows:
+        if row.scenario_code == BASE_CURVE_SCENARIO:
+            midpoint = Decimal(row.shock_key.removesuffix("y"))
+            curve[midpoint] = Decimal(str(row.shock_value))
+        else:
+            scenario_shocks.setdefault(row.scenario_code, {})[row.shock_key] = Decimal(
+                str(row.shock_value)
+            )
+    thresholds = {
+        row.threshold_code: Decimal(str(row.value_pct)) for row in batch.thresholds.active_on(as_of)
+    }
+    if not curve:
+        projection = batch.projection_curves.get(as_of)
+        if projection is not None:
+            curve = discount_curve_midpoints_pct(projection.points)
+    if (
+        not curve
+        or not scenario_shocks
+        or EVE_LIMIT_THRESHOLD not in thresholds
+        or NII_LIMIT_THRESHOLD not in thresholds
+    ):
+        return None
+    discount_view = batch.discount_curves.get(as_of)
+    discount_curve = (
+        discount_curve_midpoints_pct(discount_view.points) if discount_view is not None else None
+    )
+    return _IrrParams(
+        curve=curve,
+        scenario_shocks=scenario_shocks,
+        eve_limit_pct=thresholds[EVE_LIMIT_THRESHOLD],
+        nii_limit_pct=thresholds[NII_LIMIT_THRESHOLD],
+        discount_curve=discount_curve,
+    )
+
+
+def _compute_inline_from_batch(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    batch: _IrrDashboardBatch,
+) -> _IrrAnalysis:
+    period_facts = batch.facts.get(period.id, [])
+    facts = [fact for fact in period_facts if fact.fact_group in _IRR_FACT_GROUPS]
+    active = _irr_params_from_batch(db, ctx, bank, period.period_end, batch)
+    tier1 = (
+        batch.sdi_net_own_funds[period.period_end]
+        if batch.policy_scope.institution_class == "sdi"
+        else _tier1_from_facts(period_facts)
+    )
+    return _run_analysis(db, ctx, bank, period, facts, active, tier1=tier1)
 
 
 def _compute_inline(
@@ -852,8 +990,7 @@ def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its f
     if active is None:
         raise IrrRunError(
             "missing_parameter",
-            "Required IRR parameters (base curve, scenario shocks, or limits) are "
-            "not configured.",
+            "Required IRR parameters (base curve, scenario shocks, or limits) are not configured.",
             None,
         )
     tier1 = _load_tier1(db, ctx, bank, period)
@@ -954,11 +1091,7 @@ def compute_ear_analysis(  # noqa: PLR0913 - the workbench seam names its full s
     delta = Decimal(delta_bp)
     twelve = Decimal("12")
     gap_within_horizon = sum(
-        (
-            bucket.gap
-            for bucket in gap.buckets
-            if bucket.midpoint_years * twelve < horizon
-        ),
+        (bucket.gap for bucket in gap.buckets if bucket.midpoint_years * twelve < horizon),
         _ZERO,
     )
     return IrrEarAnalysisRead(
@@ -978,9 +1111,7 @@ def compute_ear_analysis(  # noqa: PLR0913 - the workbench seam names its full s
 
 
 def _validate_ear_analysis_inputs(horizon_months: int, delta_bp: int) -> None:
-    if not (
-        EAR_ANALYSIS_MIN_HORIZON_MONTHS <= horizon_months <= EAR_ANALYSIS_MAX_HORIZON_MONTHS
-    ):
+    if not (EAR_ANALYSIS_MIN_HORIZON_MONTHS <= horizon_months <= EAR_ANALYSIS_MAX_HORIZON_MONTHS):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
@@ -1014,10 +1145,19 @@ def _validate_ear_analysis_inputs(horizon_months: int, delta_bp: int) -> None:
 
 
 def _compute_inline_or_409(
-    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period: BankReportingPeriod,
+    *,
+    batch: _IrrDashboardBatch | None = None,
 ) -> _IrrAnalysis:
     try:
-        return _compute_inline(db, ctx, bank, period)
+        return (
+            _compute_inline_from_batch(db, ctx, bank, period, batch)
+            if batch is not None
+            else _compute_inline(db, ctx, bank, period)
+        )
     except MissingParameterError as exc:
         raise ModuleDataUnavailable("missing_parameter", str(exc)) from exc
     except IrrRunError as exc:
@@ -1045,9 +1185,7 @@ def compute_live(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> LiveModuleResult:
     """Compute the baseline live view from current facts without a RegulatoryRun."""
-    current = load_current_facts(
-        db, ctx, bank, (*_IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP)
-    )
+    current = load_current_facts(db, ctx, bank, (*_IRR_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP))
     facts = [fact for fact in current.facts if fact.fact_group in _IRR_FACT_GROUPS]
     active = _load_irr_params_or_none(db, ctx, bank, current.source_as_of_date)
     analysis = _run_analysis(

@@ -35,13 +35,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from typing import Any, NamedTuple
 from weakref import WeakKeyDictionary
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.domain.authority.outcomes import OutcomeDetail
@@ -70,6 +70,7 @@ __all__ = [
     "Direction",
     "PolicyScope",
     "PolicyUnresolvedError",
+    "PrefetchedParameterResolver",
     "RegulatoryParameterError",
     "ResolvedParameter",
     "SEED_PARAMETERS",
@@ -983,6 +984,153 @@ def policy_scope(db: Session, bank: Bank, *, as_of: date | None = None) -> Polic
         liquidity_binding=bool(type_row.liquidity_binding),
         as_of=as_of or date.today(),
     )
+
+
+@dataclass(frozen=True)
+class PrefetchedParameterResolver:
+    """Request-local governed-parameter generations for one institution.
+
+    The full policy scope (including jurisdiction and institution type) is
+    resolved once, then every approved generation overlapping the requested
+    date window is loaded in one query. Resolution still applies the exact
+    licence-before-class precedence, active-window rule, observability, and
+    provenance recording used by :func:`try_resolve`.
+    """
+
+    db: Session
+    bank: Bank
+    scope: PolicyScope
+    rows: tuple[RegulatoryParameter, ...]
+
+    @classmethod
+    def load(
+        cls, db: Session, bank: Bank, *, as_of_dates: Iterable[date]
+    ) -> PrefetchedParameterResolver:
+        dates = tuple(as_of_dates)
+        anchor = min(dates) if dates else date.today()
+        scope = policy_scope(db, bank, as_of=anchor)
+        if not dates:
+            return cls(db=db, bank=bank, scope=scope, rows=())
+        first, last = min(dates), max(dates)
+        scope_conditions = [
+            and_(
+                RegulatoryParameter.scope_type == scope_type,
+                RegulatoryParameter.scope_key == scope_key,
+            )
+            for scope_type, scope_key in resolution_order(scope)
+        ]
+        rows = tuple(
+            db.scalars(
+                select(RegulatoryParameter)
+                .where(
+                    or_(*scope_conditions),
+                    RegulatoryParameter.jurisdiction_code == scope.jurisdiction_code,
+                    RegulatoryParameter.status == "approved",
+                    RegulatoryParameter.effective_from <= last,
+                    or_(
+                        RegulatoryParameter.effective_to.is_(None),
+                        RegulatoryParameter.effective_to > first,
+                    ),
+                )
+                .order_by(
+                    RegulatoryParameter.param_code,
+                    RegulatoryParameter.scope_type,
+                    RegulatoryParameter.scope_key,
+                    RegulatoryParameter.effective_from,
+                    RegulatoryParameter.id,
+                )
+            )
+        )
+        return cls(db=db, bank=bank, scope=scope, rows=rows)
+
+    def _scope_on(self, as_of: date) -> PolicyScope:
+        return replace(self.scope, as_of=as_of)
+
+    def try_resolve(self, param_code: str, *, as_of: date) -> ResolvedParameter | None:
+        scope = self._scope_on(as_of)
+        for scope_type, scope_key in resolution_order(scope):
+            candidates = [
+                row
+                for row in self.rows
+                if row.scope_type == scope_type
+                and row.scope_key == scope_key
+                and row.param_code == param_code
+                and row.effective_from <= as_of
+                and (row.effective_to is None or row.effective_to > as_of)
+            ]
+            if not candidates:
+                continue
+            newest_date = max(row.effective_from for row in candidates)
+            row = min(
+                (row for row in candidates if row.effective_from == newest_date),
+                key=lambda item: str(item.id),
+            )
+            _record_consumption(self.db, row)
+            return _observe_resolution(self.bank, _to_resolved(row))
+        return None
+
+    def resolve(self, param_code: str, *, as_of: date) -> ResolvedParameter:
+        resolved = self.try_resolve(param_code, as_of=as_of)
+        if resolved is not None:
+            return resolved
+        scope = self._scope_on(as_of)
+        logger.error(
+            "regulatory_parameter.unseeded code=%s bank=%s org=%s scope=%s",
+            param_code,
+            self.bank.id,
+            self.bank.organization_id,
+            scope.describe(),
+        )
+        msg = (
+            f"Regulatory parameter {param_code!r} is not seeded for bank {self.bank.id} "
+            f"({scope.describe()}). It must exist in the regulatory-parameter control "
+            "plane — configure it in the operator console."
+        )
+        raise RegulatoryParameterError(
+            msg,
+            policy_unresolved(param_code, scope, reason=msg, items=(f"param:{param_code}",)),
+        )
+
+    def resolve_hqla_parameters(self, *, as_of: date) -> HqlaParameters:
+        haircuts: dict[str, Decimal] = {}
+        for level, code in HQLA_HAIRCUT_CODES.items():
+            resolved = self.try_resolve(code, as_of=as_of)
+            if resolved is not None and resolved.value is not None:
+                haircuts[level] = resolved.decimal
+        cap2 = self.try_resolve(HQLA_LEVEL2_CAP_CODE, as_of=as_of)
+        cap2b = self.try_resolve(HQLA_LEVEL2B_CAP_CODE, as_of=as_of)
+        return HqlaParameters(
+            haircut_pct=haircuts,
+            level2_cap_pct=None if cap2 is None else cap2.value,
+            level2b_cap_pct=None if cap2b is None else cap2b.value,
+        )
+
+    def clamp_overrides(self, tenant_values: Mapping[str, Decimal], *, as_of: date) -> ClampReport:
+        governed = {
+            code: value for code, value in tenant_values.items() if code in governed_codes()
+        }
+        if not governed:
+            return ClampReport(values=dict(tenant_values), clamped=())
+        controls = {
+            code: (
+                param.normalized_value
+                if (param := self.try_resolve(code, as_of=as_of)) is not None
+                else None
+            )
+            for code in governed
+        }
+        report = _clamp_values(governed, controls)
+        if report.clamped:
+            logger.warning(
+                "regulatory_parameter.tenant_override_clamped bank=%s org=%s codes=%s details=%s",
+                self.bank.id,
+                self.bank.organization_id,
+                ",".join(report.codes_clamped()),
+                [record.to_dict() for record in report.clamped],
+            )
+        merged = dict(tenant_values)
+        merged.update(report.values)
+        return ClampReport(values=merged, clamped=report.clamped)
 
 
 def _observe_resolution(bank: Bank, resolved: ResolvedParameter) -> ResolvedParameter:
