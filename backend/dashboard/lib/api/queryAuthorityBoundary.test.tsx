@@ -141,6 +141,9 @@ async function main(): Promise<void> {
   loadedReact = React;
   const { act, create } = await import('react-test-renderer');
   const { focusManager, useQueryClient } = await import('@tanstack/react-query');
+  // Keep accelerated signal polls dormant until the explicit focus/poll checks
+  // below so they cannot race the controlled invalidation assertions.
+  focusManager.setFocused(false);
   const { GET: getImpersonationStatus } = await import(
     '../../app/api/impersonation/status/route'
   );
