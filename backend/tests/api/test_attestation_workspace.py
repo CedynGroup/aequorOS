@@ -237,9 +237,12 @@ def test_a_board_role_cannot_be_placed_at_the_contract_boundary(
     assert response.status_code == 422, response.text
 
 
-def test_the_placement_template_is_admin_only_and_reason_required(
+def test_the_placement_template_is_owner_only_and_reason_required(
     real_client: TestClient, real_session: Session
 ) -> None:
+    """Authoring the default placement set is Org Owner authority, not a scalar
+    ``admin`` claim — the same binding scoped grant administration uses. The
+    analyst denial and the reason requirement survive the gate."""
     _forget_return_templates(real_session)
     payload = {
         "return_code": RETURN_CODE,

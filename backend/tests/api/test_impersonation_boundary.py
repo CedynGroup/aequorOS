@@ -217,7 +217,7 @@ def test_account_admin_is_limited_to_account_administration(db_client: TestClien
         json={},
     )
     assert attestation_templates.status_code == 403
-    assert "admin" in attestation_templates.json()["error"]["message"]
+    assert "Organization Owner" in attestation_templates.json()["error"]["message"]
 
 
 def test_impersonation_exemption_set_is_minimal_and_real(client: TestClient) -> None:

@@ -164,6 +164,7 @@ migration `202608280046` leaves no persisted legacy `admin`:
 | generate, validate, request-approval, export, request-resubmission | `MutationTenant` (analyst+)  |
 | **decide-approval, submit, poll, decide-resubmission**             | `ApproverTenant` (approver+) |
 | reads, artifact download                                           | `Tenant` (viewer+)           |
+| **configure signing policies / placement templates**               | `GrantAdminTenant` (persisted Org Owner binding — no scalar `admin` claim suffices) |
 
 **Segregation of duties exists in exactly one place:**
 

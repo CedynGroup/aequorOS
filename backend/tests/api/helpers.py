@@ -3,8 +3,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
-from fastapi.testclient import TestClient
-
 from app.core.config import get_settings
 from app.core.security import create_token
 
@@ -37,29 +35,3 @@ def headers(
         settings=get_settings().auth,
     )
     return {"Authorization": f"Bearer {token}"}
-
-
-def relax_signing(client: TestClient, return_code: str, *, org_id: str = ORG_1) -> None:
-    """Configure a signature-OPTIONAL policy through the real admin endpoint.
-
-    Signing is required for every return by default, so an API suite that drives
-    a package to a channel meets the attestation gate on the way. Suites that are
-    about something else opt the return out exactly as an administrator would —
-    an audited PUT, not a row poked into the database — so the escape hatch under
-    test is the one a bank actually has.
-
-    Never reach for this in a suite that is *about* the filing gate: that would
-    be deleting the gate while keeping the tests green.
-    """
-    response = client.put(
-        "/api/v1/attestation/signing-policies",
-        headers=headers(org_id=org_id),
-        json={
-            "return_code": return_code,
-            "required_signatures": [],
-            "require_signature": False,
-            "effective_from": "2000-01-01",
-            "reason": "test fixture: this suite is not about the signing gate",
-        },
-    )
-    assert response.status_code in (200, 201), response.text
