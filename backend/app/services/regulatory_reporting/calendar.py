@@ -31,6 +31,7 @@ from app.models import (
 from app.schemas.regulatory_reporting import (
     ReportingObligationListRead,
     ReportingObligationRead,
+    ReportingObligationSummaryRead,
     ReturnAnchorListRead,
     ReturnAnchorRead,
 )
@@ -189,13 +190,15 @@ def _due_date(
     return definition.deadline_rule(reporting_date)
 
 
-def list_obligations(
+def list_obligations(  # noqa: PLR0913 - tenant scope + horizon + optional page controls
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     horizon_months: int = 3,
     *,
     as_of: date | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> ReportingObligationListRead:
     bank = get_bank_or_404(db, ctx, bank_id)
     today = as_of or date.today()
@@ -263,11 +266,35 @@ def list_obligations(
                 )
             )
     obligations.sort(key=lambda item: (item.due_date, item.return_code))
+    summary_counts = {
+        "overdue": 0,
+        "due_soon": 0,
+        "on_track": 0,
+        "pending_reupload": 0,
+    }
+    for obligation in obligations:
+        summary_counts[obligation.rag] += 1
+        if obligation.package_status == "submitted" and obligation.rag != "on_track":
+            summary_counts["pending_reupload"] += 1
+
+    total = len(obligations)
+    page_limit = total if limit is None else limit
+    page = obligations[offset:] if limit is None else obligations[offset : offset + limit]
     return ReportingObligationListRead(
         bank_id=bank.id,
         as_of=today,
         horizon_months=horizon_months,
-        obligations=obligations,
+        obligations=page,
+        summary=ReportingObligationSummaryRead(
+            overdue=summary_counts["overdue"],
+            due_soon=summary_counts["due_soon"],
+            on_track=summary_counts["on_track"],
+            pending_reupload=summary_counts["pending_reupload"],
+        ),
+        total=total,
+        limit=page_limit,
+        offset=offset,
+        has_more=offset + len(page) < total,
         # The note the eligibility authority has always been able to write, now
         # carried on the payload (audit 2026-08-22 D-20). It is None whenever the
         # institution has an eligible return set, so this adds a sentence exactly

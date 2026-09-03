@@ -1017,6 +1017,7 @@ export * from "./ReportScore";
 export * from "./ReportingObligationListRead";
 export * from "./ReportingObligationRead";
 export * from "./ReportingObligationReadPackageStatus";
+export * from "./ReportingObligationSummaryRead";
 export * from "./ReportingPeriodId";
 export * from "./ReportingSettingsPut";
 export * from "./ReportingSettingsRead";

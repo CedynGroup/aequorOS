@@ -2126,7 +2126,7 @@ export function useTriggerTemenosBackfill(bankId: string | undefined) {
 // ---------------------------------------------------------------------------
 // Regulatory Reporting & Submission Hub (docs/regulatory_reporting.md)
 //
-// Query keys: ['rr-obligations', bankId, horizon], ['rr-packages', bankId,
+// Query keys: ['rr-obligations', bankId, horizon, limit, offset], ['rr-packages', bankId,
 // ...filters], ['rr-package', bankId, packageId], ['rr-events', bankId,
 // packageId], ['rr-templates'], ['rr-channel-config', bankId, channel],
 // ['rr-artifacts', bankId, packageId] (persisted artifact list from the API),
@@ -2148,19 +2148,24 @@ const reportingInvalidatePrefixes = [
 /** Deadline board: every registry obligation in the horizon with RAG + package. */
 export function useReportingObligations(
   bankId: string | undefined,
-  horizonMonths = 3
+  horizonMonths = 3,
+  limit = 50,
+  offset = 0
 ) {
   return useQuery({
-    queryKey: ['rr-obligations', bankId, horizonMonths],
+    queryKey: ['rr-obligations', bankId, horizonMonths, limit, offset],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listReportingObligations({
           bankId: bankId!,
           horizonMonths,
+          limit,
+          offset,
         })
       ),
     enabled: Boolean(bankId),
-    refetchInterval: DASHBOARD_REFETCH_MS,
+    placeholderData: keepPreviousData,
+    ...HEAVY_DASHBOARD_QUERY_POLICY,
   });
 }
 

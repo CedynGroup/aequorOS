@@ -208,6 +208,8 @@ export interface ListRegulatoryPackagesRequest {
 export interface ListReportingObligationsRequest {
   bankId: string;
   horizonMonths?: number;
+  limit?: number | null;
+  offset?: number;
 }
 
 export interface ListResubmissionRequestsRequest {
@@ -1608,6 +1610,14 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     if (requestParameters["horizonMonths"] != null) {
       queryParameters["horizon_months"] = requestParameters["horizonMonths"];
+    }
+
+    if (requestParameters["limit"] != null) {
+      queryParameters["limit"] = requestParameters["limit"];
+    }
+
+    if (requestParameters["offset"] != null) {
+      queryParameters["offset"] = requestParameters["offset"];
     }
 
     const headerParameters: runtime.HTTPHeaders = {};

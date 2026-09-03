@@ -240,11 +240,25 @@ class ReportingObligationRead(ClosedModel):
     rag: ObligationRag
 
 
+class ReportingObligationSummaryRead(ClosedModel):
+    """Whole-horizon counts, independent of the requested result page."""
+
+    overdue: int = Field(ge=0)
+    due_soon: int = Field(ge=0)
+    on_track: int = Field(ge=0)
+    pending_reupload: int = Field(ge=0)
+
+
 class ReportingObligationListRead(ClosedModel):
     bank_id: str
     as_of: date
     horizon_months: int
     obligations: list[ReportingObligationRead]
+    summary: ReportingObligationSummaryRead
+    total: int = Field(ge=0)
+    limit: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    has_more: bool
     # Why the list is empty when it is (audit 2026-08-22 D-20).
     # ``InstitutionEligibility.coverage_note()`` had produced this sentence since
     # ARCH-8 and had nowhere to go, so an SDI tenant received ``obligations: []``
