@@ -73,8 +73,34 @@ test.describe("submission pipeline", () => {
     await page.goto("/submissions/calendar");
     await expect(page).toHaveURL(/\/submissions\/calendar/);
     // The obligation table is populated from listReportingObligations for the
-    // seeded bank — LCR-NSFR (monthly liquidity return; the legacy 'BSD3' code was recoded — official BSD3 is Large Exposures) must appear.
-    await expect(page.getByText("LCR-NSFR").first()).toBeVisible();
+    // seeded bank. Follow the due-date pager because the calendar deliberately
+    // renders only 25 obligations at a time.
+    const lcrNsfr = page.getByText("LCR-NSFR", { exact: true }).first();
+    const pager = page.getByRole("navigation", {
+      name: "Reporting obligations pages",
+    });
+    const nextPage = pager.getByRole("button", { name: "Next" });
+    const firstObligation = page.getByRole("table").getByRole("row").nth(1);
+    while (!(await lcrNsfr.isVisible())) {
+      // Reaching a disabled Next button without the return is a real failure:
+      // LCR-NSFR (the recoded monthly liquidity return) must be in the registry.
+      await expect(nextPage).toBeEnabled();
+      const previousFirstObligation = await firstObligation.textContent();
+      const nextPageResponse = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.pathname.endsWith("/reporting-obligations") &&
+          response.request().method() === "GET" &&
+          response.ok()
+        );
+      });
+      await nextPage.click();
+      await nextPageResponse;
+      await expect(firstObligation).not.toHaveText(
+        previousFirstObligation ?? "",
+      );
+    }
+    await expect(lcrNsfr).toBeVisible();
   });
 
   test.fail(
