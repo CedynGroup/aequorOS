@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import path from "path";
-import { E2E_TMP } from "../playwright.config";
+import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { E2E_USERS, mintBackendToken } from "./support/mint";
 
-const API = "http://127.0.0.1:8021/api/v1";
+const API = `${E2E_API_ORIGIN}/api/v1`;
 const ownerState = path.join(E2E_TMP, "admin.json");
 const member = E2E_USERS.grant_member;
 const targetSentence =
@@ -154,6 +154,7 @@ test.describe("scoped grant administration", () => {
         "Liquidity monitoring responsibility transferred to another officer",
       );
     await revocation.getByRole("button", { name: "Revoke access" }).click();
+    await expect(revocation).toBeHidden();
 
     const nextAction = await page.request.get(`${API}/auth/me`, {
       headers: { Authorization: `Bearer ${currentMemberToken}` },
