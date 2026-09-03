@@ -354,8 +354,8 @@ def _inactive_user_by_email(db: Session, organization_id: str, email: str) -> Us
 
 def _record_sso_access_request(db: Session, *, connection: SsoConnection, claims: dict) -> None:
     """JIT is a REQUEST, never access: the account is created deactivated and no
-    tokens are issued — an admin must approve it (with a role) before the first
-    real sign-in. Guarded twice: the connection must opt in AND carry a non-empty
+    tokens are issued — an Org Owner must approve a complete scoped grant before
+    the first real sign-in. Guarded twice: the connection must opt in AND carry a non-empty
     domain allow-list (re-checked here so a hand-edited row can never open
     public sign-up)."""
     db.add(
@@ -475,8 +475,17 @@ def list_sso_access_requests(db: Session, organization_id: str) -> list[User]:
     return list(db.scalars(_access_request_stmt(organization_id).order_by(User.created_at)))
 
 
-def _get_access_request(db: Session, organization_id: str, user_id: UUID) -> User:
-    user = db.scalar(_access_request_stmt(organization_id).where(User.id == user_id))
+def get_sso_access_request(
+    db: Session,
+    *,
+    organization_id: str,
+    user_id: UUID,
+    lock: bool = False,
+) -> User:
+    statement = _access_request_stmt(organization_id).where(User.id == user_id)
+    if lock:
+        statement = statement.with_for_update()
+    user = db.scalar(statement)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Access request not found."
@@ -484,7 +493,7 @@ def _get_access_request(db: Session, organization_id: str, user_id: UUID) -> Use
     return user
 
 
-def _provision_signer_identity(db: Session, user: User) -> None:
+def provision_signer_identity(db: Session, user: User) -> None:
     """Mint the permanent signer identity when access is granted.
 
     Best-effort: an unconfigured SIGNER_ID_PEPPER must not block onboarding a
@@ -503,29 +512,13 @@ def _provision_signer_identity(db: Session, user: User) -> None:
         logger.warning("signer identity not provisioned for {}: {}", user.id, exc)
 
 
-def approve_sso_access_request(
-    db: Session, *, organization_id: str, user_id: UUID, role: str
-) -> User:
-    """The authorization act: an account admin activates the requested account with an
-    explicitly chosen role."""
-    user = _get_access_request(db, organization_id, user_id)
-    user.role = role
-    user.is_active = True
-    db.commit()
-    db.refresh(user)
-    # Access granted is the moment the signer identity should exist — before it
-    # is ever needed, so an operator can print a signer roster in advance.
-    _provision_signer_identity(db, user)
-    return user
-
-
 def reject_sso_access_request(db: Session, *, organization_id: str, user_id: UUID) -> None:
     """Records the rejection on the never-activated stub and leaves it
     deactivated. Users are never physically deleted (signer identities reference
     them and the append-only privilege tiering makes a DELETE fail on the
     primary — found 2026-08-16); the employee can request again, which clears
     the rejection and re-opens the request."""
-    user = _get_access_request(db, organization_id, user_id)
+    user = get_sso_access_request(db, organization_id=organization_id, user_id=user_id)
     user.access_rejected_at = utc_now()
     db.commit()
 

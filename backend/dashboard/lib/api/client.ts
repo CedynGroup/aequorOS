@@ -15,6 +15,7 @@ import {
   LiquidityThresholdsApi,
   AttestationApi,
   AuthApi,
+  AuthorizationApi,
   BanksApi,
   BehavioralModelsApi,
   CashflowForecastApi,
@@ -38,19 +39,18 @@ import {
   ResponseError,
   TemenosApi,
   WindowAnalyticsApi,
-} from '@aequoros/risk-service-api';
-import { getSession } from 'next-auth/react';
-import { getAccessToken, setAccessToken } from './token';
+} from "@aequoros/risk-service-api";
+import { getSession } from "next-auth/react";
+import { getAccessToken, setAccessToken } from "./token";
 import {
   getImpersonationBearer,
   impersonationMarkerPresent,
   markImpersonationExpired,
-} from './impersonation';
+} from "./impersonation";
 
-const DEFAULT_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+const DEFAULT_BASE_URL = "http://127.0.0.1:8000/api/v1";
 
-const baseUrl =
-  process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? DEFAULT_BASE_URL;
+const baseUrl = process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? DEFAULT_BASE_URL;
 
 /** Fully-qualified /api/v1 base of the risk service (for display + health checks). */
 export const apiBaseUrl = baseUrl;
@@ -60,7 +60,7 @@ export const apiBaseUrl = baseUrl;
  * carry /api/v1, so the client is configured with this. The single source of
  * truth for the API origin — import it instead of re-deriving from env.
  */
-export const apiOrigin = baseUrl.replace(/\/api\/v1\/?$/, '');
+export const apiOrigin = baseUrl.replace(/\/api\/v1\/?$/, "");
 
 // Every request carries the signed backend access token as `Authorization:
 // Bearer`; the tenant (org/user/roles) comes from the *verified* token, not headers.
@@ -84,7 +84,7 @@ export const configuration = new Configuration({
     const cached = getAccessToken();
     if (cached) return cached;
     const session = await getSession();
-    const token = session?.accessToken ?? '';
+    const token = session?.accessToken ?? "";
     if (token) setAccessToken(token);
     return token;
   },
@@ -104,6 +104,7 @@ export const configuration = new Configuration({
 });
 
 export const authApi = new AuthApi(configuration);
+export const authorizationApi = new AuthorizationApi(configuration);
 export const attestationApi = new AttestationApi(configuration);
 export const banksApi = new BanksApi(configuration);
 export const behavioralModelsApi = new BehavioralModelsApi(configuration);
@@ -152,7 +153,7 @@ export class ApiError extends Error {
     details?: unknown;
   }) {
     super(options.message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
     this.status = options.status;
     this.code = options.code;
     this.errorCode = options.errorCode;
@@ -181,16 +182,19 @@ export async function normalizeApiError(error: unknown): Promise<ApiError> {
     try {
       const body = await error.response.clone().json();
       const envelope = body?.error ?? body;
-      if (envelope && typeof envelope === 'object') {
-        code = typeof envelope.code === 'string' ? envelope.code : null;
-        if (typeof envelope.message === 'string') message = envelope.message;
+      if (envelope && typeof envelope === "object") {
+        code = typeof envelope.code === "string" ? envelope.code : null;
+        if (typeof envelope.message === "string") message = envelope.message;
         details = envelope.details ?? envelope.detail ?? null;
-        const detailObj = details as { error_code?: string; message?: string } | null;
-        if (detailObj && typeof detailObj === 'object') {
-          if (typeof detailObj.error_code === 'string') {
+        const detailObj = details as {
+          error_code?: string;
+          message?: string;
+        } | null;
+        if (detailObj && typeof detailObj === "object") {
+          if (typeof detailObj.error_code === "string") {
             errorCode = detailObj.error_code;
           }
-          if (typeof detailObj.message === 'string') {
+          if (typeof detailObj.message === "string") {
             message = detailObj.message;
           }
         }
@@ -203,17 +207,17 @@ export async function normalizeApiError(error: unknown): Promise<ApiError> {
   if (error instanceof Error) {
     return new ApiError({
       message:
-        'Could not reach the risk service. Check that the backend is running.',
+        "Could not reach the risk service. Check that the backend is running.",
       status: null,
-      code: 'network_error',
+      code: "network_error",
       errorCode: null,
       details: error.message,
     });
   }
   return new ApiError({
-    message: 'Unexpected error.',
+    message: "Unexpected error.",
     status: null,
-    code: 'unknown',
+    code: "unknown",
     errorCode: null,
     details: error,
   });
@@ -230,13 +234,15 @@ export class ModuleUnavailableError extends Error {
   readonly errorCode: string | null;
   constructor(reason: string, errorCode: string | null) {
     super(reason);
-    this.name = 'ModuleUnavailableError';
+    this.name = "ModuleUnavailableError";
     this.reason = reason;
     this.errorCode = errorCode;
   }
 }
 
-export function isModuleUnavailable(error: unknown): error is ModuleUnavailableError {
+export function isModuleUnavailable(
+  error: unknown,
+): error is ModuleUnavailableError {
   return error instanceof ModuleUnavailableError;
 }
 
@@ -247,15 +253,15 @@ export async function apiCall<T>(fn: () => Promise<T>): Promise<T> {
     // typed empty state, not data the caller would try to render.
     if (
       result &&
-      typeof result === 'object' &&
-      'available' in result &&
+      typeof result === "object" &&
+      "available" in result &&
       (result as { available?: unknown }).available === false &&
-      'error_code' in result
+      "error_code" in result
     ) {
       const env = result as { reason?: string; error_code?: string };
       throw new ModuleUnavailableError(
-        env.reason ?? 'This module has no computed data yet.',
-        env.error_code ?? null
+        env.reason ?? "This module has no computed data yet.",
+        env.error_code ?? null,
       );
     }
     return result;

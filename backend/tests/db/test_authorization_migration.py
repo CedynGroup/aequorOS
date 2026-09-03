@@ -50,6 +50,7 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
         "ck_authorization_bindings_grant_reason",
         "ck_authorization_bindings_validity_window",
         "ck_authorization_bindings_revocation_state",
+        "ck_authorization_bindings_revoker_type",
         "fk_organization_owner_assignments_owner_tenant",
         "ck_organization_owner_assignments_status",
         "ck_organization_owner_assignments_basis",
@@ -140,6 +141,83 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
     assert version_default == "1"
     assert refresh_revocation_constraint is not None
     assert "authorization_changed" in refresh_revocation_constraint
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration tests.",
+)
+def test_revoker_migration_grandfathers_historical_rows_without_fabricated_actor(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    organization_id = "OR-RBCH0001"
+    user_id = uuid4()
+    binding_id = uuid4()
+    now = datetime.now(UTC)
+    command.downgrade(alembic_config_for_app(), "202608280046")
+    clear_database_caches()
+
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO organizations (id, name, created_at, updated_at) "
+                "VALUES (:id, 'Historical revocation proof', :now, :now)"
+            ),
+            {"id": organization_id, "now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO users "
+                "(id, organization_id, email, is_active, role, auth_provider, "
+                "failed_login_attempts, authorization_version, created_at, updated_at) "
+                "VALUES (:id, :organization_id, 'historical@example.test', true, 'viewer', "
+                "'password', 0, 1, :now, :now)"
+            ),
+            {"id": user_id, "organization_id": organization_id, "now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO authorization_bindings "
+                "(id, organization_id, principal_user_id, principal_type, role_bundle, "
+                "institution_scope, institution_id, module_scope, sensitivity_scope, "
+                "granted_by_type, granted_by_id, grant_reason, granted_at, status, valid_from, "
+                "valid_until, revoked_at, revoked_reason, created_at, updated_at) "
+                "VALUES (:id, :organization_id, :user_id, 'human', 'viewer', 'organization', "
+                "NULL, 'all', 'all', 'system', 'historical-source', 'historical grant', :now, "
+                "'revoked', :now, NULL, :now, 'historical revocation', :now, :now)"
+            ),
+            {
+                "id": binding_id,
+                "organization_id": organization_id,
+                "user_id": user_id,
+                "now": now,
+            },
+        )
+
+    command.upgrade(alembic_config_for_app(), "head")
+    clear_database_caches()
+    with migrated_postgres_schema.app_engine.connect() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
+        revoker = connection.execute(
+            text(
+                "SELECT revoked_by_type, revoked_by_id FROM authorization_bindings "
+                "WHERE id = :binding_id"
+            ),
+            {"binding_id": binding_id},
+        ).one()
+
+    assert revoker == (
+        "system",
+        "revoker-not-recorded-predates-attribution",
+    )
+    assert str(user_id) not in revoker
 
 
 @pytest.mark.skipif(

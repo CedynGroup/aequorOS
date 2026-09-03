@@ -12,6 +12,7 @@
 
 import * as runtime from "../runtime";
 import type {
+  BindingCreateResponse,
   ErrorResponse,
   LoginRequest,
   MeResponse,
@@ -26,6 +27,8 @@ import type {
   TokenResponse,
 } from "../models/index";
 import {
+  BindingCreateResponseFromJSON,
+  BindingCreateResponseToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
   LoginRequestFromJSON,
@@ -90,13 +93,13 @@ export interface AuthUpdateMeRequest {
  */
 export class AuthApi extends runtime.BaseAPI {
   /**
-   * Activate a requested account with an explicitly chosen role (account admin only).
+   * Approve verified identity and atomically create one complete scoped grant.
    * Approve Sso Access Request
    */
   async authApproveSsoAccessRequestRaw(
     requestParameters: AuthApproveSsoAccessRequestRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<SsoAccessRequestRead>> {
+  ): Promise<runtime.ApiResponse<BindingCreateResponse>> {
     if (requestParameters["userId"] == null) {
       throw new runtime.RequiredError(
         "userId",
@@ -142,18 +145,18 @@ export class AuthApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      SsoAccessRequestReadFromJSON(jsonValue),
+      BindingCreateResponseFromJSON(jsonValue),
     );
   }
 
   /**
-   * Activate a requested account with an explicitly chosen role (account admin only).
+   * Approve verified identity and atomically create one complete scoped grant.
    * Approve Sso Access Request
    */
   async authApproveSsoAccessRequest(
     requestParameters: AuthApproveSsoAccessRequestRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<SsoAccessRequestRead> {
+  ): Promise<BindingCreateResponse> {
     const response = await this.authApproveSsoAccessRequestRaw(
       requestParameters,
       initOverrides,

@@ -113,9 +113,16 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         ),
         CheckConstraint(
             "(status = 'revoked' AND revoked_at IS NOT NULL AND "
-            "revoked_reason IS NOT NULL AND length(trim(revoked_reason)) > 0) OR "
-            "(status <> 'revoked' AND revoked_at IS NULL AND revoked_reason IS NULL)",
+            "revoked_by_type IS NOT NULL AND revoked_by_id IS NOT NULL AND "
+            "length(trim(revoked_by_id)) > 0 AND revoked_reason IS NOT NULL AND "
+            "length(trim(revoked_reason)) > 0) OR "
+            "(status <> 'revoked' AND revoked_at IS NULL AND revoked_by_type IS NULL AND "
+            "revoked_by_id IS NULL AND revoked_reason IS NULL)",
             name="ck_authorization_bindings_revocation_state",
+        ),
+        CheckConstraint(
+            f"revoked_by_type IS NULL OR revoked_by_type IN ({_values(tuple(GrantorType))})",
+            name="ck_authorization_bindings_revoker_type",
         ),
         Index(
             "ix_authorization_bindings_principal",
@@ -164,6 +171,8 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     )
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    revoked_by_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     revoked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

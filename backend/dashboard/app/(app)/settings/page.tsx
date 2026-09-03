@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Settings — token'd governance cards:
@@ -6,42 +6,46 @@
  *     source of truth, managed under Governance → Institution Profile) plus
  *     platform reporting facts from the bank record
  *   · Appearance — real theme toggle (ThemeProvider)
- *   · Users & roles — the signed-in account, its access level, and its permanent
- *     signer identity (SGN-…, monospace with a copy control — §2.5)
+ *   · Members — tenant-scoped identity, lifecycle, and indivisible scoped grants
+ *   · Your account — the signed-in account and its permanent signer identity
  *   · Data & compute — real service health, market-data connections, and the
  *     official-run schedule note (read-only)
  *   · About — engine versions and provenance from persisted regulatory runs
  */
 
-import Link from 'next/link';
-import type { InstitutionProfileRead } from '@aequoros/risk-service-api';
-import { useQuery } from '@tanstack/react-query';
-import { useSession } from 'next-auth/react';
-import { Monitor, Moon, Sun } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import AuthenticationPanel from '@/components/settings/AuthenticationPanel';
-import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import CopyButton from '@/components/ui/CopyButton';
-import RunBadge from '@/components/ui/RunBadge';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { SkeletonLine } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
+import Link from "next/link";
+import type { InstitutionProfileRead } from "@aequoros/risk-service-api";
+import { useQuery } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
+import { Monitor, Moon, Sun } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import AuthenticationPanel from "@/components/settings/AuthenticationPanel";
+import MembersPanel from "@/components/settings/MembersPanel";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import CopyButton from "@/components/ui/CopyButton";
+import RunBadge from "@/components/ui/RunBadge";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import { SkeletonLine } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useTheme,
   type ThemePreference,
-} from '@/components/shell/ThemeProvider';
-import { useUserProfile } from '@/components/profile/ProfileProvider';
-import { MODULE_LABELS, useLatestRunsByModule } from '@/components/reports/hooks';
-import { apiBaseUrl, apiOrigin } from '@/lib/api/client';
+} from "@/components/shell/ThemeProvider";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
+import {
+  MODULE_LABELS,
+  useLatestRunsByModule,
+} from "@/components/reports/hooks";
+import { apiBaseUrl, apiOrigin } from "@/lib/api/client";
 import {
   useBank,
   useCashflowHistory,
   useInstitutionProfile,
   useMarketDataConnections,
   useMySignerIdentity,
-} from '@/lib/api/hooks';
-import { fmtRelative, labelize } from '@/lib/api/values';
-import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
+} from "@/lib/api/hooks";
+import { fmtRelative, labelize } from "@/lib/api/values";
+import { avatarColor, initialsFrom, roleLabel } from "@/lib/api/identity";
 
 /** A copyable identifier row for the identity grid. */
 function IdField({
@@ -54,13 +58,17 @@ function IdField({
   wide?: boolean;
 }) {
   return (
-    <div className={wide ? 'sm:col-span-2' : undefined}>
+    <div className={wide ? "sm:col-span-2" : undefined}>
       <dt className="text-micro font-medium uppercase tracking-wider text-slate">
         {label}
       </dt>
       <dd className="mt-1 flex items-center gap-2">
-        <code className="font-mono text-caption text-navy break-all">{value ?? '—'}</code>
-        {value && <CopyButton text={value} label={label} className="shrink-0" />}
+        <code className="font-mono text-caption text-navy break-all">
+          {value ?? "—"}
+        </code>
+        {value && (
+          <CopyButton text={value} label={label} className="shrink-0" />
+        )}
       </dd>
     </div>
   );
@@ -69,13 +77,14 @@ function IdField({
 /** Ping the risk-service liveness endpoint directly (outside the generated client). */
 function useRiskServiceHealth() {
   return useQuery({
-    queryKey: ['health', 'risk-service'],
+    queryKey: ["health", "risk-service"],
     queryFn: async () => {
       const healthUrl = `${apiOrigin}/api/health/live`;
       const response = await fetch(healthUrl, {
         signal: AbortSignal.timeout(4000),
       });
-      if (!response.ok) throw new Error(`Health check failed (${response.status})`);
+      if (!response.ok)
+        throw new Error(`Health check failed (${response.status})`);
       return (await response.json()) as { status?: string };
     },
     retry: false,
@@ -92,12 +101,10 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Settings"
-        subtitle="Institution profile, appearance, roles, data & compute"
-      />
+      <PageHeader title="Settings" />
 
       <div className="px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <MembersPanel />
         <InstitutionProfile
           profile={profile}
           register={register}
@@ -107,7 +114,7 @@ export default function SettingsPage() {
         />
         <div className="space-y-6">
           <AppearancePanel />
-          <UsersRolesPanel />
+          <CurrentAccountPanel />
         </div>
         <AuthenticationPanel />
         <DataComputePanel bankId={bank?.id} />
@@ -132,8 +139,8 @@ function Field({
       <dt className="text-micro font-medium uppercase tracking-wider text-slate">
         {label}
       </dt>
-      <dd className={`mt-1 text-navy ${mono ? 'font-mono' : ''}`}>
-        {value || '—'}
+      <dd className={`mt-1 text-navy ${mono ? "font-mono" : ""}`}>
+        {value || "—"}
       </dd>
     </div>
   );
@@ -146,7 +153,7 @@ function InstitutionProfile({
   periodCount,
   latestPeriodLabel,
 }: {
-  profile: ReturnType<typeof useBank>['data'] | null;
+  profile: ReturnType<typeof useBank>["data"] | null;
   register: InstitutionProfileRead | null;
   registerLoading: boolean;
   periodCount: number;
@@ -177,8 +184,8 @@ function InstitutionProfile({
           <>
             {!register && (
               <p className="mb-4 rounded border border-warning/25 bg-warning-light/50 px-3.5 py-2.5 text-caption text-navy/85">
-                No corporate profile configured yet — the fields below fall
-                back to the platform bank record.{' '}
+                No corporate profile configured yet — the fields below fall back
+                to the platform bank record.{" "}
                 <Link
                   href="/institution"
                   className="font-medium text-action hover:text-action-hover"
@@ -212,8 +219,8 @@ function InstitutionProfile({
                 label="Jurisdiction"
                 value={
                   profile
-                    ? profile.jurisdiction?.countryName ??
-                      profile.jurisdictionCode
+                    ? (profile.jurisdiction?.countryName ??
+                      profile.jurisdictionCode)
                     : null
                 }
               />
@@ -234,7 +241,7 @@ function InstitutionProfile({
                 label="Reporting periods"
                 value={
                   `${periodCount} loaded` +
-                  (latestPeriodLabel ? ` · latest ${latestPeriodLabel}` : '')
+                  (latestPeriodLabel ? ` · latest ${latestPeriodLabel}` : "")
                 }
               />
               <IdField
@@ -262,9 +269,9 @@ function AppearancePanel() {
     label: string;
     Icon: typeof Sun;
   }[] = [
-    { value: 'dark', label: 'Dark', Icon: Moon },
-    { value: 'light', label: 'Light', Icon: Sun },
-    { value: 'system', label: 'System', Icon: Monitor },
+    { value: "dark", label: "Dark", Icon: Moon },
+    { value: "light", label: "Light", Icon: Sun },
+    { value: "system", label: "System", Icon: Monitor },
   ];
   return (
     <Card>
@@ -289,8 +296,8 @@ function AppearancePanel() {
                 onClick={() => setTheme(value)}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded text-caption font-medium transition-colors ${
                   selected
-                    ? 'bg-surface-raised text-navy shadow-subtle border border-border-light'
-                    : 'text-slate hover:text-navy'
+                    ? "bg-surface-raised text-navy shadow-subtle border border-border-light"
+                    : "text-slate hover:text-navy"
                 }`}
               >
                 <Icon size={14} aria-hidden />
@@ -308,25 +315,24 @@ function AppearancePanel() {
   );
 }
 
-function UsersRolesPanel() {
+function CurrentAccountPanel() {
   const { data: session } = useSession();
   const { profile } = useUserProfile();
-  const email = profile?.email ?? session?.user?.email ?? '';
+  const email = profile?.email ?? session?.user?.email ?? "";
   const name =
-    profile?.displayName || session?.user?.name || email || 'Signed in';
+    profile?.displayName || session?.user?.name || email || "Signed in";
   const roles = session?.user?.roles ?? [];
   const role = profile?.role
     ? roleLabel(profile.role)
     : roles.length
       ? roleLabel(roles[0])
-      : 'Signed in';
+      : "Signed in";
   const avatarBackground = avatarColor(profile?.userId ?? email);
 
   return (
     <Card>
       <CardHeader
-        title="Users & roles"
-        subtitle="Your signed-in account and access level"
+        title="Your account"
         action={<StatusPill tone="success">You</StatusPill>}
       />
       <CardBody className="p-0">
@@ -350,11 +356,6 @@ function UsersRolesPanel() {
           </li>
         </ul>
         <SignerIdentityRow />
-        <p className="px-5 py-3 border-t border-border-light text-caption text-slate leading-relaxed">
-          Roles are enforced server-side (admin · approver · analyst · viewer);
-          viewer accounts are read-only. Team management for the institution is
-          administered outside this workspace.
-        </p>
       </CardBody>
     </Card>
   );
@@ -388,14 +389,18 @@ function SignerIdentityRow() {
   return (
     <div className="px-5 py-3 border-t border-border-light">
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <IdField label="Signer ID" value={identity.data.signerId} wide={false} />
+        <IdField
+          label="Signer ID"
+          value={identity.data.signerId}
+          wide={false}
+        />
         <div>
           <dt className="text-micro font-medium uppercase tracking-wider text-slate">
             Signing key
           </dt>
           <dd className="mt-1 flex items-center gap-2">
-            <StatusPill tone={identity.data.hasActiveKey ? 'success' : 'amber'}>
-              {identity.data.hasActiveKey ? 'Enrolled' : 'Not enrolled'}
+            <StatusPill tone={identity.data.hasActiveKey ? "success" : "amber"}>
+              {identity.data.hasActiveKey ? "Enrolled" : "Not enrolled"}
             </StatusPill>
             <span className="text-caption text-slate">
               provisioned {fmtRelative(identity.data.provisionedAt)}
@@ -421,30 +426,30 @@ function DataComputePanel({ bankId }: { bankId: string | undefined }) {
   const connections = useMarketDataConnections(bankId);
 
   const riskServiceTone: StatusTone = health.isLoading
-    ? 'slate'
-    : health.data?.status === 'ok'
-    ? 'success'
-    : 'critical';
+    ? "slate"
+    : health.data?.status === "ok"
+      ? "success"
+      : "critical";
   const riskServiceStatus = health.isLoading
-    ? 'Checking…'
-    : health.data?.status === 'ok'
-    ? 'OK'
-    : 'Down';
+    ? "Checking…"
+    : health.data?.status === "ok"
+      ? "OK"
+      : "Down";
 
   const sidecarTone: StatusTone = sidecarProbe.isLoading
-    ? 'slate'
+    ? "slate"
     : sidecarProbe.data
-    ? 'success'
-    : 'amber';
+      ? "success"
+      : "amber";
   const sidecarStatus = sidecarProbe.isLoading
-    ? 'Checking…'
+    ? "Checking…"
     : sidecarProbe.data
-    ? 'OK'
-    : 'Offline';
+      ? "OK"
+      : "Offline";
 
   const connectionRows = connections.data?.connections ?? [];
   const activeConnections = connectionRows.filter(
-    (c) => c.status === 'active'
+    (c) => c.status === "active",
   ).length;
 
   return (
@@ -491,12 +496,12 @@ function DataComputePanel({ bankId }: { bankId: string | undefined }) {
               <SkeletonLine width={64} height={18} />
             ) : (
               <StatusPill
-                tone={activeConnections > 0 ? 'success' : 'slate'}
+                tone={activeConnections > 0 ? "success" : "slate"}
                 className="shrink-0"
               >
                 {activeConnections > 0
                   ? `${activeConnections} active`
-                  : 'None connected'}
+                  : "None connected"}
               </StatusPill>
             )}
           </div>

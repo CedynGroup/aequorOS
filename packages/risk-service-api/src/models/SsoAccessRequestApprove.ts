@@ -11,8 +11,37 @@
  */
 
 import { mapValues } from "../runtime";
+import type { SensitivityScope } from "./SensitivityScope";
+import {
+  SensitivityScopeFromJSON,
+  SensitivityScopeFromJSONTyped,
+  SensitivityScopeToJSON,
+  SensitivityScopeToJSONTyped,
+} from "./SensitivityScope";
+import type { InstitutionScope } from "./InstitutionScope";
+import {
+  InstitutionScopeFromJSON,
+  InstitutionScopeFromJSONTyped,
+  InstitutionScopeToJSON,
+  InstitutionScopeToJSONTyped,
+} from "./InstitutionScope";
+import type { ModuleScope } from "./ModuleScope";
+import {
+  ModuleScopeFromJSON,
+  ModuleScopeFromJSONTyped,
+  ModuleScopeToJSON,
+  ModuleScopeToJSONTyped,
+} from "./ModuleScope";
+import type { GrantTargetInstitutionID } from "./GrantTargetInstitutionID";
+import {
+  GrantTargetInstitutionIDFromJSON,
+  GrantTargetInstitutionIDFromJSONTyped,
+  GrantTargetInstitutionIDToJSON,
+  GrantTargetInstitutionIDToJSONTyped,
+} from "./GrantTargetInstitutionID";
+
 /**
- * Approval is the authorization act — the account admin explicitly picks the role.
+ * Approval activates identity and creates exactly one complete scoped grant.
  * @export
  * @interface SsoAccessRequestApprove
  */
@@ -22,20 +51,57 @@ export interface SsoAccessRequestApprove {
    * @type {string}
    * @memberof SsoAccessRequestApprove
    */
-  role?: SsoAccessRequestApproveRoleEnum;
+  expectedAuthoritySentence: string;
+  /**
+   *
+   * @type {GrantTargetInstitutionID}
+   * @memberof SsoAccessRequestApprove
+   */
+  institutionId?: GrantTargetInstitutionID;
+  /**
+   *
+   * @type {InstitutionScope}
+   * @memberof SsoAccessRequestApprove
+   */
+  institutionScope: InstitutionScope;
+  /**
+   *
+   * @type {ModuleScope}
+   * @memberof SsoAccessRequestApprove
+   */
+  moduleScope: ModuleScope;
+  /**
+   *
+   * @type {string}
+   * @memberof SsoAccessRequestApprove
+   */
+  reason: string;
+  /**
+   *
+   * @type {string}
+   * @memberof SsoAccessRequestApprove
+   */
+  roleBundle: SsoAccessRequestApproveRoleBundleEnum;
+  /**
+   *
+   * @type {SensitivityScope}
+   * @memberof SsoAccessRequestApprove
+   */
+  sensitivityScope: SensitivityScope;
 }
 
 /**
  * @export
  */
-export const SsoAccessRequestApproveRoleEnum = {
-  AccountAdmin: "account_admin",
-  Approver: "approver",
-  Analyst: "analyst",
+export const SsoAccessRequestApproveRoleBundleEnum = {
   Viewer: "viewer",
+  Auditor: "auditor",
+  Analyst: "analyst",
+  Approver: "approver",
+  AccountAdmin: "account_admin",
 } as const;
-export type SsoAccessRequestApproveRoleEnum =
-  (typeof SsoAccessRequestApproveRoleEnum)[keyof typeof SsoAccessRequestApproveRoleEnum];
+export type SsoAccessRequestApproveRoleBundleEnum =
+  (typeof SsoAccessRequestApproveRoleBundleEnum)[keyof typeof SsoAccessRequestApproveRoleBundleEnum];
 
 /**
  * Check if a given object implements the SsoAccessRequestApprove interface.
@@ -43,6 +109,20 @@ export type SsoAccessRequestApproveRoleEnum =
 export function instanceOfSsoAccessRequestApprove(
   value: object,
 ): value is SsoAccessRequestApprove {
+  if (
+    !("expectedAuthoritySentence" in value) ||
+    value["expectedAuthoritySentence"] === undefined
+  )
+    return false;
+  if (!("institutionScope" in value) || value["institutionScope"] === undefined)
+    return false;
+  if (!("moduleScope" in value) || value["moduleScope"] === undefined)
+    return false;
+  if (!("reason" in value) || value["reason"] === undefined) return false;
+  if (!("roleBundle" in value) || value["roleBundle"] === undefined)
+    return false;
+  if (!("sensitivityScope" in value) || value["sensitivityScope"] === undefined)
+    return false;
   return true;
 }
 
@@ -60,7 +140,17 @@ export function SsoAccessRequestApproveFromJSONTyped(
     return json;
   }
   return {
-    role: json["role"] == null ? undefined : json["role"],
+    ...json,
+    expectedAuthoritySentence: json["expected_authority_sentence"],
+    institutionId:
+      json["institution_id"] == null
+        ? undefined
+        : GrantTargetInstitutionIDFromJSON(json["institution_id"]),
+    institutionScope: InstitutionScopeFromJSON(json["institution_scope"]),
+    moduleScope: ModuleScopeFromJSON(json["module_scope"]),
+    reason: json["reason"],
+    roleBundle: json["role_bundle"],
+    sensitivityScope: SensitivityScopeFromJSON(json["sensitivity_scope"]),
   };
 }
 
@@ -79,6 +169,12 @@ export function SsoAccessRequestApproveToJSONTyped(
   }
 
   return {
-    role: value["role"],
+    expected_authority_sentence: value["expectedAuthoritySentence"],
+    institution_id: GrantTargetInstitutionIDToJSON(value["institutionId"]),
+    institution_scope: InstitutionScopeToJSON(value["institutionScope"]),
+    module_scope: ModuleScopeToJSON(value["moduleScope"]),
+    reason: value["reason"],
+    role_bundle: value["roleBundle"],
+    sensitivity_scope: SensitivityScopeToJSON(value["sensitivityScope"]),
   };
 }

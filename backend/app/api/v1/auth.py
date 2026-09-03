@@ -18,13 +18,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
+    DbSession,
+    GrantAdminTenant,
     TenantContext,
     get_current_principal,
     get_tenant_db_session,
     require_account_administration,
 )
+from app.core.authorization import RoleBundle
 from app.core.config import get_settings
 from app.db.session import get_worker_sessionmaker
+from app.features.manage_authorization import binding_response, binding_scope, grant_conflict
 from app.models import User
 from app.schemas.auth import (
     LoginRequest,
@@ -40,7 +44,8 @@ from app.schemas.auth import (
     TokenRefreshRequest,
     TokenResponse,
 )
-from app.services import authentication, sso_config
+from app.schemas.authorization import BindingCreateResponse
+from app.services import authentication, grant_administration, sso_config
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -211,25 +216,31 @@ def list_sso_access_requests(
 
 @router.post(
     "/sso/access-requests/{user_id}/approve",
-    response_model=SsoAccessRequestRead,
+    response_model=BindingCreateResponse,
     operation_id="authApproveSsoAccessRequest",
 )
 def approve_sso_access_request(
     user_id: UUID,
     payload: SsoAccessRequestApprove,
-    ctx: Annotated[TenantContext, Depends(require_account_administration)],
-    db: Annotated[Session, Depends(get_tenant_db_session)],
-) -> SsoAccessRequestRead:
-    """Activate a requested account with an explicitly chosen role (account admin only)."""
-    user = authentication.approve_sso_access_request(
-        db, organization_id=ctx.organization_id, user_id=user_id, role=payload.role
-    )
-    return SsoAccessRequestRead(
-        user_id=user.id,
-        email=user.email,
-        display_name=user.display_name,
-        requested_at=user.created_at,
-    )
+    ctx: GrantAdminTenant,
+    db: DbSession,
+) -> BindingCreateResponse:
+    """Approve verified identity and atomically create one complete scoped grant."""
+    assert ctx.actor_user_id is not None  # guaranteed by GrantAdminTenant
+    try:
+        result = grant_administration.approve_sso_access_request_with_grant(
+            db,
+            organization_id=ctx.organization_id,
+            user_id=user_id,
+            role_bundle=RoleBundle(payload.role_bundle),
+            scope=binding_scope(payload),
+            actor_user_id=ctx.actor_user_id,
+            reason=payload.reason,
+            expected_authority_sentence=payload.expected_authority_sentence,
+        )
+    except grant_administration.GrantAdministrationError as exc:
+        raise grant_conflict(exc) from exc
+    return binding_response(db, ctx.organization_id, result)
 
 
 @router.post(

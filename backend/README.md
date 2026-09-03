@@ -17,17 +17,21 @@ the tenant API).
   worker and signing subsystems independently
 - Password and OIDC SSO authentication (AequorOS is its own relying party — no
   third-party broker), integration-key service accounts, RLS-forced tenancy
-- Shadow-only scoped authorization bindings with deny-by-default, explainable
-  evaluation and explicit organization-or-exact-institution targets. Liquidity
-  Monitoring emits legacy-versus-binding decisions for its institution target,
-  but operational endpoint enforcement still uses the legacy role hierarchy.
+- Scoped authorization bindings with deny-by-default, explainable evaluation
+  and explicit organization-or-exact-institution targets. Product enforcement
+  remains shadow-only: Liquidity Monitoring emits legacy-versus-binding
+  decisions for its institution target, while operational endpoint enforcement
+  still uses the legacy role hierarchy.
   Account administration is split out into the non-operational `account_admin`
   role, while initial Org Owner authority is an explicit organization-wide
   binding. Migration `202608280046` assigns it only for exactly one eligible
   active human legacy admin; zero/multiple candidates require later staff
   designation. App access and refresh tokens carry `authv`, so authorization
   migrations and later authorization changes can invalidate every session
-  immediately. See `docs/authorization_foundation.md`.
+  immediately. Org Owners can preview, create, list, and revoke one complete
+  scoped grant at a time; Settings → Members aggregates tenant identities and
+  binding evidence, and SSO request approval atomically activates the identity
+  with one grant. See `docs/authorization_foundation.md`.
 - Data Engine: Excel/CSV upload, push API, market-data adapters, and the
   database-direct adapter (see the deployment note below)
 - Six calculation modules — liquidity (LCR/NSFR/stress/LMT), Basel capital

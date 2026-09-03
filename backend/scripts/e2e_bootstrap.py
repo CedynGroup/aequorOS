@@ -40,6 +40,7 @@ from app.db.base import Base
 from app.models import Organization, User
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
+from app.services.organization_ownership import assign_initial_owner
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -59,6 +60,7 @@ E2E_USERS = {
     "approver": UUID("eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2"),
     "analyst": UUID("eeeeeeee-3333-4eee-8eee-eeeeeeeeeee3"),
     "viewer": UUID("eeeeeeee-4444-4eee-8eee-eeeeeeeeeee4"),
+    "grant_member": UUID("eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5"),
 }
 
 
@@ -82,19 +84,32 @@ def main() -> None:
         # One hash for every user rather than one per user: Argon2id is
         # deliberately slow, and four of them is four seconds of every e2e run.
         password_hash = hash_password(E2E_PASSWORD)
+        users: dict[str, User] = {}
         for role, user_id in E2E_USERS.items():
-            if session.get(User, user_id) is None:
-                session.add(
-                    User(
-                        id=user_id,
-                        organization_id=DEMO_ORG_ID,
-                        email=f"e2e.{role}@aequoros.example",
-                        display_name=f"E2E {role.capitalize()}",
-                        role=role,
-                        auth_provider="password",
-                        password_hash=password_hash,
-                    )
+            user = session.get(User, user_id)
+            if user is None:
+                display_role = "Grant Member" if role == "grant_member" else role.capitalize()
+                user = User(
+                    id=user_id,
+                    organization_id=DEMO_ORG_ID,
+                    email=f"e2e.{role}@aequoros.example",
+                    display_name=f"E2E {display_role}",
+                    role="viewer" if role == "grant_member" else role,
+                    auth_provider="password",
+                    password_hash=password_hash,
                 )
+                session.add(user)
+            users[role] = user
+        session.flush()
+        # create_all does not run the initial-owner migration. Mirror the landed
+        # #127 bootstrap so the Members journey exercises real owner authority.
+        assign_initial_owner(
+            session,
+            organization_id=DEMO_ORG_ID,
+            candidate=users["admin"],
+            granted_by_id="e2e-bootstrap",
+            commit=False,
+        )
         session.commit()
         _enrol_signing_keys(session)
         materialize_canonical_test_book(session)
@@ -125,9 +140,10 @@ def _enrol_signing_keys(session: Session) -> None:
     service = SignerKeyService(session, ctx)
     for role, user_id in E2E_USERS.items():
         identity = ensure_signer_identity(session, ctx, user_id)
+        display_role = "Grant Member" if role == "grant_member" else role.capitalize()
         service.issue(
             signer_id=identity.signer_id,
-            display_name=f"E2E {role.capitalize()}",
+            display_name=f"E2E {display_role}",
             organization_name="AequorOS E2E",
         )
         session.commit()

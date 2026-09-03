@@ -1,9 +1,9 @@
-"""Database operations for authorization bindings and session invalidation.
+"""Low-level authorization binding evaluation and persistence operations.
 
-No API route exposes these operations yet. The service is ready for a future
-admin endpoint: creating a binding checks tenant ownership and updates the
-user's authorization version in the same transaction, which also revokes all
-their refresh tokens.
+The Org Owner administration API wraps these primitives with delegation,
+separation-of-duties, audit, and presentation policy. Creating a binding checks
+tenant ownership and updates the user's authorization version in the same
+transaction, which also revokes all their refresh tokens.
 """
 
 from __future__ import annotations
@@ -194,9 +194,9 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
 ) -> AuthorizationBinding:
     """Create a single binding and invalidate the user's existing sessions.
 
-    This is a low-level service function, not a tenant admin API. Future
-    endpoints must add delegation and segregation-of-duties checks before
-    calling it.
+    This remains a low-level service function, not a tenant admin API. Tenant
+    callers must use ``grant_administration.create_scoped_grant``, which adds
+    delegation, separation-of-duties, audit, and public-bundle policy.
     """
 
     grant_reason = reason.strip()

@@ -1,6 +1,7 @@
 export * from "./AssessmentsApi";
 export * from "./AttestationApi";
 export * from "./AuthApi";
+export * from "./AuthorizationApi";
 export * from "./BanksApi";
 export * from "./BehavioralModelsApi";
 export * from "./CalculationsApi";

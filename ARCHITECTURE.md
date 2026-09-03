@@ -1,7 +1,7 @@
 # AequorOS Architecture
 
 Single source of truth for agents building new modules. Initially verified on
-2026-07-14 and updated through 2026-08-25. When this document and the code
+2026-07-14 and updated through 2026-08-29. When this document and the code
 disagree, the code wins — fix this file.
 
 Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
@@ -82,11 +82,11 @@ organization-wide scope. It ignores scalar role and token-permission claims and
 applies workflow-supplied demo-mode, maker-checker, step-up, and limit
 conditions as global vetoes. Its decision includes an audit-ready trace.
 
-This kernel is shadow-only: Liquidity Monitoring evaluates an exact institution
-target and emits `authz.shadow_decision`, but its legacy authenticated-read
-result remains authoritative even if shadow evaluation denies or fails. No
-endpoint uses the binding result as a gate and no grant API exists. Follow-on
-migration `202608280046` creates an explicit organization-wide `org_owner`
+Product-route enforcement remains shadow-only: Liquidity Monitoring evaluates
+an exact institution target and emits `authz.shadow_decision`, but its legacy
+authenticated-read result remains authoritative even if shadow evaluation
+denies or fails. Follow-on migration `202608280046` creates an explicit
+organization-wide `org_owner`
 binding only where an organization had exactly one active human legacy admin;
 zero/multiple-candidate organizations remain unassigned in a queryable
 designation state. It also converts every persisted `admin` to the
@@ -100,6 +100,14 @@ security mutation must call
 advance the version and revoke all refresh families. Full semantics and the
 deployment transition are in
 [`backend/docs/authorization_foundation.md`](backend/docs/authorization_foundation.md).
+
+Migration `202608290047` adds attributed revocation evidence. Org Owner-gated
+tenant routes now preview, create, list, and revoke one complete scalar binding
+at a time and aggregate Settings → Members. Create and revoke are audited,
+assignment SoD is authoritative, and each mutation invalidates the grantee's
+sessions transactionally. SSO request approval uses the same complete-grant
+path. This administration boundary is enforcing; ordinary product routes are
+still on the legacy gates described above.
 
 ---
 
