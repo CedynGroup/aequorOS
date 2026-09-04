@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The signing workspace: the document, the fields, the mark, the recipient and
@@ -44,7 +44,7 @@
  * committing to something they read somewhere else.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookmarkPlus,
   ChevronLeft,
@@ -55,18 +55,18 @@ import {
   Plus,
   Undo2,
   X,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   PlacementFieldType,
   ResolvedSignaturePlacementsRead,
   SignatureFieldPlacement,
   SignatureRead,
   SigningRole,
-} from '@aequoros/risk-service-api';
-import StatusPill from '@/components/ui/StatusPill';
-import { SkeletonCard } from '@/components/ui/Skeleton';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { useGrantAdministrationAccess } from '@/lib/api/grantAdministration';
+} from "@aequoros/risk-service-api";
+import StatusPill from "@/components/ui/StatusPill";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { useGrantAdministrationAccess } from "@/lib/api/grantAdministration";
 import {
   useCertifyAndSend,
   useCertifyAndSendWithHeldAuthorization,
@@ -83,11 +83,11 @@ import {
   useSetPackageSignaturePlacements,
   useStepUpForSigning,
   useUpsertSignaturePlacementTemplate,
-} from '@/lib/api/hooks';
+} from "@/lib/api/hooks";
 import {
   fetchArtifactBytes,
   fetchArtifactVersionBytes,
-} from '@/components/submissions/shared';
+} from "@/components/submissions/shared";
 import {
   fieldTypeOf,
   limitsByFieldType,
@@ -96,10 +96,13 @@ import {
   signatureRolesPlaced,
   type PageSpace,
   type ViewerRect,
-} from '@/lib/attestation/geometry';
-import { DEFAULT_FIELD_SIZES, FIELD_TYPE_LABELS } from '@/lib/attestation/fields';
-import { recipientStashKey, startSsoStepUp } from '@/lib/attestation/ssoStepUp';
-import { SIGNING_ROLE_ACTIONS, SignatureBlock, roleNoun } from '../shared';
+} from "@/lib/attestation/geometry";
+import {
+  DEFAULT_FIELD_SIZES,
+  FIELD_TYPE_LABELS,
+} from "@/lib/attestation/fields";
+import { recipientStashKey, startSsoStepUp } from "@/lib/attestation/ssoStepUp";
+import { SIGNING_ROLE_ACTIONS, SignatureBlock, roleNoun } from "../shared";
 import {
   CertificationFailure,
   FiguresSection,
@@ -108,15 +111,18 @@ import {
   StatementSection,
   StepUpSection,
   isTerminalFailure,
-} from '../review';
-import DocumentCanvas from './DocumentCanvas';
-import PlacementLayer, { type FieldSlot } from './PlacementLayer';
-import FieldPalette, { FIELD_DRAG_TYPE, type PaletteRecipient } from './FieldPalette';
-import AdoptSignaturePanel from './AdoptSignaturePanel';
-import RecipientPicker, { type Nomination } from './RecipientPicker';
+} from "../review";
+import DocumentCanvas from "./DocumentCanvas";
+import PlacementLayer, { type FieldSlot } from "./PlacementLayer";
+import FieldPalette, {
+  FIELD_DRAG_TYPE,
+  type PaletteRecipient,
+} from "./FieldPalette";
+import AdoptSignaturePanel from "./AdoptSignaturePanel";
+import RecipientPicker, { type Nomination } from "./RecipientPicker";
 
 /** The roles the return artifact actually has a field for. */
-const PLACEABLE_ROLES = ['preparer', 'approver'] as const;
+const PLACEABLE_ROLES = ["preparer", "approver"] as const;
 
 export function isPlaceableRole(role: SigningRole): boolean {
   return (PLACEABLE_ROLES as readonly string[]).includes(role);
@@ -126,8 +132,8 @@ const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 2];
 
 /** Rail tints, one per recipient, matching the box drawn on the page. */
 const RECIPIENT_TONES: Record<string, string> = {
-  preparer: 'border-action bg-action/10',
-  approver: 'border-slate bg-slate/10',
+  preparer: "border-action bg-action/10",
+  approver: "border-slate bg-slate/10",
 };
 
 export default function SigningWorkspace({
@@ -166,14 +172,16 @@ export default function SigningWorkspace({
   const sendBack = useSendBackForCorrections(bankId);
   const canAdministerGrants = useGrantAdministrationAccess();
 
-  const [placements, setPlacements] = useState<SignatureFieldPlacement[] | null>(null);
+  const [placements, setPlacements] = useState<
+    SignatureFieldPlacement[] | null
+  >(null);
   const [nominations, setNominations] = useState<Nomination[]>([]);
   const [activeRole, setActiveRole] = useState<string>(signingRole);
   const [armed, setArmed] = useState<PlacementFieldType | null>(null);
   const [templateSaved, setTemplateSaved] = useState(false);
-  const [password, setPassword] = useState('');
-  const [reason, setReason] = useState('');
-  const [correctionsNote, setCorrectionsNote] = useState('');
+  const [password, setPassword] = useState("");
+  const [reason, setReason] = useState("");
+  const [correctionsNote, setCorrectionsNote] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [scale, setScale] = useState(1);
@@ -191,7 +199,7 @@ export default function SigningWorkspace({
   // that actually refuses the placement.
   const limits = useMemo(
     () => limitsByFieldType(resolved?.fieldTypes ?? []),
-    [resolved]
+    [resolved],
   );
   const editable = resolved?.editable ?? false;
 
@@ -208,7 +216,9 @@ export default function SigningWorkspace({
   useEffect(() => {
     if (!resolved || placements) return;
     const seeded =
-      resolved.source === 'default' && resolved.editable ? [] : resolved.placements;
+      resolved.source === "default" && resolved.editable
+        ? []
+        : resolved.placements;
     setPlacements(seeded);
     const mine = seeded.find((p) => p.signingRole === signingRole);
     setPageIndex(mine?.pageIndex ?? seeded[0]?.pageIndex ?? 0);
@@ -217,9 +227,9 @@ export default function SigningWorkspace({
   useEffect(() => {
     if (reason) return;
     setReason(
-      signingRole === 'preparer'
-        ? 'Signature fields placed; certified as preparer and sent for approval.'
-        : `Certified as ${roleNoun(signingRole).toLowerCase()} on the frozen figures.`
+      signingRole === "preparer"
+        ? "Signature fields placed; certified as preparer and sent for approval."
+        : `Certified as ${roleNoun(signingRole).toLowerCase()} on the frozen figures.`,
     );
   }, [reason, signingRole]);
 
@@ -227,10 +237,10 @@ export default function SigningWorkspace({
   // — the server re-validates every nominee — so a miss is an annoyance, not a
   // correctness problem.
   useEffect(() => {
-    if (ssoOutcome !== 'ready') return;
+    if (ssoOutcome !== "ready") return;
     try {
       const stashed = window.sessionStorage.getItem(
-        recipientStashKey(packageId, signingRole)
+        recipientStashKey(packageId, signingRole),
       );
       if (stashed) setNominations(JSON.parse(stashed) as Nomination[]);
     } catch {
@@ -254,7 +264,7 @@ export default function SigningWorkspace({
         const known = pageSizes[placement.pageIndex];
         return known ? placementViolation(placement, known, limits) : null;
       }),
-    [placements, pageSizes, limits]
+    [placements, pageSizes, limits],
   );
 
   const nominationSlots = useMemo<SigningRole[]>(() => {
@@ -278,13 +288,22 @@ export default function SigningWorkspace({
    */
   const recipients: PaletteRecipient[] = useMemo(() => {
     const signed = new Map(
-      (status?.signatures ?? []).map((signature) => [signature.signingRole, signature])
+      (status?.signatures ?? []).map((signature) => [
+        signature.signingRole,
+        signature,
+      ]),
     );
     const routed = new Map(
-      (status?.recipients ?? []).map((recipient) => [recipient.signingRole, recipient])
+      (status?.recipients ?? []).map((recipient) => [
+        recipient.signingRole,
+        recipient,
+      ]),
     );
     const nominated = new Map(
-      nominations.map((nomination) => [nomination.signingRole as string, nomination.userId])
+      nominations.map((nomination) => [
+        nomination.signingRole as string,
+        nomination.userId,
+      ]),
     );
     const users = usersQuery.data?.users ?? [];
     return PLACEABLE_ROLES.map((role) => {
@@ -293,14 +312,20 @@ export default function SigningWorkspace({
       const picked = users.find((user) => user.id === nominated.get(role));
       const mine = role === signingRole && signature == null;
       const signer = signature
-        ? { displayName: signature.signerDisplayName, jobTitle: signature.officerTitle }
+        ? {
+            displayName: signature.signerDisplayName,
+            jobTitle: signature.officerTitle,
+          }
         : recipient
           ? {
               displayName: recipient.recipientDisplayName,
               jobTitle: recipient.recipientJobTitle,
             }
           : picked
-            ? { displayName: picked.displayName ?? picked.email, jobTitle: picked.jobTitle }
+            ? {
+                displayName: picked.displayName ?? picked.email,
+                jobTitle: picked.jobTitle,
+              }
             : mine
               ? {
                   displayName: identityQuery.data?.displayName ?? null,
@@ -313,23 +338,30 @@ export default function SigningWorkspace({
           ? `${roleNoun(role)} — ${signer.displayName}`
           : `${roleNoun(role)} — to be named`,
         signer,
-        tone: RECIPIENT_TONES[role] ?? 'border-slate bg-slate/10',
+        tone: RECIPIENT_TONES[role] ?? "border-slate bg-slate/10",
       };
     });
   }, [status, nominations, usersQuery.data, signingRole, identityQuery.data]);
 
   const slots: FieldSlot[] = useMemo(() => {
     const signedRoles = new Set(
-      (status?.signatures ?? []).map((signature) => signature.signingRole as string)
+      (status?.signatures ?? []).map(
+        (signature) => signature.signingRole as string,
+      ),
     );
-    const byRole = new Map(recipients.map((entry) => [entry.signingRole, entry]));
+    const byRole = new Map(
+      recipients.map((entry) => [entry.signingRole, entry]),
+    );
     return (placements ?? []).map((placement, index) => {
       const owner = byRole.get(placement.signingRole);
       return {
         index,
         placement,
-        ownerLabel: owner?.label ?? roleNoun(placement.signingRole as SigningRole),
-        mine: placement.signingRole === signingRole && !signedRoles.has(signingRole),
+        ownerLabel:
+          owner?.label ?? roleNoun(placement.signingRole as SigningRole),
+        mine:
+          placement.signingRole === signingRole &&
+          !signedRoles.has(signingRole),
         // The document on screen is the signed revision, so this role's mark and
         // values are already printed on the page beneath the box. Previewing them
         // again would draw a second copy over the real one.
@@ -345,8 +377,10 @@ export default function SigningWorkspace({
     const box = space.toPdf(rect);
     setPlacements((current) =>
       (current ?? []).map((placement, at) =>
-        at === index ? { ...placement, pageIndex: space.pageIndex, ...box } : placement
-      )
+        at === index
+          ? { ...placement, pageIndex: space.pageIndex, ...box }
+          : placement,
+      ),
     );
   };
 
@@ -356,7 +390,11 @@ export default function SigningWorkspace({
   };
 
   /** Drop a new box of the armed (or dragged) kind where the pointer landed. */
-  const placeField = (fieldType: PlacementFieldType, clientX: number, clientY: number) => {
+  const placeField = (
+    fieldType: PlacementFieldType,
+    clientX: number,
+    clientY: number,
+  ) => {
     if (!space || !editable) return;
     const surface = pageRef.current?.getBoundingClientRect();
     if (!surface) return;
@@ -364,18 +402,19 @@ export default function SigningWorkspace({
       ...(current ?? []),
       newPlacement(
         fieldType,
-        activeRole as SignatureFieldPlacement['signingRole'],
+        activeRole as SignatureFieldPlacement["signingRole"],
         { x: clientX - surface.left, y: clientY - surface.top },
         DEFAULT_FIELD_SIZES[fieldType],
-        space
+        space,
       ),
     ]);
     setArmed(null);
   };
 
-  const failure = certifyWithHeld.error ?? certifyAndSend.error ?? stepUp.error ?? null;
+  const failure =
+    certifyWithHeld.error ?? certifyAndSend.error ?? stepUp.error ?? null;
   const terminal = isTerminalFailure(failure);
-  const authorizationHeld = ssoOutcome === 'ready';
+  const authorizationHeld = ssoOutcome === "ready";
   const pending =
     stepUp.isPending ||
     certifyAndSend.isPending ||
@@ -388,21 +427,23 @@ export default function SigningWorkspace({
   // certifying with nothing placed would silently fall back to the platform
   // default layout — the guess this screen exists to replace.
   const unplaced = editable
-    ? PLACEABLE_ROLES.filter((role) => !signatureRolesPlaced(placements ?? []).has(role))
+    ? PLACEABLE_ROLES.filter(
+        (role) => !signatureRolesPlaced(placements ?? []).has(role),
+      )
     : [];
   const blockedReason = offending
     ? `The ${offending.ownerLabel.toLowerCase()} ${FIELD_TYPE_LABELS[
         fieldTypeOf(offending.placement)
       ].toLowerCase()} field cannot be filed: ${offending.violation}`
     : unplaced.length > 0
-      ? `Place a signature field for ${unplaced.map(roleNoun).join(' and ')}. ` +
-        'Every field has to exist before the first signature — the certification ' +
-        'permits only form filling afterwards, so one left unplaced can never be added.'
+      ? `Place a signature field for ${unplaced.map(roleNoun).join(" and ")}. ` +
+        "Every field has to exist before the first signature — the certification " +
+        "permits only form filling afterwards, so one left unplaced can never be added."
       : missingNominee
-        ? 'Name who signs next before certifying. The signature and the routing land in ' +
-          'one transaction, so a return cannot be certified into nobody’s queue.'
+        ? "Name who signs next before certifying. The signature and the routing land in " +
+          "one transaction, so a return cannot be certified into nobody’s queue."
         : reason.trim().length === 0
-          ? 'A reason is recorded against the placement and the routing. Say why in a line.'
+          ? "A reason is recorded against the placement and the routing. Say why in a line."
           : null;
 
   /** The placement to send: only when it is still ours to set. */
@@ -410,7 +451,7 @@ export default function SigningWorkspace({
 
   /** Both exits end the same way: nothing held locally, the caller re-reads. */
   const finish = () => {
-    setPassword('');
+    setPassword("");
     window.sessionStorage.removeItem(recipientStashKey(packageId, signingRole));
     onCertified?.();
     onClose();
@@ -420,7 +461,11 @@ export default function SigningWorkspace({
     event.preventDefault();
     if (!preview) return;
     void (async () => {
-      const granted = await stepUp.mutateAsync({ packageId, signingRole, password });
+      const granted = await stepUp.mutateAsync({
+        packageId,
+        signingRole,
+        password,
+      });
       await certifyAndSend.mutateAsync({
         packageId,
         signingRole,
@@ -463,7 +508,7 @@ export default function SigningWorkspace({
       try {
         window.sessionStorage.setItem(
           recipientStashKey(packageId, signingRole),
-          JSON.stringify(nominations)
+          JSON.stringify(nominations),
         );
       } catch {
         // Private-mode storage refusal: the nominee is simply picked again.
@@ -472,10 +517,12 @@ export default function SigningWorkspace({
         await savePlacements.mutateAsync({
           packageId,
           placements,
-          reason: reason.trim() || 'Placement saved before single sign-on re-authentication.',
+          reason:
+            reason.trim() ||
+            "Placement saved before single sign-on re-authentication.",
         });
       }
-      startSsoStepUp({ bankId, packageId, signingRole, resume: 'sign' });
+      startSsoStepUp({ bankId, packageId, signingRole, resume: "sign" });
     })().catch(() => undefined);
   };
 
@@ -501,7 +548,7 @@ export default function SigningWorkspace({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== "Escape") return;
       // Escape disarms the palette first: closing the whole ceremony because
       // somebody cancelled a field drop would lose every box they had placed.
       if (armed) {
@@ -510,8 +557,8 @@ export default function SigningWorkspace({
       }
       onClose();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [onClose, armed]);
 
   return (
@@ -525,13 +572,13 @@ export default function SigningWorkspace({
       <header className="flex items-start justify-between gap-4 px-5 py-3 border-b border-border bg-surface-raised">
         <div className="min-w-0">
           <h2 className="text-h3 text-navy">
-            {SIGNING_ROLE_ACTIONS[signingRole] ?? 'Certify'} — {returnLabel}
+            {SIGNING_ROLE_ACTIONS[signingRole] ?? "Certify"} — {returnLabel}
           </h2>
           <p className="mt-0.5 text-caption text-slate">
-            Signing as {roleNoun(signingRole).toLowerCase()} ·{' '}
+            Signing as {roleNoun(signingRole).toLowerCase()} ·{" "}
             {editable
-              ? 'position the fields, adopt your mark, name who signs next, then certify'
-              : 'the fields are part of the certified revision and can no longer be moved'}
+              ? "position the fields, adopt your mark, name who signs next, then certify"
+              : "the fields are part of the certified revision and can no longer be moved"}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
@@ -563,7 +610,7 @@ export default function SigningWorkspace({
               disabled={!editable}
             />
             <TemplateSaver
-              returnCode={resolved?.returnCode ?? ''}
+              returnCode={resolved?.returnCode ?? ""}
               canAdministerGrants={canAdministerGrants}
               canSave={(placements?.length ?? 0) > 0 && !offending}
               saved={templateSaved}
@@ -588,7 +635,10 @@ export default function SigningWorkspace({
           <div className="flex-1 min-h-0 overflow-auto p-6 flex justify-center">
             {bytes.error ? (
               <div className="max-w-xl">
-                <ErrorPanel error={bytes.error} title="The return document is not available" />
+                <ErrorPanel
+                  error={bytes.error}
+                  title="The return document is not available"
+                />
               </div>
             ) : bytes.data ? (
               <DocumentCanvas
@@ -605,17 +655,26 @@ export default function SigningWorkspace({
                   <div
                     ref={pageRef}
                     data-testid="placement-surface"
-                    className={`absolute inset-0 ${armed ? 'cursor-copy' : ''}`}
+                    className={`absolute inset-0 ${armed ? "cursor-copy" : ""}`}
                     onDragOver={(event) => {
-                      if (!armed && !event.dataTransfer.types.includes(FIELD_DRAG_TYPE)) return;
+                      if (
+                        !armed &&
+                        !event.dataTransfer.types.includes(FIELD_DRAG_TYPE)
+                      )
+                        return;
                       event.preventDefault();
-                      event.dataTransfer.dropEffect = 'copy';
+                      event.dataTransfer.dropEffect = "copy";
                     }}
                     onDrop={(event) => {
-                      const dropped = event.dataTransfer.getData(FIELD_DRAG_TYPE);
+                      const dropped =
+                        event.dataTransfer.getData(FIELD_DRAG_TYPE);
                       if (!dropped) return;
                       event.preventDefault();
-                      placeField(dropped as PlacementFieldType, event.clientX, event.clientY);
+                      placeField(
+                        dropped as PlacementFieldType,
+                        event.clientX,
+                        event.clientY,
+                      );
                     }}
                     onClick={(event) => {
                       if (!armed) return;
@@ -654,14 +713,14 @@ export default function SigningWorkspace({
             </>
           ) : null}
 
-          {status && signingRole !== 'preparer' && (
+          {status && signingRole !== "preparer" && (
             <PriorSignatures signatures={status.signatures} />
           )}
 
           <div className="pt-4 border-t border-border-light">
             <AdoptSignaturePanel
               adopted={appearanceQuery.data}
-              signerName={identityQuery.data?.displayName ?? ''}
+              signerName={identityQuery.data?.displayName ?? ""}
             />
           </div>
 
@@ -679,7 +738,10 @@ export default function SigningWorkspace({
 
           <label className="block">
             <span className="block text-caption font-medium text-navy mb-1.5">
-              Reason <span className="font-normal text-slate">(recorded, required)</span>
+              Reason{" "}
+              <span className="font-normal text-slate">
+                (recorded, required)
+              </span>
             </span>
             <textarea
               value={reason}
@@ -712,22 +774,24 @@ export default function SigningWorkspace({
               signingRole={signingRole}
               password={password}
               onPasswordChange={setPassword}
-              onSubmit={authorizationHeld ? onHeldAuthorizationSubmit : onPasswordSubmit}
+              onSubmit={
+                authorizationHeld ? onHeldAuthorizationSubmit : onPasswordSubmit
+              }
               onSsoClick={onSsoClick}
               pending={pending}
               authorizationHeld={authorizationHeld}
               actionLabel={
                 nominationSlots.length > 0
-                  ? 'Certify and send'
-                  : (SIGNING_ROLE_ACTIONS[signingRole] ?? 'Certify')
+                  ? "Certify and send"
+                  : (SIGNING_ROLE_ACTIONS[signingRole] ?? "Certify")
               }
               blockedReason={blockedReason}
               stage={
                 certifyAndSend.isPending || certifyWithHeld.isPending
-                  ? 'signing'
+                  ? "signing"
                   : stepUp.isPending
-                    ? 'proving'
-                    : 'idle'
+                    ? "proving"
+                    : "idle"
               }
               onCancel={onClose}
             />
@@ -735,7 +799,7 @@ export default function SigningWorkspace({
 
           {/* The reviewer's other exit. Offered to checkers only: a preparer who
               disagrees with their own figures regenerates them. */}
-          {signingRole !== 'preparer' && (
+          {signingRole !== "preparer" && (
             <SendBackPanel
               note={correctionsNote}
               onNoteChange={setCorrectionsNote}
@@ -785,7 +849,9 @@ function SendBackPanel({
     >
       <div className="flex items-center gap-2">
         <Undo2 size={13} className="text-slate" aria-hidden />
-        <p className="text-body font-medium text-navy">Or send it back for corrections</p>
+        <p className="text-body font-medium text-navy">
+          Or send it back for corrections
+        </p>
       </div>
       <p className="text-caption text-slate leading-relaxed">
         Nothing is signed. The return goes back to the preparer with your note,
@@ -794,7 +860,8 @@ function SendBackPanel({
       </p>
       <label className="block">
         <span className="block text-caption font-medium text-navy mb-1.5">
-          What needs correcting <span className="font-normal text-slate">(required)</span>
+          What needs correcting{" "}
+          <span className="font-normal text-slate">(required)</span>
         </span>
         <textarea
           value={note}
@@ -808,7 +875,11 @@ function SendBackPanel({
       <button
         type="button"
         disabled={pending || empty}
-        title={empty ? 'A note is required — it is the instruction to the preparer.' : undefined}
+        title={
+          empty
+            ? "A note is required — it is the instruction to the preparer."
+            : undefined
+        }
         onClick={onSend}
         className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-critical border border-critical/30 bg-critical-light/40 rounded-md hover:bg-critical-light disabled:opacity-60"
       >
@@ -821,7 +892,9 @@ function SendBackPanel({
       </button>
       {error != null && (
         <p role="alert" className="text-caption text-critical leading-relaxed">
-          {error instanceof Error ? error.message : 'The return could not be sent back.'}
+          {error instanceof Error
+            ? error.message
+            : "The return could not be sent back."}
         </p>
       )}
     </div>
@@ -855,14 +928,15 @@ function usePackageDocument(bankId: string, packageId: string) {
   const loadedDocument = useRef<string | null>(null);
 
   const signed = useMemo(
-    () => versionsQuery.data?.versions.find((version) => version.isFiled) ?? null,
-    [versionsQuery.data]
+    () =>
+      versionsQuery.data?.versions.find((version) => version.isFiled) ?? null,
+    [versionsQuery.data],
   );
 
   const pdf = useMemo(() => {
     const artifacts = artifactsQuery.data?.artifacts ?? [];
     return artifacts
-      .filter((artifact) => artifact.kind === 'pdf')
+      .filter((artifact) => artifact.kind === "pdf")
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
   }, [artifactsQuery.data]);
 
@@ -886,11 +960,12 @@ function usePackageDocument(bankId: string, packageId: string) {
   }, [bankId, pdf, signed, versionsQuery.isSuccess]);
 
   useEffect(() => {
-    if (pdf || signed || !artifactsQuery.isSuccess || requestedExport.current) return;
+    if (pdf || signed || !artifactsQuery.isSuccess || requestedExport.current)
+      return;
     requestedExport.current = true;
     exportPackage.mutate(
-      { packageId, kind: 'pdf' },
-      { onError: (cause) => setError(cause) }
+      { packageId, kind: "pdf" },
+      { onError: (cause) => setError(cause) },
     );
   }, [pdf, signed, artifactsQuery.isSuccess, exportPackage, packageId]);
 
@@ -906,17 +981,25 @@ function DocumentPending({ exporting }: { exporting: boolean }) {
     <div className="self-center text-center max-w-sm">
       {exporting ? (
         <>
-          <Loader2 size={22} className="mx-auto animate-spin text-action" aria-hidden />
-          <p className="mt-2 text-body text-navy">Exporting the return as a PDF…</p>
+          <Loader2
+            size={22}
+            className="mx-auto animate-spin text-action"
+            aria-hidden
+          />
+          <p className="mt-2 text-body text-navy">
+            Exporting the return as a PDF…
+          </p>
           <p className="mt-1 text-caption text-slate leading-relaxed">
-            The signature fields are created on this document, so it has to exist
-            before anything can be placed on it.
+            The signature fields are created on this document, so it has to
+            exist before anything can be placed on it.
           </p>
         </>
       ) : (
         <>
           <FileWarning size={22} className="mx-auto text-slate" aria-hidden />
-          <p className="mt-2 text-body text-navy">Loading the return document…</p>
+          <p className="mt-2 text-body text-navy">
+            Loading the return document…
+          </p>
         </>
       )}
     </div>
@@ -938,7 +1021,13 @@ function Toolbar({
 }) {
   const step = (delta: number) => {
     const index = ZOOM_STEPS.indexOf(scale);
-    const next = ZOOM_STEPS[Math.min(Math.max((index < 0 ? 1 : index) + delta, 0), ZOOM_STEPS.length - 1)];
+    const next =
+      ZOOM_STEPS[
+        Math.min(
+          Math.max((index < 0 ? 1 : index) + delta, 0),
+          ZOOM_STEPS.length - 1,
+        )
+      ];
     onScale(next);
   };
   return (
@@ -991,17 +1080,21 @@ function Toolbar({
 }
 
 const PLACEMENT_SOURCE_LABELS: Record<string, string> = {
-  package: 'Placed on this return',
-  bank_template: 'From this bank’s template',
-  organization_template: 'From the institution template',
+  package: "Placed on this return",
+  bank_template: "From this bank’s template",
+  organization_template: "From the institution template",
   // "default" is never seeded into the workspace, so what the signer is looking
   // at when it resolves is an empty page — say that, not "platform default".
-  default: 'Nothing placed yet',
+  default: "Nothing placed yet",
 };
 
-function PlacementSourcePill({ source }: { source: ResolvedSignaturePlacementsRead }) {
+function PlacementSourcePill({
+  source,
+}: {
+  source: ResolvedSignaturePlacementsRead;
+}) {
   return (
-    <StatusPill tone={source.source === 'default' ? 'slate' : 'action'}>
+    <StatusPill tone={source.source === "default" ? "slate" : "action"}>
       {PLACEMENT_SOURCE_LABELS[source.source] ?? source.source}
     </StatusPill>
   );
@@ -1035,9 +1128,9 @@ function TemplateSaver({
   if (!canAdministerGrants) {
     return (
       <p className="mt-4 pt-4 border-t border-border-light text-caption text-slate leading-relaxed">
-        These boxes apply to this return only. An Organization Owner can save the
-        layout as the {returnCode || 'return'} template so next month opens with
-        the fields already on the form.
+        These boxes apply to this return only. An Organization Owner can save
+        the layout as the {returnCode || "return"} template so next month opens
+        with the fields already on the form.
       </p>
     );
   }
@@ -1054,17 +1147,25 @@ function TemplateSaver({
         ) : (
           <BookmarkPlus size={13} aria-hidden />
         )}
-        Save as the {returnCode || 'return'} template
+        Save as the {returnCode || "return"} template
       </button>
       {saved && (
-        <p role="status" className="mt-1.5 text-caption text-positive leading-relaxed">
+        <p
+          role="status"
+          className="mt-1.5 text-caption text-positive leading-relaxed"
+        >
           Saved. Every future {returnCode} filing for this bank opens with these
           boxes already on the form.
         </p>
       )}
       {error != null && (
-        <p role="alert" className="mt-1.5 text-caption text-critical leading-relaxed">
-          {error instanceof Error ? error.message : 'The template could not be saved.'}
+        <p
+          role="alert"
+          className="mt-1.5 text-caption text-critical leading-relaxed"
+        >
+          {error instanceof Error
+            ? error.message
+            : "The template could not be saved."}
         </p>
       )}
     </div>
@@ -1096,8 +1197,8 @@ function PriorSignatures({ signatures }: { signatures: SignatureRead[] }) {
         ))}
       </ul>
       <p className="mt-1.5 text-caption text-slate leading-relaxed">
-        The document above is the signed revision each of these pinned — the same
-        bytes an examiner would receive.
+        The document above is the signed revision each of these pinned — the
+        same bytes an examiner would receive.
       </p>
     </div>
   );

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Regulatory Reporting — Settings. Per-channel submission configuration:
@@ -14,47 +14,61 @@
  * docs/attestation_esignature.md §4.5), which renders nothing for non-owners.
  */
 
-import { useEffect, useState } from 'react';
-import { FlaskConical, KeyRound, Loader2, Save } from 'lucide-react';
-import type { ChannelCode, ChannelConfigRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonCard } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
+import { useEffect, useState } from "react";
+import { FlaskConical, KeyRound, Loader2, Save } from "lucide-react";
+import type {
+  ChannelCode,
+  ChannelConfigRead,
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   isChannelConfigMissingError,
   useChannelConfig,
   useSaveChannelConfig,
-} from '@/lib/api/hooks';
-import { fmtTimestamp, shortId } from '@/lib/api/values';
-import { CHANNEL_LABELS } from '@/components/submissions/shared';
-import SigningPolicyPanel from '@/components/attestation/SigningPolicyPanel';
-import { regShort } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { fmtTimestamp, shortId } from "@/lib/api/values";
+import { CHANNEL_LABELS } from "@/components/submissions/shared";
+import SigningPolicyPanel from "@/components/attestation/SigningPolicyPanel";
+import { regShort } from "@/lib/format";
 
-const CHANNELS: ChannelCode[] = ['orass_api', 'orass_sandbox', 'email', 'manual'];
+const CHANNELS: ChannelCode[] = [
+  "orass_api",
+  "orass_sandbox",
+  "email",
+  "manual",
+];
 
 const SANDBOX_BEHAVIORS = [
-  { value: 'ack', label: 'Acknowledge (happy path)' },
-  { value: 'reject', label: 'Reject (simulated server-side validation failure)' },
-  { value: 'slow', label: 'Slow (pending for two polls, then acknowledge)' },
-  { value: 'decline', label: 'Decline (terminal supervisor refusal with comments)' },
+  { value: "ack", label: "Acknowledge (happy path)" },
+  {
+    value: "reject",
+    label: "Reject (simulated server-side validation failure)",
+  },
+  { value: "slow", label: "Slow (pending for two polls, then acknowledge)" },
+  {
+    value: "decline",
+    label: "Decline (terminal supervisor refusal with comments)",
+  },
 ];
 
 const RESUBMISSION_BEHAVIORS = [
-  { value: 'grant', label: 'Grant resubmission requests' },
-  { value: 'deny', label: 'Deny resubmission requests' },
+  { value: "grant", label: "Grant resubmission requests" },
+  { value: "deny", label: "Deny resubmission requests" },
 ];
 
 const AUTH_MODES = [
-  { value: 'api_key', label: 'API key' },
-  { value: 'basic', label: 'Basic (username + password)' },
+  { value: "api_key", label: "API key" },
+  { value: "basic", label: "Basic (username + password)" },
 ];
 
 const BASIS_OPTIONS = [
-  { value: 'solo', label: 'Solo (standalone licensed entity)' },
-  { value: 'consolidated', label: 'Consolidated (banking group)' },
+  { value: "solo", label: "Solo (standalone licensed entity)" },
+  { value: "consolidated", label: "Consolidated (banking group)" },
 ];
 
 type FormState = {
@@ -78,23 +92,23 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
-  institutionCode: '',
-  contactName: '',
-  contactEmail: '',
-  reportingBasis: 'solo',
-  sandboxBehavior: 'ack',
-  resubmissionBehavior: 'grant',
+  institutionCode: "",
+  contactName: "",
+  contactEmail: "",
+  reportingBasis: "solo",
+  sandboxBehavior: "ack",
+  resubmissionBehavior: "grant",
   downtime: false,
-  fallbackRecipient: '',
-  apiBaseUrl: '',
-  authMode: 'api_key',
-  timeoutSeconds: '',
+  fallbackRecipient: "",
+  apiBaseUrl: "",
+  authMode: "api_key",
+  timeoutSeconds: "",
   verifyTls: true,
-  principalUserName: '',
-  principalUserEmail: '',
-  username: '',
-  password: '',
-  apiKey: '',
+  principalUserName: "",
+  principalUserEmail: "",
+  username: "",
+  password: "",
+  apiKey: "",
 };
 
 function formFromConfig(config: ChannelConfigRead | undefined): FormState {
@@ -102,36 +116,36 @@ function formFromConfig(config: ChannelConfigRead | undefined): FormState {
   const raw = config.config as Record<string, unknown>;
   return {
     ...EMPTY_FORM,
-    institutionCode: String(raw.institution_code ?? ''),
-    contactName: String(raw.contact_name ?? ''),
-    contactEmail: String(raw.contact_email ?? ''),
-    reportingBasis: String(raw.reporting_basis ?? 'solo'),
-    sandboxBehavior: String(raw.sandbox_behavior ?? 'ack'),
-    resubmissionBehavior: String(raw.resubmission_behavior ?? 'grant'),
+    institutionCode: String(raw.institution_code ?? ""),
+    contactName: String(raw.contact_name ?? ""),
+    contactEmail: String(raw.contact_email ?? ""),
+    reportingBasis: String(raw.reporting_basis ?? "solo"),
+    sandboxBehavior: String(raw.sandbox_behavior ?? "ack"),
+    resubmissionBehavior: String(raw.resubmission_behavior ?? "grant"),
     downtime: raw.downtime === true,
-    fallbackRecipient: String(raw.fallback_recipient ?? ''),
-    apiBaseUrl: String(raw.api_base_url ?? ''),
-    authMode: String(raw.auth_mode ?? 'api_key'),
+    fallbackRecipient: String(raw.fallback_recipient ?? ""),
+    apiBaseUrl: String(raw.api_base_url ?? ""),
+    authMode: String(raw.auth_mode ?? "api_key"),
     timeoutSeconds:
-      raw.timeout_seconds == null ? '' : String(raw.timeout_seconds),
+      raw.timeout_seconds == null ? "" : String(raw.timeout_seconds),
     verifyTls: raw.verify_tls !== false,
-    principalUserName: String(raw.principal_user_name ?? ''),
-    principalUserEmail: String(raw.principal_user_email ?? ''),
+    principalUserName: String(raw.principal_user_name ?? ""),
+    principalUserEmail: String(raw.principal_user_email ?? ""),
   };
 }
 
 export default function SettingsPage() {
   const { bank } = useBankContext();
   const bankId = bank?.id;
-  const [channel, setChannel] = useState<ChannelCode>('orass_sandbox');
+  const [channel, setChannel] = useState<ChannelCode>("orass_sandbox");
 
   return (
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'Settings' },
+          { label: "Governance", href: "/submissions" },
+          { label: "Regulatory Reporting", href: "/submissions" },
+          { label: "Settings" },
         ]}
         title="Channel settings"
         subtitle="Per-channel submission configuration · credentials are write-only (fingerprint back, never the material)"
@@ -154,7 +168,9 @@ export default function SettingsPage() {
       />
 
       <div className="px-8 py-6 space-y-6">
-        {bankId && <ChannelForm key={channel} bankId={bankId} channel={channel} />}
+        {bankId && (
+          <ChannelForm key={channel} bankId={bankId} channel={channel} />
+        )}
         {/* Org Owner-only, and renders nothing for everyone else. Who must sign is a
             separate control from how a return is transmitted, but both belong to
             the same "how this institution files" settings surface. */}
@@ -213,7 +229,7 @@ function ChannelForm({
       contact_email: form.contactEmail.trim(),
       reporting_basis: form.reportingBasis,
     };
-    if (channel === 'orass_api') {
+    if (channel === "orass_api") {
       configPayload.api_base_url = form.apiBaseUrl.trim();
       configPayload.auth_mode = form.authMode;
       const timeout = Number.parseInt(form.timeoutSeconds, 10);
@@ -222,12 +238,12 @@ function ChannelForm({
       }
       configPayload.verify_tls = form.verifyTls;
     }
-    if (channel === 'orass_sandbox') {
+    if (channel === "orass_sandbox") {
       configPayload.sandbox_behavior = form.sandboxBehavior;
       configPayload.resubmission_behavior = form.resubmissionBehavior;
       configPayload.downtime = form.downtime;
     }
-    if (channel === 'orass_api' || channel === 'orass_sandbox') {
+    if (channel === "orass_api" || channel === "orass_sandbox") {
       if (form.principalUserName.trim()) {
         configPayload.principal_user_name = form.principalUserName.trim();
       }
@@ -235,30 +251,39 @@ function ChannelForm({
         configPayload.principal_user_email = form.principalUserEmail.trim();
       }
     }
-    if (channel === 'email' && form.fallbackRecipient.trim()) {
+    if (channel === "email" && form.fallbackRecipient.trim()) {
       configPayload.fallback_recipient = form.fallbackRecipient.trim();
     }
     // Credentials stay write-only: only sent when the operator typed material.
     let credentials: Record<string, unknown> | undefined;
-    if (channel === 'orass_api' && form.authMode === 'api_key') {
-      if (form.apiKey.trim() !== '') credentials = { api_key: form.apiKey.trim() };
-    } else if (channel === 'orass_api' || channel === 'orass_sandbox') {
-      if (form.username.trim() !== '' || form.password !== '') {
-        credentials = { username: form.username.trim(), password: form.password };
+    if (channel === "orass_api" && form.authMode === "api_key") {
+      if (form.apiKey.trim() !== "")
+        credentials = { api_key: form.apiKey.trim() };
+    } else if (channel === "orass_api" || channel === "orass_sandbox") {
+      if (form.username.trim() !== "" || form.password !== "") {
+        credentials = {
+          username: form.username.trim(),
+          password: form.password,
+        };
       }
     }
     save.mutate(
       { channel, config: configPayload, credentials },
       {
         onSuccess: () =>
-          setForm((prev) => ({ ...prev, username: '', password: '', apiKey: '' })),
-      }
+          setForm((prev) => ({
+            ...prev,
+            username: "",
+            password: "",
+            apiKey: "",
+          })),
+      },
     );
   };
 
   const inputClass =
-    'w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light';
-  const labelClass = 'block text-caption font-medium text-navy mb-1.5';
+    "w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light";
+  const labelClass = "block text-caption font-medium text-navy mb-1.5";
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
@@ -267,10 +292,10 @@ function ChannelForm({
           title={CHANNEL_LABELS[channel]}
           subtitle={
             unconfigured && !save.isSuccess
-              ? 'Not configured yet — saving creates the configuration'
+              ? "Not configured yet — saving creates the configuration"
               : config
-              ? `Last updated ${fmtTimestamp(config.updatedAt)}`
-              : undefined
+                ? `Last updated ${fmtTimestamp(config.updatedAt)}`
+                : undefined
           }
           actions={
             <button
@@ -296,7 +321,7 @@ function ChannelForm({
               <input
                 id="institution-code"
                 value={form.institutionCode}
-                onChange={(e) => set('institutionCode', e.target.value)}
+                onChange={(e) => set("institutionCode", e.target.value)}
                 placeholder="e.g. SBL"
                 className={inputClass}
               />
@@ -312,7 +337,7 @@ function ChannelForm({
               <select
                 id="reporting-basis"
                 value={form.reportingBasis}
-                onChange={(e) => set('reportingBasis', e.target.value)}
+                onChange={(e) => set("reportingBasis", e.target.value)}
                 className={inputClass}
               >
                 {BASIS_OPTIONS.map((option) => (
@@ -329,7 +354,7 @@ function ChannelForm({
               <input
                 id="contact-name"
                 value={form.contactName}
-                onChange={(e) => set('contactName', e.target.value)}
+                onChange={(e) => set("contactName", e.target.value)}
                 placeholder="Name / designation"
                 className={inputClass}
               />
@@ -342,23 +367,25 @@ function ChannelForm({
                 id="contact-email"
                 type="email"
                 value={form.contactEmail}
-                onChange={(e) => set('contactEmail', e.target.value)}
+                onChange={(e) => set("contactEmail", e.target.value)}
                 placeholder="reporting@bank.example"
                 className={inputClass}
               />
             </div>
 
-            {channel === 'orass_api' && (
+            {channel === "orass_api" && (
               <>
                 <div className="md:col-span-2">
                   <label className={labelClass} htmlFor="api-base-url">
-                    API base URL{' '}
-                    <span className="font-normal text-critical">(required)</span>
+                    API base URL{" "}
+                    <span className="font-normal text-critical">
+                      (required)
+                    </span>
                   </label>
                   <input
                     id="api-base-url"
                     value={form.apiBaseUrl}
-                    onChange={(e) => set('apiBaseUrl', e.target.value)}
+                    onChange={(e) => set("apiBaseUrl", e.target.value)}
                     placeholder="https://orass-portal.example/api"
                     className={inputClass}
                   />
@@ -370,7 +397,7 @@ function ChannelForm({
                   <select
                     id="auth-mode"
                     value={form.authMode}
-                    onChange={(e) => set('authMode', e.target.value)}
+                    onChange={(e) => set("authMode", e.target.value)}
                     className={inputClass}
                   >
                     {AUTH_MODES.map((option) => (
@@ -389,7 +416,7 @@ function ChannelForm({
                     type="number"
                     min={1}
                     value={form.timeoutSeconds}
-                    onChange={(e) => set('timeoutSeconds', e.target.value)}
+                    onChange={(e) => set("timeoutSeconds", e.target.value)}
                     placeholder="30"
                     className={inputClass}
                   />
@@ -399,7 +426,7 @@ function ChannelForm({
                     <input
                       type="checkbox"
                       checked={form.verifyTls}
-                      onChange={(e) => set('verifyTls', e.target.checked)}
+                      onChange={(e) => set("verifyTls", e.target.checked)}
                       className="w-4 h-4 accent-[rgb(var(--accent))]"
                     />
                     Verify TLS certificates
@@ -412,7 +439,7 @@ function ChannelForm({
               </>
             )}
 
-            {channel === 'orass_sandbox' && (
+            {channel === "orass_sandbox" && (
               <>
                 <div>
                   <label className={labelClass} htmlFor="sandbox-behavior">
@@ -421,7 +448,7 @@ function ChannelForm({
                   <select
                     id="sandbox-behavior"
                     value={form.sandboxBehavior}
-                    onChange={(e) => set('sandboxBehavior', e.target.value)}
+                    onChange={(e) => set("sandboxBehavior", e.target.value)}
                     className={inputClass}
                   >
                     {SANDBOX_BEHAVIORS.map((option) => (
@@ -438,7 +465,9 @@ function ChannelForm({
                   <select
                     id="resubmission-behavior"
                     value={form.resubmissionBehavior}
-                    onChange={(e) => set('resubmissionBehavior', e.target.value)}
+                    onChange={(e) =>
+                      set("resubmissionBehavior", e.target.value)
+                    }
                     className={inputClass}
                   >
                     {RESUBMISSION_BEHAVIORS.map((option) => (
@@ -453,7 +482,7 @@ function ChannelForm({
                     <input
                       type="checkbox"
                       checked={form.downtime}
-                      onChange={(e) => set('downtime', e.target.checked)}
+                      onChange={(e) => set("downtime", e.target.checked)}
                       className="w-4 h-4 accent-[rgb(var(--accent))]"
                     />
                     Simulate ORASS downtime
@@ -467,7 +496,7 @@ function ChannelForm({
               </>
             )}
 
-            {(channel === 'orass_api' || channel === 'orass_sandbox') && (
+            {(channel === "orass_api" || channel === "orass_sandbox") && (
               <>
                 <div className="md:col-span-2 pt-2">
                   <p className="text-body font-medium text-navy">
@@ -485,7 +514,7 @@ function ChannelForm({
                   <input
                     id="principal-user-name"
                     value={form.principalUserName}
-                    onChange={(e) => set('principalUserName', e.target.value)}
+                    onChange={(e) => set("principalUserName", e.target.value)}
                     placeholder="Name / designation"
                     className={inputClass}
                   />
@@ -498,7 +527,7 @@ function ChannelForm({
                     id="principal-user-email"
                     type="email"
                     value={form.principalUserEmail}
-                    onChange={(e) => set('principalUserEmail', e.target.value)}
+                    onChange={(e) => set("principalUserEmail", e.target.value)}
                     placeholder="principal@bank.example"
                     className={inputClass}
                   />
@@ -506,7 +535,7 @@ function ChannelForm({
               </>
             )}
 
-            {channel === 'email' && (
+            {channel === "email" && (
               <div className="md:col-span-2">
                 <label className={labelClass} htmlFor="fallback-recipient">
                   Downtime return recipient
@@ -515,13 +544,13 @@ function ChannelForm({
                   id="fallback-recipient"
                   type="email"
                   value={form.fallbackRecipient}
-                  onChange={(e) => set('fallbackRecipient', e.target.value)}
+                  onChange={(e) => set("fallbackRecipient", e.target.value)}
                   placeholder="Supervisor-provided return-desk address"
                   className={inputClass}
                 />
                 <p className="mt-1 text-micro text-slate leading-relaxed">
-                  The {regShort()} downtime-return address is UNKNOWN in the public
-                  record; bsdletters@bog.gov.gh is confirmed only for
+                  The {regShort()} downtime-return address is UNKNOWN in the
+                  public record; bsdletters@bog.gov.gh is confirmed only for
                   directive-consultation correspondence. Use the address your
                   {regShort()} supervision contact provides.
                 </p>
@@ -529,20 +558,20 @@ function ChannelForm({
             )}
           </div>
 
-          {(channel === 'orass_api' || channel === 'orass_sandbox') && (
+          {(channel === "orass_api" || channel === "orass_sandbox") && (
             <div className="mt-6 pt-5 border-t border-border-light max-w-3xl">
               <p className="inline-flex items-center gap-2 text-body font-medium text-navy">
                 <KeyRound size={14} className="text-slate" aria-hidden />
                 ORASS credentials (write-only)
               </p>
               <p className="mt-1 text-caption text-slate leading-relaxed">
-                Encrypted with AES-256-GCM in the credential vault and
-                retrieved per submission cycle only. Responses expose the
-                SHA-256 fingerprint — never the material. Leave blank to keep
-                the stored credential.
+                Encrypted with AES-256-GCM in the credential vault and retrieved
+                per submission cycle only. Responses expose the SHA-256
+                fingerprint — never the material. Leave blank to keep the stored
+                credential.
               </p>
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {channel === 'orass_api' && form.authMode === 'api_key' ? (
+                {channel === "orass_api" && form.authMode === "api_key" ? (
                   <div>
                     <label className={labelClass} htmlFor="orass-api-key">
                       API key
@@ -551,7 +580,7 @@ function ChannelForm({
                       id="orass-api-key"
                       type="password"
                       value={form.apiKey}
-                      onChange={(e) => set('apiKey', e.target.value)}
+                      onChange={(e) => set("apiKey", e.target.value)}
                       autoComplete="new-password"
                       className={inputClass}
                     />
@@ -565,7 +594,7 @@ function ChannelForm({
                       <input
                         id="orass-username"
                         value={form.username}
-                        onChange={(e) => set('username', e.target.value)}
+                        onChange={(e) => set("username", e.target.value)}
                         autoComplete="off"
                         className={inputClass}
                       />
@@ -578,7 +607,7 @@ function ChannelForm({
                         id="orass-password"
                         type="password"
                         value={form.password}
-                        onChange={(e) => set('password', e.target.value)}
+                        onChange={(e) => set("password", e.target.value)}
                         autoComplete="new-password"
                         className={inputClass}
                       />
@@ -608,12 +637,12 @@ function ChannelForm({
             <div className="space-y-2">
               <StatusPill tone="success">Credentials stored</StatusPill>
               <p className="font-mono text-caption text-slate tnum">
-                fingerprint{' '}
+                fingerprint{" "}
                 {shortId(
                   save.data?.credentialFingerprint ??
                     config?.credentialFingerprint ??
-                    '',
-                  16
+                    "",
+                  16,
                 )}
               </p>
             </div>
@@ -629,12 +658,16 @@ function ChannelForm({
         </SectionCard>
 
         <div className="card px-5 py-4 flex items-start gap-3">
-          <FlaskConical size={15} className="text-warning shrink-0 mt-0.5" aria-hidden />
+          <FlaskConical
+            size={15}
+            className="text-warning shrink-0 mt-0.5"
+            aria-hidden
+          />
           <p className="text-caption text-navy/80 leading-relaxed">
-            ORASS integration ships as a clearly-labeled sandbox simulator —
-            the portal&apos;s API is not publicly documented. Real onboarding
-            ({regShort()}/Regnology-issued specs and credentials) is a configuration
-            swap behind the same channel interface.
+            ORASS integration ships as a clearly-labeled sandbox simulator — the
+            portal&apos;s API is not publicly documented. Real onboarding (
+            {regShort()}/Regnology-issued specs and credentials) is a
+            configuration swap behind the same channel interface.
           </p>
         </div>
       </div>
