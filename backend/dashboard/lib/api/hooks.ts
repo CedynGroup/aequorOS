@@ -3443,7 +3443,7 @@ export function useSetPackageSignaturePlacements(bankId: string | undefined) {
  * Save this layout as the reusable template for a return code (optionally for
  * one bank), so next month's filing opens with the boxes already on the lines.
  *
- * Admin-only server-side, like every other placement template write: the
+ * Org Owner-only server-side, like every other placement template write: the
  * template decides where an officer's name and permanent signer ID print on
  * every future filing of that return, not just this one.
  */
@@ -3604,7 +3604,7 @@ export function useSigningPolicies(enabled = true) {
 }
 
 /**
- * Create or supersede a signing policy. Reason-required and admin-only: this is
+ * Create or supersede a signing policy. Reason-required and Org Owner-only: this is
  * the control that decides whether a filed return is properly attested, so
  * changing it is itself an audited act. Policies are versioned by effective
  * date rather than edited in place, so every attestation read invalidates too.

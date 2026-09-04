@@ -10,8 +10,8 @@
  * write-only ORASS credentials (the API returns only the fingerprint —
  * mirroring the market-data vault pattern).
  *
- * Plus the admin-only signing-policy section (who must sign which return —
- * docs/attestation_esignature.md §4.5), which renders nothing for non-admins.
+ * Plus the Org Owner-only signing-policy section (who must sign which return —
+ * docs/attestation_esignature.md §4.5), which renders nothing for non-owners.
  */
 
 import { useEffect, useState } from 'react';
@@ -155,7 +155,7 @@ export default function SettingsPage() {
 
       <div className="px-8 py-6 space-y-6">
         {bankId && <ChannelForm key={channel} bankId={bankId} channel={channel} />}
-        {/* Admin-only, and renders nothing for everyone else. Who must sign is a
+        {/* Org Owner-only, and renders nothing for everyone else. Who must sign is a
             separate control from how a return is transmitted, but both belong to
             the same "how this institution files" settings surface. */}
         <SigningPolicyPanel />
