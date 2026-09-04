@@ -13,7 +13,7 @@
  *
  * Two behaviours are deliberate rather than incidental:
  *
- * - **Admin-only**, gated the same way Settings → Authentication is: this is the
+ * - **Org Owner-only**: this is the
  *   control that decides whether a filed return is properly attested.
  * - **Reason-required, versioned by effective date.** Saving does not edit a
  *   policy in place; it end-dates the identically scoped one and inserts a new
@@ -22,7 +22,6 @@
  */
 
 import { useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { Loader2, Save, ShieldCheck } from 'lucide-react';
 import type {
   PolicyRead,
@@ -36,6 +35,7 @@ import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
 import { FAMILY_LABELS } from '@/components/submissions/shared';
 import { useReturnTemplates, useSigningPolicies, useUpsertSigningPolicy } from '@/lib/api/hooks';
+import { useGrantAdministrationAccess } from '@/lib/api/grantAdministration';
 import { fmtDateUTC, fmtTimestamp, isoDate } from '@/lib/api/values';
 import { SIGNING_ROLE_LABELS, roleNoun } from './shared';
 
@@ -89,11 +89,10 @@ function emptyForm(): FormState {
 }
 
 export default function SigningPolicyPanel() {
-  const { data: session } = useSession();
-  const isAdmin = (session?.user?.roles ?? []).includes('admin');
-  // Non-admins see nothing rather than a disabled form: the API refuses the
+  const canAdministerGrants = useGrantAdministrationAccess();
+  // Non-owners see nothing rather than a disabled form: the API refuses the
   // write anyway, and a dead control invites support tickets.
-  if (!isAdmin) return null;
+  if (!canAdministerGrants) return null;
   return <SigningPolicyPanelInner />;
 }
 

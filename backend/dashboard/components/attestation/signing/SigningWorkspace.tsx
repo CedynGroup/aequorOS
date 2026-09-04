@@ -45,7 +45,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSession } from 'next-auth/react';
 import {
   BookmarkPlus,
   ChevronLeft,
@@ -67,6 +66,7 @@ import type {
 import StatusPill from '@/components/ui/StatusPill';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
+import { useGrantAdministrationAccess } from '@/lib/api/grantAdministration';
 import {
   useCertifyAndSend,
   useCertifyAndSendWithHeldAuthorization,
@@ -164,8 +164,7 @@ export default function SigningWorkspace({
   const savePlacements = useSetPackageSignaturePlacements(bankId);
   const saveTemplate = useUpsertSignaturePlacementTemplate();
   const sendBack = useSendBackForCorrections(bankId);
-  const { data: session } = useSession();
-  const isAdmin = (session?.user?.roles ?? []).includes('admin');
+  const canAdministerGrants = useGrantAdministrationAccess();
 
   const [placements, setPlacements] = useState<SignatureFieldPlacement[] | null>(null);
   const [nominations, setNominations] = useState<Nomination[]>([]);
@@ -565,7 +564,7 @@ export default function SigningWorkspace({
             />
             <TemplateSaver
               returnCode={resolved?.returnCode ?? ''}
-              isAdmin={isAdmin}
+              canAdministerGrants={canAdministerGrants}
               canSave={(placements?.length ?? 0) > 0 && !offending}
               saved={templateSaved}
               pending={saveTemplate.isPending}
@@ -1012,13 +1011,13 @@ function PlacementSourcePill({ source }: { source: ResolvedSignaturePlacementsRe
  * One press to make next month effortless.
  *
  * These returns are monthly, and the layout is the part that is fiddly to get
- * right once and pointless to redo. Admin-only, because the template governs
+ * right once and pointless to redo. Org Owner-only, because the template governs
  * every future filing of the return code rather than this one package — a
- * non-admin is told that rather than shown a button that 403s.
+ * non-owner is told that rather than shown a button that 403s.
  */
 function TemplateSaver({
   returnCode,
-  isAdmin,
+  canAdministerGrants,
   canSave,
   saved,
   pending,
@@ -1026,17 +1025,17 @@ function TemplateSaver({
   onSave,
 }: {
   returnCode: string;
-  isAdmin: boolean;
+  canAdministerGrants: boolean;
   canSave: boolean;
   saved: boolean;
   pending: boolean;
   error: unknown;
   onSave: () => void;
 }) {
-  if (!isAdmin) {
+  if (!canAdministerGrants) {
     return (
       <p className="mt-4 pt-4 border-t border-border-light text-caption text-slate leading-relaxed">
-        These boxes apply to this return only. An administrator can save the
+        These boxes apply to this return only. An Organization Owner can save the
         layout as the {returnCode || 'return'} template so next month opens with
         the fields already on the form.
       </p>
