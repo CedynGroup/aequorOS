@@ -351,7 +351,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: preflight
     if: needs.preflight.outputs.backend == 'true'
-    timeout-minutes: 90
+    # The 2026-09-04 PR #161 run was still making steady progress (81%, no
+    # failures) when the previous 90-minute ceiling cancelled pytest. The same
+    # suite completed in 49 minutes on the preceding run, so retain a hard
+    # bound while allowing for observed hosted-runner variance.
+    timeout-minutes: 120
     services:
       # The attestation signing backend. Without a real server the OpenBao tests
       # skip themselves, and "written but never executed" is exactly the state
