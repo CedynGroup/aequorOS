@@ -7,8 +7,6 @@ from typing import Literal
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.authorization import ConditionKind
-
 AppEnv = Literal["local", "test", "staging", "production"]
 StorageBackend = Literal["s3"]
 SigningBackend = Literal["software", "pkcs11", "kms", "openbao"]
@@ -621,26 +619,6 @@ class AuthSettings(BaseSettings):
     # OIDC client config (the only path that ever reads the secret back). Unset =
     # that internal endpoint is disabled, so browser SSO cannot start.
     sso_internal_key: str | None = Field(default=None, alias="SSO_INTERNAL_KEY")
-    authorization_global_vetoes_raw: str = Field(
-        default="", alias="AUTHORIZATION_GLOBAL_VETOES"
-    )
-
-    @property
-    def authorization_global_vetoes(self) -> tuple[ConditionKind, ...]:
-        return tuple(
-            ConditionKind(value.strip())
-            for value in self.authorization_global_vetoes_raw.split(",")
-            if value.strip()
-        )
-
-    @field_validator("authorization_global_vetoes_raw")
-    @classmethod
-    def validate_authorization_global_vetoes(cls, value: str) -> str:
-        for item in value.split(","):
-            if item.strip():
-                ConditionKind(item.strip())
-        return value
-
     @field_validator("sso_internal_key", mode="before")
     @classmethod
     def blank_internal_key_is_unset(cls, value: str | None) -> str | None:

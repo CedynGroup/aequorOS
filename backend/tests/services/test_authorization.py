@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import (
     BindingStatus,
+    ConditionCheck,
     ConditionKind,
     InstitutionScope,
     Module,
@@ -26,7 +27,6 @@ from app.core.authorization import (
     Sensitivity,
     SensitivityScope,
 )
-from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import AuthorizationBinding, Bank, RefreshToken, User
 from app.services import authentication, authorization
@@ -169,17 +169,16 @@ def test_effective_authority_projects_only_exact_binding_dimensions(
     assert BANK_1_SIBLING not in by_bank
 
 
-def test_effective_authority_applies_runtime_global_vetoes(
+def test_effective_authority_applies_contextual_runtime_requirements(
     db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _banks(db_session)
     user = db_session.get(User, USER_1)
     assert user is not None
-    db_session.add(_raw_binding(organization_id=ORG_1, institution_id=BANK_1))
+    binding = _raw_binding(organization_id=ORG_1, institution_id=BANK_1)
+    binding.role_bundle = RoleBundle.APPROVER.value
+    db_session.add(binding)
     db_session.commit()
-    monkeypatch.setenv("AUTHORIZATION_GLOBAL_VETOES", ConditionKind.DEMO_MODE.value)
-    get_settings.cache_clear()
     projection = authorization.project_effective_authority(
         db_session,
         TenantContext(
@@ -190,23 +189,45 @@ def test_effective_authority_applies_runtime_global_vetoes(
         [db_session.get(Bank, BANK_1)],
         failure_surface="test_effective_authority_condition_veto",
     )
-    enforcement = authorization.evaluate_permission(
+    resource = ResourceLocator(
+        ORG_1,
+        InstitutionScope.INSTITUTION,
+        BANK_1,
+        Module.LIQUIDITY,
+        Sensitivity.CONFIDENTIAL,
+    )
+    view = authorization.evaluate_permission(
         db_session,
         PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
         Permission.VIEW,
-        ResourceLocator(
-            ORG_1,
-            InstitutionScope.INSTITUTION,
-            BANK_1,
-            Module.LIQUIDITY,
-            Sensitivity.CONFIDENTIAL,
+        resource,
+    )
+    approval_without_context = authorization.evaluate_permission(
+        db_session,
+        PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
+        Permission.APPROVE,
+        resource,
+    )
+    approval_with_context = authorization.evaluate_permission(
+        db_session,
+        PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
+        Permission.APPROVE,
+        resource,
+        conditions=(
+            ConditionCheck(ConditionKind.MAKER_CHECKER, True, "maker and checker differ"),
         ),
     )
 
     assert projection.organization_capabilities == []
-    assert projection.institution_capabilities == []
-    assert not enforcement.allowed
-    assert enforcement.reason == "condition_denied:demo_mode"
+    capabilities = projection.institution_capabilities[0].capabilities
+    assert [capability.permission for capability in capabilities] == [
+        Permission.VIEW,
+        Permission.REVIEW,
+    ]
+    assert view.allowed
+    assert not approval_without_context.allowed
+    assert approval_without_context.reason == "condition_denied:maker_checker"
+    assert approval_with_context.allowed
 
 
 def test_org_owner_projects_account_authority_without_institution_coverage(

@@ -61,7 +61,6 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # Same guard for the SSO internal key: a developer's .env value would make
     # tests asserting the "SSO not configured" 404 path see a configured key.
     monkeypatch.setenv("SSO_INTERNAL_KEY", "")
-    monkeypatch.setenv("AUTHORIZATION_GLOBAL_VETOES", "")
     # Demo seeding is disabled by default in the product (data flows through the
     # Data Engine); tests opt in — the seed is the hermetic fixture they build on.
     monkeypatch.setenv("DEMO_SEED_ENABLED", "1")

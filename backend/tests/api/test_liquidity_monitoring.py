@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from app.core.authorization import (
     BindingStatus,
     ConditionCheck,
-    ConditionKind,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -20,7 +19,6 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
-from app.core.config import get_settings
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
@@ -194,23 +192,23 @@ def test_no_binding_defaults_to_denial_without_legacy_role_fallback(
     assert decisions[0]["binding_trace"] == ""
 
 
-def test_runtime_global_veto_suppresses_production_capability_projections(
+def test_production_projection_omits_contextual_approval_without_hiding_views(
     db_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed_liquidity_book()
-    _, version = _grant()
+    _, version = _grant(role_bundle=RoleBundle.APPROVER)
     request_headers = headers(authorization_version=version)
-    monkeypatch.setenv("AUTHORIZATION_GLOBAL_VETOES", ConditionKind.DEMO_MODE.value)
-    get_settings.cache_clear()
 
     me = db_client.get("/api/v1/auth/me", headers=request_headers)
     banks = db_client.get("/api/v1/banks", headers=request_headers)
 
     assert me.status_code == 200, me.text
-    assert me.json()["effective_authority"]["institution_capabilities"] == []
+    capabilities = me.json()["effective_authority"]["institution_capabilities"][0][
+        "capabilities"
+    ]
+    assert {capability["permission"] for capability in capabilities} == {"view", "review"}
     assert banks.status_code == 200, banks.text
-    assert banks.json()["banks"] == []
+    assert [bank["id"] for bank in banks.json()["banks"]] == [SAMPLE_BANK_ID]
 
 
 def test_profile_projection_failure_rolls_back_before_side_effects(
@@ -230,7 +228,7 @@ def test_profile_projection_failure_rolls_back_before_side_effects(
     def fail_conditions(*_args: object) -> tuple[ConditionCheck, ...]:
         raise RuntimeError("condition authority unavailable")
 
-    monkeypatch.setattr(authorization, "runtime_global_condition_checks", fail_conditions)
+    monkeypatch.setattr(authorization, "runtime_condition_checks", fail_conditions)
     response = db_client.patch(
         "/api/v1/auth/me",
         headers=headers(),

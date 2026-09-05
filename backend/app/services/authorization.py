@@ -22,6 +22,7 @@ from app.core.authorization import (
     BindingGrant,
     BindingStatus,
     ConditionCheck,
+    ConditionKind,
     GrantorType,
     InstitutionScope,
     Module,
@@ -35,7 +36,6 @@ from app.core.authorization import (
     SensitivityScope,
     principal_bundle_compatible,
 )
-from app.core.config import get_settings
 from app.core.authorization import (
     evaluate_permission as evaluate_grants,
 )
@@ -70,6 +70,10 @@ class BindingScope:
 
 _ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT)
 _INSTITUTION_MODULES = tuple(module for module in Module if module not in _ORGANIZATION_MODULES)
+_REQUIRED_RUNTIME_CONDITIONS: dict[Permission, tuple[ConditionKind, ...]] = {
+    Permission.APPROVE: (ConditionKind.MAKER_CHECKER,),
+    Permission.SIGN_OFF: (ConditionKind.MAKER_CHECKER, ConditionKind.STEP_UP),
+}
 
 
 class TenantPrincipalContext(Protocol):
@@ -92,26 +96,23 @@ def principal_locator(ctx: TenantPrincipalContext) -> PrincipalLocator:
     return PrincipalLocator(organization_id, principal_id, principal_type)
 
 
-def runtime_global_condition_checks(
-    _db: Session,
-    _principal: PrincipalLocator,
+def runtime_condition_checks(
+    permission: Permission,
+    _resource: ResourceLocator,
+    workflow_conditions: Sequence[ConditionCheck] = (),
 ) -> tuple[ConditionCheck, ...]:
-    return tuple(
+    supplied = tuple(workflow_conditions)
+    supplied_kinds = {condition.kind for condition in supplied}
+    missing = tuple(
         ConditionCheck(
             kind=kind,
             passed=False,
-            reason=f"deployment runtime veto is active: {kind.value}",
+            reason=f"required runtime context is not established: {kind.value}",
         )
-        for kind in get_settings().auth.authorization_global_vetoes
+        for kind in _REQUIRED_RUNTIME_CONDITIONS.get(permission, ())
+        if kind not in supplied_kinds
     )
-
-
-def _conditions_for_evaluation(
-    db: Session,
-    principal: PrincipalLocator,
-    workflow_conditions: Sequence[ConditionCheck] = (),
-) -> tuple[ConditionCheck, ...]:
-    return (*runtime_global_condition_checks(db, principal), *workflow_conditions)
+    return (*supplied, *missing)
 
 
 def _effective_capabilities(
@@ -120,7 +121,6 @@ def _effective_capabilities(
     institution_id: str | None,
     modules: Sequence[Module],
     bindings: Sequence[BindingGrant],
-    conditions: Sequence[ConditionCheck],
 ) -> list[EffectiveCapabilityRead]:
     capabilities: list[EffectiveCapabilityRead] = []
     for module in modules:
@@ -138,7 +138,7 @@ def _effective_capabilities(
                     permission,
                     resource,
                     bindings,
-                    conditions=conditions,
+                    conditions=runtime_condition_checks(permission, resource),
                 ).allowed:
                     capabilities.append(
                         EffectiveCapabilityRead(
@@ -161,7 +161,6 @@ def project_effective_authority(
 
     principal = principal_locator(ctx)
     try:
-        conditions = _conditions_for_evaluation(db, principal)
         principal_active, bindings = _load_principal_grants(db, principal)
         user = db.scalar(
             select(User).where(
@@ -178,7 +177,6 @@ def project_effective_authority(
             None,
             _ORGANIZATION_MODULES,
             effective_bindings,
-            conditions,
         )
         institution_capabilities = []
         for institution in institutions:
@@ -190,7 +188,6 @@ def project_effective_authority(
                 institution.id,
                 _INSTITUTION_MODULES,
                 effective_bindings,
-                conditions,
             )
             if capabilities:
                 institution_capabilities.append(
@@ -476,7 +473,7 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
 ) -> AuthorizationDecision:
     """Check permissions using only stored bindings, returning a trace for audit."""
 
-    conditions = _conditions_for_evaluation(db, principal, conditions)
+    conditions = runtime_condition_checks(permission, resource, conditions)
     principal_active, bindings = _load_principal_grants(db, principal)
     if not principal_active:
         return _deny_with_trace(
