@@ -193,9 +193,8 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
                 bank,
                 jurisdictions,
                 institution_types,
-                liquidity_monitoring_access=_liquidity_monitoring_access(
-                    capabilities_by_institution[bank.id]
-                ),
+                liquidity_monitoring_access=ctx.impersonation_context is None
+                and _liquidity_monitoring_access(capabilities_by_institution[bank.id]),
             )
             for bank in banks
         ]
@@ -212,7 +211,8 @@ def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
         bank,
         jurisdictions,
         institution_types,
-        liquidity_monitoring_access=_liquidity_monitoring_access(capabilities),
+        liquidity_monitoring_access=ctx.impersonation_context is None
+        and _liquidity_monitoring_access(capabilities),
     )
 
 
