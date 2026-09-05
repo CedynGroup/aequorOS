@@ -1,15 +1,15 @@
-import type { DefaultSession } from 'next-auth';
+import type { DefaultSession } from "next-auth";
 
-declare module 'next-auth' {
+declare module "next-auth" {
   interface Session {
     accessToken?: string;
     /** Set when a silent token refresh failed — the UI should force re-login. */
-    error?: 'RefreshTokenError';
+    error?: "RefreshTokenError";
     user: {
       organizationId?: string;
       roles?: string[];
       authorizationVersion?: number;
-    } & DefaultSession['user'];
+    } & DefaultSession["user"];
   }
 
   interface User {
@@ -21,7 +21,7 @@ declare module 'next-auth' {
   }
 }
 
-declare module 'next-auth/jwt' {
+declare module "next-auth/jwt" {
   interface JWT {
     accessToken?: string;
     refreshToken?: string;
@@ -31,6 +31,6 @@ declare module 'next-auth/jwt' {
     roles?: string[];
     authorizationVersion?: number;
     /** Set when a silent token refresh failed — the UI should force re-login. */
-    error?: 'RefreshTokenError';
+    error?: "RefreshTokenError";
   }
 }

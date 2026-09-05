@@ -1,9 +1,9 @@
-import assert from 'node:assert/strict';
+import assert from "node:assert/strict";
 
-const BANK_ID = 'BK-SAMP0001';
-const PERIOD_ID = 'period-latest';
-const HISTORICAL_PERIOD_ID = 'period-historical';
-const UPDATED_PERIOD_ID = 'period-updated';
+const BANK_ID = "BK-SAMP0001";
+const PERIOD_ID = "period-latest";
+const HISTORICAL_PERIOD_ID = "period-historical";
+const UPDATED_PERIOD_ID = "period-updated";
 
 /**
  * Wait for the query layer to CONVERGE on an expected state.
@@ -32,28 +32,44 @@ async function waitFor(check: () => boolean, message: string): Promise<void> {
 async function main(): Promise<void> {
   (globalThis as { window?: object }).window = {};
   (globalThis as { document?: { cookie: string } }).document = {
-    cookie: 'aeq-impersonation-active=1',
+    cookie: "aeq-impersonation-active=1",
   };
   const nativeSetInterval = globalThis.setInterval;
   const nativeSetTimeout = globalThis.setTimeout;
-  globalThis.setInterval = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
-    nativeSetInterval(handler, timeout && timeout >= 1_000 ? 30 : timeout, ...args)) as typeof setInterval;
-  globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
-    nativeSetTimeout(handler, timeout && timeout >= 1_000 ? 30 : timeout, ...args)) as typeof setTimeout;
+  globalThis.setInterval = ((
+    handler: TimerHandler,
+    timeout?: number,
+    ...args: unknown[]
+  ) =>
+    nativeSetInterval(
+      handler,
+      timeout && timeout >= 1_000 ? 30 : timeout,
+      ...args,
+    )) as typeof setInterval;
+  globalThis.setTimeout = ((
+    handler: TimerHandler,
+    timeout?: number,
+    ...args: unknown[]
+  ) =>
+    nativeSetTimeout(
+      handler,
+      timeout && timeout >= 1_000 ? 30 : timeout,
+      ...args,
+    )) as typeof setTimeout;
 
-  const { default: NodeModule } = await import('node:module');
+  const { default: NodeModule } = await import("node:module");
   const moduleWithLoader = NodeModule as typeof NodeModule & {
     _load: (request: string, parent: unknown, isMain: boolean) => unknown;
   };
   const originalLoad = moduleWithLoader._load;
-  let loadedReact: typeof import('react') | undefined;
-  let loadedHooks: typeof import('./hooks') | undefined;
+  let loadedReact: typeof import("react") | undefined;
+  let loadedHooks: typeof import("./hooks") | undefined;
   class ApiStub {}
   class ConfigurationStub {
     constructor(_options: unknown) {}
   }
   class ResponseErrorStub extends Error {
-    response = new Response('{}');
+    response = new Response("{}");
   }
   const generatedApi = new Proxy(
     {
@@ -65,100 +81,111 @@ async function main(): Promise<void> {
     },
   );
   const impersonationClaims = {
-    typ: 'impersonation',
-    org: 'OR-DEM00001',
-    act_operator: 'operator@aequoros.example',
-    session_id: 'inspection-session',
-    roles: ['examiner'],
+    typ: "impersonation",
+    org: "OR-DEM00001",
+    act_operator: "operator@aequoros.example",
+    session_id: "inspection-session",
+    roles: ["examiner"],
     iat: Math.floor(Date.now() / 1_000),
     exp: Math.floor(Date.now() / 1_000) + 900,
   };
   const impersonationToken = [
-    Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
-    Buffer.from(JSON.stringify(impersonationClaims)).toString('base64url'),
-    'signed',
-  ].join('.');
+    Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString(
+      "base64url",
+    ),
+    Buffer.from(JSON.stringify(impersonationClaims)).toString("base64url"),
+    "signed",
+  ].join(".");
   moduleWithLoader._load = (request, parent, isMain) => {
-    if (request === '@aequoros/risk-service-api') return generatedApi;
-    if (request === 'next/server') {
+    if (request === "@aequoros/risk-service-api") return generatedApi;
+    if (request === "next/server") {
       return {
         NextResponse: {
-          json: (body: unknown, init?: ResponseInit) => Response.json(body, init),
+          json: (body: unknown, init?: ResponseInit) =>
+            Response.json(body, init),
         },
       };
     }
-    if (request === 'next/headers') {
+    if (request === "next/headers") {
       return {
         cookies: async () => ({
           get: (name: string) =>
-            name === 'aeq-impersonation' ? { value: impersonationToken } : undefined,
+            name === "aeq-impersonation"
+              ? { value: impersonationToken }
+              : undefined,
         }),
       };
     }
-    if (request === '@/lib/impersonation-cookies') {
-      return { IMPERSONATION_COOKIE: 'aeq-impersonation' };
+    if (request === "@/lib/impersonation-cookies") {
+      return { IMPERSONATION_COOKIE: "aeq-impersonation" };
     }
-    if (request === 'next-auth/react') {
+    if (request === "next-auth/react") {
       return {
         getSession: async () => null,
-        useSession: () => ({ data: null, status: 'loading' }),
+        useSession: () => ({ data: null, status: "loading" }),
       };
     }
-    if (request === 'next/link') {
-      return ({ children, ...props }: { children?: import('react').ReactNode }) =>
-        loadedReact!.createElement('a', props, children);
+    if (request === "next/link") {
+      return ({
+        children,
+        ...props
+      }: {
+        children?: import("react").ReactNode;
+      }) => loadedReact!.createElement("a", props, children);
     }
-    if (request === 'lucide-react') {
-      return new Proxy({}, {
-        get: () => (props: object) => loadedReact!.createElement('span', props),
-      });
+    if (request === "lucide-react") {
+      return new Proxy(
+        {},
+        {
+          get: () => (props: object) =>
+            loadedReact!.createElement("span", props),
+        },
+      );
     }
-    if (request === '@/lib/api/hooks') return loadedHooks;
-    if (request === '@/components/ui/SectionCard') {
-      return ({ children }: { children?: import('react').ReactNode }) =>
-        loadedReact!.createElement('section', null, children);
+    if (request === "@/lib/api/hooks") return loadedHooks;
+    if (request === "@/components/ui/SectionCard") {
+      return ({ children }: { children?: import("react").ReactNode }) =>
+        loadedReact!.createElement("section", null, children);
     }
-    if (request === '@/components/ui/StatusPill') {
-      return ({ children }: { children?: import('react').ReactNode }) =>
-        loadedReact!.createElement('span', null, children);
+    if (request === "@/components/ui/StatusPill") {
+      return ({ children }: { children?: import("react").ReactNode }) =>
+        loadedReact!.createElement("span", null, children);
     }
-    if (request === '@/components/ui/Skeleton') {
-      return { SkeletonLine: () => loadedReact!.createElement('span') };
+    if (request === "@/components/ui/Skeleton") {
+      return { SkeletonLine: () => loadedReact!.createElement("span") };
     }
-    if (request === '@/lib/api/values') {
+    if (request === "@/lib/api/values") {
       return {
-        fmtRelative: () => 'just now',
+        fmtRelative: () => "just now",
         shortId: (value: string) => value,
       };
     }
-    if (request === '@/components/live/moduleDisplay') {
-      return { LIVE_MODULE_LABELS: { capital: 'Capital' } };
+    if (request === "@/components/live/moduleDisplay") {
+      return { LIVE_MODULE_LABELS: { capital: "Capital" } };
     }
     return originalLoad(request, parent, isMain);
   };
 
-  const React = await import('react');
+  const React = await import("react");
   loadedReact = React;
-  const { act, create } = await import('react-test-renderer');
-  const { focusManager, useQueryClient } = await import('@tanstack/react-query');
+  const { act, create } = await import("react-test-renderer");
+  const { focusManager, useQueryClient } =
+    await import("@tanstack/react-query");
   // Keep accelerated signal polls dormant until the explicit focus/poll checks
   // below so they cannot race the controlled invalidation assertions.
   focusManager.setFocused(false);
-  const { GET: getImpersonationStatus } = await import(
-    '../../app/api/impersonation/status/route'
-  );
-  const { default: QueryAuthorityBoundary } = await import('./QueryAuthorityBoundary');
-  const {
-    useQueryAuthorityScope,
-    useResolvedQueryAuthorityScope,
-  } = await import('./useQueryScope');
-  const hooks = await import('./hooks');
+  const { GET: getImpersonationStatus } =
+    await import("../../app/api/impersonation/status/route");
+  const { default: QueryAuthorityBoundary } =
+    await import("./QueryAuthorityBoundary");
+  const { useQueryAuthorityScope, useResolvedQueryAuthorityScope } =
+    await import("./useQueryScope");
+  const hooks = await import("./hooks");
   loadedHooks = hooks;
-  const { default: FreshnessStrip } = await import(
-    '../../components/reports/FreshnessStrip'
-  );
-  const ingestion = await import('./ingestion');
-  const clients = await import('./client');
+  const { default: FreshnessStrip } =
+    await import("../../components/reports/FreshnessStrip");
+  const ingestion = await import("./ingestion");
+  const clients = await import("./client");
   moduleWithLoader._load = originalLoad;
 
   const statusResponse = await getImpersonationStatus();
@@ -178,17 +205,19 @@ async function main(): Promise<void> {
   });
   globalThis.fetch = (async () => {
     statusRequests += 1;
-    if (statusRequests === 1) throw new TypeError('transient status failure');
+    if (statusRequests === 1) throw new TypeError("transient status failure");
     await statusGate;
     return Response.json(inspectionStatus);
   }) as typeof fetch;
 
   const counts = new Map<string, number>();
-  const response = <T,>(name: string, value: T) => async () => {
-    counts.set(name, (counts.get(name) ?? 0) + 1);
-    await new Promise((resolve) => setTimeout(resolve, 1));
-    return value;
-  };
+  const response =
+    <T,>(name: string, value: T) =>
+    async () => {
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      return value;
+    };
   let generation = 7;
   let officialGeneration = 1;
   let currentPeriodId = PERIOD_ID;
@@ -198,14 +227,14 @@ async function main(): Promise<void> {
     releaseInitialSignals = resolve;
   });
   const liveSummary = async () => {
-    counts.set('live-summary', (counts.get('live-summary') ?? 0) + 1);
+    counts.set("live-summary", (counts.get("live-summary") ?? 0) + 1);
     await initialSignalGate;
     return {
       modules: [
         {
-          module: 'liquidity',
+          module: "liquidity",
           calculationGeneration: generation,
-          engineVersion: 'live-liquidity-v1',
+          engineVersion: "live-liquidity-v1",
           computedFromInputHash: `hash-${generation}`,
           sourceFactPeriodId: PERIOD_ID,
         },
@@ -216,9 +245,9 @@ async function main(): Promise<void> {
     Object.assign(target, methods);
 
   mock(clients.banksApi, {
-    listBanks: response('banks', { banks: [] }),
-    listBankReportingPeriods: response('periods', { periods: [] }),
-    getBankPeriodFacts: response('facts', {}),
+    listBanks: response("banks", { banks: [] }),
+    listBankReportingPeriods: response("periods", { periods: [] }),
+    getBankPeriodFacts: response("facts", {}),
   });
   mock(clients.regulatoryLiquidityApi, {
     // Reads the raw envelope (like IRR/FX) so an HTTP 200 {available:false}
@@ -230,13 +259,16 @@ async function main(): Promise<void> {
     }) => {
       const name = reportingPeriodId
         ? `liq-dashboard:${reportingPeriodId}`
-        : 'liq-dashboard';
+        : "liq-dashboard";
       counts.set(name, (counts.get(name) ?? 0) + 1);
       if (!reportingPeriodId && currentDetailGate) await currentDetailGate;
-      const body = { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
-      return { raw: new Response('{}'), value: async () => body };
+      const body = {
+        period: { id: reportingPeriodId ?? currentPeriodId },
+        trend: [],
+      };
+      return { raw: new Response("{}"), value: async () => body };
     },
-    runAllLiquidityScenarios: response('liq-mutation', {}),
+    runAllLiquidityScenarios: response("liq-mutation", {}),
   });
   mock(clients.regulatoryCapitalApi, {
     getCapitalDashboardRaw: async ({
@@ -246,18 +278,21 @@ async function main(): Promise<void> {
     }) => {
       const name = reportingPeriodId
         ? `cap-dashboard:${reportingPeriodId}`
-        : 'cap-dashboard';
+        : "cap-dashboard";
       counts.set(name, (counts.get(name) ?? 0) + 1);
       if (!reportingPeriodId && currentDetailGate) await currentDetailGate;
-      const body = { period: { id: reportingPeriodId ?? currentPeriodId }, trend: [] };
-      return { raw: new Response('{}'), value: async () => body };
+      const body = {
+        period: { id: reportingPeriodId ?? currentPeriodId },
+        trend: [],
+      };
+      return { raw: new Response("{}"), value: async () => body };
     },
   });
   mock(clients.regulatoryIrrApi, {
     getIrrDashboardRaw: async () => {
-      counts.set('irr-dashboard', (counts.get('irr-dashboard') ?? 0) + 1);
+      counts.set("irr-dashboard", (counts.get("irr-dashboard") ?? 0) + 1);
       return {
-        raw: new Response('{}'),
+        raw: new Response("{}"),
         value: async () => ({}),
       };
     },
@@ -266,17 +301,17 @@ async function main(): Promise<void> {
     // FX reads the raw envelope (like IRR) so an HTTP 200 {available:false}
     // renders as a module-unavailable panel instead of a false backend error.
     getFxDashboardRaw: async () => {
-      counts.set('fx-dashboard', (counts.get('fx-dashboard') ?? 0) + 1);
+      counts.set("fx-dashboard", (counts.get("fx-dashboard") ?? 0) + 1);
       return {
-        raw: new Response('{}'),
+        raw: new Response("{}"),
         value: async () => ({}),
       };
     },
   });
   mock(clients.regulatoryFtpApi, {
     getFtpDashboardRaw: async () => {
-      counts.set('ftp-dashboard', (counts.get('ftp-dashboard') ?? 0) + 1);
-      return { raw: new Response('{}'), value: async () => ({}) };
+      counts.set("ftp-dashboard", (counts.get("ftp-dashboard") ?? 0) + 1);
+      return { raw: new Response("{}"), value: async () => ({}) };
     },
   });
   mock(clients.liveEngineApi, {
@@ -286,25 +321,25 @@ async function main(): Promise<void> {
     }: {
       reportingPeriodId?: string;
     }) => {
-      const name = `freshness:${reportingPeriodId ?? 'current'}`;
+      const name = `freshness:${reportingPeriodId ?? "current"}`;
       counts.set(name, (counts.get(name) ?? 0) + 1);
       await initialSignalGate;
       return {
         reportingPeriodId: reportingPeriodId ?? null,
         modules: [
           {
-            module: 'capital',
+            module: "capital",
             officialRunHash: `official-${officialGeneration}`,
-            officialRunAt: new Date(
-              `2026-08-27T12:0${officialGeneration}:00Z`,
-            ),
+            officialRunAt: new Date(`2026-08-27T12:0${officialGeneration}:00Z`),
           },
         ],
       };
     },
-    getBankAlerts: response('alerts', {}),
-    refreshBankData: response('refresh-mutation', { jobId: 'pipeline-job' }),
-    mintOfficialRun: response('official-run-mutation', { jobId: 'official-run-job' }),
+    getBankAlerts: response("alerts", {}),
+    refreshBankData: response("refresh-mutation", { jobId: "pipeline-job" }),
+    mintOfficialRun: response("official-run-mutation", {
+      jobId: "official-run-job",
+    }),
     listLiveSnapshots: async ({ module: liveModule }: { module: string }) => {
       const name = `live-snapshots:${liveModule}`;
       counts.set(name, (counts.get(name) ?? 0) + 1);
@@ -312,15 +347,15 @@ async function main(): Promise<void> {
     },
   });
   mock(clients.notificationsApi, {
-    listNotifications: response('notifications', {}),
+    listNotifications: response("notifications", {}),
   });
   mock(clients.jobsApi, {
-    getJob: response('job-status', { status: 'succeeded' }),
+    getJob: response("job-status", { status: "succeeded" }),
   });
   mock(ingestion.ingestionApi, {
-    activateBankData: response('activation-mutation', {}),
-    listIngestionBatches: response('de-batches', {}),
-    listBankDataActivations: response('de-activations', {}),
+    activateBankData: response("activation-mutation", {}),
+    listIngestionBatches: response("de-batches", {}),
+    listBankDataActivations: response("de-activations", {}),
   });
 
   let queryClient: ReturnType<typeof useQueryClient> | null = null;
@@ -329,7 +364,8 @@ async function main(): Promise<void> {
   let mintOfficialRun: (() => Promise<unknown>) | null = null;
   let activateBankData: (() => Promise<unknown>) | null = null;
   let authorityMounts = 0;
-  let resolvedAuthority: ReturnType<typeof useQueryAuthorityScope> | null = null;
+  let resolvedAuthority: ReturnType<typeof useQueryAuthorityScope> | null =
+    null;
   let selectRatioPeriod: ((periodId: string) => void) | null = null;
   let effectiveLiquidityPeriod: string | undefined;
   let effectiveCapitalPeriod: string | undefined;
@@ -360,20 +396,23 @@ async function main(): Promise<void> {
     hooks.useNotifications();
     hooks.useLiquidityDashboard(BANK_ID);
     hooks.useCapitalDashboard(BANK_ID);
-    const effectiveRatios = hooks.useEffectiveRatioDashboards(BANK_ID, ratioPeriodId);
+    const effectiveRatios = hooks.useEffectiveRatioDashboards(
+      BANK_ID,
+      ratioPeriodId,
+    );
     effectiveLiquidityPeriod = effectiveRatios.liquidity.data?.period.id;
     effectiveCapitalPeriod = effectiveRatios.capital.data?.period.id;
     hooks.useIrrDashboard(BANK_ID);
     hooks.useFxDashboard(BANK_ID);
     hooks.useFtpDashboard(BANK_ID);
     for (const liveModule of [
-      'liquidity',
-      'capital',
-      'irr',
-      'fx',
-      'ftp',
-      'rating',
-      'forecast',
+      "liquidity",
+      "capital",
+      "irr",
+      "fx",
+      "ftp",
+      "rating",
+      "forecast",
     ] as const) {
       hooks.useLiveSnapshots(BANK_ID, liveModule);
     }
@@ -384,13 +423,16 @@ async function main(): Promise<void> {
       mutation.mutateAsync({ reportingPeriodId: PERIOD_ID });
     const refresh = hooks.useRefreshBankData(BANK_ID);
     refreshBankData = () =>
-      refresh.mutateAsync({ asOfDate: '2026-08-27', reason: 'test refresh' });
+      refresh.mutateAsync({ asOfDate: "2026-08-27", reason: "test refresh" });
     const officialRun = hooks.useMintOfficialRun(BANK_ID);
     mintOfficialRun = () =>
-      officialRun.mutateAsync({ asOfDate: '2026-08-27', reason: 'test official run' });
+      officialRun.mutateAsync({
+        asOfDate: "2026-08-27",
+        reason: "test official run",
+      });
     const activation = ingestion.useActivateBankData(BANK_ID);
     activateBankData = () =>
-      activation.mutateAsync({ asOfDate: '2026-08-27', runCalculations: true });
+      activation.mutateAsync({ asOfDate: "2026-08-27", runCalculations: true });
     return null;
   }
 
@@ -414,52 +456,66 @@ async function main(): Promise<void> {
     renderer = create(<ResolvedInspectionBoundary />);
     await new Promise((resolve) => setTimeout(resolve, 70));
   });
-  assert.equal(counts.size, 0, 'unresolved authority must not mount query consumers');
-  assert.equal(statusRequests, 2, 'transient inspection status failure must retry');
+  assert.equal(
+    counts.size,
+    0,
+    "unresolved authority must not mount query consumers",
+  );
+  assert.equal(
+    statusRequests,
+    2,
+    "transient inspection status failure must retry",
+  );
 
   await act(async () => {
     releaseStatus!();
   });
   await waitFor(
     () =>
-      counts.get('live-summary') === 1 &&
-      counts.get('freshness:current') === 1 &&
+      counts.get("live-summary") === 1 &&
+      counts.get("freshness:current") === 1 &&
       counts.get(`freshness:${PERIOD_ID}`) === 1,
-    'initial dashboard signals did not start',
+    "initial dashboard signals did not start",
   );
   assert.equal(
-    counts.get('liq-dashboard'),
+    counts.get("liq-dashboard"),
     undefined,
-    'liquidity detail started before its initial signals settled',
+    "liquidity detail started before its initial signals settled",
   );
   assert.equal(
-    counts.get('cap-dashboard'),
+    counts.get("cap-dashboard"),
     undefined,
-    'capital detail started before its initial signals settled',
+    "capital detail started before its initial signals settled",
   );
   await act(async () => {
     releaseInitialSignals!();
   });
   await waitFor(
-    () => [...counts.entries()].filter(([name]) => name !== 'liq-mutation').length === 22,
-    'Command Center resources did not settle',
+    () =>
+      [...counts.entries()].filter(([name]) => name !== "liq-mutation")
+        .length === 22,
+    "Command Center resources did not settle",
   );
   const initialCounts = new Map(counts);
-  assert.equal(authorityMounts, 1, 'inspection authority must resolve exactly once');
+  assert.equal(
+    authorityMounts,
+    1,
+    "inspection authority must resolve exactly once",
+  );
   assert.deepEqual(resolvedAuthority, {
     tenantId: impersonationClaims.org,
     authorityId: `operator:${impersonationClaims.act_operator}|authv:0`,
   });
-  assert.equal(initialCounts.get('liq-dashboard'), 1);
-  assert.equal(initialCounts.get('cap-dashboard'), 1);
-  assert.equal(initialCounts.get('facts'), 1);
-  assert.equal(initialCounts.get('live-summary'), 1);
+  assert.equal(initialCounts.get("liq-dashboard"), 1);
+  assert.equal(initialCounts.get("cap-dashboard"), 1);
+  assert.equal(initialCounts.get("facts"), 1);
+  assert.equal(initialCounts.get("live-summary"), 1);
   assert.equal(
     [...initialCounts.entries()]
-      .filter(([name]) => name !== 'liq-mutation')
+      .filter(([name]) => name !== "liq-mutation")
       .reduce((total, [, count]) => total + count, 0),
     22,
-    'real duplicate consumers must collapse without cross-period summary polling',
+    "real duplicate consumers must collapse without cross-period summary polling",
   );
 
   await act(async () => {
@@ -471,19 +527,19 @@ async function main(): Promise<void> {
       counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) === 1 &&
       effectiveLiquidityPeriod === HISTORICAL_PERIOD_ID &&
       effectiveCapitalPeriod === HISTORICAL_PERIOD_ID,
-    'historical ratio dashboards did not retain explicit-period semantics',
+    "historical ratio dashboards did not retain explicit-period semantics",
   );
   assert.equal(effectiveLiquidityPeriod, HISTORICAL_PERIOD_ID);
   assert.equal(effectiveCapitalPeriod, HISTORICAL_PERIOD_ID);
   assert.equal(
-    counts.get('freshness:current'),
+    counts.get("freshness:current"),
     1,
-    'current-semantic module reads must share one freshness signal',
+    "current-semantic module reads must share one freshness signal",
   );
   assert.equal(
     counts.get(`freshness:${HISTORICAL_PERIOD_ID}`),
     1,
-    'effective-period dashboard reads must share one freshness signal',
+    "effective-period dashboard reads must share one freshness signal",
   );
   officialGeneration += 1;
   const beforeFallbackOfficialCapital =
@@ -491,7 +547,7 @@ async function main(): Promise<void> {
   await act(async () => {
     await queryClient!.invalidateQueries({
       predicate: (query) =>
-        query.queryKey[0] === 'freshness' &&
+        query.queryKey[0] === "freshness" &&
         query.queryKey[4] === HISTORICAL_PERIOD_ID,
     });
   });
@@ -499,27 +555,29 @@ async function main(): Promise<void> {
     () =>
       counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ===
       beforeFallbackOfficialCapital + 1,
-    'effective-period official-run signal did not invalidate displayed detail',
+    "effective-period official-run signal did not invalidate displayed detail",
   );
 
   let releaseHistoricalRefetch: (() => void) | null = null;
   currentDetailGate = new Promise<void>((resolve) => {
     releaseHistoricalRefetch = resolve;
   });
-  const beforeHistoricalRefetch = counts.get('liq-dashboard') ?? 0;
+  const beforeHistoricalRefetch = counts.get("liq-dashboard") ?? 0;
   await act(async () => {
     void queryClient!.invalidateQueries({
       predicate: (query) =>
-        query.queryKey[0] === 'liq-dashboard' && query.queryKey[4] === 'current',
+        query.queryKey[0] === "liq-dashboard" &&
+        query.queryKey[4] === "current",
     });
     void queryClient!.invalidateQueries({
       predicate: (query) =>
-        query.queryKey[0] === 'cap-dashboard' && query.queryKey[4] === 'current',
+        query.queryKey[0] === "cap-dashboard" &&
+        query.queryKey[4] === "current",
     });
   });
   await waitFor(
-    () => counts.get('liq-dashboard') === beforeHistoricalRefetch + 1,
-    'current dashboard did not begin its historical-selection refetch',
+    () => counts.get("liq-dashboard") === beforeHistoricalRefetch + 1,
+    "current dashboard did not begin its historical-selection refetch",
   );
   assert.equal(effectiveLiquidityPeriod, HISTORICAL_PERIOD_ID);
   assert.equal(effectiveCapitalPeriod, HISTORICAL_PERIOD_ID);
@@ -532,21 +590,23 @@ async function main(): Promise<void> {
   currentDetailGate = new Promise<void>((resolve) => {
     releaseCurrentDetail = resolve;
   });
-  const beforeCurrentRefetch = counts.get('liq-dashboard') ?? 0;
+  const beforeCurrentRefetch = counts.get("liq-dashboard") ?? 0;
   await act(async () => {
     void queryClient!.invalidateQueries({
       predicate: (query) =>
-        query.queryKey[0] === 'liq-dashboard' && query.queryKey[4] === 'current',
+        query.queryKey[0] === "liq-dashboard" &&
+        query.queryKey[4] === "current",
     });
     void queryClient!.invalidateQueries({
       predicate: (query) =>
-        query.queryKey[0] === 'cap-dashboard' && query.queryKey[4] === 'current',
+        query.queryKey[0] === "cap-dashboard" &&
+        query.queryKey[4] === "current",
     });
     selectRatioPeriod!(UPDATED_PERIOD_ID);
   });
   await waitFor(
-    () => counts.get('liq-dashboard') === beforeCurrentRefetch + 1,
-    'current ratio dashboard did not begin refetching',
+    () => counts.get("liq-dashboard") === beforeCurrentRefetch + 1,
+    "current ratio dashboard did not begin refetching",
   );
   await waitFor(
     () =>
@@ -554,7 +614,7 @@ async function main(): Promise<void> {
       counts.get(`cap-dashboard:${UPDATED_PERIOD_ID}`) === 1 &&
       effectiveLiquidityPeriod === UPDATED_PERIOD_ID &&
       effectiveCapitalPeriod === UPDATED_PERIOD_ID,
-    'a new period selection must use its own fallback during a current refetch',
+    "a new period selection must use its own fallback during a current refetch",
   );
   currentPeriodId = UPDATED_PERIOD_ID;
   currentDetailGate = null;
@@ -567,97 +627,97 @@ async function main(): Promise<void> {
   assert.equal(effectiveLiquidityPeriod, UPDATED_PERIOD_ID);
   assert.equal(effectiveCapitalPeriod, UPDATED_PERIOD_ID);
 
-  const beforeIdleLiquidity = counts.get('liq-dashboard') ?? 0;
-  const beforeIdleCapital = counts.get('cap-dashboard') ?? 0;
+  const beforeIdleLiquidity = counts.get("liq-dashboard") ?? 0;
+  const beforeIdleCapital = counts.get("cap-dashboard") ?? 0;
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 70));
   });
-  assert.equal(counts.get('liq-dashboard'), beforeIdleLiquidity);
-  assert.equal(counts.get('cap-dashboard'), beforeIdleCapital);
-  const idleCapitalCount = counts.get('cap-dashboard') ?? 0;
+  assert.equal(counts.get("liq-dashboard"), beforeIdleLiquidity);
+  assert.equal(counts.get("cap-dashboard"), beforeIdleCapital);
+  const idleCapitalCount = counts.get("cap-dashboard") ?? 0;
 
   officialGeneration += 1;
-  const beforeScheduledOfficialCapital = counts.get('cap-dashboard') ?? 0;
-  const beforeScheduledOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
+  const beforeScheduledOfficialCapital = counts.get("cap-dashboard") ?? 0;
+  const beforeScheduledOfficialLiquidity = counts.get("liq-dashboard") ?? 0;
   await act(async () => {
     await queryClient!.invalidateQueries({
       predicate: (query) =>
-        query.queryKey[0] === 'freshness' && query.queryKey[4] === null,
+        query.queryKey[0] === "freshness" && query.queryKey[4] === null,
     });
   });
   await waitFor(
-    () => counts.get('cap-dashboard') === beforeScheduledOfficialCapital + 1,
-    'scheduled official-run signal did not invalidate capital detail',
+    () => counts.get("cap-dashboard") === beforeScheduledOfficialCapital + 1,
+    "scheduled official-run signal did not invalidate capital detail",
   );
   assert.equal(
-    counts.get('liq-dashboard'),
+    counts.get("liq-dashboard"),
     beforeScheduledOfficialLiquidity,
-    'official-run signal invalidated an unaffected module',
+    "official-run signal invalidated an unaffected module",
   );
 
-  const beforeFocusLiquidity = counts.get('liq-dashboard') ?? 0;
-  const beforeFocusCapital = counts.get('cap-dashboard') ?? 0;
+  const beforeFocusLiquidity = counts.get("liq-dashboard") ?? 0;
+  const beforeFocusCapital = counts.get("cap-dashboard") ?? 0;
   focusManager.setFocused(false);
   await act(async () => {
     focusManager.setFocused(true);
   });
   await waitFor(
     () =>
-      counts.get('liq-dashboard') === beforeFocusLiquidity + 1 &&
-      counts.get('cap-dashboard') === beforeFocusCapital + 1,
-    'returning focus did not revalidate full-range trend details',
+      counts.get("liq-dashboard") === beforeFocusLiquidity + 1 &&
+      counts.get("cap-dashboard") === beforeFocusCapital + 1,
+    "returning focus did not revalidate full-range trend details",
   );
 
-  const beforeLiquidityMutation = counts.get('liq-dashboard') ?? 0;
+  const beforeLiquidityMutation = counts.get("liq-dashboard") ?? 0;
   await act(async () => {
     await runLiquidityScenarios!();
   });
   await waitFor(
-    () => counts.get('liq-dashboard') === beforeLiquidityMutation + 1,
-    'mutation did not invalidate detail',
+    () => counts.get("liq-dashboard") === beforeLiquidityMutation + 1,
+    "mutation did not invalidate detail",
   );
 
   generation += 1;
-  const beforePipelineRefresh = counts.get('liq-dashboard') ?? 0;
+  const beforePipelineRefresh = counts.get("liq-dashboard") ?? 0;
   await act(async () => {
     await refreshBankData!();
   });
   await waitFor(
-    () => counts.get('liq-dashboard') === beforePipelineRefresh + 1,
-    'pipeline generation did not invalidate detail',
+    () => counts.get("liq-dashboard") === beforePipelineRefresh + 1,
+    "pipeline generation did not invalidate detail",
   );
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(
-    counts.get('liq-dashboard'),
+    counts.get("liq-dashboard"),
     beforePipelineRefresh + 1,
-    'pipeline completion must fetch generation-owned detail exactly once',
+    "pipeline completion must fetch generation-owned detail exactly once",
   );
 
   generation += 1;
-  const beforeSignalRefresh = counts.get('liq-dashboard') ?? 0;
+  const beforeSignalRefresh = counts.get("liq-dashboard") ?? 0;
   await act(async () => {
-    await queryClient!.invalidateQueries({ queryKey: ['live-summary'] });
+    await queryClient!.invalidateQueries({ queryKey: ["live-summary"] });
   });
   await waitFor(
-    () => counts.get('liq-dashboard') === beforeSignalRefresh + 1,
-    'live generation change did not invalidate detail',
+    () => counts.get("liq-dashboard") === beforeSignalRefresh + 1,
+    "live generation change did not invalidate detail",
   );
 
   generation += 1;
-  const beforeActivationLiquidity = counts.get('liq-dashboard') ?? 0;
-  const beforeActivationCapital = counts.get('cap-dashboard') ?? 0;
+  const beforeActivationLiquidity = counts.get("liq-dashboard") ?? 0;
+  const beforeActivationCapital = counts.get("cap-dashboard") ?? 0;
   await act(async () => {
     await activateBankData!();
   });
   await waitFor(
     () =>
-      counts.get('liq-dashboard') === beforeActivationLiquidity + 1 &&
-      counts.get('cap-dashboard') === beforeActivationCapital + 1,
-    'activation did not refresh detailed dashboards',
+      counts.get("liq-dashboard") === beforeActivationLiquidity + 1 &&
+      counts.get("cap-dashboard") === beforeActivationCapital + 1,
+    "activation did not refresh detailed dashboards",
   );
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(counts.get('liq-dashboard'), beforeActivationLiquidity + 1);
-  assert.equal(counts.get('cap-dashboard'), beforeActivationCapital + 1);
+  assert.equal(counts.get("liq-dashboard"), beforeActivationLiquidity + 1);
+  assert.equal(counts.get("cap-dashboard"), beforeActivationCapital + 1);
 
   await act(async () => {
     selectRatioPeriod!(HISTORICAL_PERIOD_ID);
@@ -667,11 +727,11 @@ async function main(): Promise<void> {
       (counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2 &&
       (counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2 &&
       (counts.get(`freshness:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2,
-    'historical dashboards did not reactivate before the official run',
+    "historical dashboards did not reactivate before the official run",
   );
   await new Promise((resolve) => setTimeout(resolve, 20));
-  const beforeOfficialLiquidity = counts.get('liq-dashboard') ?? 0;
-  const beforeOfficialCapital = counts.get('cap-dashboard') ?? 0;
+  const beforeOfficialLiquidity = counts.get("liq-dashboard") ?? 0;
+  const beforeOfficialCapital = counts.get("cap-dashboard") ?? 0;
   const beforeOfficialHistoricalLiquidity =
     counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) ?? 0;
   const beforeOfficialHistoricalCapital =
@@ -681,17 +741,17 @@ async function main(): Promise<void> {
   });
   await waitFor(
     () =>
-      counts.get('liq-dashboard') === beforeOfficialLiquidity + 1 &&
-      counts.get('cap-dashboard') === beforeOfficialCapital + 1 &&
+      counts.get("liq-dashboard") === beforeOfficialLiquidity + 1 &&
+      counts.get("cap-dashboard") === beforeOfficialCapital + 1 &&
       counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) ===
         beforeOfficialHistoricalLiquidity + 1 &&
       counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) ===
         beforeOfficialHistoricalCapital + 1,
-    'official run did not refresh regulatory detail',
+    "official run did not refresh regulatory detail",
   );
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(counts.get('liq-dashboard'), beforeOfficialLiquidity + 1);
-  assert.equal(counts.get('cap-dashboard'), beforeOfficialCapital + 1);
+  assert.equal(counts.get("liq-dashboard"), beforeOfficialLiquidity + 1);
+  assert.equal(counts.get("cap-dashboard"), beforeOfficialCapital + 1);
   assert.equal(
     counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`),
     beforeOfficialHistoricalLiquidity + 1,
@@ -700,28 +760,32 @@ async function main(): Promise<void> {
     counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`),
     beforeOfficialHistoricalCapital + 1,
   );
-  assert.ok((counts.get('cap-dashboard') ?? 0) > idleCapitalCount);
+  assert.ok((counts.get("cap-dashboard") ?? 0) > idleCapitalCount);
 
   await act(async () => renderer!.unmount());
 
-  const bankRequestsBeforePersonalSelfService = counts.get('banks');
+  const bankRequestsBeforePersonalSelfService = counts.get("banks");
   let personalSelfServiceRenderer: ReturnType<typeof create>;
   await act(async () => {
     personalSelfServiceRenderer = create(
-      <QueryAuthorityBoundary scope={resolvedAuthority!} fallback={<span>loading</span>}>
+      <QueryAuthorityBoundary
+        scope={resolvedAuthority!}
+        fallback={<span>loading</span>}
+      >
         <PersonalSelfServiceHookHarness />
       </QueryAuthorityBoundary>,
     );
   });
   assert.equal(
-    counts.get('banks'),
+    counts.get("banks"),
     bankRequestsBeforePersonalSelfService,
-    'personal self-service must not mount institution discovery',
+    "personal self-service must not mount institution discovery",
   );
   await act(async () => personalSelfServiceRenderer!.unmount());
 
-  const reportsPeriodId = 'period-reports';
-  const beforeReportsFreshness = counts.get(`freshness:${reportsPeriodId}`) ?? 0;
+  const reportsPeriodId = "period-reports";
+  const beforeReportsFreshness =
+    counts.get(`freshness:${reportsPeriodId}`) ?? 0;
   let reportsRenderer: ReturnType<typeof create>;
   await act(async () => {
     reportsRenderer = create(
@@ -733,7 +797,7 @@ async function main(): Promise<void> {
       >
         <FreshnessStrip
           bankId={BANK_ID}
-          period={{ id: reportsPeriodId, label: 'Reports period' } as never}
+          period={{ id: reportsPeriodId, label: "Reports period" } as never}
         />
       </QueryAuthorityBoundary>,
     );
@@ -742,13 +806,13 @@ async function main(): Promise<void> {
   assert.ok(
     (counts.get(`freshness:${reportsPeriodId}`) ?? 0) >=
       beforeReportsFreshness + 2,
-    'Reports freshness strip must retain the cheap jittered poll',
+    "Reports freshness strip must retain the cheap jittered poll",
   );
   await act(async () => reportsRenderer!.unmount());
   globalThis.setInterval = nativeSetInterval;
   globalThis.setTimeout = nativeSetTimeout;
   console.log(
-    'queryAuthorityBoundary.test.tsx: pending 0; settled 22 resources/calls; focus, idle, and invalidation passed',
+    "queryAuthorityBoundary.test.tsx: pending 0; settled 22 resources/calls; focus, idle, and invalidation passed",
   );
 }
 

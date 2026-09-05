@@ -100,11 +100,17 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const banksQuery = useBanks(!isPersonalSelfService);
   const bank = banksQuery.data?.banks[0] ?? null;
   const authority = profileQuery.effectiveAuthority;
-  const institutionCapabilities =
-    authority?.institutionCapabilities.find(
-      (entry) => entry.institutionId === bank?.id,
-    )?.capabilities ?? [];
-  const organizationCapabilities = authority?.organizationCapabilities ?? [];
+  const institutionCapabilities = useMemo(
+    () =>
+      authority?.institutionCapabilities.find(
+        (entry) => entry.institutionId === bank?.id,
+      )?.capabilities ?? [],
+    [authority, bank?.id],
+  );
+  const organizationCapabilities = useMemo(
+    () => authority?.organizationCapabilities ?? [],
+    [authority],
+  );
 
   // Bind the resolved jurisdiction (registry row on the bank payload) into the
   // formatter module BEFORE children render, so every fmtCurrency/regShort call
@@ -229,8 +235,8 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         title="Risk service unreachable"
         description={
           isApiError(banksQuery.error ?? profileQuery.error)
-            ? (banksQuery.error ?? profileQuery.error)?.message ??
-              "Effective authority is temporarily unavailable."
+            ? ((banksQuery.error ?? profileQuery.error)?.message ??
+              "Effective authority is temporarily unavailable.")
             : "Could not resolve effective authority from the risk service."
         }
         action={
@@ -272,7 +278,6 @@ function NoAuthorizedInstitutionsPanel() {
     />
   );
 }
-
 
 function FullScreenPanel({
   title,

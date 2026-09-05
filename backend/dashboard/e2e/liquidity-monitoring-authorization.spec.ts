@@ -10,7 +10,9 @@ test.describe("unbound Liquidity Monitoring user", () => {
   test("hides navigation and 404s the deep link", async ({ page }) => {
     const productRequests: string[] = [];
     page.on("request", (request) => {
-      if (/\/banks\/[^/]+\/(live-summary|freshness|liquidity)/.test(request.url())) {
+      if (
+        /\/banks\/[^/]+\/(live-summary|freshness|liquidity)/.test(request.url())
+      ) {
         productRequests.push(request.url());
       }
     });

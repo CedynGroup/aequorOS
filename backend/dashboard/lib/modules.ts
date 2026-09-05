@@ -183,8 +183,10 @@ export function effectiveInstitutionModules(
   const modules = new Set<ModuleKey>();
   for (const capability of capabilities) {
     if (capability.permission !== "view") continue;
-    for (const module of CAPABILITY_MODULES[capability.module]) {
-      if (!entitled || entitled.has(module)) modules.add(module);
+    for (const capabilityModule of CAPABILITY_MODULES[capability.module]) {
+      if (!entitled || entitled.has(capabilityModule)) {
+        modules.add(capabilityModule);
+      }
     }
   }
   return modules;
@@ -195,8 +197,7 @@ export function effectiveOrganizationModules(
 ): ReadonlySet<ModuleKey> {
   return capabilities.some(
     (capability) =>
-      capability.module === "account" &&
-      capability.permission === "administer",
+      capability.module === "account" && capability.permission === "administer",
   )
     ? new Set<ModuleKey>(["settings"])
     : new Set<ModuleKey>();

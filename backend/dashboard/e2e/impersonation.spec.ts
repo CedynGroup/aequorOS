@@ -25,7 +25,16 @@ test("examiner inspection loads read-only navigation without tenant profile", as
     page.getByText("AequorOS staff is inspecting this account — read-only."),
   ).toBeVisible();
   await expect(page.getByText("Risk service unreachable")).toHaveCount(0);
-  await expect(page.getByText("Liquidity", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText("Liquidity", { exact: true }).first(),
+  ).toBeVisible();
   await expect(page.getByText("Settings", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /recompute/i })).toHaveCount(0);
+
+  if (process.env.E2E_EVIDENCE_SCREENSHOT) {
+    await page.screenshot({
+      path: process.env.E2E_EVIDENCE_SCREENSHOT,
+      fullPage: true,
+    });
+  }
 });

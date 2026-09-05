@@ -151,8 +151,10 @@ Health endpoints:
 Business API endpoints use URL path major versioning under `/api/v1`. See
 `docs/architecture.md` for the API versioning policy.
 
-Authenticated users read their current identity and personal preferences with
-`GET /api/v1/auth/me` and update their own nullable `display_name`, `job_title`,
+Authenticated users read their current identity, personal preferences, and
+server-evaluated effective-authority projection with `GET /api/v1/auth/me` (or read
+the projection alone with `GET /api/v1/auth/effective-authority`) and update their
+own nullable `display_name`, `job_title`,
 BCP-47-like `locale`, IANA `timezone`, and `light` / `dark` / `system` `theme`
 with `PATCH /api/v1/auth/me`. The patch rejects extra fields, so email, role,
 organization, and security settings cannot be changed through this endpoint.

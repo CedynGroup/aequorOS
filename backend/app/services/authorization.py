@@ -78,9 +78,14 @@ _REQUIRED_RUNTIME_CONDITIONS: dict[Permission, tuple[ConditionKind, ...]] = {
 
 
 class TenantPrincipalContext(Protocol):
-    organization_id: str
-    actor_user_id: UUID | None
-    authorization_version: int | None
+    @property
+    def organization_id(self) -> str: ...
+
+    @property
+    def actor_user_id(self) -> UUID | None: ...
+
+    @property
+    def authorization_version(self) -> int | None: ...
 
 
 def principal_locator(ctx: TenantPrincipalContext) -> PrincipalLocator:
@@ -131,7 +136,7 @@ def request_wide_condition_checks() -> tuple[ConditionCheck, ...]:
     )
 
 
-def _effective_capabilities(
+def _effective_capabilities(  # noqa: PLR0913 - projection requires the complete tuple
     principal: PrincipalLocator,
     resource_scope: InstitutionScope,
     institution_id: str | None,

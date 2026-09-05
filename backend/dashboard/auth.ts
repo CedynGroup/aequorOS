@@ -12,17 +12,25 @@
  * API client attaches the access token as `Authorization: Bearer` on every call.
  * The browser never sets the tenant identity — it comes from the verified token.
  */
-import NextAuth, { customFetch, type NextAuthConfig } from 'next-auth';
-import Credentials from 'next-auth/providers/credentials';
-import { OutboundTargetBlocked, checkOutboundUrl, guardedFetchFor } from './lib/outbound';
+import NextAuth, { customFetch, type NextAuthConfig } from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import {
+  OutboundTargetBlocked,
+  checkOutboundUrl,
+  guardedFetchFor,
+} from "./lib/outbound";
 
-const apiOrigin = (process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? 'http://localhost:8000')
-  .replace(/\/api\/v1\/?$/, '');
+const apiOrigin = (
+  process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? "http://localhost:8000"
+).replace(/\/api\/v1\/?$/, "");
 
 /** Decode a JWT payload (no verification — the token was just issued by our backend). */
 function decodeJwt(token: string): Record<string, unknown> {
-  const payload = token.split('.')[1];
-  const json = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();
+  const payload = token.split(".")[1];
+  const json = Buffer.from(
+    payload.replace(/-/g, "+").replace(/_/g, "/"),
+    "base64",
+  ).toString();
   return JSON.parse(json) as Record<string, unknown>;
 }
 
@@ -38,7 +46,7 @@ function decodeJwt(token: string): Record<string, unknown> {
 export class AuthServiceUnavailable extends Error {
   constructor(detail: string) {
     super(`service_unavailable: ${detail}`);
-    this.name = 'AuthServiceUnavailable';
+    this.name = "AuthServiceUnavailable";
   }
 }
 
@@ -46,14 +54,16 @@ async function backendTokens(path: string, body: unknown) {
   let res: Response;
   try {
     res = await fetch(`${apiOrigin}/api/v1/auth/${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   } catch (cause) {
     // DNS failure, refused connection, TLS error, timeout — nothing to do with
     // what the user typed.
-    throw new AuthServiceUnavailable(cause instanceof Error ? cause.message : 'unreachable');
+    throw new AuthServiceUnavailable(
+      cause instanceof Error ? cause.message : "unreachable",
+    );
   }
   // 5xx is the service failing; only a 4xx is a statement about the credentials.
   if (res.status >= 500) {
@@ -66,7 +76,7 @@ async function backendTokens(path: string, body: unknown) {
 /** Epoch ms at which a freshly issued access token expires (from its `exp` claim). */
 function accessTokenExpiryMs(accessToken: string): number {
   const exp = decodeJwt(accessToken).exp;
-  return typeof exp === 'number' ? exp * 1000 : 0;
+  return typeof exp === "number" ? exp * 1000 : 0;
 }
 
 /**
@@ -76,10 +86,13 @@ function accessTokenExpiryMs(accessToken: string): number {
  * On failure (refresh expired/revoked) the caller flags the token so the UI
  * re-authenticates rather than looping on 401s.
  */
-async function refreshAccessToken(token: import('next-auth/jwt').JWT) {
-  if (!token.refreshToken) return { ...token, error: 'RefreshTokenError' as const };
-  const tokens = await backendTokens('refresh', { refresh_token: token.refreshToken });
-  if (!tokens) return { ...token, error: 'RefreshTokenError' as const };
+async function refreshAccessToken(token: import("next-auth/jwt").JWT) {
+  if (!token.refreshToken)
+    return { ...token, error: "RefreshTokenError" as const };
+  const tokens = await backendTokens("refresh", {
+    refresh_token: token.refreshToken,
+  });
+  if (!tokens) return { ...token, error: "RefreshTokenError" as const };
   // Re-read identity claims from the fresh token so name/role/email stay current
   // (and pre-existing sessions pick up newly-added claims like `name`).
   const claims = decodeJwt(tokens.access_token);
@@ -92,7 +105,9 @@ async function refreshAccessToken(token: import('next-auth/jwt').JWT) {
     email: claims.email ? String(claims.email) : token.email,
     roles: (claims.roles as string[]) ?? token.roles,
     authorizationVersion:
-      typeof claims.authv === 'number' ? claims.authv : token.authorizationVersion,
+      typeof claims.authv === "number"
+        ? claims.authv
+        : token.authorizationVersion,
     organizationId: claims.org ? String(claims.org) : token.organizationId,
     error: undefined,
   };
@@ -140,7 +155,7 @@ export async function vetSsoIssuer(
 ): Promise<SsoClientConfig | null> {
   if (!config?.enabled || !config.issuer) return config;
   try {
-    await checkOutboundUrl(config.issuer, { field: 'SSO issuer', ...options });
+    await checkOutboundUrl(config.issuer, { field: "SSO issuer", ...options });
     return config;
   } catch (error) {
     if (error instanceof OutboundTargetBlocked) {
@@ -159,14 +174,16 @@ async function fetchSsoConfig(): Promise<SsoClientConfig | null> {
   if (Date.now() - ssoCache.fetchedAt < SSO_CACHE_MS) return ssoCache.config;
   try {
     const res = await fetch(`${apiOrigin}/api/v1/auth/sso/client-config`, {
-      headers: { 'X-Internal-Auth': internalKey },
-      cache: 'no-store',
+      headers: { "X-Internal-Auth": internalKey },
+      cache: "no-store",
       signal: AbortSignal.timeout(3000),
     });
     // Vetted BEFORE it is cached, so the cache can only ever hold a permitted
     // issuer and the provider below is built from a checked value by construction.
     ssoCache = {
-      config: await vetSsoIssuer(res.ok ? ((await res.json()) as SsoClientConfig) : null),
+      config: await vetSsoIssuer(
+        res.ok ? ((await res.json()) as SsoClientConfig) : null,
+      ),
       fetchedAt: Date.now(),
     };
   } catch {
@@ -184,11 +201,11 @@ async function fetchSsoConfig(): Promise<SsoClientConfig | null> {
  * so a failure here must never block the sign-out the user asked for.
  */
 async function revokeBackendSession(refreshToken: unknown): Promise<void> {
-  if (typeof refreshToken !== 'string' || !refreshToken) return;
+  if (typeof refreshToken !== "string" || !refreshToken) return;
   try {
     await fetch(`${apiOrigin}/api/v1/auth/logout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
   } catch {
@@ -198,11 +215,13 @@ async function revokeBackendSession(refreshToken: unknown): Promise<void> {
 }
 
 const baseConfig = {
-  session: { strategy: 'jwt' },
-  pages: { signIn: '/login' },
+  session: { strategy: "jwt" },
+  pages: { signIn: "/login" },
   events: {
     async signOut(message) {
-      await revokeBackendSession('token' in message ? message.token?.refreshToken : undefined);
+      await revokeBackendSession(
+        "token" in message ? message.token?.refreshToken : undefined,
+      );
     },
   },
   callbacks: {
@@ -215,10 +234,12 @@ const baseConfig = {
     },
     async jwt({ token, user, account }) {
       // Credentials: the authorize() result already carries backend tokens.
-      if (user && 'accessToken' in user) {
+      if (user && "accessToken" in user) {
         token.accessToken = user.accessToken as string;
         token.refreshToken = user.refreshToken as string;
-        token.accessTokenExpires = accessTokenExpiryMs(user.accessToken as string);
+        token.accessTokenExpires = accessTokenExpiryMs(
+          user.accessToken as string,
+        );
         token.organizationId = user.organizationId as string;
         token.roles = user.roles as string[];
         token.authorizationVersion = user.authorizationVersion as number;
@@ -228,9 +249,14 @@ const baseConfig = {
       }
       // SSO: exchange the IdP's id_token for backend app tokens on first sign-in
       // (the backend re-verifies it against the connection's issuer JWKS).
-      if (account?.provider === 'sso' && account.id_token) {
-        const tokens = await backendTokens('sso', { id_token: account.id_token });
-        if (!tokens) throw new Error('No AequorOS account is provisioned for this identity.');
+      if (account?.provider === "sso" && account.id_token) {
+        const tokens = await backendTokens("sso", {
+          id_token: account.id_token,
+        });
+        if (!tokens)
+          throw new Error(
+            "No AequorOS account is provisioned for this identity.",
+          );
         const claims = decodeJwt(tokens.access_token);
         token.accessToken = tokens.access_token;
         token.refreshToken = tokens.refresh_token;
@@ -238,7 +264,7 @@ const baseConfig = {
         token.organizationId = String(claims.org);
         token.roles = (claims.roles as string[]) ?? [];
         token.authorizationVersion =
-          typeof claims.authv === 'number' ? claims.authv : undefined;
+          typeof claims.authv === "number" ? claims.authv : undefined;
         token.sub = String(claims.sub);
         token.name = claims.name ? String(claims.name) : token.name;
         token.email = claims.email ? String(claims.email) : token.email;
@@ -258,24 +284,26 @@ const baseConfig = {
       session.accessToken = token.accessToken as string | undefined;
       session.error = token.error;
       if (session.user) {
-        session.user.name = (token.name as string | undefined) ?? session.user.name;
-        session.user.email = (token.email as string | undefined) ?? session.user.email;
-        session.user.organizationId = token.organizationId as string | undefined;
+        session.user.name =
+          (token.name as string | undefined) ?? session.user.name;
+        session.user.email =
+          (token.email as string | undefined) ?? session.user.email;
+        session.user.organizationId = token.organizationId as
+          string | undefined;
         session.user.roles = (token.roles as string[]) ?? [];
         session.user.authorizationVersion = token.authorizationVersion as
-          | number
-          | undefined;
+          number | undefined;
       }
       return session;
     },
   },
-} satisfies Omit<NextAuthConfig, 'providers'>;
+} satisfies Omit<NextAuthConfig, "providers">;
 
 const credentialsProvider = Credentials({
-  name: 'Email and password',
+  name: "Email and password",
   credentials: { email: {}, password: {} },
   async authorize(credentials) {
-    const tokens = await backendTokens('login', {
+    const tokens = await backendTokens("login", {
       email: credentials?.email,
       password: credentials?.password,
     });
@@ -283,12 +311,12 @@ const credentialsProvider = Credentials({
     const claims = decodeJwt(tokens.access_token);
     return {
       id: String(claims.sub),
-      email: String(claims.email ?? ''),
+      email: String(claims.email ?? ""),
       name: claims.name ? String(claims.name) : undefined,
       organizationId: String(claims.org),
       roles: (claims.roles as string[]) ?? [],
       authorizationVersion:
-        typeof claims.authv === 'number' ? claims.authv : undefined,
+        typeof claims.authv === "number" ? claims.authv : undefined,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
     };
@@ -299,16 +327,16 @@ const credentialsProvider = Credentials({
 // (sign-in, callback, providers). Middleware's session gate and server-side
 // auth() calls never pay for the backend config fetch.
 export const { handlers, signIn, signOut, auth } = NextAuth(async (req) => {
-  const providers: NextAuthConfig['providers'] = [credentialsProvider];
-  if (req?.nextUrl.pathname.startsWith('/api/auth')) {
+  const providers: NextAuthConfig["providers"] = [credentialsProvider];
+  if (req?.nextUrl.pathname.startsWith("/api/auth")) {
     // fetchSsoConfig() has already put the issuer through the egress guard, so
     // reaching this line at all means the destination was permitted.
     const sso = await fetchSsoConfig();
     if (sso?.enabled && sso.issuer && sso.client_id && sso.client_secret) {
       providers.push({
-        id: 'sso',
-        name: 'SSO',
-        type: 'oidc',
+        id: "sso",
+        name: "SSO",
+        type: "oidc",
         issuer: sso.issuer,
         clientId: sso.client_id,
         clientSecret: sso.client_secret,
@@ -322,7 +350,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth(async (req) => {
         // why the guard lives at the fetch boundary rather than on the issuer
         // string. Auth.js sets `allowInsecureRequests` internally, so the
         // https allow-list here is the only thing requiring TLS.
-        [customFetch]: guardedFetchFor('OIDC endpoint'),
+        [customFetch]: guardedFetchFor("OIDC endpoint"),
       });
     }
   }

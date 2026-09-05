@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   createContext,
@@ -8,11 +8,11 @@ import {
   useMemo,
   useState,
   type ReactNode,
-} from 'react';
-import { useSession } from 'next-auth/react';
-import { useImpersonation } from '../../components/impersonation/useImpersonation';
-import { resolveImpersonationStatus } from './impersonation';
-import { queryAuthorityScope, type QueryAuthorityScope } from './queryPolicy';
+} from "react";
+import { useSession } from "next-auth/react";
+import { useImpersonation } from "../../components/impersonation/useImpersonation";
+import { resolveImpersonationStatus } from "./impersonation";
+import { queryAuthorityScope, type QueryAuthorityScope } from "./queryPolicy";
 
 const QueryAuthorityContext = createContext<QueryAuthorityScope | null>(null);
 
@@ -53,31 +53,22 @@ export function useResolvedQueryAuthorityScope(): QueryAuthorityScope | null {
     ? 0
     : session?.user?.authorizationVersion;
   const verified = inspection.impersonating
-    ? !inspection.expired && Boolean(inspection.token && organizationId && email)
-    : status === 'authenticated' &&
+    ? !inspection.expired &&
+      Boolean(inspection.token && organizationId && email)
+    : status === "authenticated" &&
       Boolean(
         session?.accessToken &&
-          !session.error &&
-          organizationId &&
-          email &&
-          authorizationVersion,
+        !session.error &&
+        organizationId &&
+        email &&
+        authorizationVersion,
       );
   return useMemo(
     () =>
       inspectionResolved && verified
-        ? queryAuthorityScope(
-            organizationId,
-            email,
-            authorizationVersion,
-          )
+        ? queryAuthorityScope(organizationId, email, authorizationVersion)
         : null,
-    [
-      authorizationVersion,
-      email,
-      inspectionResolved,
-      organizationId,
-      verified,
-    ],
+    [authorizationVersion, email, inspectionResolved, organizationId, verified],
   );
 }
 
@@ -88,7 +79,11 @@ export function QueryAuthorityScopeProvider({
   scope: QueryAuthorityScope;
   children: ReactNode;
 }) {
-  return createElement(QueryAuthorityContext.Provider, { value: scope }, children);
+  return createElement(
+    QueryAuthorityContext.Provider,
+    { value: scope },
+    children,
+  );
 }
 
 /** Cache scope for query hooks; access-token rotation is deliberately inert. */
@@ -96,7 +91,7 @@ export function useQueryAuthorityScope(): QueryAuthorityScope {
   const scope = useContext(QueryAuthorityContext);
   if (!scope) {
     throw new Error(
-      'useQueryAuthorityScope must be used within QueryAuthorityScopeProvider.'
+      "useQueryAuthorityScope must be used within QueryAuthorityScopeProvider.",
     );
   }
   return scope;
