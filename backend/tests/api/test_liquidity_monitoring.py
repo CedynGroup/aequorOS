@@ -195,30 +195,60 @@ def test_no_binding_defaults_to_denial_without_legacy_role_fallback(
 
 def test_runtime_global_veto_suppresses_production_capability_projections(
     db_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed_liquidity_book()
     _, version = _grant()
-    monkeypatch.setattr(
-        authorization,
-        "runtime_global_condition_checks",
-        lambda _db, _principal: (
+    request_headers = headers(authorization_version=version)
+    with authorization.runtime_global_conditions(
+        (
             ConditionCheck(
                 kind=ConditionKind.DEMO_MODE,
                 passed=False,
                 reason="operation unavailable in demo mode",
             ),
-        ),
-    )
-    request_headers = headers(authorization_version=version)
-
-    me = db_client.get("/api/v1/auth/me", headers=request_headers)
-    banks = db_client.get("/api/v1/banks", headers=request_headers)
+        )
+    ):
+        me = db_client.get("/api/v1/auth/me", headers=request_headers)
+        banks = db_client.get("/api/v1/banks", headers=request_headers)
 
     assert me.status_code == 200, me.text
     assert me.json()["effective_authority"]["institution_capabilities"] == []
     assert banks.status_code == 200, banks.text
     assert banks.json()["banks"] == []
+
+
+def test_profile_projection_failure_rolls_back_before_side_effects(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_name = "Profile Before Projection Failure"
+    session = get_sessionmaker()()
+    try:
+        user = session.get(User, USER_1)
+        assert user is not None
+        user.display_name = original_name
+        session.commit()
+    finally:
+        session.close()
+
+    def fail_conditions(*_args: object) -> tuple[ConditionCheck, ...]:
+        raise RuntimeError("condition authority unavailable")
+
+    monkeypatch.setattr(authorization, "runtime_global_condition_checks", fail_conditions)
+    response = db_client.patch(
+        "/api/v1/auth/me",
+        headers=headers(),
+        json={"display_name": "Profile Must Not Persist"},
+    )
+
+    session = get_sessionmaker()()
+    try:
+        persisted = session.get(User, USER_1)
+        assert persisted is not None
+        assert persisted.display_name == original_name
+    finally:
+        session.close()
+    assert response.status_code == 503
 
 
 @pytest.mark.parametrize(

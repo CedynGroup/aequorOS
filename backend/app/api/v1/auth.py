@@ -345,6 +345,6 @@ def update_me(
     user = _current_user(db, ctx)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(user, field, value)
+    response = _me_response(db, ctx, user)
     db.commit()
-    db.refresh(user)
-    return _me_response(db, ctx, user)
+    return response

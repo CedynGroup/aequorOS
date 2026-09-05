@@ -8,7 +8,9 @@ transaction, which also revokes all their refresh tokens.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Protocol
@@ -69,6 +71,9 @@ class BindingScope:
 
 _ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT)
 _INSTITUTION_MODULES = tuple(module for module in Module if module not in _ORGANIZATION_MODULES)
+_RUNTIME_GLOBAL_CONDITIONS: ContextVar[tuple[ConditionCheck, ...]] = ContextVar(
+    "authorization_runtime_global_conditions", default=()
+)
 
 
 class TenantPrincipalContext(Protocol):
@@ -95,7 +100,27 @@ def runtime_global_condition_checks(
     _db: Session,
     _principal: PrincipalLocator,
 ) -> tuple[ConditionCheck, ...]:
-    return ()
+    return _RUNTIME_GLOBAL_CONDITIONS.get()
+
+
+@contextmanager
+def runtime_global_conditions(conditions: Sequence[ConditionCheck]) -> Iterator[None]:
+    resolved = tuple(conditions)
+    if not all(isinstance(condition, ConditionCheck) for condition in resolved):
+        raise AuthorizationInvariantError("runtime authorization conditions are invalid")
+    token = _RUNTIME_GLOBAL_CONDITIONS.set(resolved)
+    try:
+        yield
+    finally:
+        _RUNTIME_GLOBAL_CONDITIONS.reset(token)
+
+
+def _conditions_for_evaluation(
+    db: Session,
+    principal: PrincipalLocator,
+    workflow_conditions: Sequence[ConditionCheck] = (),
+) -> tuple[ConditionCheck, ...]:
+    return (*runtime_global_condition_checks(db, principal), *workflow_conditions)
 
 
 def _effective_capabilities(
@@ -145,7 +170,7 @@ def project_effective_authority(
 
     principal = principal_locator(ctx)
     try:
-        conditions = runtime_global_condition_checks(db, principal)
+        conditions = _conditions_for_evaluation(db, principal)
         principal_active, bindings = _load_principal_grants(db, principal)
         user = db.scalar(
             select(User).where(
@@ -460,6 +485,7 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
 ) -> AuthorizationDecision:
     """Check permissions using only stored bindings, returning a trace for audit."""
 
+    conditions = _conditions_for_evaluation(db, principal, conditions)
     principal_active, bindings = _load_principal_grants(db, principal)
     if not principal_active:
         return _deny_with_trace(
