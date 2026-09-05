@@ -2322,6 +2322,11 @@
             "title": "License Type",
             "type": "string"
           },
+          "liquidity_monitoring_access": {
+            "default": false,
+            "title": "Liquidity Monitoring Access",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"

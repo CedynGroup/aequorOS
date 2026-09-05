@@ -33,12 +33,13 @@ export const E2E_USERS: Record<
   string,
   { id: string; roles: string[]; authv: number }
 > = {
-  // Initial-owner assignment is the sole bootstrap authorization mutation, so
-  // only admin starts at version 2. Grant journeys pass later versions explicitly.
+  // Initial-owner assignment and the exact Liquidity Monitoring fixture grant
+  // are the two bootstrap authorization mutations. Grant journeys pass later
+  // versions explicitly.
   admin: {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     roles: ["admin"],
-    authv: 2,
+    authv: 3,
   },
   approver: {
     id: "eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2",

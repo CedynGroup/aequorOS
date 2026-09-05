@@ -18,10 +18,10 @@ the tenant API).
 - Password and OIDC SSO authentication (AequorOS is its own relying party — no
   third-party broker), integration-key service accounts, RLS-forced tenancy
 - Scoped authorization bindings with deny-by-default, explainable evaluation
-  and explicit organization-or-exact-institution targets. Product enforcement
-  remains shadow-only: Liquidity Monitoring emits legacy-versus-binding
-  decisions for its institution target, while operational endpoint enforcement
-  still uses the legacy role hierarchy.
+  and explicit organization-or-exact-institution targets. Liquidity Monitoring
+  is the first product surface enforced solely by one complete active binding
+  for the exact institution or explicit organization-wide coverage;
+  every other product surface remains on its existing authorization boundary.
   Account administration is split out into the non-operational `account_admin`
   role, while initial Org Owner authority is an explicit organization-wide
   binding. Migration `202608280046` assigns it only for exactly one eligible

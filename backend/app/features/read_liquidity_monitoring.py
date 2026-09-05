@@ -8,16 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
-from app.api.deps import DbSession, Tenant, TenantContext
-from app.core.authorization import (
-    InstitutionScope,
-    Module,
-    Permission,
-    PrincipalLocator,
-    PrincipalType,
-    ResourceLocator,
-    Sensitivity,
-)
+from app.api.deps import DbSession, LiquidityMonitoringResource, TenantContext
 from app.models import Bank, CanonicalPosition
 from app.schemas.sdi import (
     LiquidityMonitoringRead,
@@ -27,8 +18,7 @@ from app.schemas.sdi import (
     SdiFundingProviderRead,
     SdiMaturityBucketRead,
 )
-from app.services import authorization, institution_types, sdi_readiness, sdi_views
-from app.services import banks as banks_service
+from app.services import institution_types, sdi_readiness, sdi_views
 
 router = APIRouter(tags=["liquidity-monitoring"])
 
@@ -53,30 +43,12 @@ def _effective_as_of(db: DbSession, ctx: TenantContext, bank: Bank, requested: d
 def get_liquidity_monitoring(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: LiquidityMonitoringResource,
     as_of: Annotated[date | None, Query()] = None,
 ) -> LiquidityMonitoringRead:
     """Shared funding, collateral, maturity, and data-readiness analytics."""
-    bank = banks_service.resolve_bank_reference(db, ctx, bank_id)
-    # The scoped-binding foundation remains shadow-only. Normal app sessions
-    # produce a real institution-target decision for rollout telemetry, while
-    # the existing authenticated read contract remains authoritative. Operator
-    # impersonation and integration keys have separate principal lifecycles and
-    # are intentionally outside this human-binding pilot.
-    if ctx.actor_user_id is not None and ctx.authorization_version is not None:
-        authorization.observe_shadow_permission(
-            db,
-            PrincipalLocator(ctx.organization_id, ctx.actor_user_id, PrincipalType.HUMAN),
-            Permission.VIEW,
-            ResourceLocator(
-                ctx.organization_id,
-                InstitutionScope.INSTITUTION,
-                bank.id,
-                Module.LIQUIDITY,
-                Sensitivity.CONFIDENTIAL,
-            ),
-            legacy_allowed=True,
-        )
+    ctx = access.ctx
+    bank = access.bank
     when = _effective_as_of(db, ctx, bank, as_of)
     monitoring = sdi_views.get_liquidity_monitoring(db, ctx, bank, when)
     readiness = sdi_readiness.assess_sdi_readiness(db, ctx, bank, when)

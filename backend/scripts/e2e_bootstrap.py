@@ -35,9 +35,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models import Organization, User
+from app.services import authorization
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
 from app.services.organization_ownership import assign_initial_owner
@@ -113,6 +122,24 @@ def main() -> None:
         session.commit()
         _enrol_signing_keys(session)
         materialize_canonical_test_book(session)
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["admin"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.LIQUIDITY,
+                SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="exercise the binding-enforced Liquidity Monitoring journey",
+        )
         session.commit()
         _materialize_live_plane(session)
     print("e2e database bootstrapped")

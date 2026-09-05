@@ -82,10 +82,12 @@ organization-wide scope. It ignores scalar role and token-permission claims and
 applies workflow-supplied demo-mode, maker-checker, step-up, and limit
 conditions as global vetoes. Its decision includes an audit-ready trace.
 
-Product-route enforcement remains shadow-only: Liquidity Monitoring evaluates
-an exact institution target and emits `authz.shadow_decision`, but its legacy
-authenticated-read result remains authoritative even if shadow evaluation
-denies or fails. Follow-on migration `202608280046` creates an explicit
+Liquidity Monitoring is the first enforcing product route: it requires `view`
+on an exact institution target (or an explicitly organization-wide binding)
+for LIQ/confidential and emits `authz.binding_decision`. It denies when no
+complete active binding matches or evaluation fails; scalar roles are not a
+fallback. Other product routes retain their existing authorization behavior.
+Follow-on migration `202608280046` creates an explicit
 organization-wide `org_owner`
 binding only where an organization had exactly one active human legacy admin;
 zero/multiple-candidate organizations remain unassigned in a queryable

@@ -86,6 +86,7 @@ class BankRead(ClosedModel):
     # institution_class, return family, exposure limits and default module set
     # later SDI phases branch on. None only if the code has no registry row.
     institution_type_detail: InstitutionTypeRead | None = None
+    liquidity_monitoring_access: bool = False
     created_at: datetime
     updated_at: datetime
 

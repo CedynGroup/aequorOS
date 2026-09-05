@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Bank + reporting-period selection context for the app shell.
@@ -15,19 +15,19 @@ import {
   useMemo,
   useState,
   type ReactNode,
-} from 'react';
-import Link from 'next/link';
-import { Landmark } from 'lucide-react';
+} from "react";
+import Link from "next/link";
+import { Landmark } from "lucide-react";
 import type {
   BankRead,
   BankReadInstitutionTypeDetail,
   BankReportingPeriodRead,
-} from '@aequoros/risk-service-api';
-import { isApiError } from '@/lib/api/client';
-import { useBanks, useReportingPeriods } from '@/lib/api/hooks';
-import { setActiveJurisdiction } from '@/lib/format';
-import { moduleSetFrom, type ModuleScope } from '@/lib/modules';
-import Logo from './Logo';
+} from "@aequoros/risk-service-api";
+import { isApiError } from "@/lib/api/client";
+import { useBanks, useReportingPeriods } from "@/lib/api/hooks";
+import { setActiveJurisdiction } from "@/lib/format";
+import { moduleSetFrom, type ModuleScope } from "@/lib/modules";
+import Logo from "./Logo";
 
 /**
  * The active tenant's institution-type discriminator (docs/sdi.md §1), resolved
@@ -63,7 +63,7 @@ const BankContext = createContext<BankContextValue | null>(null);
 export function useBankContext(): BankContextValue {
   const value = useContext(BankContext);
   if (!value) {
-    throw new Error('useBankContext must be used within <BankProvider>.');
+    throw new Error("useBankContext must be used within <BankProvider>.");
   }
   return value;
 }
@@ -111,12 +111,12 @@ export default function BankProvider({ children }: { children: ReactNode }) {
             // (never the GH defaults — that would mislabel the regulator).
             {
               currencyCode: bank.currency,
-              locale: 'en-US',
-              regulatorShort: 'Regulator',
-              centralBankName: 'Central bank',
+              locale: "en-US",
+              regulatorShort: "Regulator",
+              centralBankName: "Central bank",
               countryName: bank.jurisdictionCode,
               submissionPortal: null,
-            }
+            },
       );
     }
   }, [bank]);
@@ -125,9 +125,9 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const periods = useMemo(
     () =>
       [...(periodsQuery.data?.periods ?? [])].sort(
-        (a, b) => b.periodEnd.getTime() - a.periodEnd.getTime()
+        (a, b) => b.periodEnd.getTime() - a.periodEnd.getTime(),
       ),
-    [periodsQuery.data]
+    [periodsQuery.data],
   );
 
   // The active tenant's institution-type discriminator, resolved from the bank
@@ -138,11 +138,12 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       bank
         ? {
             code: bank.institutionType,
-            institutionClass: bank.institutionTypeDetail?.institutionClass ?? null,
+            institutionClass:
+              bank.institutionTypeDetail?.institutionClass ?? null,
             detail: bank.institutionTypeDetail ?? null,
           }
         : null,
-    [bank]
+    [bank],
   );
 
   // The tenant's scoped module set (docs/sdi.md §3): built from the API's
@@ -153,9 +154,10 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     () => ({
       modules: moduleSetFrom(bank?.institutionTypeDetail?.defaultModules),
       institutionClass: bank?.institutionTypeDetail?.institutionClass ?? null,
+      liquidityMonitoringAccess: bank?.liquidityMonitoringAccess ?? false,
       isResolved: !banksQuery.isLoading,
     }),
-    [bank, banksQuery.isLoading]
+    [bank, banksQuery.isLoading],
   );
 
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
@@ -177,7 +179,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       isLoading,
       isEmpty,
     }),
-    [bank, institutionType, moduleScope, period, periods, isLoading, isEmpty]
+    [bank, institutionType, moduleScope, period, periods, isLoading, isEmpty],
   );
 
   if (banksQuery.error) {
@@ -187,7 +189,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         description={
           isApiError(banksQuery.error)
             ? banksQuery.error.message
-            : 'Could not load banks from the risk service.'
+            : "Could not load banks from the risk service."
         }
         action={
           <button

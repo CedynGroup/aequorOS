@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Alert stream: open live findings grouped by module or severity. Each row
@@ -8,23 +8,19 @@
  * exposes no acknowledge mutation, so none is rendered.
  */
 
-import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
-import type { AlertItemRead } from '@aequoros/risk-service-api';
-import StatusPill from '@/components/ui/StatusPill';
-import SectionCard from '@/components/ui/SectionCard';
-import { fmtRelative, labelize } from '@/lib/api/values';
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+import type { AlertItemRead } from "@aequoros/risk-service-api";
+import StatusPill from "@/components/ui/StatusPill";
+import SectionCard from "@/components/ui/SectionCard";
+import { LIVE_MODULE_HREFS } from "@/components/live/moduleDisplay";
+import { fmtRelative, labelize } from "@/lib/api/values";
 
-export type AlertGroupBy = 'module' | 'severity';
+export type AlertGroupBy = "module" | "severity";
 
-export const ALERT_MODULE_HREFS: Record<string, string> = {
-  liquidity: '/liquidity/monitoring',
-  capital: '/basel',
-  irr: '/irr/limits',
-  fx: '/fx/limits',
-  ftp: '/ftp/products',
-  forecast: '/forecasting',
-};
+function alertModuleHref(module: string): string | undefined {
+  return LIVE_MODULE_HREFS[module as keyof typeof LIVE_MODULE_HREFS];
+}
 
 const SEVERITY_ORDER: Record<string, number> = {
   critical: 0,
@@ -34,26 +30,26 @@ const SEVERITY_ORDER: Record<string, number> = {
 };
 
 function severityDotClass(severity: string): string {
-  if (severity === 'critical') return 'bg-critical';
-  if (severity === 'high') return 'bg-warning';
-  return 'bg-slate-light';
+  if (severity === "critical") return "bg-critical";
+  if (severity === "high") return "bg-warning";
+  return "bg-slate-light";
 }
 
 function severityTone(severity: string) {
-  if (severity === 'critical') return 'critical' as const;
-  if (severity === 'high') return 'amber' as const;
-  return 'slate' as const;
+  if (severity === "critical") return "critical" as const;
+  if (severity === "high") return "amber" as const;
+  return "slate" as const;
 }
 
 function AlertRow({ item }: { item: AlertItemRead }) {
-  const href = ALERT_MODULE_HREFS[item.module];
+  const href = alertModuleHref(item.module);
   return (
     <li className="px-5 py-3.5 flex items-start gap-3">
       <span
         aria-hidden
         title={item.severity}
         className={`mt-1.5 shrink-0 inline-block w-2 h-2 rounded-full ${severityDotClass(
-          item.severity
+          item.severity,
         )}`}
       />
       <div className="min-w-0 flex-1">
@@ -62,14 +58,16 @@ function AlertRow({ item }: { item: AlertItemRead }) {
           <span className="font-mono">{labelize(item.ruleId)}</span>
           {item.metric && (
             <>
-              {' · metric '}
+              {" · metric "}
               <span className="font-mono text-navy/80">{item.metric}</span>
             </>
           )}
         </p>
       </div>
       <div className="shrink-0 flex items-center gap-2.5">
-        <StatusPill tone={severityTone(item.severity)}>{item.severity}</StatusPill>
+        <StatusPill tone={severityTone(item.severity)}>
+          {item.severity}
+        </StatusPill>
         {href ? (
           <Link
             href={href}
@@ -79,7 +77,9 @@ function AlertRow({ item }: { item: AlertItemRead }) {
             <ArrowUpRight size={12} aria-hidden />
           </Link>
         ) : (
-          <span className="text-caption text-slate">{labelize(item.module)}</span>
+          <span className="text-caption text-slate">
+            {labelize(item.module)}
+          </span>
         )}
         <span
           className="text-caption text-slate-light whitespace-nowrap font-mono tnum"
@@ -100,17 +100,17 @@ export default function AlertStream({
   groupBy: AlertGroupBy;
 }) {
   const keys =
-    groupBy === 'module'
+    groupBy === "module"
       ? [...new Set(items.map((item) => item.module as string))].sort()
       : [...new Set(items.map((item) => item.severity as string))].sort(
-          (a, b) => (SEVERITY_ORDER[a] ?? 99) - (SEVERITY_ORDER[b] ?? 99)
+          (a, b) => (SEVERITY_ORDER[a] ?? 99) - (SEVERITY_ORDER[b] ?? 99),
         );
 
   return (
     <div className="space-y-6">
       {keys.map((key) => {
         const groupItems = items.filter((item) =>
-          groupBy === 'module' ? item.module === key : item.severity === key
+          groupBy === "module" ? item.module === key : item.severity === key,
         );
         return (
           <SectionCard
@@ -124,9 +124,9 @@ export default function AlertStream({
               </span>
             }
             actions={
-              groupBy === 'module' && ALERT_MODULE_HREFS[key] ? (
+              groupBy === "module" && alertModuleHref(key) ? (
                 <Link
-                  href={ALERT_MODULE_HREFS[key]}
+                  href={alertModuleHref(key)!}
                   className="text-caption font-medium text-action hover:underline"
                 >
                   Open module →

@@ -8,6 +8,7 @@ transaction, which also revokes all their refresh tokens.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from uuid import UUID
@@ -34,7 +35,7 @@ from app.core.authorization import (
 from app.core.authorization import (
     evaluate_permission as evaluate_grants,
 )
-from app.core.observability import authorization_shadow_decision
+from app.core.observability import authorization_binding_decision
 from app.db.base import utc_now
 from app.models import AuthorizationBinding, Bank, OperatorUser, User
 from app.services import authentication
@@ -277,6 +278,31 @@ def _deny_with_trace(  # noqa: PLR0913 - the complete decision tuple is explicit
     return decision
 
 
+def _load_principal_grants(
+    db: Session,
+    principal: PrincipalLocator,
+) -> tuple[bool, list[BindingGrant]]:
+    user = db.scalar(
+        select(User).where(
+            User.id == principal.principal_id,
+            User.organization_id == principal.organization_id,
+            User.is_active.is_(True),
+        )
+    )
+    if user is None or _principal_type(user) is not principal.principal_type:
+        return False, []
+    bindings = list(
+        db.scalars(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.organization_id == principal.organization_id,
+                AuthorizationBinding.principal_user_id == principal.principal_id,
+                AuthorizationBinding.principal_type == principal.principal_type.value,
+            )
+        )
+    )
+    return True, [_binding_grant(binding) for binding in bindings]
+
+
 def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
     db: Session,
     principal: PrincipalLocator,
@@ -288,14 +314,8 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
 ) -> AuthorizationDecision:
     """Check permissions using only stored bindings, returning a trace for audit."""
 
-    user = db.scalar(
-        select(User).where(
-            User.id == principal.principal_id,
-            User.organization_id == principal.organization_id,
-            User.is_active.is_(True),
-        )
-    )
-    if user is None or _principal_type(user) is not principal.principal_type:
+    principal_active, bindings = _load_principal_grants(db, principal)
+    if not principal_active:
         return _deny_with_trace(
             principal, permission, resource, conditions, now, "principal_not_active"
         )
@@ -317,43 +337,141 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
                 now,
                 "resource_institution_not_in_tenant",
             )
-    bindings = list(
-        db.scalars(
-            select(AuthorizationBinding).where(
-                AuthorizationBinding.organization_id == principal.organization_id,
-                AuthorizationBinding.principal_user_id == principal.principal_id,
-                AuthorizationBinding.principal_type == principal.principal_type.value,
-            )
-        )
-    )
     return evaluate_grants(
         principal,
         permission,
         resource,
-        [_binding_grant(binding) for binding in bindings],
+        bindings,
         conditions=conditions,
         now=now,
     )
 
 
-def observe_shadow_permission(  # noqa: PLR0913 - the observed decision tuple is explicit
+def evaluate_liquidity_monitoring_views(
     db: Session,
+    *,
+    organization_id: str,
+    principal_id: UUID,
+    institutions: Sequence[Bank],
+    failure_surface: str | None = None,
+) -> dict[str, AuthorizationDecision]:
+    """Evaluate Liquidity Monitoring for tenant-resolved institutions in one load."""
+
+    from app.core.authorization import Module, Sensitivity  # noqa: PLC0415
+
+    principal = PrincipalLocator(organization_id, principal_id, PrincipalType.HUMAN)
+    permission = Permission.VIEW
+    resources = {
+        institution.id: ResourceLocator(
+            organization_id,
+            InstitutionScope.INSTITUTION,
+            institution.id,
+            Module.LIQUIDITY,
+            Sensitivity.CONFIDENTIAL,
+        )
+        for institution in institutions
+    }
+    try:
+        principal_active, bindings = _load_principal_grants(db, principal)
+    except Exception as exc:  # noqa: BLE001 - callers deny closed after telemetry
+        if failure_surface is not None:
+            for resource in resources.values():
+                record_binding_evaluation_failure(
+                    principal,
+                    permission,
+                    resource,
+                    surface=failure_surface,
+                    error=exc,
+                )
+        raise
+    decisions: dict[str, AuthorizationDecision] = {}
+    for institution in institutions:
+        resource = resources[institution.id]
+        if not principal_active:
+            decision = _deny_with_trace(
+                principal,
+                permission,
+                resource,
+                (),
+                None,
+                "principal_not_active",
+            )
+        elif institution.organization_id != organization_id:
+            decision = _deny_with_trace(
+                principal,
+                permission,
+                resource,
+                (),
+                None,
+                "resource_institution_not_in_tenant",
+            )
+        else:
+            decision = evaluate_grants(principal, permission, resource, bindings)
+        decisions[institution.id] = decision
+    return decisions
+
+
+def evaluate_liquidity_monitoring_view(
+    db: Session,
+    *,
+    organization_id: str,
+    principal_id: UUID,
+    institution: Bank,
+    surface: str | None = None,
+) -> AuthorizationDecision:
+    """Evaluate and optionally record one Liquidity Monitoring decision."""
+
+    decision = evaluate_liquidity_monitoring_views(
+        db,
+        organization_id=organization_id,
+        principal_id=principal_id,
+        institutions=(institution,),
+        failure_surface=surface,
+    )[institution.id]
+    if surface is not None:
+        record_binding_decision(
+            decision,
+            surface=surface,
+            severity="info" if decision.allowed else "warning",
+        )
+    return decision
+
+
+def record_binding_decision(
+    decision: AuthorizationDecision,
+    *,
+    surface: str,
+    severity: str = "info",
+) -> None:
+    """Emit the evaluator's complete enforcing outcome for one product surface."""
+
+    authorization_binding_decision(
+        allowed=decision.allowed,
+        reason=decision.reason,
+        severity=severity,
+        surface=surface,
+        **_decision_target_fields(
+            decision.principal,
+            decision.permission,
+            decision.resource,
+        ),
+        matching_binding_ids=",".join(str(value) for value in decision.matching_binding_ids),
+        binding_trace=",".join(
+            f"{trace.binding_id}:{trace.reason}" for trace in decision.binding_trace
+        ),
+        condition_trace=",".join(
+            f"{check.kind.value}:{check.reason}:{check.passed}"
+            for check in decision.condition_trace
+        ),
+    )
+
+
+def _decision_target_fields(
     principal: PrincipalLocator,
     permission: Permission,
     resource: ResourceLocator,
-    *,
-    legacy_allowed: bool,
-    conditions: tuple[ConditionCheck, ...] = (),
-    now: datetime | None = None,
-) -> AuthorizationDecision | None:
-    """Evaluate the binding result and log it for comparison with the legacy check.
-
-    This function never allows or denies the request itself. It gives a real
-    route a way to log what the new binding evaluator would say, so the two
-    can be compared during the rollout without switching the route over.
-    """
-
-    target_fields = {
+) -> dict[str, str | None]:
+    return {
         "organization_id": resource.organization_id,
         "principal_id": str(principal.principal_id),
         "principal_type": principal.principal_type.value,
@@ -363,34 +481,23 @@ def observe_shadow_permission(  # noqa: PLR0913 - the observed decision tuple is
         "module": resource.module.value,
         "sensitivity": resource.sensitivity.value,
     }
-    try:
-        with db.begin_nested():
-            decision = evaluate_permission(
-                db,
-                principal,
-                permission,
-                resource,
-                conditions=conditions,
-                now=now,
-            )
-    except Exception as exc:  # noqa: BLE001 - shadow observation must never become a route gate
-        authorization_shadow_decision(
-            binding_allowed=False,
-            legacy_allowed=legacy_allowed,
-            reason="shadow_evaluation_failed",
-            severity="error",
-            error_type=type(exc).__name__,
-            **target_fields,
-        )
-        return None
-    authorization_shadow_decision(
-        binding_allowed=decision.allowed,
-        legacy_allowed=legacy_allowed,
-        reason=decision.reason,
-        matching_binding_ids=",".join(str(value) for value in decision.matching_binding_ids),
-        binding_trace=",".join(
-            f"{trace.binding_id}:{trace.reason}" for trace in decision.binding_trace
-        ),
-        **target_fields,
+
+
+def record_binding_evaluation_failure(
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    *,
+    surface: str,
+    error: Exception,
+) -> None:
+    """Record an evaluator failure that the enforcing surface denied closed."""
+
+    authorization_binding_decision(
+        allowed=False,
+        reason="binding_evaluation_failed",
+        severity="error",
+        surface=surface,
+        **_decision_target_fields(principal, permission, resource),
+        error_type=type(error).__name__,
     )
-    return decision

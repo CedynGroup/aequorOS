@@ -12,24 +12,24 @@
  */
 
 export type ModuleKey =
-  | 'command_center'
-  | 'risk'
-  | 'alerts'
-  | 'liquidity'
-  | 'capital'
-  | 'credit'
-  | 'regulatory_reporting'
-  | 'data_engine'
-  | 'institution'
-  | 'reports'
-  | 'settings'
-  | 'irrbb'
-  | 'behavioral'
-  | 'forecasting'
-  | 'ftp'
-  | 'fx'
-  | 'markets'
-  | 'positions';
+  | "command_center"
+  | "risk"
+  | "alerts"
+  | "liquidity"
+  | "capital"
+  | "credit"
+  | "regulatory_reporting"
+  | "data_engine"
+  | "institution"
+  | "reports"
+  | "settings"
+  | "irrbb"
+  | "behavioral"
+  | "forecasting"
+  | "ftp"
+  | "fx"
+  | "markets"
+  | "positions";
 
 /**
  * Route-prefix → module slug. Longest matching prefix wins; `/` is the Command
@@ -38,34 +38,34 @@ export type ModuleKey =
  * from the path.
  */
 const ROUTE_MODULES: ReadonlyArray<readonly [string, ModuleKey]> = [
-  ['/risk', 'risk'],
-  ['/alerts', 'alerts'],
-  ['/markets', 'markets'],
-  ['/positions', 'positions'],
-  ['/irr', 'irrbb'],
-  ['/liquidity', 'liquidity'],
-  ['/fx', 'fx'],
-  ['/basel', 'capital'],
-  ['/credit', 'credit'],
-  ['/ftp', 'ftp'],
-  ['/forecasting', 'forecasting'],
-  ['/behavioral', 'behavioral'],
-  ['/data-engine', 'data_engine'],
-  ['/reports', 'reports'],
-  ['/institution', 'institution'],
-  ['/submissions', 'regulatory_reporting'],
-  ['/settings', 'settings'],
+  ["/risk", "risk"],
+  ["/alerts", "alerts"],
+  ["/markets", "markets"],
+  ["/positions", "positions"],
+  ["/irr", "irrbb"],
+  ["/liquidity", "liquidity"],
+  ["/fx", "fx"],
+  ["/basel", "capital"],
+  ["/credit", "credit"],
+  ["/ftp", "ftp"],
+  ["/forecasting", "forecasting"],
+  ["/behavioral", "behavioral"],
+  ["/data-engine", "data_engine"],
+  ["/reports", "reports"],
+  ["/institution", "institution"],
+  ["/submissions", "regulatory_reporting"],
+  ["/settings", "settings"],
 ];
 
 function normalize(pathOrHref: string): string {
-  const path = (pathOrHref.split('?')[0] || '/').replace(/\/+$/, '');
-  return path === '' ? '/' : path;
+  const path = (pathOrHref.split("?")[0] || "/").replace(/\/+$/, "");
+  return path === "" ? "/" : path;
 }
 
 /** The module a route path belongs to, or null for a route outside the map. */
 export function moduleForPath(pathname: string): ModuleKey | null {
   const path = normalize(pathname);
-  if (path === '/') return 'command_center';
+  if (path === "/") return "command_center";
   let best: readonly [string, ModuleKey] | null = null;
   for (const entry of ROUTE_MODULES) {
     const prefix = entry[0];
@@ -84,12 +84,12 @@ export function moduleForPath(pathname: string): ModuleKey | null {
  * nav-level scoping — the SDI capital/liquidity engine reframe is Phase C/D.
  */
 const SDI_HIDDEN_SUBROUTES: readonly string[] = [
-  '/liquidity/buffer',
-  '/liquidity/nsfr',
-  '/basel/rwa',
-  '/basel/structure',
-  '/basel/stress',
-  '/basel/planning',
+  "/liquidity/buffer",
+  "/liquidity/nsfr",
+  "/basel/rwa",
+  "/basel/structure",
+  "/basel/stress",
+  "/basel/planning",
 ];
 
 const SDI_ONLY_SUBROUTES: readonly string[] = [
@@ -106,19 +106,19 @@ const SDI_ONLY_SUBROUTES: readonly string[] = [
  * institution_types registry (migration 202608190018 as amended by 202608210026).
  */
 export const CORE_MODULES: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
-  'command_center',
-  'risk',
-  'alerts',
-  'liquidity',
-  'capital',
+  "command_center",
+  "risk",
+  "alerts",
+  "liquidity",
+  "capital",
   // Credit joined every institution type's default set (credit PR-2,
   // migration 202609010046) — both classes lend, so it is core.
-  'credit',
-  'regulatory_reporting',
-  'data_engine',
-  'institution',
-  'reports',
-  'settings',
+  "credit",
+  "regulatory_reporting",
+  "data_engine",
+  "institution",
+  "reports",
+  "settings",
 ]);
 
 export type ModuleScope = {
@@ -129,6 +129,12 @@ export type ModuleScope = {
   modules: ReadonlySet<ModuleKey> | null;
   institutionClass: string | null;
   /**
+   * Server-evaluated access to the exact institution's Liquidity Monitoring
+   * detail surface. Omitted/false is deny so navigation never infers authority
+   * from a legacy role or the broader liquidity module entitlement.
+   */
+  liquidityMonitoringAccess?: boolean;
+  /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than
    * assume "everything" — the fix for the every-module-flashes-on-refresh race.
@@ -137,7 +143,9 @@ export type ModuleScope = {
 };
 
 /** Build a scope from the API `default_modules` list. Empty/absent → null. */
-export function moduleSetFrom(defaultModules: readonly string[] | null | undefined): ReadonlySet<ModuleKey> | null {
+export function moduleSetFrom(
+  defaultModules: readonly string[] | null | undefined,
+): ReadonlySet<ModuleKey> | null {
   if (!defaultModules || defaultModules.length === 0) return null;
   return new Set(defaultModules as ModuleKey[]);
 }
@@ -145,13 +153,26 @@ export function moduleSetFrom(defaultModules: readonly string[] | null | undefin
 function subrouteHidden(path: string, scope: ModuleScope): boolean {
   if (!scope.isResolved) {
     return [...SDI_HIDDEN_SUBROUTES, ...SDI_ONLY_SUBROUTES].some(
-      (route) => path === route || path.startsWith(`${route}/`)
+      (route) => path === route || path.startsWith(`${route}/`),
     );
   }
-  if (scope.institutionClass === 'sdi') {
-    return SDI_HIDDEN_SUBROUTES.some((r) => path === r || path.startsWith(`${r}/`));
+  if (scope.institutionClass === "sdi") {
+    return SDI_HIDDEN_SUBROUTES.some(
+      (r) => path === r || path.startsWith(`${r}/`),
+    );
   }
   return SDI_ONLY_SUBROUTES.some((r) => path === r || path.startsWith(`${r}/`));
+}
+
+function bindingControlledSubrouteHidden(
+  path: string,
+  scope: ModuleScope,
+): boolean {
+  return (
+    (path === "/liquidity/monitoring" ||
+      path.startsWith("/liquidity/monitoring/")) &&
+    scope.liquidityMonitoringAccess !== true
+  );
 }
 
 /**
@@ -165,9 +186,15 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   // A deep-link refresh must wait for scope resolution, never briefly 404.
   if (!scope.isResolved) return true;
   const moduleKey = moduleForPath(path);
-  if (moduleKey && scope.isResolved && scope.modules && !scope.modules.has(moduleKey)) {
+  if (
+    moduleKey &&
+    scope.isResolved &&
+    scope.modules &&
+    !scope.modules.has(moduleKey)
+  ) {
     return false;
   }
+  if (bindingControlledSubrouteHidden(path, scope)) return false;
   if (subrouteHidden(path, scope)) return false;
   return true;
 }
@@ -180,8 +207,10 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
  * deep links for an SDI (docs/sdi.md §6.3).
  */
 export function isHrefVisible(href: string, scope: ModuleScope): boolean {
-  if (scope.institutionClass === 'sdi' && /[?&]code=BSD/i.test(href)) return false;
+  if (scope.institutionClass === "sdi" && /[?&]code=BSD/i.test(href))
+    return false;
   const path = normalize(href);
+  if (bindingControlledSubrouteHidden(path, scope)) return false;
   // Hide class-specific subroutes until the class is known. In particular,
   // Capital is a core module but its Basel and SDI tabs are not interchangeable.
   if (subrouteHidden(path, scope)) return false;

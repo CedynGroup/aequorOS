@@ -11,8 +11,8 @@ from app.core.observability import (
     CONDITION_SOURCES,
     Condition,
     auth_anomaly,
+    authorization_binding_decision,
     authorization_denied,
-    authorization_shadow_decision,
     cross_tenant_attempt,
     emit,
     package_failed,
@@ -130,20 +130,18 @@ class TestHelpers:
         cross_tenant_attempt(reason="organization_not_visible", organization_id="OR-X")
         assert captured[0]["extra"]["severity"] == "error"
 
-    def test_authorization_shadow_decision_is_non_enforcing_parity_telemetry(
+    def test_authorization_binding_decision_records_the_enforcing_outcome(
         self, captured: list[dict[str, Any]]
     ) -> None:
-        authorization_shadow_decision(
-            binding_allowed=False,
-            legacy_allowed=True,
+        authorization_binding_decision(
+            allowed=False,
             reason="no_active_exact_binding",
             institution_id="BK-SAMP0001",
         )
         extra = captured[0]["extra"]
-        assert extra["condition"] == Condition.AUTHORIZATION_SHADOW_DECISION.value
+        assert extra["condition"] == Condition.AUTHORIZATION_BINDING_DECISION.value
         assert extra["severity"] == "info"
-        assert extra["binding_allowed"] is False
-        assert extra["legacy_allowed"] is True
+        assert extra["allowed"] is False
         assert extra["reason"] == "no_active_exact_binding"
 
     def test_auth_anomaly_uses_the_auth_condition(self, captured: list[dict[str, Any]]) -> None:
