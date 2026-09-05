@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.core.authorization import (
     BindingStatus,
     InstitutionScope,
@@ -128,6 +129,86 @@ def test_legacy_admin_role_is_not_new_policy_authority(db_session: Session) -> N
     assert not decision.allowed
     assert decision.reason == "no_active_exact_binding"
     assert decision.matching_binding_ids == ()
+
+
+def test_effective_authority_projects_only_exact_binding_dimensions(
+    db_session: Session,
+) -> None:
+    _banks(db_session)
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    db_session.add(_raw_binding(organization_id=ORG_1, institution_id=BANK_1))
+    db_session.commit()
+
+    projection = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=user.id,
+            roles=("admin",),
+            authorization_version=user.authorization_version,
+        ),
+        [
+            db_session.get(Bank, BANK_1),
+            db_session.get(Bank, BANK_1_SIBLING),
+        ],
+        failure_surface="test_effective_authority",
+    )
+
+    assert projection.authv == user.authorization_version
+    assert projection.organization_capabilities == []
+    by_bank = {
+        item.institution_id: item.capabilities
+        for item in projection.institution_capabilities
+    }
+    assert [
+        (cap.module, cap.sensitivity, cap.permission) for cap in by_bank[BANK_1]
+    ] == [(Module.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW)]
+    assert BANK_1_SIBLING not in by_bank
+
+
+def test_org_owner_projects_account_authority_without_institution_coverage(
+    db_session: Session,
+) -> None:
+    _banks(db_session)
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    db_session.add(
+        AuthorizationBinding(
+            organization_id=ORG_1,
+            principal_user_id=user.id,
+            principal_type=PrincipalType.HUMAN.value,
+            role_bundle=RoleBundle.ORG_OWNER.value,
+            institution_scope=InstitutionScope.ORGANIZATION.value,
+            institution_id=None,
+            module_scope=ModuleScope.ACCOUNT.value,
+            sensitivity_scope=SensitivityScope.RESTRICTED.value,
+            granted_by_type=authorization.GrantorType.SYSTEM.value,
+            granted_by_id="test-suite",
+            grant_reason="project owner account authority",
+            granted_at=utc_now(),
+            status=BindingStatus.ACTIVE.value,
+            valid_from=utc_now(),
+        )
+    )
+    db_session.commit()
+
+    projection = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=user.id,
+            authorization_version=user.authorization_version,
+        ),
+        [db_session.get(Bank, BANK_1)],
+        failure_surface="test_owner_projection",
+    )
+
+    assert [
+        (cap.module, cap.sensitivity, cap.permission)
+        for cap in projection.organization_capabilities
+    ] == [(Module.ACCOUNT, Sensitivity.RESTRICTED, Permission.ADMINISTER)]
+    assert projection.institution_capabilities == []
 
 
 def test_token_issuance_refreshes_authorization_version_after_owner_lock(

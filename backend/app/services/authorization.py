@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
@@ -23,12 +24,14 @@ from app.core.authorization import (
     ConditionCheck,
     GrantorType,
     InstitutionScope,
+    Module,
     ModuleScope,
     Permission,
     PrincipalLocator,
     PrincipalType,
     ResourceLocator,
     RoleBundle,
+    Sensitivity,
     SensitivityScope,
     principal_bundle_compatible,
 )
@@ -38,6 +41,11 @@ from app.core.authorization import (
 from app.core.observability import authorization_binding_decision
 from app.db.base import utc_now
 from app.models import AuthorizationBinding, Bank, OperatorUser, User
+from app.schemas.authorization import (
+    EffectiveAuthorityRead,
+    EffectiveCapabilityRead,
+    InstitutionCapabilitiesRead,
+)
 from app.services import authentication
 
 
@@ -57,6 +65,127 @@ class BindingScope:
     institution_id: str | None
     module_scope: ModuleScope
     sensitivity_scope: SensitivityScope
+
+
+_ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT)
+_INSTITUTION_MODULES = tuple(module for module in Module if module not in _ORGANIZATION_MODULES)
+
+
+class TenantPrincipalContext(Protocol):
+    organization_id: str
+    actor_user_id: UUID | None
+    authorization_version: int | None
+
+
+def principal_locator(ctx: TenantPrincipalContext) -> PrincipalLocator:
+    """Build the evaluator principal represented by an authenticated tenant context."""
+
+    organization_id = ctx.organization_id
+    principal_id = ctx.actor_user_id
+    if principal_id is None:
+        raise AuthorizationInvariantError("authenticated tenant identity has no principal")
+    authorization_version = ctx.authorization_version
+    principal_type = (
+        PrincipalType.HUMAN if authorization_version is not None else PrincipalType.MACHINE
+    )
+    return PrincipalLocator(organization_id, principal_id, principal_type)
+
+
+def _effective_capabilities(
+    principal: PrincipalLocator,
+    resource_scope: InstitutionScope,
+    institution_id: str | None,
+    modules: Sequence[Module],
+    bindings: Sequence[BindingGrant],
+) -> list[EffectiveCapabilityRead]:
+    capabilities: list[EffectiveCapabilityRead] = []
+    for module in modules:
+        for sensitivity in Sensitivity:
+            resource = ResourceLocator(
+                principal.organization_id,
+                resource_scope,
+                institution_id,
+                module,
+                sensitivity,
+            )
+            for permission in Permission:
+                if evaluate_grants(principal, permission, resource, bindings).allowed:
+                    capabilities.append(
+                        EffectiveCapabilityRead(
+                            module=module,
+                            sensitivity=sensitivity,
+                            permission=permission,
+                        )
+                    )
+    return capabilities
+
+
+def project_effective_authority(
+    db: Session,
+    ctx: TenantPrincipalContext,
+    institutions: Sequence[Bank],
+    *,
+    failure_surface: str,
+) -> EffectiveAuthorityRead:
+    """Project exact evaluator-derived capabilities without alternate authority sources."""
+
+    principal = principal_locator(ctx)
+    try:
+        principal_active, bindings = _load_principal_grants(db, principal)
+        user = db.scalar(
+            select(User).where(
+                User.id == principal.principal_id,
+                User.organization_id == principal.organization_id,
+            )
+        )
+        if user is None:
+            raise AuthorizationInvariantError("authenticated principal is not available")
+        effective_bindings: Sequence[BindingGrant] = bindings if principal_active else ()
+        organization_capabilities = _effective_capabilities(
+            principal,
+            InstitutionScope.ORGANIZATION,
+            None,
+            _ORGANIZATION_MODULES,
+            effective_bindings,
+        )
+        institution_capabilities = []
+        for institution in institutions:
+            if institution.organization_id != principal.organization_id:
+                continue
+            capabilities = _effective_capabilities(
+                principal,
+                InstitutionScope.INSTITUTION,
+                institution.id,
+                _INSTITUTION_MODULES,
+                effective_bindings,
+            )
+            if capabilities:
+                institution_capabilities.append(
+                    InstitutionCapabilitiesRead(
+                        institution_id=institution.id,
+                        capabilities=capabilities,
+                    )
+                )
+        return EffectiveAuthorityRead(
+            authv=user.authorization_version,
+            organization_capabilities=organization_capabilities,
+            institution_capabilities=institution_capabilities,
+        )
+    except Exception as exc:
+        record_binding_evaluation_failure(
+            principal,
+            Permission.VIEW,
+            ResourceLocator(
+                principal.organization_id,
+                InstitutionScope.ORGANIZATION,
+                None,
+                Module.ACCOUNT,
+                Sensitivity.CONFIDENTIAL,
+            ),
+            surface=failure_surface,
+            error=exc,
+        )
+        raise
 
 
 def _principal_type(user: User) -> PrincipalType:

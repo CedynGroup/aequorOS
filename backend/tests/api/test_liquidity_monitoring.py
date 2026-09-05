@@ -371,10 +371,8 @@ def test_bank_list_and_detail_expose_the_same_server_evaluated_access(
         headers=headers(roles=("viewer",)),
     )
     assert denied.status_code == 200
-    assert denied_detail.status_code == 200
-    denied_bank = next(row for row in denied.json()["banks"] if row["id"] == SAMPLE_BANK_ID)
-    assert denied_bank["liquidity_monitoring_access"] is False
-    assert denied_detail.json()["liquidity_monitoring_access"] is False
+    assert denied.json()["banks"] == []
+    assert denied_detail.status_code == 404
 
     _, version = _grant()
     allowed = db_client.get(
@@ -390,3 +388,31 @@ def test_bank_list_and_detail_expose_the_same_server_evaluated_access(
     allowed_bank = next(row for row in allowed.json()["banks"] if row["id"] == SAMPLE_BANK_ID)
     assert allowed_bank["liquidity_monitoring_access"] is True
     assert allowed_detail.json()["liquidity_monitoring_access"] is True
+
+
+def test_bank_capability_resolution_failure_returns_503_before_listing(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_liquidity_book()
+    records, sink_id = _capture_binding_records()
+
+    def fail_evaluation(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("evaluator unavailable")
+
+    monkeypatch.setattr(authorization, "_load_principal_grants", fail_evaluation)
+    try:
+        response = db_client.get(
+            "/api/v1/banks",
+            headers=headers(roles=("admin",)),
+        )
+    finally:
+        logger.remove(sink_id)
+
+    assert response.status_code == 503
+    decisions = _binding_extras(records)
+    assert len(decisions) == 1
+    assert decisions[0]["allowed"] is False
+    assert decisions[0]["reason"] == "binding_evaluation_failed"
+    assert decisions[0]["severity"] == "error"
+    assert decisions[0]["surface"] == "manage_banks_effective_authority"

@@ -138,6 +138,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   same transaction. Settings → Members aggregates tenant identities and complete
   grants; the sentence composer uses only scalar controls. SSO request approval uses
   that same atomic scoped-grant flow—verified identity alone still has no access.
+  **Effective dashboard authority** is projected by `/auth/me` from the same evaluator:
+  cache scopes include `authv`; `/banks` exposes only institutions with at least one
+  exact effective capability; bank detail/period/fact routes 404 without institution
+  coverage; shell navigation and deep links consume the projection, never token roles.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).

@@ -16,8 +16,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import Link from "next/link";
 import { Landmark } from "lucide-react";
+import { notFound, usePathname } from "next/navigation";
 import type {
   BankRead,
   BankReadInstitutionTypeDetail,
@@ -25,8 +25,14 @@ import type {
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
 import { useBanks, useReportingPeriods } from "@/lib/api/hooks";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { setActiveJurisdiction } from "@/lib/format";
-import { moduleSetFrom, type ModuleScope } from "@/lib/modules";
+import {
+  effectiveInstitutionModules,
+  effectiveOrganizationModules,
+  hasEffectiveCapability,
+  type ModuleScope,
+} from "@/lib/modules";
 import Logo from "./Logo";
 
 /**
@@ -87,8 +93,16 @@ export function useModuleScope(): ModuleScope {
 }
 
 export default function BankProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const profileQuery = useUserProfile();
   const banksQuery = useBanks();
   const bank = banksQuery.data?.banks[0] ?? null;
+  const authority = profileQuery.profile?.effectiveAuthority;
+  const institutionCapabilities =
+    authority?.institutionCapabilities.find(
+      (entry) => entry.institutionId === bank?.id,
+    )?.capabilities ?? [];
+  const organizationCapabilities = authority?.organizationCapabilities ?? [];
 
   // Bind the resolved jurisdiction (registry row on the bank payload) into the
   // formatter module BEFORE children render, so every fmtCurrency/regShort call
@@ -152,12 +166,30 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   // fire out-of-scope requests during the load (the every-module-on-refresh race).
   const moduleScope = useMemo<ModuleScope>(
     () => ({
-      modules: moduleSetFrom(bank?.institutionTypeDetail?.defaultModules),
+      modules: effectiveInstitutionModules(
+        bank?.institutionTypeDetail?.defaultModules,
+        institutionCapabilities,
+      ),
+      organizationModules: effectiveOrganizationModules(
+        organizationCapabilities,
+      ),
+      hasInstitutionAuthority: institutionCapabilities.length > 0,
       institutionClass: bank?.institutionTypeDetail?.institutionClass ?? null,
-      liquidityMonitoringAccess: bank?.liquidityMonitoringAccess ?? false,
-      isResolved: !banksQuery.isLoading,
+      liquidityMonitoringAccess: hasEffectiveCapability(
+        institutionCapabilities,
+        "liq",
+        "confidential",
+        "view",
+      ),
+      isResolved: !banksQuery.isLoading && !profileQuery.isLoading,
     }),
-    [bank, banksQuery.isLoading],
+    [
+      bank,
+      banksQuery.isLoading,
+      institutionCapabilities,
+      organizationCapabilities,
+      profileQuery.isLoading,
+    ],
   );
 
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
@@ -165,8 +197,15 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     periods.find((p) => p.id === selectedPeriodId) ?? periods[0] ?? null;
 
   const isLoading =
-    banksQuery.isLoading || (Boolean(bank) && periodsQuery.isLoading);
-  const isEmpty = !banksQuery.isLoading && !banksQuery.error && !bank;
+    banksQuery.isLoading ||
+    profileQuery.isLoading ||
+    (Boolean(bank) && periodsQuery.isLoading);
+  const isEmpty =
+    !banksQuery.isLoading &&
+    !profileQuery.isLoading &&
+    !banksQuery.error &&
+    !profileQuery.error &&
+    !bank;
 
   const value = useMemo<BankContextValue>(
     () => ({
@@ -182,19 +221,23 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     [bank, institutionType, moduleScope, period, periods, isLoading, isEmpty],
   );
 
-  if (banksQuery.error) {
+  if (banksQuery.error || profileQuery.error) {
     return (
       <FullScreenPanel
         title="Risk service unreachable"
         description={
-          isApiError(banksQuery.error)
-            ? banksQuery.error.message
-            : "Could not load banks from the risk service."
+          isApiError(banksQuery.error ?? profileQuery.error)
+            ? (banksQuery.error ?? profileQuery.error)?.message ??
+              "Effective authority is temporarily unavailable."
+            : "Could not resolve effective authority from the risk service."
         }
         action={
           <button
             type="button"
-            onClick={() => banksQuery.refetch()}
+            onClick={() => {
+              void banksQuery.refetch();
+              void profileQuery.refetch();
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
           >
             Retry
@@ -205,31 +248,24 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   }
 
   if (isEmpty) {
-    return <NoBanksPanel />;
+    if ((authority?.organizationCapabilities.length ?? 0) === 0) {
+      if (pathname !== "/") notFound();
+      return <NoAuthorizedInstitutionsPanel />;
+    }
   }
 
   return <BankContext.Provider value={value}>{children}</BankContext.Provider>;
 }
 
-function NoBanksPanel() {
-  // No seeding path in the product: every data point flows through the Data
-  // Engine (uploads, core-banking adapters, API push). A bank is provisioned by
-  // its first ingestion.
+function NoAuthorizedInstitutionsPanel() {
   return (
     <FullScreenPanel
-      title="No banks provisioned"
-      description="This organization has no banks yet. Connect a data source in the Data Engine — the bank is created by its first ingestion (Excel/CSV upload, core-banking connection, or API push)."
-      action={
-        <Link
-          href="/data-engine"
-          className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary"
-        >
-          Open the Data Engine
-        </Link>
-      }
+      title="No authorized institutions"
+      description="Your account is active, but it has no effective institution capabilities. Ask an organization owner to assign one complete scoped grant."
     />
   );
 }
+
 
 function FullScreenPanel({
   title,

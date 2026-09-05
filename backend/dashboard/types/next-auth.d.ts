@@ -8,12 +8,14 @@ declare module 'next-auth' {
     user: {
       organizationId?: string;
       roles?: string[];
+      authorizationVersion?: number;
     } & DefaultSession['user'];
   }
 
   interface User {
     organizationId?: string;
     roles?: string[];
+    authorizationVersion?: number;
     accessToken?: string;
     refreshToken?: string;
   }
@@ -27,6 +29,7 @@ declare module 'next-auth/jwt' {
     accessTokenExpires?: number;
     organizationId?: string;
     roles?: string[];
+    authorizationVersion?: number;
     /** Set when a silent token refresh failed — the UI should force re-login. */
     error?: 'RefreshTokenError';
   }

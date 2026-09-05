@@ -29,7 +29,7 @@ import {
 
 const BANK_ID = 'BK-SAMP0001';
 const PERIOD_ID = 'period-latest';
-const scope = queryAuthorityScope('OR-DEM00001', 'analyst@aequoros.example', ['analyst']);
+const scope = queryAuthorityScope('OR-DEM00001', 'analyst@aequoros.example', 7);
 
 /** See queryAuthorityBoundary.test.tsx: these wait for CONVERGENCE, not speed. */
 const CONVERGENCE_TIMEOUT_MS = Number(
@@ -75,10 +75,12 @@ async function main(): Promise<void> {
   assert.equal(currentLiquidity.at(-2), 'current');
   assert.equal(selectedLiquidity.at(-1), PERIOD_ID);
 
-  const otherTenant = queryAuthorityScope('OR-OTHER001', 'analyst@aequoros.example', ['analyst']);
-  const otherAuthority = queryAuthorityScope(scope.tenantId, 'examiner@aequoros.example', [
-    'examiner',
-  ]);
+  const otherTenant = queryAuthorityScope('OR-OTHER001', 'analyst@aequoros.example', 7);
+  const otherAuthority = queryAuthorityScope(
+    scope.tenantId,
+    'analyst@aequoros.example',
+    8,
+  );
   const tenantKey = dashboardQueryKey('liq-dashboard', otherTenant, BANK_ID, dashboardSemantic());
   const authorityKey = dashboardQueryKey(
     'liq-dashboard',

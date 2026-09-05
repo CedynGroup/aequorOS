@@ -49,22 +49,35 @@ export function useResolvedQueryAuthorityScope(): QueryAuthorityScope | null {
       ? `operator:${inspection.operator}`
       : null
     : session?.user?.email;
-  const roles = inspection.impersonating ? ['examiner'] : session?.user?.roles;
-  const rolesKey = [...(roles ?? [])].sort().join(',');
+  const authorizationVersion = inspection.impersonating
+    ? 0
+    : session?.user?.authorizationVersion;
   const verified = inspection.impersonating
     ? !inspection.expired && Boolean(inspection.token && organizationId && email)
     : status === 'authenticated' &&
-      Boolean(session?.accessToken && !session.error && organizationId && email);
+      Boolean(
+        session?.accessToken &&
+          !session.error &&
+          organizationId &&
+          email &&
+          authorizationVersion,
+      );
   return useMemo(
     () =>
       inspectionResolved && verified
         ? queryAuthorityScope(
             organizationId,
             email,
-            rolesKey ? rolesKey.split(',') : [],
+            authorizationVersion,
           )
         : null,
-    [email, inspectionResolved, organizationId, rolesKey, verified],
+    [
+      authorizationVersion,
+      email,
+      inspectionResolved,
+      organizationId,
+      verified,
+    ],
   );
 }
 

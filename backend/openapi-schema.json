@@ -12524,6 +12524,57 @@
         "title": "EclSuggestionRead",
         "type": "object"
       },
+      "EffectiveAuthorityRead": {
+        "additionalProperties": false,
+        "properties": {
+          "authv": {
+            "title": "Authv",
+            "type": "integer"
+          },
+          "institution_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/InstitutionCapabilitiesRead"
+            },
+            "title": "Institution Capabilities",
+            "type": "array"
+          },
+          "organization_capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/EffectiveCapabilityRead"
+            },
+            "title": "Organization Capabilities",
+            "type": "array"
+          }
+        },
+        "required": [
+          "authv",
+          "organization_capabilities",
+          "institution_capabilities"
+        ],
+        "title": "EffectiveAuthorityRead",
+        "type": "object"
+      },
+      "EffectiveCapabilityRead": {
+        "additionalProperties": false,
+        "properties": {
+          "module": {
+            "$ref": "#/components/schemas/Module"
+          },
+          "permission": {
+            "$ref": "#/components/schemas/Permission"
+          },
+          "sensitivity": {
+            "$ref": "#/components/schemas/Sensitivity"
+          }
+        },
+        "required": [
+          "module",
+          "sensitivity",
+          "permission"
+        ],
+        "title": "EffectiveCapabilityRead",
+        "type": "object"
+      },
       "EmailFallbackAttachmentRead": {
         "additionalProperties": false,
         "properties": {
@@ -20257,6 +20308,28 @@
         "title": "IngestionUploadRead",
         "type": "object"
       },
+      "InstitutionCapabilitiesRead": {
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/EffectiveCapabilityRead"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "institution_id": {
+            "title": "Institution Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "institution_id",
+          "capabilities"
+        ],
+        "title": "InstitutionCapabilitiesRead",
+        "type": "object"
+      },
       "InstitutionProfileFullRead": {
         "additionalProperties": false,
         "description": "The full corporate register for one bank \u2014 the ORASS master-data mirror.",
@@ -25571,6 +25644,9 @@
             ],
             "title": "Display Name"
           },
+          "effective_authority": {
+            "$ref": "#/components/schemas/EffectiveAuthorityRead"
+          },
           "email": {
             "title": "Email",
             "type": "string"
@@ -25648,7 +25724,8 @@
           "timezone",
           "theme",
           "role",
-          "auth_provider"
+          "auth_provider",
+          "effective_authority"
         ],
         "title": "MeResponse",
         "type": "object"
@@ -25808,6 +25885,26 @@
           "leverage",
           "paid_up"
         ],
+        "type": "string"
+      },
+      "Module": {
+        "description": "Concrete modules that a resource locator may carry.",
+        "enum": [
+          "liq",
+          "cap",
+          "irrbb",
+          "fx",
+          "ftp",
+          "fcst",
+          "beh",
+          "data",
+          "reg",
+          "risk",
+          "markets",
+          "account",
+          "audit"
+        ],
+        "title": "Module",
         "type": "string"
       },
       "ModuleReadinessRead": {
@@ -27376,6 +27473,26 @@
         ],
         "title": "PdEstimateRead",
         "type": "object"
+      },
+      "Permission": {
+        "description": "The set of actions that permission checks can allow or deny.",
+        "enum": [
+          "view",
+          "create",
+          "edit",
+          "run",
+          "review",
+          "approve",
+          "configure",
+          "export",
+          "validate",
+          "sign_off",
+          "submit",
+          "administer",
+          "ingest"
+        ],
+        "title": "Permission",
+        "type": "string"
       },
       "Pillar2AddOn": {
         "additionalProperties": false,
@@ -34963,6 +35080,17 @@
         ],
         "title": "SendBackForCorrectionsRequest",
         "type": "object"
+      },
+      "Sensitivity": {
+        "description": "Concrete data classifications carried by a resource.",
+        "enum": [
+          "published",
+          "aggregated",
+          "confidential",
+          "restricted"
+        ],
+        "title": "Sensitivity",
+        "type": "string"
       },
       "SensitivityScope": {
         "description": "Which data sensitivity levels a binding covers; ``ALL`` means every level.",

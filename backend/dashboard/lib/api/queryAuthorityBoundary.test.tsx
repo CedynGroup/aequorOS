@@ -443,7 +443,7 @@ async function main(): Promise<void> {
   assert.equal(authorityMounts, 1, 'inspection authority must resolve exactly once');
   assert.deepEqual(resolvedAuthority, {
     tenantId: impersonationClaims.org,
-    authorityId: `operator:${impersonationClaims.act_operator}|examiner`,
+    authorityId: `operator:${impersonationClaims.act_operator}|authv:0`,
   });
   assert.equal(initialCounts.get('liq-dashboard'), 1);
   assert.equal(initialCounts.get('cap-dashboard'), 1);
@@ -707,7 +707,7 @@ async function main(): Promise<void> {
       <QueryAuthorityBoundary
         scope={{
           tenantId: impersonationClaims.org,
-          authorityId: `operator:${impersonationClaims.act_operator}|examiner`,
+          authorityId: `operator:${impersonationClaims.act_operator}|authv:0`,
         }}
       >
         <FreshnessStrip

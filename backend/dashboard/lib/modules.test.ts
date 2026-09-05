@@ -14,6 +14,8 @@ const resolved = (liquidityMonitoringAccess: boolean): ModuleScope => ({
     "reports",
     "settings",
   ]),
+  organizationModules: new Set(["settings"]),
+  hasInstitutionAuthority: true,
   institutionClass: "bank",
   liquidityMonitoringAccess,
   isResolved: true,
@@ -31,8 +33,24 @@ const allowed = resolved(true);
 assert.equal(isHrefVisible("/liquidity/monitoring", allowed), true);
 assert.equal(isPathVisible("/liquidity/monitoring", allowed), true);
 
+const ownerOnly: ModuleScope = {
+  modules: new Set(),
+  organizationModules: new Set(["settings"]),
+  hasInstitutionAuthority: false,
+  institutionClass: null,
+  liquidityMonitoringAccess: false,
+  isResolved: true,
+};
+assert.equal(isHrefVisible("/settings", ownerOnly), true);
+assert.equal(isPathVisible("/settings/members", ownerOnly), true);
+assert.equal(isHrefVisible("/", ownerOnly), false);
+assert.equal(isHrefVisible("/liquidity", ownerOnly), false);
+assert.equal(isPathVisible("/liquidity", ownerOnly), false);
+
 const unresolved: ModuleScope = {
   modules: null,
+  organizationModules: new Set(),
+  hasInstitutionAuthority: false,
   institutionClass: null,
   liquidityMonitoringAccess: false,
   isResolved: false,

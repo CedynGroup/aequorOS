@@ -8,6 +8,18 @@ test.describe("unbound Liquidity Monitoring user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
 
   test("hides navigation and 404s the deep link", async ({ page }) => {
+    const productRequests: string[] = [];
+    page.on("request", (request) => {
+      if (/\/banks\/[^/]+\/(live-summary|freshness|liquidity)/.test(request.url())) {
+        productRequests.push(request.url());
+      }
+    });
+    await page.goto("/");
+    await expect(
+      page.getByText("No authorized institutions", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+
     await page.goto("/liquidity");
     await expect(
       page.getByRole("link", { name: "Monitoring Tools" }),
@@ -15,6 +27,7 @@ test.describe("unbound Liquidity Monitoring user", () => {
 
     await page.goto("/liquidity/monitoring");
     await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    expect(productRequests).toEqual([]);
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "liquidity-monitoring-unbound.png"),

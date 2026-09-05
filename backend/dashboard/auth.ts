@@ -91,6 +91,8 @@ async function refreshAccessToken(token: import('next-auth/jwt').JWT) {
     name: claims.name ? String(claims.name) : token.name,
     email: claims.email ? String(claims.email) : token.email,
     roles: (claims.roles as string[]) ?? token.roles,
+    authorizationVersion:
+      typeof claims.authv === 'number' ? claims.authv : token.authorizationVersion,
     organizationId: claims.org ? String(claims.org) : token.organizationId,
     error: undefined,
   };
@@ -219,6 +221,7 @@ const baseConfig = {
         token.accessTokenExpires = accessTokenExpiryMs(user.accessToken as string);
         token.organizationId = user.organizationId as string;
         token.roles = user.roles as string[];
+        token.authorizationVersion = user.authorizationVersion as number;
         token.name = (user.name as string | undefined) ?? token.name;
         token.email = (user.email as string | undefined) ?? token.email;
         return token;
@@ -234,6 +237,8 @@ const baseConfig = {
         token.accessTokenExpires = accessTokenExpiryMs(tokens.access_token);
         token.organizationId = String(claims.org);
         token.roles = (claims.roles as string[]) ?? [];
+        token.authorizationVersion =
+          typeof claims.authv === 'number' ? claims.authv : undefined;
         token.sub = String(claims.sub);
         token.name = claims.name ? String(claims.name) : token.name;
         token.email = claims.email ? String(claims.email) : token.email;
@@ -257,6 +262,9 @@ const baseConfig = {
         session.user.email = (token.email as string | undefined) ?? session.user.email;
         session.user.organizationId = token.organizationId as string | undefined;
         session.user.roles = (token.roles as string[]) ?? [];
+        session.user.authorizationVersion = token.authorizationVersion as
+          | number
+          | undefined;
       }
       return session;
     },
@@ -279,6 +287,8 @@ const credentialsProvider = Credentials({
       name: claims.name ? String(claims.name) : undefined,
       organizationId: String(claims.org),
       roles: (claims.roles as string[]) ?? [],
+      authorizationVersion:
+        typeof claims.authv === 'number' ? claims.authv : undefined,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
     };

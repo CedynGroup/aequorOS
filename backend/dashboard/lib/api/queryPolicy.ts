@@ -4,8 +4,8 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query';
  * Identity dimensions that make a browser cache safe to reuse.
  *
  * `tenantId` prevents cross-organization reuse. `authorityId` includes the
- * signed-in actor and their roles so a role change (or an examiner hand-off)
- * cannot inherit data fetched under a different authorization decision.
+ * signed-in actor and the backend authorization generation, so a binding change
+ * cannot inherit product or capability data fetched under an older decision.
  */
 export type QueryAuthorityScope = Readonly<{
   tenantId: string;
@@ -28,12 +28,11 @@ export const LIVE_SIGNAL_POLL_MS = 20_000;
 export function queryAuthorityScope(
   tenantId: string | null | undefined,
   email: string | null | undefined,
-  roles: readonly string[] | null | undefined
+  authorizationVersion: number | null | undefined,
 ): QueryAuthorityScope {
-  const normalizedRoles = [...(roles ?? [])].sort().join(',');
   return {
     tenantId: tenantId ?? 'tenant:pending',
-    authorityId: `${email?.trim().toLowerCase() || 'actor:pending'}|${normalizedRoles || 'roles:pending'}`,
+    authorityId: `${email?.trim().toLowerCase() || 'actor:pending'}|authv:${authorizationVersion ?? 'pending'}`,
   };
 }
 
@@ -181,9 +180,8 @@ function invalidateMatchingScopedPrefixes(
       key[1] === scope.tenantId &&
       key[2] === scope.authorityId &&
       key[3] === (bankId ?? null);
-    // During the incremental key migration, non-home reads still use
-    // [prefix, bankId, …]. The QueryClient itself is authority-scoped,
-    // so matching that bank-local legacy shape cannot cross a boundary.
+    // Transitional bank-local keys remain safe because the QueryClient itself
+    // is remounted for every tenant, actor, and authorization generation.
     const bankLocalLegacy = Boolean(bankId) && key[1] === bankId;
     return scoped || bankLocalLegacy;
   };

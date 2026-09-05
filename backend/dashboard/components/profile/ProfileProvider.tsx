@@ -46,8 +46,13 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
       'me',
       session?.user?.organizationId ?? null,
       session?.user?.email ?? null,
+      session?.user?.authorizationVersion ?? null,
     ],
-    [session?.user?.email, session?.user?.organizationId],
+    [
+      session?.user?.authorizationVersion,
+      session?.user?.email,
+      session?.user?.organizationId,
+    ],
   );
   const profileQuery = useQuery({
     queryKey: profileQueryKey,

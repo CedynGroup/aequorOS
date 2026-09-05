@@ -12,7 +12,7 @@ import QueryAuthorityBoundary from '@/lib/api/QueryAuthorityBoundary';
 import { queryAuthorityScope } from '@/lib/api/queryPolicy';
 import { useResolvedQueryAuthorityScope } from '@/lib/api/useQueryScope';
 
-const PUBLIC_QUERY_SCOPE = queryAuthorityScope('public', 'anonymous', []);
+const PUBLIC_QUERY_SCOPE = queryAuthorityScope('public', 'anonymous', 0);
 
 /** Keeps the API client's bearer token in sync with the NextAuth session. */
 function TokenSync() {
