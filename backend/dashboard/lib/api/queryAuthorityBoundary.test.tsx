@@ -394,6 +394,11 @@ async function main(): Promise<void> {
     return null;
   }
 
+  function PersonalSelfServiceHookHarness() {
+    hooks.useBanks(false);
+    return null;
+  }
+
   function ResolvedInspectionBoundary() {
     const scope = useResolvedQueryAuthorityScope();
     return (
@@ -698,6 +703,22 @@ async function main(): Promise<void> {
   assert.ok((counts.get('cap-dashboard') ?? 0) > idleCapitalCount);
 
   await act(async () => renderer!.unmount());
+
+  const bankRequestsBeforePersonalSelfService = counts.get('banks');
+  let personalSelfServiceRenderer: ReturnType<typeof create>;
+  await act(async () => {
+    personalSelfServiceRenderer = create(
+      <QueryAuthorityBoundary scope={resolvedAuthority!} fallback={<span>loading</span>}>
+        <PersonalSelfServiceHookHarness />
+      </QueryAuthorityBoundary>,
+    );
+  });
+  assert.equal(
+    counts.get('banks'),
+    bankRequestsBeforePersonalSelfService,
+    'personal self-service must not mount institution discovery',
+  );
+  await act(async () => personalSelfServiceRenderer!.unmount());
 
   const reportsPeriodId = 'period-reports';
   const beforeReportsFreshness = counts.get(`freshness:${reportsPeriodId}`) ?? 0;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   hasEffectiveCapability,
   isHrefVisible,
+  isPersonalSettingsPath,
   isPathVisible,
   type ModuleScope,
 } from "./modules";
@@ -80,6 +81,10 @@ assert.equal(isHrefVisible("/settings/members", operationalOnly), false);
 assert.equal(isPathVisible("/settings/members", operationalOnly), false);
 assert.equal(isHrefVisible("/settings/authentication", operationalOnly), false);
 assert.equal(isPathVisible("/settings/authentication", operationalOnly), false);
+assert.equal(isPersonalSettingsPath("/settings/profile"), true);
+assert.equal(isPersonalSettingsPath("/settings/profile/preferences"), true);
+assert.equal(isPersonalSettingsPath("/settings"), false);
+assert.equal(isPersonalSettingsPath("/settings/members"), false);
 
 const unresolved: ModuleScope = {
   modules: null,

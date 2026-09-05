@@ -31,6 +31,7 @@ import {
   effectiveInstitutionModules,
   effectiveOrganizationModules,
   hasEffectiveCapability,
+  isPersonalSettingsPath,
   type ModuleScope,
 } from "@/lib/modules";
 import Logo from "./Logo";
@@ -94,8 +95,9 @@ export function useModuleScope(): ModuleScope {
 
 export default function BankProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const isPersonalSelfService = isPersonalSettingsPath(pathname);
   const profileQuery = useUserProfile();
-  const banksQuery = useBanks();
+  const banksQuery = useBanks(!isPersonalSelfService);
   const bank = banksQuery.data?.banks[0] ?? null;
   const authority = profileQuery.effectiveAuthority;
   const institutionCapabilities =
@@ -249,7 +251,12 @@ export default function BankProvider({ children }: { children: ReactNode }) {
 
   if (isEmpty) {
     if ((authority?.organizationCapabilities.length ?? 0) === 0) {
-      if (pathname !== "/") notFound();
+      if (pathname !== "/" && !isPersonalSelfService) notFound();
+      if (isPersonalSelfService) {
+        return (
+          <BankContext.Provider value={value}>{children}</BankContext.Provider>
+        );
+      }
       return <NoAuthorizedInstitutionsPanel />;
     }
   }

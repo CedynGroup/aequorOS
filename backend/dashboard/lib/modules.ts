@@ -244,7 +244,7 @@ function bindingControlledSubrouteHidden(
 
 const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings"]);
 
-function isPersonalSettingsPath(path: string): boolean {
+export function isPersonalSettingsPath(path: string): boolean {
   return path === "/settings/profile" || path.startsWith("/settings/profile/");
 }
 
