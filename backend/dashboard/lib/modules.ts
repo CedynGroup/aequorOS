@@ -244,6 +244,10 @@ function bindingControlledSubrouteHidden(
 
 const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings"]);
 
+function isPersonalSettingsPath(path: string): boolean {
+  return path === "/settings/profile" || path.startsWith("/settings/profile/");
+}
+
 /**
  * Is a route path visible under this scope? Used by the ROUTE GUARD, which 404s a
  * hidden path — so it stays permissive until the scope resolves (no 404 flash on
@@ -254,6 +258,7 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   const path = normalize(pathname);
   // A deep-link refresh must wait for scope resolution, never briefly 404.
   if (!scope.isResolved) return true;
+  if (isPersonalSettingsPath(path)) return true;
   const moduleKey = moduleForPath(path);
   if (
     moduleKey &&
@@ -291,6 +296,7 @@ export function isHrefVisible(href: string, scope: ModuleScope): boolean {
   // Hide class-specific subroutes until the class is known. In particular,
   // Capital is a core module but its Basel and SDI tabs are not interchangeable.
   if (subrouteHidden(path, scope)) return false;
+  if (isPersonalSettingsPath(path)) return true;
   const moduleKey = moduleForPath(path);
   if (moduleKey) {
     if (ORGANIZATION_ROUTES.has(moduleKey)) {

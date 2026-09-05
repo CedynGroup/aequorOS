@@ -68,6 +68,19 @@ assert.equal(isHrefVisible("/", ownerOnly), false);
 assert.equal(isHrefVisible("/liquidity", ownerOnly), false);
 assert.equal(isPathVisible("/liquidity", ownerOnly), false);
 
+const operationalOnly: ModuleScope = {
+  ...resolved(true),
+  organizationModules: new Set(),
+};
+assert.equal(isHrefVisible("/settings/profile", operationalOnly), true);
+assert.equal(isPathVisible("/settings/profile", operationalOnly), true);
+assert.equal(isHrefVisible("/settings", operationalOnly), false);
+assert.equal(isPathVisible("/settings", operationalOnly), false);
+assert.equal(isHrefVisible("/settings/members", operationalOnly), false);
+assert.equal(isPathVisible("/settings/members", operationalOnly), false);
+assert.equal(isHrefVisible("/settings/authentication", operationalOnly), false);
+assert.equal(isPathVisible("/settings/authentication", operationalOnly), false);
+
 const unresolved: ModuleScope = {
   modules: null,
   organizationModules: new Set(),
