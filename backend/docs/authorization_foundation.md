@@ -1,11 +1,12 @@
-# Authorization foundation (as built through 2026-09-04)
+# Authorization foundation (as built through 2026-09-05)
 
 This document records the first bounded server-side slice of `docs/rbac.md`.
 The policy kernel remains additive. Liquidity Monitoring is the first product
-route enforced by it; the authorization-version check and Org Owner
-grant-administration boundary are also enforcing. Tenant grant
-create/list/revoke and the Members aggregation are live, while every other
-product route remains on its existing hierarchy until its separate rollout.
+route enforced by it; the authorization-version check, effective-authority
+projection, institution-discovery boundary, and Org Owner grant-administration
+boundary are also enforcing. Tenant grant create/list/revoke and the Members
+aggregation are live, while every other product route keeps its existing data
+permission check until its separate rollout.
 
 ## Authority model
 
@@ -103,14 +104,15 @@ The shared evaluator:
 2. evaluates each binding independently for principal, tenant, lifecycle,
    permission bundle, institution, module, and sensitivity;
 3. unions only bindings whose complete tuple matches; and
-4. applies every supplied runtime condition as a global veto.
+4. applies every applicable runtime condition as a global veto.
 
 The returned `AuthorizationDecision` includes a per-binding trace, matching
 binding IDs, typed condition results, and `to_audit_dict()` for a future
-immutable `audit_events` envelope. Condition hooks are reserved for demo-mode,
-maker/checker, step-up, and approval-limit policies. Those conditions remain
-owned by their workflows and cannot be bypassed by adding another allow
-binding. The filing workflow is not changed by this slice.
+immutable `audit_events` envelope. The shared condition authority contributes
+request-wide state available at the projection boundary (currently demo mode)
+to every evaluated tuple. Maker/checker, step-up, digest, routed-recipient, and
+approval-limit checks remain owned by their workflows and cannot be bypassed by
+adding another allow binding. The filing workflow is not changed by this slice.
 
 The persistence boundary performs two fail-closed checks before evaluating any
 binding: the principal must still be an active tenant member of the declared
@@ -119,6 +121,43 @@ These return explained denials (`principal_not_active`,
 `resource_tenant_mismatch`, or `resource_institution_not_in_tenant`) with no
 misleading matching-binding trace rather than allowing a matching row to
 outlive its identity or resource.
+
+## Effective-authority projection and institution coverage
+
+`GET /auth/me` includes `effective_authority`; the same projection is available
+alone from `GET /auth/effective-authority`. It contains the current `authv`,
+organization capabilities, and capabilities grouped by exact institution. Each
+capability is produced by evaluating one complete active binding against one
+exact module, sensitivity, permission, and resource target. Scalar roles, token
+roles, tenant membership, and partial matches across rows do not contribute.
+
+Request-wide vetoes available at projection time are evaluated before a
+capability is returned. A capability whose final decision needs unavailable
+object or transaction context is structural eligibility only and carries
+`requires_contextual_authorization=true`; it is not execution authority. The
+concrete operation must evaluate its maker/checker, step-up, digest, recipient,
+limit, and other workflow context before any side effect.
+
+`GET /banks` returns only institutions with at least one projected capability.
+Bank detail, reporting-period, and fact routes apply the same coverage decision
+and return `404` for an uncovered institution. This is an addressability and
+discovery boundary only: except for Liquidity Monitoring, it does not replace a
+product route's existing data authorization. Projection failures return `503`
+and emit denial/error telemetry rather than falling back to legacy authority.
+
+The dashboard shell, command palette, module tabs, route guard, and query policy
+consume this server projection. Capability and product caches are partitioned by
+tenant, actor, `authv`, and institution. An active zero-binding user sees no
+institutions or product navigation, while personal profile self-service remains
+available; organization settings require organization-wide Account
+administration. Context-dependent capabilities may support structural
+navigation, but actions and deep links never treat them as final authorization.
+
+Verified operator examiner impersonation remains explicit staff-plane read
+authority rather than a tenant binding. Its server projection grants only
+institution `view` capabilities, applies the same request-wide vetoes, and is
+shared by profile bootstrap and bank list/detail/period/fact coverage. It grants
+no tenant mutation capability and never advertises Liquidity Monitoring access.
 
 ## Liquidity Monitoring enforcement (as built 2026-09-04)
 
@@ -140,11 +179,12 @@ advance `authv`, so the next request after a grant change must use a freshly
 issued session and observes the new authority.
 
 Operator impersonation and integration-key credentials keep their separate
-lifecycles and do not satisfy this human-binding gate. The dashboard consumes
-the server-computed `liquidity_monitoring_access` boolean on the tenant-filtered
-bank list/detail payload. It hides the Monitoring Tools tab, in-page links, and
-deep route when access is absent, without inferring authority from the session
-role.
+lifecycles and do not satisfy this human-binding gate. The dashboard derives
+Liquidity Monitoring visibility from the non-contextual LIQ/confidential/view
+capability in the server projection; the bank list/detail compatibility boolean
+is computed from that same capability. It hides the Monitoring Tools tab,
+in-page links, and deep route when access is absent, without inferring authority
+from the session role.
 
 The pre-cutover shadow evidence had three outcomes:
 
