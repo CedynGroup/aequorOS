@@ -141,7 +141,8 @@ def _liquidity_monitoring_access(
     capabilities: list[EffectiveCapabilityRead],
 ) -> bool:
     return any(
-        capability.module is Module.LIQUIDITY
+        not capability.requires_contextual_authorization
+        and capability.module is Module.LIQUIDITY
         and capability.sensitivity is Sensitivity.CONFIDENTIAL
         and capability.permission is Permission.VIEW
         for capability in capabilities

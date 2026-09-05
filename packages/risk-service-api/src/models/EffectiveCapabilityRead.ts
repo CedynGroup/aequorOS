@@ -53,6 +53,12 @@ export interface EffectiveCapabilityRead {
   permission: Permission;
   /**
    *
+   * @type {boolean}
+   * @memberof EffectiveCapabilityRead
+   */
+  requiresContextualAuthorization: boolean;
+  /**
+   *
    * @type {Sensitivity}
    * @memberof EffectiveCapabilityRead
    */
@@ -67,6 +73,11 @@ export function instanceOfEffectiveCapabilityRead(
 ): value is EffectiveCapabilityRead {
   if (!("module" in value) || value["module"] === undefined) return false;
   if (!("permission" in value) || value["permission"] === undefined)
+    return false;
+  if (
+    !("requiresContextualAuthorization" in value) ||
+    value["requiresContextualAuthorization"] === undefined
+  )
     return false;
   if (!("sensitivity" in value) || value["sensitivity"] === undefined)
     return false;
@@ -90,6 +101,7 @@ export function EffectiveCapabilityReadFromJSONTyped(
     ...json,
     module: ModuleFromJSON(json["module"]),
     permission: PermissionFromJSON(json["permission"]),
+    requiresContextualAuthorization: json["requires_contextual_authorization"],
     sensitivity: SensitivityFromJSON(json["sensitivity"]),
   };
 }
@@ -111,6 +123,7 @@ export function EffectiveCapabilityReadToJSONTyped(
   return {
     module: ModuleToJSON(value["module"]),
     permission: PermissionToJSON(value["permission"]),
+    requires_contextual_authorization: value["requiresContextualAuthorization"],
     sensitivity: SensitivityToJSON(value["sensitivity"]),
   };
 }

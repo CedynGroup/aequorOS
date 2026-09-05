@@ -140,8 +140,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   that same atomic scoped-grant flow—verified identity alone still has no access.
   **Effective dashboard authority** is projected by `/auth/me` from the same evaluator:
   cache scopes include `authv`; `/banks` exposes only institutions with at least one
-  exact effective capability; bank detail/period/fact routes 404 without institution
-  coverage; shell navigation and deep links consume the projection, never token roles.
+  exact structurally eligible capability; capabilities whose final decision needs object
+  or transaction context carry `requires_contextual_authorization` and are never execution
+  authority; bank detail/period/fact routes 404 without institution coverage; shell
+  navigation and deep links consume the projection, never token roles.
   Account-plane SSO and access-request API enforcement remains on its temporary legacy
   compatibility gate; enforcement-matrix PR #12 owns that scoped-authority cutover.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through

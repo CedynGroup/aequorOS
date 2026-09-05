@@ -41,6 +41,7 @@ class EffectiveCapabilityRead(ClosedModel):
     module: Module
     sensitivity: Sensitivity
     permission: Permission
+    requires_contextual_authorization: bool
 
 
 class InstitutionCapabilitiesRead(ClosedModel):

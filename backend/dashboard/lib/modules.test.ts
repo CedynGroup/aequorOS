@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { isHrefVisible, isPathVisible, type ModuleScope } from "./modules";
+import {
+  hasEffectiveCapability,
+  isHrefVisible,
+  isPathVisible,
+  type ModuleScope,
+} from "./modules";
 
 const resolved = (liquidityMonitoringAccess: boolean): ModuleScope => ({
   modules: new Set([
@@ -32,6 +37,22 @@ assert.equal(isHrefVisible("/basel", denied), true);
 const allowed = resolved(true);
 assert.equal(isHrefVisible("/liquidity/monitoring", allowed), true);
 assert.equal(isPathVisible("/liquidity/monitoring", allowed), true);
+assert.equal(
+  hasEffectiveCapability(
+    [
+      {
+        module: "liq",
+        sensitivity: "confidential",
+        permission: "approve",
+        requiresContextualAuthorization: true,
+      },
+    ],
+    "liq",
+    "confidential",
+    "approve",
+  ),
+  false,
+);
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),

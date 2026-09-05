@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import (
     BindingStatus,
-    ConditionCheck,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -206,7 +205,10 @@ def test_production_projection_omits_contextual_approval_without_hiding_views(
     capabilities = me.json()["effective_authority"]["institution_capabilities"][0][
         "capabilities"
     ]
-    assert {capability["permission"] for capability in capabilities} == {"view", "review"}
+    assert {
+        capability["permission"]: capability["requires_contextual_authorization"]
+        for capability in capabilities
+    } == {"view": False, "review": False, "approve": True}
     assert banks.status_code == 200, banks.text
     assert [bank["id"] for bank in banks.json()["banks"]] == [SAMPLE_BANK_ID]
 
@@ -225,10 +227,10 @@ def test_profile_projection_failure_rolls_back_before_side_effects(
     finally:
         session.close()
 
-    def fail_conditions(*_args: object) -> tuple[ConditionCheck, ...]:
-        raise RuntimeError("condition authority unavailable")
+    def fail_projection(*_args: object) -> None:
+        raise RuntimeError("capability projection unavailable")
 
-    monkeypatch.setattr(authorization, "runtime_condition_checks", fail_conditions)
+    monkeypatch.setattr(authorization, "_load_principal_grants", fail_projection)
     response = db_client.patch(
         "/api/v1/auth/me",
         headers=headers(),

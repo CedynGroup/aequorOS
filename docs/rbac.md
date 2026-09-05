@@ -524,9 +524,11 @@ describe the remaining generalized frontend rollout.
   Never rely on hiding alone — the backend is the boundary; the UI just avoids
   dead ends.
 - **Session state:** do not make token `roles[]`, `perms`, or `scopes` an
-  authority source. Expose an effective, display-only capability summary from a
-  server-evaluated `/auth/me` contract when endpoint rollout begins. A version
-  change invalidates the app session through `authv` (§8.1).
+  authority source. The server-evaluated `/auth/me` contract distinguishes final
+  capabilities from structural eligibility that still requires contextual authorization.
+  Navigation may use eligibility; actions and deep links must never treat a contextual
+  marker as execution authority. A version change invalidates the app session through
+  `authv` (§8.1).
 
 ### 8.3 Default landing per role
 

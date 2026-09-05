@@ -210,6 +210,7 @@ export function hasEffectiveCapability(
 ): boolean {
   return capabilities.some(
     (capability) =>
+      !capability.requiresContextualAuthorization &&
       capability.module === module &&
       capability.sensitivity === sensitivity &&
       capability.permission === permission,

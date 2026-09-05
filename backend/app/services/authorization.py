@@ -138,13 +138,15 @@ def _effective_capabilities(
                     permission,
                     resource,
                     bindings,
-                    conditions=runtime_condition_checks(permission, resource),
                 ).allowed:
                     capabilities.append(
                         EffectiveCapabilityRead(
                             module=module,
                             sensitivity=sensitivity,
                             permission=permission,
+                            requires_contextual_authorization=bool(
+                                _REQUIRED_RUNTIME_CONDITIONS.get(permission)
+                            ),
                         )
                     )
     return capabilities

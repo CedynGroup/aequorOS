@@ -164,8 +164,14 @@ def test_effective_authority_projects_only_exact_binding_dimensions(
         for item in projection.institution_capabilities
     }
     assert [
-        (cap.module, cap.sensitivity, cap.permission) for cap in by_bank[BANK_1]
-    ] == [(Module.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW)]
+        (
+            cap.module,
+            cap.sensitivity,
+            cap.permission,
+            cap.requires_contextual_authorization,
+        )
+        for cap in by_bank[BANK_1]
+    ] == [(Module.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW, False)]
     assert BANK_1_SIBLING not in by_bank
 
 
@@ -220,9 +226,13 @@ def test_effective_authority_applies_contextual_runtime_requirements(
 
     assert projection.organization_capabilities == []
     capabilities = projection.institution_capabilities[0].capabilities
-    assert [capability.permission for capability in capabilities] == [
-        Permission.VIEW,
-        Permission.REVIEW,
+    assert [
+        (capability.permission, capability.requires_contextual_authorization)
+        for capability in capabilities
+    ] == [
+        (Permission.VIEW, False),
+        (Permission.REVIEW, False),
+        (Permission.APPROVE, True),
     ]
     assert view.allowed
     assert not approval_without_context.allowed
