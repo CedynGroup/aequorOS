@@ -129,7 +129,6 @@ def _effective_authority(
             ctx,
             institutions,
             failure_surface="manage_banks_effective_authority",
-            conditions=(),
         )
     except Exception as exc:
         raise HTTPException(

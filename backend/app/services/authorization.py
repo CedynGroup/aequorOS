@@ -91,6 +91,13 @@ def principal_locator(ctx: TenantPrincipalContext) -> PrincipalLocator:
     return PrincipalLocator(organization_id, principal_id, principal_type)
 
 
+def runtime_global_condition_checks(
+    _db: Session,
+    _principal: PrincipalLocator,
+) -> tuple[ConditionCheck, ...]:
+    return ()
+
+
 def _effective_capabilities(
     principal: PrincipalLocator,
     resource_scope: InstitutionScope,
@@ -133,12 +140,12 @@ def project_effective_authority(
     institutions: Sequence[Bank],
     *,
     failure_surface: str,
-    conditions: Sequence[ConditionCheck],
 ) -> EffectiveAuthorityRead:
     """Project exact evaluator-derived capabilities without alternate authority sources."""
 
     principal = principal_locator(ctx)
     try:
+        conditions = runtime_global_condition_checks(db, principal)
         principal_active, bindings = _load_principal_grants(db, principal)
         user = db.scalar(
             select(User).where(

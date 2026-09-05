@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import (
     BindingStatus,
+    ConditionCheck,
+    ConditionKind,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -189,6 +191,34 @@ def test_no_binding_defaults_to_denial_without_legacy_role_fallback(
     assert decisions[0]["allowed"] is False
     assert decisions[0]["reason"] == "no_active_exact_binding"
     assert decisions[0]["binding_trace"] == ""
+
+
+def test_runtime_global_veto_suppresses_production_capability_projections(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_liquidity_book()
+    _, version = _grant()
+    monkeypatch.setattr(
+        authorization,
+        "runtime_global_condition_checks",
+        lambda _db, _principal: (
+            ConditionCheck(
+                kind=ConditionKind.DEMO_MODE,
+                passed=False,
+                reason="operation unavailable in demo mode",
+            ),
+        ),
+    )
+    request_headers = headers(authorization_version=version)
+
+    me = db_client.get("/api/v1/auth/me", headers=request_headers)
+    banks = db_client.get("/api/v1/banks", headers=request_headers)
+
+    assert me.status_code == 200, me.text
+    assert me.json()["effective_authority"]["institution_capabilities"] == []
+    assert banks.status_code == 200, banks.text
+    assert banks.json()["banks"] == []
 
 
 @pytest.mark.parametrize(
