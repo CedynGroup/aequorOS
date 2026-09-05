@@ -20,6 +20,7 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.config import get_settings
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
@@ -195,21 +196,16 @@ def test_no_binding_defaults_to_denial_without_legacy_role_fallback(
 
 def test_runtime_global_veto_suppresses_production_capability_projections(
     db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed_liquidity_book()
     _, version = _grant()
     request_headers = headers(authorization_version=version)
-    with authorization.runtime_global_conditions(
-        (
-            ConditionCheck(
-                kind=ConditionKind.DEMO_MODE,
-                passed=False,
-                reason="operation unavailable in demo mode",
-            ),
-        )
-    ):
-        me = db_client.get("/api/v1/auth/me", headers=request_headers)
-        banks = db_client.get("/api/v1/banks", headers=request_headers)
+    monkeypatch.setenv("AUTHORIZATION_GLOBAL_VETOES", ConditionKind.DEMO_MODE.value)
+    get_settings.cache_clear()
+
+    me = db_client.get("/api/v1/auth/me", headers=request_headers)
+    banks = db_client.get("/api/v1/banks", headers=request_headers)
 
     assert me.status_code == 200, me.text
     assert me.json()["effective_authority"]["institution_capabilities"] == []

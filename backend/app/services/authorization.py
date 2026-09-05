@@ -8,9 +8,7 @@ transaction, which also revokes all their refresh tokens.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
-from contextvars import ContextVar
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Protocol
@@ -37,6 +35,7 @@ from app.core.authorization import (
     SensitivityScope,
     principal_bundle_compatible,
 )
+from app.core.config import get_settings
 from app.core.authorization import (
     evaluate_permission as evaluate_grants,
 )
@@ -71,9 +70,6 @@ class BindingScope:
 
 _ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT)
 _INSTITUTION_MODULES = tuple(module for module in Module if module not in _ORGANIZATION_MODULES)
-_RUNTIME_GLOBAL_CONDITIONS: ContextVar[tuple[ConditionCheck, ...]] = ContextVar(
-    "authorization_runtime_global_conditions", default=()
-)
 
 
 class TenantPrincipalContext(Protocol):
@@ -100,19 +96,14 @@ def runtime_global_condition_checks(
     _db: Session,
     _principal: PrincipalLocator,
 ) -> tuple[ConditionCheck, ...]:
-    return _RUNTIME_GLOBAL_CONDITIONS.get()
-
-
-@contextmanager
-def runtime_global_conditions(conditions: Sequence[ConditionCheck]) -> Iterator[None]:
-    resolved = tuple(conditions)
-    if not all(isinstance(condition, ConditionCheck) for condition in resolved):
-        raise AuthorizationInvariantError("runtime authorization conditions are invalid")
-    token = _RUNTIME_GLOBAL_CONDITIONS.set(resolved)
-    try:
-        yield
-    finally:
-        _RUNTIME_GLOBAL_CONDITIONS.reset(token)
+    return tuple(
+        ConditionCheck(
+            kind=kind,
+            passed=False,
+            reason=f"deployment runtime veto is active: {kind.value}",
+        )
+        for kind in get_settings().auth.authorization_global_vetoes
+    )
 
 
 def _conditions_for_evaluation(

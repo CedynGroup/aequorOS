@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import (
     BindingStatus,
-    ConditionCheck,
     ConditionKind,
     InstitutionScope,
     Module,
@@ -27,6 +26,7 @@ from app.core.authorization import (
     Sensitivity,
     SensitivityScope,
 )
+from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import AuthorizationBinding, Bank, RefreshToken, User
 from app.services import authentication, authorization
@@ -171,43 +171,37 @@ def test_effective_authority_projects_only_exact_binding_dimensions(
 
 def test_effective_authority_applies_runtime_global_vetoes(
     db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _banks(db_session)
     user = db_session.get(User, USER_1)
     assert user is not None
     db_session.add(_raw_binding(organization_id=ORG_1, institution_id=BANK_1))
     db_session.commit()
-    with authorization.runtime_global_conditions(
-        (
-            ConditionCheck(
-                kind=ConditionKind.DEMO_MODE,
-                passed=False,
-                reason="operation unavailable in demo mode",
-            ),
-        )
-    ):
-        projection = authorization.project_effective_authority(
-            db_session,
-            TenantContext(
-                organization_id=ORG_1,
-                actor_user_id=user.id,
-                authorization_version=user.authorization_version,
-            ),
-            [db_session.get(Bank, BANK_1)],
-            failure_surface="test_effective_authority_condition_veto",
-        )
-        enforcement = authorization.evaluate_permission(
-            db_session,
-            PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
-            Permission.VIEW,
-            ResourceLocator(
-                ORG_1,
-                InstitutionScope.INSTITUTION,
-                BANK_1,
-                Module.LIQUIDITY,
-                Sensitivity.CONFIDENTIAL,
-            ),
-        )
+    monkeypatch.setenv("AUTHORIZATION_GLOBAL_VETOES", ConditionKind.DEMO_MODE.value)
+    get_settings.cache_clear()
+    projection = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=user.id,
+            authorization_version=user.authorization_version,
+        ),
+        [db_session.get(Bank, BANK_1)],
+        failure_surface="test_effective_authority_condition_veto",
+    )
+    enforcement = authorization.evaluate_permission(
+        db_session,
+        PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
+        Permission.VIEW,
+        ResourceLocator(
+            ORG_1,
+            InstitutionScope.INSTITUTION,
+            BANK_1,
+            Module.LIQUIDITY,
+            Sensitivity.CONFIDENTIAL,
+        ),
+    )
 
     assert projection.organization_capabilities == []
     assert projection.institution_capabilities == []
