@@ -24,6 +24,7 @@ import { useBanks } from "@/lib/api/hooks";
 import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
 import { avatarColor, initialsFrom } from "@/lib/api/identity";
 import { fmtRelative } from "@/lib/api/values";
+import { ORGANIZATION_MEMBERS_QUERY_KEY } from "@/lib/api/grantAdministration";
 import {
   canAddGrantToMember,
   MODULE_OPTIONS,
@@ -33,7 +34,7 @@ import {
   type GrantDraft,
 } from "@/lib/api/grants";
 
-const MEMBERS_KEY = ["settings", "organization-members"];
+const MEMBERS_KEY = ORGANIZATION_MEMBERS_QUERY_KEY;
 const REQUESTS_KEY = ["settings", "sso-access-requests"];
 
 function memberName(member: MemberRead): string {

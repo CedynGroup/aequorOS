@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Regulatory Reporting → Settings: signing policies
@@ -13,7 +13,7 @@
  *
  * Two behaviours are deliberate rather than incidental:
  *
- * - **Admin-only**, gated the same way Settings → Authentication is: this is the
+ * - **Org Owner-only**: this is the
  *   control that decides whether a filed return is properly attested.
  * - **Reason-required, versioned by effective date.** Saving does not edit a
  *   policy in place; it end-dates the identically scoped one and inserts a new
@@ -21,29 +21,38 @@
  *   rules that were actually in force at its reporting date.
  */
 
-import { useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { Loader2, Save, ShieldCheck } from 'lucide-react';
+import { useState } from "react";
+import { Loader2, Save, ShieldCheck } from "lucide-react";
 import type {
   PolicyRead,
   SignatureSlotRead,
   SigningRole,
-} from '@aequoros/risk-service-api';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { SkeletonCard } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
-import { FAMILY_LABELS } from '@/components/submissions/shared';
-import { useReturnTemplates, useSigningPolicies, useUpsertSigningPolicy } from '@/lib/api/hooks';
-import { fmtDateUTC, fmtTimestamp, isoDate } from '@/lib/api/values';
-import { SIGNING_ROLE_LABELS, roleNoun } from './shared';
+} from "@aequoros/risk-service-api";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
+import { FAMILY_LABELS } from "@/components/submissions/shared";
+import {
+  useReturnTemplates,
+  useSigningPolicies,
+  useUpsertSigningPolicy,
+} from "@/lib/api/hooks";
+import { useGrantAdministrationAccess } from "@/lib/api/grantAdministration";
+import { fmtDateUTC, fmtTimestamp, isoDate } from "@/lib/api/values";
+import { SIGNING_ROLE_LABELS, roleNoun } from "./shared";
 
-const ROLE_OPTIONS: SigningRole[] = ['preparer', 'approver', 'board', 'witness'];
-const BASIS_OPTIONS = ['solo', 'consolidated'] as const;
+const ROLE_OPTIONS: SigningRole[] = [
+  "preparer",
+  "approver",
+  "board",
+  "witness",
+];
+const BASIS_OPTIONS = ["solo", "consolidated"] as const;
 
 /** Sentinel for "not scoped to this dimension" — the API takes null. */
-const ANY = '';
+const ANY = "";
 
 interface SlotDraft {
   role: SigningRole;
@@ -75,25 +84,24 @@ function emptyForm(): FormState {
     returnFamily: ANY,
     basis: ANY,
     slots: [
-      { role: 'preparer', minCount: '1', officerTitles: '' },
-      { role: 'approver', minCount: '1', officerTitles: '' },
+      { role: "preparer", minCount: "1", officerTitles: "" },
+      { role: "approver", minCount: "1", officerTitles: "" },
     ],
-    requiredAttachments: '',
+    requiredAttachments: "",
     requireSignature: true,
     requireSignedPdf: false,
     distinctSigners: true,
     effectiveFrom: isoDate(new Date()),
-    effectiveTo: '',
-    reason: '',
+    effectiveTo: "",
+    reason: "",
   };
 }
 
 export default function SigningPolicyPanel() {
-  const { data: session } = useSession();
-  const isAdmin = (session?.user?.roles ?? []).includes('admin');
-  // Non-admins see nothing rather than a disabled form: the API refuses the
+  const canAdministerGrants = useGrantAdministrationAccess();
+  // Non-owners see nothing rather than a disabled form: the API refuses the
   // write anyway, and a dead control invites support tickets.
-  if (!isAdmin) return null;
+  if (!canAdministerGrants) return null;
   return <SigningPolicyPanelInner />;
 }
 
@@ -118,7 +126,9 @@ function SigningPolicyPanelInner() {
     setNotice(null);
     setForm((prev) => ({
       ...prev,
-      slots: prev.slots.map((slot, i) => (i === index ? { ...slot, ...patch } : slot)),
+      slots: prev.slots.map((slot, i) =>
+        i === index ? { ...slot, ...patch } : slot,
+      ),
     }));
   };
 
@@ -131,7 +141,7 @@ function SigningPolicyPanelInner() {
       role: slot.role,
       minCount: Math.max(Number.parseInt(slot.minCount, 10) || 1, 1),
       officerTitles: slot.officerTitles
-        .split(',')
+        .split(",")
         .map((title) => title.trim())
         .filter(Boolean),
     }));
@@ -142,10 +152,12 @@ function SigningPolicyPanelInner() {
         returnCode: form.returnCode === ANY ? null : form.returnCode,
         returnFamily: form.returnFamily === ANY ? null : form.returnFamily,
         basis:
-          form.basis === ANY ? null : (form.basis as (typeof BASIS_OPTIONS)[number]),
+          form.basis === ANY
+            ? null
+            : (form.basis as (typeof BASIS_OPTIONS)[number]),
         requiredSignatures,
         requiredAttachments: form.requiredAttachments
-          .split(',')
+          .split(",")
           .map((item) => item.trim())
           .filter(Boolean),
         requireSignature: form.requireSignature,
@@ -159,16 +171,16 @@ function SigningPolicyPanelInner() {
         onSuccess: () => {
           setForm(emptyForm());
           setNotice(
-            'Saved. The identically scoped open policy was end-dated; returns already filed keep the policy that was in force at their reporting date.'
+            "Saved. The identically scoped open policy was end-dated; returns already filed keep the policy that was in force at their reporting date.",
           );
         },
-      }
+      },
     );
   };
 
   const inputClass =
-    'w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light';
-  const labelClass = 'block text-caption font-medium text-navy mb-1.5';
+    "w-full rounded border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light";
+  const labelClass = "block text-caption font-medium text-navy mb-1.5";
 
   return (
     <div className="space-y-6">
@@ -194,10 +206,10 @@ function SigningPolicyPanelInner() {
             No policies configured. Every return therefore falls back to the
             platform default — one preparer plus one approver, distinct signers,
             role-only (no officer titles enforced), and no signed PDF required.
-            The daily returns family ships exempt from signing entirely, because a
-            two-person ceremony every weekday morning is operationally infeasible
-            and imposing one on an assumption would cause missed statutory
-            deadlines or shared credentials.
+            The daily returns family ships exempt from signing entirely, because
+            a two-person ceremony every weekday morning is operationally
+            infeasible and imposing one on an assumption would cause missed
+            statutory deadlines or shared credentials.
           </p>
         ) : (
           <ul>
@@ -214,15 +226,17 @@ function SigningPolicyPanelInner() {
         actions={
           <button
             type="button"
-            disabled={upsert.isPending || scopeMissing || reasonMissing || slotsMissing}
+            disabled={
+              upsert.isPending || scopeMissing || reasonMissing || slotsMissing
+            }
             onClick={handleSave}
             title={
               scopeMissing
-                ? 'Scope the policy to a return code or a return family.'
+                ? "Scope the policy to a return code or a return family."
                 : reasonMissing
-                  ? 'A reason is required.'
+                  ? "A reason is required."
                   : slotsMissing
-                    ? 'Add at least one required signature.'
+                    ? "Add at least one required signature."
                     : undefined
             }
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
@@ -245,7 +259,7 @@ function SigningPolicyPanelInner() {
               <select
                 id="policy-return-code"
                 value={form.returnCode}
-                onChange={(event) => set('returnCode', event.target.value)}
+                onChange={(event) => set("returnCode", event.target.value)}
                 className={inputClass}
               >
                 <option value={ANY}>Any (scope by family instead)</option>
@@ -263,7 +277,7 @@ function SigningPolicyPanelInner() {
               <select
                 id="policy-return-family"
                 value={form.returnFamily}
-                onChange={(event) => set('returnFamily', event.target.value)}
+                onChange={(event) => set("returnFamily", event.target.value)}
                 className={inputClass}
               >
                 <option value={ANY}>Any (scope by return code instead)</option>
@@ -281,13 +295,13 @@ function SigningPolicyPanelInner() {
               <select
                 id="policy-basis"
                 value={form.basis}
-                onChange={(event) => set('basis', event.target.value)}
+                onChange={(event) => set("basis", event.target.value)}
                 className={inputClass}
               >
                 <option value={ANY}>Any basis</option>
                 {BASIS_OPTIONS.map((value) => (
                   <option key={value} value={value}>
-                    {value === 'solo' ? 'Solo' : 'Consolidated'}
+                    {value === "solo" ? "Solo" : "Consolidated"}
                   </option>
                 ))}
               </select>
@@ -301,13 +315,13 @@ function SigningPolicyPanelInner() {
               >
                 <ScopeToggle
                   selected={form.scopeBank}
-                  label={bank ? `This bank (${bank.id})` : 'This bank'}
-                  onSelect={() => set('scopeBank', true)}
+                  label={bank ? `This bank (${bank.id})` : "This bank"}
+                  onSelect={() => set("scopeBank", true)}
                 />
                 <ScopeToggle
                   selected={!form.scopeBank}
                   label="All banks in the organization"
-                  onSelect={() => set('scopeBank', false)}
+                  onSelect={() => set("scopeBank", false)}
                 />
               </div>
             </div>
@@ -315,8 +329,8 @@ function SigningPolicyPanelInner() {
 
           {scopeMissing && (
             <p className="text-caption text-warning">
-              A policy must scope to a return code or a return family — otherwise
-              there is nothing for the resolver to match.
+              A policy must scope to a return code or a return family —
+              otherwise there is nothing for the resolver to match.
             </p>
           )}
 
@@ -329,9 +343,9 @@ function SigningPolicyPanelInner() {
               <button
                 type="button"
                 onClick={() =>
-                  set('slots', [
+                  set("slots", [
                     ...form.slots,
-                    { role: 'approver', minCount: '1', officerTitles: '' },
+                    { role: "approver", minCount: "1", officerTitles: "" },
                   ])
                 }
                 className="inline-flex items-center px-2.5 py-1 text-micro font-medium text-navy border border-border rounded hover:bg-surface"
@@ -353,7 +367,9 @@ function SigningPolicyPanelInner() {
                       aria-label={`Role for slot ${index + 1}`}
                       value={slot.role}
                       onChange={(event) =>
-                        setSlot(index, { role: event.target.value as SigningRole })
+                        setSlot(index, {
+                          role: event.target.value as SigningRole,
+                        })
                       }
                       className="w-full rounded border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
                     >
@@ -398,8 +414,8 @@ function SigningPolicyPanelInner() {
                     type="button"
                     onClick={() =>
                       set(
-                        'slots',
-                        form.slots.filter((_, i) => i !== index)
+                        "slots",
+                        form.slots.filter((_, i) => i !== index),
                       )
                     }
                     className="inline-flex items-center px-2.5 py-1.5 text-micro font-medium text-critical border border-critical/30 rounded hover:bg-critical-light/40"
@@ -411,9 +427,10 @@ function SigningPolicyPanelInner() {
             </ul>
             <p className="mt-1.5 text-micro text-slate leading-relaxed">
               Officer titles are matched against the signer&apos;s recorded job
-              title, so &quot;the CFO must sign&quot; becomes enforceable rather than
-              aspirational. Leave blank until the requirement is confirmed with the
-              regulator — enforcing a guessed title would block a legitimate signer.
+              title, so &quot;the CFO must sign&quot; becomes enforceable rather
+              than aspirational. Leave blank until the requirement is confirmed
+              with the regulator — enforcing a guessed title would block a
+              legitimate signer.
             </p>
           </div>
 
@@ -421,19 +438,19 @@ function SigningPolicyPanelInner() {
           <div className="space-y-2">
             <Toggle
               checked={form.requireSignature}
-              onChange={(value) => set('requireSignature', value)}
+              onChange={(value) => set("requireSignature", value)}
               label="A signature is required for returns in this scope"
               hint="Turn off to exempt a family entirely — used for the daily return, whose signing requirement is unconfirmed with the regulator."
             />
             <Toggle
               checked={form.requireSignedPdf}
-              onChange={(value) => set('requireSignedPdf', value)}
+              onChange={(value) => set("requireSignedPdf", value)}
               label="A cryptographically signed PDF artifact is required"
               hint="Unconfirmed with the regulator; ships off. Turning it on makes PDF signature validity and tamper analysis part of verification."
             />
             <Toggle
               checked={form.distinctSigners}
-              onChange={(value) => set('distinctSigners', value)}
+              onChange={(value) => set("distinctSigners", value)}
               label="Every required signature must come from a different person"
               hint="Segregation of duties. Off only where a scope genuinely has one eligible officer."
             />
@@ -448,20 +465,22 @@ function SigningPolicyPanelInner() {
                 id="policy-effective-from"
                 type="date"
                 value={form.effectiveFrom}
-                onChange={(event) => set('effectiveFrom', event.target.value)}
+                onChange={(event) => set("effectiveFrom", event.target.value)}
                 className={`${inputClass} tnum`}
               />
             </div>
             <div>
               <label className={labelClass} htmlFor="policy-effective-to">
-                Effective to{' '}
-                <span className="font-normal text-slate">(blank = open-ended)</span>
+                Effective to{" "}
+                <span className="font-normal text-slate">
+                  (blank = open-ended)
+                </span>
               </label>
               <input
                 id="policy-effective-to"
                 type="date"
                 value={form.effectiveTo}
-                onChange={(event) => set('effectiveTo', event.target.value)}
+                onChange={(event) => set("effectiveTo", event.target.value)}
                 className={`${inputClass} tnum`}
               />
             </div>
@@ -474,7 +493,9 @@ function SigningPolicyPanelInner() {
                 type="text"
                 placeholder="board_resolution, senior_management_report"
                 value={form.requiredAttachments}
-                onChange={(event) => set('requiredAttachments', event.target.value)}
+                onChange={(event) =>
+                  set("requiredAttachments", event.target.value)
+                }
                 className={inputClass}
               />
             </div>
@@ -488,20 +509,26 @@ function SigningPolicyPanelInner() {
               id="policy-reason"
               rows={2}
               value={form.reason}
-              onChange={(event) => set('reason', event.target.value)}
+              onChange={(event) => set("reason", event.target.value)}
               placeholder="e.g. Board resolution of 12 Jul 2026: the CFO signs BSD5A and the Head of Finance signs BSD2."
               className={inputClass}
             />
           </div>
 
           {notice && (
-            <p role="status" className="text-caption text-success leading-relaxed">
+            <p
+              role="status"
+              className="text-caption text-success leading-relaxed"
+            >
               <ShieldCheck size={12} className="inline mr-1" aria-hidden />
               {notice}
             </p>
           )}
           {upsert.error && (
-            <ErrorPanel error={upsert.error} title="Could not save the policy" />
+            <ErrorPanel
+              error={upsert.error}
+              title="Could not save the policy"
+            />
           )}
         </div>
       </SectionCard>
@@ -526,8 +553,8 @@ function ScopeToggle({
       onClick={onSelect}
       className={`px-3 py-2 rounded text-caption font-medium border transition-colors ${
         selected
-          ? 'border-action/30 bg-action-light text-action'
-          : 'border-border text-slate hover:text-navy'
+          ? "border-action/30 bg-action-light text-action"
+          : "border-border text-slate hover:text-navy"
       }`}
     >
       {label}
@@ -556,7 +583,9 @@ function Toggle({
       />
       <span className="text-body text-navy">
         {label}
-        <span className="block text-caption text-slate leading-relaxed">{hint}</span>
+        <span className="block text-caption text-slate leading-relaxed">
+          {hint}
+        </span>
       </span>
     </label>
   );
@@ -565,10 +594,13 @@ function Toggle({
 /** One configured policy, with its scope, slots, flags, and effective window. */
 function PolicyRow({ policy }: { policy: PolicyRead }) {
   const scope = [
-    policy.bankId ?? 'All banks',
-    policy.returnCode ?? (policy.returnFamily ? FAMILY_LABELS[policy.returnFamily] ?? policy.returnFamily : 'Any return'),
-    policy.basis ?? 'any basis',
-  ].join(' · ');
+    policy.bankId ?? "All banks",
+    policy.returnCode ??
+      (policy.returnFamily
+        ? (FAMILY_LABELS[policy.returnFamily] ?? policy.returnFamily)
+        : "Any return"),
+    policy.basis ?? "any basis",
+  ].join(" · ");
 
   return (
     <li className="px-5 py-3.5 border-b border-border-light last:border-b-0 space-y-1.5">
@@ -578,7 +610,9 @@ function PolicyRow({ policy }: { policy: PolicyRead }) {
           {!policy.requireSignature && (
             <StatusPill tone="slate">Signature not required</StatusPill>
           )}
-          {policy.requireSignedPdf && <StatusPill tone="amber">Signed PDF</StatusPill>}
+          {policy.requireSignedPdf && (
+            <StatusPill tone="amber">Signed PDF</StatusPill>
+          )}
           {!policy.distinctSigners && (
             <StatusPill tone="amber">Distinct signers off</StatusPill>
           )}
@@ -592,28 +626,28 @@ function PolicyRow({ policy }: { policy: PolicyRead }) {
 
       <p className="text-caption text-navy/85">
         {policy.requiredSignatures.length === 0
-          ? 'No slots — the platform default applies.'
+          ? "No slots — the platform default applies."
           : policy.requiredSignatures
               .map(
                 (slot) =>
                   `${roleNoun(slot.role)} ×${slot.minCount}` +
                   (slot.officerTitles.length > 0
-                    ? ` (${slot.officerTitles.join(' or ')})`
-                    : '')
+                    ? ` (${slot.officerTitles.join(" or ")})`
+                    : ""),
               )
-              .join(' + ')}
+              .join(" + ")}
       </p>
 
       {policy.requiredAttachments.length > 0 && (
         <p className="text-caption text-navy/85">
-          Attachments: {policy.requiredAttachments.join(', ')}
+          Attachments: {policy.requiredAttachments.join(", ")}
         </p>
       )}
 
       <p className="font-mono text-micro text-slate tnum">
-        {fmtDateUTC(policy.effectiveFrom)} →{' '}
-        {policy.effectiveTo ? fmtDateUTC(new Date(policy.effectiveTo)) : 'open'} ·
-        updated {fmtTimestamp(policy.updatedAt)}
+        {fmtDateUTC(policy.effectiveFrom)} →{" "}
+        {policy.effectiveTo ? fmtDateUTC(new Date(policy.effectiveTo)) : "open"}{" "}
+        · updated {fmtTimestamp(policy.updatedAt)}
       </p>
       <p className="text-caption text-slate leading-relaxed">
         Reason: {policy.reason}

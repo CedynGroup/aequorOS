@@ -19,10 +19,11 @@ import StatusPill from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
 import { hasAccountAdministrationRole } from "@/lib/api/accountAdministration";
+import { ORGANIZATION_MEMBERS_QUERY_KEY } from "@/lib/api/grantAdministration";
 
 const QUERY_KEY = ["settings", "sso-connection"];
 const REQUESTS_KEY = ["settings", "sso-access-requests"];
-const MEMBERS_KEY = ["settings", "organization-members"];
+const MEMBERS_KEY = ORGANIZATION_MEMBERS_QUERY_KEY;
 
 interface FormState {
   issuer: string;

@@ -40687,7 +40687,7 @@
         ]
       },
       "put": {
-        "description": "Author the reusable placement template for a return (optionally per bank).\n\nAdmin-only and reason-required, matching the signing-policy endpoints: this is\nthe default every future filing of that return inherits.",
+        "description": "Author the reusable placement template for a return (optionally per bank).\n\nOrg Owner-only and reason-required, matching the signing-policy endpoints\nand scoped grant administration: this is the default every future filing of\nthat return inherits.",
         "operationId": "upsertSignaturePlacementTemplate",
         "requestBody": {
           "content": {
@@ -40955,7 +40955,7 @@
         ]
       },
       "put": {
-        "description": "Configure who must sign which return.\n\nAdmin-only and reason-required: this is the control that decides whether a\nfiled return is properly attested, so changing it is itself an audited act.",
+        "description": "Configure who must sign which return.\n\nOrg Owner-only and reason-required: this is the control that decides whether\na filed return is properly attested, so changing it is itself an audited\nact, administered on the same binding as scoped grant administration.",
         "operationId": "upsertSigningPolicy",
         "requestBody": {
           "content": {

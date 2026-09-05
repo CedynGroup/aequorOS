@@ -1189,7 +1189,7 @@ export class AttestationApi extends runtime.BaseAPI {
   }
 
   /**
-   * Author the reusable placement template for a return (optionally per bank).  Admin-only and reason-required, matching the signing-policy endpoints: this is the default every future filing of that return inherits.
+   * Author the reusable placement template for a return (optionally per bank).  Org Owner-only and reason-required, matching the signing-policy endpoints and scoped grant administration: this is the default every future filing of that return inherits.
    * Upsert Signature Placement Template
    */
   async upsertSignaturePlacementTemplateRaw(
@@ -1236,7 +1236,7 @@ export class AttestationApi extends runtime.BaseAPI {
   }
 
   /**
-   * Author the reusable placement template for a return (optionally per bank).  Admin-only and reason-required, matching the signing-policy endpoints: this is the default every future filing of that return inherits.
+   * Author the reusable placement template for a return (optionally per bank).  Org Owner-only and reason-required, matching the signing-policy endpoints and scoped grant administration: this is the default every future filing of that return inherits.
    * Upsert Signature Placement Template
    */
   async upsertSignaturePlacementTemplate(
@@ -1251,7 +1251,7 @@ export class AttestationApi extends runtime.BaseAPI {
   }
 
   /**
-   * Configure who must sign which return.  Admin-only and reason-required: this is the control that decides whether a filed return is properly attested, so changing it is itself an audited act.
+   * Configure who must sign which return.  Org Owner-only and reason-required: this is the control that decides whether a filed return is properly attested, so changing it is itself an audited act, administered on the same binding as scoped grant administration.
    * Upsert Signing Policy
    */
   async upsertSigningPolicyRaw(
@@ -1298,7 +1298,7 @@ export class AttestationApi extends runtime.BaseAPI {
   }
 
   /**
-   * Configure who must sign which return.  Admin-only and reason-required: this is the control that decides whether a filed return is properly attested, so changing it is itself an audited act.
+   * Configure who must sign which return.  Org Owner-only and reason-required: this is the control that decides whether a filed return is properly attested, so changing it is itself an audited act, administered on the same binding as scoped grant administration.
    * Upsert Signing Policy
    */
   async upsertSigningPolicy(

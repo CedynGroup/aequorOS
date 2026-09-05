@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * TanStack Query hooks over the generated risk-service client.
@@ -10,14 +10,14 @@
  * the related bank-local reads.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from "react";
 import {
   keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
-} from '@tanstack/react-query';
-import type { QueryClient } from '@tanstack/react-query';
+} from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import type {
   LiveModule,
   AnalysisRunCreate,
@@ -68,7 +68,7 @@ import type {
   TemenosConnectionCreate,
   TemenosConnectionUpdate,
   WhatIfShockCode,
-} from '@aequoros/risk-service-api';
+} from "@aequoros/risk-service-api";
 import {
   ApiError,
   apiCall,
@@ -101,8 +101,8 @@ import {
   regulatoryLiquidityApi,
   regulatoryReportingApi,
   temenosApi,
-} from './client';
-import { ingestionApi } from './ingestion';
+} from "./client";
+import { ingestionApi } from "./ingestion";
 import {
   getForwardGrid,
   getMarketDataPlanes,
@@ -110,11 +110,11 @@ import {
   putMarketDataSourcePreferences,
   type MarketDataCategory,
   type MarketDataSourcePreferencesPatch,
-} from './marketDataSources';
+} from "./marketDataSources";
 import {
   getReportComparison,
   type ReportComparisonParams,
-} from './reportComparison';
+} from "./reportComparison";
 import {
   HEAVY_DASHBOARD_QUERY_POLICY,
   LIVE_SIGNAL_POLL_MS,
@@ -134,16 +134,15 @@ import {
   scopedQueryKey,
   waitForInitialDashboardSignals,
   type QueryAuthorityScope,
-} from './queryPolicy';
-import { useQueryAuthorityScope } from './useQueryScope';
-
+} from "./queryPolicy";
+import { useQueryAuthorityScope } from "./useQueryScope";
 
 const DASHBOARD_REFETCH_MS = 30_000;
 
 export function useBanks() {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('banks', scope),
+    queryKey: scopedQueryKey("banks", scope),
     queryFn: () => apiCall(() => banksApi.listBanks({})),
   });
 }
@@ -151,7 +150,7 @@ export function useBanks() {
 export function useBank(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('bank', scope, bankId ?? null),
+    queryKey: scopedQueryKey("bank", scope, bankId ?? null),
     queryFn: () => apiCall(() => banksApi.getBank({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
@@ -160,7 +159,7 @@ export function useBank(bankId: string | undefined) {
 export function useReportingPeriods(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('periods', scope, bankId ?? null),
+    queryKey: scopedQueryKey("periods", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => banksApi.listBankReportingPeriods({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -169,17 +168,17 @@ export function useReportingPeriods(bankId: string | undefined) {
 
 export function useBankPeriodFacts(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId: string | undefined,
 ) {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('facts', scope, bankId ?? null, periodId ?? null),
+    queryKey: scopedQueryKey("facts", scope, bankId ?? null, periodId ?? null),
     queryFn: () =>
       apiCall(() =>
         banksApi.getBankPeriodFacts({
           bankId: bankId!,
           periodId: periodId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && periodId),
   });
@@ -187,14 +186,14 @@ export function useBankPeriodFacts(
 
 export function useLiquidityDashboard(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
 ) {
   useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   const semantic = dashboardSemantic(periodId);
   return useQuery({
-    queryKey: dashboardQueryKey('liq-dashboard', scope, bankId, semantic),
+    queryKey: dashboardQueryKey("liq-dashboard", scope, bankId, semantic),
     queryFn: async () => {
       await waitForInitialDashboardSignals(queryClient, scope, bankId);
       return apiCall(async () => {
@@ -214,8 +213,8 @@ export function useLiquidityDashboard(
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'Liquidity analysis is not available yet.',
-            payload.error_code
+            payload.reason ?? "Liquidity analysis is not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -228,14 +227,14 @@ export function useLiquidityDashboard(
 
 export function useCapitalDashboard(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
 ) {
   useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   const semantic = dashboardSemantic(periodId);
   return useQuery({
-    queryKey: dashboardQueryKey('cap-dashboard', scope, bankId, semantic),
+    queryKey: dashboardQueryKey("cap-dashboard", scope, bankId, semantic),
     queryFn: async () => {
       await waitForInitialDashboardSignals(queryClient, scope, bankId);
       return apiCall(async () => {
@@ -255,8 +254,8 @@ export function useCapitalDashboard(
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'Capital analysis is not available yet.',
-            payload.error_code
+            payload.reason ?? "Capital analysis is not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -319,11 +318,11 @@ export function useRegulatoryRuns(
     scenarioCode?: string;
     limit?: number;
     offset?: number;
-  } = {}
+  } = {},
 ) {
   return useQuery({
     queryKey: [
-      'reg-runs',
+      "reg-runs",
       bankId,
       filters.module ?? null,
       filters.reportingPeriodId ?? null,
@@ -340,7 +339,7 @@ export function useRegulatoryRuns(
           scenarioCode: filters.scenarioCode,
           limit: filters.limit,
           offset: filters.offset,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
   });
@@ -348,42 +347,42 @@ export function useRegulatoryRuns(
 
 export function useRegulatoryRun(
   bankId: string | undefined,
-  runId: string | null | undefined
+  runId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['reg-run', bankId, runId],
+    queryKey: ["reg-run", bankId, runId],
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.getRegulatoryRun({
           bankId: bankId!,
           runId: runId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && runId),
   });
 }
 
 const liquidityInvalidatePrefixes = [
-  'liq-dashboard',
-  'reg-runs',
-  'reg-run',
-  'bsd3',
+  "liq-dashboard",
+  "reg-runs",
+  "reg-run",
+  "bsd3",
 ];
 
 const capitalInvalidatePrefixes = [
-  'cap-dashboard',
-  'credit-dashboard',
-  'credit-loans',
-  'credit-loans-facets',
-  'credit-concentration',
-  'credit-activity',
-  'credit-migration',
-  'credit-vintages',
-  'cap-rwa',
-  'cap-structure',
-  'reg-runs',
-  'reg-run',
-  'bsd2',
+  "cap-dashboard",
+  "credit-dashboard",
+  "credit-loans",
+  "credit-loans-facets",
+  "credit-concentration",
+  "credit-activity",
+  "credit-migration",
+  "credit-vintages",
+  "cap-rwa",
+  "cap-structure",
+  "reg-runs",
+  "reg-run",
+  "bsd2",
 ];
 
 export function useCreateRegulatoryRun(bankId: string | undefined) {
@@ -399,11 +398,11 @@ export function useCreateRegulatoryRun(bankId: string | undefined) {
         regulatoryLiquidityApi.createRegulatoryRun({
           bankId: bankId!,
           regulatoryRunCreate: payload,
-        })
+        }),
       ),
     onSuccess: (run) => {
       const prefixes =
-        run.module === 'capital'
+        run.module === "capital"
           ? capitalInvalidatePrefixes
           : liquidityInvalidatePrefixes;
       void invalidateScopedPrefixes(queryClient, prefixes, scope, bankId);
@@ -420,7 +419,7 @@ export function useRunAllLiquidityScenarios(bankId: string | undefined) {
         regulatoryLiquidityApi.runAllLiquidityScenarios({
           bankId: bankId!,
           liquidityScenarioBatchCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
       void invalidateScopedPrefixes(
@@ -442,7 +441,7 @@ export function useRunAllCapitalScenarios(bankId: string | undefined) {
         regulatoryCapitalApi.runAllCapitalScenarios({
           bankId: bankId!,
           capitalScenarioBatchCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
       void invalidateScopedPrefixes(
@@ -465,14 +464,14 @@ export function useRunAllCapitalScenarios(bankId: string | undefined) {
 
 export function useIrrDashboard(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
 ) {
   useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
     queryKey: dashboardQueryKey(
-      'irr-dashboard',
+      "irr-dashboard",
       scope,
       bankId,
       dashboardSemantic(periodId),
@@ -494,8 +493,9 @@ export function useIrrDashboard(
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'Interest-rate risk analysis is not available yet.',
-            payload.error_code
+            payload.reason ??
+              "Interest-rate risk analysis is not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -512,10 +512,10 @@ export function useIrrDashboard(
 
 export function useCreditDashboard(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
 ) {
   return useQuery({
-    queryKey: ['credit-dashboard', bankId, periodId],
+    queryKey: ["credit-dashboard", bankId, periodId],
     queryFn: () =>
       apiCall(async () => {
         // The credit service answers HTTP 200 with an availability envelope
@@ -532,8 +532,8 @@ export function useCreditDashboard(
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'The credit view is not available yet.',
-            payload.error_code
+            payload.reason ?? "The credit view is not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -554,11 +554,11 @@ export type CreditLoanFilters = {
 
 export function useCreditLoansPage(
   bankId: string | undefined,
-  filters: CreditLoanFilters
+  filters: CreditLoanFilters,
 ) {
   return useQuery({
     queryKey: [
-      'credit-loans',
+      "credit-loans",
       bankId,
       filters.limit ?? 100,
       filters.offset ?? 0,
@@ -577,7 +577,7 @@ export function useCreditLoansPage(
           product: filters.product,
           branch: filters.branch,
           q: filters.q,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
     placeholderData: keepPreviousData,
@@ -587,8 +587,11 @@ export function useCreditLoansPage(
 
 export function useCreditLoanFacets(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['credit-loans-facets', bankId],
-    queryFn: () => apiCall(() => regulatoryCreditApi.getCreditLoanFacets({ bankId: bankId! })),
+    queryKey: ["credit-loans-facets", bankId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryCreditApi.getCreditLoanFacets({ bankId: bankId! }),
+      ),
     enabled: Boolean(bankId),
     staleTime: 5 * 60_000,
   });
@@ -596,7 +599,7 @@ export function useCreditLoanFacets(bankId: string | undefined) {
 
 export function useCreditConcentration(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['credit-concentration', bankId],
+    queryKey: ["credit-concentration", bankId],
     queryFn: () =>
       apiCall(async () => {
         const response = await regulatoryCreditApi.getCreditConcentrationRaw({
@@ -609,8 +612,8 @@ export function useCreditConcentration(bankId: string | undefined) {
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'The concentration monitor is not available yet.',
-            payload.error_code
+            payload.reason ?? "The concentration monitor is not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -622,10 +625,12 @@ export function useCreditConcentration(bankId: string | undefined) {
 
 export function useCreditActivity(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['credit-activity', bankId],
+    queryKey: ["credit-activity", bankId],
     queryFn: () =>
       apiCall(async () => {
-        const response = await regulatoryCreditApi.getCreditActivityRaw({ bankId: bankId! });
+        const response = await regulatoryCreditApi.getCreditActivityRaw({
+          bankId: bankId!,
+        });
         const payload = (await response.raw.clone().json()) as {
           available?: boolean;
           error_code?: string;
@@ -633,8 +638,8 @@ export function useCreditActivity(bankId: string | undefined) {
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'Loan-book activity is not available yet.',
-            payload.error_code
+            payload.reason ?? "Loan-book activity is not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -646,10 +651,12 @@ export function useCreditActivity(bankId: string | undefined) {
 
 export function useCreditMigration(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['credit-migration', bankId],
+    queryKey: ["credit-migration", bankId],
     queryFn: () =>
       apiCall(async () => {
-        const response = await regulatoryCreditApi.getCreditMigrationRaw({ bankId: bankId! });
+        const response = await regulatoryCreditApi.getCreditMigrationRaw({
+          bankId: bankId!,
+        });
         const payload = (await response.raw.clone().json()) as {
           available?: boolean;
           error_code?: string;
@@ -659,8 +666,8 @@ export function useCreditMigration(bankId: string | undefined) {
         // payload's own available=false (insufficient history) renders inline.
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'Migration is not available yet.',
-            payload.error_code
+            payload.reason ?? "Migration is not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -672,10 +679,12 @@ export function useCreditMigration(bankId: string | undefined) {
 
 export function useCreditVintages(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['credit-vintages', bankId],
+    queryKey: ["credit-vintages", bankId],
     queryFn: () =>
       apiCall(async () => {
-        const response = await regulatoryCreditApi.getCreditVintagesRaw({ bankId: bankId! });
+        const response = await regulatoryCreditApi.getCreditVintagesRaw({
+          bankId: bankId!,
+        });
         const payload = (await response.raw.clone().json()) as {
           available?: boolean;
           error_code?: string;
@@ -683,8 +692,8 @@ export function useCreditVintages(bankId: string | undefined) {
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'Vintages are not available yet.',
-            payload.error_code
+            payload.reason ?? "Vintages are not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -696,10 +705,12 @@ export function useCreditVintages(bankId: string | undefined) {
 
 export function useCreditPd(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['credit-pd', bankId],
+    queryKey: ["credit-pd", bankId],
     queryFn: () =>
       apiCall(async () => {
-        const response = await regulatoryCreditApi.getCreditPdRaw({ bankId: bankId! });
+        const response = await regulatoryCreditApi.getCreditPdRaw({
+          bankId: bankId!,
+        });
         const payload = (await response.raw.clone().json()) as {
           available?: boolean;
           error_code?: string;
@@ -709,8 +720,8 @@ export function useCreditPd(bankId: string | undefined) {
         // own available=false (thin history) renders inline with its reason.
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'PD estimates are not available yet.',
-            payload.error_code
+            payload.reason ?? "PD estimates are not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -727,15 +738,21 @@ export function useRunAllCreditScenarios(bankId: string | undefined) {
       apiCall(() =>
         regulatoryCreditApi.runAllCreditScenarios({
           bankId: bankId!,
-          creditScenarioBatchCreate: { reportingPeriodId: payload.reportingPeriodId },
-        })
+          creditScenarioBatchCreate: {
+            reportingPeriodId: payload.reportingPeriodId,
+          },
+        }),
       ),
     onSuccess: () => {
-      ['credit-dashboard', 'credit-loans', 'reg-runs', 'reg-run', 'freshness'].forEach(
-        (prefix) => {
-          void queryClient.invalidateQueries({ queryKey: [prefix] });
-        }
-      );
+      [
+        "credit-dashboard",
+        "credit-loans",
+        "reg-runs",
+        "reg-run",
+        "freshness",
+      ].forEach((prefix) => {
+        void queryClient.invalidateQueries({ queryKey: [prefix] });
+      });
     },
   });
 }
@@ -748,10 +765,10 @@ export function useRunAllIrrScenarios(bankId: string | undefined) {
         regulatoryIrrApi.runAllIrrScenarios({
           bankId: bankId!,
           irrScenarioBatchCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      ['irr-dashboard', 'reg-runs', 'reg-run'].forEach((prefix) => {
+      ["irr-dashboard", "reg-runs", "reg-run"].forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
     },
@@ -760,14 +777,14 @@ export function useRunAllIrrScenarios(bankId: string | undefined) {
 
 export function useFxDashboard(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
 ) {
   useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
     queryKey: dashboardQueryKey(
-      'fx-dashboard',
+      "fx-dashboard",
       scope,
       bankId,
       dashboardSemantic(periodId),
@@ -791,8 +808,8 @@ export function useFxDashboard(
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'FX analysis is not available yet.',
-            payload.error_code
+            payload.reason ?? "FX analysis is not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -811,10 +828,10 @@ export function useRunAllFxScenarios(bankId: string | undefined) {
         regulatoryFxApi.runAllFxScenarios({
           bankId: bankId!,
           fxScenarioBatchCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      ['fx-dashboard', 'reg-runs', 'reg-run'].forEach((prefix) => {
+      ["fx-dashboard", "reg-runs", "reg-run"].forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
     },
@@ -823,14 +840,14 @@ export function useRunAllFxScenarios(bankId: string | undefined) {
 
 export function useFtpDashboard(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
 ) {
   useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
     queryKey: dashboardQueryKey(
-      'ftp-dashboard',
+      "ftp-dashboard",
       scope,
       bankId,
       dashboardSemantic(periodId),
@@ -854,8 +871,8 @@ export function useFtpDashboard(
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'FTP analysis is not available yet.',
-            payload.error_code
+            payload.reason ?? "FTP analysis is not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -874,10 +891,10 @@ export function useRunAllFtpScenarios(bankId: string | undefined) {
         regulatoryFtpApi.runAllFtpScenarios({
           bankId: bankId!,
           ftpScenarioBatchCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      ['ftp-dashboard', 'reg-runs', 'reg-run'].forEach((prefix) => {
+      ["ftp-dashboard", "reg-runs", "reg-run"].forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
     },
@@ -886,25 +903,25 @@ export function useRunAllFtpScenarios(bankId: string | undefined) {
 
 /** Whether an error is the BSD preview's "no baseline run yet" 409. */
 export function isNoBaselineRunError(error: unknown): boolean {
-  return isApiError(error) && error.errorCode === 'no_baseline_run';
+  return isApiError(error) && error.errorCode === "no_baseline_run";
 }
 
 export function useRwaBreakdown(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
 ) {
   useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
-    queryKey: ['cap-rwa', bankId, periodId],
+    queryKey: ["cap-rwa", bankId, periodId],
     queryFn: async () => {
       await waitForInitialDashboardSignals(queryClient, scope, bankId);
       return apiCall(() =>
         regulatoryCapitalApi.getRwaBreakdown({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
+        }),
       );
     },
     enabled: Boolean(bankId),
@@ -915,20 +932,20 @@ export function useRwaBreakdown(
 
 export function useCapitalStructure(
   bankId: string | undefined,
-  periodId?: string | undefined
+  periodId?: string | undefined,
 ) {
   useBankFreshness(bankId, periodId);
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
-    queryKey: ['cap-structure', bankId, periodId],
+    queryKey: ["cap-structure", bankId, periodId],
     queryFn: async () => {
       await waitForInitialDashboardSignals(queryClient, scope, bankId);
       return apiCall(() =>
         regulatoryCapitalApi.getCapitalStructure({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
+        }),
       );
     },
     enabled: Boolean(bankId),
@@ -939,16 +956,16 @@ export function useCapitalStructure(
 
 export function useBsd3Preview(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId: string | undefined,
 ) {
   return useQuery({
-    queryKey: ['bsd3', bankId, periodId],
+    queryKey: ["bsd3", bankId, periodId],
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.getBsd3Preview({
           bankId: bankId!,
           reportingPeriodId: periodId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && periodId),
     retry: (failureCount, error) =>
@@ -958,16 +975,16 @@ export function useBsd3Preview(
 
 export function useBsd2Preview(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId: string | undefined,
 ) {
   return useQuery({
-    queryKey: ['bsd2', bankId, periodId],
+    queryKey: ["bsd2", bankId, periodId],
     queryFn: () =>
       apiCall(() =>
         regulatoryCapitalApi.getBsd2Preview({
           bankId: bankId!,
           reportingPeriodId: periodId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && periodId),
     retry: (failureCount, error) =>
@@ -975,28 +992,30 @@ export function useBsd2Preview(
   });
 }
 
-const forecastInvalidatePrefixes = ['forecast-runs', 'forecast-run', 'reg-runs'];
+const forecastInvalidatePrefixes = [
+  "forecast-runs",
+  "forecast-run",
+  "reg-runs",
+];
 
 export function useForecastScenarios(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['forecast-scenarios', bankId],
+    queryKey: ["forecast-scenarios", bankId],
     queryFn: () =>
-      apiCall(() =>
-        forecastingApi.listForecastScenarios({ bankId: bankId! })
-      ),
+      apiCall(() => forecastingApi.listForecastScenarios({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
 
 export function useForecastRuns(
   bankId: string | undefined,
-  filters: { limit?: number; offset?: number } = {}
+  filters: { limit?: number; offset?: number } = {},
 ) {
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
     queryKey: [
-      'forecast-runs',
+      "forecast-runs",
       bankId,
       filters.limit ?? 25,
       filters.offset ?? 0,
@@ -1008,7 +1027,7 @@ export function useForecastRuns(
           bankId: bankId!,
           limit: filters.limit,
           offset: filters.offset,
-        })
+        }),
       );
     },
     enabled: Boolean(bankId),
@@ -1017,16 +1036,16 @@ export function useForecastRuns(
 
 export function useForecastRun(
   bankId: string | undefined,
-  runId: string | null | undefined
+  runId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['forecast-run', bankId, runId],
+    queryKey: ["forecast-run", bankId, runId],
     queryFn: () =>
       apiCall(() =>
         forecastingApi.getForecastRun({
           bankId: bankId!,
           runId: runId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && runId),
   });
@@ -1040,7 +1059,7 @@ export function useCreateForecastRun(bankId: string | undefined) {
         forecastingApi.createForecastRun({
           bankId: bankId!,
           forecastRunCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
       forecastInvalidatePrefixes.forEach((prefix) => {
@@ -1058,11 +1077,11 @@ export function useRunOptimizer(bankId: string | undefined) {
         forecastingApi.runStrategicOptimizer({
           bankId: bankId!,
           optimizerRunCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['reg-runs'] });
-      void queryClient.invalidateQueries({ queryKey: ['reg-run'] });
+      void queryClient.invalidateQueries({ queryKey: ["reg-runs"] });
+      void queryClient.invalidateQueries({ queryKey: ["reg-run"] });
     },
   });
 }
@@ -1078,11 +1097,11 @@ export function useRunWhatIf(bankId: string | undefined) {
         forecastingApi.runWhatIfAnalysis({
           bankId: bankId!,
           whatIfRunCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['reg-runs'] });
-      void queryClient.invalidateQueries({ queryKey: ['reg-run'] });
+      void queryClient.invalidateQueries({ queryKey: ["reg-runs"] });
+      void queryClient.invalidateQueries({ queryKey: ["reg-run"] });
     },
   });
 }
@@ -1096,10 +1115,10 @@ export function useCashflowForecast(
   bankId: string | undefined,
   horizon: CashflowHorizon,
   mode: CashflowForecastMode,
-  scenario: CashflowForecastScenario
+  scenario: CashflowForecastScenario,
 ) {
   return useQuery({
-    queryKey: ['cashflow-forecast', bankId, horizon, mode, scenario],
+    queryKey: ["cashflow-forecast", bankId, horizon, mode, scenario],
     queryFn: () =>
       apiCall(() =>
         cashflowForecastApi.getCashflowForecast({
@@ -1107,7 +1126,7 @@ export function useCashflowForecast(
           horizon,
           mode,
           scenario,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
     retry: false,
@@ -1118,13 +1137,13 @@ export function useCashflowForecast(
 
 export function useCashflowHistory(bankId: string | undefined, days: number) {
   return useQuery({
-    queryKey: ['cashflow-history', bankId, days],
+    queryKey: ["cashflow-history", bankId, days],
     queryFn: () =>
       apiCall(() =>
         cashflowForecastApi.getCashflowHistory({
           bankId: bankId!,
           days,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
     retry: false,
@@ -1137,20 +1156,18 @@ export function useCashflowHistory(bankId: string | undefined, days: number) {
 // ---------------------------------------------------------------------------
 
 export type BehavioralModelSlug =
-  | 'nmd-duration'
-  | 'prepayment'
-  | 'deposit-stability';
+  "nmd-duration" | "prepayment" | "deposit-stability";
 
 /** Read a model's per-product estimates (trains on the bank's history on first call). */
 export function useBehavioralModel(
   bankId: string | undefined,
-  model: BehavioralModelSlug
+  model: BehavioralModelSlug,
 ) {
   return useQuery({
-    queryKey: ['behavioral-model', bankId, model],
+    queryKey: ["behavioral-model", bankId, model],
     queryFn: () =>
       apiCall(() =>
-        behavioralModelsApi.getBehavioralModel({ bankId: bankId!, model })
+        behavioralModelsApi.getBehavioralModel({ bankId: bankId!, model }),
       ),
     enabled: Boolean(bankId),
     retry: false,
@@ -1162,9 +1179,11 @@ export function useBehavioralModel(
 /** Observed deposit behavior by product, segment, connected group, and branch. */
 export function useBehavioralLiquidity(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['behavioral-liquidity', bankId],
+    queryKey: ["behavioral-liquidity", bankId],
     queryFn: () =>
-      apiCall(() => behavioralModelsApi.getBehavioralLiquidity({ bankId: bankId! })),
+      apiCall(() =>
+        behavioralModelsApi.getBehavioralLiquidity({ bankId: bankId! }),
+      ),
     enabled: Boolean(bankId),
     staleTime: 5 * 60_000,
   });
@@ -1173,16 +1192,16 @@ export function useBehavioralLiquidity(bankId: string | undefined) {
 /** Retrain a model on the latest ingested history. */
 export function useTrainBehavioralModel(
   bankId: string | undefined,
-  model: BehavioralModelSlug
+  model: BehavioralModelSlug,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () =>
       apiCall(() =>
-        behavioralModelsApi.trainBehavioralModel({ bankId: bankId!, model })
+        behavioralModelsApi.trainBehavioralModel({ bankId: bankId!, model }),
       ),
     onSuccess: (result) => {
-      queryClient.setQueryData(['behavioral-model', bankId, model], result);
+      queryClient.setQueryData(["behavioral-model", bankId, model], result);
     },
   });
 }
@@ -1190,7 +1209,7 @@ export function useTrainBehavioralModel(
 /** Apply reviewed estimates as accepted behavioral assumptions the engines consume. */
 export function useApplyBehavioralModel(
   bankId: string | undefined,
-  model: BehavioralModelSlug
+  model: BehavioralModelSlug,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -1200,14 +1219,14 @@ export function useApplyBehavioralModel(
           bankId: bankId!,
           model,
           behavioralApplyRequest: { products },
-        })
+        }),
       ),
     onSuccess: () => {
       // Downstream ALM facts change once assumptions are applied.
-      ['behavioral-model', 'liquidity', 'ftp', 'irr', 'forecasting'].forEach(
+      ["behavioral-model", "liquidity", "ftp", "irr", "forecasting"].forEach(
         (prefix) => {
           void queryClient.invalidateQueries({ queryKey: [prefix] });
-        }
+        },
       );
     },
   });
@@ -1232,22 +1251,28 @@ type ObservedModuleSignal = {
   failed: boolean;
 };
 
-const observedLiveGenerations = new WeakMap<object, Map<string, ObservedModuleSignal>>();
+const observedLiveGenerations = new WeakMap<
+  object,
+  Map<string, ObservedModuleSignal>
+>();
 
-const observedOfficialRuns = new WeakMap<object, Map<string, ObservedModuleSignal>>();
+const observedOfficialRuns = new WeakMap<
+  object,
+  Map<string, ObservedModuleSignal>
+>();
 
 /** Cross-module current metrics + per-module generation signal, cheaply polled. */
 export function useLiveSummary(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   const query = useQuery({
-    queryKey: scopedQueryKey('live-summary', scope, bankId ?? null),
+    queryKey: scopedQueryKey("live-summary", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => liveEngineApi.getLiveSummary({ bankId: bankId! })),
     enabled: Boolean(bankId),
     refetchInterval: jitteredPollInterval(
       LIVE_SIGNAL_POLL_MS,
-      'live-summary',
+      "live-summary",
       scope,
       bankId,
     ),
@@ -1264,7 +1289,10 @@ export function useLiveSummary(bankId: string | undefined) {
     const observed = byScope.get(identity);
     if (!query.data) {
       if (query.isError) {
-        byScope.set(identity, { fingerprint: observed?.fingerprint, failed: true });
+        byScope.set(identity, {
+          fingerprint: observed?.fingerprint,
+          failed: true,
+        });
       }
       return;
     }
@@ -1298,7 +1326,7 @@ export function useBankFreshness(
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: scopedQueryKey(
-      'freshness',
+      "freshness",
       scope,
       bankId ?? null,
       periodId ?? null,
@@ -1308,16 +1336,11 @@ export function useBankFreshness(
         liveEngineApi.getBankFreshness({
           bankId: bankId!,
           reportingPeriodId: periodId,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
     refetchInterval: poll
-      ? jitteredPollInterval(
-          LIVE_SIGNAL_POLL_MS,
-          'freshness',
-          scope,
-          bankId,
-        )
+      ? jitteredPollInterval(LIVE_SIGNAL_POLL_MS, "freshness", scope, bankId)
       : false,
   });
 
@@ -1328,11 +1351,14 @@ export function useBankFreshness(
       byScope = new Map();
       observedOfficialRuns.set(queryClient, byScope);
     }
-    const identity = `${scope.tenantId}|${scope.authorityId}|${bankId}|${periodId ?? ''}`;
+    const identity = `${scope.tenantId}|${scope.authorityId}|${bankId}|${periodId ?? ""}`;
     const observed = byScope.get(identity);
     if (!query.data) {
       if (query.isError) {
-        byScope.set(identity, { fingerprint: observed?.fingerprint, failed: true });
+        byScope.set(identity, {
+          fingerprint: observed?.fingerprint,
+          failed: true,
+        });
       }
       return;
     }
@@ -1349,12 +1375,7 @@ export function useBankFreshness(
       );
     }
     if (changed.length > 0) {
-      void invalidateOfficialRunChanges(
-        queryClient,
-        scope,
-        bankId,
-        changed,
-      );
+      void invalidateOfficialRunChanges(queryClient, scope, bankId, changed);
     }
   }, [bankId, periodId, query.data, query.isError, queryClient, scope]);
 
@@ -1365,15 +1386,13 @@ export function useBankFreshness(
 export function useBankAlerts(bankId: string | undefined, limit = 20) {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('alerts', scope, bankId ?? null, limit),
+    queryKey: scopedQueryKey("alerts", scope, bankId ?? null, limit),
     queryFn: () =>
-      apiCall(() =>
-        liveEngineApi.getBankAlerts({ bankId: bankId!, limit })
-      ),
+      apiCall(() => liveEngineApi.getBankAlerts({ bankId: bankId!, limit })),
     enabled: Boolean(bankId),
     refetchInterval: jitteredPollInterval(
       LIVE_SIGNAL_POLL_MS,
-      'alerts',
+      "alerts",
       scope,
       bankId,
     ),
@@ -1381,14 +1400,14 @@ export function useBankAlerts(bankId: string | undefined, limit = 20) {
 }
 
 const livePipelineCompletionPrefixes = [
-  'freshness',
-  'alerts',
-  'bsd3',
-  'bsd2',
-  'reg-runs',
-  'reg-run',
-  'facts',
-  'periods',
+  "freshness",
+  "alerts",
+  "bsd3",
+  "bsd2",
+  "reg-runs",
+  "reg-run",
+  "facts",
+  "periods",
 ];
 
 async function invalidateCompletedPipeline(
@@ -1396,7 +1415,7 @@ async function invalidateCompletedPipeline(
   scope: QueryAuthorityScope,
   bankId: string | undefined,
 ) {
-  await invalidateScopedPrefixes(queryClient, ['live-summary'], scope, bankId);
+  await invalidateScopedPrefixes(queryClient, ["live-summary"], scope, bankId);
   await invalidateScopedPrefixes(
     queryClient,
     livePipelineCompletionPrefixes,
@@ -1406,17 +1425,17 @@ async function invalidateCompletedPipeline(
 }
 
 const officialRunCompletionPrefixes = regulatoryDetailInvalidationPrefixes([
-  'liquidity',
-  'capital',
-  'irr',
-  'fx',
-  'ftp',
-  'forecast',
+  "liquidity",
+  "capital",
+  "irr",
+  "fx",
+  "ftp",
+  "forecast",
 ]);
 
 const capitalAssumptionPrefixes = regulatoryDetailInvalidationPrefixes([
-  'capital',
-  'forecast',
+  "capital",
+  "forecast",
 ]);
 
 async function invalidateCompletedOfficialRun(
@@ -1441,17 +1460,17 @@ async function invalidateCompletedOfficialRun(
  */
 async function pollJobToCompletion(
   jobId: string,
-  { intervalMs = 1500, timeoutMs = 120_000 } = {}
+  { intervalMs = 1500, timeoutMs = 120_000 } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const job = await apiCall(() => jobsApi.getJob({ jobId }));
-    if (job.status === 'succeeded') return job;
-    if (job.status === 'failed') {
+    if (job.status === "succeeded") return job;
+    if (job.status === "failed") {
       throw new ApiError({
-        message: job.error ?? 'The background job failed.',
+        message: job.error ?? "The background job failed.",
         status: null,
-        code: 'job_failed',
+        code: "job_failed",
         errorCode: null,
         details: job.progress,
       });
@@ -1479,7 +1498,7 @@ export function useRefreshBankData(bankId: string | undefined) {
             asOfDate: new Date(`${asOfDate}T00:00:00Z`),
             reason,
           },
-        })
+        }),
       );
       return pollJobToCompletion(enqueued.jobId);
     },
@@ -1505,7 +1524,7 @@ export function useMintOfficialRun(bankId: string | undefined) {
             asOfDate: new Date(`${asOfDate}T00:00:00Z`),
             reason,
           },
-        })
+        }),
       );
       return pollJobToCompletion(enqueued.jobId);
     },
@@ -1523,14 +1542,14 @@ export function useMintOfficialRun(bankId: string | undefined) {
 // list; pull-affecting ones also invalidate the quota ledger.
 // ---------------------------------------------------------------------------
 
-const marketDataInvalidatePrefixes = ['md-connections', 'md-quota'];
+const marketDataInvalidatePrefixes = ["md-connections", "md-quota"];
 
 export function useMarketDataConnections(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['md-connections', bankId],
+    queryKey: ["md-connections", bankId],
     queryFn: () =>
       apiCall(() =>
-        marketDataApi.listMarketDataConnections({ bankId: bankId! })
+        marketDataApi.listMarketDataConnections({ bankId: bankId! }),
       ),
     enabled: Boolean(bankId),
   });
@@ -1540,7 +1559,7 @@ export function useMarketDataConnections(bankId: string | undefined) {
  * per-pull quota impact — drives the scope checkboxes in the add-source flow. */
 export function useMarketDataScopes(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['md-scopes', bankId],
+    queryKey: ["md-scopes", bankId],
     queryFn: () =>
       apiCall(() => marketDataApi.listMarketDataScopes({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -1551,7 +1570,7 @@ export function useMarketDataScopes(bankId: string | undefined) {
 
 export function useMarketDataQuota(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['md-quota', bankId],
+    queryKey: ["md-quota", bankId],
     queryFn: () =>
       apiCall(() => marketDataApi.getMarketDataQuota({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -1566,7 +1585,7 @@ export function useCreateMarketDataConnection(bankId: string | undefined) {
         marketDataApi.createMarketDataConnection({
           bankId: bankId!,
           marketDataConnectionCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
       marketDataInvalidatePrefixes.forEach((prefix) => {
@@ -1584,10 +1603,10 @@ export function useValidateMarketDataConnection(bankId: string | undefined) {
         marketDataApi.validateMarketDataConnection({
           bankId: bankId!,
           connectionId,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['md-connections'] });
+      void queryClient.invalidateQueries({ queryKey: ["md-connections"] });
     },
   });
 }
@@ -1601,7 +1620,7 @@ export function useTestMarketDataConnection(bankId: string | undefined) {
         marketDataApi.testMarketDataConnection({
           bankId: bankId!,
           connectionId,
-        })
+        }),
       ),
   });
 }
@@ -1624,10 +1643,10 @@ export function useUpdateMarketDataConnection(bankId: string | undefined) {
           bankId: bankId!,
           connectionId,
           marketDataConnectionUpdate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['md-connections'] });
+      void queryClient.invalidateQueries({ queryKey: ["md-connections"] });
     },
   });
 }
@@ -1640,10 +1659,10 @@ export function useDisableMarketDataConnection(bankId: string | undefined) {
         marketDataApi.disableMarketDataConnection({
           bankId: bankId!,
           connectionId,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['md-connections'] });
+      void queryClient.invalidateQueries({ queryKey: ["md-connections"] });
     },
   });
 }
@@ -1656,10 +1675,10 @@ export function useEnableMarketDataConnection(bankId: string | undefined) {
         marketDataApi.enableMarketDataConnection({
           bankId: bankId!,
           connectionId,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['md-connections'] });
+      void queryClient.invalidateQueries({ queryKey: ["md-connections"] });
     },
   });
 }
@@ -1673,7 +1692,7 @@ export function useRevokeMarketDataConnection(bankId: string | undefined) {
         marketDataApi.revokeMarketDataConnection({
           bankId: bankId!,
           connectionId,
-        })
+        }),
       ),
     onSuccess: () => {
       marketDataInvalidatePrefixes.forEach((prefix) => {
@@ -1691,13 +1710,13 @@ export function useRevokeMarketDataConnection(bankId: string | undefined) {
  */
 export function useMarketDataViews(bankId: string | undefined, asOf?: string) {
   return useQuery({
-    queryKey: ['md-views', bankId, asOf ?? null],
+    queryKey: ["md-views", bankId, asOf ?? null],
     queryFn: () =>
       apiCall(() =>
         marketDataApi.getMarketDataViews({
           bankId: bankId!,
           asOf: asOf ? new Date(`${asOf}T00:00:00Z`) : undefined,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
@@ -1710,15 +1729,15 @@ export function useMarketDataViews(bankId: string | undefined, asOf?: string) {
 // the composed views (adjusted curves are computed server-side at read time).
 // ---------------------------------------------------------------------------
 
-const overlayInvalidatePrefixes = ['md-overlays', 'md-views'];
+const overlayInvalidatePrefixes = ["md-overlays", "md-views"];
 
 export function useMarketDataOverlays(
   bankId: string | undefined,
-  options?: { includeHistory?: boolean; baseCurveName?: string }
+  options?: { includeHistory?: boolean; baseCurveName?: string },
 ) {
   return useQuery({
     queryKey: [
-      'md-overlays',
+      "md-overlays",
       bankId,
       options?.includeHistory ?? false,
       options?.baseCurveName ?? null,
@@ -1729,7 +1748,7 @@ export function useMarketDataOverlays(
           bankId: bankId!,
           includeHistory: options?.includeHistory,
           baseCurveName: options?.baseCurveName,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
@@ -1744,7 +1763,7 @@ export function useCreateMarketDataOverlay(bankId: string | undefined) {
         marketDataApi.createMarketDataOverlay({
           bankId: bankId!,
           marketDataOverlayCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
       overlayInvalidatePrefixes.forEach((prefix) => {
@@ -1765,7 +1784,7 @@ export function useEndMarketDataOverlay(bankId: string | undefined) {
           marketDataOverlayEnd: {
             effectiveTo: new Date(`${payload.effectiveTo}T00:00:00Z`),
           },
-        })
+        }),
       ),
     onSuccess: () => {
       overlayInvalidatePrefixes.forEach((prefix) => {
@@ -1786,24 +1805,30 @@ export function useEndMarketDataOverlay(bankId: string | undefined) {
 // selected plane, exactly as the engines will consume it.
 // ---------------------------------------------------------------------------
 
-const sourcePrefsInvalidatePrefixes = ['md-source-prefs', 'md-planes', 'md-views'];
+const sourcePrefsInvalidatePrefixes = [
+  "md-source-prefs",
+  "md-planes",
+  "md-views",
+];
 
 export function useMarketDataSourcePreferences(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['md-source-prefs', bankId],
+    queryKey: ["md-source-prefs", bankId],
     queryFn: () => getMarketDataSourcePreferences(bankId!),
     enabled: Boolean(bankId),
     refetchInterval: DASHBOARD_REFETCH_MS,
   });
 }
 
-export function useUpdateMarketDataSourcePreferences(bankId: string | undefined) {
+export function useUpdateMarketDataSourcePreferences(
+  bankId: string | undefined,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (patch: MarketDataSourcePreferencesPatch) =>
       putMarketDataSourcePreferences(bankId!, patch),
     onSuccess: (resolved) => {
-      queryClient.setQueryData(['md-source-prefs', bankId], resolved);
+      queryClient.setQueryData(["md-source-prefs", bankId], resolved);
       sourcePrefsInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
@@ -1820,10 +1845,10 @@ export function useMarketDataPlanes(
   bankId: string | undefined,
   category: MarketDataCategory,
   asOf?: string,
-  enabled = true
+  enabled = true,
 ) {
   return useQuery({
-    queryKey: ['md-planes', bankId, category, asOf ?? null],
+    queryKey: ["md-planes", bankId, category, asOf ?? null],
     queryFn: () => getMarketDataPlanes(bankId!, { category, asOf }),
     enabled: Boolean(bankId) && enabled,
     refetchInterval: DASHBOARD_REFETCH_MS,
@@ -1840,10 +1865,16 @@ export function useForwardGrid(
   curveName: string | null,
   asOf?: string,
   frequency?: string,
-  enabled = true
+  enabled = true,
 ) {
   return useQuery({
-    queryKey: ['md-forward-grid', bankId, curveName, asOf ?? null, frequency ?? null],
+    queryKey: [
+      "md-forward-grid",
+      bankId,
+      curveName,
+      asOf ?? null,
+      frequency ?? null,
+    ],
     queryFn: () => getForwardGrid(bankId!, curveName!, { asOf, frequency }),
     enabled: Boolean(bankId) && Boolean(curveName) && enabled,
     refetchInterval: DASHBOARD_REFETCH_MS,
@@ -1867,11 +1898,11 @@ export type CanonicalPositionsPageParams = {
  */
 export function useCanonicalPositionsPage(
   bankId: string | undefined,
-  { limit, offset, positionType, currency, q }: CanonicalPositionsPageParams
+  { limit, offset, positionType, currency, q }: CanonicalPositionsPageParams,
 ) {
   return useQuery({
     queryKey: [
-      'positions-page',
+      "positions-page",
       bankId,
       limit,
       offset,
@@ -1888,7 +1919,7 @@ export function useCanonicalPositionsPage(
           positionType: positionType || undefined,
           currency: currency || undefined,
           q: q || undefined,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
     placeholderData: keepPreviousData,
@@ -1902,10 +1933,10 @@ export function useCanonicalPositionsPage(
  */
 export function useCanonicalPositionFacets(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['positions-facets', bankId],
+    queryKey: ["positions-facets", bankId],
     queryFn: () =>
       apiCall(() =>
-        ingestionApi.listCanonicalPositionFacets({ bankId: bankId! })
+        ingestionApi.listCanonicalPositionFacets({ bankId: bankId! }),
       ),
     enabled: Boolean(bankId),
     staleTime: 5 * 60_000,
@@ -1923,7 +1954,7 @@ export function useUploadMarketData(bankId: string | undefined) {
           bankId: bankId!,
           file,
           asOfDate: new Date(`${asOfDate}T00:00:00Z`),
-        })
+        }),
       ),
     onSuccess: () => {
       marketDataInvalidatePrefixes.forEach((prefix) => {
@@ -1932,7 +1963,7 @@ export function useUploadMarketData(bankId: string | undefined) {
       // Manual pulls land canonical market data the same way ingestion does.
       void invalidateScopedPrefixes(
         queryClient,
-        ['de-batches', 'de-summary'],
+        ["de-batches", "de-summary"],
         scope,
         bankId,
       );
@@ -1944,11 +1975,11 @@ export function useUploadMarketData(bankId: string | undefined) {
 // Temenos T24 core-banking connections (docs/temenos_adapter.md)
 // ---------------------------------------------------------------------------
 
-const temenosInvalidatePrefixes = ['t24-connections'];
+const temenosInvalidatePrefixes = ["t24-connections"];
 
 export function useTemenosConnections(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['t24-connections', bankId],
+    queryKey: ["t24-connections", bankId],
     queryFn: () =>
       apiCall(() => temenosApi.listTemenosConnections({ bankId: bankId! })),
     enabled: Boolean(bankId),
@@ -1959,7 +1990,7 @@ export function useTemenosConnections(bankId: string | undefined) {
  * entity type, default cadence, and whether the mode catalog supports it. */
 export function useTemenosDomains(bankId: string | undefined, mode: string) {
   return useQuery({
-    queryKey: ['t24-domains', bankId, mode],
+    queryKey: ["t24-domains", bankId, mode],
     queryFn: () =>
       apiCall(() => temenosApi.listTemenosDomains({ bankId: bankId!, mode })),
     enabled: Boolean(bankId),
@@ -1975,7 +2006,7 @@ export function useCreateTemenosConnection(bankId: string | undefined) {
         temenosApi.createTemenosConnection({
           bankId: bankId!,
           temenosConnectionCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
       temenosInvalidatePrefixes.forEach((prefix) => {
@@ -1990,10 +2021,10 @@ export function useValidateTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.validateTemenosConnection({ bankId: bankId!, connectionId })
+        temenosApi.validateTemenosConnection({ bankId: bankId!, connectionId }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+      void queryClient.invalidateQueries({ queryKey: ["t24-connections"] });
     },
   });
 }
@@ -2004,7 +2035,7 @@ export function useTestTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.testTemenosConnection({ bankId: bankId!, connectionId })
+        temenosApi.testTemenosConnection({ bankId: bankId!, connectionId }),
       ),
   });
 }
@@ -2026,10 +2057,10 @@ export function useUpdateTemenosConnection(bankId: string | undefined) {
           bankId: bankId!,
           connectionId,
           temenosConnectionUpdate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+      void queryClient.invalidateQueries({ queryKey: ["t24-connections"] });
     },
   });
 }
@@ -2039,10 +2070,10 @@ export function useDisableTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.disableTemenosConnection({ bankId: bankId!, connectionId })
+        temenosApi.disableTemenosConnection({ bankId: bankId!, connectionId }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+      void queryClient.invalidateQueries({ queryKey: ["t24-connections"] });
     },
   });
 }
@@ -2052,10 +2083,10 @@ export function useEnableTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.enableTemenosConnection({ bankId: bankId!, connectionId })
+        temenosApi.enableTemenosConnection({ bankId: bankId!, connectionId }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+      void queryClient.invalidateQueries({ queryKey: ["t24-connections"] });
     },
   });
 }
@@ -2065,7 +2096,7 @@ export function useRevokeTemenosConnection(bankId: string | undefined) {
   return useMutation({
     mutationFn: (connectionId: string) =>
       apiCall(() =>
-        temenosApi.revokeTemenosConnection({ bankId: bankId!, connectionId })
+        temenosApi.revokeTemenosConnection({ bankId: bankId!, connectionId }),
       ),
     onSuccess: () => {
       temenosInvalidatePrefixes.forEach((prefix) => {
@@ -2095,10 +2126,10 @@ export function useTriggerTemenosPull(bankId: string | undefined) {
           temenosPullTriggerRequest: {
             asOfDate: asOfDate ? `${asOfDate}T00:00:00Z` : undefined,
           },
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['t24-connections'] });
+      void queryClient.invalidateQueries({ queryKey: ["t24-connections"] });
     },
   });
 }
@@ -2118,7 +2149,7 @@ export function useTriggerTemenosBackfill(bankId: string | undefined) {
           bankId: bankId!,
           connectionId,
           temenosBackfillRequest: payload,
-        })
+        }),
       ),
   });
 }
@@ -2135,14 +2166,14 @@ export function useTriggerTemenosBackfill(bankId: string | undefined) {
 // ---------------------------------------------------------------------------
 
 const reportingInvalidatePrefixes = [
-  'rr-obligations',
-  'rr-packages',
-  'rr-package',
-  'rr-events',
+  "rr-obligations",
+  "rr-packages",
+  "rr-package",
+  "rr-events",
   // Certification appends a signed revision, so the version chain — and with it
   // which document Download resolves to — changes without the artifact list
   // moving at all.
-  'rr-artifact-versions',
+  "rr-artifact-versions",
 ];
 
 /** Deadline board: every registry obligation in the horizon with RAG + package. */
@@ -2150,10 +2181,10 @@ export function useReportingObligations(
   bankId: string | undefined,
   horizonMonths = 3,
   limit = 50,
-  offset = 0
+  offset = 0,
 ) {
   return useQuery({
-    queryKey: ['rr-obligations', bankId, horizonMonths, limit, offset],
+    queryKey: ["rr-obligations", bankId, horizonMonths, limit, offset],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listReportingObligations({
@@ -2161,7 +2192,7 @@ export function useReportingObligations(
           horizonMonths,
           limit,
           offset,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
     placeholderData: keepPreviousData,
@@ -2185,11 +2216,11 @@ export type RegulatoryPackageFilters = {
 
 export function useRegulatoryPackages(
   bankId: string | undefined,
-  filters: RegulatoryPackageFilters = {}
+  filters: RegulatoryPackageFilters = {},
 ) {
   return useQuery({
     queryKey: [
-      'rr-packages',
+      "rr-packages",
       bankId,
       filters.returnCode ?? null,
       filters.returnFamily ?? null,
@@ -2220,7 +2251,7 @@ export function useRegulatoryPackages(
           includeSuperseded: filters.includeSuperseded,
           limit: filters.limit,
           offset: filters.offset,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
   });
@@ -2228,16 +2259,16 @@ export function useRegulatoryPackages(
 
 export function useRegulatoryPackage(
   bankId: string | undefined,
-  packageId: string | null | undefined
+  packageId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['rr-package', bankId, packageId],
+    queryKey: ["rr-package", bankId, packageId],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.getRegulatoryPackage({
           bankId: bankId!,
           packageId: packageId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId),
   });
@@ -2261,7 +2292,7 @@ export function useGenerateRegulatoryPackage(bankId: string | undefined) {
             reportingDate: new Date(`${payload.reportingDate}T00:00:00Z`),
             notes: payload.notes ?? null,
           },
-        })
+        }),
       ),
     onSuccess: () => {
       reportingInvalidatePrefixes.forEach((prefix) => {
@@ -2279,12 +2310,12 @@ export function useValidateRegulatoryPackage(bankId: string | undefined) {
         regulatoryReportingApi.validateRegulatoryPackage({
           bankId: bankId!,
           packageId,
-        })
+        }),
       ),
     onSuccess: (pkg) => {
-      queryClient.setQueryData(['rr-package', bankId, pkg.id], pkg);
-      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
-      void queryClient.invalidateQueries({ queryKey: ['rr-obligations'] });
+      queryClient.setQueryData(["rr-package", bankId, pkg.id], pkg);
+      void queryClient.invalidateQueries({ queryKey: ["rr-packages"] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-obligations"] });
     },
   });
 }
@@ -2292,18 +2323,24 @@ export function useValidateRegulatoryPackage(bankId: string | undefined) {
 export function useRequestPackageApproval(bankId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ packageId, reason }: { packageId: string; reason?: string }) =>
+    mutationFn: ({
+      packageId,
+      reason,
+    }: {
+      packageId: string;
+      reason?: string;
+    }) =>
       apiCall(() =>
         regulatoryReportingApi.requestPackageApproval({
           bankId: bankId!,
           packageId,
           packageApprovalRequestCreate: { reason: reason ?? null },
-        })
+        }),
       ),
     onSuccess: (pkg) => {
-      queryClient.setQueryData(['rr-package', bankId, pkg.id], pkg);
-      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
-      void queryClient.invalidateQueries({ queryKey: ['rr-obligations'] });
+      queryClient.setQueryData(["rr-package", bankId, pkg.id], pkg);
+      void queryClient.invalidateQueries({ queryKey: ["rr-packages"] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-obligations"] });
     },
   });
 }
@@ -2330,12 +2367,12 @@ export function useDecidePackageApproval(bankId: string | undefined) {
           bankId: bankId!,
           packageId,
           packageApprovalDecisionCreate: { action, reason: reason ?? null },
-        })
+        }),
       ),
     onSuccess: (pkg) => {
-      queryClient.setQueryData(['rr-package', bankId, pkg.id], pkg);
-      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
-      void queryClient.invalidateQueries({ queryKey: ['rr-obligations'] });
+      queryClient.setQueryData(["rr-package", bankId, pkg.id], pkg);
+      void queryClient.invalidateQueries({ queryKey: ["rr-packages"] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-obligations"] });
     },
   });
 }
@@ -2343,16 +2380,16 @@ export function useDecidePackageApproval(bankId: string | undefined) {
 /** Persisted artifact list for one package (survives reloads — API-backed). */
 export function usePackageArtifacts(
   bankId: string | undefined,
-  packageId: string | null | undefined
+  packageId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['rr-artifacts', bankId, packageId],
+    queryKey: ["rr-artifacts", bankId, packageId],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listPackageArtifacts({
           bankId: bankId!,
           packageId: packageId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId),
   });
@@ -2370,16 +2407,16 @@ export function usePackageArtifacts(
  */
 export function usePackageArtifactVersions(
   bankId: string | undefined,
-  packageId: string | null | undefined
+  packageId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['rr-artifact-versions', bankId, packageId],
+    queryKey: ["rr-artifact-versions", bankId, packageId],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listPackageArtifactVersions({
           bankId: bankId!,
           packageId: packageId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId),
   });
@@ -2395,16 +2432,16 @@ export function usePackageArtifactVersions(
  */
 export function usePackageVersionChain(
   bankId: string | undefined,
-  packageId: string | null | undefined
+  packageId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['rr-version-chain', bankId, packageId],
+    queryKey: ["rr-version-chain", bankId, packageId],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.getPackageVersionChain({
           bankId: bankId!,
           packageId: packageId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId),
   });
@@ -2421,17 +2458,17 @@ export function useComparePackageVersions(
   bankId: string | undefined,
   packageId: string | null | undefined,
   againstPackageId: string | null | undefined,
-  enabled = true
+  enabled = true,
 ) {
   return useQuery({
-    queryKey: ['rr-comparison', bankId, packageId, againstPackageId],
+    queryKey: ["rr-comparison", bankId, packageId, againstPackageId],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.comparePackageVersions({
           bankId: bankId!,
           packageId: packageId!,
           against: againstPackageId!,
-        })
+        }),
       ),
     enabled: Boolean(enabled && bankId && packageId && againstPackageId),
   });
@@ -2450,17 +2487,17 @@ export function useComparePackageVersions(
 export function useReportComparison(
   bankId: string | undefined,
   params: ReportComparisonParams,
-  enabled = true
+  enabled = true,
 ) {
   return useQuery({
     queryKey: [
-      'report-comparison',
+      "report-comparison",
       bankId,
       params.mode,
       params.module,
       params.left,
       params.right,
-      params.scenarioCode ?? 'baseline',
+      params.scenarioCode ?? "baseline",
     ],
     queryFn: () => getReportComparison(bankId!, params),
     enabled:
@@ -2474,20 +2511,26 @@ export function useReportComparison(
 export function useExportRegulatoryPackage(bankId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ packageId, kind }: { packageId: string; kind: ArtifactKind }) =>
+    mutationFn: ({
+      packageId,
+      kind,
+    }: {
+      packageId: string;
+      kind: ArtifactKind;
+    }) =>
       apiCall(() =>
         regulatoryReportingApi.exportRegulatoryPackage({
           bankId: bankId!,
           packageId,
           kind,
-        })
+        }),
       ),
     onSuccess: (artifact) => {
       void queryClient.invalidateQueries({
-        queryKey: ['rr-artifacts', bankId, artifact.packageId],
+        queryKey: ["rr-artifacts", bankId, artifact.packageId],
       });
       void queryClient.invalidateQueries({
-        queryKey: ['rr-artifact-versions', bankId, artifact.packageId],
+        queryKey: ["rr-artifact-versions", bankId, artifact.packageId],
       });
     },
   });
@@ -2513,10 +2556,10 @@ export function useSubmitRegulatoryPackage(bankId: string | undefined) {
           bankId: bankId!,
           packageId,
           packageSubmitCreate: { channel: channel ?? null },
-        })
+        }),
       ),
     onSuccess: (pkg) => {
-      queryClient.setQueryData(['rr-package', bankId, pkg.id], pkg);
+      queryClient.setQueryData(["rr-package", bankId, pkg.id], pkg);
       reportingInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
@@ -2533,10 +2576,13 @@ export function usePollRegulatorySubmission(bankId: string | undefined) {
         regulatoryReportingApi.pollRegulatorySubmission({
           bankId: bankId!,
           packageId,
-        })
+        }),
       ),
     onSuccess: (poll) => {
-      queryClient.setQueryData(['rr-package', bankId, poll._package.id], poll._package);
+      queryClient.setQueryData(
+        ["rr-package", bankId, poll._package.id],
+        poll._package,
+      );
       reportingInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
@@ -2547,16 +2593,16 @@ export function usePollRegulatorySubmission(bankId: string | undefined) {
 /** ORASS-parity resubmission requests filed against one package. */
 export function useResubmissionRequests(
   bankId: string | undefined,
-  packageId: string | null | undefined
+  packageId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['rr-resubmissions', bankId, packageId],
+    queryKey: ["rr-resubmissions", bankId, packageId],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listResubmissionRequests({
           bankId: bankId!,
           packageId: packageId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId),
   });
@@ -2566,23 +2612,29 @@ export function useResubmissionRequests(
 export function useRequestResubmission(bankId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ packageId, reason }: { packageId: string; reason: string }) =>
+    mutationFn: ({
+      packageId,
+      reason,
+    }: {
+      packageId: string;
+      reason: string;
+    }) =>
       apiCall(() =>
         regulatoryReportingApi.requestPackageResubmission({
           bankId: bankId!,
           packageId,
           resubmissionRequestCreate: { reason },
-        })
+        }),
       ),
     onSuccess: (request) => {
       void queryClient.invalidateQueries({
-        queryKey: ['rr-resubmissions', bankId, request.packageId],
+        queryKey: ["rr-resubmissions", bankId, request.packageId],
       });
       void queryClient.invalidateQueries({
-        queryKey: ['rr-package', bankId, request.packageId],
+        queryKey: ["rr-package", bankId, request.packageId],
       });
-      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
-      void queryClient.invalidateQueries({ queryKey: ['rr-events'] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-packages"] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-events"] });
     },
   });
 }
@@ -2602,7 +2654,7 @@ export function useDecideResubmission(bankId: string | undefined) {
     }: {
       packageId: string;
       requestId: string;
-      decision: 'granted' | 'denied';
+      decision: "granted" | "denied";
       note?: string;
     }) =>
       apiCall(() =>
@@ -2611,17 +2663,17 @@ export function useDecideResubmission(bankId: string | undefined) {
           packageId,
           requestId,
           resubmissionDecisionCreate: { decision, note: note ?? null },
-        })
+        }),
       ),
     onSuccess: (request) => {
       void queryClient.invalidateQueries({
-        queryKey: ['rr-resubmissions', bankId, request.packageId],
+        queryKey: ["rr-resubmissions", bankId, request.packageId],
       });
       void queryClient.invalidateQueries({
-        queryKey: ['rr-package', bankId, request.packageId],
+        queryKey: ["rr-package", bankId, request.packageId],
       });
-      void queryClient.invalidateQueries({ queryKey: ['rr-packages'] });
-      void queryClient.invalidateQueries({ queryKey: ['rr-events'] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-packages"] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-events"] });
     },
   });
 }
@@ -2629,17 +2681,17 @@ export function useDecideResubmission(bankId: string | undefined) {
 export function useSubmissionEvents(
   bankId: string | undefined,
   packageId: string | null | undefined,
-  limit = 50
+  limit = 50,
 ) {
   return useQuery({
-    queryKey: ['rr-events', bankId, packageId, limit],
+    queryKey: ["rr-events", bankId, packageId, limit],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listSubmissionEvents({
           bankId: bankId!,
           packageId: packageId!,
           limit,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId),
   });
@@ -2649,16 +2701,16 @@ export function useSubmissionEvents(
 export function useEmailFallbackInstructions(
   bankId: string | undefined,
   packageId: string | null | undefined,
-  enabled = true
+  enabled = true,
 ) {
   return useQuery({
-    queryKey: ['rr-email-fallback', bankId, packageId],
+    queryKey: ["rr-email-fallback", bankId, packageId],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.getEmailFallbackInstructions({
           bankId: bankId!,
           packageId: packageId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId) && enabled,
   });
@@ -2675,17 +2727,17 @@ export function useEmailFallbackInstructions(
 export function useReturnAnchors(
   bankId: string | undefined,
   returnCode: string | undefined,
-  horizonMonths = 3
+  horizonMonths = 3,
 ) {
   return useQuery({
-    queryKey: ['rr-anchors', bankId, returnCode, horizonMonths],
+    queryKey: ["rr-anchors", bankId, returnCode, horizonMonths],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listReturnAnchors({
           bankId: bankId!,
           returnCode: returnCode!,
           horizonMonths,
-        })
+        }),
       ),
     enabled: Boolean(bankId && returnCode),
   });
@@ -2693,8 +2745,9 @@ export function useReturnAnchors(
 
 export function useReturnTemplates() {
   return useQuery({
-    queryKey: ['rr-templates'],
-    queryFn: () => apiCall(() => regulatoryReportingApi.listReturnTemplates({})),
+    queryKey: ["rr-templates"],
+    queryFn: () =>
+      apiCall(() => regulatoryReportingApi.listReturnTemplates({})),
     staleTime: 10 * 60_000,
   });
 }
@@ -2706,16 +2759,16 @@ export function isChannelConfigMissingError(error: unknown): boolean {
 
 export function useChannelConfig(
   bankId: string | undefined,
-  channel: ChannelCode
+  channel: ChannelCode,
 ) {
   return useQuery({
-    queryKey: ['rr-channel-config', bankId, channel],
+    queryKey: ["rr-channel-config", bankId, channel],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.getChannelConfig({
           bankId: bankId!,
           channel,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
     retry: false,
@@ -2743,12 +2796,12 @@ export function useSaveChannelConfig(bankId: string | undefined) {
             config,
             credentials: credentials ?? null,
           },
-        })
+        }),
       ),
     onSuccess: (config) => {
       queryClient.setQueryData(
-        ['rr-channel-config', bankId, config.channel],
-        config
+        ["rr-channel-config", bankId, config.channel],
+        config,
       );
     },
   });
@@ -2767,10 +2820,10 @@ export function useSaveChannelConfig(bankId: string | undefined) {
 /** The composed corporate register (profile may be null until first configured). */
 export function useInstitutionProfile(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['institution-profile', bankId],
+    queryKey: ["institution-profile", bankId],
     queryFn: () =>
       apiCall(() =>
-        institutionProfileApi.getInstitutionProfile({ bankId: bankId! })
+        institutionProfileApi.getInstitutionProfile({ bankId: bankId! }),
       ),
     enabled: Boolean(bankId),
   });
@@ -2779,14 +2832,14 @@ export function useInstitutionProfile(bankId: string | undefined) {
 /** Shared invalidation: every register mutation refreshes the composed read. */
 function useInstitutionRegisterMutation<TVariables, TData>(
   bankId: string | undefined,
-  mutationFn: (variables: TVariables) => Promise<TData>
+  mutationFn: (variables: TVariables) => Promise<TData>,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ['institution-profile', bankId],
+        queryKey: ["institution-profile", bankId],
       });
     },
   });
@@ -2801,8 +2854,8 @@ export function useSaveInstitutionProfile(bankId: string | undefined) {
         institutionProfileApi.putInstitutionProfile({
           bankId: bankId!,
           institutionProfilePut: payload,
-        })
-      )
+        }),
+      ),
   );
 }
 
@@ -2812,8 +2865,8 @@ export function useCreateRelatedParty(bankId: string | undefined) {
       institutionProfileApi.createRelatedParty({
         bankId: bankId!,
         relatedPartyCreate: payload,
-      })
-    )
+      }),
+    ),
   );
 }
 
@@ -2827,8 +2880,8 @@ export function useUpdateRelatedParty(bankId: string | undefined) {
           bankId: bankId!,
           partyId,
           relatedPartyUpdate: payload,
-        })
-      )
+        }),
+      ),
   );
 }
 
@@ -2841,8 +2894,8 @@ export function useCreateShareholding(bankId: string | undefined) {
           bankId: bankId!,
           partyId,
           shareholdingCreate: payload,
-        })
-      )
+        }),
+      ),
   );
 }
 
@@ -2864,8 +2917,8 @@ export function useUpdateShareholding(bankId: string | undefined) {
           partyId,
           shareholdingId,
           shareholdingUpdate: payload,
-        })
-      )
+        }),
+      ),
   );
 }
 
@@ -2875,8 +2928,8 @@ export function useCreateOutlet(bankId: string | undefined) {
       institutionProfileApi.createOutlet({
         bankId: bankId!,
         outletCreate: payload,
-      })
-    )
+      }),
+    ),
   );
 }
 
@@ -2890,8 +2943,8 @@ export function useUpdateOutlet(bankId: string | undefined) {
           bankId: bankId!,
           outletId,
           outletUpdate: payload,
-        })
-      )
+        }),
+      ),
   );
 }
 
@@ -2901,22 +2954,28 @@ export function useCreateBankProduct(bankId: string | undefined) {
       institutionProfileApi.createBankProduct({
         bankId: bankId!,
         bankProductCreate: payload,
-      })
-    )
+      }),
+    ),
   );
 }
 
 export function useUpdateBankProduct(bankId: string | undefined) {
   return useInstitutionRegisterMutation(
     bankId,
-    ({ productId, payload }: { productId: string; payload: BankProductUpdate }) =>
+    ({
+      productId,
+      payload,
+    }: {
+      productId: string;
+      payload: BankProductUpdate;
+    }) =>
       apiCall(() =>
         institutionProfileApi.updateBankProduct({
           bankId: bankId!,
           productId,
           bankProductUpdate: payload,
-        })
-      )
+        }),
+      ),
   );
 }
 
@@ -2926,22 +2985,28 @@ export function useCreateBankLicense(bankId: string | undefined) {
       institutionProfileApi.createBankLicense({
         bankId: bankId!,
         bankLicenseCreate: payload,
-      })
-    )
+      }),
+    ),
   );
 }
 
 export function useUpdateBankLicense(bankId: string | undefined) {
   return useInstitutionRegisterMutation(
     bankId,
-    ({ licenseId, payload }: { licenseId: string; payload: BankLicenseUpdate }) =>
+    ({
+      licenseId,
+      payload,
+    }: {
+      licenseId: string;
+      payload: BankLicenseUpdate;
+    }) =>
       apiCall(() =>
         institutionProfileApi.updateBankLicense({
           bankId: bankId!,
           licenseId,
           bankLicenseUpdate: payload,
-        })
-      )
+        }),
+      ),
   );
 }
 
@@ -2953,22 +3018,28 @@ export function useCreateNameHistoryEntry(bankId: string | undefined) {
         institutionProfileApi.createNameHistoryEntry({
           bankId: bankId!,
           bankNameHistoryCreate: payload,
-        })
-      )
+        }),
+      ),
   );
 }
 
 export function useUpdateNameHistoryEntry(bankId: string | undefined) {
   return useInstitutionRegisterMutation(
     bankId,
-    ({ entryId, payload }: { entryId: string; payload: BankNameHistoryUpdate }) =>
+    ({
+      entryId,
+      payload,
+    }: {
+      entryId: string;
+      payload: BankNameHistoryUpdate;
+    }) =>
       apiCall(() =>
         institutionProfileApi.updateNameHistoryEntry({
           bankId: bankId!,
           entryId,
           bankNameHistoryUpdate: payload,
-        })
-      )
+        }),
+      ),
   );
 }
 
@@ -2979,7 +3050,7 @@ export function useUpdateNameHistoryEntry(bankId: string | undefined) {
 /** The tenant's user roster — display names for actor-id attribution. */
 export function useOrganizationUsers() {
   return useQuery({
-    queryKey: ['org-users'],
+    queryKey: ["org-users"],
     queryFn: () => apiCall(() => organizationApi.listOrganizationUsers()),
     staleTime: 10 * 60_000,
   });
@@ -3000,7 +3071,7 @@ export function useOfficerNames(): (userId: string) => string {
       const role = user.jobTitle ?? user.role;
       return role ? `${name} (${role})` : name;
     },
-    [users]
+    [users],
   );
 }
 
@@ -3013,16 +3084,12 @@ export function useOfficerNames(): (userId: string) => string {
 export function useNotifications(unreadOnly = false) {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('notifications', scope, unreadOnly),
+    queryKey: scopedQueryKey("notifications", scope, unreadOnly),
     queryFn: () =>
       apiCall(() =>
-        notificationsApi.listNotifications({ unreadOnly, limit: 50 })
+        notificationsApi.listNotifications({ unreadOnly, limit: 50 }),
       ),
-    refetchInterval: jitteredPollInterval(
-      60_000,
-      'notifications',
-      scope,
-    ),
+    refetchInterval: jitteredPollInterval(60_000, "notifications", scope),
   });
 }
 
@@ -3032,7 +3099,7 @@ export function useMarkNotificationRead() {
     mutationFn: (notificationId: string) =>
       apiCall(() => notificationsApi.markNotificationRead({ notificationId })),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }
@@ -3040,9 +3107,10 @@ export function useMarkNotificationRead() {
 export function useMarkAllNotificationsRead() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiCall(() => notificationsApi.markAllNotificationsRead()),
+    mutationFn: () =>
+      apiCall(() => notificationsApi.markAllNotificationsRead()),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 }
@@ -3054,7 +3122,7 @@ export function useMarkAllNotificationsRead() {
 
 export function useIntegrationKeys(enabled: boolean) {
   return useQuery({
-    queryKey: ['integration-keys'],
+    queryKey: ["integration-keys"],
     queryFn: () => apiCall(() => integrationKeysApi.listIntegrationKeys()),
     enabled,
   });
@@ -3067,10 +3135,10 @@ export function useIssueIntegrationKey() {
       apiCall(() =>
         integrationKeysApi.issueIntegrationKey({
           integrationKeyIssueRequest: { label },
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['integration-keys'] });
+      void queryClient.invalidateQueries({ queryKey: ["integration-keys"] });
     },
   });
 }
@@ -3083,10 +3151,10 @@ export function useRevokeIntegrationKey() {
         integrationKeysApi.revokeIntegrationKey({
           keyId,
           integrationKeyRevokeRequest: { reason },
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['integration-keys'] });
+      void queryClient.invalidateQueries({ queryKey: ["integration-keys"] });
     },
   });
 }
@@ -3107,7 +3175,7 @@ export function useRevokeIntegrationKey() {
 /** The caller's own permanent signer identity (provisioned on first read). */
 export function useMySignerIdentity(enabled = true) {
   return useQuery({
-    queryKey: ['attn-identity'],
+    queryKey: ["attn-identity"],
     queryFn: () => apiCall(() => attestationApi.getMySignerIdentity()),
     enabled,
     // Permanent by design (§2.3) — no reason to re-fetch it on every mount.
@@ -3118,16 +3186,16 @@ export function useMySignerIdentity(enabled = true) {
 /** Who has signed, who must still sign, and whether submission is unlocked. */
 export function usePackageAttestation(
   bankId: string | undefined,
-  packageId: string | null | undefined
+  packageId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['attn-status', bankId, packageId],
+    queryKey: ["attn-status", bankId, packageId],
     queryFn: () =>
       apiCall(() =>
         attestationApi.getPackageAttestation({
           bankId: bankId!,
           packageId: packageId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId),
   });
@@ -3142,17 +3210,17 @@ export function useCertificationPreview(
   bankId: string | undefined,
   packageId: string | null | undefined,
   signingRole: SigningRole,
-  enabled = true
+  enabled = true,
 ) {
   return useQuery({
-    queryKey: ['attn-preview', bankId, packageId, signingRole],
+    queryKey: ["attn-preview", bankId, packageId, signingRole],
     queryFn: () =>
       apiCall(() =>
         attestationApi.previewCertification({
           bankId: bankId!,
           packageId: packageId!,
           signingRole,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId) && enabled,
     staleTime: 0,
@@ -3188,7 +3256,7 @@ export function useStepUpForSigning(bankId: string | undefined) {
             password: password ?? null,
             idToken: idToken ?? null,
           },
-        })
+        }),
       ),
   });
 }
@@ -3221,12 +3289,15 @@ export function useCertifyPackage(bankId: string | undefined) {
             authorizationToken,
             expectedCertificationDigest,
           },
-        })
+        }),
       ),
     onSuccess: (status) => {
-      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
-      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
+      queryClient.setQueryData(
+        ["attn-status", bankId, status.packageId],
+        status,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["attn-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-verify"] });
       reportingInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
@@ -3253,9 +3324,9 @@ export function useCertifyWithHeldAuthorization(bankId: string | undefined) {
       signingRole: SigningRole;
       expectedCertificationDigest: string;
     }) => {
-      const response = await fetch('/api/attestation/certify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/attestation/certify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bankId: bankId!,
           packageId,
@@ -3267,9 +3338,12 @@ export function useCertifyWithHeldAuthorization(bankId: string | undefined) {
       if (!response.ok) {
         const envelope = (body as { error?: unknown })?.error ?? body;
         const shaped = (
-          envelope && typeof envelope === 'object' ? envelope : {}
+          envelope && typeof envelope === "object" ? envelope : {}
         ) as { code?: string; message?: string; details?: unknown };
-        const details = shaped.details as { error_code?: string; message?: string } | null;
+        const details = shaped.details as {
+          error_code?: string;
+          message?: string;
+        } | null;
         throw new ApiError({
           message:
             details?.message ??
@@ -3284,9 +3358,12 @@ export function useCertifyWithHeldAuthorization(bankId: string | undefined) {
       return body as AttestationStatusRead;
     },
     onSuccess: (status) => {
-      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
-      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
+      queryClient.setQueryData(
+        ["attn-status", bankId, status.packageId],
+        status,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["attn-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-verify"] });
       reportingInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
@@ -3298,18 +3375,27 @@ export function useCertifyWithHeldAuthorization(bankId: string | undefined) {
 export function useVoidAttestation(bankId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ packageId, reason }: { packageId: string; reason: string }) =>
+    mutationFn: ({
+      packageId,
+      reason,
+    }: {
+      packageId: string;
+      reason: string;
+    }) =>
       apiCall(() =>
         attestationApi.voidAttestation({
           bankId: bankId!,
           packageId,
           voidAttestationRequest: { reason },
-        })
+        }),
       ),
     onSuccess: (status) => {
-      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
-      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
+      queryClient.setQueryData(
+        ["attn-status", bankId, status.packageId],
+        status,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["attn-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-verify"] });
       reportingInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
@@ -3327,19 +3413,28 @@ export function useVoidAttestation(bankId: string | undefined) {
 export function useSendBackForCorrections(bankId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ packageId, reason }: { packageId: string; reason: string }) =>
+    mutationFn: ({
+      packageId,
+      reason,
+    }: {
+      packageId: string;
+      reason: string;
+    }) =>
       apiCall(() =>
         attestationApi.sendPackageBackForCorrections({
           bankId: bankId!,
           packageId,
           sendBackForCorrectionsRequest: { reason },
-        })
+        }),
       ),
     onSuccess: (status) => {
-      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
-      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-awaiting'] });
+      queryClient.setQueryData(
+        ["attn-status", bankId, status.packageId],
+        status,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["attn-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-verify"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-awaiting"] });
       reportingInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
@@ -3355,16 +3450,16 @@ export function useSendBackForCorrections(bankId: string | undefined) {
 export function useVerifyPackageAttestation(
   bankId: string | undefined,
   packageId: string | null | undefined,
-  enabled: boolean
+  enabled: boolean,
 ) {
   return useQuery({
-    queryKey: ['attn-verify', bankId, packageId],
+    queryKey: ["attn-verify", bankId, packageId],
     queryFn: () =>
       apiCall(() =>
         attestationApi.verifyPackageAttestation({
           bankId: bankId!,
           packageId: packageId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId) && enabled,
     staleTime: 0,
@@ -3387,16 +3482,16 @@ export function useVerifyPackageAttestation(
  */
 export function usePackageSignaturePlacements(
   bankId: string | undefined,
-  packageId: string | null | undefined
+  packageId: string | null | undefined,
 ) {
   return useQuery({
-    queryKey: ['attn-placements', bankId, packageId],
+    queryKey: ["attn-placements", bankId, packageId],
     queryFn: () =>
       apiCall(() =>
         attestationApi.getPackageSignaturePlacements({
           bankId: bankId!,
           packageId: packageId!,
-        })
+        }),
       ),
     enabled: Boolean(bankId && packageId),
   });
@@ -3428,12 +3523,12 @@ export function useSetPackageSignaturePlacements(bankId: string | undefined) {
           bankId: bankId!,
           packageId,
           packageSignaturePlacementRequest: { placements, reason },
-        })
+        }),
       ),
     onSuccess: (resolved) => {
       queryClient.setQueryData(
-        ['attn-placements', bankId, resolved.packageId],
-        resolved
+        ["attn-placements", bankId, resolved.packageId],
+        resolved,
       );
     },
   });
@@ -3443,7 +3538,7 @@ export function useSetPackageSignaturePlacements(bankId: string | undefined) {
  * Save this layout as the reusable template for a return code (optionally for
  * one bank), so next month's filing opens with the boxes already on the lines.
  *
- * Admin-only server-side, like every other placement template write: the
+ * Org Owner-only server-side, like every other placement template write: the
  * template decides where an officer's name and permanent signer ID print on
  * every future filing of that return, not just this one.
  */
@@ -3454,17 +3549,17 @@ export function useUpsertSignaturePlacementTemplate() {
       apiCall(() =>
         attestationApi.upsertSignaturePlacementTemplate({
           signaturePlacementTemplateUpsertRequest: payload,
-        })
+        }),
       ),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['attn-placements'] }),
+      queryClient.invalidateQueries({ queryKey: ["attn-placements"] }),
   });
 }
 
 /** The caller's own adopted mark — drawn or typed. Never anybody else's. */
 export function useMyAdoptedSignature(enabled = true) {
   return useQuery({
-    queryKey: ['attn-appearance'],
+    queryKey: ["attn-appearance"],
     queryFn: () => apiCall(() => attestationApi.getMyAdoptedSignature()),
     enabled,
   });
@@ -3476,10 +3571,10 @@ export function useAdoptMySignature() {
   return useMutation({
     mutationFn: (payload: AdoptSignatureRequest) =>
       apiCall(() =>
-        attestationApi.adoptMySignature({ adoptSignatureRequest: payload })
+        attestationApi.adoptMySignature({ adoptSignatureRequest: payload }),
       ),
     onSuccess: (adopted) => {
-      queryClient.setQueryData(['attn-appearance'], adopted);
+      queryClient.setQueryData(["attn-appearance"], adopted);
     },
   });
 }
@@ -3501,14 +3596,17 @@ export function useCertifyAndSend(bankId: string | undefined) {
           bankId: bankId!,
           packageId,
           certifyAndSendRequest: request,
-        })
+        }),
       ),
     onSuccess: (status) => {
-      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
-      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-placements'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-awaiting'] });
+      queryClient.setQueryData(
+        ["attn-status", bankId, status.packageId],
+        status,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["attn-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-verify"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-placements"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-awaiting"] });
       reportingInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
@@ -3523,7 +3621,9 @@ export function useCertifyAndSend(bankId: string | undefined) {
  * server-side and relays the risk service's verdict verbatim, including
  * `details.error_code`, so this branches on the same codes as the password path.
  */
-export function useCertifyAndSendWithHeldAuthorization(bankId: string | undefined) {
+export function useCertifyAndSendWithHeldAuthorization(
+  bankId: string | undefined,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -3533,10 +3633,12 @@ export function useCertifyAndSendWithHeldAuthorization(bankId: string | undefine
       recipients,
       placements,
       reason,
-    }: Omit<CertifyAndSendRequest, 'authorizationToken'> & { packageId: string }) => {
-      const response = await fetch('/api/attestation/certify-and-send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    }: Omit<CertifyAndSendRequest, "authorizationToken"> & {
+      packageId: string;
+    }) => {
+      const response = await fetch("/api/attestation/certify-and-send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bankId: bankId!,
           packageId,
@@ -3551,9 +3653,12 @@ export function useCertifyAndSendWithHeldAuthorization(bankId: string | undefine
       if (!response.ok) {
         const envelope = (body as { error?: unknown })?.error ?? body;
         const shaped = (
-          envelope && typeof envelope === 'object' ? envelope : {}
+          envelope && typeof envelope === "object" ? envelope : {}
         ) as { code?: string; message?: string; details?: unknown };
-        const details = shaped.details as { error_code?: string; message?: string } | null;
+        const details = shaped.details as {
+          error_code?: string;
+          message?: string;
+        } | null;
         throw new ApiError({
           message:
             details?.message ??
@@ -3568,11 +3673,14 @@ export function useCertifyAndSendWithHeldAuthorization(bankId: string | undefine
       return body as AttestationStatusRead;
     },
     onSuccess: (status) => {
-      queryClient.setQueryData(['attn-status', bankId, status.packageId], status);
-      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-verify'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-placements'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-awaiting'] });
+      queryClient.setQueryData(
+        ["attn-status", bankId, status.packageId],
+        status,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["attn-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-verify"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-placements"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-awaiting"] });
       reportingInvalidatePrefixes.forEach((prefix) => {
         void queryClient.invalidateQueries({ queryKey: [prefix] });
       });
@@ -3587,8 +3695,9 @@ export function useCertifyAndSendWithHeldAuthorization(bankId: string | undefine
  */
 export function useReturnsAwaitingMySignature(enabled = true) {
   return useQuery({
-    queryKey: ['attn-awaiting'],
-    queryFn: () => apiCall(() => attestationApi.listReturnsAwaitingMySignature()),
+    queryKey: ["attn-awaiting"],
+    queryFn: () =>
+      apiCall(() => attestationApi.listReturnsAwaitingMySignature()),
     enabled,
     refetchInterval: 60_000,
   });
@@ -3597,14 +3706,14 @@ export function useReturnsAwaitingMySignature(enabled = true) {
 /** Configured signing policies for the org (the built-in default is not a row). */
 export function useSigningPolicies(enabled = true) {
   return useQuery({
-    queryKey: ['attn-policies'],
+    queryKey: ["attn-policies"],
     queryFn: () => apiCall(() => attestationApi.listSigningPolicies()),
     enabled,
   });
 }
 
 /**
- * Create or supersede a signing policy. Reason-required and admin-only: this is
+ * Create or supersede a signing policy. Reason-required and Org Owner-only: this is
  * the control that decides whether a filed return is properly attested, so
  * changing it is itself an audited act. Policies are versioned by effective
  * date rather than edited in place, so every attestation read invalidates too.
@@ -3614,21 +3723,24 @@ export function useUpsertSigningPolicy() {
   return useMutation({
     mutationFn: (payload: PolicyUpsertRequest) =>
       apiCall(() =>
-        attestationApi.upsertSigningPolicy({ policyUpsertRequest: payload })
+        attestationApi.upsertSigningPolicy({ policyUpsertRequest: payload }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['attn-policies'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-status'] });
-      void queryClient.invalidateQueries({ queryKey: ['attn-preview'] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-policies"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-status"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-preview"] });
     },
   });
 }
 
 // --- Phase 2: EWI / CFP / threshold registers / reverse stress -------------
 
-export function useEwiDashboard(bankId: string | undefined, periodId?: string | undefined) {
+export function useEwiDashboard(
+  bankId: string | undefined,
+  periodId?: string | undefined,
+) {
   return useQuery({
-    queryKey: ['ewi-dashboard', bankId, periodId],
+    queryKey: ["ewi-dashboard", bankId, periodId],
     queryFn: () =>
       apiCall(async () => {
         // The EWI service uses a valid HTTP 200 availability envelope while
@@ -3645,8 +3757,8 @@ export function useEwiDashboard(bankId: string | undefined, periodId?: string | 
         };
         if (payload.available === false && payload.error_code) {
           throw new ModuleUnavailableError(
-            payload.reason ?? 'Early-warning indicators are not available yet.',
-            payload.error_code
+            payload.reason ?? "Early-warning indicators are not available yet.",
+            payload.error_code,
           );
         }
         return response.value();
@@ -3658,52 +3770,63 @@ export function useEwiDashboard(bankId: string | undefined, periodId?: string | 
 
 export function useCfpSummary(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['cfp-summary', bankId],
-    queryFn: () => apiCall(() => liquidityCfpApi.getContingencyFundingPlan({ bankId: bankId! })),
+    queryKey: ["cfp-summary", bankId],
+    queryFn: () =>
+      apiCall(() =>
+        liquidityCfpApi.getContingencyFundingPlan({ bankId: bankId! }),
+      ),
     enabled: Boolean(bankId),
   });
 }
 
 export function useCfpEvents(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['cfp-events', bankId],
+    queryKey: ["cfp-events", bankId],
     queryFn: () =>
-      apiCall(() => liquidityCfpApi.listContingencyFundingPlanEvents({ bankId: bankId! })),
+      apiCall(() =>
+        liquidityCfpApi.listContingencyFundingPlanEvents({ bankId: bankId! }),
+      ),
     enabled: Boolean(bankId),
   });
 }
 
 export function useLiquidityThresholdRegister(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['liq-thresholds', bankId],
+    queryKey: ["liq-thresholds", bankId],
     queryFn: () =>
-      apiCall(() => liquidityThresholdsApi.getLiquidityThresholdRegister({ bankId: bankId! })),
+      apiCall(() =>
+        liquidityThresholdsApi.getLiquidityThresholdRegister({
+          bankId: bankId!,
+        }),
+      ),
     enabled: Boolean(bankId),
   });
 }
 
 export function useLiquidityHaircutSchedule(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['liq-haircuts', bankId],
+    queryKey: ["liq-haircuts", bankId],
     queryFn: () =>
-      apiCall(() => liquidityThresholdsApi.getLiquidityHaircutSchedule({ bankId: bankId! })),
+      apiCall(() =>
+        liquidityThresholdsApi.getLiquidityHaircutSchedule({ bankId: bankId! }),
+      ),
     enabled: Boolean(bankId),
   });
 }
 
 export function useLatestReverseStress(
   bankId: string | undefined,
-  periodId: string | undefined
+  periodId: string | undefined,
 ) {
   return useQuery({
-    queryKey: ['reverse-stress', bankId, periodId],
+    queryKey: ["reverse-stress", bankId, periodId],
     queryFn: async () => {
       try {
         return await apiCall(() =>
           reverseStressApi.getLatestReverseStress({
             bankId: bankId!,
             reportingPeriodId: periodId!,
-          })
+          }),
         );
       } catch (error) {
         // No frontier run yet is a normal state, not an error banner.
@@ -3723,10 +3846,10 @@ export function useRunReverseStress(bankId: string | undefined) {
         reverseStressApi.runReverseStress({
           bankId: bankId!,
           reverseStressRunCreate: { reportingPeriodId: periodId },
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['reverse-stress'] });
+      void queryClient.invalidateQueries({ queryKey: ["reverse-stress"] });
     },
   });
 }
@@ -3736,23 +3859,26 @@ export function useRunReverseStress(bankId: string | undefined) {
 export function useScenarioCatalogue(
   bankId: string | undefined,
   module: WorkbenchModule,
-  periodId: string | undefined
+  periodId: string | undefined,
 ) {
   return useQuery({
-    queryKey: ['scenario-catalogue', bankId, module, periodId],
+    queryKey: ["scenario-catalogue", bankId, module, periodId],
     queryFn: () =>
       apiCall(() =>
         scenarioWorkbenchApi.listScenarioCatalogue({
           bankId: bankId!,
           module,
           reportingPeriodId: periodId,
-        })
+        }),
       ),
     enabled: Boolean(bankId),
   });
 }
 
-export function useRunScenarioAnalysis(bankId: string | undefined, module: WorkbenchModule) {
+export function useRunScenarioAnalysis(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+) {
   return useMutation({
     mutationFn: (payload: AnalysisRunCreate) =>
       apiCall(() =>
@@ -3760,12 +3886,15 @@ export function useRunScenarioAnalysis(bankId: string | undefined, module: Workb
           bankId: bankId!,
           module,
           analysisRunCreate: payload,
-        })
+        }),
       ),
   });
 }
 
-export function useCreateStressScenario(bankId: string | undefined, module: WorkbenchModule) {
+export function useCreateStressScenario(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: StressScenarioCreate) =>
@@ -3774,60 +3903,92 @@ export function useCreateStressScenario(bankId: string | undefined, module: Work
           bankId: bankId!,
           module,
           stressScenarioCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['scenario-catalogue', bankId, module] });
+      void queryClient.invalidateQueries({
+        queryKey: ["scenario-catalogue", bankId, module],
+      });
     },
   });
 }
 
-export function useUpdateStressScenario(bankId: string | undefined, module: WorkbenchModule) {
+export function useUpdateStressScenario(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ scenarioId, payload }: { scenarioId: string; payload: StressScenarioUpdate }) =>
+    mutationFn: ({
+      scenarioId,
+      payload,
+    }: {
+      scenarioId: string;
+      payload: StressScenarioUpdate;
+    }) =>
       apiCall(() =>
         scenarioWorkbenchApi.updateStressScenario({
           bankId: bankId!,
           module,
           scenarioId,
           stressScenarioUpdate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['scenario-catalogue', bankId, module] });
+      void queryClient.invalidateQueries({
+        queryKey: ["scenario-catalogue", bankId, module],
+      });
     },
   });
 }
 
-export function useArchiveStressScenario(bankId: string | undefined, module: WorkbenchModule) {
+export function useArchiveStressScenario(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ scenarioId, isArchived }: { scenarioId: string; isArchived: boolean }) =>
+    mutationFn: ({
+      scenarioId,
+      isArchived,
+    }: {
+      scenarioId: string;
+      isArchived: boolean;
+    }) =>
       apiCall(() =>
         scenarioWorkbenchApi.archiveStressScenario({
           bankId: bankId!,
           module,
           scenarioId,
           stressScenarioArchive: { isArchived },
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['scenario-catalogue', bankId, module] });
+      void queryClient.invalidateQueries({
+        queryKey: ["scenario-catalogue", bankId, module],
+      });
     },
   });
 }
 
-export function useSavedAnalyses(bankId: string | undefined, module: WorkbenchModule) {
+export function useSavedAnalyses(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+) {
   return useQuery({
-    queryKey: ['scenario-analyses', bankId, module],
+    queryKey: ["scenario-analyses", bankId, module],
     queryFn: () =>
-      apiCall(() => scenarioWorkbenchApi.listScenarioAnalyses({ bankId: bankId!, module })),
+      apiCall(() =>
+        scenarioWorkbenchApi.listScenarioAnalyses({ bankId: bankId!, module }),
+      ),
     enabled: Boolean(bankId),
   });
 }
 
-export function useSaveScenarioAnalysis(bankId: string | undefined, module: WorkbenchModule) {
+export function useSaveScenarioAnalysis(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: SavedAnalysisCreate) =>
@@ -3836,27 +3997,37 @@ export function useSaveScenarioAnalysis(bankId: string | undefined, module: Work
           bankId: bankId!,
           module,
           savedAnalysisCreate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['scenario-analyses', bankId, module] });
+      void queryClient.invalidateQueries({
+        queryKey: ["scenario-analyses", bankId, module],
+      });
     },
   });
 }
 
-export function useDeleteScenarioAnalysis(bankId: string | undefined, module: WorkbenchModule) {
+export function useDeleteScenarioAnalysis(
+  bankId: string | undefined,
+  module: WorkbenchModule,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (analysisId: string) =>
       apiCall(() =>
-        scenarioWorkbenchApi.deleteScenarioAnalysis({ bankId: bankId!, module, analysisId })
+        scenarioWorkbenchApi.deleteScenarioAnalysis({
+          bankId: bankId!,
+          module,
+          analysisId,
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['scenario-analyses', bankId, module] });
+      void queryClient.invalidateQueries({
+        queryKey: ["scenario-analyses", bankId, module],
+      });
     },
   });
 }
-
 
 // --- Board registers (Governance → Board Registers editor surface) ---------
 // Reads pair with the existing register hooks above (['liq-thresholds'],
@@ -3866,25 +4037,31 @@ export function useDeleteScenarioAnalysis(bankId: string | undefined, module: Wo
 
 export function useCrmHaircutRegister(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['crm-haircuts', bankId],
-    queryFn: () => apiCall(() => creditParamsApi.getCrmHaircutRegister({ bankId: bankId! })),
+    queryKey: ["crm-haircuts", bankId],
+    queryFn: () =>
+      apiCall(() => creditParamsApi.getCrmHaircutRegister({ bankId: bankId! })),
     enabled: Boolean(bankId),
   });
 }
 
 export function useEclAssumptionRegister(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['ecl-assumptions', bankId],
-    queryFn: () => apiCall(() => creditParamsApi.getEclAssumptionRegister({ bankId: bankId! })),
+    queryKey: ["ecl-assumptions", bankId],
+    queryFn: () =>
+      apiCall(() =>
+        creditParamsApi.getEclAssumptionRegister({ bankId: bankId! }),
+      ),
     enabled: Boolean(bankId),
   });
 }
 
 export function useCreditThresholdRegister(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['credit-thresholds', bankId],
+    queryKey: ["credit-thresholds", bankId],
     queryFn: () =>
-      apiCall(() => creditParamsApi.getCreditThresholdRegister({ bankId: bankId! })),
+      apiCall(() =>
+        creditParamsApi.getCreditThresholdRegister({ bankId: bankId! }),
+      ),
     enabled: Boolean(bankId),
   });
 }
@@ -3897,19 +4074,25 @@ export function useUpdateCreditThresholdRegister(bankId: string | undefined) {
         creditParamsApi.updateCreditThresholdRegister({
           bankId: bankId!,
           creditThresholdUpdate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['credit-thresholds', bankId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["credit-thresholds", bankId],
+      });
       // The four Board comparisons ride the credit validations/findings, so
       // every credit read that shows them refreshes (the server also enqueues
       // a live refresh for the alerts surface).
-      void queryClient.invalidateQueries({ queryKey: ['credit-dashboard', bankId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["credit-dashboard", bankId],
+      });
     },
   });
 }
 
-export function useUpdateLiquidityThresholdRegister(bankId: string | undefined) {
+export function useUpdateLiquidityThresholdRegister(
+  bankId: string | undefined,
+) {
   const queryClient = useQueryClient();
   const scope = useQueryAuthorityScope();
   return useMutation({
@@ -3918,14 +4101,16 @@ export function useUpdateLiquidityThresholdRegister(bankId: string | undefined) 
         liquidityThresholdsApi.updateLiquidityThresholdRegister({
           bankId: bankId!,
           liquidityThresholdUpdate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['liq-thresholds', bankId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["liq-thresholds", bankId],
+      });
       // Threshold generations feed the monitoring/liquidity views.
       void invalidateScopedPrefixes(
         queryClient,
-        ['liq-dashboard'],
+        ["liq-dashboard"],
         scope,
         bankId,
       );
@@ -3941,11 +4126,13 @@ export function useUpdateLiquidityEwiRegister(bankId: string | undefined) {
         liquidityCfpApi.updateLiquidityEwiRegister({
           bankId: bankId!,
           ewiRegisterPut: payload,
-        })
+        }),
       ),
     onSuccess: () => {
       // Prefix-invalidates every period's dashboard read.
-      void queryClient.invalidateQueries({ queryKey: ['ewi-dashboard', bankId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["ewi-dashboard", bankId],
+      });
     },
   });
 }
@@ -3959,10 +4146,12 @@ export function useUpdateCrmHaircutRegister(bankId: string | undefined) {
         creditParamsApi.updateCrmHaircutRegister({
           bankId: bankId!,
           crmHaircutUpdate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['crm-haircuts', bankId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["crm-haircuts", bankId],
+      });
       void invalidateScopedPrefixes(
         queryClient,
         capitalAssumptionPrefixes,
@@ -3982,10 +4171,12 @@ export function useUpdateEclAssumptionRegister(bankId: string | undefined) {
         creditParamsApi.updateEclAssumptionRegister({
           bankId: bankId!,
           eclAssumptionUpdate: payload,
-        })
+        }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['ecl-assumptions', bankId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["ecl-assumptions", bankId],
+      });
       void invalidateScopedPrefixes(
         queryClient,
         capitalAssumptionPrefixes,
@@ -4003,13 +4194,13 @@ export function useUpdateEclAssumptionRegister(bankId: string | undefined) {
 export function useLiveSnapshots(
   bankId: string | undefined,
   module: LiveModule,
-  days = 45
+  days = 45,
 ) {
   const scope = useQueryAuthorityScope();
   const queryClient = useQueryClient();
   return useQuery({
     queryKey: scopedQueryKey(
-      'live-snapshots',
+      "live-snapshots",
       scope,
       bankId ?? null,
       module,
@@ -4018,7 +4209,7 @@ export function useLiveSnapshots(
     queryFn: async () => {
       await waitForInitialDashboardSignals(queryClient, scope, bankId);
       return apiCall(() =>
-        liveEngineApi.listLiveSnapshots({ bankId: bankId!, module, days })
+        liveEngineApi.listLiveSnapshots({ bankId: bankId!, module, days }),
       );
     },
     enabled: Boolean(bankId),
@@ -4036,17 +4227,17 @@ export function useWindowAnalytics(
   bankId: string | undefined,
   start: string | undefined,
   end: string | undefined,
-  enabled: boolean
+  enabled: boolean,
 ) {
   return useQuery({
-    queryKey: ['window-analytics', bankId, start ?? null, end ?? null],
+    queryKey: ["window-analytics", bankId, start ?? null, end ?? null],
     queryFn: () =>
       apiCall(() =>
         windowAnalyticsApi.computeWindowAnalytics({
           bankId: bankId!,
           startDate: new Date(start!),
           endDate: new Date(end!),
-        })
+        }),
       ),
     enabled: enabled && Boolean(bankId && start && end),
   });
@@ -4061,17 +4252,17 @@ export function useCashflowWindow(
   bankId: string | undefined,
   start: string | undefined,
   end: string | undefined,
-  enabled: boolean
+  enabled: boolean,
 ) {
   return useQuery({
-    queryKey: ['cashflow-window', bankId, start ?? null, end ?? null],
+    queryKey: ["cashflow-window", bankId, start ?? null, end ?? null],
     queryFn: () =>
       apiCall(() =>
         cashflowWindowApi.computeCashflowWindow({
           bankId: bankId!,
           startDate: new Date(start!),
           endDate: new Date(end!),
-        })
+        }),
       ),
     enabled: enabled && Boolean(bankId && start && end),
   });

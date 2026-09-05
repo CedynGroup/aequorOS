@@ -2,8 +2,8 @@
 
 Role gating mirrors the capability's meaning rather than inventing a new
 hierarchy: preparing is an analyst act, approving is an approver act, and
-policy administration is an admin act. pyHanko and ``cryptography`` are invoked
-server-side only — nothing in this module is user-facing crypto.
+policy administration is an Org Owner act. pyHanko and ``cryptography`` are
+invoked server-side only — nothing in this module is user-facing crypto.
 
 The signing flow is deliberately two calls, not one:
 
@@ -16,18 +16,16 @@ authorisation cannot outlive them.
 
 from __future__ import annotations
 
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
 from app.api.deps import (
     ApproverTenant,
     DbSession,
+    GrantAdminTenant,
     MutationTenant,
     Tenant,
-    TenantContext,
-    require_role,
 )
 from app.features.manage_banks import BankReference
 from app.schemas.attestation import (
@@ -57,8 +55,6 @@ from app.schemas.attestation import (
 from app.services import attestation_api
 
 router = APIRouter(tags=["attestation"])
-
-AdminCtx = Annotated[TenantContext, Depends(require_role("admin"))]
 
 
 @router.get(
@@ -288,12 +284,13 @@ def list_signature_placement_templates(
     operation_id="upsertSignaturePlacementTemplate",
 )
 def upsert_signature_placement_template(
-    payload: SignaturePlacementTemplateUpsertRequest, db: DbSession, ctx: AdminCtx
+    payload: SignaturePlacementTemplateUpsertRequest, db: DbSession, ctx: GrantAdminTenant
 ) -> SignaturePlacementTemplateRead:
     """Author the reusable placement template for a return (optionally per bank).
 
-    Admin-only and reason-required, matching the signing-policy endpoints: this is
-    the default every future filing of that return inherits.
+    Org Owner-only and reason-required, matching the signing-policy endpoints
+    and scoped grant administration: this is the default every future filing of
+    that return inherits.
     """
     return attestation_api.upsert_placement_template(db, ctx, payload)
 
@@ -341,11 +338,12 @@ def list_signing_policies(db: DbSession, ctx: Tenant) -> PolicyListRead:
     operation_id="upsertSigningPolicy",
 )
 def upsert_signing_policy(
-    payload: PolicyUpsertRequest, db: DbSession, ctx: AdminCtx
+    payload: PolicyUpsertRequest, db: DbSession, ctx: GrantAdminTenant
 ) -> PolicyRead:
     """Configure who must sign which return.
 
-    Admin-only and reason-required: this is the control that decides whether a
-    filed return is properly attested, so changing it is itself an audited act.
+    Org Owner-only and reason-required: this is the control that decides whether
+    a filed return is properly attested, so changing it is itself an audited
+    act, administered on the same binding as scoped grant administration.
     """
     return attestation_api.upsert_policy(db, ctx, payload)
