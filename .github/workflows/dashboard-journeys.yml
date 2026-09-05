@@ -1,0 +1,12 @@
+name: Dashboard Playwright journeys
+
+on:
+  workflow_dispatch:
+
+jobs:
+  register:
+    name: Register manual workflow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm registration
+        run: echo "Dashboard journey workflow path is registered for the follow-up."
