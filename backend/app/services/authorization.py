@@ -97,6 +97,7 @@ def _effective_capabilities(
     institution_id: str | None,
     modules: Sequence[Module],
     bindings: Sequence[BindingGrant],
+    conditions: Sequence[ConditionCheck],
 ) -> list[EffectiveCapabilityRead]:
     capabilities: list[EffectiveCapabilityRead] = []
     for module in modules:
@@ -109,7 +110,13 @@ def _effective_capabilities(
                 sensitivity,
             )
             for permission in Permission:
-                if evaluate_grants(principal, permission, resource, bindings).allowed:
+                if evaluate_grants(
+                    principal,
+                    permission,
+                    resource,
+                    bindings,
+                    conditions=conditions,
+                ).allowed:
                     capabilities.append(
                         EffectiveCapabilityRead(
                             module=module,
@@ -126,6 +133,7 @@ def project_effective_authority(
     institutions: Sequence[Bank],
     *,
     failure_surface: str,
+    conditions: Sequence[ConditionCheck],
 ) -> EffectiveAuthorityRead:
     """Project exact evaluator-derived capabilities without alternate authority sources."""
 
@@ -147,6 +155,7 @@ def project_effective_authority(
             None,
             _ORGANIZATION_MODULES,
             effective_bindings,
+            conditions,
         )
         institution_capabilities = []
         for institution in institutions:
@@ -158,6 +167,7 @@ def project_effective_authority(
                 institution.id,
                 _INSTITUTION_MODULES,
                 effective_bindings,
+                conditions,
             )
             if capabilities:
                 institution_capabilities.append(

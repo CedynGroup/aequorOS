@@ -142,6 +142,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   cache scopes include `authv`; `/banks` exposes only institutions with at least one
   exact effective capability; bank detail/period/fact routes 404 without institution
   coverage; shell navigation and deep links consume the projection, never token roles.
+  Account-plane SSO and access-request API enforcement remains on its temporary legacy
+  compatibility gate; enforcement-matrix PR #12 owns that scoped-authority cutover.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).

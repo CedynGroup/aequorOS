@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import (
     BindingStatus,
+    ConditionCheck,
+    ConditionKind,
     InstitutionScope,
     Module,
     ModuleScope,
@@ -153,6 +155,7 @@ def test_effective_authority_projects_only_exact_binding_dimensions(
             db_session.get(Bank, BANK_1_SIBLING),
         ],
         failure_surface="test_effective_authority",
+        conditions=(),
     )
 
     assert projection.authv == user.authorization_version
@@ -165,6 +168,37 @@ def test_effective_authority_projects_only_exact_binding_dimensions(
         (cap.module, cap.sensitivity, cap.permission) for cap in by_bank[BANK_1]
     ] == [(Module.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW)]
     assert BANK_1_SIBLING not in by_bank
+
+
+def test_effective_authority_applies_runtime_global_vetoes(
+    db_session: Session,
+) -> None:
+    _banks(db_session)
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    db_session.add(_raw_binding(organization_id=ORG_1, institution_id=BANK_1))
+    db_session.commit()
+
+    projection = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=user.id,
+            authorization_version=user.authorization_version,
+        ),
+        [db_session.get(Bank, BANK_1)],
+        failure_surface="test_effective_authority_condition_veto",
+        conditions=(
+            ConditionCheck(
+                kind=ConditionKind.DEMO_MODE,
+                passed=False,
+                reason="operation unavailable in demo mode",
+            ),
+        ),
+    )
+
+    assert projection.organization_capabilities == []
+    assert projection.institution_capabilities == []
 
 
 def test_org_owner_projects_account_authority_without_institution_coverage(
@@ -202,6 +236,7 @@ def test_org_owner_projects_account_authority_without_institution_coverage(
         ),
         [db_session.get(Bank, BANK_1)],
         failure_surface="test_owner_projection",
+        conditions=(),
     )
 
     assert [

@@ -80,7 +80,11 @@ def _me_response(db: Session, ctx: TenantContext, user: User) -> MeResponse:
     )
     try:
         effective_authority = authorization.project_effective_authority(
-            db, ctx, institutions, failure_surface="auth_me_effective_authority"
+            db,
+            ctx,
+            institutions,
+            failure_surface="auth_me_effective_authority",
+            conditions=(),
         )
     except Exception as exc:
         raise HTTPException(

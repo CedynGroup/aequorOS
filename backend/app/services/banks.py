@@ -129,23 +129,13 @@ def _effective_authority(
             ctx,
             institutions,
             failure_surface="manage_banks_effective_authority",
+            conditions=(),
         )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Effective authority is temporarily unavailable.",
         ) from exc
-
-
-def _covered_institution_ids(db: Session, ctx: TenantContext, institutions: list[Bank]) -> set[str]:
-    if ctx.actor_user_id is None:
-        return set()
-    projection = _effective_authority(db, ctx, institutions)
-    return {
-        item.institution_id
-        for item in projection.institution_capabilities
-        if item.capabilities
-    }
 
 
 def _liquidity_monitoring_access(
@@ -157,6 +147,23 @@ def _liquidity_monitoring_access(
         and capability.permission is Permission.VIEW
         for capability in capabilities
     )
+
+
+def _require_institution_coverage(
+    db: Session, ctx: TenantContext, bank_reference: str
+) -> tuple[Bank, list[EffectiveCapabilityRead]]:
+    bank = _get_bank_or_404(db, ctx, normalize_public_id(bank_reference))
+    capabilities = next(
+        (
+            item.capabilities
+            for item in _effective_authority(db, ctx, [bank]).institution_capabilities
+            if item.institution_id == bank.id
+        ),
+        None,
+    )
+    if capabilities is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    return bank, capabilities
 
 
 def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
@@ -194,18 +201,7 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
 
 
 def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
-    bank = _get_bank_or_404(db, ctx, normalize_public_id(bank_reference))
-    projection = _effective_authority(db, ctx, [bank])
-    capabilities = next(
-        (
-            item.capabilities
-            for item in projection.institution_capabilities
-            if item.institution_id == bank.id
-        ),
-        None,
-    )
-    if capabilities is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    bank, capabilities = _require_institution_coverage(db, ctx, bank_reference)
     jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code})
     institution_types = _institution_types_by_code(
         db, {(bank.institution_type, bank.jurisdiction_code)}
@@ -221,7 +217,7 @@ def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
 def list_reporting_periods(
     db: Session, ctx: TenantContext, bank_reference: str
 ) -> BankReportingPeriodListRead:
-    bank = resolve_bank_reference(db, ctx, bank_reference)
+    bank, _ = _require_institution_coverage(db, ctx, bank_reference)
     periods = list(
         db.scalars(
             select(BankReportingPeriod)
@@ -244,7 +240,7 @@ def list_reporting_periods(
 def get_period_facts(
     db: Session, ctx: TenantContext, bank_reference: str, period_id: UUID
 ) -> BankFactsRead:
-    bank = resolve_bank_reference(db, ctx, bank_reference)
+    bank, _ = _require_institution_coverage(db, ctx, bank_reference)
     period = db.scalar(
         select(BankReportingPeriod).where(
             BankReportingPeriod.id == period_id,
@@ -294,7 +290,4 @@ def resolve_bank_reference(db: Session, ctx: TenantContext, reference: str) -> B
     Canonical form is uppercase; lowercase input from integrations is
     tolerated. Lookup is tenant-scoped.
     """
-    bank = _get_bank_or_404(db, ctx, normalize_public_id(reference))
-    if bank.id not in _covered_institution_ids(db, ctx, [bank]):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
+    return _get_bank_or_404(db, ctx, normalize_public_id(reference))
