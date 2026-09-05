@@ -11,14 +11,17 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import type {
+  EffectiveAuthorityRead,
   MeResponse,
   ProfileUpdateRequest,
 } from '@aequoros/risk-service-api';
 
+import { useImpersonation } from '@/components/impersonation/useImpersonation';
 import { apiCall, authApi } from '@/lib/api/client';
 
 type ProfileContextValue = {
   profile: MeResponse | undefined;
+  effectiveAuthority: EffectiveAuthorityRead | undefined;
   isLoading: boolean;
   error: Error | null;
   updateProfile: (updates: ProfileUpdateRequest) => Promise<MeResponse>;
@@ -38,6 +41,7 @@ export function useUserProfile(): ProfileContextValue {
 
 export default function ProfileProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
+  const inspection = useImpersonation();
   const queryClient = useQueryClient();
   const updateQueue = useRef<Promise<void>>(Promise.resolve());
   const profileQueryKey = useMemo(
@@ -65,7 +69,23 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
     // which surfaces as a red console error on the sign-in page while the
     // sign-out redirect is still in flight. There is nothing to ask the API
     // until we hold a token to ask it with.
-    enabled: status === 'authenticated' && Boolean(session?.accessToken) && !session?.error,
+    enabled:
+      !inspection.impersonating &&
+      status === 'authenticated' &&
+      Boolean(session?.accessToken) &&
+      !session?.error,
+    staleTime: 5 * 60_000,
+  });
+  const authorityQuery = useQuery({
+    queryKey: [
+      'auth',
+      'effective-authority',
+      inspection.org,
+      inspection.operator,
+      0,
+    ],
+    queryFn: () => apiCall(() => authApi.authEffectiveAuthority()),
+    enabled: inspection.impersonating && !inspection.expired,
     staleTime: 5 * 60_000,
   });
   const updateMutation = useMutation({
@@ -79,6 +99,7 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
   });
   const { mutateAsync, isPending } = updateMutation;
   const { refetch: refetchProfile } = profileQuery;
+  const { refetch: refetchAuthority } = authorityQuery;
   const updateProfile = useCallback(
     (updates: ProfileUpdateRequest) => {
       const request = updateQueue.current.then(() => mutateAsync(updates));
@@ -91,15 +112,26 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
     [mutateAsync],
   );
   const refetch = useCallback(
-    async () => (await refetchProfile()).data,
-    [refetchProfile],
+    async () => {
+      if (inspection.impersonating) {
+        await refetchAuthority();
+        return undefined;
+      }
+      return (await refetchProfile()).data;
+    },
+    [inspection.impersonating, refetchAuthority, refetchProfile],
   );
 
   const value = useMemo<ProfileContextValue>(
     () => ({
       profile: profileQuery.data,
-      isLoading: profileQuery.isLoading,
-      error: profileQuery.error,
+      effectiveAuthority: inspection.impersonating
+        ? authorityQuery.data
+        : profileQuery.data?.effectiveAuthority,
+      isLoading: inspection.impersonating
+        ? authorityQuery.isLoading
+        : profileQuery.isLoading,
+      error: inspection.impersonating ? authorityQuery.error : profileQuery.error,
       updateProfile,
       isSaving: isPending,
       refetch,
@@ -108,6 +140,10 @@ export default function ProfileProvider({ children }: { children: ReactNode }) {
       profileQuery.data,
       profileQuery.error,
       profileQuery.isLoading,
+      authorityQuery.data,
+      authorityQuery.error,
+      authorityQuery.isLoading,
+      inspection.impersonating,
       refetch,
       isPending,
       updateProfile,

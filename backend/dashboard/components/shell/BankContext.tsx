@@ -97,7 +97,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const profileQuery = useUserProfile();
   const banksQuery = useBanks();
   const bank = banksQuery.data?.banks[0] ?? null;
-  const authority = profileQuery.profile?.effectiveAuthority;
+  const authority = profileQuery.effectiveAuthority;
   const institutionCapabilities =
     authority?.institutionCapabilities.find(
       (entry) => entry.institutionId === bank?.id,

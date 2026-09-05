@@ -35,7 +35,10 @@ from app.api.deps import IMPERSONATION_READ_ONLY_ROUTES, MUTATION_ROLE_DEPENDENC
 from app.core import security
 from app.core.config import get_settings
 from app.db.base import utc_now
+from app.db.session import get_sessionmaker
 from app.integrations.storage.base import StoredObjectHead
+from app.models import Bank
+from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.factories import CaseFactory, DocumentFactory
 from tests.api.helpers import ORG_1, USER_1, headers
 
@@ -290,10 +293,50 @@ def test_read_only_compute_post_still_works_under_impersonation(
     assert response.status_code in (404, 422), response.text
 
 
-def test_impersonated_examiner_can_still_read(db_client: TestClient) -> None:
+def test_impersonated_examiner_can_still_read(
+    db_client: TestClient,
+) -> None:
     """Regression: the boundary guard touches only unsafe methods."""
-    response = db_client.get("/api/v1/banks", headers=_impersonation_headers())
-    assert response.status_code == 200, response.text
+    session = get_sessionmaker()()
+    try:
+        session.add(
+            Bank(
+                id="BK-IMPRSN01",
+                organization_id=ORG_1,
+                name="Inspection Bank",
+                short_name="Inspection",
+                currency="GHS",
+                jurisdiction_code="GH",
+                license_type="universal_bank",
+                institution_type=FALLBACK_TYPE_CODE,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+    impersonation_headers = _impersonation_headers()
+    banks = db_client.get("/api/v1/banks", headers=impersonation_headers)
+    authority = db_client.get(
+        "/api/v1/auth/effective-authority",
+        headers=impersonation_headers,
+    )
+    profile = db_client.get("/api/v1/auth/me", headers=impersonation_headers)
+
+    assert banks.status_code == 200, banks.text
+    assert authority.status_code == 200, authority.text
+    assert authority.json()["authv"] == 0
+    assert authority.json()["organization_capabilities"] == []
+    assert [
+        institution["institution_id"]
+        for institution in authority.json()["institution_capabilities"]
+    ] == ["BK-IMPRSN01"]
+    assert all(
+        capability["permission"] == "view"
+        and capability["requires_contextual_authorization"] is False
+        for institution in authority.json()["institution_capabilities"]
+        for capability in institution["capabilities"]
+    )
+    assert profile.status_code == 401, profile.text
 
 
 # --- 3. the role ladder on the 14 ---------------------------------------------

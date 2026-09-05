@@ -241,6 +241,44 @@ def project_effective_authority(
         raise
 
 
+def project_examiner_authority(
+    ctx: TenantPrincipalContext,
+    institutions: Sequence[Bank],
+) -> EffectiveAuthorityRead:
+    if getattr(ctx, "impersonation_context", None) is None or getattr(
+        ctx, "actor_operator", None
+    ) is None:
+        raise AuthorizationInvariantError("verified examiner context is required")
+    if not all(condition.passed for condition in request_wide_condition_checks()):
+        return EffectiveAuthorityRead(
+            authv=0,
+            organization_capabilities=[],
+            institution_capabilities=[],
+        )
+    capabilities = [
+        EffectiveCapabilityRead(
+            module=module,
+            sensitivity=sensitivity,
+            permission=Permission.VIEW,
+            requires_contextual_authorization=False,
+        )
+        for module in _INSTITUTION_MODULES
+        for sensitivity in Sensitivity
+    ]
+    return EffectiveAuthorityRead(
+        authv=0,
+        organization_capabilities=[],
+        institution_capabilities=[
+            InstitutionCapabilitiesRead(
+                institution_id=institution.id,
+                capabilities=capabilities,
+            )
+            for institution in institutions
+            if institution.organization_id == ctx.organization_id
+        ],
+    )
+
+
 def _principal_type(user: User) -> PrincipalType:
     return PrincipalType.MACHINE if user.auth_provider == "service" else PrincipalType.HUMAN
 

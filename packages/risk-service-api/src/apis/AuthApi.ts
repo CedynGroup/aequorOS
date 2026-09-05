@@ -13,6 +13,7 @@
 import * as runtime from "../runtime";
 import type {
   BindingCreateResponse,
+  EffectiveAuthorityRead,
   ErrorResponse,
   LoginRequest,
   MeResponse,
@@ -29,6 +30,8 @@ import type {
 import {
   BindingCreateResponseFromJSON,
   BindingCreateResponseToJSON,
+  EffectiveAuthorityReadFromJSON,
+  EffectiveAuthorityReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
   LoginRequestFromJSON,
@@ -161,6 +164,49 @@ export class AuthApi extends runtime.BaseAPI {
       requestParameters,
       initOverrides,
     );
+    return await response.value();
+  }
+
+  /**
+   * Effective Authority
+   */
+  async authEffectiveAuthorityRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<EffectiveAuthorityRead>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/auth/effective-authority`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      EffectiveAuthorityReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Effective Authority
+   */
+  async authEffectiveAuthority(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<EffectiveAuthorityRead> {
+    const response = await this.authEffectiveAuthorityRaw(initOverrides);
     return await response.value();
   }
 

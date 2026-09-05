@@ -85,6 +85,7 @@ export default defineConfig({
         SIGNING_SOFTWARE_KEY_DIR: `${E2E_TMP}/signing-keys`,
         RUN_INPROCESS_WORKER: "0",
         AUTH_JWT_SECRET: "e2e-backend-jwt-secret-not-production-000",
+        IMPERSONATION_JWT_SECRET: "e2e-impersonation-secret-not-production-000",
         SSO_INTERNAL_KEY: "",
         // Computed, not written as a literal: the vault wants base64, and a
         // base64 literal in source is indistinguishable from a real key to a
