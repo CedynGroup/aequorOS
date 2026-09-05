@@ -124,6 +124,8 @@ def _effective_authority(
     institutions: list[Bank],
 ):
     try:
+        if ctx.impersonation_context is not None:
+            return authorization.project_examiner_authority(ctx, institutions)
         return authorization.project_effective_authority(
             db,
             ctx,
@@ -153,8 +155,6 @@ def _require_institution_coverage(
     db: Session, ctx: TenantContext, bank_reference: str
 ) -> tuple[Bank, list[EffectiveCapabilityRead]]:
     bank = _get_bank_or_404(db, ctx, normalize_public_id(bank_reference))
-    if ctx.impersonation_context is not None:
-        return bank, []
     capabilities = next(
         (
             item.capabilities
@@ -176,22 +176,6 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
             .order_by(Bank.name, Bank.id)
         )
     )
-    if ctx.impersonation_context is not None:
-        jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code for bank in banks})
-        institution_types = _institution_types_by_code(
-            db, {(bank.institution_type, bank.jurisdiction_code) for bank in banks}
-        )
-        return BankListRead(
-            banks=[
-                _bank_read(
-                    bank,
-                    jurisdictions,
-                    institution_types,
-                    liquidity_monitoring_access=False,
-                )
-                for bank in banks
-            ]
-        )
     projection = _effective_authority(db, ctx, banks)
     capabilities_by_institution = {
         item.institution_id: item.capabilities

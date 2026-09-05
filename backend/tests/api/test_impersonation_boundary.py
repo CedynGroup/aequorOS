@@ -295,6 +295,7 @@ def test_read_only_compute_post_still_works_under_impersonation(
 
 def test_impersonated_examiner_can_still_read(
     db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Regression: the boundary guard touches only unsafe methods."""
     session = get_sessionmaker()()
@@ -337,6 +338,28 @@ def test_impersonated_examiner_can_still_read(
         for capability in institution["capabilities"]
     )
     assert profile.status_code == 401, profile.text
+
+    monkeypatch.setenv("DEMO_MODE", "1")
+    get_settings.cache_clear()
+    hidden_banks = db_client.get("/api/v1/banks", headers=impersonation_headers)
+    hidden_detail = db_client.get(
+        "/api/v1/banks/BK-IMPRSN01",
+        headers=impersonation_headers,
+    )
+    hidden_periods = db_client.get(
+        "/api/v1/banks/BK-IMPRSN01/reporting-periods",
+        headers=impersonation_headers,
+    )
+    hidden_facts = db_client.get(
+        f"/api/v1/banks/BK-IMPRSN01/reporting-periods/{uuid4()}/facts",
+        headers=impersonation_headers,
+    )
+
+    assert hidden_banks.status_code == 200, hidden_banks.text
+    assert hidden_banks.json()["banks"] == []
+    assert hidden_detail.status_code == 404, hidden_detail.text
+    assert hidden_periods.status_code == 404, hidden_periods.text
+    assert hidden_facts.status_code == 404, hidden_facts.text
 
 
 # --- 3. the role ladder on the 14 ---------------------------------------------
