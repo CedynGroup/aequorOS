@@ -18,6 +18,7 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.config import get_settings
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
@@ -211,6 +212,27 @@ def test_production_projection_omits_contextual_approval_without_hiding_views(
     } == {"view": False, "review": False, "approve": True}
     assert banks.status_code == 200, banks.text
     assert [bank["id"] for bank in banks.json()["banks"]] == [SAMPLE_BANK_ID]
+
+
+def test_production_demo_mode_hides_complete_view_authority(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_liquidity_book()
+    _, version = _grant(role_bundle=RoleBundle.VIEWER)
+    request_headers = headers(authorization_version=version)
+    monkeypatch.setenv("DEMO_MODE", "1")
+    get_settings.cache_clear()
+
+    me = db_client.get("/api/v1/auth/me", headers=request_headers)
+    banks = db_client.get("/api/v1/banks", headers=request_headers)
+    product = _get(db_client, authorization_version=version)
+
+    assert me.status_code == 200, me.text
+    assert me.json()["effective_authority"]["institution_capabilities"] == []
+    assert banks.status_code == 200, banks.text
+    assert banks.json()["banks"] == []
+    assert product.status_code == 403, product.text
 
 
 def test_profile_projection_failure_rolls_back_before_side_effects(

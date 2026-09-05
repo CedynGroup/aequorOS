@@ -34,6 +34,7 @@ class AppSettings(BaseSettings):
 
     app_env: AppEnv = Field(default="local", alias="APP_ENV")
     app_name: str = Field(default="risk-service", alias="APP_NAME")
+    demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 
 
 class DatabaseSettings(BaseSettings):

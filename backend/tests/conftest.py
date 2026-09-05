@@ -41,6 +41,7 @@ from tests.storage.inmemory import InMemoryStorageClient
 def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("APP_NAME", "risk-service")
+    monkeypatch.setenv("DEMO_MODE", "0")
     # Set (not delete) so a developer's local .env cannot leak into the suite:
     # environment variables take priority over the env_file in pydantic-settings,
     # and the settings treat "" as unconfigured. Deleting the variable is NOT

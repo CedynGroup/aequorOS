@@ -39,6 +39,7 @@ from app.core.authorization import (
 from app.core.authorization import (
     evaluate_permission as evaluate_grants,
 )
+from app.core.config import get_settings
 from app.core.observability import authorization_binding_decision
 from app.db.base import utc_now
 from app.models import AuthorizationBinding, Bank, OperatorUser, User
@@ -115,12 +116,28 @@ def runtime_condition_checks(
     return (*supplied, *missing)
 
 
+def request_wide_condition_checks() -> tuple[ConditionCheck, ...]:
+    demo_mode = get_settings().app.demo_mode
+    return (
+        ConditionCheck(
+            kind=ConditionKind.DEMO_MODE,
+            passed=not demo_mode,
+            reason=(
+                "demo mode is disabled"
+                if not demo_mode
+                else "demo mode blocks effective authority"
+            ),
+        ),
+    )
+
+
 def _effective_capabilities(
     principal: PrincipalLocator,
     resource_scope: InstitutionScope,
     institution_id: str | None,
     modules: Sequence[Module],
     bindings: Sequence[BindingGrant],
+    request_conditions: Sequence[ConditionCheck],
 ) -> list[EffectiveCapabilityRead]:
     capabilities: list[EffectiveCapabilityRead] = []
     for module in modules:
@@ -138,6 +155,7 @@ def _effective_capabilities(
                     permission,
                     resource,
                     bindings,
+                    conditions=request_conditions,
                 ).allowed:
                     capabilities.append(
                         EffectiveCapabilityRead(
@@ -163,6 +181,7 @@ def project_effective_authority(
 
     principal = principal_locator(ctx)
     try:
+        request_conditions = request_wide_condition_checks()
         principal_active, bindings = _load_principal_grants(db, principal)
         user = db.scalar(
             select(User).where(
@@ -179,6 +198,7 @@ def project_effective_authority(
             None,
             _ORGANIZATION_MODULES,
             effective_bindings,
+            request_conditions,
         )
         institution_capabilities = []
         for institution in institutions:
@@ -190,6 +210,7 @@ def project_effective_authority(
                 institution.id,
                 _INSTITUTION_MODULES,
                 effective_bindings,
+                request_conditions,
             )
             if capabilities:
                 institution_capabilities.append(
@@ -475,7 +496,10 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
 ) -> AuthorizationDecision:
     """Check permissions using only stored bindings, returning a trace for audit."""
 
-    conditions = runtime_condition_checks(permission, resource, conditions)
+    conditions = (
+        *request_wide_condition_checks(),
+        *runtime_condition_checks(permission, resource, conditions),
+    )
     principal_active, bindings = _load_principal_grants(db, principal)
     if not principal_active:
         return _deny_with_trace(
@@ -523,6 +547,7 @@ def evaluate_liquidity_monitoring_views(
 
     principal = PrincipalLocator(organization_id, principal_id, PrincipalType.HUMAN)
     permission = Permission.VIEW
+    conditions = request_wide_condition_checks()
     resources = {
         institution.id: ResourceLocator(
             organization_id,
@@ -554,7 +579,7 @@ def evaluate_liquidity_monitoring_views(
                 principal,
                 permission,
                 resource,
-                (),
+                conditions,
                 None,
                 "principal_not_active",
             )
@@ -563,12 +588,18 @@ def evaluate_liquidity_monitoring_views(
                 principal,
                 permission,
                 resource,
-                (),
+                conditions,
                 None,
                 "resource_institution_not_in_tenant",
             )
         else:
-            decision = evaluate_grants(principal, permission, resource, bindings)
+            decision = evaluate_grants(
+                principal,
+                permission,
+                resource,
+                bindings,
+                conditions=conditions,
+            )
         decisions[institution.id] = decision
     return decisions
 
