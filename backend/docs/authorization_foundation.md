@@ -141,15 +141,17 @@ issued session and observes the new authority.
 
 Operator impersonation and integration-key credentials keep their separate
 lifecycles and do not satisfy this human-binding gate. The dashboard consumes
-the server-computed access boolean on the tenant-filtered bank list/detail
-payload. It hides the Monitoring Tools tab, in-page links, and deep route when
-access is absent, without inferring authority from the session role.
+the server-computed `liquidity_monitoring_access` boolean on the tenant-filtered
+bank list/detail payload. It hides the Monitoring Tools tab, in-page links, and
+deep route when access is absent, without inferring authority from the session
+role.
 
 The pre-cutover shadow evidence had three outcomes:
 
 - legacy allow plus no exact binding was the expected divergence and is the
   intended tightening under immediate default-deny;
-- legacy allow plus an exact active binding was parity and remains allowed; and
+- legacy allow plus a complete matching active binding was parity and remains
+  allowed; and
 - legacy allow plus shadow evaluation failure exposed a fail-open defect in the
   pilot. Enforcement removes the exception-swallowing path, records
   `binding_evaluation_failed`, and returns `403`.
@@ -289,7 +291,7 @@ and atomic version-bump/session-revocation contract. The fixed tests also prove
 that one institution binding does not reach a sibling, an explicitly
 organization-wide binding does, cross-organization and invalid targets fail
 closed with actionable reasons, and suspended or absent bindings default to
-denial. The Liquidity Monitoring API tests pin both allowed and denied shadow
+denial. The Liquidity Monitoring API tests pin both allowed and denied binding
 decisions, all scope and lifecycle mismatches, anti-composition, stale sessions,
 post-revocation denial, and fail-closed evaluator errors. The architecture test
 pins the route's named binding dependency and forbids legacy role dependencies.

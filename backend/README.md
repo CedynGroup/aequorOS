@@ -19,7 +19,8 @@ the tenant API).
   third-party broker), integration-key service accounts, RLS-forced tenancy
 - Scoped authorization bindings with deny-by-default, explainable evaluation
   and explicit organization-or-exact-institution targets. Liquidity Monitoring
-  is the first product surface enforced solely by an exact active binding;
+  is the first product surface enforced solely by one complete active binding
+  for the exact institution or explicit organization-wide coverage;
   every other product surface remains on its existing authorization boundary.
   Account administration is split out into the non-operational `account_admin`
   role, while initial Org Owner authority is an explicit organization-wide

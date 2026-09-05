@@ -21,8 +21,8 @@
 import { defineConfig } from '@playwright/test';
 import path from 'path';
 
-export const E2E_BACKEND_PORT = 8021;
-export const E2E_DASHBOARD_PORT = 3021;
+export const E2E_BACKEND_PORT = Number(process.env.E2E_BACKEND_PORT ?? 8021);
+export const E2E_DASHBOARD_PORT = Number(process.env.E2E_DASHBOARD_PORT ?? 3021);
 export const E2E_BASE_URL = `http://localhost:${E2E_DASHBOARD_PORT}`;
 export const E2E_API_ORIGIN = `http://127.0.0.1:${E2E_BACKEND_PORT}`;
 export const E2E_TMP = path.join(__dirname, 'e2e', '.tmp');
