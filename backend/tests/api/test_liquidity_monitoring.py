@@ -203,9 +203,7 @@ def test_production_projection_omits_contextual_approval_without_hiding_views(
     banks = db_client.get("/api/v1/banks", headers=request_headers)
 
     assert me.status_code == 200, me.text
-    capabilities = me.json()["effective_authority"]["institution_capabilities"][0][
-        "capabilities"
-    ]
+    capabilities = me.json()["effective_authority"]["institution_capabilities"][0]["capabilities"]
     assert {
         capability["permission"]: capability["requires_contextual_authorization"]
         for capability in capabilities

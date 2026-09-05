@@ -620,6 +620,7 @@ class AuthSettings(BaseSettings):
     # OIDC client config (the only path that ever reads the secret back). Unset =
     # that internal endpoint is disabled, so browser SSO cannot start.
     sso_internal_key: str | None = Field(default=None, alias="SSO_INTERNAL_KEY")
+
     @field_validator("sso_internal_key", mode="before")
     @classmethod
     def blank_internal_key_is_unset(cls, value: str | None) -> str | None:

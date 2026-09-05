@@ -128,9 +128,7 @@ def request_wide_condition_checks() -> tuple[ConditionCheck, ...]:
             kind=ConditionKind.DEMO_MODE,
             passed=not demo_mode,
             reason=(
-                "demo mode is disabled"
-                if not demo_mode
-                else "demo mode blocks effective authority"
+                "demo mode is disabled" if not demo_mode else "demo mode blocks effective authority"
             ),
         ),
     )
@@ -250,9 +248,10 @@ def project_examiner_authority(
     ctx: TenantPrincipalContext,
     institutions: Sequence[Bank],
 ) -> EffectiveAuthorityRead:
-    if getattr(ctx, "impersonation_context", None) is None or getattr(
-        ctx, "actor_operator", None
-    ) is None:
+    if (
+        getattr(ctx, "impersonation_context", None) is None
+        or getattr(ctx, "actor_operator", None) is None
+    ):
         raise AuthorizationInvariantError("verified examiner context is required")
     if not all(condition.passed for condition in request_wide_condition_checks()):
         return EffectiveAuthorityRead(

@@ -139,6 +139,10 @@ def test_effective_authority_projects_only_exact_binding_dimensions(
     _banks(db_session)
     user = db_session.get(User, USER_1)
     assert user is not None
+    bank = db_session.get(Bank, BANK_1)
+    sibling = db_session.get(Bank, BANK_1_SIBLING)
+    assert bank is not None
+    assert sibling is not None
     db_session.add(_raw_binding(organization_id=ORG_1, institution_id=BANK_1))
     db_session.commit()
 
@@ -150,18 +154,14 @@ def test_effective_authority_projects_only_exact_binding_dimensions(
             roles=("admin",),
             authorization_version=user.authorization_version,
         ),
-        [
-            db_session.get(Bank, BANK_1),
-            db_session.get(Bank, BANK_1_SIBLING),
-        ],
+        [bank, sibling],
         failure_surface="test_effective_authority",
     )
 
     assert projection.authv == user.authorization_version
     assert projection.organization_capabilities == []
     by_bank = {
-        item.institution_id: item.capabilities
-        for item in projection.institution_capabilities
+        item.institution_id: item.capabilities for item in projection.institution_capabilities
     }
     assert [
         (
@@ -181,6 +181,8 @@ def test_effective_authority_applies_contextual_runtime_requirements(
     _banks(db_session)
     user = db_session.get(User, USER_1)
     assert user is not None
+    bank = db_session.get(Bank, BANK_1)
+    assert bank is not None
     binding = _raw_binding(organization_id=ORG_1, institution_id=BANK_1)
     binding.role_bundle = RoleBundle.APPROVER.value
     db_session.add(binding)
@@ -192,7 +194,7 @@ def test_effective_authority_applies_contextual_runtime_requirements(
             actor_user_id=user.id,
             authorization_version=user.authorization_version,
         ),
-        [db_session.get(Bank, BANK_1)],
+        [bank],
         failure_surface="test_effective_authority_condition_veto",
     )
     resource = ResourceLocator(
@@ -219,9 +221,7 @@ def test_effective_authority_applies_contextual_runtime_requirements(
         PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
         Permission.APPROVE,
         resource,
-        conditions=(
-            ConditionCheck(ConditionKind.MAKER_CHECKER, True, "maker and checker differ"),
-        ),
+        conditions=(ConditionCheck(ConditionKind.MAKER_CHECKER, True, "maker and checker differ"),),
     )
 
     assert projection.organization_capabilities == []
@@ -246,6 +246,8 @@ def test_org_owner_projects_account_authority_without_institution_coverage(
     _banks(db_session)
     user = db_session.get(User, USER_1)
     assert user is not None
+    bank = db_session.get(Bank, BANK_1)
+    assert bank is not None
     db_session.add(
         AuthorizationBinding(
             organization_id=ORG_1,
@@ -273,7 +275,7 @@ def test_org_owner_projects_account_authority_without_institution_coverage(
             actor_user_id=user.id,
             authorization_version=user.authorization_version,
         ),
-        [db_session.get(Bank, BANK_1)],
+        [bank],
         failure_surface="test_owner_projection",
     )
 

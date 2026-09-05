@@ -178,8 +178,7 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
     )
     projection = _effective_authority(db, ctx, banks)
     capabilities_by_institution = {
-        item.institution_id: item.capabilities
-        for item in projection.institution_capabilities
+        item.institution_id: item.capabilities for item in projection.institution_capabilities
     }
     covered_ids = set(capabilities_by_institution)
     banks = [bank for bank in banks if bank.id in covered_ids]
