@@ -291,9 +291,9 @@ diagnosis:
    or CI has none. The `attestation`, `full-lifecycle`,
    `submission-lifecycle`, and opt-in `visual-tour` specs refuse immediately
    without it rather than letting package assertions time out one at a time.
-   Storage-free specs remain runnable without any S3 configuration. CI starts
-   a disposable MinIO with its built-in KMS and runs the standard suite against
-   that real object store.
+   Storage-free specs remain runnable without any S3 configuration. The
+   manually dispatched GitHub Actions workflow starts a disposable MinIO with
+   its built-in KMS and runs the standard suite against that real object store.
 2. **Global reference registries.** `scripts/e2e_bootstrap.py` builds the schema
    with `Base.metadata.create_all`, so **no migration runs** — jurisdictions,
    the institution-type registry and the regulatory-parameter control plane are
@@ -323,17 +323,21 @@ VISUAL_TOUR=1 npx playwright test visual-tour    # full-page screenshot of every
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
 
-The blocking `journeys` job in `.github/workflows/risk-service.yml` installs
-Chromium, starts MinIO with its built-in KMS, and runs this same command. CI
-requires at least 20 journeys to execute. Eight package-generation journeys are
-temporarily declared as expected failures because the canonical fixture has no
-exact snapshot for the regulator-selected anchor; the exact list is in
-`e2e/support/quarantine.ts`, and the repair is tracked in
-[#151](https://github.com/CedynGroup/aequorOS/issues/151). The custom reporter
-fails CI for any non-quarantined failure, unexpected quarantine pass, skipped or
-undiscovered quarantine entry, or `test.fail` declaration missing from that
-list. The quarantine is fixture drift, not relaxed product behavior: reporting
-still refuses to substitute an earlier snapshot.
+The `Dashboard Playwright journeys` workflow in
+`.github/workflows/dashboard-journeys.yml` is manual-dispatch only: ordinary
+pull requests and pushes do not enqueue it. A maintainer launches it from the
+Actions UI or with
+`gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It installs
+Chromium, starts MinIO with its built-in KMS, and runs this same command against
+real CI-local object storage. The run requires at least 20 journeys to execute.
+Eight package-generation journeys are temporarily declared as expected failures
+because the canonical fixture has no exact snapshot for the regulator-selected
+anchor; the exact list is in `e2e/support/quarantine.ts`, and the repair is
+tracked in [#151](https://github.com/CedynGroup/aequorOS/issues/151). The custom
+reporter fails the manual run for any non-quarantined failure, unexpected
+quarantine pass, skipped or undiscovered quarantine entry, or `test.fail`
+declaration missing from that list. The quarantine is fixture drift, not relaxed
+product behavior: reporting still refuses to substitute an earlier snapshot.
 
 ## Deploy to bank.aequoros.com
 

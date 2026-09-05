@@ -1,12 +1,79 @@
 name: Dashboard Playwright journeys
 
+# Deliberately manual-only. These browser journeys are an authoritative,
+# maintainer-invoked diagnostic run, not part of routine pull-request or push
+# CI. Do not add pull_request or push triggers here.
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  register:
-    name: Register manual workflow
+  journeys:
+    name: Run dashboard Playwright journeys
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
-      - name: Confirm registration
-        run: echo "Dashboard journey workflow path is registered for the follow-up."
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+        with:
+          # Pinned to match the repository's other CI workflows.
+          version: 2026.7.7
+          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      - name: Install workspace dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Install Chromium and browser system dependencies
+        run: mise exec -- pnpm --filter @aequoros/dashboard exec playwright install --with-deps chromium
+      # Keep this identical to the proven Storage contract setup in
+      # risk-service.yml. A services: container cannot pass MinIO's
+      # `server /data` command, and the built-in KMS is required by the
+      # platform's encrypted write path.
+      - name: Start MinIO with built-in KMS
+        run: |
+          set -euo pipefail
+          docker run -d --name aequoros-e2e-minio \
+            -e MINIO_ROOT_USER=ciminio \
+            -e MINIO_ROOT_PASSWORD=ciminio123 \
+            -e "MINIO_KMS_SECRET_KEY=aequoros-key:$(head -c 32 /dev/urandom | base64 -w0)" \
+            -p 9000:9000 \
+            quay.io/minio/minio:latest server /data
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO is live"; exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO did not become live"; docker logs aequoros-e2e-minio; exit 1
+      - name: Run dashboard journeys
+        env:
+          S3_ENDPOINT: http://127.0.0.1:9000
+          S3_ACCESS_KEY: ciminio
+          S3_SECRET_KEY: ciminio123
+          S3_REGION: us-east-1
+          S3_BUCKET: aequoros
+          STORAGE_BACKEND: minio
+          STORAGE_ENV: mvp
+          STORAGE_RETIRE_AFTER: "2099-01-01"
+          STORAGE_KMS_KEY_ID: aequoros-key
+          PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
+        run: mise exec -- pnpm --filter @aequoros/dashboard e2e
+      - name: The browser journeys must have executed, not skipped
+        run: |
+          set -euo pipefail
+          jq . "$RUNNER_TEMP/journeys.json"
+          jq -e '
+            .executed >= 20 and
+            .quarantinedExecuted == 8 and
+            .quarantineSize == 8 and
+            (.integrityErrors | length) == 0
+          ' "$RUNNER_TEMP/journeys.json" >/dev/null
+      - name: Stop MinIO
+        if: always()
+        run: docker rm -f aequoros-e2e-minio || true

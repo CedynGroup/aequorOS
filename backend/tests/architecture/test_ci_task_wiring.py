@@ -186,6 +186,25 @@ def test_every_task_ci_invokes_exists() -> None:
     assert missing == [], f"Workflows invoke tasks the root mise.toml does not define: {missing}"
 
 
+def test_dashboard_journeys_are_manual_only() -> None:
+    """The long browser suite is maintainer-dispatched, never routine CI."""
+    journey_workflow = WORKFLOWS / "dashboard-journeys.yml"
+    document = yaml.load(journey_workflow.read_text(), Loader=yaml.BaseLoader)
+    assert set(document["on"]) == {"workflow_dispatch"}, (
+        "dashboard-journeys.yml must not be enqueued by pull requests or pushes."
+    )
+
+    risk_document = yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text())
+    risk_jobs = risk_document["jobs"]
+    assert "journeys" not in risk_jobs, (
+        "The dashboard journeys belong only in the manual workflow, not the "
+        "default Risk Service CI job graph."
+    )
+    assert "journeys" not in _needs(risk_jobs["gate"]), (
+        "The routine Risk service gate must not require the manual journey suite."
+    )
+
+
 def test_the_backend_gates_ci_must_run_are_all_defined() -> None:
     """Naming them here is what stops a gate quietly disappearing from the list."""
     required = {

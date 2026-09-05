@@ -29,12 +29,12 @@ name: Dashboard CI
 #   build      — production Next build + Command Center entry-graph guard
 #                (Recharts must remain deferred from the home route)
 #
-# The Playwright journeys are gated by risk-service.yml's `journeys` job rather
-# than duplicated here: they boot both the backend and dashboard, and the risk
-# service change detector already covers every `backend/` path. That job starts
-# disposable MinIO with built-in KMS and proves tests executed from a
-# machine-readable quarantine report; the aggregate `Risk service gate` makes
-# the result blocking.
+# The Playwright journeys deliberately are not part of this default gate. They
+# boot both the backend and dashboard, take minutes, and run only when a
+# maintainer explicitly dispatches `dashboard-journeys.yml`. That workflow
+# starts disposable MinIO with built-in KMS and proves tests executed from a
+# machine-readable quarantine report. Ordinary pull requests and pushes do not
+# enqueue it.
 
 # REQUIRED-CHECK SAFETY (2026-08-22). This workflow used to be `paths:`-filtered
 # on both triggers, which makes it impossible to mark required: a required check
