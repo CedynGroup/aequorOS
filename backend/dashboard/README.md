@@ -263,7 +263,7 @@ pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
 pnpm --filter @aequoros/dashboard lint        # next lint
 pnpm --filter @aequoros/dashboard test        # unit and query-cache policy suites
 pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
-pnpm --filter @aequoros/dashboard e2e         # Playwright (needs object storage)
+pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys need S3/MinIO
 ```
 
 Regenerate the API client after any backend contract change:
@@ -272,9 +272,14 @@ Regenerate the API client after any backend contract change:
 ## End-to-end (Playwright)
 
 `playwright.config.ts` boots a **disposable** stack: the FastAPI backend on a
-throwaway sqlite file (deleted and rebuilt every run) plus `next dev` on 3021,
+throwaway sqlite file (deleted and rebuilt every run) plus `next dev`. Both
+servers use OS-selected free ports (optional `E2E_BACKEND_PORT` and
+`E2E_DASHBOARD_PORT` preferences fall back when occupied),
 then `e2e/global-setup.ts` seeds through the API and mints per-role session
-cookies. It never touches the primary database.
+cookies. The Next.js server uses `.next-e2e`, so it cannot contaminate the
+normal development cache. Because every journey shares the disposable database
+and session files, a worktree-local lock rejects a second concurrent E2E run.
+The stack never touches the primary database.
 
 Three prerequisites are not obvious, and each one has already cost a long
 diagnosis:
@@ -283,8 +288,12 @@ diagnosis:
    filesystem mode — so validated packages need a reachable S3/MinIO endpoint.
    Locally it arrives from the untracked `backend/.env` (`S3_ENDPOINT`,
    `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`); a fresh clone, a git worktree
-   or CI has none. `global-setup.ts` refuses to start without it rather than
-   letting seven journeys time out one at a time.
+   or CI has none. The `attestation`, `full-lifecycle`,
+   `submission-lifecycle`, and opt-in `visual-tour` specs refuse immediately
+   without it rather than letting package assertions time out one at a time.
+   Storage-free specs remain runnable without any S3 configuration. The
+   manually dispatched GitHub Actions workflow starts a disposable MinIO with
+   its built-in KMS and runs the standard suite against that real object store.
 2. **Global reference registries.** `scripts/e2e_bootstrap.py` builds the schema
    with `Base.metadata.create_all`, so **no migration runs** — jurisdictions,
    the institution-type registry and the regulatory-parameter control plane are
@@ -313,6 +322,22 @@ VISUAL_TOUR=1 npx playwright test visual-tour    # full-page screenshot of every
 
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run it from `backend/dashboard`.
+
+The `Dashboard Playwright journeys` workflow in
+`.github/workflows/dashboard-journeys.yml` is manual-dispatch only: ordinary
+pull requests and pushes do not enqueue it. A maintainer launches it from the
+Actions UI or with
+`gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It installs
+Chromium, starts MinIO with its built-in KMS, and runs this same command against
+real CI-local object storage. The run requires at least 20 journeys to execute.
+Eight package-generation journeys are temporarily declared as expected failures
+because the canonical fixture has no exact snapshot for the regulator-selected
+anchor; the exact list is in `e2e/support/quarantine.ts`, and the repair is
+tracked in [#151](https://github.com/CedynGroup/aequorOS/issues/151). The custom
+reporter fails the manual run for any non-quarantined failure, unexpected
+quarantine pass, skipped or undiscovered quarantine entry, or `test.fail`
+declaration missing from that list. The quarantine is fixture drift, not relaxed
+product behavior: reporting still refuses to substitute an earlier snapshot.
 
 ## Deploy to bank.aequoros.com
 

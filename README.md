@@ -35,12 +35,12 @@ find here is held privately — ask for it.
 
 ### Deployables
 
-| App | Production build | Domain |
-| --- | --- | --- |
-| `frontend` | Vercel (see `frontend/README.md`) | `aequoros.com` |
-| `backend/dashboard` | `docker-compose.dashboard.yml` — Docker Compose build pack, **repo root** as build context | `bank.aequoros.com` |
-| `backend` | `backend/docker-compose.prod.yml` — `risk-migrate` (one-shot `alembic upgrade head`), `risk-api` :8000, `risk-worker`, `risk-operator` :8100 | `api.aequoros.com` on `risk-api` only |
-| `console` | none committed yet — no Dockerfile or compose file in this repo | intended `console.aequoros.com` |
+| App                 | Production build                                                                                                                             | Domain                                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `frontend`          | Vercel (see `frontend/README.md`)                                                                                                            | `aequoros.com`                        |
+| `backend/dashboard` | `docker-compose.dashboard.yml` — Docker Compose build pack, **repo root** as build context                                                   | `bank.aequoros.com`                   |
+| `backend`           | `backend/docker-compose.prod.yml` — `risk-migrate` (one-shot `alembic upgrade head`), `risk-api` :8000, `risk-worker`, `risk-operator` :8100 | `api.aequoros.com` on `risk-api` only |
+| `console`           | none committed yet — no Dockerfile or compose file in this repo                                                                              | intended `console.aequoros.com`       |
 
 `backend/.dockerignore` excludes `dashboard/`, so the API image never carries the UI.
 
@@ -134,6 +134,7 @@ and drops its own `risk_service_test_<hex>` schema). The task inventory is in
 # From the repo root — the TypeScript surfaces.
 pnpm --filter @aequoros/dashboard typecheck && pnpm --filter @aequoros/dashboard lint \
   && pnpm --filter @aequoros/dashboard test && pnpm --filter @aequoros/dashboard build
+pnpm --filter @aequoros/dashboard e2e             # disposable stack; package specs need S3/MinIO
 pnpm --filter @aequoros/console typecheck && pnpm --filter @aequoros/console test \
   && pnpm --filter @aequoros/console build          # no lint: no ESLint config in this workspace
 pnpm --filter @aequoros/frontend lint && pnpm --filter @aequoros/frontend build
@@ -144,7 +145,8 @@ mise run risk-service:openapi-client
 mise run risk-service:api-fresh                     # must leave git clean
 ```
 
-The CI gates live in `.github/workflows/`: `risk-service.yml` (backend),
+The CI gates live in `.github/workflows/`: `risk-service.yml` (backend plus the
+MinIO-backed dashboard Playwright journeys),
 `dashboard.yml` (generated client + dashboard) and `web.yml` (marketing site +
 operator console). Each workflow's header comment is its own gate inventory —
 read that comment rather than inferring coverage from the job names. See

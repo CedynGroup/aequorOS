@@ -125,11 +125,6 @@ name: Risk Service CI
 #                              under backend/data/, deliberately not in the repo.
 #   tests/scripts/test_dr_tooling.py DR-drill cases — need DR_DRILL_CLUSTER_URL,
 #                              i.e. a disposable cluster the drill may destroy.
-#   backend/dashboard/e2e    — 7 Playwright specs, in NO workflow. Needs a booted
-#                              backend, scripts/e2e_bootstrap.py standing in for
-#                              BOTH the migrations and the worker, object storage
-#                              and browser binaries. The storage half is now
-#                              demonstrably solvable (see the `storage` job).
 #   `ruff format --check .`  — not a gate anywhere; a tree-wide format pass has
 #                              to land first. Named so a future format gate is
 #                              not a surprise.
@@ -204,7 +199,7 @@ permissions:
   contents: read
 
 # A gate that never gets a runner is as unenforced as a gate nobody wrote. This
-# file went from one job to ten, three of which stand up Postgres and run for
+# file went from one job to nine, three of which stand up Postgres and run for
 # tens of minutes, and the repository is worked by many concurrent branches — so
 # without this every intermediate push kept a full matrix alive and the queue,
 # not the tests, decided what ran. Superseded PR runs are cancelled; runs on
@@ -276,7 +271,6 @@ jobs:
         run: mise run risk-service:typecheck
       - name: Build production risk-service image
         run: docker build --tag aequoros/risk-service:ci ./backend
-
 
   architecture:
     name: Architecture and CI guards

@@ -29,20 +29,12 @@ name: Dashboard CI
 #   build      — production Next build + Command Center entry-graph guard
 #                (Recharts must remain deferred from the home route)
 #
-# NOT gated here, and named rather than left to be discovered (D-32, 2026-08-22):
-#   e2e        — `pnpm --filter dashboard e2e`, the 7 Playwright specs under
-#                backend/dashboard/e2e (attestation, full-lifecycle,
-#                submission-lifecycle, stress, visual-tour, home, bell). They run
-#                in NO workflow. The blocker is object storage: the harness needs
-#                S3 credentials that live only in untracked backend/.env, and
-#                scripts/e2e_bootstrap.py additionally has to stand in for both
-#                the migrations and the worker (see NEW-52). The storage half is
-#                now demonstrably solvable — risk-service.yml's `storage` job runs
-#                MinIO with its built-in KMS and the object-store contract passes
-#                45/45 against it — so what remains is standing up the backend,
-#                the bootstrap seed and the browser download in one job. That is a
-#                job to build deliberately, not a line to add here, and claiming
-#                the gate before it exists would be worse than naming the gap.
+# The Playwright journeys deliberately are not part of this default gate. They
+# boot both the backend and dashboard, take minutes, and run only when a
+# maintainer explicitly dispatches `dashboard-journeys.yml`. That workflow
+# starts disposable MinIO with built-in KMS and proves tests executed from a
+# machine-readable quarantine report. Ordinary pull requests and pushes do not
+# enqueue it.
 
 # REQUIRED-CHECK SAFETY (2026-08-22). This workflow used to be `paths:`-filtered
 # on both triggers, which makes it impossible to mark required: a required check
