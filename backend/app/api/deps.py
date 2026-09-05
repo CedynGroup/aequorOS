@@ -43,6 +43,12 @@ class TenantContext:
     actor_operator: str | None = None
 
 
+@dataclass(frozen=True)
+class LiquidityMonitoringAccess:
+    ctx: TenantContext
+    bank: Bank
+
+
 # HTTP methods the boundary treats as state-changing. GET/HEAD/OPTIONS are the
 # safe set; everything else must justify itself against
 # ``IMPERSONATION_READ_ONLY_ROUTES`` before an impersonated session may reach it.
@@ -470,6 +476,75 @@ def require_grant_administration(
     return ctx
 
 
+def require_liquidity_monitoring_view(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> LiquidityMonitoringAccess:
+    """Require one exact active LIQ/confidential view binding for the bank."""
+
+    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    if bank is None:
+        cross_tenant_attempt(
+            reason="bank_not_visible_to_tenant",
+            organization_id=ctx.organization_id,
+            bank_id=bank_id,
+            module="liq",
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    if ctx.actor_user_id is None or ctx.authorization_version is None:
+        authorization_denied(
+            reason="liquidity_monitoring_human_binding_required",
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Liquidity Monitoring access requires an active scoped binding.",
+        )
+
+    try:
+        decision = authorization_service.evaluate_liquidity_monitoring_view(
+            db,
+            organization_id=ctx.organization_id,
+            principal_id=ctx.actor_user_id,
+            institution=bank,
+            surface="liquidity_monitoring",
+        )
+    except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
+        authorization_denied(
+            reason="binding_evaluation_failed",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            bank_id=bank.id,
+            module="liq",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Liquidity Monitoring access requires an active scoped binding.",
+        ) from exc
+
+    if not decision.allowed:
+        authorization_denied(
+            reason=decision.reason,
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            bank_id=bank.id,
+            module="liq",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Liquidity Monitoring access requires an active scoped binding.",
+        )
+    return LiquidityMonitoringAccess(ctx=ctx, bank=bank)
+
+
 def get_approver_tenant_context(
     principal: Annotated[TenantContext, Depends(get_mutation_tenant_context)],
 ) -> TenantContext:
@@ -498,6 +573,9 @@ Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
 MutationTenant = Annotated[TenantContext, Depends(get_mutation_tenant_context)]
 ApproverTenant = Annotated[TenantContext, Depends(get_approver_tenant_context)]
 GrantAdminTenant = Annotated[TenantContext, Depends(require_grant_administration)]
+LiquidityMonitoringResource = Annotated[
+    LiquidityMonitoringAccess, Depends(require_liquidity_monitoring_view)
+]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 
 

@@ -82,6 +82,12 @@ export interface BankRead {
   licenseType: string;
   /**
    *
+   * @type {boolean}
+   * @memberof BankRead
+   */
+  liquidityMonitoringAccess?: boolean;
+  /**
+   *
    * @type {string}
    * @memberof BankRead
    */
@@ -156,6 +162,10 @@ export function BankReadFromJSONTyped(
         : BankReadJurisdictionFromJSON(json["jurisdiction"]),
     jurisdictionCode: json["jurisdiction_code"],
     licenseType: json["license_type"],
+    liquidityMonitoringAccess:
+      json["liquidity_monitoring_access"] == null
+        ? undefined
+        : json["liquidity_monitoring_access"],
     name: json["name"],
     organizationId: json["organization_id"],
     shortName: json["short_name"],
@@ -186,6 +196,7 @@ export function BankReadToJSONTyped(
     jurisdiction: BankReadJurisdictionToJSON(value["jurisdiction"]),
     jurisdiction_code: value["jurisdictionCode"],
     license_type: value["licenseType"],
+    liquidity_monitoring_access: value["liquidityMonitoringAccess"],
     name: value["name"],
     organization_id: value["organizationId"],
     short_name: value["shortName"],

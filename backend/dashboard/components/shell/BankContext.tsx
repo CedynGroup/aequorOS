@@ -153,6 +153,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     () => ({
       modules: moduleSetFrom(bank?.institutionTypeDetail?.defaultModules),
       institutionClass: bank?.institutionTypeDetail?.institutionClass ?? null,
+      liquidityMonitoringAccess: bank?.liquidityMonitoringAccess ?? false,
       isResolved: !banksQuery.isLoading,
     }),
     [bank, banksQuery.isLoading]

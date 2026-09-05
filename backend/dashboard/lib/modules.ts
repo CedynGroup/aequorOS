@@ -129,6 +129,12 @@ export type ModuleScope = {
   modules: ReadonlySet<ModuleKey> | null;
   institutionClass: string | null;
   /**
+   * Server-evaluated access to the exact institution's Liquidity Monitoring
+   * detail surface. Omitted/false is deny so navigation never infers authority
+   * from a legacy role or the broader liquidity module entitlement.
+   */
+  liquidityMonitoringAccess?: boolean;
+  /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than
    * assume "everything" — the fix for the every-module-flashes-on-refresh race.
@@ -154,6 +160,13 @@ function subrouteHidden(path: string, scope: ModuleScope): boolean {
   return SDI_ONLY_SUBROUTES.some((r) => path === r || path.startsWith(`${r}/`));
 }
 
+function bindingControlledSubrouteHidden(path: string, scope: ModuleScope): boolean {
+  return (
+    (path === '/liquidity/monitoring' || path.startsWith('/liquidity/monitoring/')) &&
+    scope.liquidityMonitoringAccess !== true
+  );
+}
+
 /**
  * Is a route path visible under this scope? Used by the ROUTE GUARD, which 404s a
  * hidden path — so it stays permissive until the scope resolves (no 404 flash on
@@ -168,6 +181,7 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   if (moduleKey && scope.isResolved && scope.modules && !scope.modules.has(moduleKey)) {
     return false;
   }
+  if (bindingControlledSubrouteHidden(path, scope)) return false;
   if (subrouteHidden(path, scope)) return false;
   return true;
 }
@@ -182,6 +196,7 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
 export function isHrefVisible(href: string, scope: ModuleScope): boolean {
   if (scope.institutionClass === 'sdi' && /[?&]code=BSD/i.test(href)) return false;
   const path = normalize(href);
+  if (bindingControlledSubrouteHidden(path, scope)) return false;
   // Hide class-specific subroutes until the class is known. In particular,
   // Capital is a core module but its Basel and SDI tabs are not interchangeable.
   if (subrouteHidden(path, scope)) return false;

@@ -81,6 +81,7 @@ class Condition(StrEnum):
     SSRF_BLOCKED = "egress.blocked"
     AUTHORIZATION_DENIED = "authz.denied"
     AUTHORIZATION_SHADOW_DECISION = "authz.shadow_decision"
+    AUTHORIZATION_BINDING_DECISION = "authz.binding_decision"
     CROSS_TENANT_ATTEMPT = "tenant.cross_access_attempt"
 
 
@@ -139,7 +140,10 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
     ),
     Condition.AUTHORIZATION_DENIED: "this log line only, from the gates in app/api/deps.py",
     Condition.AUTHORIZATION_SHADOW_DECISION: (
-        "this log line only, from app/services/authorization.py::observe_shadow_permission"
+        "historical Liquidity Monitoring rollout logs emitted before binding enforcement"
+    ),
+    Condition.AUTHORIZATION_BINDING_DECISION: (
+        "this log line only, from app/services/authorization.py::record_binding_decision"
     ),
     Condition.CROSS_TENANT_ATTEMPT: "this log line only, from app/api/deps.py",
 }
@@ -191,22 +195,20 @@ def authorization_denied(*, reason: str, **fields: Any) -> None:
     )
 
 
-def authorization_shadow_decision(
+def authorization_binding_decision(
     *,
-    binding_allowed: bool,
-    legacy_allowed: bool,
+    allowed: bool,
     reason: str,
     severity: Severity = "info",
     **fields: Any,
 ) -> None:
-    """Record binding-policy parity without changing the legacy route result."""
+    """Record an explainable enforcing decision from the binding evaluator."""
 
     emit(
-        Condition.AUTHORIZATION_SHADOW_DECISION,
-        "Authorization shadow decision",
+        Condition.AUTHORIZATION_BINDING_DECISION,
+        "Authorization binding decision",
         severity=severity,
-        binding_allowed=binding_allowed,
-        legacy_allowed=legacy_allowed,
+        allowed=allowed,
         reason=reason,
         **fields,
     )

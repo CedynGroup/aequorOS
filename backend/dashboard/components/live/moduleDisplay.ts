@@ -21,7 +21,7 @@ export const LIVE_MODULE_LABELS: Record<LiveModule, string> = {
 };
 
 export const LIVE_MODULE_HREFS: Record<LiveModule, string> = {
-  liquidity: '/liquidity/monitoring',
+  liquidity: '/liquidity',
   capital: '/basel',
   credit: '/credit',
   irr: '/irr/limits',

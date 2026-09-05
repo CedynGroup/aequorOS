@@ -26,6 +26,8 @@
     "lib/api/queryPolicy.ts",
     "lib/api/queryPolicy.test.ts",
     "lib/api/useQueryScope.ts",
+    "lib/modules.ts",
+    "lib/modules.test.ts",
     "components/reports/FreshnessStrip.tsx",
     "app/api/impersonation/status/route.ts",
     "lib/outbound.ts",

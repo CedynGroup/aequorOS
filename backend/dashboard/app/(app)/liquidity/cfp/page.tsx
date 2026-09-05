@@ -21,6 +21,7 @@ import { useCfpEvents, useCfpSummary, useEwiDashboard } from '@/lib/api/hooks';
 import { fmtDateUTC } from '@/lib/api/values';
 import { regShort } from '@/lib/format';
 import { axisProps, CHART_GRID, chartTooltipProps, seriesColor } from '@/lib/chartTheme';
+import { isHrefVisible } from '@/lib/modules';
 import type { EwiEvaluationRead } from '@aequoros/risk-service-api';
 
 // Server-side EWI states (LRMD ¶28(e)–(f)): values, Board trigger levels and
@@ -123,7 +124,7 @@ const indicatorColumns: Column<EwiEvaluationRead>[] = [
 ];
 
 export default function ContingencyFundingPlan() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
   const ewis = useEwiDashboard(bankId);
@@ -272,9 +273,13 @@ export default function ContingencyFundingPlan() {
                   Trigger levels are Board configuration with approval evidence; an
                   indicator without levels shows Unconfigured rather than an invented
                   classification. {' '}
-                  <Link href="/liquidity/monitoring" className="text-action hover:underline">
-                    Monitoring tools & threshold register
-                  </Link>
+                  {isHrefVisible('/liquidity/monitoring', moduleScope) ? (
+                    <Link href="/liquidity/monitoring" className="text-action hover:underline">
+                      Monitoring tools & threshold register
+                    </Link>
+                  ) : (
+                    <span>Monitoring tools & threshold register</span>
+                  )}
                 </span>
               }
             >

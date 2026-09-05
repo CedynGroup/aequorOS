@@ -25,7 +25,7 @@ from app.schemas.banks import (
     InstitutionTypeRead,
     JurisdictionRead,
 )
-from app.services import regulatory_parameters
+from app.services import authorization, regulatory_parameters
 from app.services.public_ids import normalize_public_id
 
 _FACT_GROUP_FIELDS: dict[str, str] = {
@@ -101,6 +101,8 @@ def _bank_read(
     bank: Bank,
     jurisdictions: dict[str, JurisdictionRead],
     institution_types: dict[tuple[str, str], InstitutionTypeRead],
+    *,
+    liquidity_monitoring_access: bool,
 ) -> BankRead:
     read = BankRead.model_validate(bank, from_attributes=True)
     return read.model_copy(
@@ -109,8 +111,30 @@ def _bank_read(
             "institution_type_detail": institution_types.get(
                 (bank.institution_type, bank.jurisdiction_code)
             ),
+            "liquidity_monitoring_access": liquidity_monitoring_access,
         }
     )
+
+
+def _liquidity_monitoring_access(
+    db: Session,
+    ctx: TenantContext,
+    banks: list[Bank],
+) -> dict[str, bool]:
+    denied = dict.fromkeys((bank.id for bank in banks), False)
+    if ctx.actor_user_id is None or ctx.authorization_version is None or not banks:
+        return denied
+    try:
+        decisions = authorization.evaluate_liquidity_monitoring_views(
+            db,
+            organization_id=ctx.organization_id,
+            principal_id=ctx.actor_user_id,
+            institutions=banks,
+            failure_surface="bank_access_summary",
+        )
+    except Exception:  # noqa: BLE001 - access presentation denies closed
+        return denied
+    return {bank_id: decision.allowed for bank_id, decision in decisions.items()}
 
 
 def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
@@ -125,8 +149,17 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
     institution_types = _institution_types_by_code(
         db, {(bank.institution_type, bank.jurisdiction_code) for bank in banks}
     )
+    liquidity_access = _liquidity_monitoring_access(db, ctx, banks)
     return BankListRead(
-        banks=[_bank_read(bank, jurisdictions, institution_types) for bank in banks]
+        banks=[
+            _bank_read(
+                bank,
+                jurisdictions,
+                institution_types,
+                liquidity_monitoring_access=liquidity_access[bank.id],
+            )
+            for bank in banks
+        ]
     )
 
 
@@ -136,7 +169,13 @@ def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
     institution_types = _institution_types_by_code(
         db, {(bank.institution_type, bank.jurisdiction_code)}
     )
-    return _bank_read(bank, jurisdictions, institution_types)
+    liquidity_access = _liquidity_monitoring_access(db, ctx, [bank])
+    return _bank_read(
+        bank,
+        jurisdictions,
+        institution_types,
+        liquidity_monitoring_access=liquidity_access[bank.id],
+    )
 
 
 def list_reporting_periods(

@@ -1,11 +1,11 @@
-# Authorization foundation (as built through 2026-08-29)
+# Authorization foundation (as built through 2026-09-04)
 
 This document records the first bounded server-side slice of `docs/rbac.md`.
-The policy kernel remains additive and product-route enforcement is shadow-only;
-the authorization-version check and Org Owner grant-administration boundary are
-enforcing. Tenant grant create/list/revoke and the Members aggregation are live,
-but ordinary product routes remain on the existing hierarchy until their
-separate rollout.
+The policy kernel remains additive. Liquidity Monitoring is the first product
+route enforced by it; the authorization-version check and Org Owner
+grant-administration boundary are also enforcing. Tenant grant
+create/list/revoke and the Members aggregation are live, while every other
+product route remains on its existing hierarchy until its separate rollout.
 
 ## Authority model
 
@@ -120,23 +120,44 @@ These return explained denials (`principal_not_active`,
 misleading matching-binding trace rather than allowing a matching row to
 outlive its identity or resource.
 
-## Institution-target slice and migration posture (as built 2026-08-28)
+## Liquidity Monitoring enforcement (as built 2026-09-04)
 
 `GET /banks/{bank_id}/liquidity-monitoring` is the first real resource path to
-construct an exact institution-scoped locator. For normal tenant app sessions
-it evaluates `view` on LIQ/confidential and emits `authz.shadow_decision` with
-the legacy and binding outcomes, reason, target, matching binding IDs, and
-per-binding reasons. The route still follows its existing authenticated read
-contract regardless of the shadow outcome. Operator impersonation and
-integration-key credentials retain their separate lifecycles and are outside
-this human-binding pilot. A shadow-evaluation failure emits
-`shadow_evaluation_failed` at error severity and does not become a route gate.
+construct an exact institution-scoped locator. For normal human tenant sessions
+it evaluates `view` on LIQ/confidential and emits `authz.binding_decision` with
+the outcome, reason, target, matching binding IDs, and per-binding reasons.
+The binding result is authoritative: no complete active match returns `403`,
+and evaluator failure denies closed. Bank resolution remains tenant-scoped and
+precedes the binding decision, so an unknown or cross-tenant institution still
+returns `404` without disclosing whether it exists elsewhere.
 
-The institution-target shadow slice itself requires no new migration. Initial
-ownership is the separate migration `202608280046`, described below. Organization
-membership, token `org`, the session's `app.organization_id`, organization-scoped
-foreign keys, and FORCE RLS remain the outer boundary. Grant administration is
-described below; Liquidity product enforcement is not introduced.
+The cutover is deliberately immediate default-deny. No migration, fixture, or
+runtime path infers Liquidity Monitoring authority from a scalar legacy role,
+and no broad binding is created or backfilled. A user who lacks one exact
+institution binding or an explicitly organization-wide LIQ/confidential
+binding loses this surface at deployment. Binding create and revoke already
+advance `authv`, so the next request after a grant change must use a freshly
+issued session and observes the new authority.
+
+Operator impersonation and integration-key credentials keep their separate
+lifecycles and do not satisfy this human-binding gate. The dashboard consumes
+the server-computed access boolean on the tenant-filtered bank list/detail
+payload. It hides the Monitoring Tools tab, in-page links, and deep route when
+access is absent, without inferring authority from the session role.
+
+The pre-cutover shadow evidence had three outcomes:
+
+- legacy allow plus no exact binding was the expected divergence and is the
+  intended tightening under immediate default-deny;
+- legacy allow plus an exact active binding was parity and remains allowed; and
+- legacy allow plus shadow evaluation failure exposed a fail-open defect in the
+  pilot. Enforcement removes the exception-swallowing path, records
+  `binding_evaluation_failed`, and returns `403`.
+
+The institution-target slice requires no new migration. Initial ownership is
+the separate migration `202608280046`, described below. Organization
+membership, token `org`, the session's `app.organization_id`,
+organization-scoped foreign keys, and FORCE RLS remain the outer boundary.
 
 ## Initial Org Owner assignment (migration 202608280046)
 
@@ -174,7 +195,8 @@ management; the generic `require_role("admin")` dependency remains operational
 and excludes it. It sits outside the analyst/approver ladder and cannot reach
 attestation policy, placement-template mutation, or regulatory submission. This
 avoids grandfathering operational superuser authority while binding enforcement
-remains shadow-only.
+rolls out route by route. Liquidity Monitoring likewise requires its own
+explicit scoped binding.
 
 Migration `202608280046` records every demoted legacy administrator in the
 FORCE-RLS `initial_admin_role_demotions` table. Downgrade restores and invalidates
@@ -268,8 +290,10 @@ that one institution binding does not reach a sibling, an explicitly
 organization-wide binding does, cross-organization and invalid targets fail
 closed with actionable reasons, and suspended or absent bindings default to
 denial. The Liquidity Monitoring API tests pin both allowed and denied shadow
-telemetry and prove that a shadow-evaluation failure cannot change the legacy
-response. Two generative suites add coverage beyond the fixed examples:
+decisions, all scope and lifecycle mismatches, anti-composition, stale sessions,
+post-revocation denial, and fail-closed evaluator errors. The architecture test
+pins the route's named binding dependency and forbids legacy role dependencies.
+Two generative suites add coverage beyond the fixed examples:
 
 - `tests/core/test_authorization_properties.py` compares the evaluator with an
   independent per-binding oracle across binding order, partial cross-row
@@ -280,14 +304,10 @@ response. Two generative suites add coverage beyond the fixed examples:
   against an independent finite oracle, including sensitivity, after every
   transition and proves no unrequested cross-product appears.
 
-## Shadow rollout and next vertical slice
+## Product rollout boundary
 
-The new evaluator is not a product endpoint gate yet. Existing operational
-routes keep their current rank checks, while grant administration itself
-requires the owner binding. Liquidity Monitoring records
-legacy-versus-binding decisions for one exact institution target, which is
-evidence for a later enforcement decision rather than enforcement itself.
-
-The next bounded slice may review parity/denial telemetry before switching its
-endpoint gate. Explanation endpoints, Liquidity enforcement, invite/lifecycle
-actions, scheduled grants, and owner designation/transfer remain separate work.
+Liquidity Monitoring is enforcing. Existing operational routes outside that
+surface keep their current checks, while grant administration itself requires
+the owner binding. Explanation endpoints, further product-route cutovers,
+invite/lifecycle actions, scheduled grants, and owner designation/transfer
+remain separate work.

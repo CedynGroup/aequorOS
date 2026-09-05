@@ -13,18 +13,14 @@ import { ArrowUpRight } from 'lucide-react';
 import type { AlertItemRead } from '@aequoros/risk-service-api';
 import StatusPill from '@/components/ui/StatusPill';
 import SectionCard from '@/components/ui/SectionCard';
+import { LIVE_MODULE_HREFS } from '@/components/live/moduleDisplay';
 import { fmtRelative, labelize } from '@/lib/api/values';
 
 export type AlertGroupBy = 'module' | 'severity';
 
-export const ALERT_MODULE_HREFS: Record<string, string> = {
-  liquidity: '/liquidity/monitoring',
-  capital: '/basel',
-  irr: '/irr/limits',
-  fx: '/fx/limits',
-  ftp: '/ftp/products',
-  forecast: '/forecasting',
-};
+function alertModuleHref(module: string): string | undefined {
+  return LIVE_MODULE_HREFS[module as keyof typeof LIVE_MODULE_HREFS];
+}
 
 const SEVERITY_ORDER: Record<string, number> = {
   critical: 0,
@@ -46,7 +42,7 @@ function severityTone(severity: string) {
 }
 
 function AlertRow({ item }: { item: AlertItemRead }) {
-  const href = ALERT_MODULE_HREFS[item.module];
+  const href = alertModuleHref(item.module);
   return (
     <li className="px-5 py-3.5 flex items-start gap-3">
       <span
@@ -124,9 +120,9 @@ export default function AlertStream({
               </span>
             }
             actions={
-              groupBy === 'module' && ALERT_MODULE_HREFS[key] ? (
+              groupBy === 'module' && alertModuleHref(key) ? (
                 <Link
-                  href={ALERT_MODULE_HREFS[key]}
+                  href={alertModuleHref(key)!}
                   className="text-caption font-medium text-action hover:underline"
                 >
                   Open module →

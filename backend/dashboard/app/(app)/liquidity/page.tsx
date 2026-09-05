@@ -28,6 +28,7 @@ import {
 } from '@/lib/api/hooks';
 import { num, statusTone } from '@/lib/api/values';
 import { currencyCode, fmtCurrency, fmtPct, regShort, centralBankName } from '@/lib/format';
+import { isHrefVisible } from '@/lib/modules';
 
 type LineRow = {
   item: string;
@@ -256,9 +257,11 @@ export default function LiquidityCockpit() {
                   <Link href="/liquidity/buffer" className="flex items-center justify-between gap-3 border-b border-border-light pb-2 text-body text-navy hover:text-action">
                     Buffer concentration and haircuts <ArrowUpRight size={14} aria-hidden />
                   </Link>
-                  <Link href="/liquidity/monitoring" className="flex items-center justify-between gap-3 border-b border-border-light py-2 text-body text-navy hover:text-action">
-                    Thresholds and maturity monitoring <ArrowUpRight size={14} aria-hidden />
-                  </Link>
+                  {isHrefVisible('/liquidity/monitoring', moduleScope) && (
+                    <Link href="/liquidity/monitoring" className="flex items-center justify-between gap-3 border-b border-border-light py-2 text-body text-navy hover:text-action">
+                      Thresholds and maturity monitoring <ArrowUpRight size={14} aria-hidden />
+                    </Link>
+                  )}
                   <Link href="/liquidity/cfp" className="flex items-center justify-between gap-3 pt-2 text-body text-navy hover:text-action">
                     CFP actions and activation log <ArrowUpRight size={14} aria-hidden />
                   </Link>
