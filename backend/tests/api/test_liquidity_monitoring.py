@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 from loguru import logger
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -32,6 +33,17 @@ from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_ca
 URL = f"/api/v1/banks/{SAMPLE_BANK_ID}/liquidity-monitoring"
 SIBLING_BANK_ID = "BK-LIQM0002"
 OTHER_BANK_ID = "BK-LIQM0003"
+
+
+@pytest.fixture(autouse=True)
+def _start_without_fixture_authority(db_client: TestClient) -> None:
+    """Exercise the enforcement boundary without the API fixture's explicit grants."""
+    session = get_sessionmaker()()
+    try:
+        session.execute(delete(AuthorizationBinding))
+        session.commit()
+    finally:
+        session.close()
 
 
 def _seed_liquidity_book() -> None:

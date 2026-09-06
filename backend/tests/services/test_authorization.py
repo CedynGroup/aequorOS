@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import jwt
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,13 @@ from tests.api.helpers import ORG_1, ORG_2, USER_1
 BANK_1 = "BK-AUTH0001"
 BANK_1_SIBLING = "BK-AUTH0003"
 BANK_2 = "BK-AUTH0002"
+
+
+@pytest.fixture(autouse=True)
+def _start_without_fixture_authority(db_session: Session) -> None:
+    """Exercise authorization semantics without the API fixture's explicit grants."""
+    db_session.execute(delete(AuthorizationBinding))
+    db_session.commit()
 
 
 def _banks(db: Session) -> None:
