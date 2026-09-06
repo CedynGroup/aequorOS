@@ -507,6 +507,12 @@ def test_grant_administration_state_machine_preserves_exact_union(
                                     and permission in ROLE_PERMISSIONS[requested.role_bundle]
                                     for requested in self.requested.values()
                                 )
+                                # Action-time workflow conditions remain global vetoes.
+                                # This structural-union invariant supplies no maker/checker
+                                # or step-up context, so those permissions must deny even
+                                # when one complete binding matches.
+                                if permission in (Permission.APPROVE, Permission.SIGN_OFF):
+                                    expected = False
                                 decision = authorization.evaluate_permission(
                                     session,
                                     principal,
