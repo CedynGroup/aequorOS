@@ -152,6 +152,11 @@ institutions or product navigation, while personal profile self-service remains
 available; organization settings require organization-wide Account
 administration. Context-dependent capabilities may support structural
 navigation, but actions and deep links never treat them as final authorization.
+This dashboard slice gates action controls only where the projected capability is
+already final and non-contextual. Module-specific mutations such as run,
+configure, approve, sign-off, and submit remain with their dependency-ordered
+endpoint cutovers; each cutover must drive its UI control from the same final
+authority that its backend route enforces before side effects.
 
 Verified operator examiner impersonation remains explicit staff-plane read
 authority rather than a tenant binding. Its server projection grants only

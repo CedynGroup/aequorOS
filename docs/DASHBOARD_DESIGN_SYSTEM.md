@@ -89,9 +89,11 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
 
 ## 5. Phase 2 (deliberately deferred)
 
-- Further product-endpoint authorization cutovers and complete action gating (the
-  shell, institution visibility, deep routes, and query scopes already consume the
-  server-derived scoped-binding projection; token roles are not authority)
+- Further product-endpoint authorization cutovers and their module-specific action
+  controls (the shell, institution visibility, deep routes, query scopes, and controls
+  backed by final non-contextual authority already consume the server-derived
+  scoped-binding projection; token roles and contextual eligibility are not execution
+  authority)
 - PDF/Excel export engine (print-optimized board pack ships; `window.print()` → PDF)
 - Alert acknowledge/resolve workflow (no mutation endpoint yet) and resolved-history tab
 - Server pagination for the positions blotter; deal-level cash-flow schedule drill
