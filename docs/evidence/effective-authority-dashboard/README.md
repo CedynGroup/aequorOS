@@ -9,8 +9,15 @@ dashboard ports.
 - `liquidity-monitoring-bound.png`: an exact active
   LIQ/confidential/view binding exposes the Monitoring Tools tab and permits the
   matching route.
+- `zero-binding-shell.png`: an active user with no effective binding sees the
+  authoritative no-institutions state. There is no institution selector,
+  sidebar, product navigation, or operational module entry.
+- `account-only-owner-shell.png`: an Org Owner whose only binding is
+  organization-wide Account authority can open Members and organization
+  administration. The sidebar contains Settings only, with no Liquidity, IRRBB,
+  FX, capital, or other operational navigation.
 
-Reproduce without object storage:
+The bound and unbound direct-route states reproduce without object storage:
 
 ```bash
 E2E_CAPABILITY_ONLY=1 \
