@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -15,6 +16,7 @@ from app.models import (
     InstitutionType,
     Jurisdiction,
 )
+from app.schemas.authorization import EffectiveCapabilityRead
 from app.schemas.banks import (
     BankFactRead,
     BankFactsRead,
@@ -116,25 +118,54 @@ def _bank_read(
     )
 
 
-def _liquidity_monitoring_access(
+def _effective_authority(
     db: Session,
     ctx: TenantContext,
-    banks: list[Bank],
-) -> dict[str, bool]:
-    denied = dict.fromkeys((bank.id for bank in banks), False)
-    if ctx.actor_user_id is None or ctx.authorization_version is None or not banks:
-        return denied
+    institutions: list[Bank],
+):
     try:
-        decisions = authorization.evaluate_liquidity_monitoring_views(
+        if ctx.impersonation_context is not None:
+            return authorization.project_examiner_authority(ctx, institutions)
+        return authorization.project_effective_authority(
             db,
-            organization_id=ctx.organization_id,
-            principal_id=ctx.actor_user_id,
-            institutions=banks,
-            failure_surface="bank_access_summary",
+            ctx,
+            institutions,
+            failure_surface="manage_banks_effective_authority",
         )
-    except Exception:  # noqa: BLE001 - access presentation denies closed
-        return denied
-    return {bank_id: decision.allowed for bank_id, decision in decisions.items()}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Effective authority is temporarily unavailable.",
+        ) from exc
+
+
+def _liquidity_monitoring_access(
+    capabilities: list[EffectiveCapabilityRead],
+) -> bool:
+    return any(
+        not capability.requires_contextual_authorization
+        and capability.module is Module.LIQUIDITY
+        and capability.sensitivity is Sensitivity.CONFIDENTIAL
+        and capability.permission is Permission.VIEW
+        for capability in capabilities
+    )
+
+
+def _require_institution_coverage(
+    db: Session, ctx: TenantContext, bank_reference: str
+) -> tuple[Bank, list[EffectiveCapabilityRead]]:
+    bank = _get_bank_or_404(db, ctx, normalize_public_id(bank_reference))
+    capabilities = next(
+        (
+            item.capabilities
+            for item in _effective_authority(db, ctx, [bank]).institution_capabilities
+            if item.institution_id == bank.id
+        ),
+        None,
+    )
+    if capabilities is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    return bank, capabilities
 
 
 def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
@@ -145,18 +176,24 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
             .order_by(Bank.name, Bank.id)
         )
     )
+    projection = _effective_authority(db, ctx, banks)
+    capabilities_by_institution = {
+        item.institution_id: item.capabilities for item in projection.institution_capabilities
+    }
+    covered_ids = set(capabilities_by_institution)
+    banks = [bank for bank in banks if bank.id in covered_ids]
     jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code for bank in banks})
     institution_types = _institution_types_by_code(
         db, {(bank.institution_type, bank.jurisdiction_code) for bank in banks}
     )
-    liquidity_access = _liquidity_monitoring_access(db, ctx, banks)
     return BankListRead(
         banks=[
             _bank_read(
                 bank,
                 jurisdictions,
                 institution_types,
-                liquidity_monitoring_access=liquidity_access[bank.id],
+                liquidity_monitoring_access=ctx.impersonation_context is None
+                and _liquidity_monitoring_access(capabilities_by_institution[bank.id]),
             )
             for bank in banks
         ]
@@ -164,24 +201,24 @@ def list_banks(db: Session, ctx: TenantContext) -> BankListRead:
 
 
 def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
-    bank = resolve_bank_reference(db, ctx, bank_reference)
+    bank, capabilities = _require_institution_coverage(db, ctx, bank_reference)
     jurisdictions = _jurisdictions_by_code(db, {bank.jurisdiction_code})
     institution_types = _institution_types_by_code(
         db, {(bank.institution_type, bank.jurisdiction_code)}
     )
-    liquidity_access = _liquidity_monitoring_access(db, ctx, [bank])
     return _bank_read(
         bank,
         jurisdictions,
         institution_types,
-        liquidity_monitoring_access=liquidity_access[bank.id],
+        liquidity_monitoring_access=ctx.impersonation_context is None
+        and _liquidity_monitoring_access(capabilities),
     )
 
 
 def list_reporting_periods(
     db: Session, ctx: TenantContext, bank_reference: str
 ) -> BankReportingPeriodListRead:
-    bank = resolve_bank_reference(db, ctx, bank_reference)
+    bank, _ = _require_institution_coverage(db, ctx, bank_reference)
     periods = list(
         db.scalars(
             select(BankReportingPeriod)
@@ -204,7 +241,7 @@ def list_reporting_periods(
 def get_period_facts(
     db: Session, ctx: TenantContext, bank_reference: str, period_id: UUID
 ) -> BankFactsRead:
-    bank = resolve_bank_reference(db, ctx, bank_reference)
+    bank, _ = _require_institution_coverage(db, ctx, bank_reference)
     period = db.scalar(
         select(BankReportingPeriod).where(
             BankReportingPeriod.id == period_id,

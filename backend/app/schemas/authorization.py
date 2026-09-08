@@ -17,7 +17,10 @@ from app.core.authorization import (
     BindingStatus,
     GrantorType,
     InstitutionScope,
+    Module,
     ModuleScope,
+    Permission,
+    Sensitivity,
     SensitivityScope,
 )
 
@@ -32,6 +35,24 @@ GrantableRoleBundle = Literal[
 
 class ClosedModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class EffectiveCapabilityRead(ClosedModel):
+    module: Module
+    sensitivity: Sensitivity
+    permission: Permission
+    requires_contextual_authorization: bool
+
+
+class InstitutionCapabilitiesRead(ClosedModel):
+    institution_id: str
+    capabilities: list[EffectiveCapabilityRead]
+
+
+class EffectiveAuthorityRead(ClosedModel):
+    authv: int
+    organization_capabilities: list[EffectiveCapabilityRead]
+    institution_capabilities: list[InstitutionCapabilitiesRead]
 
 
 class ScopedGrantInput(ClosedModel):

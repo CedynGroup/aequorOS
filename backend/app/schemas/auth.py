@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.json_schema import SkipJsonSchema
 
-from app.schemas.authorization import ScopedGrantInput
+from app.schemas.authorization import EffectiveAuthorityRead, ScopedGrantInput
 
 _BCP47_PATTERN = (
     r"^[A-Za-z]{2,3}(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?"
@@ -61,6 +61,7 @@ class MeResponse(BaseModel):
     # Lets the signing ceremony offer the correct step-up proof (SSO
     # re-authentication vs password re-entry) rather than presenting both.
     auth_provider: str
+    effective_authority: EffectiveAuthorityRead
 
 
 class ProfileUpdateRequest(BaseModel):

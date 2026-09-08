@@ -72,7 +72,7 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 | Endpoint enforcement                 | Liquidity Monitoring is enforced through a named route dependency by one complete active binding for the exact institution or explicit organization-wide coverage. Coarse legacy dependencies still enforce viewer/analyst mutation separation and selected approver gates elsewhere; SSO membership and integration-key management use a separate account-administration gate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `app/api/deps.py`                                                                                                                                                                                                                                         |
 | Tenancy                              | Postgres RLS forced on `app.organization_id`; cross-tenant work runs on the BYPASSRLS `WORKER_DATABASE_URL` role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `app/db/session.py`, CLAUDE.md                                                                                                                                                                                                                            |
 | Maker-checker                        | **Regulatory reporting already has it**: `draft→generated→validated→pending_approval→approved→submitted→acknowledged→…` with an append-only approval trail where **checker ≠ maker is enforced in the service**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `app/models/regulatory_reporting.py` (`PACKAGE_STATUSES`, `APPROVAL_ACTIONS`, `RegulatoryPackageApproval`)                                                                                                                                                |
-| Authorization foundation             | **BUILT; Liquidity Monitoring enforcing.** Deny-by-default evaluation over indivisible `authorization_bindings`; explicit organization-or-exact-institution resource targets; exact module, sensitivity, lifecycle, principal-type, and runtime-condition matching. Org Owner-gated create/list/revoke and tenant Members aggregation are live, with assignment-time SoD, complete grant/revoke audit evidence, and transactional `authv`/refresh-family invalidation. Liquidity Monitoring requires one complete active LIQ/confidential view binding; every other product route retains its existing authorization behavior.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `app/core/authorization.py`, `app/services/authorization.py`, `app/services/grant_administration.py`, `app/features/manage_authorization.py`, `dashboard/components/settings/MembersPanel.tsx`, `backend/docs/authorization_foundation.md`                |
+| Authorization foundation             | **BUILT; Liquidity Monitoring enforcing.** Deny-by-default evaluation over indivisible `authorization_bindings`; explicit organization-or-exact-institution resource targets; exact module, sensitivity, lifecycle, principal-type, and runtime-condition matching. Org Owner-gated create/list/revoke and tenant Members aggregation are live, with assignment-time SoD, complete grant/revoke audit evidence, and transactional `authv`/refresh-family invalidation. `/auth/me` and `/auth/effective-authority` project evaluator-derived organization and institution capabilities; `/banks` and its detail/period/fact routes require projected institution coverage. Liquidity Monitoring remains the first product route whose own data permission is enforced; every other product route retains its existing authorization behavior.                                                                                                                                                                                                                                                                                                                                                                                 | `app/core/authorization.py`, `app/services/authorization.py`, `app/services/grant_administration.py`, `app/features/manage_authorization.py`, `dashboard/components/settings/MembersPanel.tsx`, `backend/docs/authorization_foundation.md`                |
 | Token claims                         | App access and refresh tokens carry `sub`, `org`, legacy `roles[]`, and authoritative `authv`, plus `email`/`name` when present; refresh tokens also require `jti`. Pre-`202608250044` and stale-version sessions fail closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `app/core/security.py:create_token`, `app/api/deps.py:validate_tenant_context`                                                                                                                                                                            |
 | Identity in UI                       | Header + settings read the real session (name/role); route gate redirects unauthenticated → `/login`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `dashboard/components/shell/Header.tsx`, `dashboard/middleware.ts`                                                                                                                                                                                        |
 
@@ -507,26 +507,32 @@ version and revokes every refresh family with `authorization_changed`.
 
 ### 8.2 Frontend (dashboard)
 
-Liquidity Monitoring is the first built binding-aware slice. Bank list/detail
-responses expose `liquidity_monitoring_access`; the dashboard uses that
-server-computed value to hide its Monitoring Tools navigation, in-page actions,
-and deep route. Missing or false access denies, and the UI does not infer access
-from a legacy role or the broader liquidity module entitlement. The items below
-describe the remaining generalized frontend rollout.
+The generalized authority projection is built. `/auth/me` supplies exact
+organization and per-institution capabilities from the binding evaluator; `/banks`
+filters out uncovered institutions before presentation. The shell, command palette,
+module tabs, and route guard consume that projection without consulting token or
+scalar roles. Unauthorized direct routes resolve as 404 and do not mount product
+queries. Query caches are partitioned by tenant, actor, `authv`, and institution.
+Personal profile self-service remains available to an active user without an Account
+binding; organization settings require organization-wide Account administration.
 
-- **Nav filtering** (`Sidebar.tsx`): render a nav item only if the session grants
-  any `{module}:view`. Drives which modules a persona even sees.
-- **Route guard:** `middleware.ts` already gates auth. Add a per-route permission
-  check (or a server component guard) so deep links to a module the user can't
-  see redirect to their landing page, not a 403 wall.
-- **Action gating:** buttons for `run / approve / sign_off / submit / configure`
-  render disabled-with-tooltip or hidden based on permissions in the session.
-  Never rely on hiding alone — the backend is the boundary; the UI just avoids
-  dead ends.
+Remaining rollout work:
+
+- **Module action cutovers:** this effective-authority dashboard slice gates an
+  action only where the backend already supplies final, non-contextual authority.
+  Buttons for `run / approve / sign_off / submit / configure` and other
+  module-specific mutations remain owned by their dependency-ordered endpoint
+  cutovers. Each cutover must derive its UI control from the same final action
+  authority enforced by the concrete backend route; structural or contextual
+  eligibility is never enough to render an enabled action. Hiding remains a UX
+  boundary, while the backend authorization check remains authoritative before
+  side effects.
 - **Session state:** do not make token `roles[]`, `perms`, or `scopes` an
-  authority source. Expose an effective, display-only capability summary from a
-  server-evaluated `/auth/me` contract when endpoint rollout begins. A version
-  change invalidates the app session through `authv` (§8.1).
+  authority source. The server-evaluated `/auth/me` contract distinguishes final
+  capabilities from structural eligibility that still requires contextual authorization.
+  Navigation may use eligibility; actions and deep links must never treat a contextual
+  marker as execution authority. A version change invalidates the app session through
+  `authv` (§8.1).
 
 ### 8.3 Default landing per role
 
@@ -858,15 +864,16 @@ cross-tenant surface.
 ## 14. Target API surface
 
 Except for the routes explicitly marked **BUILT** below, this is the target
-tenant contract rather than the current OpenAPI surface. The existing
-`GET /auth/me` returns identity, preferences, and the legacy scalar role; its
-effective-permission and scope fields land with endpoint authorization rollout.
+tenant contract rather than the current OpenAPI surface. `GET /auth/me` returns
+identity, preferences, the legacy display-only scalar role, and effective authority;
+`GET /auth/effective-authority` returns that authority projection independently.
 
 Tenant plane (under `/api/v1`, RLS-scoped, permission-gated where noted):
 
 ```
 # current user
-GET   /auth/me                                    → identity + roles + effective perms + scopes
+GET   /auth/me                                    BUILT: identity + preferences + effective authority
+GET   /auth/effective-authority                   BUILT: evaluator-derived capability projection
 
 # members (org admin)
 GET   /organization/members                       BUILT: Org Owner; identity + lifecycle + complete grants
@@ -939,11 +946,11 @@ Ship value early; don't block the dashboards on SSO/SCIM.
 
 **Phase 0 — authorization foundation and first endpoint slice.**
 The static `ROLE_PERMISSIONS` map, scoped binding table, exact evaluator, and
-`authv` invalidation seam are **BUILT**. Liquidity Monitoring is the first
-enforcing endpoint, with immediate default-deny and dashboard navigation/deep
-links driven by its server-computed result. The governed binding-creation and
-Members slice is built. Remaining Phase-0 work is further endpoint cutovers,
-`/auth/me` display capabilities, broader nav/action gating, and default landings
+`authv` invalidation seam are **BUILT**. The effective-authority projection,
+institution filtering, capability-driven shell/navigation/deep-link boundary,
+authority-partitioned caches, and governed binding-creation/Members slice are built.
+Liquidity Monitoring is the first enforcing product endpoint. Remaining Phase-0
+work is further endpoint cutovers, their matching module-action controls, and default landings
 ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).
 Do not add independent `user_roles`/`user_scopes` tables or infer ownership from
 the scalar `account_admin` role. Initial Owner assignment is built only for the

@@ -39,17 +39,17 @@ export const E2E_USERS: Record<
   admin: {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     roles: ["admin"],
-    authv: 3,
+    authv: 4,
   },
   approver: {
     id: "eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2",
     roles: ["approver"],
-    authv: 1,
+    authv: 2,
   },
   analyst: {
     id: "eeeeeeee-3333-4eee-8eee-eeeeeeeeeee3",
     roles: ["analyst"],
-    authv: 1,
+    authv: 2,
   },
   viewer: {
     id: "eeeeeeee-4444-4eee-8eee-eeeeeeeeeee4",
@@ -102,6 +102,7 @@ export async function mintSessionCookie(
       accessTokenExpires: Date.now() + 2 * 60 * 60 * 1000,
       organizationId: E2E_ORG_ID,
       roles: user.roles,
+      authorizationVersion: authorizationVersion ?? user.authv,
     },
     secret: E2E_AUTH_SECRET,
     salt: "authjs.session-token",

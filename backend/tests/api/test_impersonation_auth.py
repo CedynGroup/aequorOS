@@ -87,6 +87,21 @@ def test_impersonation_token_reads_as_examiner(db_client: TestClient) -> None:
     assert "BK-IMPRSN01" in bank_ids
 
 
+def test_impersonation_reads_bank_detail_without_tenant_principal_binding(
+    db_client: TestClient,
+) -> None:
+    _add_bank(ORG_1, "BK-IMPRSN02", "Impersonation Detail Bank")
+
+    response = db_client.get(
+        "/api/v1/banks/BK-IMPRSN02",
+        headers=_bearer(_impersonation_token(ORG_1)),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == "BK-IMPRSN02"
+    assert response.json()["liquidity_monitoring_access"] is False
+
+
 def test_impersonation_is_single_org_isolated(db_client: TestClient) -> None:
     """The core safety test: a token minted for org A can read ONLY org A."""
     _add_bank(ORG_1, "BK-ORGA0001", "Org A Bank")

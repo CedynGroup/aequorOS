@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
@@ -21,23 +22,32 @@ from app.core.authorization import (
     BindingGrant,
     BindingStatus,
     ConditionCheck,
+    ConditionKind,
     GrantorType,
     InstitutionScope,
+    Module,
     ModuleScope,
     Permission,
     PrincipalLocator,
     PrincipalType,
     ResourceLocator,
     RoleBundle,
+    Sensitivity,
     SensitivityScope,
     principal_bundle_compatible,
 )
 from app.core.authorization import (
     evaluate_permission as evaluate_grants,
 )
+from app.core.config import get_settings
 from app.core.observability import authorization_binding_decision
 from app.db.base import utc_now
 from app.models import AuthorizationBinding, Bank, OperatorUser, User
+from app.schemas.authorization import (
+    EffectiveAuthorityRead,
+    EffectiveCapabilityRead,
+    InstitutionCapabilitiesRead,
+)
 from app.services import authentication
 
 
@@ -57,6 +67,220 @@ class BindingScope:
     institution_id: str | None
     module_scope: ModuleScope
     sensitivity_scope: SensitivityScope
+
+
+_ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT)
+_INSTITUTION_MODULES = tuple(module for module in Module if module not in _ORGANIZATION_MODULES)
+_REQUIRED_RUNTIME_CONDITIONS: dict[Permission, tuple[ConditionKind, ...]] = {
+    Permission.APPROVE: (ConditionKind.MAKER_CHECKER,),
+    Permission.SIGN_OFF: (ConditionKind.MAKER_CHECKER, ConditionKind.STEP_UP),
+}
+
+
+class TenantPrincipalContext(Protocol):
+    @property
+    def organization_id(self) -> str: ...
+
+    @property
+    def actor_user_id(self) -> UUID | None: ...
+
+    @property
+    def authorization_version(self) -> int | None: ...
+
+
+def principal_locator(ctx: TenantPrincipalContext) -> PrincipalLocator:
+    """Build the evaluator principal represented by an authenticated tenant context."""
+
+    organization_id = ctx.organization_id
+    principal_id = ctx.actor_user_id
+    if principal_id is None:
+        raise AuthorizationInvariantError("authenticated tenant identity has no principal")
+    authorization_version = ctx.authorization_version
+    principal_type = (
+        PrincipalType.HUMAN if authorization_version is not None else PrincipalType.MACHINE
+    )
+    return PrincipalLocator(organization_id, principal_id, principal_type)
+
+
+def runtime_condition_checks(
+    permission: Permission,
+    _resource: ResourceLocator,
+    workflow_conditions: Sequence[ConditionCheck] = (),
+) -> tuple[ConditionCheck, ...]:
+    supplied = tuple(workflow_conditions)
+    supplied_kinds = {condition.kind for condition in supplied}
+    missing = tuple(
+        ConditionCheck(
+            kind=kind,
+            passed=False,
+            reason=f"required runtime context is not established: {kind.value}",
+        )
+        for kind in _REQUIRED_RUNTIME_CONDITIONS.get(permission, ())
+        if kind not in supplied_kinds
+    )
+    return (*supplied, *missing)
+
+
+def request_wide_condition_checks() -> tuple[ConditionCheck, ...]:
+    demo_mode = get_settings().app.demo_mode
+    return (
+        ConditionCheck(
+            kind=ConditionKind.DEMO_MODE,
+            passed=not demo_mode,
+            reason=(
+                "demo mode is disabled" if not demo_mode else "demo mode blocks effective authority"
+            ),
+        ),
+    )
+
+
+def _effective_capabilities(  # noqa: PLR0913 - projection requires the complete tuple
+    principal: PrincipalLocator,
+    resource_scope: InstitutionScope,
+    institution_id: str | None,
+    modules: Sequence[Module],
+    bindings: Sequence[BindingGrant],
+    request_conditions: Sequence[ConditionCheck],
+) -> list[EffectiveCapabilityRead]:
+    capabilities: list[EffectiveCapabilityRead] = []
+    for module in modules:
+        for sensitivity in Sensitivity:
+            resource = ResourceLocator(
+                principal.organization_id,
+                resource_scope,
+                institution_id,
+                module,
+                sensitivity,
+            )
+            for permission in Permission:
+                if evaluate_grants(
+                    principal,
+                    permission,
+                    resource,
+                    bindings,
+                    conditions=request_conditions,
+                ).allowed:
+                    capabilities.append(
+                        EffectiveCapabilityRead(
+                            module=module,
+                            sensitivity=sensitivity,
+                            permission=permission,
+                            requires_contextual_authorization=bool(
+                                _REQUIRED_RUNTIME_CONDITIONS.get(permission)
+                            ),
+                        )
+                    )
+    return capabilities
+
+
+def project_effective_authority(
+    db: Session,
+    ctx: TenantPrincipalContext,
+    institutions: Sequence[Bank],
+    *,
+    failure_surface: str,
+) -> EffectiveAuthorityRead:
+    """Project exact evaluator-derived capabilities without alternate authority sources."""
+
+    principal = principal_locator(ctx)
+    try:
+        request_conditions = request_wide_condition_checks()
+        principal_active, bindings = _load_principal_grants(db, principal)
+        user = db.scalar(
+            select(User).where(
+                User.id == principal.principal_id,
+                User.organization_id == principal.organization_id,
+            )
+        )
+        if user is None:
+            raise AuthorizationInvariantError("authenticated principal is not available")
+        effective_bindings: Sequence[BindingGrant] = bindings if principal_active else ()
+        organization_capabilities = _effective_capabilities(
+            principal,
+            InstitutionScope.ORGANIZATION,
+            None,
+            _ORGANIZATION_MODULES,
+            effective_bindings,
+            request_conditions,
+        )
+        institution_capabilities = []
+        for institution in institutions:
+            if institution.organization_id != principal.organization_id:
+                continue
+            capabilities = _effective_capabilities(
+                principal,
+                InstitutionScope.INSTITUTION,
+                institution.id,
+                _INSTITUTION_MODULES,
+                effective_bindings,
+                request_conditions,
+            )
+            if capabilities:
+                institution_capabilities.append(
+                    InstitutionCapabilitiesRead(
+                        institution_id=institution.id,
+                        capabilities=capabilities,
+                    )
+                )
+        return EffectiveAuthorityRead(
+            authv=user.authorization_version,
+            organization_capabilities=organization_capabilities,
+            institution_capabilities=institution_capabilities,
+        )
+    except Exception as exc:
+        record_binding_evaluation_failure(
+            principal,
+            Permission.VIEW,
+            ResourceLocator(
+                principal.organization_id,
+                InstitutionScope.ORGANIZATION,
+                None,
+                Module.ACCOUNT,
+                Sensitivity.CONFIDENTIAL,
+            ),
+            surface=failure_surface,
+            error=exc,
+        )
+        raise
+
+
+def project_examiner_authority(
+    ctx: TenantPrincipalContext,
+    institutions: Sequence[Bank],
+) -> EffectiveAuthorityRead:
+    if (
+        getattr(ctx, "impersonation_context", None) is None
+        or getattr(ctx, "actor_operator", None) is None
+    ):
+        raise AuthorizationInvariantError("verified examiner context is required")
+    if not all(condition.passed for condition in request_wide_condition_checks()):
+        return EffectiveAuthorityRead(
+            authv=0,
+            organization_capabilities=[],
+            institution_capabilities=[],
+        )
+    capabilities = [
+        EffectiveCapabilityRead(
+            module=module,
+            sensitivity=sensitivity,
+            permission=Permission.VIEW,
+            requires_contextual_authorization=False,
+        )
+        for module in _INSTITUTION_MODULES
+        for sensitivity in Sensitivity
+    ]
+    return EffectiveAuthorityRead(
+        authv=0,
+        organization_capabilities=[],
+        institution_capabilities=[
+            InstitutionCapabilitiesRead(
+                institution_id=institution.id,
+                capabilities=capabilities,
+            )
+            for institution in institutions
+            if institution.organization_id == ctx.organization_id
+        ],
+    )
 
 
 def _principal_type(user: User) -> PrincipalType:
@@ -314,6 +538,10 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
 ) -> AuthorizationDecision:
     """Check permissions using only stored bindings, returning a trace for audit."""
 
+    conditions = (
+        *request_wide_condition_checks(),
+        *runtime_condition_checks(permission, resource, conditions),
+    )
     principal_active, bindings = _load_principal_grants(db, principal)
     if not principal_active:
         return _deny_with_trace(
@@ -361,6 +589,7 @@ def evaluate_liquidity_monitoring_views(
 
     principal = PrincipalLocator(organization_id, principal_id, PrincipalType.HUMAN)
     permission = Permission.VIEW
+    conditions = request_wide_condition_checks()
     resources = {
         institution.id: ResourceLocator(
             organization_id,
@@ -392,7 +621,7 @@ def evaluate_liquidity_monitoring_views(
                 principal,
                 permission,
                 resource,
-                (),
+                conditions,
                 None,
                 "principal_not_active",
             )
@@ -401,12 +630,18 @@ def evaluate_liquidity_monitoring_views(
                 principal,
                 permission,
                 resource,
-                (),
+                conditions,
                 None,
                 "resource_institution_not_in_tenant",
             )
         else:
-            decision = evaluate_grants(principal, permission, resource, bindings)
+            decision = evaluate_grants(
+                principal,
+                permission,
+                resource,
+                bindings,
+                conditions=conditions,
+            )
         decisions[institution.id] = decision
     return decisions
 

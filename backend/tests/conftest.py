@@ -22,6 +22,14 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.core.config import Settings, get_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
@@ -30,6 +38,7 @@ from app.integrations.storage.base import PresignedUpload, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
+from app.services import authorization
 from tests.api.factories import ApiFactories
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.fixtures.reference_data import seed_global_reference_data
@@ -41,6 +50,7 @@ from tests.storage.inmemory import InMemoryStorageClient
 def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("APP_NAME", "risk-service")
+    monkeypatch.setenv("DEMO_MODE", "0")
     # Set (not delete) so a developer's local .env cannot leak into the suite:
     # environment variables take priority over the env_file in pydantic-settings,
     # and the settings treat "" as unconfigured. Deleting the variable is NOT
@@ -286,6 +296,29 @@ def _seed_demo_tenants(engine: Engine) -> None:
                 ),
             ]
         )
+        session.flush()
+        for organization_id, user_id in ((ORG_1, USER_1), (ORG_2, USER_2)):
+            authorization.create_role_binding(
+                session,
+                organization_id=organization_id,
+                principal_user_id=user_id,
+                principal_type=PrincipalType.HUMAN,
+                role_bundle=RoleBundle.VIEWER,
+                scope=authorization.BindingScope(
+                    institution_scope=InstitutionScope.ORGANIZATION,
+                    institution_id=None,
+                    module_scope=ModuleScope.ALL,
+                    sensitivity_scope=SensitivityScope.ALL,
+                ),
+                grantor=authorization.GrantorRef(GrantorType.SYSTEM, "hermetic-fixture"),
+                reason="Hermetic fixture institution coverage",
+                commit=False,
+            )
+            # Fixture tokens intentionally start at authv=1. Binding creation
+            # invalidates real sessions, but no session exists during bootstrap.
+            user = session.get(User, user_id)
+            assert user is not None
+            user.authorization_version = 1
         session.commit()
 
 

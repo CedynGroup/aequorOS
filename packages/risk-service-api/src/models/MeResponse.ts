@@ -11,6 +11,14 @@
  */
 
 import { mapValues } from "../runtime";
+import type { EffectiveAuthorityRead } from "./EffectiveAuthorityRead";
+import {
+  EffectiveAuthorityReadFromJSON,
+  EffectiveAuthorityReadFromJSONTyped,
+  EffectiveAuthorityReadToJSON,
+  EffectiveAuthorityReadToJSONTyped,
+} from "./EffectiveAuthorityRead";
+
 /**
  *
  * @export
@@ -29,6 +37,12 @@ export interface MeResponse {
    * @memberof MeResponse
    */
   displayName: string | null;
+  /**
+   *
+   * @type {EffectiveAuthorityRead}
+   * @memberof MeResponse
+   */
+  effectiveAuthority: EffectiveAuthorityRead;
   /**
    *
    * @type {string}
@@ -98,6 +112,11 @@ export function instanceOfMeResponse(value: object): value is MeResponse {
     return false;
   if (!("displayName" in value) || value["displayName"] === undefined)
     return false;
+  if (
+    !("effectiveAuthority" in value) ||
+    value["effectiveAuthority"] === undefined
+  )
+    return false;
   if (!("email" in value) || value["email"] === undefined) return false;
   if (!("jobTitle" in value) || value["jobTitle"] === undefined) return false;
   if (!("locale" in value) || value["locale"] === undefined) return false;
@@ -124,6 +143,9 @@ export function MeResponseFromJSONTyped(
   return {
     authProvider: json["auth_provider"],
     displayName: json["display_name"],
+    effectiveAuthority: EffectiveAuthorityReadFromJSON(
+      json["effective_authority"],
+    ),
     email: json["email"],
     jobTitle: json["job_title"],
     locale: json["locale"],
@@ -150,6 +172,9 @@ export function MeResponseToJSONTyped(
   return {
     auth_provider: value["authProvider"],
     display_name: value["displayName"],
+    effective_authority: EffectiveAuthorityReadToJSON(
+      value["effectiveAuthority"],
+    ),
     email: value["email"],
     job_title: value["jobTitle"],
     locale: value["locale"],

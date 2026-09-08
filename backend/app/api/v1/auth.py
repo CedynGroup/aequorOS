@@ -29,7 +29,7 @@ from app.core.authorization import RoleBundle
 from app.core.config import get_settings
 from app.db.session import get_worker_sessionmaker
 from app.features.manage_authorization import binding_response, binding_scope, grant_conflict
-from app.models import User
+from app.models import Bank, User
 from app.schemas.auth import (
     LoginRequest,
     MeResponse,
@@ -44,8 +44,8 @@ from app.schemas.auth import (
     TokenRefreshRequest,
     TokenResponse,
 )
-from app.schemas.authorization import BindingCreateResponse
-from app.services import authentication, grant_administration, sso_config
+from app.schemas.authorization import BindingCreateResponse, EffectiveAuthorityRead
+from app.services import authentication, authorization, grant_administration, sso_config
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -70,7 +70,12 @@ def _tokens(issued: authentication.IssuedTokens) -> TokenResponse:
     )
 
 
-def _me_response(user: User) -> MeResponse:
+def _me_response(db: Session, ctx: TenantContext, user: User) -> MeResponse:
+    effective_authority = _effective_authority_response(
+        db,
+        ctx,
+        failure_surface="auth_me_effective_authority",
+    )
     return MeResponse(
         user_id=user.id,
         organization_id=user.organization_id,
@@ -79,12 +84,40 @@ def _me_response(user: User) -> MeResponse:
         job_title=user.job_title,
         locale=user.locale,
         timezone=user.timezone,
-        # The database CHECK constraint and update schema guarantee this set;
-        # SQLAlchemy exposes String columns as the wider `str` type.
         theme=cast(Literal["light", "dark", "system"] | None, user.theme),
         role=user.role,
         auth_provider=user.auth_provider,
+        effective_authority=effective_authority,
     )
+
+
+def _effective_authority_response(
+    db: Session,
+    ctx: TenantContext,
+    *,
+    failure_surface: str,
+) -> EffectiveAuthorityRead:
+    institutions = list(
+        db.scalars(
+            select(Bank)
+            .where(Bank.organization_id == ctx.organization_id)
+            .order_by(Bank.name, Bank.id)
+        )
+    )
+    try:
+        if ctx.impersonation_context is not None:
+            return authorization.project_examiner_authority(ctx, institutions)
+        return authorization.project_effective_authority(
+            db,
+            ctx,
+            institutions,
+            failure_surface=failure_surface,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Effective authority is temporarily unavailable.",
+        ) from exc
 
 
 def _current_user(db: Session, ctx: TenantContext) -> User:
@@ -313,7 +346,23 @@ def me(
     ctx: Annotated[TenantContext, Depends(get_current_principal)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> MeResponse:
-    return _me_response(_current_user(db, ctx))
+    return _me_response(db, ctx, _current_user(db, ctx))
+
+
+@router.get(
+    "/effective-authority",
+    response_model=EffectiveAuthorityRead,
+    operation_id="authEffectiveAuthority",
+)
+def effective_authority(
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+    db: Annotated[Session, Depends(get_tenant_db_session)],
+) -> EffectiveAuthorityRead:
+    return _effective_authority_response(
+        db,
+        ctx,
+        failure_surface="auth_effective_authority",
+    )
 
 
 @router.patch("/me", response_model=MeResponse, operation_id="authUpdateMe")
@@ -325,6 +374,6 @@ def update_me(
     user = _current_user(db, ctx)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(user, field, value)
+    response = _me_response(db, ctx, user)
     db.commit()
-    db.refresh(user)
-    return _me_response(user)
+    return response

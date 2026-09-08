@@ -1,3 +1,5 @@
+import type { EffectiveCapabilityRead } from "@aequoros/risk-service-api";
+
 /**
  * Institution-type module scoping (docs/sdi.md §3, §6.3).
  *
@@ -127,6 +129,10 @@ export type ModuleScope = {
    * carries no registry detail. Only meaningful once `isResolved` is true.
    */
   modules: ReadonlySet<ModuleKey> | null;
+  /** Exact organization-level modules projected by the binding evaluator. */
+  organizationModules: ReadonlySet<ModuleKey>;
+  /** True only when the selected institution has at least one exact capability. */
+  hasInstitutionAuthority: boolean;
   institutionClass: string | null;
   /**
    * Server-evaluated access to the exact institution's Liquidity Monitoring
@@ -148,6 +154,68 @@ export function moduleSetFrom(
 ): ReadonlySet<ModuleKey> | null {
   if (!defaultModules || defaultModules.length === 0) return null;
   return new Set(defaultModules as ModuleKey[]);
+}
+
+const CAPABILITY_MODULES = {
+  liq: ["liquidity"],
+  cap: ["capital"],
+  irrbb: ["irrbb"],
+  fx: ["fx"],
+  ftp: ["ftp"],
+  fcst: ["forecasting"],
+  beh: ["behavioral"],
+  data: ["data_engine"],
+  reg: ["regulatory_reporting", "reports"],
+  risk: ["command_center", "risk", "alerts", "credit", "positions"],
+  markets: ["markets"],
+  account: ["institution"],
+  audit: [],
+} as const satisfies Record<
+  EffectiveCapabilityRead["module"],
+  readonly ModuleKey[]
+>;
+
+export function effectiveInstitutionModules(
+  defaultModules: readonly string[] | null | undefined,
+  capabilities: readonly EffectiveCapabilityRead[],
+): ReadonlySet<ModuleKey> {
+  const entitled = moduleSetFrom(defaultModules);
+  const modules = new Set<ModuleKey>();
+  for (const capability of capabilities) {
+    if (capability.permission !== "view") continue;
+    for (const capabilityModule of CAPABILITY_MODULES[capability.module]) {
+      if (!entitled || entitled.has(capabilityModule)) {
+        modules.add(capabilityModule);
+      }
+    }
+  }
+  return modules;
+}
+
+export function effectiveOrganizationModules(
+  capabilities: readonly EffectiveCapabilityRead[],
+): ReadonlySet<ModuleKey> {
+  return capabilities.some(
+    (capability) =>
+      capability.module === "account" && capability.permission === "administer",
+  )
+    ? new Set<ModuleKey>(["settings"])
+    : new Set<ModuleKey>();
+}
+
+export function hasEffectiveCapability(
+  capabilities: readonly EffectiveCapabilityRead[],
+  module: EffectiveCapabilityRead["module"],
+  sensitivity: EffectiveCapabilityRead["sensitivity"],
+  permission: EffectiveCapabilityRead["permission"],
+): boolean {
+  return capabilities.some(
+    (capability) =>
+      !capability.requiresContextualAuthorization &&
+      capability.module === module &&
+      capability.sensitivity === sensitivity &&
+      capability.permission === permission,
+  );
 }
 
 function subrouteHidden(path: string, scope: ModuleScope): boolean {
@@ -175,6 +243,12 @@ function bindingControlledSubrouteHidden(
   );
 }
 
+const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings"]);
+
+export function isPersonalSettingsPath(path: string): boolean {
+  return path === "/settings/profile" || path.startsWith("/settings/profile/");
+}
+
 /**
  * Is a route path visible under this scope? Used by the ROUTE GUARD, which 404s a
  * hidden path — so it stays permissive until the scope resolves (no 404 flash on
@@ -185,7 +259,16 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   const path = normalize(pathname);
   // A deep-link refresh must wait for scope resolution, never briefly 404.
   if (!scope.isResolved) return true;
+  if (isPersonalSettingsPath(path)) return true;
   const moduleKey = moduleForPath(path);
+  if (
+    moduleKey &&
+    ORGANIZATION_ROUTES.has(moduleKey) &&
+    !scope.organizationModules.has(moduleKey)
+  ) {
+    return false;
+  }
+  if (moduleKey && ORGANIZATION_ROUTES.has(moduleKey)) return true;
   if (
     moduleKey &&
     scope.isResolved &&
@@ -214,9 +297,14 @@ export function isHrefVisible(href: string, scope: ModuleScope): boolean {
   // Hide class-specific subroutes until the class is known. In particular,
   // Capital is a core module but its Basel and SDI tabs are not interchangeable.
   if (subrouteHidden(path, scope)) return false;
+  if (isPersonalSettingsPath(path)) return true;
   const moduleKey = moduleForPath(path);
   if (moduleKey) {
+    if (ORGANIZATION_ROUTES.has(moduleKey)) {
+      return scope.organizationModules.has(moduleKey);
+    }
     if (!scope.isResolved) return CORE_MODULES.has(moduleKey);
+    if (!scope.hasInstitutionAuthority) return false;
     if (scope.modules && !scope.modules.has(moduleKey)) return false;
   }
   return true;

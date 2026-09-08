@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 from loguru import logger
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -18,6 +19,7 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.config import get_settings
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
@@ -31,6 +33,17 @@ from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_ca
 URL = f"/api/v1/banks/{SAMPLE_BANK_ID}/liquidity-monitoring"
 SIBLING_BANK_ID = "BK-LIQM0002"
 OTHER_BANK_ID = "BK-LIQM0003"
+
+
+@pytest.fixture(autouse=True)
+def _start_without_fixture_authority(db_client: TestClient) -> None:
+    """Exercise the enforcement boundary without the API fixture's explicit grants."""
+    session = get_sessionmaker()()
+    try:
+        session.execute(delete(AuthorizationBinding))
+        session.commit()
+    finally:
+        session.close()
 
 
 def _seed_liquidity_book() -> None:
@@ -189,6 +202,81 @@ def test_no_binding_defaults_to_denial_without_legacy_role_fallback(
     assert decisions[0]["allowed"] is False
     assert decisions[0]["reason"] == "no_active_exact_binding"
     assert decisions[0]["binding_trace"] == ""
+
+
+def test_production_projection_omits_contextual_approval_without_hiding_views(
+    db_client: TestClient,
+) -> None:
+    _seed_liquidity_book()
+    _, version = _grant(role_bundle=RoleBundle.APPROVER)
+    request_headers = headers(authorization_version=version)
+
+    me = db_client.get("/api/v1/auth/me", headers=request_headers)
+    banks = db_client.get("/api/v1/banks", headers=request_headers)
+
+    assert me.status_code == 200, me.text
+    capabilities = me.json()["effective_authority"]["institution_capabilities"][0]["capabilities"]
+    assert {
+        capability["permission"]: capability["requires_contextual_authorization"]
+        for capability in capabilities
+    } == {"view": False, "review": False, "approve": True}
+    assert banks.status_code == 200, banks.text
+    assert [bank["id"] for bank in banks.json()["banks"]] == [SAMPLE_BANK_ID]
+
+
+def test_production_demo_mode_hides_complete_view_authority(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_liquidity_book()
+    _, version = _grant(role_bundle=RoleBundle.VIEWER)
+    request_headers = headers(authorization_version=version)
+    monkeypatch.setenv("DEMO_MODE", "1")
+    get_settings.cache_clear()
+
+    me = db_client.get("/api/v1/auth/me", headers=request_headers)
+    banks = db_client.get("/api/v1/banks", headers=request_headers)
+    product = _get(db_client, authorization_version=version)
+
+    assert me.status_code == 200, me.text
+    assert me.json()["effective_authority"]["institution_capabilities"] == []
+    assert banks.status_code == 200, banks.text
+    assert banks.json()["banks"] == []
+    assert product.status_code == 403, product.text
+
+
+def test_profile_projection_failure_rolls_back_before_side_effects(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_name = "Profile Before Projection Failure"
+    session = get_sessionmaker()()
+    try:
+        user = session.get(User, USER_1)
+        assert user is not None
+        user.display_name = original_name
+        session.commit()
+    finally:
+        session.close()
+
+    def fail_projection(*_args: object) -> None:
+        raise RuntimeError("capability projection unavailable")
+
+    monkeypatch.setattr(authorization, "_load_principal_grants", fail_projection)
+    response = db_client.patch(
+        "/api/v1/auth/me",
+        headers=headers(),
+        json={"display_name": "Profile Must Not Persist"},
+    )
+
+    session = get_sessionmaker()()
+    try:
+        persisted = session.get(User, USER_1)
+        assert persisted is not None
+        assert persisted.display_name == original_name
+    finally:
+        session.close()
+    assert response.status_code == 503
 
 
 @pytest.mark.parametrize(
@@ -371,10 +459,8 @@ def test_bank_list_and_detail_expose_the_same_server_evaluated_access(
         headers=headers(roles=("viewer",)),
     )
     assert denied.status_code == 200
-    assert denied_detail.status_code == 200
-    denied_bank = next(row for row in denied.json()["banks"] if row["id"] == SAMPLE_BANK_ID)
-    assert denied_bank["liquidity_monitoring_access"] is False
-    assert denied_detail.json()["liquidity_monitoring_access"] is False
+    assert denied.json()["banks"] == []
+    assert denied_detail.status_code == 404
 
     _, version = _grant()
     allowed = db_client.get(
@@ -390,3 +476,31 @@ def test_bank_list_and_detail_expose_the_same_server_evaluated_access(
     allowed_bank = next(row for row in allowed.json()["banks"] if row["id"] == SAMPLE_BANK_ID)
     assert allowed_bank["liquidity_monitoring_access"] is True
     assert allowed_detail.json()["liquidity_monitoring_access"] is True
+
+
+def test_bank_capability_resolution_failure_returns_503_before_listing(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_liquidity_book()
+    records, sink_id = _capture_binding_records()
+
+    def fail_evaluation(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("evaluator unavailable")
+
+    monkeypatch.setattr(authorization, "_load_principal_grants", fail_evaluation)
+    try:
+        response = db_client.get(
+            "/api/v1/banks",
+            headers=headers(roles=("admin",)),
+        )
+    finally:
+        logger.remove(sink_id)
+
+    assert response.status_code == 503
+    decisions = _binding_extras(records)
+    assert len(decisions) == 1
+    assert decisions[0]["allowed"] is False
+    assert decisions[0]["reason"] == "binding_evaluation_failed"
+    assert decisions[0]["severity"] == "error"
+    assert decisions[0]["surface"] == "manage_banks_effective_authority"

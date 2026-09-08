@@ -171,7 +171,11 @@ def test_resolver_fails_loud_when_the_registry_is_unseeded(db_session: Session) 
 
 def test_bank_read_rides_the_resolved_discriminator(db_session: Session) -> None:
     _make_bank(db_session, institution_type="finance_house")
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(
+        organization_id=ORG_1,
+        actor_user_id=USER_1,
+        authorization_version=1,
+    )
 
     listed = banks_service.list_banks(db_session, ctx).banks
     read = next(b for b in listed if b.name == "Resolver Test Bank")

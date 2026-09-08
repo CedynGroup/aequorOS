@@ -32,6 +32,12 @@ async function api(
 }
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {
+  if (process.env.E2E_CAPABILITY_ONLY === "1") {
+    for (const role of ["admin", "approver", "analyst", "viewer"] as const) {
+      await writeStorageState(role, E2E_BASE_URL, E2E_TMP);
+    }
+    return;
+  }
   const admin = await mintBackendToken("admin");
 
   // The disposable database is populated by the backend's test-only canonical

@@ -122,6 +122,29 @@ def main() -> None:
         session.commit()
         _enrol_signing_keys(session)
         materialize_canonical_test_book(session)
+        for role, bundle in (
+            ("admin", RoleBundle.ANALYST),
+            ("approver", RoleBundle.APPROVER),
+            ("analyst", RoleBundle.ANALYST),
+        ):
+            authorization.create_role_binding(
+                session,
+                organization_id=DEMO_ORG_ID,
+                principal_user_id=users[role].id,
+                principal_type=PrincipalType.HUMAN,
+                role_bundle=bundle,
+                scope=authorization.BindingScope(
+                    InstitutionScope.ORGANIZATION,
+                    None,
+                    ModuleScope.ALL,
+                    SensitivityScope.ALL,
+                ),
+                grantor=authorization.GrantorRef(
+                    GrantorType.SYSTEM,
+                    "e2e-bootstrap",
+                ),
+                reason="exercise the dashboard through explicit effective authority",
+            )
         authorization.create_role_binding(
             session,
             organization_id=DEMO_ORG_ID,

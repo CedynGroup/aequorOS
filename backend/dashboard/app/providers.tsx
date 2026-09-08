@@ -1,18 +1,18 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { SessionProvider, signOut, useSession } from 'next-auth/react';
-import { usePathname } from 'next/navigation';
+import { useEffect } from "react";
+import { SessionProvider, signOut, useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 
-import { setAccessToken } from '@/lib/api/token';
-import { LOGIN_URL } from '@/lib/loginUrl';
-import ProfileProvider from '@/components/profile/ProfileProvider';
-import ImpersonationBanner from '@/components/impersonation/ImpersonationBanner';
-import QueryAuthorityBoundary from '@/lib/api/QueryAuthorityBoundary';
-import { queryAuthorityScope } from '@/lib/api/queryPolicy';
-import { useResolvedQueryAuthorityScope } from '@/lib/api/useQueryScope';
+import { setAccessToken } from "@/lib/api/token";
+import { LOGIN_URL } from "@/lib/loginUrl";
+import ProfileProvider from "@/components/profile/ProfileProvider";
+import ImpersonationBanner from "@/components/impersonation/ImpersonationBanner";
+import QueryAuthorityBoundary from "@/lib/api/QueryAuthorityBoundary";
+import { queryAuthorityScope } from "@/lib/api/queryPolicy";
+import { useResolvedQueryAuthorityScope } from "@/lib/api/useQueryScope";
 
-const PUBLIC_QUERY_SCOPE = queryAuthorityScope('public', 'anonymous', []);
+const PUBLIC_QUERY_SCOPE = queryAuthorityScope("public", "anonymous", 0);
 
 /** Keeps the API client's bearer token in sync with the NextAuth session. */
 function TokenSync() {
@@ -20,7 +20,7 @@ function TokenSync() {
   useEffect(() => {
     // A failed silent refresh means the session can no longer authenticate; send
     // the user back to sign in rather than looping on 401s with a dead token.
-    if (session?.error === 'RefreshTokenError') {
+    if (session?.error === "RefreshTokenError") {
       setAccessToken(null);
       void signOut({ redirectTo: LOGIN_URL });
       return;
@@ -33,7 +33,7 @@ function TokenSync() {
 function AuthorityQueryBoundary({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const scope = useResolvedQueryAuthorityScope();
-  const publicRoute = pathname === '/login' || pathname === '/inspect';
+  const publicRoute = pathname === "/login" || pathname === "/inspect";
   return (
     <QueryAuthorityBoundary
       scope={publicRoute ? PUBLIC_QUERY_SCOPE : scope}

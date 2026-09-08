@@ -139,11 +139,12 @@ import { useQueryAuthorityScope } from "./useQueryScope";
 
 const DASHBOARD_REFETCH_MS = 30_000;
 
-export function useBanks() {
+export function useBanks(enabled = true) {
   const scope = useQueryAuthorityScope();
   return useQuery({
     queryKey: scopedQueryKey("banks", scope),
     queryFn: () => apiCall(() => banksApi.listBanks({})),
+    enabled,
   });
 }
 

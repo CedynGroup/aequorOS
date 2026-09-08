@@ -39,17 +39,17 @@ After authentication, `/auth/me` is authoritative; changes are persisted to the
 user profile for cross-browser consistency and mirrored locally for the next
 pre-paint boot. System mode follows OS theme changes live.
 
-| Token (Tailwind name) | Role | Dark | Light |
-|---|---|---|---|
-| `bg-base` | page background | `#0A0F1A` | `#FAFBFC` |
-| `bg-surface` / `surface-raised` / `surface-hover` | cards, hovers | `#101827 / #17202F / #1C2737` | `#F5F7FA / #FFF / #F5F7FA` |
-| `text-navy` | headings | `#EDF2F9` | `#0A2540` |
-| `text-ink` / `text-slate` / `text-slate-light` | body / muted / faint | `#C6D0DE / #8494A9 / #5C6B80` | `#33415C / #5A6776 / #7A8693` |
-| `border-border` / `border-light` | hairlines | `#2E3E58 / #223047` | `#D0D7DE / #E4E8EC` |
-| `action` (+hover/soft) | accent / links / CTAs | `#4D9FFF` | `#2D7FF9` |
-| `success / warning / critical` (+soft) | risk semantics | `#35C28D / #F5A623 / #F26D6D` | `#0E8A4F / #C97C00 / #B3261E` |
-| `bg-nav` | always-dark rail/hero | `#070C15` | `#0A2540` |
-| `--chart-1..6` | data-viz categorical | blue/teal/violet/amber/rose/cyan | deepened variants |
+| Token (Tailwind name)                             | Role                  | Dark                             | Light                         |
+| ------------------------------------------------- | --------------------- | -------------------------------- | ----------------------------- |
+| `bg-base`                                         | page background       | `#0A0F1A`                        | `#FAFBFC`                     |
+| `bg-surface` / `surface-raised` / `surface-hover` | cards, hovers         | `#101827 / #17202F / #1C2737`    | `#F5F7FA / #FFF / #F5F7FA`    |
+| `text-navy`                                       | headings              | `#EDF2F9`                        | `#0A2540`                     |
+| `text-ink` / `text-slate` / `text-slate-light`    | body / muted / faint  | `#C6D0DE / #8494A9 / #5C6B80`    | `#33415C / #5A6776 / #7A8693` |
+| `border-border` / `border-light`                  | hairlines             | `#2E3E58 / #223047`              | `#D0D7DE / #E4E8EC`           |
+| `action` (+hover/soft)                            | accent / links / CTAs | `#4D9FFF`                        | `#2D7FF9`                     |
+| `success / warning / critical` (+soft)            | risk semantics        | `#35C28D / #F5A623 / #F26D6D`    | `#0E8A4F / #C97C00 / #B3261E` |
+| `bg-nav`                                          | always-dark rail/hero | `#070C15`                        | `#0A2540`                     |
+| `--chart-1..6`                                    | data-viz categorical  | blue/teal/violet/amber/rose/cyan | deepened variants             |
 
 Utilities: `.card` (10px radius; shadow only in light), `.btn-primary`, `.tnum`
 (tabular numerals — global on tables), `text-kpi`/`text-kpi-lg` (28/36px numerics),
@@ -69,7 +69,7 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
 - **GuidedTour** (`components/tour/`) — zero-dep spotlight tour, 8 steps, `?tour=1` or
   first-visit pill
 - **ProfileProvider** (`components/profile/`) — cached `GET /auth/me`, serialized profile
-  updates, and immediate header/profile freshness independent of JWT claim rotation
+  updates, and the server-derived effective-authority projection used by the shell
 - **Profile & preferences** (`/settings/profile`) — personal details, generated initials
   avatar with identity-stable color, and server-persisted light/dark/system preference
 - `lib/chartTheme.ts` — recharts theme: `CHART_SERIES`, grid/status colors, axis/tooltip props
@@ -89,7 +89,11 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
 
 ## 5. Phase 2 (deliberately deferred)
 
-- True role-based access control (role lenses are client-side view permutations)
+- Further product-endpoint authorization cutovers and their module-specific action
+  controls (the shell, institution visibility, deep routes, query scopes, and controls
+  backed by final non-contextual authority already consume the server-derived
+  scoped-binding projection; token roles and contextual eligibility are not execution
+  authority)
 - PDF/Excel export engine (print-optimized board pack ships; `window.print()` → PDF)
 - Alert acknowledge/resolve workflow (no mutation endpoint yet) and resolved-history tab
 - Server pagination for the positions blotter; deal-level cash-flow schedule drill
