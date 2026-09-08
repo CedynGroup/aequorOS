@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,10 +11,21 @@ from app.models import AuditEvent
 from tests.api.factories import CaseFactory
 from tests.api.helpers import headers
 
+# This test verifies committed audit writes through an independently opened engine.
+requires_committing_db = pytest.mark.committing_db
 
-def test_audit_events_are_created(db_client: TestClient, db_settings: Settings) -> None:
+
+@requires_committing_db
+def test_audit_events_are_created(
+    db_client: TestClient,
+    db_settings: Settings,
+) -> None:
     case_id = str(CaseFactory(db_client).create().id)
-    db_client.patch(f"/api/v1/cases/{case_id}", headers=headers(), json={"status": "in_review"})
+    db_client.patch(
+        f"/api/v1/cases/{case_id}",
+        headers=headers(),
+        json={"status": "in_review"},
+    )
     assessment = db_client.post(
         "/api/v1/assessments",
         headers=headers(),

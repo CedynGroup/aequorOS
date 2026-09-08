@@ -32,6 +32,9 @@ from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.api.test_calculations import _financial_inputs, _ready_scenario
 
+# Liquidity publication uses raw commits, advisory locks, and independent sessions.
+requires_committing_db = pytest.mark.committing_db
+
 
 def test_liquidity_openapi_contracts(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
@@ -70,6 +73,7 @@ def test_liquidity_openapi_contracts(client: TestClient) -> None:
     assert "diagnostic" in metric["properties"]
 
 
+@requires_committing_db
 def test_legacy_successful_run_returns_honest_unavailable_summary(
     db_client: TestClient,
 ) -> None:
@@ -111,6 +115,7 @@ def test_legacy_successful_run_returns_honest_unavailable_summary(
     }
 
 
+@requires_committing_db
 def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     empty = db_client.get(f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers())
@@ -224,6 +229,7 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
         )
 
 
+@requires_committing_db
 def test_credit_reliance_finding_evidence_covers_all_forecast_periods(
     db_client: TestClient,
 ) -> None:
@@ -277,6 +283,7 @@ def test_credit_reliance_finding_evidence_covers_all_forecast_periods(
     assert {item.locator["period_number"] for item in period_evidence} == {1, 2, 3}
 
 
+@requires_committing_db
 def test_liquidity_summary_and_review_are_tenant_scoped(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -308,6 +315,7 @@ def test_liquidity_summary_and_review_are_tenant_scoped(db_client: TestClient) -
     )
 
 
+@requires_committing_db
 def test_liquidity_review_rolls_back_when_audit_event_fails(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -350,6 +358,7 @@ def test_liquidity_review_rolls_back_when_audit_event_fails(
     assert "liquidity_finding.reviewed" not in event_types
 
 
+@requires_committing_db
 def test_liquidity_summary_reads_immutable_persisted_metrics(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -417,6 +426,7 @@ def test_liquidity_summary_reads_immutable_persisted_metrics(
     )
 
 
+@requires_committing_db
 def test_zero_finding_run_persists_liquidity_analysis(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -447,6 +457,7 @@ def test_zero_finding_run_persists_liquidity_analysis(db_client: TestClient) -> 
     assert analysis.analysis_version == "liquidity-v1.0.0"
 
 
+@requires_committing_db
 def test_liquidity_review_rejects_findings_not_owned_by_workflow(
     db_client: TestClient,
 ) -> None:
@@ -525,6 +536,7 @@ def test_liquidity_review_rejects_findings_not_owned_by_workflow(
     assert "liquidity_finding.reviewed" not in event_types
 
 
+@requires_committing_db
 def test_liquidity_review_uses_finding_producing_rule_version(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -553,6 +565,7 @@ def test_liquidity_review_uses_finding_producing_rule_version(
     assert response.json()["rule_version"] == "liquidity-v1.0.0"
 
 
+@requires_committing_db
 def test_liquidity_review_rejects_terminal_findings(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -597,6 +610,7 @@ def test_liquidity_review_rejects_terminal_findings(db_client: TestClient) -> No
         )
 
 
+@requires_committing_db
 def test_liquidity_review_rejects_archived_scenario_findings(
     db_client: TestClient,
 ) -> None:
@@ -643,6 +657,7 @@ def test_liquidity_review_rejects_archived_scenario_findings(
         )
 
 
+@requires_committing_db
 def test_liquidity_review_cannot_overwrite_concurrent_supersession(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -719,6 +734,7 @@ def test_liquidity_review_cannot_overwrite_concurrent_supersession(
         )
 
 
+@requires_committing_db
 def test_liquidity_review_cannot_commit_after_concurrent_scenario_archive(
     db_client: TestClient,
 ) -> None:
@@ -799,6 +815,7 @@ def test_liquidity_review_cannot_commit_after_concurrent_scenario_archive(
         )
 
 
+@requires_committing_db
 def test_generic_finding_update_rejects_liquidity_workflow_findings(
     db_client: TestClient,
 ) -> None:
@@ -858,6 +875,7 @@ def test_generic_finding_update_rejects_liquidity_workflow_findings(
     assert generic_review_events == []
 
 
+@requires_committing_db
 def test_generic_liquidity_review_rejects_before_case_lock(
     db_client: TestClient,
 ) -> None:
@@ -897,6 +915,7 @@ def test_generic_liquidity_review_rejects_before_case_lock(
     )
 
 
+@requires_committing_db
 def test_liquidity_rerun_supersedes_prior_scenario_findings(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -928,6 +947,7 @@ def test_liquidity_rerun_supersedes_prior_scenario_findings(db_client: TestClien
     assert prior and all(item.status == "superseded" for item in prior)
 
 
+@requires_committing_db
 def test_stale_run_completion_does_not_replace_newer_findings(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -980,6 +1000,7 @@ def test_stale_run_completion_does_not_replace_newer_findings(db_client: TestCli
     assert {item["status"] for item in historical["findings"]} == {"superseded"}
 
 
+@requires_committing_db
 def test_stale_run_uses_latest_newer_run_as_superseder(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -1032,6 +1053,7 @@ def test_stale_run_uses_latest_newer_run_as_superseder(db_client: TestClient) ->
     )
 
 
+@requires_committing_db
 def test_liquidity_summary_ranks_findings_by_severity(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -1079,6 +1101,7 @@ def test_liquidity_summary_ranks_findings_by_severity(db_client: TestClient) -> 
     )
 
 
+@requires_committing_db
 def test_liquidity_summary_loads_only_findings_for_selected_run(
     db_client: TestClient,
 ) -> None:
@@ -1116,6 +1139,7 @@ def test_liquidity_summary_loads_only_findings_for_selected_run(
     assert second["id"] not in loaded_run_ids
 
 
+@requires_committing_db
 def test_concurrent_publication_keeps_only_newest_run_findings(
     db_client: TestClient,
 ) -> None:
@@ -1245,6 +1269,7 @@ def test_concurrent_publication_keeps_only_newest_run_findings(
     assert {item["status"] for item in historical["findings"]} == {"superseded"}
 
 
+@requires_committing_db
 def test_publication_lock_and_transaction_share_a_constrained_pool_connection(
     db_client: TestClient,
 ) -> None:

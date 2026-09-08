@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,6 +11,9 @@ from app.db.session import get_engine
 from app.models import Document, Job, RiskFinding
 from tests.api.factories import ApiFactories
 from tests.api.helpers import ORG_1
+
+# This test verifies committed API writes through an independently opened engine.
+pytestmark = pytest.mark.committing_db
 
 
 def test_db_rows_are_scoped_to_expected_org(

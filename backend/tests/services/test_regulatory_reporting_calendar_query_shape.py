@@ -47,13 +47,40 @@ def _capture_sql(engine: Engine | Connection) -> Iterator[list[str]]:
         _context: object,
         _executemany: bool,
     ) -> None:
-        statements.append(" ".join(statement.lower().split()))
+        normalized = _calendar_statement(statement)
+        if normalized is not None:
+            statements.append(normalized)
 
     event.listen(engine, "before_cursor_execute", record)
     try:
         yield statements
     finally:
         event.remove(engine, "before_cursor_execute", record)
+
+
+def _calendar_statement(statement: str) -> str | None:
+    normalized = " ".join(statement.lower().split())
+    if normalized.startswith(
+        (
+            "select set_config('app.organization_id',",
+            "savepoint ",
+            "release savepoint ",
+            "rollback to savepoint ",
+        )
+    ):
+        return None
+    return normalized
+
+
+def test_calendar_query_count_ignores_transaction_setup() -> None:
+    assert _calendar_statement("SAVEPOINT sa_savepoint_1") is None
+    assert _calendar_statement("RELEASE SAVEPOINT sa_savepoint_1") is None
+    assert _calendar_statement("ROLLBACK TO SAVEPOINT sa_savepoint_1") is None
+    assert (
+        _calendar_statement("SELECT set_config('app.organization_id', %(organization_id)s, true)")
+        is None
+    )
+    assert _calendar_statement(" SELECT banks.id\nFROM banks ") == "select banks.id from banks"
 
 
 def _measure[T](db: Session, operation: Callable[[], T]) -> tuple[T, list[str]]:

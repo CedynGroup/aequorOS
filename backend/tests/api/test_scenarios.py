@@ -18,6 +18,9 @@ from app.services.scenarios import update_assumption
 from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 
+# These concurrency tests need PostgreSQL row locks and independent sessions.
+requires_committing_db = pytest.mark.committing_db
+
 
 def initialize(client: TestClient, case_id: UUID) -> dict:
     response = client.post(
@@ -278,7 +281,10 @@ def test_duplicate_assumption_returns_conflict_and_rolls_back(db_client: TestCli
     assert len(current["assumptions"]) == len(scenario["assumptions"])
 
 
-def test_concurrent_review_and_edit_serialize_on_the_assumption(db_client: TestClient) -> None:
+@requires_committing_db
+def test_concurrent_review_and_edit_serialize_on_the_assumption(
+    db_client: TestClient,
+) -> None:
     sessionmaker = get_sessionmaker()
     with sessionmaker() as dialect_session:
         if dialect_session.get_bind().dialect.name != "postgresql":
@@ -328,7 +334,10 @@ def test_concurrent_review_and_edit_serialize_on_the_assumption(db_client: TestC
         assert persisted.provenance["source"] == "reviewer_edit"
 
 
-def test_concurrent_archive_prevents_an_assumption_edit(db_client: TestClient) -> None:
+@requires_committing_db
+def test_concurrent_archive_prevents_an_assumption_edit(
+    db_client: TestClient,
+) -> None:
     sessionmaker = get_sessionmaker()
     with sessionmaker() as dialect_session:
         if dialect_session.get_bind().dialect.name != "postgresql":

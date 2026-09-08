@@ -53,6 +53,10 @@ _POSTGRES_ONLY = pytest.mark.skipif(
 )
 
 
+# Refresh-token ordering and race tests inspect a real engine and its pool.
+pytestmark = pytest.mark.committing_db
+
+
 def _password_user(db_session: Session) -> User:
     user = db_session.get(User, USER_1)
     assert user is not None
@@ -127,8 +131,7 @@ def _assert_owner_locked_before_any_token_write(log: _StatementLog, dialect: str
     assert first_token_write is not None, "the path under test wrote no refresh_tokens row"
     assert first_owner is not None, "refresh_tokens was written without touching users at all"
     assert first_owner < first_token_write, (
-        "a refresh_tokens write ran before its owner row was locked:\n"
-        + "\n".join(log.statements)
+        "a refresh_tokens write ran before its owner row was locked:\n" + "\n".join(log.statements)
     )
     if dialect == "postgresql":
         # SQLite's dialect drops the clause (its own write lock serializes the

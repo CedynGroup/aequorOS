@@ -33,6 +33,9 @@ from app.services import calculations
 from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 
+# Calculation publication uses raw commits and PostgreSQL advisory locks.
+requires_committing_db = pytest.mark.committing_db
+
 
 def _ready_scenario(client: TestClient, case_id: UUID) -> dict:
     workspace = client.post(
@@ -119,6 +122,7 @@ def _financial_inputs(case_id: UUID) -> None:
         session.commit()
 
 
+@requires_committing_db
 def test_calculation_correctness_persistence_and_reproducible_rerun(
     db_client: TestClient,
 ) -> None:
@@ -199,6 +203,7 @@ def test_calculation_correctness_persistence_and_reproducible_rerun(
         )
 
 
+@requires_committing_db
 def test_active_run_listing_returns_latest_success_for_every_scenario(
     db_client: TestClient,
 ) -> None:
@@ -258,6 +263,7 @@ def test_active_run_listing_returns_latest_success_for_every_scenario(
     assert discovered_ids == expected_ids
 
 
+@requires_committing_db
 def test_successful_run_reuses_calculated_liquidity_metrics(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -294,6 +300,7 @@ def test_successful_run_reuses_calculated_liquidity_metrics(
     assert generated_results == calculated_results
 
 
+@requires_committing_db
 def test_default_as_of_date_excludes_future_balances_unless_explicit(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -345,6 +352,7 @@ def test_default_as_of_date_excludes_future_balances_unless_explicit(
     assert [item["id"] for item in future_run["inputs"]["balances"]] == [future_balance_id]
 
 
+@requires_committing_db
 def test_audit_binds_pending_run_to_established_input_hash(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -378,6 +386,7 @@ def test_audit_binds_pending_run_to_established_input_hash(db_client: TestClient
     }
 
 
+@requires_committing_db
 def test_failure_after_liquidity_publication_rolls_back_atomic_run_result(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -430,6 +439,7 @@ def test_failure_after_liquidity_publication_rolls_back_atomic_run_result(
     assert liquidity_events == []
 
 
+@requires_committing_db
 def test_publication_establishes_repeatable_read_before_loading_run(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -468,6 +478,7 @@ def test_publication_establishes_repeatable_read_before_loading_run(
     assert call_order[:2] == ["isolation", "load"]
 
 
+@requires_committing_db
 def test_publication_lock_acquisition_failure_persists_failed_run(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -495,6 +506,7 @@ def test_publication_lock_acquisition_failure_persists_failed_run(
     assert run["error"]["details"]["diagnostic"] == "publication lock unavailable"
 
 
+@requires_committing_db
 def test_publication_lock_cleanup_failure_preserves_successful_run(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -522,6 +534,7 @@ def test_publication_lock_cleanup_failure_preserves_successful_run(
     assert run["outputs"]
 
 
+@requires_committing_db
 def test_archived_case_rejects_start_and_rerun_without_side_effects(
     db_client: TestClient,
 ) -> None:
@@ -573,6 +586,7 @@ def test_archived_case_rejects_start_and_rerun_without_side_effects(
     assert counts_after == counts_before
 
 
+@requires_committing_db
 def test_scenario_archive_wins_before_calculation_publication(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -656,6 +670,7 @@ def test_scenario_archive_wins_before_calculation_publication(
     assert "liquidity_analysis.completed" not in event_types
 
 
+@requires_committing_db
 def test_rerun_after_assumption_change_versions_inputs_without_replacing_output(
     db_client: TestClient,
 ) -> None:
@@ -697,6 +712,7 @@ def test_rerun_after_assumption_change_versions_inputs_without_replacing_output(
     assert persisted_first["outputs"] == first["outputs"]
 
 
+@requires_committing_db
 def test_failed_run_is_persisted_and_prior_success_remains_current(
     db_client: TestClient,
 ) -> None:
@@ -747,6 +763,7 @@ def test_failed_run_is_persisted_and_prior_success_remains_current(
 
 
 @pytest.mark.parametrize("input_model", [FinancialCashFlow, FinancialObligation])
+@requires_committing_db
 def test_calculation_rejects_mixed_currencies_across_all_inputs(
     db_client: TestClient,
     input_model: type[FinancialCashFlow] | type[FinancialObligation],
@@ -782,6 +799,7 @@ def test_calculation_rejects_mixed_currencies_across_all_inputs(
         (FinancialObligation, "obligation"),
     ],
 )
+@requires_committing_db
 def test_calculation_rejects_missing_currencies_across_all_inputs(
     db_client: TestClient,
     input_model: type[FinancialBalance] | type[FinancialCashFlow] | type[FinancialObligation],
@@ -811,6 +829,7 @@ def test_calculation_rejects_missing_currencies_across_all_inputs(
     assert "currency" in run["error"]["details"]["corrective_action"]
 
 
+@requires_committing_db
 def test_out_of_range_forecast_is_persisted_as_failed(
     db_client: TestClient,
 ) -> None:
@@ -886,6 +905,7 @@ def test_non_finite_assumption_is_rejected(value: str) -> None:
     }
 
 
+@requires_committing_db
 def test_only_active_obligations_participate(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -927,6 +947,7 @@ def test_only_active_obligations_participate(db_client: TestClient) -> None:
     assert run["outputs"][0]["total_liabilities"] == "500.0000"
 
 
+@requires_committing_db
 def test_undated_cash_flow_without_reporting_period_is_actionable_failure(
     db_client: TestClient,
 ) -> None:
@@ -957,6 +978,7 @@ def test_undated_cash_flow_without_reporting_period_is_actionable_failure(
     assert "cash-flow date" in run["error"]["details"]["corrective_action"]
 
 
+@requires_committing_db
 def test_cash_flows_outside_selected_reporting_period_name_every_record(
     db_client: TestClient,
 ) -> None:
@@ -1034,6 +1056,7 @@ def test_cash_flows_outside_selected_reporting_period_name_every_record(
     assert persisted["error"] == run["error"]
 
 
+@requires_committing_db
 def test_active_obligations_missing_amounts_name_every_record(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -1075,6 +1098,7 @@ def test_active_obligations_missing_amounts_name_every_record(db_client: TestCli
     assert "mark an obligation inactive" in run["error"]["details"]["corrective_action"]
 
 
+@requires_committing_db
 def test_snapshot_uses_effective_reporting_period_and_excludes_later_records(
     db_client: TestClient,
 ) -> None:
@@ -1154,6 +1178,7 @@ def test_snapshot_uses_effective_reporting_period_and_excludes_later_records(
     assert [item["id"] for item in run["inputs"]["cash_flows"]] == [str(old_flow.id)]
 
 
+@requires_committing_db
 def test_unknown_balance_type_is_an_actionable_persisted_failure(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -1184,6 +1209,7 @@ def test_unknown_balance_type_is_an_actionable_persisted_failure(db_client: Test
     assert run["error"]["details"]["corrective_action"]
 
 
+@requires_committing_db
 def test_category_semantics_keep_readiness_and_calculation_aligned(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     scenario = _ready_scenario(db_client, case.id)
@@ -1213,6 +1239,7 @@ def test_category_semantics_keep_readiness_and_calculation_aligned(db_client: Te
     assert run["inputs"]["scenario"]["numeric_assumptions"]["revenue_growth_rate"] == "0"
 
 
+@requires_committing_db
 def test_history_is_paginated_summaries_and_details_are_fetched_separately(
     db_client: TestClient,
 ) -> None:
@@ -1246,6 +1273,7 @@ def test_history_is_paginated_summaries_and_details_are_fetched_separately(
     assert detail["outputs"]
 
 
+@requires_committing_db
 def test_running_state_is_committed_before_snapshot_execution(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1277,6 +1305,7 @@ def test_running_state_is_committed_before_snapshot_execution(
     assert observed == ["running"]
 
 
+@requires_committing_db
 def test_unexpected_failure_is_persisted_with_sanitized_diagnostic(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1300,6 +1329,7 @@ def test_unexpected_failure_is_persisted_with_sanitized_diagnostic(
     assert run["error"]["details"]["corrective_action"]
 
 
+@requires_committing_db
 def test_calculation_runs_are_tenant_scoped(db_client: TestClient) -> None:
     case = CaseFactory(db_client).create()
     response = db_client.get(f"/api/v1/cases/{case.id}/calculation-runs", headers=headers(ORG_2))

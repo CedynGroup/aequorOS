@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 
 # IMPORT-TIME guards (before any `app.*` import below): the per-test fixture
 # sets these too, but module import happens during COLLECTION — a developer's
@@ -12,10 +13,13 @@ os.environ["DATABASE_URL"] = ""
 os.environ["WORKER_DATABASE_URL"] = ""
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.engine import make_url
@@ -322,6 +326,139 @@ def _seed_demo_tenants(engine: Engine) -> None:
         session.commit()
 
 
+@dataclass(frozen=True)
+class _TestDatabase:
+    database_url: str
+    engine: Engine
+
+
+@dataclass
+class _LazyTestApp:
+    app: FastAPI | None = None
+
+    def get(self) -> FastAPI:
+        if self.app is None:
+            self.app = create_app()
+        return self.app
+
+
+@pytest.fixture(scope="session")
+def _shared_test_database(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[_TestDatabase]:
+    """Build the rollback-isolated test database once per pytest process."""
+    test_database_url = os.getenv("TEST_DATABASE_URL")
+    schema_name: str | None = None
+    if test_database_url is None:
+        database_path = tmp_path_factory.mktemp("shared-test-database") / "risk_service_test.db"
+        database_url = f"sqlite+pysqlite:///{database_path}"
+    else:
+        schema_name = f"risk_service_test_{uuid4().hex}"
+        admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
+        try:
+            with admin_engine.connect() as connection:
+                connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
+        finally:
+            admin_engine.dispose()
+        database_url = _postgres_schema_url(test_database_url, schema_name)
+
+    engine = get_engine(database_url)
+    if engine.dialect.name == "sqlite":
+        _enable_sqlite_foreign_keys(engine)
+    try:
+        Base.metadata.create_all(engine)
+        _seed_demo_tenants(engine)
+        yield _TestDatabase(
+            database_url=database_url,
+            engine=engine,
+        )
+    finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+        get_settings.cache_clear()
+        get_engine.cache_clear()
+        if test_database_url is not None:
+            _drop_postgres_schema(test_database_url, schema_name)
+
+
+@pytest.fixture(scope="session")
+def _shared_app() -> _LazyTestApp:
+    """Defer app construction until a test's hermetic environment is active."""
+    return _LazyTestApp()
+
+
+@contextmanager
+def _rollback_sessionmaker_lifecycle(
+    database: _TestDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[sessionmaker]:
+    import app.api.deps as deps_mod  # noqa: PLC0415
+    import app.db.session as session_mod  # noqa: PLC0415
+
+    monkeypatch.setenv("DATABASE_URL", database.database_url)
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+
+    connection = database.engine.connect()
+    outer = connection.begin()
+    if connection.dialect.name == "sqlite":
+        connection.exec_driver_sql("BEGIN")
+    bound_sessionmaker = sessionmaker(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+        autoflush=False,
+        expire_on_commit=False,
+    )
+
+    original_get_engine = session_mod.get_engine
+    original_sessionmaker = session_mod.sessionmaker
+
+    def shared_engine(database_url: str) -> Engine:
+        if database_url == database.database_url:
+            return database.engine
+        return original_get_engine(database_url)
+
+    def shared_sessionmaker(*args, **kwargs) -> sessionmaker:
+        bind = kwargs.get("bind")
+        if bind is database.engine or bind is connection:
+            return bound_sessionmaker
+        return original_sessionmaker(*args, **kwargs)
+
+    monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
+    monkeypatch.setattr(session_mod, "get_engine", shared_engine)
+    monkeypatch.setattr(session_mod, "sessionmaker", shared_sessionmaker)
+    try:
+        yield bound_sessionmaker
+    finally:
+        outer_is_active = outer.is_active
+        if outer_is_active:
+            outer.rollback()
+        connection.close()
+        get_settings.cache_clear()
+        get_engine.cache_clear()
+        if not outer_is_active:
+            Base.metadata.drop_all(database.engine)
+            Base.metadata.create_all(database.engine)
+            _seed_demo_tenants(database.engine)
+            pytest.fail(
+                "The rollback-isolated database transaction was committed directly. "
+                "Mark this test with @pytest.mark.committing_db when its writes must really "
+                "commit for DDL, independent connections, or database locks."
+            )
+
+
+@pytest.fixture
+def _bound_test_sessionmaker(
+    _shared_test_database: _TestDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[sessionmaker]:
+    """Bind one test to a connection whose outer transaction is never committed."""
+    with _rollback_sessionmaker_lifecycle(_shared_test_database, monkeypatch) as maker:
+        # SQLite needs a physical BEGIN before the first savepoint; the shared
+        # lifecycle also redirects every application session to this connection.
+        yield maker
+
+
 @pytest.fixture
 def fake_storage() -> FakeStorage:
     return FakeStorage()
@@ -354,12 +491,13 @@ def tenant_ctx() -> TenantContext:
 
 
 @pytest.fixture
-def db_client(
+def committing_db_client(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
+    """A fresh schema, engine, application, and committing client for one test."""
     test_database_url = os.getenv("TEST_DATABASE_URL")
     database_url, schema_name = _prepare_database_url(tmp_path=tmp_path, monkeypatch=monkeypatch)
     monkeypatch.setenv("DATABASE_URL", database_url)
@@ -387,10 +525,11 @@ def db_client(
 
 
 @pytest.fixture
-def db_session(
+def committing_db_session(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> Iterator:
+) -> Iterator[Session]:
+    """A fresh schema and engine-backed committing session for one test."""
     test_database_url = os.getenv("TEST_DATABASE_URL")
     database_url, schema_name = _prepare_database_url(tmp_path=tmp_path, monkeypatch=monkeypatch)
     monkeypatch.setenv("DATABASE_URL", database_url)
@@ -405,6 +544,7 @@ def db_session(
         Base.metadata.create_all(engine)
         _seed_demo_tenants(engine)
         session = get_sessionmaker()()
+        assert session is not None
         yield session
     finally:
         if session is not None:
@@ -415,6 +555,94 @@ def db_session(
         get_engine.cache_clear()
         if test_database_url is not None:
             _drop_postgres_schema(test_database_url, schema_name)
+
+
+@pytest.fixture
+def _rollback_db_client(
+    _bound_test_sessionmaker: sessionmaker,
+    _shared_app: _LazyTestApp,
+    fake_storage: FakeStorage,
+    storage_engine: InMemoryStorageClient,
+) -> Iterator[TestClient]:
+    """The default API client, isolated by an outer transaction rollback."""
+    _ = _bound_test_sessionmaker
+    with _db_client_lifecycle(_shared_app.get(), fake_storage, storage_engine) as client:
+        yield client
+
+
+@contextmanager
+def _db_client_lifecycle(
+    app: FastAPI,
+    fake_storage: FakeStorage,
+    storage_engine: InMemoryStorageClient,
+) -> Iterator[TestClient]:
+
+    def object_storage_override() -> FakeStorage:
+        return fake_storage
+
+    def ingestion_storage_override() -> InMemoryStorageClient:
+        return storage_engine
+
+    app.dependency_overrides[get_object_storage] = object_storage_override
+    app.dependency_overrides[get_ingestion_storage] = ingestion_storage_override
+    try:
+        with TestClient(app, raise_server_exceptions=False) as test_client:
+            yield test_client
+    finally:
+        if app.dependency_overrides.get(get_object_storage) is object_storage_override:
+            app.dependency_overrides.pop(get_object_storage)
+        if app.dependency_overrides.get(get_ingestion_storage) is ingestion_storage_override:
+            app.dependency_overrides.pop(get_ingestion_storage)
+
+
+@pytest.fixture
+def _rollback_db_session(_bound_test_sessionmaker: sessionmaker) -> Iterator[Session]:
+    """The default direct session, isolated by an outer transaction rollback."""
+    session = _bound_test_sessionmaker()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def _selected_database_fixture(
+    request: pytest.FixtureRequest,
+    *,
+    rollback_fixture: str,
+    committing_fixture: str,
+) -> object:
+    fixture_name = (
+        committing_fixture
+        if request.node.get_closest_marker("committing_db") is not None
+        else rollback_fixture
+    )
+    return request.getfixturevalue(fixture_name)
+
+
+@pytest.fixture
+def db_client(request: pytest.FixtureRequest) -> TestClient:
+    """Select the API fixture family declared by the test's commit requirement."""
+    return cast(
+        TestClient,
+        _selected_database_fixture(
+            request,
+            rollback_fixture="_rollback_db_client",
+            committing_fixture="committing_db_client",
+        ),
+    )
+
+
+@pytest.fixture
+def db_session(request: pytest.FixtureRequest) -> Session:
+    """Select the session fixture family declared by the test's commit requirement."""
+    return cast(
+        Session,
+        _selected_database_fixture(
+            request,
+            rollback_fixture="_rollback_db_session",
+            committing_fixture="committing_db_session",
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

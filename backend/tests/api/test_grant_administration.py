@@ -33,6 +33,9 @@ GRANTEE = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 BANK_A = "BK-GRNT0001"
 BANK_B = "BK-GRNT0002"
 
+# This concurrency test needs PostgreSQL row locks and independent sessions.
+requires_committing_db = pytest.mark.committing_db
+
 
 def _session() -> Session:
     session = get_sessionmaker()()
@@ -380,9 +383,11 @@ def test_duplicate_effective_grant_is_targetable_and_revoke_removes_equivalent_a
         assert equivalents == []
 
 
+@requires_committing_db
 def test_concurrent_conflicting_grants_serialize_before_sod_decision(
     grant_client: TestClient,
 ) -> None:
+    _ = grant_client
     sessionmaker = get_sessionmaker()
     with sessionmaker() as dialect_session:
         if dialect_session.get_bind().dialect.name != "postgresql":

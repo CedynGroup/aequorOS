@@ -53,6 +53,9 @@ from tests.factories.canonical import (
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
+# The worker retry test opens separate sessions that must observe committed job state.
+requires_committing_db = pytest.mark.committing_db
+
 _CHEAP = {"liquidity", "capital", "irr", "fx", "ftp", "rating", "forecast"}
 _OFFICIAL_REGULATORY_MODULES = _CHEAP - {"rating", "forecast"}
 
@@ -269,8 +272,10 @@ def test_completed_refresh_does_not_reopen_on_unchanged_summary_read(
     )
 
 
+@requires_committing_db
 def test_transient_module_failure_obeys_bounded_backoff_then_recovers(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed(db_session)
     real_scoped_modules = pipeline._scoped_modules  # pyright: ignore[reportPrivateUsage]
