@@ -518,10 +518,15 @@ binding; organization settings require organization-wide Account administration.
 
 Remaining rollout work:
 
-- **Action gating:** buttons for `run / approve / sign_off / submit / configure`
-  render disabled-with-tooltip or hidden based on permissions in the session.
-  Never rely on hiding alone — the backend is the boundary; the UI just avoids
-  dead ends.
+- **Module action cutovers:** this effective-authority dashboard slice gates an
+  action only where the backend already supplies final, non-contextual authority.
+  Buttons for `run / approve / sign_off / submit / configure` and other
+  module-specific mutations remain owned by their dependency-ordered endpoint
+  cutovers. Each cutover must derive its UI control from the same final action
+  authority enforced by the concrete backend route; structural or contextual
+  eligibility is never enough to render an enabled action. Hiding remains a UX
+  boundary, while the backend authorization check remains authoritative before
+  side effects.
 - **Session state:** do not make token `roles[]`, `perms`, or `scopes` an
   authority source. The server-evaluated `/auth/me` contract distinguishes final
   capabilities from structural eligibility that still requires contextual authorization.
@@ -945,7 +950,7 @@ The static `ROLE_PERMISSIONS` map, scoped binding table, exact evaluator, and
 institution filtering, capability-driven shell/navigation/deep-link boundary,
 authority-partitioned caches, and governed binding-creation/Members slice are built.
 Liquidity Monitoring is the first enforcing product endpoint. Remaining Phase-0
-work is further endpoint cutovers, complete action gating, and default landings
+work is further endpoint cutovers, their matching module-action controls, and default landings
 ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).
 Do not add independent `user_roles`/`user_scopes` tables or infer ownership from
 the scalar `account_admin` role. Initial Owner assignment is built only for the
