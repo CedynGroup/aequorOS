@@ -586,7 +586,7 @@ def db_client(
 @contextmanager
 def _db_client_lifecycle(
     app: FastAPI,
-    fake_storage: object,
+    fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
 

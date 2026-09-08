@@ -18,6 +18,16 @@ are always welcome.
 - Backend gates: `ruff check`, `basedpyright`, and
   `CASHFLOW_FAST_TEST=1 pytest` must be green; tests are hermetic (no ambient
   database) and Postgres-gated tests opt in via `TEST_DATABASE_URL`.
+- Backend database tests use two fixture families. `db_client` and `db_session`
+  are the default: pytest creates and seeds one database per test process,
+  reuses the FastAPI application, and rolls each test back. Every `db_client`
+  still gets a fresh `TestClient` and function-scoped storage overrides. Use
+  `isolated_db_client` or `isolated_db_session` only when a test needs real DDL,
+  independent connections, raw commit visibility, query-count transaction
+  boundaries without the rollback wrapper, or concurrency/lock behavior; tests
+  under `tests/db/` select that family automatically. The executable contract
+  for both families and for safe application reuse is
+  `tests/test_database_fixture_isolation.py`.
 - Dashboard gates: `tsc --noEmit`; both dark and light themes must render (no
   raw hex — use the token classes).
 - Commits follow Conventional Commits (`feat(scope): …`).
