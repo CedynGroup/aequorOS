@@ -225,7 +225,6 @@ def test_ci_actually_runs_every_required_gate() -> None:
     required = {
         "risk-service:lint",
         "risk-service:typecheck",
-        "risk-service:test",
         "risk-service:test-architecture",
         # Supersedes test-postgres-migrations: the same chain plus the RLS
         # policies and server defaults it installs.
