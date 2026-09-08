@@ -466,7 +466,33 @@ jobs:
       # No skip ceiling here: this run legitimately skips the opt-in tiers
       # (real-data, live-data, storage). What it must not do is skip everything.
       - name: The Postgres run must have executed, not skipped
-        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-suite.xml" --min-executed 3000
+        run: |
+          python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-suite.xml" --min-executed 3000
+          python3 - "$RUNNER_TEMP/pg-suite.xml" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          report = sys.argv[1]
+          module = "tests.services.test_attestation_openbao"
+          cases = [
+              case
+              for case in ET.parse(report).iter("testcase")
+              if case.attrib.get("classname", "").startswith(module)
+          ]
+          skipped = sum(case.find("skipped") is not None for case in cases)
+          failed = sum(case.find("failure") is not None for case in cases)
+          errored = sum(case.find("error") is not None for case in cases)
+          executed = len(cases) - skipped
+          print(
+              "tests/services/test_attestation_openbao.py: "
+              f"{len(cases)} collected, {executed} executed, {skipped} skipped, "
+              f"{failed} failed, {errored} errored."
+          )
+          if not cases:
+              raise SystemExit("OpenBao attestation tests were absent from pg-suite.xml")
+          if skipped or failed or errored:
+              raise SystemExit("OpenBao attestation tests did not execute cleanly")
+          PY
 
   storage:
     name: Storage contract

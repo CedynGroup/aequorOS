@@ -230,6 +230,8 @@ def test_ci_actually_runs_every_required_gate() -> None:
         # policies and server defaults it installs.
         "risk-service:test-postgres-schema",
         "risk-service:test-postgres-locks",
+        # The duplicate hermetic SQLite suite was retired from CI; the full
+        # suite runs on Postgres, while risk-service:test remains local-only.
         # SQLite is not production confidence: the hermetic schema is built by
         # Base.metadata.create_all and has no row-level security at all.
         "risk-service:test-postgres-suite",
