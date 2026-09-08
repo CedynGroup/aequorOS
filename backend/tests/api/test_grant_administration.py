@@ -381,8 +381,10 @@ def test_duplicate_effective_grant_is_targetable_and_revoke_removes_equivalent_a
 
 
 def test_concurrent_conflicting_grants_serialize_before_sod_decision(
-    grant_client: TestClient,
+    isolated_db_client: TestClient,
 ) -> None:
+    _ = isolated_db_client
+    _seed_admin_surface()
     sessionmaker = get_sessionmaker()
     with sessionmaker() as dialect_session:
         if dialect_session.get_bind().dialect.name != "postgresql":

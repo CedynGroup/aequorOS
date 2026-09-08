@@ -34,6 +34,12 @@ from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 
 
+@pytest.fixture
+def db_client(isolated_db_client: TestClient) -> TestClient:
+    """Calculation publication uses raw commits and PostgreSQL advisory locks."""
+    return isolated_db_client
+
+
 def _ready_scenario(client: TestClient, case_id: UUID) -> dict:
     workspace = client.post(
         f"/api/v1/cases/{case_id}/scenarios/initialize",

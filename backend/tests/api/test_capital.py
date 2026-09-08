@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -21,6 +22,12 @@ from app.models import (
 )
 from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, headers
+
+
+@pytest.fixture
+def db_client(isolated_db_client: TestClient) -> TestClient:
+    """Capital publication reaches calculation advisory-lock transaction boundaries."""
+    return isolated_db_client
 
 
 def _ready_scenarios(client: TestClient, case_id: UUID) -> list[dict]:

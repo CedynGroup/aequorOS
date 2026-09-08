@@ -33,6 +33,12 @@ from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.api.test_calculations import _financial_inputs, _ready_scenario
 
 
+@pytest.fixture
+def db_client(isolated_db_client: TestClient) -> TestClient:
+    """Liquidity publication uses raw commits, advisory locks, and independent sessions."""
+    return isolated_db_client
+
+
 def test_liquidity_openapi_contracts(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
     paths = schema["paths"]

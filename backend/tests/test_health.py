@@ -11,6 +11,13 @@ from app.core.config import get_settings
 from app.main import create_app
 from app.storage.client import StorageHealth
 
+
+@pytest.fixture
+def db_client(isolated_db_client: TestClient) -> TestClient:
+    """Readiness probes open independent database connections by design."""
+    return isolated_db_client
+
+
 #: Stands in for the deployment's BYPASSRLS worker role. Deliberately NOT the
 #: real name: this repository is public, and the assertions below are about
 #: what SHAPE of value must never reach an unauthenticated caller.
@@ -179,6 +186,7 @@ def test_ready_fails_when_configured_storage_is_unhealthy(
     readiness answered 200 with `"storage": "ok"` (audit finding P0-17). The
     probe is what closes that, so it has to be the thing under test.
     """
+
     class UnhealthyStorage:
         def health_check(self) -> StorageHealth:
             return StorageHealth(healthy=False, backend="s3", detail="fixture unavailable")

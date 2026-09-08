@@ -270,8 +270,10 @@ def test_completed_refresh_does_not_reopen_on_unchanged_summary_read(
 
 
 def test_transient_module_failure_obeys_bounded_backoff_then_recovers(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
+    isolated_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    db_session = isolated_db_session
     _seed(db_session)
     real_scoped_modules = pipeline._scoped_modules  # pyright: ignore[reportPrivateUsage]
     failures_left = 1

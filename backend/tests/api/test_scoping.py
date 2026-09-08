@@ -13,11 +13,11 @@ from tests.api.helpers import ORG_1
 
 
 def test_db_rows_are_scoped_to_expected_org(
-    api_factories: ApiFactories,
-    db_settings: Settings,
+    isolated_api_factories: ApiFactories,
+    isolated_db_settings: Settings,
 ) -> None:
-    document_id = str(api_factories.documents.create_uploaded().document_id)
-    engine = get_engine(db_settings.database.database_url or "")
+    document_id = str(isolated_api_factories.documents.create_uploaded().document_id)
+    engine = get_engine(isolated_db_settings.database.database_url or "")
 
     with Session(engine) as session:
         document = session.scalar(select(Document).where(Document.id == UUID(document_id)))

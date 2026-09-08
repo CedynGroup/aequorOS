@@ -278,7 +278,10 @@ def test_duplicate_assumption_returns_conflict_and_rolls_back(db_client: TestCli
     assert len(current["assumptions"]) == len(scenario["assumptions"])
 
 
-def test_concurrent_review_and_edit_serialize_on_the_assumption(db_client: TestClient) -> None:
+def test_concurrent_review_and_edit_serialize_on_the_assumption(
+    isolated_db_client: TestClient,
+) -> None:
+    db_client = isolated_db_client
     sessionmaker = get_sessionmaker()
     with sessionmaker() as dialect_session:
         if dialect_session.get_bind().dialect.name != "postgresql":
@@ -328,7 +331,10 @@ def test_concurrent_review_and_edit_serialize_on_the_assumption(db_client: TestC
         assert persisted.provenance["source"] == "reviewer_edit"
 
 
-def test_concurrent_archive_prevents_an_assumption_edit(db_client: TestClient) -> None:
+def test_concurrent_archive_prevents_an_assumption_edit(
+    isolated_db_client: TestClient,
+) -> None:
+    db_client = isolated_db_client
     sessionmaker = get_sessionmaker()
     with sessionmaker() as dialect_session:
         if dialect_session.get_bind().dialect.name != "postgresql":

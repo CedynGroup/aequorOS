@@ -83,6 +83,19 @@ def signer(db_session: Session) -> User:
     return user
 
 
+@pytest.fixture
+def isolated_signer(isolated_db_session: Session) -> User:
+    """A signer for the cross-session stale-reader transaction test."""
+    user = isolated_db_session.scalar(select(User).where(User.id == USER_1))
+    assert user is not None
+    user.password_hash = security.hash_password(PASSWORD)
+    user.auth_provider = "password"
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    isolated_db_session.commit()
+    return user
+
+
 def _detail(error: HTTPException) -> dict[str, Any]:
     """Every step-up refusal carries the typed ``{error_code, message}`` body
     the dashboard branches on — assert against that shape, not against a str."""
@@ -432,7 +445,8 @@ def test_an_authorization_can_only_be_spent_once(db_session: Session, signer: Us
 
 
 def test_two_readers_that_both_saw_it_unspent_cannot_both_burn_it(
-    db_session: Session, signer: User
+    isolated_db_session: Session,
+    isolated_signer: User,
 ) -> None:
     """The race the read-then-write had: two certifications read
     ``consumed_at IS NULL``, both write it, and one act of presence produces two
@@ -440,6 +454,8 @@ def test_two_readers_that_both_saw_it_unspent_cannot_both_burn_it(
     of the row taken BEFORE the first burned it, which is precisely what a
     concurrent reader has — and defeated by making the burn itself conditional.
     """
+    db_session = isolated_db_session
+    _ = isolated_signer
     raw, row = _mint(db_session)
     package_id, user_id = row.package_id, row.user_id
     digest, role = row.certification_digest, row.signing_role
