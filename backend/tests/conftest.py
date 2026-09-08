@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 
 # IMPORT-TIME guards (before any `app.*` import below): the per-test fixture
 # sets these too, but module import happens during COLLECTION — a developer's
@@ -385,16 +386,14 @@ def _shared_app() -> _LazyTestApp:
     return _LazyTestApp()
 
 
-@pytest.fixture
-def _bound_test_sessionmaker(
-    _shared_test_database: _TestDatabase,
+@contextmanager
+def _rollback_sessionmaker_lifecycle(
+    database: _TestDatabase,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[sessionmaker]:
-    """Bind one test to a connection whose outer transaction is never committed."""
     import app.api.deps as deps_mod  # noqa: PLC0415
     import app.db.session as session_mod  # noqa: PLC0415
 
-    database = _shared_test_database
     monkeypatch.setenv("DATABASE_URL", database.database_url)
     get_settings.cache_clear()
     get_engine.cache_clear()
@@ -402,9 +401,6 @@ def _bound_test_sessionmaker(
     connection = database.engine.connect()
     outer = connection.begin()
     if connection.dialect.name == "sqlite":
-        # SQLite defers the physical transaction until the first statement.
-        # Without an explicit BEGIN, releasing the first request savepoint can
-        # commit it as the outermost transaction and leak rows into the next test.
         connection.exec_driver_sql("BEGIN")
     bound_sessionmaker = sessionmaker(
         bind=connection,
@@ -427,9 +423,6 @@ def _bound_test_sessionmaker(
             return bound_sessionmaker
         return original_sessionmaker(*args, **kwargs)
 
-    # deps.py imported get_sessionmaker by name. Other application and test
-    # modules imported the original function object, whose module globals are
-    # redirected here so they all join this test's connection.
     monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
     monkeypatch.setattr(session_mod, "get_engine", shared_engine)
     monkeypatch.setattr(session_mod, "sessionmaker", shared_sessionmaker)
@@ -443,8 +436,6 @@ def _bound_test_sessionmaker(
         get_settings.cache_clear()
         get_engine.cache_clear()
         if not outer_is_active:
-            # A raw Connection.commit() escaped rollback isolation. Restore the
-            # shared template before failing so later tests do not inherit rows.
             Base.metadata.drop_all(database.engine)
             Base.metadata.create_all(database.engine)
             _seed_demo_tenants(database.engine)
@@ -453,6 +444,18 @@ def _bound_test_sessionmaker(
                 "Use isolated_db_client or isolated_db_session for tests that require "
                 "raw commits, independent connections, DDL, or database locks."
             )
+
+
+@pytest.fixture
+def _bound_test_sessionmaker(
+    _shared_test_database: _TestDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[sessionmaker]:
+    """Bind one test to a connection whose outer transaction is never committed."""
+    with _rollback_sessionmaker_lifecycle(_shared_test_database, monkeypatch) as maker:
+        # SQLite needs a physical BEGIN before the first savepoint; the shared
+        # lifecycle also redirects every application session to this connection.
+        yield maker
 
 
 @pytest.fixture
@@ -576,7 +579,16 @@ def db_client(
 ) -> Iterator[TestClient]:
     """The default API client, isolated by an outer transaction rollback."""
     _ = _bound_test_sessionmaker
-    app = _shared_app.get()
+    with _db_client_lifecycle(_shared_app.get(), fake_storage, storage_engine) as client:
+        yield client
+
+
+@contextmanager
+def _db_client_lifecycle(
+    app: FastAPI,
+    fake_storage: object,
+    storage_engine: InMemoryStorageClient,
+) -> Iterator[TestClient]:
 
     def object_storage_override() -> FakeStorage:
         return fake_storage
