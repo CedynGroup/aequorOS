@@ -36,33 +36,6 @@ name: Risk Service CI
 #   static      — ruff, basedpyright, production image build
 #   architecture— CI task wiring, RLS-blind migration scanner, case/regulatory
 #                 dependency boundaries
-#   unit        — the hermetic suite + OpenBao signing. `risk-service:test` is a
-#                 bare `pytest` and pyproject sets `testpaths = ["tests"]`, so
-#                 this job COLLECTS the WHOLE backend tree — re-measured
-#                 2026-08-22 17:20 with `pytest --collect-only -q`: 390 files on
-#                 disk, 390 collected, ZERO collection errors, and a full run of
-#                 `mise run risk-service:test` from the repository root gave
-#                 `4492 passed, 342 skipped in 1482.96s`. That 4,492 is what the
-#                 `--min-executed 3000` floor on this job is measured against.
-#                 (The
-#                 count moves as siblings land; what must stay true is
-#                 files-on-disk == files-collected. A file that collects nowhere
-#                 is the D-32 defect in its purest form, and the equality is the
-#                 cheapest way to see it.) Included by construction: tests/domain
-#                 incl. tests/domain/authority (138) and tests/domain/policy (31),
-#                 tests/architecture (64), tests/equivalence (38),
-#                 tests/operator (221), tests/core (148), tests/etl (99),
-#                 tests/scripts (39), tests/ml (15), tests/db (105),
-#                 tests/services/bog_forms (133), the engine golden suites in
-#                 tests/domain, test_phase2_full_report_proof.py (1),
-#                 test_bog_forms_framework.py (129),
-#                 test_input_hash_determinism.py (2) and
-#                 test_jurisdiction_neutrality.py (25). What it does not run, it
-#                 SKIPS at runtime, and the skip set is the whole of D-32; the
-#                 excluded set is enumerated below and in
-#                 docs/audit/remediation_master_register.md.
-#                 (There is no tests/security directory — that name in the D-32
-#                 brief does not correspond to anything in the tree.)
 #   postgres    — migration chain, RLS policies, schema defaults, row/advisory
 #                 locks. `risk-service:test-postgres-schema` runs ALL of tests/db,
 #                 which is the only job that reaches
@@ -70,10 +43,11 @@ name: Risk Service CI
 #                 guard on tenant isolation. main currently runs
 #                 test-postgres-migrations instead, i.e. one file of tests/db, so
 #                 that guard is gated NOWHERE until this file is merged.
-#   postgres-suite — the SAME suite against Postgres. The hermetic run builds its
-#                 schema with Base.metadata.create_all and therefore has NO
-#                 row-level security at all, so SQLite alone is not production
-#                 confidence.
+#   postgres-suite — the full backend suite against Postgres, including OpenBao
+#                 signing. This is CI's only full-suite execution; the local
+#                 `risk-service:test` task retains the hermetic SQLite path for
+#                 developers. The `--min-executed 3000` floor proves the suite
+#                 did not accidentally collect or execute nothing.
 #   storage     — the S3-compatible object-store contract: SSE-KMS at rest, the
 #                 hash-chained access log, per-institution provisioning. Added
 #                 2026-08-22. It self-skips without S3_*, and no job had ever
@@ -340,60 +314,8 @@ jobs:
           fi
           echo "Every test module on disk is collected."
 
-  unit:
-    name: Hermetic suite
-    runs-on: ubuntu-latest
-    needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
-    # The 2026-09-04 PR #161 run was still making steady progress (81%, no
-    # failures) when first the 90-minute and then the 120-minute ceiling
-    # cancelled pytest. Retain a hard bound while allowing for observed
-    # hosted-runner variance as the suite grows.
-    timeout-minutes: 180
-    services:
-      # The attestation signing backend. Without a real server the OpenBao tests
-      # skip themselves, and "written but never executed" is exactly the state
-      # the PKCS#11 backend is in — so CI runs one. Dev mode is unsealed with a
-      # known root token, which is what the suite provisions its AppRole with;
-      # it is in-memory and dies with the job.
-      openbao:
-        image: openbao/openbao:2.6.1
-        env:
-          BAO_DEV_ROOT_TOKEN_ID: aequoros-ci-root
-          BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
-          BAO_ADDR: http://127.0.0.1:8200
-        ports:
-          - "8200:8200"
-        options: >-
-          --cap-add=IPC_LOCK
-          --health-cmd "bao status -address=http://127.0.0.1:8200 || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      # Ungates tests/services/test_attestation_openbao.py against the service
-      # container above. Absent (a developer's machine), those tests skip and the
-      # rest of the suite is unaffected.
-      OPENBAO_TEST_ADDR: http://127.0.0.1:8200
-      OPENBAO_TEST_TOKEN: aequoros-ci-root
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v3
-        with:
-          # Pinned — see MISE VERSION in the header. Bump deliberately.
-          version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
-      - name: Install risk service dependencies
-        run: mise run risk-service:sync
-      - name: Test risk service
-        # pytest reads PYTEST_ADDOPTS itself, so the report is produced without
-        # changing the task command. `runner` is only available in STEP env, not
-        # job env, which is why this sits here rather than above.
-        env:
-          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/hermetic.xml
-        run: mise run risk-service:test
-      - name: The hermetic suite must have executed, not skipped
-        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/hermetic.xml" --min-executed 3000
+  # CI runs the full suite only against Postgres. Developers can still run the
+  # hermetic SQLite suite locally with `mise run risk-service:test`.
 
   postgres:
     name: Postgres schema, RLS and locks
@@ -492,6 +414,31 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # The attestation signing backend. Without a real server the OpenBao tests
+      # skip themselves, and "written but never executed" is exactly the state
+      # the PKCS#11 backend is in — so CI runs one. Dev mode is unsealed with a
+      # known root token, which is what the suite provisions its AppRole with;
+      # it is in-memory and dies with the job.
+      openbao:
+        image: openbao/openbao:2.6.1
+        env:
+          BAO_DEV_ROOT_TOKEN_ID: aequoros-ci-root
+          BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+          BAO_ADDR: http://127.0.0.1:8200
+        ports:
+          - "8200:8200"
+        options: >-
+          --cap-add=IPC_LOCK
+          --health-cmd "bao status -address=http://127.0.0.1:8200 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Ungates tests/services/test_attestation_openbao.py against the service
+      # container above. Absent (a developer's machine), those tests skip and the
+      # rest of the suite is unaffected.
+      OPENBAO_TEST_ADDR: http://127.0.0.1:8200
+      OPENBAO_TEST_TOKEN: aequoros-ci-root
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v3
@@ -663,7 +610,6 @@ jobs:
       - preflight
       - static
       - architecture
-      - unit
       - postgres
       - postgres-suite
       - storage
