@@ -82,6 +82,9 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+  "committing_db: use real commits, which require a fresh per-test schema and independent connections",
+]
 
 [tool.ruff]
 line-length = 100

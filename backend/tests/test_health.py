@@ -11,11 +11,8 @@ from app.core.config import get_settings
 from app.main import create_app
 from app.storage.client import StorageHealth
 
-
-@pytest.fixture
-def db_client(isolated_db_client: TestClient) -> TestClient:
-    """Readiness probes open independent database connections by design."""
-    return isolated_db_client
+# Readiness probes open independent database connections by design.
+requires_committing_db = pytest.mark.committing_db
 
 
 #: Stands in for the deployment's BYPASSRLS worker role. Deliberately NOT the
@@ -118,6 +115,7 @@ def _worker_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WORKER_DATABASE_URL", os.environ["DATABASE_URL"])
 
 
+@requires_committing_db
 def test_ready_fails_in_production_when_signing_is_unconfigured(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -143,6 +141,7 @@ def test_ready_fails_in_production_when_signing_is_unconfigured(
     get_settings.cache_clear()
 
 
+@requires_committing_db
 def test_ready_ignores_the_signing_gap_outside_production(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -158,6 +157,7 @@ def test_ready_ignores_the_signing_gap_outside_production(
     get_settings.cache_clear()
 
 
+@requires_committing_db
 def test_ready_ignores_the_signing_gap_when_esign_is_disabled(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -176,6 +176,7 @@ def test_ready_ignores_the_signing_gap_when_esign_is_disabled(
     get_settings.cache_clear()
 
 
+@requires_committing_db
 def test_ready_fails_when_configured_storage_is_unhealthy(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -204,6 +205,7 @@ def test_ready_fails_when_configured_storage_is_unhealthy(
     assert response.json()["error"]["message"] == "Storage connectivity check failed."
 
 
+@requires_committing_db
 def test_ready_fails_when_storage_health_probe_raises(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -216,6 +218,7 @@ def test_ready_fails_when_storage_health_probe_raises(
     assert response.json()["error"]["message"] == "Storage connectivity check failed."
 
 
+@requires_committing_db
 def test_ready_probes_storage_for_real_outside_the_hermetic_suite(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -237,6 +240,7 @@ def test_ready_probes_storage_for_real_outside_the_hermetic_suite(
     assert response.json()["checks"]["storage"]["status"] == "ok"
 
 
+@requires_committing_db
 def test_ready_reports_each_subsystem_separately(db_client: TestClient) -> None:
     """Storage used to be reported as `database.storage`, which reads as a
     property of the database and made a storage outage look like a database one.
@@ -248,6 +252,7 @@ def test_ready_reports_each_subsystem_separately(db_client: TestClient) -> None:
     assert "storage" not in body.get("database", {})
 
 
+@requires_committing_db
 def test_ready_discloses_no_deployment_topology_to_an_unauthenticated_caller(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -317,6 +322,7 @@ def test_ready_discloses_no_deployment_topology_to_an_unauthenticated_caller(
     }
 
 
+@requires_committing_db
 def test_ready_reports_a_worker_that_cannot_claim_jobs(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -366,6 +372,7 @@ def test_ready_reports_a_worker_that_cannot_claim_jobs(
     assert any("tenant_role" in record for record in records)
 
 
+@requires_committing_db
 def test_ready_fails_closed_on_a_blind_worker_in_production(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -392,6 +399,7 @@ def test_ready_fails_closed_on_a_blind_worker_in_production(
     get_settings.cache_clear()
 
 
+@requires_committing_db
 def test_ready_reports_a_starved_job_queue(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -547,6 +555,7 @@ def test_ready_health_requires_database_in_production(
     }
 
 
+@requires_committing_db
 def test_ready_health_requires_storage_when_database_is_configured(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

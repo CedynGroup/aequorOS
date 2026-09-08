@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,30 +11,34 @@ from app.models import AuditEvent
 from tests.api.factories import CaseFactory
 from tests.api.helpers import headers
 
+# This test verifies committed audit writes through an independently opened engine.
+requires_committing_db = pytest.mark.committing_db
 
+
+@requires_committing_db
 def test_audit_events_are_created(
-    isolated_db_client: TestClient,
-    isolated_db_settings: Settings,
+    db_client: TestClient,
+    db_settings: Settings,
 ) -> None:
-    case_id = str(CaseFactory(isolated_db_client).create().id)
-    isolated_db_client.patch(
+    case_id = str(CaseFactory(db_client).create().id)
+    db_client.patch(
         f"/api/v1/cases/{case_id}",
         headers=headers(),
         json={"status": "in_review"},
     )
-    assessment = isolated_db_client.post(
+    assessment = db_client.post(
         "/api/v1/assessments",
         headers=headers(),
         json={"case_id": case_id, "assessment_type": "vendor_risk", "name": "Score"},
     )
     assert assessment.status_code == 201
-    run = isolated_db_client.post(
+    run = db_client.post(
         f"/api/v1/assessments/{assessment.json()['id']}/run",
         headers=headers(),
     )
     assert run.status_code == 200
 
-    engine = get_engine(isolated_db_settings.database.database_url or "")
+    engine = get_engine(db_settings.database.database_url or "")
     with Session(engine) as session:
         events = list(session.scalars(select(AuditEvent)))
     event_types = [event.event_type for event in events]

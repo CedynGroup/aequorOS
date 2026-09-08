@@ -21,6 +21,9 @@ from tests.storage.inmemory import InMemoryStorageClient
 
 _ROLLBACK_ORGANIZATION_ID = "OR-TXROLL01"
 
+# This contract test must expose the real engine and independent connections.
+requires_committing_db = pytest.mark.committing_db
+
 
 def test_committed_write_is_rolled_back_between_fixture_lifecycles(
     _shared_test_database: _TestDatabase,
@@ -82,7 +85,8 @@ def test_reused_app_receives_fresh_client_and_storage_state(
         assert app.dependency_overrides[get_ingestion_storage]() is second_ingestion
 
 
+@requires_committing_db
 def test_isolated_session_exposes_a_real_engine(
-    isolated_db_session: Session,
+    db_session: Session,
 ) -> None:
-    assert isinstance(isolated_db_session.get_bind(), Engine)
+    assert isinstance(db_session.get_bind(), Engine)

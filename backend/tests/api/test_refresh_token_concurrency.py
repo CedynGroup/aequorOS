@@ -53,10 +53,8 @@ _POSTGRES_ONLY = pytest.mark.skipif(
 )
 
 
-@pytest.fixture
-def db_session(isolated_db_session: Session) -> Session:
-    """Refresh-token ordering and race tests inspect a real engine and its pool."""
-    return isolated_db_session
+# Refresh-token ordering and race tests inspect a real engine and its pool.
+pytestmark = pytest.mark.committing_db
 
 
 def _password_user(db_session: Session) -> User:

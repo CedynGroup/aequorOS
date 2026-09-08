@@ -23,11 +23,8 @@ from app.models import (
 from tests.api.factories import CaseFactory
 from tests.api.helpers import ORG_1, ORG_2, headers
 
-
-@pytest.fixture
-def db_client(isolated_db_client: TestClient) -> TestClient:
-    """Capital publication reaches calculation advisory-lock transaction boundaries."""
-    return isolated_db_client
+# Capital publication reaches calculation advisory-lock transaction boundaries.
+pytestmark = pytest.mark.committing_db
 
 
 def _ready_scenarios(client: TestClient, case_id: UUID) -> list[dict]:

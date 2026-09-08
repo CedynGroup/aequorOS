@@ -15,6 +15,7 @@ os.environ["WORKER_DATABASE_URL"] = ""
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -441,8 +442,8 @@ def _rollback_sessionmaker_lifecycle(
             _seed_demo_tenants(database.engine)
             pytest.fail(
                 "The rollback-isolated database transaction was committed directly. "
-                "Use isolated_db_client or isolated_db_session for tests that require "
-                "raw commits, independent connections, DDL, or database locks."
+                "Mark this test with @pytest.mark.committing_db when its writes must really "
+                "commit for DDL, independent connections, or database locks."
             )
 
 
@@ -474,14 +475,6 @@ def api_factories(db_client: TestClient, fake_storage: FakeStorage) -> ApiFactor
 
 
 @pytest.fixture
-def isolated_api_factories(
-    isolated_db_client: TestClient,
-    fake_storage: FakeStorage,
-) -> ApiFactories:
-    return ApiFactories(isolated_db_client, fake_storage)
-
-
-@pytest.fixture
 def test_settings() -> Settings:
     return get_settings()
 
@@ -493,18 +486,12 @@ def db_settings(db_client: TestClient) -> Settings:
 
 
 @pytest.fixture
-def isolated_db_settings(isolated_db_client: TestClient) -> Settings:
-    _ = isolated_db_client
-    return get_settings()
-
-
-@pytest.fixture
 def tenant_ctx() -> TenantContext:
     return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 
 
 @pytest.fixture
-def isolated_db_client(
+def committing_db_client(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     fake_storage: FakeStorage,
@@ -538,7 +525,7 @@ def isolated_db_client(
 
 
 @pytest.fixture
-def isolated_db_session(
+def committing_db_session(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[Session]:
@@ -571,7 +558,7 @@ def isolated_db_session(
 
 
 @pytest.fixture
-def db_client(
+def _rollback_db_client(
     _bound_test_sessionmaker: sessionmaker,
     _shared_app: _LazyTestApp,
     fake_storage: FakeStorage,
@@ -609,13 +596,53 @@ def _db_client_lifecycle(
 
 
 @pytest.fixture
-def db_session(_bound_test_sessionmaker: sessionmaker) -> Iterator[Session]:
+def _rollback_db_session(_bound_test_sessionmaker: sessionmaker) -> Iterator[Session]:
     """The default direct session, isolated by an outer transaction rollback."""
     session = _bound_test_sessionmaker()
     try:
         yield session
     finally:
         session.close()
+
+
+def _selected_database_fixture(
+    request: pytest.FixtureRequest,
+    *,
+    rollback_fixture: str,
+    committing_fixture: str,
+) -> object:
+    fixture_name = (
+        committing_fixture
+        if request.node.get_closest_marker("committing_db") is not None
+        else rollback_fixture
+    )
+    return request.getfixturevalue(fixture_name)
+
+
+@pytest.fixture
+def db_client(request: pytest.FixtureRequest) -> TestClient:
+    """Select the API fixture family declared by the test's commit requirement."""
+    return cast(
+        TestClient,
+        _selected_database_fixture(
+            request,
+            rollback_fixture="_rollback_db_client",
+            committing_fixture="committing_db_client",
+        ),
+    )
+
+
+@pytest.fixture
+def db_session(request: pytest.FixtureRequest) -> Session:
+    """Select the session fixture family declared by the test's commit requirement."""
+    return cast(
+        Session,
+        _selected_database_fixture(
+            request,
+            rollback_fixture="_rollback_db_session",
+            committing_fixture="committing_db_session",
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
