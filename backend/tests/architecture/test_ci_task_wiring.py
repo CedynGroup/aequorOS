@@ -225,12 +225,13 @@ def test_ci_actually_runs_every_required_gate() -> None:
     required = {
         "risk-service:lint",
         "risk-service:typecheck",
-        "risk-service:test",
         "risk-service:test-architecture",
         # Supersedes test-postgres-migrations: the same chain plus the RLS
         # policies and server defaults it installs.
         "risk-service:test-postgres-schema",
         "risk-service:test-postgres-locks",
+        # The duplicate hermetic SQLite suite was retired from CI; the full
+        # suite runs on Postgres, while risk-service:test remains local-only.
         # SQLite is not production confidence: the hermetic schema is built by
         # Base.metadata.create_all and has no row-level security at all.
         "risk-service:test-postgres-suite",
@@ -329,6 +330,7 @@ def test_the_real_data_task_selects_no_marker_that_does_not_exist() -> None:
     ]
 
     assert phantom == [], f"`{_REAL_DATA_TASK}` filters on markers no test carries: {phantom}"
+
 
 # --------------------------------------------------------------------------
 # A step can also be dead by EXIT CODE: it ran, it printed, it reported success,
