@@ -331,6 +331,7 @@ def test_the_real_data_task_selects_no_marker_that_does_not_exist() -> None:
 
     assert phantom == [], f"`{_REAL_DATA_TASK}` filters on markers no test carries: {phantom}"
 
+
 # --------------------------------------------------------------------------
 # A step can also be dead by EXIT CODE: it ran, it printed, it reported success,
 # and it executed nothing. Three ways that happens here, all guarded below.

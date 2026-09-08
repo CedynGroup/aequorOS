@@ -383,9 +383,9 @@ jobs:
       # exercised at all; it does not get to pass by abstention.
       - name: The schema and RLS suite must have executed, not skipped
         run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-schema.xml" --min-executed 80
-      # Row-lock and advisory-lock coverage. Without this step the tests run
-      # nowhere: SQLite skips them on the hermetic run above, and CI previously
-      # gave a Postgres URL only to the migrations step.
+      # Dedicated row-lock and advisory-lock coverage. SQLite cannot exercise
+      # these semantics; this step keeps failures distinct from the full
+      # Postgres suite below.
       - name: Test Postgres concurrency locks
         env:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}

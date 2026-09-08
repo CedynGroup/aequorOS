@@ -510,6 +510,9 @@ the regulatory fail-open guard and the browser-runtime SSRF guard were unenforce
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.
 
+The hermetic SQLite suite remains available to developers as `mise run risk-service:test`, but
+CI no longer exercises SQLite compatibility; its only full backend-suite run uses Postgres.
+
 ---
 
 ## Structure decision (2026-07 — six-module completion)
