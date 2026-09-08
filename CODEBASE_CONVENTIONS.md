@@ -174,13 +174,11 @@ bank-scoped tables follow the same pattern with `bank_id` in place of `case_id`.
 
 - Layout: `tests/api/` (HTTP-level, the default style), `tests/services/`, `tests/features/`,
   `tests/db/`, plus `tests/conftest.py`.
-- **Databases**: default is a per-test SQLite file under `tmp_path` (FK pragma enabled). Setting
-  `TEST_DATABASE_URL` (see `mise run risk-service:test-postgres`) makes each fixture create a
-  throwaway Postgres schema `risk_service_test_<hex>` and drop it afterwards — same tests, both
-  engines. Postgres-only behavior (RLS, advisory locks) is written to no-op on SQLite.
-- **Fixtures** (conftest): `client` (no DB), `db_client` (TestClient with schema created via
-  `Base.metadata.create_all`, demo tenants seeded, storage overridden with `FakeStorage`),
-  `db_session`, `api_factories`, `fake_storage`, `tenant_ctx`, `test_settings`/`db_settings`.
+- **Database fixtures**: `CONTRIBUTING.md` owns the fixture-family and isolation guidance.
+  Use `mise run risk-service:test-postgres` to exercise the same suite against Postgres;
+  Postgres-only behavior (RLS, advisory locks) is written to no-op on SQLite.
+- **Fixtures** (conftest): `client` (no DB), `db_client`, `db_session`, `api_factories`,
+  `fake_storage`, `tenant_ctx`, `test_settings`/`db_settings`.
 - **Tenant constants** from `tests/api/helpers.py`: `ORG_1`, `ORG_2`, `USER_1`, `USER_2`, and
   `headers(org_id, user_id, roles, authorization_version)`, which returns a signed
   `Authorization: Bearer ...` access token. It defaults to the seeded user's current
