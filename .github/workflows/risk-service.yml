@@ -92,7 +92,7 @@ name: Risk Service CI
 #                              pointing CI at production is the one thing this
 #                              programme must not do. Skips cleanly with
 #                              LIVE_DATA_DATABASE_URL unset (module-level
-#                              skipif), so it costs the hermetic run nothing.
+#                              skipif), so it costs the full-suite run nothing.
 #   25 `requires_real_data`  — see the real-data job above.
 #     modules
 #   tests/etl/test_training_on_data.py — needs the untracked Sample Bank CSVs
