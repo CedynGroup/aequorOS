@@ -1,3 +1,6 @@
+// Set E2E_EVIDENCE_DIR to write screenshot evidence to that directory:
+// E2E_CAPABILITY_ONLY=1 E2E_EVIDENCE_DIR=<path> pnpm exec playwright test e2e/liquidity-monitoring-authorization.spec.ts
+// Keep the output outside version control; /docs/** is ignored by publication policy.
 import { expect, test } from "@playwright/test";
 import path from "path";
 import { E2E_TMP } from "../playwright.config";
