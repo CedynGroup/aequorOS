@@ -554,6 +554,7 @@ def isolated_db_session(
         Base.metadata.create_all(engine)
         _seed_demo_tenants(engine)
         session = get_sessionmaker()()
+        assert session is not None
         yield session
     finally:
         if session is not None:
