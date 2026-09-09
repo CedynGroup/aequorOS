@@ -7,13 +7,14 @@ only; user administration lives in the auth/SSO admin surfaces.
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
-from app.api.deps import DbSession, Tenant
+from app.api.deps import DbSession, TenantContext, require_account_directory_view
 from app.models import User
 
 router = APIRouter(tags=["organization"])
@@ -41,7 +42,10 @@ class OrganizationUserListRead(BaseModel):
     response_model=OrganizationUserListRead,
     operation_id="listOrganizationUsers",
 )
-def list_organization_users(db: DbSession, ctx: Tenant) -> OrganizationUserListRead:
+def list_organization_users(
+    db: DbSession,
+    ctx: Annotated[TenantContext, Depends(require_account_directory_view)],
+) -> OrganizationUserListRead:
     rows = db.scalars(
         select(User)
         .where(User.organization_id == ctx.organization_id)

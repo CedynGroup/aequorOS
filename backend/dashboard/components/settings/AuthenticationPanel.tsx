@@ -10,15 +10,15 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSession } from "next-auth/react";
 import { ShieldCheck } from "lucide-react";
 import type { SsoConnectionResponse } from "@aequoros/risk-service-api";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import CopyButton from "@/components/ui/CopyButton";
 import StatusPill from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
-import { hasAccountAdministrationRole } from "@/lib/api/accountAdministration";
+import { hasAccountAdministrationAuthority } from "@/lib/api/accountAdministration";
 import { ORGANIZATION_MEMBERS_QUERY_KEY } from "@/lib/api/grantAdministration";
 
 const QUERY_KEY = ["settings", "sso-connection"];
@@ -46,9 +46,8 @@ function toForm(connection: SsoConnectionResponse | null): FormState {
 }
 
 export default function AuthenticationPanel() {
-  const { data: session } = useSession();
-  const isAdmin = hasAccountAdministrationRole(session?.user?.roles ?? []);
-  if (!isAdmin) return null;
+  const { effectiveAuthority } = useUserProfile();
+  if (!hasAccountAdministrationAuthority(effectiveAuthority)) return null;
   return <AuthenticationPanelInner />;
 }
 

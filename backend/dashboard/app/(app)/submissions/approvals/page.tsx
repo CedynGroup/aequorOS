@@ -29,6 +29,7 @@ import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
 import EmptyState from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
+import { useUserProfile } from '@/components/profile/ProfileProvider';
 import {
   useDecidePackageApproval,
   useOfficerNames,
@@ -36,14 +37,18 @@ import {
   useRegulatoryPackage,
   useRegulatoryPackages,
 } from '@/lib/api/hooks';
+import { hasAccountDirectoryAuthority } from '@/lib/api/accountAdministration';
 import { fmtDateUTC, fmtTimestamp, isoDate, shortId } from '@/lib/api/values';
 import { FAMILY_LABELS, returnsHref } from '@/components/submissions/shared';
 import { AttestationSummary } from '@/components/attestation/shared';
 
 export default function ApprovalsPage() {
   const { bank } = useBankContext();
+  const { effectiveAuthority } = useUserProfile();
   const bankId = bank?.id;
-  const officerName = useOfficerNames();
+  const officerName = useOfficerNames(
+    hasAccountDirectoryAuthority(effectiveAuthority)
+  );
 
   const queueQuery = useRegulatoryPackages(bankId, {
     status: 'pending_approval',
@@ -183,12 +188,15 @@ function DecidePanel({
   bankId: string;
   pkg: RegulatoryPackageSummaryRead;
 }) {
+  const { effectiveAuthority } = useUserProfile();
   const decide = useDecidePackageApproval(bankId);
   const detailQuery = useRegulatoryPackage(bankId, pkg.id);
   // For the selected package only — the summary payload carries no attestation
   // state, so a queue column would be one request per row.
   const attestationQuery = usePackageAttestation(bankId, pkg.id);
-  const officerName = useOfficerNames();
+  const officerName = useOfficerNames(
+    hasAccountDirectoryAuthority(effectiveAuthority)
+  );
   const [reason, setReason] = useState('');
 
   const rejectNeedsReason = reason.trim().length === 0;

@@ -27,6 +27,7 @@ import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
 import EmptyState from '@/components/ui/EmptyState';
 import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
 import { useBankContext } from '@/components/shell/BankContext';
+import { useUserProfile } from '@/components/profile/ProfileProvider';
 import {
   useOfficerNames,
   usePackageArtifacts,
@@ -36,6 +37,7 @@ import {
   useResubmissionRequests,
   useSubmissionEvents,
 } from '@/lib/api/hooks';
+import { hasAccountDirectoryAuthority } from '@/lib/api/accountAdministration';
 import { fmtDateUTC, fmtTimestamp, isoDate, labelize, shortId } from '@/lib/api/values';
 import {
   CHANNEL_LABELS,
@@ -305,6 +307,7 @@ function PackageRecord({
   bankId: string;
   summary: RegulatoryPackageSummaryRead;
 }) {
+  const { effectiveAuthority } = useUserProfile();
   const detail = useRegulatoryPackage(bankId, summary.id);
   const events = useSubmissionEvents(bankId, summary.id);
   const artifacts = usePackageArtifacts(bankId, summary.id);
@@ -312,7 +315,9 @@ function PackageRecord({
   // Fetched for the SELECTED package only: neither package payload carries the
   // attestation state, so a table column would be one request per row.
   const attestation = usePackageAttestation(bankId, summary.id);
-  const officerName = useOfficerNames();
+  const officerName = useOfficerNames(
+    hasAccountDirectoryAuthority(effectiveAuthority)
+  );
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // The full version chain for this (return, reporting date) — fetched

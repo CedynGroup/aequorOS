@@ -70,6 +70,8 @@ E2E_USERS = {
     "analyst": UUID("eeeeeeee-3333-4eee-8eee-eeeeeeeeeee3"),
     "viewer": UUID("eeeeeeee-4444-4eee-8eee-eeeeeeeeeee4"),
     "grant_member": UUID("eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5"),
+    "account_admin": UUID("eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6"),
+    "legacy_account_admin": UUID("eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7"),
 }
 
 
@@ -103,7 +105,19 @@ def main() -> None:
                     organization_id=DEMO_ORG_ID,
                     email=f"e2e.{role}@aequoros.example",
                     display_name=f"E2E {display_role}",
-                    role="viewer" if role == "grant_member" else role,
+                    # Account-plane fixtures become scalar account admins
+                    # after initial ownership is assigned, so they do not
+                    # create ambiguous owner candidates during bootstrap.
+                    role=(
+                        "viewer"
+                        if role
+                        in {
+                            "grant_member",
+                            "account_admin",
+                            "legacy_account_admin",
+                        }
+                        else role
+                    ),
                     auth_provider="password",
                     password_hash=password_hash,
                 )
@@ -119,6 +133,8 @@ def main() -> None:
             granted_by_id="e2e-bootstrap",
             commit=False,
         )
+        users["account_admin"].role = "account_admin"
+        users["legacy_account_admin"].role = "account_admin"
         session.commit()
         _enrol_signing_keys(session)
         materialize_canonical_test_book(session)
@@ -162,6 +178,24 @@ def main() -> None:
                 "e2e-bootstrap",
             ),
             reason="exercise the binding-enforced Liquidity Monitoring journey",
+        )
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["account_admin"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ACCOUNT_ADMIN,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.ACCOUNT,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="exercise scoped Account administration in the dashboard",
         )
         session.commit()
         _materialize_live_plane(session)

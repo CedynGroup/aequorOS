@@ -3049,11 +3049,12 @@ export function useUpdateNameHistoryEntry(bankId: string | undefined) {
 // ---------------------------------------------------------------------------
 
 /** The tenant's user roster — display names for actor-id attribution. */
-export function useOrganizationUsers() {
+export function useOrganizationUsers(enabled = true) {
   return useQuery({
     queryKey: ["org-users"],
     queryFn: () => apiCall(() => organizationApi.listOrganizationUsers()),
     staleTime: 10 * 60_000,
+    enabled,
   });
 }
 
@@ -3061,8 +3062,8 @@ export function useOrganizationUsers() {
  * Resolve actor user ids to "Display Name (Role)" via the organization
  * roster; unknown ids fall back to the 8-char id prefix.
  */
-export function useOfficerNames(): (userId: string) => string {
-  const usersQuery = useOrganizationUsers();
+export function useOfficerNames(enabled = true): (userId: string) => string {
+  const usersQuery = useOrganizationUsers(enabled);
   const users = usersQuery.data?.users;
   return useCallback(
     (userId: string) => {

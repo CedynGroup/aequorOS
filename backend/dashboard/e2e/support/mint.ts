@@ -61,6 +61,16 @@ export const E2E_USERS: Record<
     roles: ["viewer"],
     authv: 1,
   },
+  account_admin: {
+    id: "eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6",
+    roles: ["account_admin"],
+    authv: 2,
+  },
+  legacy_account_admin: {
+    id: "eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7",
+    roles: ["account_admin"],
+    authv: 1,
+  },
 };
 
 export async function mintBackendToken(

@@ -84,6 +84,8 @@ import {
   useStepUpForSigning,
   useUpsertSignaturePlacementTemplate,
 } from "@/lib/api/hooks";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
 import {
   fetchArtifactBytes,
   fetchArtifactVersionBytes,
@@ -161,7 +163,10 @@ export default function SigningWorkspace({
   const placementsQuery = usePackageSignaturePlacements(bankId, packageId);
   const appearanceQuery = useMyAdoptedSignature();
   const identityQuery = useMySignerIdentity();
-  const usersQuery = useOrganizationUsers();
+  const { effectiveAuthority } = useUserProfile();
+  const usersQuery = useOrganizationUsers(
+    hasAccountDirectoryAuthority(effectiveAuthority),
+  );
   const statusQuery = usePackageAttestation(bankId, packageId);
 
   const stepUp = useStepUpForSigning(bankId);
