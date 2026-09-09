@@ -150,7 +150,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   ACCOUNT/restricted `view` (administration does not imply directory access). Scalar
   roles never satisfy these routes, and the dashboard consumes the same projected
   organization capabilities. SSO approval/grant administration still requires the
-  `org_owner` bundle. Integration-key issue remains the compatibility exception until
+  `org_owner` bundle. Integration-key issuance remains the compatibility exception until
   the bank-scoped machine-principal cutover tracked by issue #175.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
