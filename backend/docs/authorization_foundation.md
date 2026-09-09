@@ -248,6 +248,12 @@ avoids grandfathering operational superuser authority while binding enforcement
 rolls out route by route. Liquidity Monitoring likewise requires its own
 explicit scoped binding.
 
+Migration `202609090051` subsequently restores only Account administration for
+eligible administrators in unowned multi-candidate organizations; it does not
+assign ownership or directory view. See
+`account_administration_enforcement_rollout.md` for the authoritative migration
+and rollout contract.
+
 Migration `202608280046` records every demoted legacy administrator in the
 FORCE-RLS `initial_admin_role_demotions` table. Downgrade restores and invalidates
 sessions only for those recorded identities. If a post-migration
