@@ -332,7 +332,9 @@ def test_initial_owner_migration_handles_zero_one_and_many_without_guessing(  # 
     # Every legacy administrator, including excluded inactive/service accounts,
     # loses the operational superuser scalar role. Their sessions are invalidated
     # in the same transaction, and account_admin cannot pass either operational
-    # gate that protects regulatory submission.
+    # gate that protects regulatory submission. The later compatibility
+    # migration advances the two unresolved eligible administrators once more
+    # when it restores their bounded account-plane authority.
     all_admin_ids = {
         zero_inactive,
         zero_service,
@@ -360,7 +362,8 @@ def test_initial_owner_migration_handles_zero_one_and_many_without_guessing(  # 
             for row in rows:
                 if row["id"] in all_admin_ids:
                     assert row["role"] == "account_admin"
-                    assert row["authorization_version"] == 2
+                    expected_version = 3 if row["id"] in {many_a, many_b} else 2
+                    assert row["authorization_version"] == expected_version
 
     assert has_role(["account_admin"], "admin") is False
     assert has_role(["account_admin"], "analyst") is False
