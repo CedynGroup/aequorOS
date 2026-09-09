@@ -20,7 +20,11 @@ The following routes require one active organization-scoped binding for module
 same resource. Account administration does not imply directory view. SSO
 access-request approval and grant administration still require an `org_owner`
 binding. Integration-key issuance remains on its existing compatibility gate
-until the bank-scoped machine-principal cutover in issue #175.
+until the bank-scoped machine-principal cutover in issue #175. The dashboard
+nevertheless hides the Generate control unless the user has this explicit
+organization-scoped Account administration authority. Consequently, a legacy
+`admin` or `account_admin` scalar-role holder without an explicit binding loses
+the Generate control before the issuance endpoint changes.
 
 ## Inventory
 
@@ -132,6 +136,12 @@ are revoked in the same transaction.
 | Administer SSO and existing integration keys        | `human`          | `account_admin`                                                                    | `organization`      | `NULL`           | `account`      | `restricted`        |
 | Preserve initial ownership and grant administration | `human`          | `org_owner`                                                                        | `organization`      | `NULL`           | `account`      | `restricted`        |
 | Read the organization directory                     | `human`          | one institution-approved bundle from `viewer`, `auditor`, `analyst`, or `approver` | `organization`      | `NULL`           | `account`      | `restricted`        |
+
+To preserve the Generate control during this transition, operators must create
+exactly one of the first two rows for the affected human: either the
+organization-scoped `account_admin` / `account` / `restricted` row or the
+organization-scoped `org_owner` / `account` / `restricted` row. A scalar role
+alone is insufficient.
 
 The least-privilege account-administrator grant request is:
 
