@@ -41816,7 +41816,7 @@
     },
     "/api/v1/auth/sso/access-requests": {
       "get": {
-        "description": "JIT sign-ins awaiting approval (deactivated stubs; account admin only).",
+        "description": "JIT sign-ins awaiting approval (deactivated stubs).",
         "operationId": "authListSsoAccessRequests",
         "responses": {
           "200": {
@@ -42016,7 +42016,7 @@
     },
     "/api/v1/auth/sso/access-requests/{user_id}/reject": {
       "post": {
-        "description": "Delete a never-activated request stub (account admin only).",
+        "description": "Reject a never-activated request stub.",
         "operationId": "authRejectSsoAccessRequest",
         "parameters": [
           {
@@ -42108,7 +42108,7 @@
     },
     "/api/v1/auth/sso/connection": {
       "get": {
-        "description": "The org's OIDC connection (account administrator). The secret is never returned \u2014 only\nwhether one is set.",
+        "description": "The org's OIDC connection. The secret is never returned.",
         "operationId": "authGetSsoConnection",
         "responses": {
           "200": {
@@ -42201,7 +42201,7 @@
         ]
       },
       "put": {
-        "description": "Create or update the org's OIDC connection (account admin; secret write-only).",
+        "description": "Create or update the org's OIDC connection (secret write-only).",
         "operationId": "authPutSsoConnection",
         "requestBody": {
           "content": {

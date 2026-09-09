@@ -211,7 +211,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * The org\'s OIDC connection (account administrator). The secret is never returned — only whether one is set.
+   * The org\'s OIDC connection. The secret is never returned.
    * Get Sso Connection
    */
   async authGetSsoConnectionRaw(
@@ -245,7 +245,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * The org\'s OIDC connection (account administrator). The secret is never returned — only whether one is set.
+   * The org\'s OIDC connection. The secret is never returned.
    * Get Sso Connection
    */
   async authGetSsoConnection(
@@ -256,7 +256,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * JIT sign-ins awaiting approval (deactivated stubs; account admin only).
+   * JIT sign-ins awaiting approval (deactivated stubs).
    * List Sso Access Requests
    */
   async authListSsoAccessRequestsRaw(
@@ -290,7 +290,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * JIT sign-ins awaiting approval (deactivated stubs; account admin only).
+   * JIT sign-ins awaiting approval (deactivated stubs).
    * List Sso Access Requests
    */
   async authListSsoAccessRequests(
@@ -439,7 +439,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Create or update the org\'s OIDC connection (account admin; secret write-only).
+   * Create or update the org\'s OIDC connection (secret write-only).
    * Put Sso Connection
    */
   async authPutSsoConnectionRaw(
@@ -486,7 +486,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Create or update the org\'s OIDC connection (account admin; secret write-only).
+   * Create or update the org\'s OIDC connection (secret write-only).
    * Put Sso Connection
    */
   async authPutSsoConnection(
@@ -555,7 +555,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Delete a never-activated request stub (account admin only).
+   * Reject a never-activated request stub.
    * Reject Sso Access Request
    */
   async authRejectSsoAccessRequestRaw(
@@ -598,7 +598,7 @@ export class AuthApi extends runtime.BaseAPI {
   }
 
   /**
-   * Delete a never-activated request stub (account admin only).
+   * Reject a never-activated request stub.
    * Reject Sso Access Request
    */
   async authRejectSsoAccessRequest(
