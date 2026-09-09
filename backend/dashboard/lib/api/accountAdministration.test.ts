@@ -1,9 +1,36 @@
 import assert from "node:assert/strict";
-import { hasAccountAdministrationRole } from "./accountAdministration";
+import type { EffectiveAuthorityRead } from "@aequoros/risk-service-api";
+import {
+  hasAccountAdministrationAuthority,
+  hasAccountDirectoryAuthority,
+} from "./accountAdministration";
 
-assert.equal(hasAccountAdministrationRole(["account_admin"]), true);
-assert.equal(hasAccountAdministrationRole(["admin"]), true);
-assert.equal(hasAccountAdministrationRole(["approver"]), false);
-assert.equal(hasAccountAdministrationRole(["analyst"]), false);
+const authority = (
+  permission: "administer" | "view",
+  sensitivity: "restricted" | "confidential" = "restricted",
+): EffectiveAuthorityRead => ({
+  authv: 3,
+  organizationCapabilities: [
+    {
+      module: "account",
+      sensitivity,
+      permission,
+      requiresContextualAuthorization: false,
+    },
+  ],
+  institutionCapabilities: [],
+});
 
-console.log("accountAdministration.test.ts: account-plane role checks passed.");
+assert.equal(hasAccountAdministrationAuthority(authority("administer")), true);
+assert.equal(hasAccountAdministrationAuthority(authority("view")), false);
+assert.equal(
+  hasAccountAdministrationAuthority(authority("administer", "confidential")),
+  false,
+);
+assert.equal(hasAccountAdministrationAuthority(undefined), false);
+assert.equal(hasAccountDirectoryAuthority(authority("view")), true);
+assert.equal(hasAccountDirectoryAuthority(authority("administer")), false);
+
+console.log(
+  "accountAdministration.test.ts: scoped account-plane authority checks passed.",
+);

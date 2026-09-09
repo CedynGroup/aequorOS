@@ -179,8 +179,7 @@ def get_sso_connection(
     ctx: Annotated[TenantContext, Depends(require_account_administration)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> SsoConnectionResponse | None:
-    """The org's OIDC connection (account administrator). The secret is never returned — only
-    whether one is set."""
+    """The org's OIDC connection. The secret is never returned."""
     connection = sso_config.get_connection(db, ctx.organization_id)
     if connection is None:
         return None
@@ -204,7 +203,7 @@ def put_sso_connection(
     ctx: Annotated[TenantContext, Depends(require_account_administration)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> SsoConnectionResponse:
-    """Create or update the org's OIDC connection (account admin; secret write-only)."""
+    """Create or update the org's OIDC connection (secret write-only)."""
     connection = sso_config.upsert_connection(
         db,
         organization_id=ctx.organization_id,
@@ -235,7 +234,7 @@ def list_sso_access_requests(
     ctx: Annotated[TenantContext, Depends(require_account_administration)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> list[SsoAccessRequestRead]:
-    """JIT sign-ins awaiting approval (deactivated stubs; account admin only)."""
+    """JIT sign-ins awaiting approval (deactivated stubs)."""
     return [
         SsoAccessRequestRead(
             user_id=user.id,
@@ -286,7 +285,7 @@ def reject_sso_access_request(
     ctx: Annotated[TenantContext, Depends(require_account_administration)],
     db: Annotated[Session, Depends(get_tenant_db_session)],
 ) -> None:
-    """Delete a never-activated request stub (account admin only)."""
+    """Reject a never-activated request stub."""
     authentication.reject_sso_access_request(
         db, organization_id=ctx.organization_id, user_id=user_id
     )

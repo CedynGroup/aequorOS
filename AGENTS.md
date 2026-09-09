@@ -144,8 +144,14 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   or transaction context carry `requires_contextual_authorization` and are never execution
   authority; bank detail/period/fact routes 404 without institution coverage; shell
   navigation and deep links consume the projection, never token roles.
-  Account-plane SSO and access-request API enforcement remains on its temporary legacy
-  compatibility gate; enforcement-matrix PR #12 owns that scoped-authority cutover.
+  **Account administration cutover (built 2026-09-08).** SSO connection read/write,
+  SSO request list/reject, and integration-key list/revoke require one organization-wide
+  ACCOUNT/restricted `administer` binding; `/organization/users` separately requires
+  ACCOUNT/restricted `view` (administration does not imply directory access). Scalar
+  roles never satisfy these routes, and the dashboard consumes the same projected
+  organization capabilities. SSO approval/grant administration still requires the
+  `org_owner` bundle. Integration-key issuance remains the compatibility exception until
+  the bank-scoped machine-principal cutover tracked by issue #175.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).

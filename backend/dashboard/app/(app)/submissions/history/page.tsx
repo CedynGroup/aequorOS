@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Regulatory Reporting — History. Every package version (superseded included)
@@ -10,23 +10,30 @@
  * (return, reporting date).
  */
 
-import { useMemo, useState, type ReactNode } from 'react';
-import { Archive, ChevronLeft, ChevronRight, Download, Mail } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from "react";
+import {
+  Archive,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Mail,
+} from "lucide-react";
 import type {
   PackageApprovalRead,
   PackageStatusFilter,
   RegulatoryPackageSummaryRead,
   SubmissionEventRead,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import CopyButton from '@/components/ui/CopyButton';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import CopyButton from "@/components/ui/CopyButton";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/Skeleton";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
 import {
   useOfficerNames,
   usePackageArtifacts,
@@ -35,8 +42,15 @@ import {
   useRegulatoryPackages,
   useResubmissionRequests,
   useSubmissionEvents,
-} from '@/lib/api/hooks';
-import { fmtDateUTC, fmtTimestamp, isoDate, labelize, shortId } from '@/lib/api/values';
+} from "@/lib/api/hooks";
+import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
+import {
+  fmtDateUTC,
+  fmtTimestamp,
+  isoDate,
+  labelize,
+  shortId,
+} from "@/lib/api/values";
 import {
   CHANNEL_LABELS,
   FAMILY_LABELS,
@@ -46,22 +60,22 @@ import {
   downloadArtifact,
   downloadEmailFallbackEml,
   fmtBytes,
-} from '@/components/submissions/shared';
-import EventsFeed from '@/components/submissions/EventsFeed';
-import { AttestationSummary } from '@/components/attestation/shared';
+} from "@/components/submissions/shared";
+import EventsFeed from "@/components/submissions/EventsFeed";
+import { AttestationSummary } from "@/components/attestation/shared";
 
-const ALL = 'all';
+const ALL = "all";
 const PAGE_SIZE = 25;
 const STATUS_OPTIONS: PackageStatusFilter[] = [
-  'generated',
-  'validated',
-  'pending_approval',
-  'approved',
-  'submitted',
-  'acknowledged',
-  'rejected',
-  'declined',
-  'superseded',
+  "generated",
+  "validated",
+  "pending_approval",
+  "approved",
+  "submitted",
+  "acknowledged",
+  "rejected",
+  "declined",
+  "superseded",
 ];
 
 export default function HistoryPage() {
@@ -70,8 +84,8 @@ export default function HistoryPage() {
 
   const [family, setFamily] = useState(ALL);
   const [status, setStatus] = useState(ALL);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [offset, setOffset] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -101,8 +115,8 @@ export default function HistoryPage() {
 
   const columns: Column<RegulatoryPackageSummaryRead>[] = [
     {
-      key: 'return',
-      header: 'Return',
+      key: "return",
+      header: "Return",
       render: (pkg) => (
         <span className="font-mono text-caption font-medium text-navy">
           {pkg.returnCode}
@@ -110,8 +124,8 @@ export default function HistoryPage() {
       ),
     },
     {
-      key: 'family',
-      header: 'Family',
+      key: "family",
+      header: "Family",
       render: (pkg) => (
         <span className="text-caption text-slate">
           {FAMILY_LABELS[pkg.returnFamily] ?? pkg.returnFamily}
@@ -119,8 +133,8 @@ export default function HistoryPage() {
       ),
     },
     {
-      key: 'reportingDate',
-      header: 'Reporting date',
+      key: "reportingDate",
+      header: "Reporting date",
       render: (pkg) => (
         <span className="font-mono text-caption text-navy/85 tnum">
           {fmtDateUTC(pkg.reportingDate)}
@@ -128,19 +142,19 @@ export default function HistoryPage() {
       ),
     },
     {
-      key: 'version',
-      header: 'Version',
+      key: "version",
+      header: "Version",
       numeric: true,
       render: (pkg) => `v${pkg.version}`,
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (pkg) => <PackageStatusPill status={pkg.status} />,
     },
     {
-      key: 'validation',
-      header: 'Validation',
+      key: "validation",
+      header: "Validation",
       render: (pkg) =>
         pkg.validationPassed == null ? (
           <span className="text-caption text-slate">Not run</span>
@@ -151,8 +165,8 @@ export default function HistoryPage() {
         ),
     },
     {
-      key: 'generatedAt',
-      header: 'Generated',
+      key: "generatedAt",
+      header: "Generated",
       render: (pkg) => (
         <span className="font-mono text-micro text-slate tnum">
           {fmtTimestamp(pkg.generatedAt)}
@@ -168,9 +182,9 @@ export default function HistoryPage() {
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'History' },
+          { label: "Governance", href: "/submissions" },
+          { label: "Regulatory Reporting", href: "/submissions" },
+          { label: "History" },
         ]}
         title="History"
         subtitle="Every package version — immutable snapshots, approvals, channel events, and artifacts"
@@ -285,7 +299,7 @@ export default function HistoryPage() {
                   setSelectedId((prev) => (prev === pkg.id ? null : pkg.id))
                 }
                 rowClassName={(pkg) =>
-                  pkg.id === selected?.id ? 'bg-action-light/40' : ''
+                  pkg.id === selected?.id ? "bg-action-light/40" : ""
                 }
               />
             )}
@@ -305,6 +319,7 @@ function PackageRecord({
   bankId: string;
   summary: RegulatoryPackageSummaryRead;
 }) {
+  const { effectiveAuthority } = useUserProfile();
   const detail = useRegulatoryPackage(bankId, summary.id);
   const events = useSubmissionEvents(bankId, summary.id);
   const artifacts = usePackageArtifacts(bankId, summary.id);
@@ -312,7 +327,9 @@ function PackageRecord({
   // Fetched for the SELECTED package only: neither package payload carries the
   // attestation state, so a table column would be one request per row.
   const attestation = usePackageAttestation(bankId, summary.id);
-  const officerName = useOfficerNames();
+  const officerName = useOfficerNames(
+    hasAccountDirectoryAuthority(effectiveAuthority),
+  );
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // The full version chain for this (return, reporting date) — fetched
@@ -330,9 +347,9 @@ function PackageRecord({
 
   // Latest submitted channel drives the .eml affordance (email fallback only).
   const latestSubmitted = (events.data?.events ?? []).find(
-    (event) => event.event === 'submitted'
+    (event) => event.event === "submitted",
   );
-  const emailChannel = latestSubmitted?.channel === 'email';
+  const emailChannel = latestSubmitted?.channel === "email";
 
   return (
     <SectionCard
@@ -360,9 +377,9 @@ function PackageRecord({
               : chain
                   .map(
                     (pkg) =>
-                      `v${pkg.version}${pkg.submissionRevision ? ` rev ${pkg.submissionRevision}` : ''}${pkg.status === 'superseded' ? '' : ` (${PACKAGE_STATUS_LABELS[pkg.status].toLowerCase()})`}`
+                      `v${pkg.version}${pkg.submissionRevision ? ` rev ${pkg.submissionRevision}` : ""}${pkg.status === "superseded" ? "" : ` (${PACKAGE_STATUS_LABELS[pkg.status].toLowerCase()})`}`,
                   )
-                  .join(' ← ')}
+                  .join(" ← ")}
           </p>
         </div>
 
@@ -416,7 +433,9 @@ function PackageRecord({
                 Approvals trail
               </p>
               {detail.data.approvals.length === 0 ? (
-                <p className="text-caption text-slate">No approval actions yet.</p>
+                <p className="text-caption text-slate">
+                  No approval actions yet.
+                </p>
               ) : (
                 <ul className="space-y-1.5">
                   {detail.data.approvals.map((approval) => (
@@ -454,7 +473,9 @@ function PackageRecord({
                   >
                     <span className="text-navy/85">{run.module}</span>
                     <span>{run.engineVersion}</span>
-                    <span className="truncate">{shortId(run.inputHash, 12)}</span>
+                    <span className="truncate">
+                      {shortId(run.inputHash, 12)}
+                    </span>
                     <CopyButton text={run.inputHash} label="input hash" />
                   </li>
                 ))}
@@ -469,7 +490,10 @@ function PackageRecord({
               {events.isLoading ? (
                 <SkeletonCard />
               ) : events.error ? (
-                <ErrorPanel error={events.error} onRetry={() => events.refetch()} />
+                <ErrorPanel
+                  error={events.error}
+                  onRetry={() => events.refetch()}
+                />
               ) : (
                 <EventsFeed events={events.data?.events ?? []} />
               )}
@@ -478,7 +502,9 @@ function PackageRecord({
                 Artifacts
               </p>
               {downloadError && (
-                <p className="mb-1.5 text-caption text-critical">{downloadError}</p>
+                <p className="mb-1.5 text-caption text-critical">
+                  {downloadError}
+                </p>
               )}
               {(artifacts.data?.artifacts ?? []).length === 0 ? (
                 <p className="text-caption text-slate leading-relaxed">
@@ -510,8 +536,8 @@ function PackageRecord({
                               setDownloadError(
                                 error instanceof Error
                                   ? error.message
-                                  : 'Download failed.'
-                              )
+                                  : "Download failed.",
+                              ),
                           );
                         }}
                         className="ml-auto inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
@@ -534,8 +560,8 @@ function PackageRecord({
                         setDownloadError(
                           error instanceof Error
                             ? error.message
-                            : 'Download failed.'
-                        )
+                            : "Download failed.",
+                        ),
                     );
                   }}
                   className="mt-2 inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
@@ -612,12 +638,12 @@ function AuditLog({
       (pkg) => ({
         id: `version-${pkg.id}`,
         action: `Generated v${pkg.version}${
-          pkg.submissionRevision ? ` · rev ${pkg.submissionRevision}` : ''
+          pkg.submissionRevision ? ` · rev ${pkg.submissionRevision}` : ""
         }`,
         actor: officerName(pkg.generatedBy),
         detail: <PackageStatusPill status={pkg.status} />,
         at: pkg.generatedAt,
-      })
+      }),
     );
     const approvalRows: AuditRow[] = approvals.map((approval) => ({
       id: `approval-${approval.id}`,
@@ -640,34 +666,35 @@ function AuditLog({
       at: event.occurredAt,
     }));
     return [...versionRows, ...approvalRows, ...eventRows].sort(
-      (a, b) => a.at.getTime() - b.at.getTime()
+      (a, b) => a.at.getTime() - b.at.getTime(),
     );
   }, [summary, chain, approvals, events, officerName]);
 
   const columns: Column<AuditRow>[] = [
     {
-      key: 'action',
-      header: 'Action',
+      key: "action",
+      header: "Action",
       render: (row) => (
         <span className="text-caption font-medium text-navy">{row.action}</span>
       ),
     },
     {
-      key: 'actor',
-      header: 'Actor / channel',
+      key: "actor",
+      header: "Actor / channel",
       render: (row) => (
         <span className="text-caption text-navy/85">{row.actor}</span>
       ),
     },
     {
-      key: 'detail',
-      header: 'Detail',
-      render: (row) => row.detail ?? <span className="text-caption text-slate">—</span>,
+      key: "detail",
+      header: "Detail",
+      render: (row) =>
+        row.detail ?? <span className="text-caption text-slate">—</span>,
     },
     {
-      key: 'at',
-      header: 'When',
-      align: 'right',
+      key: "at",
+      header: "When",
+      align: "right",
       render: (row) => (
         <span className="font-mono text-micro text-slate tnum whitespace-nowrap">
           {fmtTimestamp(row.at)}

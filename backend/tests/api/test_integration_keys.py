@@ -4,9 +4,10 @@ for bank middleware.
 Invariants: the raw key appears exactly once at issuance (only its hash is
 stored, listings mask), it authenticates the push surface as an analyst-role
 service account bound to the key, dies instantly on revocation (409 on a second
-revoke), unknown keys 401, issue/revoke are admin-only and tenant-scoped, and
-the lifecycle is audited. The real org already holds keys, so counts are
-relative. Opt-in via REAL_DATA_DATABASE_URL, rolled back (tests/real_data.py).
+revoke), unknown keys 401, issue uses its transitional compatibility gate,
+list/revoke require scoped Account administration and remain tenant-scoped, and
+the lifecycle is audited. The real org already holds keys, so counts are relative.
+Opt-in via REAL_DATA_DATABASE_URL, rolled back (tests/real_data.py).
 """
 
 from __future__ import annotations
@@ -139,7 +140,9 @@ def test_unknown_key_is_rejected(real_client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_issue_and_revoke_are_admin_only_and_tenant_scoped(real_client: TestClient) -> None:
+def test_issue_and_scoped_key_administration_are_tenant_scoped(
+    real_client: TestClient,
+) -> None:
     forbidden = real_client.post(
         "/api/v1/integration-keys",
         headers=real_headers(roles=("analyst",)),

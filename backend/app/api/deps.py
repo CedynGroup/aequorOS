@@ -236,9 +236,15 @@ def require_role(minimum: str):  # noqa: ANN201 - returns a FastAPI dependency c
     return _dependency
 
 
-def require_account_administration(
+def require_integration_key_issuance_compatibility(
     ctx: Annotated[TenantContext, Depends(get_current_principal)],
 ) -> TenantContext:
+    """Compatibility gate for organization-wide integration-key issuance.
+
+    Key issuance remains organization-scoped until the bank-scoped machine
+    principal contract can require an exact institution target. List and revoke
+    use the scoped Account authority dependencies below.
+    """
     if not set(ctx.roles) & {security.ADMIN_ROLE, security.ACCOUNT_ADMIN_ROLE}:
         authorization_denied(
             reason="insufficient_role",
@@ -253,11 +259,13 @@ def require_account_administration(
     return ctx
 
 
-# Roles that make a route a guarded mutation when required via ``require_role``.
-# ``examiner``/``viewer`` are read roles: requiring one is not a write gate.
+# Dependencies that make a route a guarded mutation. ``examiner``/``viewer``
+# remain read roles; scoped Account administration and the explicit
+# mutation-role dependencies are the recognized write gates.
 MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
     {
         "require_account_administration",
+        "require_integration_key_issuance_compatibility",
         "require_grant_administration",
         "require_role_admin",
         "require_role_approver",
@@ -419,15 +427,133 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
 DbSession = Annotated[Session, Depends(get_tenant_db_session)]
 
 
+def _require_organization_account_permission(
+    db: Session,
+    ctx: TenantContext,
+    *,
+    permission: str,
+    surface: str,
+    detail: str,
+) -> TenantContext:
+    from app.core.authorization import (  # noqa: PLC0415 - avoid deps/service cycle
+        InstitutionScope,
+        Module,
+        Permission,
+        PrincipalLocator,
+        PrincipalType,
+        ResourceLocator,
+        Sensitivity,
+    )
+    from app.services import authorization as authorization_service  # noqa: PLC0415
+
+    required_permission = Permission(permission)
+    resource = ResourceLocator(
+        ctx.organization_id,
+        InstitutionScope.ORGANIZATION,
+        None,
+        Module.ACCOUNT,
+        Sensitivity.RESTRICTED,
+    )
+    if ctx.actor_user_id is None or ctx.authorization_version is None:
+        authorization_denied(
+            reason="human_account_binding_required",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id) if ctx.actor_user_id is not None else None,
+            principal_type=(
+                "machine"
+                if ctx.actor_user_id is not None
+                else "operator_impersonation"
+                if ctx.impersonation_context is not None
+                else "unknown"
+            ),
+            permission=required_permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+    principal = PrincipalLocator(
+        ctx.organization_id,
+        ctx.actor_user_id,
+        PrincipalType.HUMAN,
+    )
+    try:
+        decision = authorization_service.evaluate_permission(
+            db,
+            principal,
+            required_permission,
+            resource,
+        )
+    except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
+        authorization_service.record_binding_evaluation_failure(
+            principal,
+            required_permission,
+            resource,
+            surface=surface,
+            error=exc,
+        )
+        authorization_denied(
+            reason="binding_evaluation_failed",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            permission=required_permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail) from exc
+    authorization_service.record_binding_decision(
+        decision,
+        surface=surface,
+        severity="info" if decision.allowed else "warning",
+    )
+    if not decision.allowed:
+        authorization_denied(
+            reason=decision.reason,
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            permission=required_permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+    return ctx
+
+
+def require_account_administration(
+    db: DbSession,
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+) -> TenantContext:
+    """Require one complete organization-wide Account/restricted admin binding."""
+
+    return _require_organization_account_permission(
+        db,
+        ctx,
+        permission="administer",
+        surface="account_administration",
+        detail="This action requires scoped Account administration authority.",
+    )
+
+
+def require_account_directory_view(
+    db: DbSession,
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+) -> TenantContext:
+    """Require one complete organization-wide Account/restricted view binding."""
+
+    return _require_organization_account_permission(
+        db,
+        ctx,
+        permission="view",
+        surface="organization_user_directory",
+        detail="This action requires scoped Account directory view authority.",
+    )
+
+
 def require_grant_administration(
     ctx: Annotated[TenantContext, Depends(get_current_principal)],
     db: DbSession,
 ) -> TenantContext:
     """Require the explicit active Org Owner binding from issue #127.
 
-    Scalar account-admin claims are deliberately ignored here.  They retain
-    compatibility access to account configuration, but only the persisted
-    owner binding may create or revoke another person's authority.
+    Scalar account-admin claims are deliberately ignored here. A scoped Account
+    administrator may configure account surfaces, but only the persisted owner
+    binding may create or revoke another person's authority.
     """
 
     from app.core.authorization import (  # noqa: PLC0415 - avoid deps/service cycle

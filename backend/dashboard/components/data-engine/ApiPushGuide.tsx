@@ -9,8 +9,8 @@
  */
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
 import { Download, KeyRound, ShieldAlert, Webhook } from "lucide-react";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
 import CopyButton from "@/components/ui/CopyButton";
 import StatusPill from "@/components/ui/StatusPill";
 import { apiOrigin } from "@/lib/api/client";
@@ -20,7 +20,7 @@ import {
   useRevokeIntegrationKey,
 } from "@/lib/api/hooks";
 import { fmtRelative } from "@/lib/api/values";
-import { hasAccountAdministrationRole } from "@/lib/api/accountAdministration";
+import { hasAccountAdministrationAuthority } from "@/lib/api/accountAdministration";
 import { downloadTextFile } from "@/lib/download";
 import {
   ENTITY_SPECS,
@@ -103,8 +103,8 @@ export function ConnectionCard() {
 }
 
 function IntegrationKeysPanel() {
-  const { data: session } = useSession();
-  const isAdmin = hasAccountAdministrationRole(session?.user?.roles ?? []);
+  const { effectiveAuthority } = useUserProfile();
+  const isAdmin = hasAccountAdministrationAuthority(effectiveAuthority);
   const keysQuery = useIntegrationKeys(isAdmin);
   const issue = useIssueIntegrationKey();
   const revoke = useRevokeIntegrationKey();

@@ -33,11 +33,20 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import IMPERSONATION_READ_ONLY_ROUTES, MUTATION_ROLE_DEPENDENCY_NAMES
 from app.core import security
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.integrations.storage.base import StoredObjectHead
-from app.models import Bank
+from app.models import Bank, User
+from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.factories import CaseFactory, DocumentFactory
 from tests.api.helpers import ORG_1, USER_1, headers
@@ -209,7 +218,32 @@ def test_account_admin_cannot_use_approver_gated_regulatory_submission(
 
 
 def test_account_admin_is_limited_to_account_administration(db_client: TestClient) -> None:
-    account_headers = headers(roles=("account_admin",))
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ACCOUNT_ADMIN,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.ACCOUNT,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
+            reason="exercise account-only administration",
+        )
+        user = session.get(User, USER_1)
+        assert user is not None
+        account_headers = headers(
+            roles=("account_admin",),
+            authorization_version=user.authorization_version,
+        )
+    finally:
+        session.close()
 
     integration_keys = db_client.get("/api/v1/integration-keys", headers=account_headers)
     assert integration_keys.status_code == 200, integration_keys.text
