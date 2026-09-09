@@ -26,6 +26,31 @@ organization-scoped Account administration authority. Consequently, a legacy
 `admin` or `account_admin` scalar-role holder without an explicit binding loses
 the Generate control before the issuance endpoint changes.
 
+## Legacy-administrator lockout closure
+
+Migration `202609090051` restores the account-plane authority that eligible
+legacy administrators exercised before scalar-role enforcement ended. It uses
+the candidate snapshots recorded by migration `202608280046` and grants each
+still-active human candidate in an unresolved multi-candidate organization the
+exact organization-scoped `account_admin` / `account` / `restricted` binding.
+This is a compatibility restoration, not an escalation: it does not grant
+billing, organization transfer, organization deletion, or ownership.
+
+The migration does not guess an owner. Organizations that already have an
+owner are untouched, no `org_owner` binding is created, and every unresolved
+`organization_owner_assignments.status = 'designation_required'` record remains
+the operator's queue for explicit designation. Until staff complete that
+designation, a multi-candidate organization can administer SSO and existing
+integration keys but cannot create new grants.
+
+Only a newly inserted binding invalidates sessions. Its user row is locked,
+`authorization_version` advances, and every live refresh-token family is
+revoked with `authorization_changed` in the same transaction, so that user must
+sign in again. A candidate who already holds suitable Account administration
+authority is left untouched. The `account_admin` bundle grants `administer`,
+not `view`; organization-directory access still requires a separate,
+institution-approved view-capable Account binding.
+
 ## Inventory
 
 Run this read-only query as a role that can see all tenant users and bindings.
@@ -127,9 +152,11 @@ that need, and the platform must not create one automatically.
 
 ## Exact binding rows
 
-Create only rows the institution confirms. Each grant must go through the
-authorization service so the user's `authv` advances and refresh-token families
-are revoked in the same transaction.
+Migration `202609090051` creates only the compatibility bindings described
+above. Create any other rows only after the institution confirms them. Each
+interactive grant must go through the authorization service so the user's
+`authv` advances and refresh-token families are revoked in the same
+transaction.
 
 | Need                                                | `principal_type` | `role_bundle`                                                                      | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
 | --------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------- | ------------------- | ---------------- | -------------- | ------------------- |
@@ -169,6 +196,8 @@ Before deployment, attach all of the following to the release record:
 
 1. The dated inventory output for every organization.
 2. The exact list of human and machine principals that will be denied.
-3. The exact approved binding rows created before release.
-4. Confirmation that every affected user signed in again after `authv`
-   invalidation.
+3. The exact migration-created compatibility bindings and any separately
+   approved binding rows.
+4. The remaining `designation_required` ownership records, with an assigned
+   operator for each explicit designation.
+5. Confirmation that every user whose `authv` changed signed in again.
