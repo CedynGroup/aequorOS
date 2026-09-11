@@ -44,7 +44,7 @@ run = "uv run pytest"
 
 [tasks."risk-service:test-postgres-migrations"]
 description = "Run Postgres-backed Alembic migration tests; requires TEST_DATABASE_URL"
-run = "uv run pytest tests/db/test_postgres_migrations.py"
+run = "uv run pytest tests/db/test_postgres_migrations.py tests/db/test_integration_key_migration.py"
 
 # The concurrency tests guard row locks and advisory locks, which SQLite cannot
 # express — they self-skip ("PostgreSQL row locks are required for concurrency

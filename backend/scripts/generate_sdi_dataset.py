@@ -137,20 +137,72 @@ LOAN_SEGMENTS = [
     ("LN-MORT", 25, 1_150_000, 0.26, 0.08, 60),
 ]
 SECTORS = {
-    "LN-SME": ["commerce.import.other", "manufacturing.home.food_drink_tobacco",
-               "construction.building_construction", "services.business",
-               "agriculture.poultry_farming"],
+    "LN-SME": [
+        "commerce.import.other",
+        "manufacturing.home.food_drink_tobacco",
+        "construction.building_construction",
+        "services.business",
+        "agriculture.poultry_farming",
+    ],
     "LN-CONS": ["services.personal", "commerce.other", "services.recreation"],
     "LN-SAL": ["services.salary_credit", "services.other_incl_government"],
     "LN-MICRO": ["commerce.other", "agriculture.other", "services.personal"],
     "LN-MORT": ["commerce.mortgage_financing", "construction.building_construction"],
 }
-_FIRST = ["Kwame", "Ama", "Kofi", "Akosua", "Yaw", "Abena", "Kojo", "Adwoa", "Kwesi", "Efua",
-          "Kwabena", "Akua", "Fiifi", "Esi", "Nana", "Afia", "Yaa", "Aba"]
-_LAST = ["Mensah", "Owusu", "Boateng", "Asante", "Agyeman", "Adjei", "Darko", "Osei", "Appiah",
-         "Yeboah", "Ofori", "Antwi", "Frimpong", "Baffour", "Dartey", "Quaye"]
-_BIZ = ["Ventures", "Enterprise", "Trading", "Logistics", "Foods", "Agro", "Fabrics", "Hardware",
-        "Pharmacy", "Motors", "Farms", "Cold Store", "Printing", "Tailoring"]
+_FIRST = [
+    "Kwame",
+    "Ama",
+    "Kofi",
+    "Akosua",
+    "Yaw",
+    "Abena",
+    "Kojo",
+    "Adwoa",
+    "Kwesi",
+    "Efua",
+    "Kwabena",
+    "Akua",
+    "Fiifi",
+    "Esi",
+    "Nana",
+    "Afia",
+    "Yaa",
+    "Aba",
+]
+_LAST = [
+    "Mensah",
+    "Owusu",
+    "Boateng",
+    "Asante",
+    "Agyeman",
+    "Adjei",
+    "Darko",
+    "Osei",
+    "Appiah",
+    "Yeboah",
+    "Ofori",
+    "Antwi",
+    "Frimpong",
+    "Baffour",
+    "Dartey",
+    "Quaye",
+]
+_BIZ = [
+    "Ventures",
+    "Enterprise",
+    "Trading",
+    "Logistics",
+    "Foods",
+    "Agro",
+    "Fabrics",
+    "Hardware",
+    "Pharmacy",
+    "Motors",
+    "Farms",
+    "Cold Store",
+    "Printing",
+    "Tailoring",
+]
 
 
 @dataclass
@@ -239,35 +291,62 @@ def build_rosters(start: date, end: date):
             ctype, name = ("SME", biz()) if is_biz else ("RETAIL_INDIVIDUAL", person())
             dref = f"CUST-D-{d_seq:04d}"
             depositors[dref] = Party(dref, name, ctype)
-            opened = (start - timedelta(days=RNG.randint(0, 900)) if RNG.random() < 0.55
-                      else start + timedelta(days=RNG.randint(0, max(60, span - 60))))
-            deposits.append(DepositAcct(
-                ref=f"DEP-{d_seq:04d}", product=code, acct_type=DEP_TYPE[code],
-                depositor=depositors[dref], branch=RNG.choice(BRANCHES), open_date=opened,
-                base=avg * RNG.uniform(0.25, 3.2), growth=RNG.uniform(*band), rate=rate,
-                tenor_months=RNG.choice([3, 6, 9, 12]) if DEP_TYPE[code] == "FIXED" else None,
-                phase=RNG.uniform(0, 6.28)))
+            opened = (
+                start - timedelta(days=RNG.randint(0, 900))
+                if RNG.random() < 0.55
+                else start + timedelta(days=RNG.randint(0, max(60, span - 60)))
+            )
+            deposits.append(
+                DepositAcct(
+                    ref=f"DEP-{d_seq:04d}",
+                    product=code,
+                    acct_type=DEP_TYPE[code],
+                    depositor=depositors[dref],
+                    branch=RNG.choice(BRANCHES),
+                    open_date=opened,
+                    base=avg * RNG.uniform(0.25, 3.2),
+                    growth=RNG.uniform(*band),
+                    rate=rate,
+                    tenor_months=RNG.choice([3, 6, 9, 12]) if DEP_TYPE[code] == "FIXED" else None,
+                    phase=RNG.uniform(0, 6.28),
+                )
+            )
 
     l_seq = 0
     for code, count, avg, rate, npl, _term in LOAN_SEGMENTS:
         for _ in range(count):
             l_seq += 1
-            ctype = ("SME" if code == "LN-SME" or (code == "LN-MICRO" and RNG.random() < 0.3)
-                     else "RETAIL_INDIVIDUAL")
+            ctype = (
+                "SME"
+                if code == "LN-SME" or (code == "LN-MICRO" and RNG.random() < 0.3)
+                else "RETAIL_INDIVIDUAL"
+            )
             name = biz() if ctype == "SME" else person()
             bref = f"CUST-L-{l_seq:04d}"
             borrowers[bref] = Party(bref, name, ctype)
-            opened = (start - timedelta(days=RNG.randint(0, 700)) if RNG.random() < 0.6
-                      else start + timedelta(days=RNG.randint(0, max(120, span - 120))))
+            opened = (
+                start - timedelta(days=RNG.randint(0, 700))
+                if RNG.random() < 0.6
+                else start + timedelta(days=RNG.randint(0, max(120, span - 120)))
+            )
             delinq, dpd_per_day = None, 0.0
             if RNG.random() < npl:
                 delinq = opened + timedelta(days=RNG.randint(150, max(200, span - 60)))
                 dpd_per_day = RNG.uniform(0.85, 1.05)
-            loans.append(LoanFacility(
-                ref=f"LN-{l_seq:04d}", product=code, borrower=borrowers[bref],
-                branch=RNG.choice(BRANCHES), sector=RNG.choice(SECTORS[code]), open_date=opened,
-                principal=avg * RNG.uniform(0.35, 2.6), rate=rate * RNG.uniform(0.92, 1.08),
-                delinquency_start=delinq, dpd_per_day=dpd_per_day))
+            loans.append(
+                LoanFacility(
+                    ref=f"LN-{l_seq:04d}",
+                    product=code,
+                    borrower=borrowers[bref],
+                    branch=RNG.choice(BRANCHES),
+                    sector=RNG.choice(SECTORS[code]),
+                    open_date=opened,
+                    principal=avg * RNG.uniform(0.35, 2.6),
+                    rate=rate * RNG.uniform(0.92, 1.08),
+                    delinquency_start=delinq,
+                    dpd_per_day=dpd_per_day,
+                )
+            )
     return deposits, loans, depositors, borrowers
 
 
@@ -322,55 +401,134 @@ def _open(path: Path, header: list[str]):
 
 
 def write_static(out: Path, depositors, borrowers) -> None:
-    fh, w = _open(out / "counterparties.csv",
-                  ["source_reference", "name", "counterparty_type", "country_code",
-                   "resident", "attributes.segment"])
+    fh, w = _open(
+        out / "counterparties.csv",
+        [
+            "source_reference",
+            "name",
+            "counterparty_type",
+            "country_code",
+            "resident",
+            "attributes.segment",
+        ],
+    )
     for c in list(depositors.values()) + list(borrowers.values()):
         w.writerow([c.ref, c.name, c.ctype, "GH", "true", c.ctype.lower()])
     fh.close()
-    fh, w = _open(out / "products.csv",
-                  ["source_reference", "product_code", "name", "regulatory_category"])
+    fh, w = _open(
+        out / "products.csv", ["source_reference", "product_code", "name", "regulatory_category"]
+    )
     for code, name, reg, _ in PRODUCTS:
         w.writerow([code, code, name, reg])
     fh.close()
     fh, w = _open(out / "behavioral_assumptions.csv", ["product_code", "assumption", "value"])
-    for row in [["DEP-SAV", "DEPOSIT_STABILITY", "0.82"], ["DEP-SAV", "NMD_DURATION", "30"],
-                ["DEP-SUSU", "DEPOSIT_STABILITY", "0.75"], ["DEP-SUSU", "NMD_DURATION", "18"],
-                ["DEP-CUR", "DEPOSIT_STABILITY", "0.55"], ["DEP-CUR", "NMD_DURATION", "12"],
-                ["DEP-CALL", "DEPOSIT_STABILITY", "0.40"], ["DEP-CALL", "NMD_DURATION", "3"],
-                ["LN-SME", "PREPAYMENT_RATE", "0.10"], ["LN-CONS", "PREPAYMENT_RATE", "0.08"],
-                ["LN-SAL", "PREPAYMENT_RATE", "0.05"], ["LN-MORT", "PREPAYMENT_RATE", "0.04"]]:
+    for row in [
+        ["DEP-SAV", "DEPOSIT_STABILITY", "0.82"],
+        ["DEP-SAV", "NMD_DURATION", "30"],
+        ["DEP-SUSU", "DEPOSIT_STABILITY", "0.75"],
+        ["DEP-SUSU", "NMD_DURATION", "18"],
+        ["DEP-CUR", "DEPOSIT_STABILITY", "0.55"],
+        ["DEP-CUR", "NMD_DURATION", "12"],
+        ["DEP-CALL", "DEPOSIT_STABILITY", "0.40"],
+        ["DEP-CALL", "NMD_DURATION", "3"],
+        ["LN-SME", "PREPAYMENT_RATE", "0.10"],
+        ["LN-CONS", "PREPAYMENT_RATE", "0.08"],
+        ["LN-SAL", "PREPAYMENT_RATE", "0.05"],
+        ["LN-MORT", "PREPAYMENT_RATE", "0.04"],
+    ]:
         w.writerow(row)
     fh.close()
 
 
 def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa: PLR0912, PLR0915
     """Write every per-book time-series file in one streaming pass over the calendar."""
-    dep_fh, dep_w = _open(out / "positions_deposits.csv",
-                          ["as_of_date", "source_reference", "position_type", "currency", "balance",
-                           "counterparty_reference", "product_code", "gl_account_code",
-                           "contractual_maturity", "interest_rate", "rate_type",
-                           "deposit_account_type", "attributes.balance_ghs",
-                           "attributes.branch_id", "attributes.tenor_months"])
-    ln_fh, ln_w = _open(out / "positions_loans.csv",
-                        ["as_of_date", "source_reference", "position_type", "currency", "balance",
-                         "counterparty_reference", "product_code", "gl_account_code",
-                         "interest_rate", "rate_type", "ifrs9_stage", "attributes.balance_ghs",
-                         "attributes.branch_id", "attributes.sector", "attributes.borrower_class",
-                         "attributes.bog_classification", "attributes.days_past_due",
-                         "attributes.ecl_provision_ghs"])
-    cash_fh, cash_w = _open(out / "positions_cash.csv",
-                            ["as_of_date", "source_reference", "position_type", "currency",
-                             "balance", "counterparty_reference", "product_code", "gl_account_code",
-                             "attributes.balance_ghs", "attributes.branch_id"])
-    sec_fh, sec_w = _open(out / "positions_securities.csv",
-                          ["as_of_date", "source_reference", "position_type", "currency", "balance",
-                           "counterparty_reference", "product_code", "gl_account_code",
-                           "contractual_maturity", "interest_rate", "attributes.balance_ghs",
-                           "attributes.redeemable_within_two_days"])
-    gl_fh, gl_w = _open(out / "gl_accounts.csv",
-                        ["as_of_date", "source_reference", "account_code", "name",
-                         "account_class", "currency", "balance"])
+    dep_fh, dep_w = _open(
+        out / "positions_deposits.csv",
+        [
+            "as_of_date",
+            "source_reference",
+            "position_type",
+            "currency",
+            "balance",
+            "counterparty_reference",
+            "product_code",
+            "gl_account_code",
+            "contractual_maturity",
+            "interest_rate",
+            "rate_type",
+            "deposit_account_type",
+            "attributes.balance_ghs",
+            "attributes.branch_id",
+            "attributes.tenor_months",
+        ],
+    )
+    ln_fh, ln_w = _open(
+        out / "positions_loans.csv",
+        [
+            "as_of_date",
+            "source_reference",
+            "position_type",
+            "currency",
+            "balance",
+            "counterparty_reference",
+            "product_code",
+            "gl_account_code",
+            "interest_rate",
+            "rate_type",
+            "ifrs9_stage",
+            "attributes.balance_ghs",
+            "attributes.branch_id",
+            "attributes.sector",
+            "attributes.borrower_class",
+            "attributes.bog_classification",
+            "attributes.days_past_due",
+            "attributes.ecl_provision_ghs",
+        ],
+    )
+    cash_fh, cash_w = _open(
+        out / "positions_cash.csv",
+        [
+            "as_of_date",
+            "source_reference",
+            "position_type",
+            "currency",
+            "balance",
+            "counterparty_reference",
+            "product_code",
+            "gl_account_code",
+            "attributes.balance_ghs",
+            "attributes.branch_id",
+        ],
+    )
+    sec_fh, sec_w = _open(
+        out / "positions_securities.csv",
+        [
+            "as_of_date",
+            "source_reference",
+            "position_type",
+            "currency",
+            "balance",
+            "counterparty_reference",
+            "product_code",
+            "gl_account_code",
+            "contractual_maturity",
+            "interest_rate",
+            "attributes.balance_ghs",
+            "attributes.redeemable_within_two_days",
+        ],
+    )
+    gl_fh, gl_w = _open(
+        out / "gl_accounts.csv",
+        [
+            "as_of_date",
+            "source_reference",
+            "account_code",
+            "name",
+            "account_class",
+            "currency",
+            "balance",
+        ],
+    )
     # Monthly income statement. Without it ``fact_derivation._derive_operational_income``
     # finds no ``historical_financials`` reference records, so the operational_income
     # fact group is skipped entirely — which zeroes the earnings component of the
@@ -378,12 +536,21 @@ def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa:
     # ratio is omitted rather than scored at a neutral value, blocks the whole
     # assessment. A deposit-taking institution obviously HAS a P&L; the generator
     # simply never emitted one (found 2026-08-23).
-    fin_fh, fin_w = _open(out / "historical_financials.csv",
-        ["period_end", "net_interest_income_ghs", "non_interest_income_ghs",
-         "operating_expenses_ghs", "provisions_ghs", "net_income_ghs"])
+    fin_fh, fin_w = _open(
+        out / "historical_financials.csv",
+        [
+            "period_end",
+            "net_interest_income_ghs",
+            "non_interest_income_ghs",
+            "operating_expenses_ghs",
+            "provisions_ghs",
+            "net_income_ghs",
+        ],
+    )
     prev_prov: dict[str, float | None] = {"v": None}
-    cs_fh, cs_w = _open(out / "capital_structure.csv",
-                        ["as_of_date", "capital_component", "amount_ghs", "tier"])
+    cs_fh, cs_w = _open(
+        out / "capital_structure.csv", ["as_of_date", "capital_component", "amount_ghs", "tier"]
+    )
     cal_fh, cal_w = _open(out / "as_of_calendar.csv", ["as_of_date", "cadence"])
 
     month_ends = set(_month_ends(calendar[0], calendar[-1]))
@@ -402,10 +569,25 @@ def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa:
             maturity = ""
             if a.acct_type == "FIXED" and a.tenor_months:
                 maturity = (d + timedelta(days=int(a.tenor_months * 30.44))).isoformat()
-            dep_w.writerow([iso, a.ref, "DEPOSIT", GHS, _m(bal), a.depositor.ref, a.product,
-                            "GL-2100", maturity, f"{a.rate:.4f}",
-                            "FIXED" if a.acct_type == "FIXED" else "FLOATING", a.acct_type,
-                            _m(bal), a.branch, a.tenor_months or ""])
+            dep_w.writerow(
+                [
+                    iso,
+                    a.ref,
+                    "DEPOSIT",
+                    GHS,
+                    _m(bal),
+                    a.depositor.ref,
+                    a.product,
+                    "GL-2100",
+                    maturity,
+                    f"{a.rate:.4f}",
+                    "FIXED" if a.acct_type == "FIXED" else "FLOATING",
+                    a.acct_type,
+                    _m(bal),
+                    a.branch,
+                    a.tenor_months or "",
+                ]
+            )
 
         loan_total = prov_total = npl_total = 0.0
         for ln in loans:
@@ -417,18 +599,62 @@ def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa:
             prov_total += ecl
             if dpd >= 90:
                 npl_total += out_bal
-            bclass = ("household" if ln.borrower.ctype == "RETAIL_INDIVIDUAL"
-                      else "private_indigenous")
-            ln_w.writerow([iso, ln.ref, "LOAN", GHS, _m(out_bal), ln.borrower.ref, ln.product,
-                           "GL-1300", f"{ln.rate:.4f}", "FIXED", STAGE[grade], _m(out_bal),
-                           ln.branch, ln.sector, bclass, grade, dpd, _m(ecl)])
+            bclass = (
+                "household" if ln.borrower.ctype == "RETAIL_INDIVIDUAL" else "private_indigenous"
+            )
+            ln_w.writerow(
+                [
+                    iso,
+                    ln.ref,
+                    "LOAN",
+                    GHS,
+                    _m(out_bal),
+                    ln.borrower.ref,
+                    ln.product,
+                    "GL-1300",
+                    f"{ln.rate:.4f}",
+                    "FIXED",
+                    STAGE[grade],
+                    _m(out_bal),
+                    ln.branch,
+                    ln.sector,
+                    bclass,
+                    grade,
+                    dpd,
+                    _m(ecl),
+                ]
+            )
 
         vault = dep_total * 0.04 * _seeded("vault", d, 0.97, 1.03)
         bog = dep_total * 0.09 * _seeded("bog", d, 0.97, 1.03)
-        cash_w.writerow([iso, "CASH-VAULT", "CASH", GHS, _m(vault), "", "CASH-VAULT", "GL-1010",
-                         _m(vault), "ACC-HQ"])
-        cash_w.writerow([iso, "CASH-BOG", "CASH", GHS, _m(bog), "CP-BOG", "CASH-BOG", "GL-1020",
-                         _m(bog), "ACC-HQ"])
+        cash_w.writerow(
+            [
+                iso,
+                "CASH-VAULT",
+                "CASH",
+                GHS,
+                _m(vault),
+                "",
+                "CASH-VAULT",
+                "GL-1010",
+                _m(vault),
+                "ACC-HQ",
+            ]
+        )
+        cash_w.writerow(
+            [
+                iso,
+                "CASH-BOG",
+                "CASH",
+                GHS,
+                _m(bog),
+                "CP-BOG",
+                "CASH-BOG",
+                "GL-1020",
+                _m(bog),
+                "ACC-HQ",
+            ]
+        )
 
         sec_total = dep_total * 0.19 * _seeded("sec", d, 0.97, 1.03)
         weights = [_seeded(f"secw{i}", d, 0.6, 1.5) for i in range(10)]
@@ -441,10 +667,22 @@ def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa:
             # the past.
             _tenors = [91, 182, 364] if is_bill else [730, 1095, 1825]
             tenor = _tenors[int(_seeded(f"tenor{i}", d, 0, len(_tenors) - 0.001))]
-            sec_w.writerow([iso, f"{code}-{i:02d}", "SECURITY_HOLDING", GHS, _m(wt * scale),
-                            "CP-GOG", code, "GL-1200",
-                            (d + timedelta(days=tenor)).isoformat(),
-                            f"{_seeded('secr', d, 0.20, 0.28):.4f}", _m(wt * scale), "true"])
+            sec_w.writerow(
+                [
+                    iso,
+                    f"{code}-{i:02d}",
+                    "SECURITY_HOLDING",
+                    GHS,
+                    _m(wt * scale),
+                    "CP-GOG",
+                    code,
+                    "GL-1200",
+                    (d + timedelta(days=tenor)).isoformat(),
+                    f"{_seeded('secr', d, 0.20, 0.28):.4f}",
+                    _m(wt * scale),
+                    "true",
+                ]
+            )
 
         # GL + capital, struck on EVERY as-of date (identity closes; other assets
         # is the plug).
@@ -485,7 +723,8 @@ def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa:
         ]:
             gl_w.writerow([iso, code, code, name, cls, GHS, _s(bal)])
         for comp, amt, tier in [
-            ("paid_up_capital", paid_up, "CET1"), ("statutory_reserves", statutory, "CET1"),
+            ("paid_up_capital", paid_up, "CET1"),
+            ("statutory_reserves", statutory, "CET1"),
             ("retained_earnings", retained, "CET1"),
             ("credit_risk_reserve", prov_total * 0.15, "CET1"),
             ("intangible_assets", -1_200_000.0, "CET1_DEDUCTION"),
@@ -516,9 +755,10 @@ def generate(out: Path, calendar: list[date], deposits, loans) -> dict:  # noqa:
         fh.close()
 
     # daily cash-flows for the full span (the 90-day view + reconciliation)
-    hcf_fh, hcf_w = _open(out / "daily_cashflows.csv",
-                          ["date", "deposit_inflow_ghs", "deposit_outflow_ghs",
-                           "net_cashflow_ghs"])
+    hcf_fh, hcf_w = _open(
+        out / "daily_cashflows.csv",
+        ["date", "deposit_inflow_ghs", "deposit_outflow_ghs", "net_cashflow_ghs"],
+    )
     d = calendar[0]
     while d <= calendar[-1]:
         if d.weekday() < 6:
@@ -535,7 +775,7 @@ _PUSH_SDI = '''#!/usr/bin/env python3
 """Push the per-book AequorOS SDI time-series files, grouped by as_of_date, through
 the Data Engine API (three-call flow per date, docs/API_INTEGRATION.md §2).
 
-    BASE_URL=http://localhost:8001 TOKEN=<admin token or aeq_live_...> BANK=BK-XREAZES1 \\\\
+    BASE_URL=http://localhost:8001 TOKEN=<aeq_live_... key for BANK> BANK=BK-XREAZES1 \\\\
         python push_sdi.py --cadence monthly   # start light; then weekly, then daily, then all
 """
 from __future__ import annotations
@@ -737,9 +977,9 @@ def main() -> None:
         "",
         "## Trajectory (month-ends)",
         f"- {first_m[0]}: deposits GHS {first_m[1]:,.0f} · loans GHS {first_m[2]:,.0f} · "
-        f"NPL {(first_m[3]/first_m[2]*100 if first_m[2] else 0):.1f}%",
+        f"NPL {(first_m[3] / first_m[2] * 100 if first_m[2] else 0):.1f}%",
         f"- {last_m[0]}: deposits GHS {last_m[1]:,.0f} · loans GHS {last_m[2]:,.0f} · "
-        f"NPL {(last_m[3]/last_m[2]*100 if last_m[2] else 0):.1f}%",
+        f"NPL {(last_m[3] / last_m[2] * 100 if last_m[2] else 0):.1f}%",
         "",
         "## Files",
         "`positions_{deposits,loans,cash,securities}.csv` `gl_accounts.csv` "
@@ -749,9 +989,11 @@ def main() -> None:
     (out / "README.md").write_text("\n".join(readme) + "\n")
 
     print(f"Generated {result['n_dates']} reporting dates ({start} → {end}) into {out}/")
-    print(f"  {first_m[0]}: dep GHS {first_m[1]/1e6:.0f}M loans GHS {first_m[2]/1e6:.0f}M")
-    print(f"  {last_m[0]}: dep GHS {last_m[1]/1e6:.0f}M loans GHS {last_m[2]/1e6:.0f}M "
-          f"NPL {(last_m[3]/last_m[2]*100 if last_m[2] else 0):.1f}%")
+    print(f"  {first_m[0]}: dep GHS {first_m[1] / 1e6:.0f}M loans GHS {first_m[2] / 1e6:.0f}M")
+    print(
+        f"  {last_m[0]}: dep GHS {last_m[1] / 1e6:.0f}M loans GHS {last_m[2] / 1e6:.0f}M "
+        f"NPL {(last_m[3] / last_m[2] * 100 if last_m[2] else 0):.1f}%"
+    )
 
 
 if __name__ == "__main__":

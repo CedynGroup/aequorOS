@@ -12,6 +12,7 @@ class ClosedModel(BaseModel):
 
 class IntegrationKeyRead(ClosedModel):
     id: UUID
+    bank_id: str | None = Field(title="Integration key bank ID")
     label: str
     # Display fragment only ("aeq_live_AB12…") — the raw key is never readable.
     key_prefix: str
@@ -26,6 +27,7 @@ class IntegrationKeyListRead(ClosedModel):
 
 
 class IntegrationKeyIssueRequest(ClosedModel):
+    bank_id: str = Field(title="Integration key bank ID")
     label: str = Field(min_length=1, max_length=80)
 
 

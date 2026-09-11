@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Uuid
+from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, Index, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin
@@ -22,14 +22,24 @@ class IntegrationKey(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "integration_keys"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            ondelete="RESTRICT",
+            name="fk_integration_keys_bank_tenant",
+        ),
         Index("uq_integration_keys_key_hash", "key_hash", unique=True),
         Index("ix_integration_keys_organization_id", "organization_id"),
+        Index("ix_integration_keys_organization_bank", "organization_id", "bank_id"),
     )
 
     organization_id: Mapped[str] = mapped_column(
         String(16), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    # The machine identity requests act as (role-checked like any user).
+    # Nullable only for credentials issued before institution scoping. Those
+    # rows remain inspectable and revocable but are never authorized to push.
+    bank_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # The machine identity behind this one credential.
     service_user_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )

@@ -36,7 +36,7 @@ from app.models import Bank, CanonicalReferenceRow
 from app.services.regulatory_reporting.bog_forms.linemaps import bsd17, line_maps_for
 from app.services.regulatory_reporting.exports import render_bog_form_xlsx
 from scripts.ingest_push import read_rows
-from tests.api.helpers import ORG_1, headers
+from tests.api.helpers import ORG_1, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -78,20 +78,21 @@ def _month_rows(month_end: str) -> list[dict[str, Any]]:
 def _push_reference(
     db_client: TestClient, kind: str, rows: list[dict[str, Any]], *, as_of: str, key: str
 ) -> dict[str, Any]:
+    push_headers = integration_key_headers(SAMPLE_BANK_ID)
     opened = db_client.post(
         f"{BASE}/push-batches",
-        headers=headers(),
+        headers=push_headers,
         json={"as_of_date": as_of, "idempotency_key": key, "reason": f"Sample Bank {kind}"},
     )
     assert opened.status_code == 201, opened.text
     push_id = opened.json()["push_batch_id"]
     staged = db_client.post(
         f"{BASE}/push-batches/{push_id}/records",
-        headers=headers(),
+        headers=push_headers,
         json={"reference": {kind: rows}},
     )
     assert staged.status_code == 200, staged.text
-    committed = db_client.post(f"{BASE}/push-batches/{push_id}/commit", headers=headers())
+    committed = db_client.post(f"{BASE}/push-batches/{push_id}/commit", headers=push_headers)
     assert committed.status_code == 201, committed.text
     return committed.json()
 

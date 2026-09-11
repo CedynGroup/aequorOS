@@ -96,14 +96,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   policies compare text — no `::uuid` casts). Pre-epoch regulatory run input hashes
   embed the old UUID string and stay internally consistent with their stored
   snapshots; new runs hash the platform ID.
-- **Integration keys are the bank-middleware credential (built 2026-07-24).** Admin
-  generates a revocable `aeq_live_…` key (Data Engine → API Push); it binds to a per-key
-  service account (`users.auth_provider='service'`, analyst role) and works as a plain
-  bearer value — `app/services/integration_keys.py`, auth branch in `app/api/deps.py`.
-  Only the SHA-256 hash is stored (raw key shown once); `integration_keys` is
-  deliberately NOT RLS-forced (pre-auth global hash lookup; hashes+metadata only —
-  keep it that way and keep endpoints org-filtered). Public contract:
-  docs/API_INTEGRATION.md §1.
+- **Integration keys are bank-scoped machine principals.** Account administrators
+  issue a revocable `aeq_live_…` key for one exact `BK-*` institution (Data Engine →
+  API Push). Issuance atomically creates the service identity, key, row, and
+  machine-only `integration_writer` binding for DATA/restricted `ingest`; push routes
+  require that complete binding and return 404 for a sibling-bank target. Human
+  Analyst authority never satisfies machine ingest. Revocation deactivates the key,
+  binding, and service identity together. Only the SHA-256 hash is stored (raw key
+  shown once); `integration_keys` is deliberately NOT RLS-forced for the pre-auth
+  global hash lookup, so every lifecycle endpoint must remain explicitly org-filtered.
+  Legacy null-bank rows remain inspectable/revocable but never authorize a push.
+  Public contract: `docs/API_INTEGRATION.md` §1.
 - **Authorization foundation (built 2026-08-25; `backend/docs/authorization_foundation.md`).**
   New policy authority is an indivisible `authorization_bindings` row: principal/type +
   static bundle + explicit organization/institution/module/sensitivity scope + provenance
@@ -125,8 +128,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   active human legacy admin exists; zero/multiple candidates get no binding and remain
   queryable, with candidate snapshots, in `organization_owner_assignments`. The migration
   converts every scalar `admin` to non-operational `account_admin`, bumps `authv`, and revokes
-  refresh families; account admins pass the account-plane compatibility gate but never the
-  analyst/approver ladder. Staff provisioning creates its sole first admin, owner binding, and
+  refresh families; account admins never enter the analyst/approver ladder. Staff
+  provisioning creates its sole first admin, owner binding, and
   assignment state atomically. Explicit designation mutation/UI remains later staff-plane work:
   a zero-owner tenant has no tenant authority that could authorize its own designation.
   **Scoped grant administration (built 2026-08-29; migration `202608290047`).**
@@ -150,8 +153,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   ACCOUNT/restricted `view` (administration does not imply directory access). Scalar
   roles never satisfy these routes, and the dashboard consumes the same projected
   organization capabilities. SSO approval/grant administration still requires the
-  `org_owner` bundle. Integration-key issuance remains the compatibility exception until
-  the bank-scoped machine-principal cutover tracked by issue #175.
+  `org_owner` bundle. Integration-key issuance uses the same Account administration
+  authority and additionally requires an exact bank target for the machine binding.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).

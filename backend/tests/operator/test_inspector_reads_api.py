@@ -52,9 +52,7 @@ GATED: list[tuple[str, str]] = [
 
 
 def _provision(client: TestClient, **overrides: object) -> tuple[str, str]:
-    body = client.post(
-        BASE, json=provision_payload(**overrides), headers=operator_headers()
-    ).json()
+    body = client.post(BASE, json=provision_payload(**overrides), headers=operator_headers()).json()
     assert body["succeeded"] is True, body
     return body["organization_id"], body["bank_id"]
 
@@ -78,9 +76,7 @@ def _seed_period(db: Session, organization_id: str, bank_id: str) -> UUID:
 @pytest.mark.parametrize("suffix", [suffix for suffix, _ in GATED])
 def test_deep_read_requires_active_session(operator_client: TestClient, suffix: str) -> None:
     organization_id, _bank = _provision(operator_client)
-    response = operator_client.get(
-        f"{BASE}/{organization_id}{suffix}", headers=operator_headers()
-    )
+    response = operator_client.get(f"{BASE}/{organization_id}{suffix}", headers=operator_headers())
     assert response.status_code == 403, response.text
     assert response.json()["error"]["details"]["code"] == "inspection_required"
 
@@ -91,14 +87,10 @@ def test_deep_read_ok_with_session_and_audits_once(
 ) -> None:
     organization_id, _bank = _provision(operator_client)
     session_id = start_inspection(operator_client, organization_id)
-    response = operator_client.get(
-        f"{BASE}/{organization_id}{suffix}", headers=operator_headers()
-    )
+    response = operator_client.get(f"{BASE}/{organization_id}{suffix}", headers=operator_headers())
     assert response.status_code == 200, response.text
     rows = list(
-        operator_db.scalars(
-            select(OperatorAuditLog).where(OperatorAuditLog.action == action)
-        )
+        operator_db.scalars(select(OperatorAuditLog).where(OperatorAuditLog.action == action))
     )
     assert len(rows) == 1
     assert rows[0].target_org == organization_id
@@ -115,18 +107,14 @@ def test_fleet_metadata_endpoints_stay_open(operator_client: TestClient) -> None
     )
 
 
-def test_expired_session_is_forbidden(
-    operator_client: TestClient, operator_db: Session
-) -> None:
+def test_expired_session_is_forbidden(operator_client: TestClient, operator_db: Session) -> None:
     organization_id, _bank = _provision(operator_client)
     session_id = start_inspection(operator_client, organization_id)
     row = operator_db.get(OperatorInspectorSession, UUID(session_id))
     assert row is not None
     row.expires_at = utc_now() - timedelta(minutes=1)
     operator_db.commit()
-    response = operator_client.get(
-        f"{BASE}/{organization_id}/metrics", headers=operator_headers()
-    )
+    response = operator_client.get(f"{BASE}/{organization_id}/metrics", headers=operator_headers())
     assert response.status_code == 403
     assert response.json()["error"]["details"]["code"] == "inspection_required"
 
@@ -138,9 +126,7 @@ def test_ended_session_is_forbidden(operator_client: TestClient) -> None:
         f"/operator/v1/inspector/sessions/{session_id}/end", headers=operator_headers()
     )
     assert ended.status_code == 200
-    response = operator_client.get(
-        f"{BASE}/{organization_id}/findings", headers=operator_headers()
-    )
+    response = operator_client.get(f"{BASE}/{organization_id}/findings", headers=operator_headers())
     assert response.status_code == 403
 
 
@@ -173,8 +159,7 @@ def test_session_is_scoped_to_the_operator_who_opened_it(
     other = bearer(login(operator_client, "ama@aequoros.com", PASSWORD))
     # A different operator has no session of their OWN for this org → 403.
     assert (
-        operator_client.get(f"{BASE}/{organization_id}/metrics", headers=other).status_code
-        == 403
+        operator_client.get(f"{BASE}/{organization_id}/metrics", headers=other).status_code == 403
     )
 
 
@@ -182,9 +167,7 @@ def test_break_glass_session_grants_read(operator_client: TestClient) -> None:
     organization_id, _bank = _provision(operator_client)
     # The dev token is super_admin, so it may open the admin-gated break_glass mode.
     start_inspection(operator_client, organization_id, mode="break_glass")
-    response = operator_client.get(
-        f"{BASE}/{organization_id}/config", headers=operator_headers()
-    )
+    response = operator_client.get(f"{BASE}/{organization_id}/config", headers=operator_headers())
     assert response.status_code == 200
 
 
@@ -404,6 +387,7 @@ def test_config_never_returns_secret_material(
     operator_db.add(
         IntegrationKey(
             organization_id=organization_id,
+            bank_id=_bank,
             service_user_id=service_user.id,
             label="core-middleware",
             key_prefix="aeq_live_ABCD",
@@ -413,9 +397,7 @@ def test_config_never_returns_secret_material(
     operator_db.commit()
 
     start_inspection(operator_client, organization_id)
-    response = operator_client.get(
-        f"{BASE}/{organization_id}/config", headers=operator_headers()
-    )
+    response = operator_client.get(f"{BASE}/{organization_id}/config", headers=operator_headers())
     assert response.status_code == 200
     text = response.text
 
@@ -435,6 +417,7 @@ def test_config_never_returns_secret_material(
     assert body["sso"]["secret_configured"] is True
     assert body["sso"]["allowed_email_domains"] == ["testbank.example"]
     key = body["integration_keys"][0]
+    assert key["bank_id"] == _bank
     assert key["key_prefix"] == "aeq_live_ABCD"
     assert key["status"] == "active"
     assert body["banks"][0]["jurisdiction_code"] == "GH"

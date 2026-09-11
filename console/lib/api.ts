@@ -32,16 +32,16 @@
  *   from the operator's browser — only from the console server.
  */
 
-export const API_BASE = '/api/op';
+export const API_BASE = "/api/op";
 
 // --------------------------------------------------------------------------
 // Session token (dev auth — sessionStorage only, never persisted to disk)
 // --------------------------------------------------------------------------
 
-const TOKEN_KEY = 'aeq-operator-token';
+const TOKEN_KEY = "aeq-operator-token";
 
 export function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === "undefined") return null;
   return window.sessionStorage.getItem(TOKEN_KEY);
 }
 
@@ -65,7 +65,7 @@ export class ApiError extends Error {
 
   constructor(code: string, message: string, status: number) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
     this.code = code;
     this.status = status;
   }
@@ -73,7 +73,11 @@ export class ApiError extends Error {
 
 export function toApiError(err: unknown): ApiError {
   if (err instanceof ApiError) return err;
-  return new ApiError('unknown_error', err instanceof Error ? err.message : String(err), 0);
+  return new ApiError(
+    "unknown_error",
+    err instanceof Error ? err.message : String(err),
+    0,
+  );
 }
 
 // --------------------------------------------------------------------------
@@ -191,7 +195,8 @@ export interface ProvisionTenantRequest {
   admin_full_name: string;
 }
 
-export type ProvisionStepStatus = 'succeeded' | 'failed' | 'skipped' | 'rolled_back';
+export type ProvisionStepStatus =
+  "succeeded" | "failed" | "skipped" | "rolled_back";
 
 // step is a backend Literal (organization | bank | storage | kms | sso_stub |
 // first_admin | readiness | cleanup) — typed as string so a new saga step
@@ -218,7 +223,7 @@ export interface ProvisionTenantResponse {
 export interface HealthResponse {
   service: string;
   environment: string;
-  status: 'ok';
+  status: "ok";
 }
 
 // --------------------------------------------------------------------------
@@ -230,7 +235,7 @@ export interface HealthResponse {
 // --------------------------------------------------------------------------
 
 /** DeskObservationCreate.unit — a backend Literal, closed on both sides. */
-export type DeskObservationUnit = 'pct' | 'rate' | 'ghs' | 'index';
+export type DeskObservationUnit = "pct" | "rate" | "ghs" | "index";
 
 // status is a service-owned vocabulary ("draft" | "approved" | …) — typed as
 // string so a new state renders instead of breaking the register.
@@ -365,7 +370,7 @@ export interface DeskRateEntry {
 /** Track-1 research judgment (Option B) — determination-scoped only. */
 export interface DeskResearchAdjustment {
   series_code: string;
-  kind: 'override' | 'additive_bps' | 'assumption_note';
+  kind: "override" | "additive_bps" | "assumption_note";
   value?: string | null;
   rationale: string;
   applied_by?: string;
@@ -496,10 +501,10 @@ export interface DeskPublicationsResponse {
 // --------------------------------------------------------------------------
 
 /** curve_kind — a backend Literal, closed on both sides. */
-export type DeskCurveKind = 'forward' | 'zero' | 'discount';
+export type DeskCurveKind = "forward" | "zero" | "discount";
 
 /** Which solved curve an instrument prices against (DeskCurveQuote.leg). */
-export type DeskCurveLeg = 'discount' | 'projection';
+export type DeskCurveLeg = "discount" | "projection";
 
 /** One governed curve-definition version (DeskCurveDefinitionRead). */
 export interface DeskCurveDefinition {
@@ -555,7 +560,7 @@ export interface DeskCurveDefinitionFields {
   roll_convention: string;
   extrapolation_rule: string;
   /** FC-6d distribution tier; omitted defaults to standard server-side. */
-  entitlement_tier?: 'core' | 'standard' | 'premium';
+  entitlement_tier?: "core" | "standard" | "premium";
   params?: Record<string, unknown>;
   change_rationale: string;
 }
@@ -646,14 +651,14 @@ export interface DeskCurveConstructResponse {
 // --------------------------------------------------------------------------
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT';
+  method?: "GET" | "POST" | "PUT";
   body?: unknown;
   /** Default true — set false for the unauthenticated health probe. */
   auth?: boolean;
 }
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: "application/json" };
 
   if (opts.auth !== false) {
     // Dev-token mode sends the bearer explicitly; workforce mode sends
@@ -663,21 +668,21 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     if (token) headers.Authorization = `Bearer ${token}`;
   }
   if (opts.body !== undefined) {
-    headers['Content-Type'] = 'application/json';
+    headers["Content-Type"] = "application/json";
   }
 
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
-      method: opts.method ?? 'GET',
+      method: opts.method ?? "GET",
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      cache: 'no-store',
+      cache: "no-store",
     });
   } catch (err) {
     throw new ApiError(
-      'network_error',
-      `Cannot reach the operator API at ${API_BASE} (${err instanceof Error ? err.message : 'fetch failed'}).`,
+      "network_error",
+      `Cannot reach the operator API at ${API_BASE} (${err instanceof Error ? err.message : "fetch failed"}).`,
       0,
     );
   }
@@ -689,14 +694,15 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       const body: unknown = await res.json();
       if (
         body &&
-        typeof body === 'object' &&
-        'error' in body &&
+        typeof body === "object" &&
+        "error" in body &&
         body.error &&
-        typeof body.error === 'object'
+        typeof body.error === "object"
       ) {
         const env = body.error as { code?: unknown; message?: unknown };
-        if (typeof env.code === 'string' && env.code) code = env.code;
-        if (typeof env.message === 'string' && env.message) message = env.message;
+        if (typeof env.code === "string" && env.code) code = env.code;
+        if (typeof env.message === "string" && env.message)
+          message = env.message;
       }
     } catch {
       // non-JSON error body — keep the http_<status> fallback
@@ -713,16 +719,19 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
 /** GET /operator/health — unauthenticated reachability probe. */
 export function getHealth(): Promise<HealthResponse> {
-  return request<HealthResponse>('/operator/health', { auth: false });
+  return request<HealthResponse>("/operator/health", { auth: false });
 }
 
 /** GET /operator/v1/tenants — all onboarded institutions. Also the token-verification call. */
 export function listTenants(): Promise<TenantsResponse> {
-  return request<TenantsResponse>('/operator/v1/tenants');
+  return request<TenantsResponse>("/operator/v1/tenants");
 }
 
 /** GET /operator/v1/tenants/{orgId}/activity?limit=N — recent activity for one org. */
-export function getTenantActivity(orgId: string, limit = 100): Promise<TenantActivityResponse> {
+export function getTenantActivity(
+  orgId: string,
+  limit = 100,
+): Promise<TenantActivityResponse> {
   return request<TenantActivityResponse>(
     `/operator/v1/tenants/${encodeURIComponent(orgId)}/activity?limit=${limit}`,
   );
@@ -730,7 +739,7 @@ export function getTenantActivity(orgId: string, limit = 100): Promise<TenantAct
 
 /** GET /operator/v1/data-engines — data-engine connections across all orgs. */
 export function listDataEngines(): Promise<DataEnginesResponse> {
-  return request<DataEnginesResponse>('/operator/v1/data-engines');
+  return request<DataEnginesResponse>("/operator/v1/data-engines");
 }
 
 /** GET /operator/v1/jobs — cross-tenant queue state and worker attribution. */
@@ -739,28 +748,37 @@ export function listOperatorJobs(
   status?: string,
 ): Promise<OperatorJobsResponse> {
   const params = new URLSearchParams({ limit: String(limit) });
-  if (status) params.set('status', status);
-  return request<OperatorJobsResponse>(`/operator/v1/jobs?${params.toString()}`);
+  if (status) params.set("status", status);
+  return request<OperatorJobsResponse>(
+    `/operator/v1/jobs?${params.toString()}`,
+  );
 }
 
 /** POST /operator/v1/tenants — run the provisioning saga. Returns the step record either way. */
-export function provisionTenant(body: ProvisionTenantRequest): Promise<ProvisionTenantResponse> {
-  return request<ProvisionTenantResponse>('/operator/v1/tenants', { method: 'POST', body });
+export function provisionTenant(
+  body: ProvisionTenantRequest,
+): Promise<ProvisionTenantResponse> {
+  return request<ProvisionTenantResponse>("/operator/v1/tenants", {
+    method: "POST",
+    body,
+  });
 }
 
 // --------------------------------------------------------------------------
 // Markets Desk endpoints (backend/app/operator/features/desk.py)
 // --------------------------------------------------------------------------
 
-const DESK = '/operator/v1/desk';
+const DESK = "/operator/v1/desk";
 
-function query(params: Record<string, string | number | boolean | undefined>): string {
+function query(
+  params: Record<string, string | number | boolean | undefined>,
+): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') search.set(key, String(value));
+    if (value !== undefined && value !== "") search.set(key, String(value));
   }
   const text = search.toString();
-  return text ? `?${text}` : '';
+  return text ? `?${text}` : "";
 }
 
 /** GET /desk/methodologies — the methodology register, optionally one code. */
@@ -776,7 +794,10 @@ export function listDeskMethodologies(
 export function createDeskMethodology(
   body: DeskMethodologyCreateRequest,
 ): Promise<DeskMethodology> {
-  return request<DeskMethodology>(`${DESK}/methodologies`, { method: 'POST', body });
+  return request<DeskMethodology>(`${DESK}/methodologies`, {
+    method: "POST",
+    body,
+  });
 }
 
 /**
@@ -784,7 +805,9 @@ export function createDeskMethodology(
  * AEQ-GHS-CURVES v1 draft. Approval still happens through Track 2.
  */
 export function ensureDefaultDeskMethodology(): Promise<DeskMethodology> {
-  return request<DeskMethodology>(`${DESK}/methodologies/ensure-default`, { method: 'POST' });
+  return request<DeskMethodology>(`${DESK}/methodologies/ensure-default`, {
+    method: "POST",
+  });
 }
 
 /** POST /desk/methodologies/{code}/versions — Track 2: draft version+1 with a rationale. 201. */
@@ -794,7 +817,7 @@ export function proposeDeskMethodologyVersion(
 ): Promise<DeskMethodology> {
   return request<DeskMethodology>(
     `${DESK}/methodologies/${encodeURIComponent(methodologyCode)}/versions`,
-    { method: 'POST', body },
+    { method: "POST", body },
   );
 }
 
@@ -809,7 +832,7 @@ export function approveDeskMethodologyVersion(
 ): Promise<DeskMethodology> {
   return request<DeskMethodology>(
     `${DESK}/methodologies/${encodeURIComponent(methodologyCode)}/versions/${version}/approve`,
-    { method: 'POST', body },
+    { method: "POST", body },
   );
 }
 
@@ -847,12 +870,19 @@ export function listDeskObservations(opts?: {
 export function createDeskObservation(
   body: DeskObservationCreateRequest,
 ): Promise<DeskObservation> {
-  return request<DeskObservation>(`${DESK}/observations`, { method: 'POST', body });
+  return request<DeskObservation>(`${DESK}/observations`, {
+    method: "POST",
+    body,
+  });
 }
 
 /** GET /desk/captures — raw source captures, newest first, optionally one source. */
-export function listDeskCaptures(sourceKey?: string): Promise<DeskCapturesResponse> {
-  return request<DeskCapturesResponse>(`${DESK}/captures${query({ source_key: sourceKey })}`);
+export function listDeskCaptures(
+  sourceKey?: string,
+): Promise<DeskCapturesResponse> {
+  return request<DeskCapturesResponse>(
+    `${DESK}/captures${query({ source_key: sourceKey })}`,
+  );
 }
 
 export interface DeskCaptureContentView {
@@ -954,12 +984,12 @@ export function listDeskEntitlements(opts: {
 
 export function grantDeskEntitlementTier(body: {
   organization_id: string;
-  tier: 'core' | 'standard' | 'premium';
+  tier: "core" | "standard" | "premium";
   effective_from: string;
   notes?: string;
 }): Promise<DeskEntitlementsResponse> {
   return request<DeskEntitlementsResponse>(`${DESK}/entitlements/grant-tier`, {
-    method: 'POST',
+    method: "POST",
     body,
   });
 }
@@ -976,7 +1006,7 @@ export function revokeDeskEntitlement(
 ): Promise<DeskEntitlement> {
   return request<DeskEntitlement>(
     `${DESK}/entitlements/${encodeURIComponent(entitlementId)}/revoke`,
-    { method: 'POST', body: { organization_id: organizationId } },
+    { method: "POST", body: { organization_id: organizationId } },
   );
 }
 
@@ -991,7 +1021,9 @@ export function listDeskDeterminations(opts?: {
 }
 
 /** GET /desk/determinations/{id} — one determination with snapshot, results, QA. */
-export function getDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+export function getDeskDetermination(
+  determinationId: string,
+): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}`,
   );
@@ -1001,7 +1033,7 @@ export function getDeskDetermination(determinationId: string): Promise<DeskDeter
 export interface DeskPackageCompletenessItem {
   series_code: string;
   required: boolean;
-  status: 'present' | 'stale' | 'missing' | string;
+  status: "present" | "stale" | "missing" | string;
   as_of_date: string | null;
   value: string | null;
   unit: string | null;
@@ -1051,7 +1083,7 @@ export interface DeskPackageView {
     series_code: string;
     as_of_date?: string;
     value?: string;
-    provenance: DeskPackageCompletenessItem['provenance'];
+    provenance: DeskPackageCompletenessItem["provenance"];
   }>;
   rates_qa_passed: boolean | null;
   curves_qa_passed: boolean | null;
@@ -1059,7 +1091,9 @@ export interface DeskPackageView {
 }
 
 /** GET /desk/determinations/{id}/package — Research Desk wizard payload. */
-export function getDeskDeterminationPackage(determinationId: string): Promise<DeskPackageView> {
+export function getDeskDeterminationPackage(
+  determinationId: string,
+): Promise<DeskPackageView> {
   return request<DeskPackageView>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}/package`,
   );
@@ -1073,14 +1107,19 @@ export function getDeskDeterminationPackage(determinationId: string): Promise<De
 export function createDeskDetermination(
   body: DeskDeterminationCreateRequest,
 ): Promise<DeskDetermination> {
-  return request<DeskDetermination>(`${DESK}/determinations`, { method: 'POST', body });
+  return request<DeskDetermination>(`${DESK}/determinations`, {
+    method: "POST",
+    body,
+  });
 }
 
 /** POST /desk/determinations/{id}/compute — run the §5 pipeline on a DRAFT (409 otherwise). */
-export function computeDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+export function computeDeskDetermination(
+  determinationId: string,
+): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}/compute`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1093,22 +1132,24 @@ export function putDeskResearchAdjustments(
   determinationId: string,
   adjustments: Array<{
     series_code: string;
-    kind: 'override' | 'additive_bps' | 'assumption_note';
+    kind: "override" | "additive_bps" | "assumption_note";
     value?: string | null;
     rationale?: string;
   }>,
 ): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}/adjustments`,
-    { method: 'PUT', body: { adjustments } },
+    { method: "PUT", body: { adjustments } },
   );
 }
 
 /** POST /desk/determinations/{id}/submit — maker step complete; draft -> pending_review. */
-export function submitDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+export function submitDeskDetermination(
+  determinationId: string,
+): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}/submit`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1117,10 +1158,12 @@ export function submitDeskDetermination(determinationId: string): Promise<DeskDe
  * reviewer is the preparer (maker-checker) or a hard QA gate failed
  * (qa_passed=false) — surface both as explicit UI states.
  */
-export function approveDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+export function approveDeskDetermination(
+  determinationId: string,
+): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}/approve`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1131,7 +1174,7 @@ export function rejectDeskDetermination(
 ): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}/reject`,
-    { method: 'POST', body: { reason } },
+    { method: "POST", body: { reason } },
   );
 }
 
@@ -1140,10 +1183,12 @@ export function rejectDeskDetermination(
  * the same COB date carrying supersedes_id; the published original is never
  * edited. Returns the new draft. 201.
  */
-export function supersedeDeskDetermination(determinationId: string): Promise<DeskDetermination> {
+export function supersedeDeskDetermination(
+  determinationId: string,
+): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}/supersede`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1152,10 +1197,12 @@ export function supersedeDeskDetermination(determinationId: string): Promise<Des
  * to every bank. Partial failure is the contract: the publication row records
  * a per-bank result either way, and re-publishing heals partial fan-outs.
  */
-export function publishDeskDetermination(determinationId: string): Promise<DeskPublication> {
+export function publishDeskDetermination(
+  determinationId: string,
+): Promise<DeskPublication> {
   return request<DeskPublication>(
     `${DESK}/determinations/${encodeURIComponent(determinationId)}/publish`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1177,7 +1224,7 @@ export function listDeskPublications(
 // constructed curve out through the existing determination seam.
 // --------------------------------------------------------------------------
 
-const CURVES = '/operator/v1/curves';
+const CURVES = "/operator/v1/curves";
 
 /** GET /curves/definitions — governed curve definitions, optionally one code. */
 export function listCurveDefinitions(
@@ -1192,7 +1239,10 @@ export function listCurveDefinitions(
 export function createCurveDefinition(
   body: DeskCurveDefinitionCreateRequest,
 ): Promise<DeskCurveDefinition> {
-  return request<DeskCurveDefinition>(`${CURVES}/definitions`, { method: 'POST', body });
+  return request<DeskCurveDefinition>(`${CURVES}/definitions`, {
+    method: "POST",
+    body,
+  });
 }
 
 /** POST /curves/definitions/{code}/versions — Track 2: draft version+1 with a rationale. 201. */
@@ -1202,7 +1252,7 @@ export function proposeCurveDefinitionVersion(
 ): Promise<DeskCurveDefinition> {
   return request<DeskCurveDefinition>(
     `${CURVES}/definitions/${encodeURIComponent(curveCode)}/versions`,
-    { method: 'POST', body },
+    { method: "POST", body },
   );
 }
 
@@ -1217,7 +1267,7 @@ export function approveCurveDefinitionVersion(
 ): Promise<DeskCurveDefinition> {
   return request<DeskCurveDefinition>(
     `${CURVES}/definitions/${encodeURIComponent(curveCode)}/versions/${version}/approve`,
-    { method: 'POST', body },
+    { method: "POST", body },
   );
 }
 
@@ -1230,7 +1280,10 @@ export function approveCurveDefinitionVersion(
 export function constructCurve(
   body: DeskCurveConstructRequest,
 ): Promise<DeskCurveConstructResponse> {
-  return request<DeskCurveConstructResponse>(`${CURVES}/construct`, { method: 'POST', body });
+  return request<DeskCurveConstructResponse>(`${CURVES}/construct`, {
+    method: "POST",
+    body,
+  });
 }
 
 /**
@@ -1242,17 +1295,22 @@ export function constructCurve(
 export function stageCurveDetermination(
   body: DeskCurveStageRequest,
 ): Promise<DeskDetermination> {
-  return request<DeskDetermination>(`${CURVES}/determinations`, { method: 'POST', body });
+  return request<DeskDetermination>(`${CURVES}/determinations`, {
+    method: "POST",
+    body,
+  });
 }
 
 /**
  * POST /curves/determinations/{id}/submit — maker step: draft -> pending_review.
  * The hard QA gate is enforced here (422 when a gate failed).
  */
-export function submitCurveDetermination(determinationId: string): Promise<DeskDetermination> {
+export function submitCurveDetermination(
+  determinationId: string,
+): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${CURVES}/determinations/${encodeURIComponent(determinationId)}/submit`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1260,10 +1318,12 @@ export function submitCurveDetermination(determinationId: string): Promise<DeskD
  * POST /curves/determinations/{id}/approve — checker step: pending_review ->
  * approved. Four-eyes: 422 when the approver is the preparer.
  */
-export function approveCurveDetermination(determinationId: string): Promise<DeskDetermination> {
+export function approveCurveDetermination(
+  determinationId: string,
+): Promise<DeskDetermination> {
   return request<DeskDetermination>(
     `${CURVES}/determinations/${encodeURIComponent(determinationId)}/approve`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1271,10 +1331,12 @@ export function approveCurveDetermination(determinationId: string): Promise<Desk
  * POST /curves/determinations/{id}/publish — publish step: only an APPROVED
  * determination fans out to golden copy. 409 before approval.
  */
-export function publishCurveDetermination(determinationId: string): Promise<DeskPublication> {
+export function publishCurveDetermination(
+  determinationId: string,
+): Promise<DeskPublication> {
   return request<DeskPublication>(
     `${CURVES}/determinations/${encodeURIComponent(determinationId)}/publish`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1282,10 +1344,10 @@ export function publishCurveDetermination(determinationId: string): Promise<Desk
 // FX-forward construction (operator FX-forward preview, FC-6b).
 // --------------------------------------------------------------------------
 
-const FX_FORWARD = '/operator/v1/fx-forward';
+const FX_FORWARD = "/operator/v1/fx-forward";
 
 export interface FxForwardLeg {
-  source: 'published';
+  source: "published";
   curve_code: string;
 }
 
@@ -1332,7 +1394,7 @@ export function constructFxForward(
   body: FxForwardConstructRequest,
 ): Promise<FxForwardConstructResponse> {
   return request<FxForwardConstructResponse>(`${FX_FORWARD}/construct`, {
-    method: 'POST',
+    method: "POST",
     body,
   });
 }
@@ -1353,7 +1415,7 @@ export function constructFxForward(
 // at the display edge, never store as a float.
 // --------------------------------------------------------------------------
 
-const OPERATING_ENVIRONMENT = '/operator/v1/operating-environment';
+const OPERATING_ENVIRONMENT = "/operator/v1/operating-environment";
 
 /**
  * The observable inputs for one jurisdiction / COB. The twelve economic +
@@ -1505,10 +1567,13 @@ export interface OperatingEnvironmentPublishResult {
 export function computeOperatingEnvironmentPreview(
   body: OperatingEnvironmentComputeRequest,
 ): Promise<OperatingEnvironmentPreview> {
-  return request<OperatingEnvironmentPreview>(`${OPERATING_ENVIRONMENT}/compute-preview`, {
-    method: 'POST',
-    body,
-  });
+  return request<OperatingEnvironmentPreview>(
+    `${OPERATING_ENVIRONMENT}/compute-preview`,
+    {
+      method: "POST",
+      body,
+    },
+  );
 }
 
 /**
@@ -1519,10 +1584,13 @@ export function computeOperatingEnvironmentPreview(
 export function stageOperatingEnvironmentAssessment(
   body: OperatingEnvironmentComputeRequest,
 ): Promise<OperatingEnvironmentAssessment> {
-  return request<OperatingEnvironmentAssessment>(`${OPERATING_ENVIRONMENT}/assessments`, {
-    method: 'POST',
-    body,
-  });
+  return request<OperatingEnvironmentAssessment>(
+    `${OPERATING_ENVIRONMENT}/assessments`,
+    {
+      method: "POST",
+      body,
+    },
+  );
 }
 
 /** GET /operating-environment/assessments — newest COB first, optional filters. */
@@ -1553,7 +1621,7 @@ export function submitOperatingEnvironmentAssessment(
 ): Promise<OperatingEnvironmentAssessment> {
   return request<OperatingEnvironmentAssessment>(
     `${OPERATING_ENVIRONMENT}/assessments/${encodeURIComponent(assessmentId)}/submit`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1566,7 +1634,7 @@ export function approveOperatingEnvironmentAssessment(
 ): Promise<OperatingEnvironmentAssessment> {
   return request<OperatingEnvironmentAssessment>(
     `${OPERATING_ENVIRONMENT}/assessments/${encodeURIComponent(assessmentId)}/approve`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1580,7 +1648,7 @@ export function publishOperatingEnvironmentAssessment(
 ): Promise<OperatingEnvironmentPublishResult> {
   return request<OperatingEnvironmentPublishResult>(
     `${OPERATING_ENVIRONMENT}/assessments/${encodeURIComponent(assessmentId)}/publish`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -1591,7 +1659,7 @@ export function publishOperatingEnvironmentAssessment(
 // the agreed contract; the BACKEND agent builds these routes to match.
 // --------------------------------------------------------------------------
 
-const OPERATORS = '/operator/v1/operators';
+const OPERATORS = "/operator/v1/operators";
 
 export interface OperatorUser {
   email: string;
@@ -1634,8 +1702,11 @@ export async function createOperator(body: {
   role: string;
 }): Promise<OperatorCreateResult> {
   // Backend returns nested {operator, one_time_password}; flatten for the UI.
-  const r = await request<{ operator: OperatorUser; one_time_password: string }>(OPERATORS, {
-    method: 'POST',
+  const r = await request<{
+    operator: OperatorUser;
+    one_time_password: string;
+  }>(OPERATORS, {
+    method: "POST",
     body,
   });
   return { ...r.operator, one_time_password: r.one_time_password };
@@ -1646,25 +1717,33 @@ export async function resetOperatorPassword(
   email: string,
 ): Promise<OperatorPasswordResetResult> {
   // Backend returns nested {operator, one_time_password}; flatten for the UI.
-  const r = await request<{ operator: OperatorUser; one_time_password: string }>(
-    `${OPERATORS}/${encodeURIComponent(email)}/reset-password`,
-    { method: 'POST' },
-  );
+  const r = await request<{
+    operator: OperatorUser;
+    one_time_password: string;
+  }>(`${OPERATORS}/${encodeURIComponent(email)}/reset-password`, {
+    method: "POST",
+  });
   return { email: r.operator.email, one_time_password: r.one_time_password };
 }
 
 /** POST /operator/v1/operators/{email}/deactivate — disable sign-in for an operator. */
 export function deactivateOperator(email: string): Promise<OperatorUser> {
-  return request<OperatorUser>(`${OPERATORS}/${encodeURIComponent(email)}/deactivate`, {
-    method: 'POST',
-  });
+  return request<OperatorUser>(
+    `${OPERATORS}/${encodeURIComponent(email)}/deactivate`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 /** POST /operator/v1/operators/{email}/reactivate — re-enable a deactivated operator. */
 export function reactivateOperator(email: string): Promise<OperatorUser> {
-  return request<OperatorUser>(`${OPERATORS}/${encodeURIComponent(email)}/reactivate`, {
-    method: 'POST',
-  });
+  return request<OperatorUser>(
+    `${OPERATORS}/${encodeURIComponent(email)}/reactivate`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 // --------------------------------------------------------------------------
@@ -1680,13 +1759,13 @@ export function reactivateOperator(email: string): Promise<OperatorUser> {
 // backend/app/schemas/operator.py on 2026-08-20.
 // --------------------------------------------------------------------------
 
-const REGULATORY_PARAMETERS = '/operator/v1/regulatory-parameters';
+const REGULATORY_PARAMETERS = "/operator/v1/regulatory-parameters";
 
 /** One effective-dated generation of a regulatory parameter, with provenance. */
 export interface RegulatoryParameter {
   id: string;
   /** Which key space this row lives in (coarse class vs specific licence code). */
-  scope_type: 'institution_class' | 'institution_type';
+  scope_type: "institution_class" | "institution_type";
   /** The class ("bank"/"sdi") or type code ("savings_and_loans" …) the value binds to. */
   scope_key: string;
   param_code: string;
@@ -1703,11 +1782,11 @@ export interface RegulatoryParameter {
    * regulator whose confirmation is outstanding follows from `jurisdiction_code`
    * and must never be named as a literal in display code.
    */
-  confirmation_status: 'confirmed' | 'pending';
+  confirmation_status: "confirmed" | "pending";
   effective_from: string; // date
   effective_to: string | null; // date; set when a later generation supersedes this one
   // draft -> approved. Only approved rows are visible to the calculation resolver.
-  status: 'draft' | 'approved';
+  status: "draft" | "approved";
   proposed_by: string;
   approved_by: string | null;
   approved_at: string | null;
@@ -1723,7 +1802,7 @@ export interface RegulatoryParametersResponse {
 
 /** Maker step body — propose a new effective-dated generation (lands as `draft`). */
 export interface RegulatoryParameterProposeRequest {
-  scope_type: 'institution_class' | 'institution_type';
+  scope_type: "institution_class" | "institution_type";
   scope_key: string;
   param_code: string;
   /**
@@ -1737,7 +1816,7 @@ export interface RegulatoryParameterProposeRequest {
   value_numeric: string;
   unit: string;
   source_citation: string;
-  confirmation_status: 'confirmed' | 'pending';
+  confirmation_status: "confirmed" | "pending";
   effective_from: string; // date
   change_rationale: string;
 }
@@ -1769,7 +1848,10 @@ export function listRegulatoryParameters(params?: {
 export function proposeRegulatoryParameter(
   body: RegulatoryParameterProposeRequest,
 ): Promise<RegulatoryParameter> {
-  return request<RegulatoryParameter>(REGULATORY_PARAMETERS, { method: 'POST', body });
+  return request<RegulatoryParameter>(REGULATORY_PARAMETERS, {
+    method: "POST",
+    body,
+  });
 }
 
 /**
@@ -1782,7 +1864,7 @@ export function approveRegulatoryParameter(
 ): Promise<RegulatoryParameter> {
   return request<RegulatoryParameter>(
     `${REGULATORY_PARAMETERS}/${encodeURIComponent(id)}/approve`,
-    { method: 'POST', body },
+    { method: "POST", body },
   );
 }
 
@@ -1819,7 +1901,7 @@ export interface OverviewResponse {
 
 /** GET /operator/v1/overview — the home cockpit rollup. */
 export function getOverview(): Promise<OverviewResponse> {
-  return request<OverviewResponse>('/operator/v1/overview');
+  return request<OverviewResponse>("/operator/v1/overview");
 }
 
 export interface AuditLogItem {
@@ -1867,7 +1949,9 @@ export function getAudit(opts?: {
 
 /** GET /operator/v1/tenants/{org_id} — one tenant (same shape as a list row). */
 export function getTenant(orgId: string): Promise<OperatorTenant> {
-  return request<OperatorTenant>(`/operator/v1/tenants/${encodeURIComponent(orgId)}`);
+  return request<OperatorTenant>(
+    `/operator/v1/tenants/${encodeURIComponent(orgId)}`,
+  );
 }
 
 export interface TenantUser {
@@ -1893,11 +1977,13 @@ export function getTenantUsers(orgId: string): Promise<TenantUsersResponse> {
 
 export interface TenantEntitlementsResponse {
   entitlements: DeskEntitlement[];
-  catalog: DeskEntitlementsResponse['catalog'];
+  catalog: DeskEntitlementsResponse["catalog"];
 }
 
 /** GET /operator/v1/tenants/{org_id}/entitlements — desk entitlements + catalog. */
-export function getTenantEntitlements(orgId: string): Promise<TenantEntitlementsResponse> {
+export function getTenantEntitlements(
+  orgId: string,
+): Promise<TenantEntitlementsResponse> {
   return request<TenantEntitlementsResponse>(
     `/operator/v1/tenants/${encodeURIComponent(orgId)}/entitlements`,
   );
@@ -1913,7 +1999,9 @@ export interface TenantStorageResponse {
 }
 
 /** GET /operator/v1/tenants/{org_id}/storage — object-store footprint + KMS state. */
-export function getTenantStorage(orgId: string): Promise<TenantStorageResponse> {
+export function getTenantStorage(
+  orgId: string,
+): Promise<TenantStorageResponse> {
   return request<TenantStorageResponse>(
     `/operator/v1/tenants/${encodeURIComponent(orgId)}/storage`,
   );
@@ -1963,7 +2051,9 @@ export interface TenantMetricsResponse {
 }
 
 /** GET /operator/v1/tenants/{org_id}/metrics — computed module outputs. Session-gated. */
-export function getTenantMetrics(orgId: string): Promise<TenantMetricsResponse> {
+export function getTenantMetrics(
+  orgId: string,
+): Promise<TenantMetricsResponse> {
   return request<TenantMetricsResponse>(
     `/operator/v1/tenants/${encodeURIComponent(orgId)}/metrics`,
   );
@@ -1989,7 +2079,10 @@ export interface TenantFindingsResponse {
 }
 
 /** GET /operator/v1/tenants/{org_id}/findings?limit=N — live findings/alerts. Session-gated. */
-export function getTenantFindings(orgId: string, limit = 100): Promise<TenantFindingsResponse> {
+export function getTenantFindings(
+  orgId: string,
+  limit = 100,
+): Promise<TenantFindingsResponse> {
   return request<TenantFindingsResponse>(
     `/operator/v1/tenants/${encodeURIComponent(orgId)}/findings${query({ limit })}`,
   );
@@ -2124,9 +2217,10 @@ export interface TenantSsoConfig {
 
 /** Integration-key metadata only — the SHA-256 hash and raw key are NEVER returned. */
 export interface TenantIntegrationKey {
+  bank_id: string | null;
   label: string;
   key_prefix: string;
-  status: 'active' | 'revoked';
+  status: "active" | "revoked";
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;
@@ -2156,13 +2250,13 @@ export function getTenantConfig(orgId: string): Promise<TenantConfigResponse> {
 // un-dismissable banner (see lib/inspector.tsx).
 // --------------------------------------------------------------------------
 
-const INSPECTOR = '/operator/v1/inspector/sessions';
+const INSPECTOR = "/operator/v1/inspector/sessions";
 
 // Backend `OPERATOR_INSPECTOR_MODES`: `consent` = routine access with the
 // tenant's knowledge; `break_glass` = emergency, admin-gated access without
 // consent. Both are READ-ONLY this wave (the session's `read_only` is always
 // true); the mode is the access-justification, not a write grant.
-export type InspectorMode = 'consent' | 'break_glass';
+export type InspectorMode = "consent" | "break_glass";
 
 export interface InspectorSession {
   session_id: string;
@@ -2189,7 +2283,7 @@ export function startInspectorSession(body: {
   mode: InspectorMode;
   ttl_minutes: number;
 }): Promise<InspectorSession> {
-  return request<InspectorSession>(INSPECTOR, { method: 'POST', body });
+  return request<InspectorSession>(INSPECTOR, { method: "POST", body });
 }
 
 /** GET /operator/v1/inspector/sessions — sessions, optionally only active / one org. */
@@ -2208,10 +2302,12 @@ export function listInspectorSessions(opts?: {
 }
 
 /** POST /operator/v1/inspector/sessions/{id}/end — end a session early. */
-export function endInspectorSession(sessionId: string): Promise<InspectorSession> {
+export function endInspectorSession(
+  sessionId: string,
+): Promise<InspectorSession> {
   return request<InspectorSession>(
     `${INSPECTOR}/${encodeURIComponent(sessionId)}/end`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -2233,10 +2329,12 @@ export interface InspectorActToken {
  * configured on this environment; 404 unknown session; 403 non-owner; 409 the
  * session has ended or expired.
  */
-export function mintInspectorActToken(sessionId: string): Promise<InspectorActToken> {
+export function mintInspectorActToken(
+  sessionId: string,
+): Promise<InspectorActToken> {
   return request<InspectorActToken>(
     `${INSPECTOR}/${encodeURIComponent(sessionId)}/act-token`,
-    { method: 'POST' },
+    { method: "POST" },
   );
 }
 
@@ -2251,7 +2349,7 @@ export function grantDeskEntitlementDataset(body: {
   notes?: string;
 }): Promise<DeskEntitlement> {
   return request<DeskEntitlement>(`${DESK}/entitlements/grant-dataset`, {
-    method: 'POST',
+    method: "POST",
     body,
   });
 }
@@ -2294,8 +2392,14 @@ export interface TenantFixJob {
 }
 
 /** POST …/fix/recompute — re-derive this bank's live metrics (debounced pipeline_refresh). */
-export function fixRecompute(orgId: string, body: { note: string }): Promise<TenantFixJob> {
-  return request<TenantFixJob>(`${tenantFix(orgId)}/recompute`, { method: 'POST', body });
+export function fixRecompute(
+  orgId: string,
+  body: { note: string },
+): Promise<TenantFixJob> {
+  return request<TenantFixJob>(`${tenantFix(orgId)}/recompute`, {
+    method: "POST",
+    body,
+  });
 }
 
 /** POST …/fix/official-run — mint an immutable official run (optional as-of date). */
@@ -2303,7 +2407,10 @@ export function fixOfficialRun(
   orgId: string,
   body: { as_of_date?: string; note: string },
 ): Promise<TenantFixJob> {
-  return request<TenantFixJob>(`${tenantFix(orgId)}/official-run`, { method: 'POST', body });
+  return request<TenantFixJob>(`${tenantFix(orgId)}/official-run`, {
+    method: "POST",
+    body,
+  });
 }
 
 /** POST …/fix/rerun-ingestion — re-run one ingestion batch by id (the failed-upload fix). */
@@ -2311,11 +2418,14 @@ export function fixRerunIngestion(
   orgId: string,
   body: { batch_id: string; note: string },
 ): Promise<TenantFixJob> {
-  return request<TenantFixJob>(`${tenantFix(orgId)}/rerun-ingestion`, { method: 'POST', body });
+  return request<TenantFixJob>(`${tenantFix(orgId)}/rerun-ingestion`, {
+    method: "POST",
+    body,
+  });
 }
 
 /** The two config surfaces a fix may touch (backend Literal — closed on both sides). */
-export type TenantFixConfigKind = 'mapping_active' | 'threshold_value';
+export type TenantFixConfigKind = "mapping_active" | "threshold_value";
 
 export interface TenantFixConfigRequest {
   kind: TenantFixConfigKind;
@@ -2344,7 +2454,10 @@ export function fixConfig(
   orgId: string,
   body: TenantFixConfigRequest,
 ): Promise<TenantFixConfigResult> {
-  return request<TenantFixConfigResult>(`${tenantFix(orgId)}/config`, { method: 'POST', body });
+  return request<TenantFixConfigResult>(`${tenantFix(orgId)}/config`, {
+    method: "POST",
+    body,
+  });
 }
 
 // --------------------------------------------------------------------------
@@ -2362,17 +2475,17 @@ export interface WorkforceSession {
   email: string | null;
   expires_at: string | null;
   /** Which sign-in produced the cookie session; null when unauthenticated. */
-  mode: 'password' | 'oidc' | null;
+  mode: "password" | "oidc" | null;
 }
 
 async function consoleJson<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(path, { cache: 'no-store', ...init });
+    res = await fetch(path, { cache: "no-store", ...init });
   } catch (err) {
     throw new ApiError(
-      'network_error',
-      err instanceof Error ? err.message : 'fetch failed',
+      "network_error",
+      err instanceof Error ? err.message : "fetch failed",
       0,
     );
   }
@@ -2385,14 +2498,15 @@ async function consoleJson<T>(path: string, init?: RequestInit): Promise<T> {
       const body: unknown = await res.json();
       if (
         body &&
-        typeof body === 'object' &&
-        'error' in body &&
+        typeof body === "object" &&
+        "error" in body &&
         body.error &&
-        typeof body.error === 'object'
+        typeof body.error === "object"
       ) {
         const env = body.error as { code?: unknown; message?: unknown };
-        if (typeof env.code === 'string' && env.code) code = env.code;
-        if (typeof env.message === 'string' && env.message) message = env.message;
+        if (typeof env.code === "string" && env.code) code = env.code;
+        if (typeof env.message === "string" && env.message)
+          message = env.message;
       }
     } catch {
       // non-JSON error body — keep the http_<status> fallback
@@ -2414,25 +2528,28 @@ export interface PasswordLoginResult {
  * operator API server-side and sets the HttpOnly op_session cookie — the
  * browser never holds the operator JWT.
  */
-export function passwordLogin(email: string, password: string): Promise<PasswordLoginResult> {
-  return consoleJson<PasswordLoginResult>('/api/auth/password-login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export function passwordLogin(
+  email: string,
+  password: string,
+): Promise<PasswordLoginResult> {
+  return consoleJson<PasswordLoginResult>("/api/auth/password-login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
 }
 
 /** Which sign-in methods this deployment offers + the API host for badges. */
 export function getAuthConfig(): Promise<AuthConfig> {
-  return consoleJson<AuthConfig>('/api/auth/config');
+  return consoleJson<AuthConfig>("/api/auth/config");
 }
 
 /** The current workforce OIDC session, if any (dev sessions are sessionStorage-only). */
 export function getWorkforceSession(): Promise<WorkforceSession> {
-  return consoleJson<WorkforceSession>('/api/auth/session');
+  return consoleJson<WorkforceSession>("/api/auth/session");
 }
 
 /** End the workforce session (clears the HttpOnly cookie). */
 export function workforceLogout(): Promise<{ ok: boolean }> {
-  return consoleJson<{ ok: boolean }>('/api/auth/logout', { method: 'POST' });
+  return consoleJson<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
 }

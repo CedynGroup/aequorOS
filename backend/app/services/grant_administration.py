@@ -505,6 +505,10 @@ def revoke_scoped_grant(  # noqa: PLR0913 - complete actor and target context is
         raise GrantAdministrationError(
             "organization ownership cannot be revoked from the Members grant flow"
         )
+    if binding.role_bundle == RoleBundle.INTEGRATION_WRITER.value:
+        raise GrantAdministrationError(
+            "integration-writer authority must be revoked with its integration key"
+        )
     if binding.status != BindingStatus.ACTIVE.value:
         raise GrantAdministrationError("only an active scoped grant can be revoked")
 

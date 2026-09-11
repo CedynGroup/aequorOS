@@ -33,6 +33,10 @@ class TenantContext:
     # before their role claims are accepted. Integration keys and impersonation
     # use separate credential lifecycles and leave this unset.
     authorization_version: int | None = None
+    # Present only for the integration-key credential branch. A legacy key has
+    # no bank target and therefore cannot satisfy machine ingest authorization.
+    integration_key_id: UUID | None = None
+    integration_key_bank_id: str | None = None
     # Set ONLY under operator act-as-examiner impersonation: the originating
     # inspector session id. Its presence marks the principal as a read-only
     # operator view (actor_user_id is None — the actor is staff, not a tenant
@@ -45,6 +49,12 @@ class TenantContext:
 
 @dataclass(frozen=True)
 class LiquidityMonitoringAccess:
+    ctx: TenantContext
+    bank: Bank
+
+
+@dataclass(frozen=True)
+class IntegrationPushAccess:
     ctx: TenantContext
     bank: Bank
 
@@ -69,6 +79,15 @@ IMPERSONATION_READ_ONLY_ROUTES: frozenset[tuple[str, str]] = frozenset(
         # documented and verified as "Writes nothing." Saving an analysis is a
         # SEPARATE route (…/analyses) and is analyst-gated.
         ("POST", "/api/v1/banks/{bank_id}/scenario-workbench/{module}/analysis"),
+    }
+)
+
+INTEGRATION_KEY_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("POST", "/api/v1/banks/{bank_id}/push-batches"),
+        ("POST", "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/records"),
+        ("POST", "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/commit"),
+        ("GET", "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}"),
     }
 )
 
@@ -118,6 +137,21 @@ def get_current_principal(
     authenticated route, before any handler or narrower ``ctx`` dependency runs.
     """
     principal = _authenticate_principal(credentials)
+    if principal.integration_key_id is not None:
+        route_path = getattr(request.scope.get("route"), "path", None)
+        if (request.method.upper(), route_path) not in INTEGRATION_KEY_ROUTES:
+            authorization_denied(
+                reason="integration_key_route_not_allowed",
+                method=request.method.upper(),
+                route=route_path,
+                organization_id=principal.organization_id,
+                integration_key_id=str(principal.integration_key_id),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Integration keys are valid only for API Push.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     if principal.authorization_version is not None:
         session = get_sessionmaker()()
         session.info["organization_id"] = principal.organization_id
@@ -236,36 +270,13 @@ def require_role(minimum: str):  # noqa: ANN201 - returns a FastAPI dependency c
     return _dependency
 
 
-def require_integration_key_issuance_compatibility(
-    ctx: Annotated[TenantContext, Depends(get_current_principal)],
-) -> TenantContext:
-    """Compatibility gate for organization-wide integration-key issuance.
-
-    Key issuance remains organization-scoped until the bank-scoped machine
-    principal contract can require an exact institution target. List and revoke
-    use the scoped Account authority dependencies below.
-    """
-    if not set(ctx.roles) & {security.ADMIN_ROLE, security.ACCOUNT_ADMIN_ROLE}:
-        authorization_denied(
-            reason="insufficient_role",
-            required_role=security.ACCOUNT_ADMIN_ROLE,
-            held_roles=",".join(ctx.roles),
-            organization_id=ctx.organization_id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This action requires account-administration authority.",
-        )
-    return ctx
-
-
 # Dependencies that make a route a guarded mutation. ``examiner``/``viewer``
 # remain read roles; scoped Account administration and the explicit
 # mutation-role dependencies are the recognized write gates.
 MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
     {
         "require_account_administration",
-        "require_integration_key_issuance_compatibility",
+        "require_integration_push_ingest",
         "require_grant_administration",
         "require_role_admin",
         "require_role_approver",
@@ -671,6 +682,116 @@ def require_liquidity_monitoring_view(
     return LiquidityMonitoringAccess(ctx=ctx, bank=bank)
 
 
+def require_integration_push_ingest(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> IntegrationPushAccess:
+    """Require one exact active machine DATA/restricted ingest binding."""
+
+    from app.core.authorization import (  # noqa: PLC0415 - avoid deps/service cycle
+        InstitutionScope,
+        Module,
+        Permission,
+        PrincipalLocator,
+        PrincipalType,
+        ResourceLocator,
+        Sensitivity,
+    )
+    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.services import integration_keys  # noqa: PLC0415
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    requested_bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    if ctx.actor_user_id is None or ctx.authorization_version is not None:
+        authorization_denied(
+            reason="integration_push_machine_binding_required",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id) if ctx.actor_user_id is not None else None,
+            bank_id=requested_bank_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API Push requires a bank-scoped integration key.",
+        )
+    if ctx.integration_key_bank_id != requested_bank_id:
+        cross_tenant_attempt(
+            reason="integration_key_bank_mismatch",
+            organization_id=ctx.organization_id,
+            bank_id=requested_bank_id,
+            credential_bank_id=ctx.integration_key_bank_id,
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+
+    # Locking the key serializes this request with revocation. The lock remains
+    # held through the route's service commit, so a key cannot be revoked after
+    # authorization but before its storage/database mutation completes.
+    integration_keys.lock_authenticated_key(db, ctx)
+    bank = db.scalar(
+        select(Bank).where(
+            Bank.id == requested_bank_id,
+            Bank.organization_id == ctx.organization_id,
+        )
+    )
+    if bank is None:
+        cross_tenant_attempt(
+            reason="bank_not_visible_to_integration_key",
+            organization_id=ctx.organization_id,
+            bank_id=requested_bank_id,
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+
+    principal = PrincipalLocator(
+        ctx.organization_id,
+        ctx.actor_user_id,
+        PrincipalType.MACHINE,
+    )
+    resource = ResourceLocator(
+        ctx.organization_id,
+        InstitutionScope.INSTITUTION,
+        bank.id,
+        Module.DATA,
+        Sensitivity.RESTRICTED,
+    )
+    try:
+        decision = authorization_service.evaluate_permission(
+            db,
+            principal,
+            Permission.INGEST,
+            resource,
+        )
+        authorization_service.record_binding_decision(
+            decision,
+            surface="integration_push",
+            severity="info" if decision.allowed else "warning",
+        )
+    except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
+        authorization_service.record_binding_evaluation_failure(
+            principal,
+            Permission.INGEST,
+            resource,
+            surface="integration_push",
+            error=exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API Push requires an active bank-scoped machine binding.",
+        ) from exc
+    if not decision.allowed:
+        authorization_denied(
+            reason=decision.reason,
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            bank_id=bank.id,
+            module=Module.DATA.value,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API Push requires an active bank-scoped machine binding.",
+        )
+    return IntegrationPushAccess(ctx=ctx, bank=bank)
+
+
 def get_approver_tenant_context(
     principal: Annotated[TenantContext, Depends(get_mutation_tenant_context)],
 ) -> TenantContext:
@@ -702,6 +823,7 @@ GrantAdminTenant = Annotated[TenantContext, Depends(require_grant_administration
 LiquidityMonitoringResource = Annotated[
     LiquidityMonitoringAccess, Depends(require_liquidity_monitoring_view)
 ]
+IntegrationPushResource = Annotated[IntegrationPushAccess, Depends(require_integration_push_ingest)]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 
 

@@ -122,7 +122,7 @@ def open_push_batch(
             "reason": payload.reason,
         },
     )
-    db.commit()
+    db.flush()
     return _status_read(manifest)
 
 
@@ -180,7 +180,7 @@ def stage_push_records(  # noqa: PLR0913 - mirrors record_event's shape
         entity_id=push_batch_id,
         details={"page": page_number, "records": page.record_count},
     )
-    db.commit()
+    db.flush()
     return _status_read(manifest)
 
 
@@ -222,6 +222,7 @@ def commit_push_batch(
             reason=manifest["reason"],
         ),
         storage,
+        commit=False,
     )
 
     manifest["status"] = "committed"
@@ -239,7 +240,7 @@ def commit_push_batch(
             "reused": started.reused,
         },
     )
-    db.commit()
+    db.flush()
     return started
 
 
@@ -314,6 +315,7 @@ def _ensure_active_mapping(db: Session, ctx: TenantContext, bank: Bank) -> None:
                 "canonical field names (identity mapping)."
             ),
         ),
+        commit=False,
     )
 
 
