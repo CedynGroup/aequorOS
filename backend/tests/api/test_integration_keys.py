@@ -142,6 +142,30 @@ def _open(client: TestClient, bank_id: str, bearer: dict[str, str]):
     )
 
 
+def _stage_minimal(
+    client: TestClient,
+    bank_id: str,
+    push_id: str,
+    bearer: dict[str, str],
+):
+    return client.post(
+        f"/api/v1/banks/{bank_id}/push-batches/{push_id}/records",
+        headers=bearer,
+        json={
+            "entities": {
+                "gl_account": [
+                    {
+                        "source_reference": "1000",
+                        "account_code": "1000",
+                        "name": "Cash",
+                        "account_class": "ASSET",
+                    }
+                ]
+            }
+        },
+    )
+
+
 @pytest.mark.parametrize("role_bundle", [RoleBundle.ACCOUNT_ADMIN, RoleBundle.ORG_OWNER])
 def test_scoped_account_authority_issues_exact_machine_binding(
     db_client: TestClient,
@@ -287,6 +311,80 @@ def test_all_push_routes_require_and_accept_the_issued_machine(
         headers=bearer,
     )
     assert committed.status_code == 201, committed.text
+
+
+def test_first_commit_keeps_one_transaction_through_ingestion(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_bank(db_client)
+    issued = _issue(db_client)
+    bearer = _bearer(issued)
+    opened = _open(db_client, SAMPLE_BANK_ID, bearer)
+    assert opened.status_code == 201, opened.text
+    push_id = opened.json()["push_batch_id"]
+    staged = _stage_minimal(db_client, SAMPLE_BANK_ID, push_id, bearer)
+    assert staged.status_code == 200, staged.text
+
+    commits: list[Session] = []
+    original_commit = Session.commit
+
+    def tracked_commit(session: Session) -> None:
+        commits.append(session)
+        original_commit(session)
+
+    monkeypatch.setattr(Session, "commit", tracked_commit)
+    response = db_client.post(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/push-batches/{push_id}/commit",
+        headers=bearer,
+    )
+
+    assert response.status_code == 201, response.text
+    assert len(commits) == 1
+
+
+def test_idempotent_open_and_recommit_persist_last_used(
+    db_client: TestClient,
+) -> None:
+    seed_bank(db_client)
+    issued = _issue(db_client)
+    bearer = _bearer(issued)
+    key_id = UUID(issued["record"]["id"])
+    opened = _open(db_client, SAMPLE_BANK_ID, bearer)
+    assert opened.status_code == 201, opened.text
+    push_id = opened.json()["push_batch_id"]
+    staged = _stage_minimal(db_client, SAMPLE_BANK_ID, push_id, bearer)
+    assert staged.status_code == 200, staged.text
+    committed = db_client.post(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/push-batches/{push_id}/commit",
+        headers=bearer,
+    )
+    assert committed.status_code == 201, committed.text
+
+    with _session() as db:
+        key = db.get(IntegrationKey, key_id)
+        assert key is not None
+        key.last_used_at = None
+        db.commit()
+    reopened = _open(db_client, SAMPLE_BANK_ID, bearer)
+    assert reopened.status_code == 201, reopened.text
+    with _session() as db:
+        key = db.get(IntegrationKey, key_id)
+        assert key is not None
+        assert key.last_used_at is not None
+        key.last_used_at = None
+        db.commit()
+
+    recommitted = db_client.post(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/push-batches/{push_id}/commit",
+        headers=bearer,
+    )
+    assert recommitted.status_code == 201, recommitted.text
+    assert recommitted.json()["reused"] is True
+    with _session() as db:
+        key = db.get(IntegrationKey, key_id)
+        assert key is not None
+        assert key.last_used_at is not None
 
 
 def test_integration_key_cannot_read_ordinary_tenant_data(

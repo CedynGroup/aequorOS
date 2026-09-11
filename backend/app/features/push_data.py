@@ -44,13 +44,15 @@ def open_push_batch(
     access: IntegrationPushResource,
     storage: IngestionStorage,
 ) -> PushBatchStatusRead:
-    return push_ingestion.open_push_batch(
+    result = push_ingestion.open_push_batch(
         db,
         access.ctx,
         access.bank.id,
         payload,
         storage,
     )
+    db.commit()
+    return result
 
 
 @router.post(
@@ -66,7 +68,7 @@ def stage_push_batch_records(  # noqa: PLR0913 - mirrors the other ingestion rou
     access: IntegrationPushResource,
     storage: IngestionStorage,
 ) -> PushBatchStatusRead:
-    return push_ingestion.stage_push_records(
+    result = push_ingestion.stage_push_records(
         db,
         access.ctx,
         access.bank.id,
@@ -74,6 +76,8 @@ def stage_push_batch_records(  # noqa: PLR0913 - mirrors the other ingestion rou
         payload,
         storage,
     )
+    db.commit()
+    return result
 
 
 @router.post(
@@ -89,13 +93,15 @@ def commit_push_batch(
     access: IntegrationPushResource,
     storage: IngestionStorage,
 ) -> IngestionBatchStartRead:
-    return push_ingestion.commit_push_batch(
+    result = push_ingestion.commit_push_batch(
         db,
         access.ctx,
         access.bank.id,
         push_batch_id,
         storage,
     )
+    db.commit()
+    return result
 
 
 @router.get(
