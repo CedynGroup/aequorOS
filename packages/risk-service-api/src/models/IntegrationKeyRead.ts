@@ -25,6 +25,13 @@ import {
   LastUsedAtToJSON,
   LastUsedAtToJSONTyped,
 } from "./LastUsedAt";
+import type { IntegrationKeyBankID } from "./IntegrationKeyBankID";
+import {
+  IntegrationKeyBankIDFromJSON,
+  IntegrationKeyBankIDFromJSONTyped,
+  IntegrationKeyBankIDToJSON,
+  IntegrationKeyBankIDToJSONTyped,
+} from "./IntegrationKeyBankID";
 import type { RevokedAt } from "./RevokedAt";
 import {
   RevokedAtFromJSON,
@@ -39,6 +46,12 @@ import {
  * @interface IntegrationKeyRead
  */
 export interface IntegrationKeyRead {
+  /**
+   *
+   * @type {IntegrationKeyBankID}
+   * @memberof IntegrationKeyRead
+   */
+  bankId: IntegrationKeyBankID;
   /**
    *
    * @type {Date}
@@ -89,6 +102,7 @@ export interface IntegrationKeyRead {
 export function instanceOfIntegrationKeyRead(
   value: object,
 ): value is IntegrationKeyRead {
+  if (!("bankId" in value) || value["bankId"] === undefined) return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("createdBy" in value) || value["createdBy"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
@@ -113,6 +127,7 @@ export function IntegrationKeyReadFromJSONTyped(
   }
   return {
     ...json,
+    bankId: IntegrationKeyBankIDFromJSON(json["bank_id"]),
     createdAt: new Date(json["created_at"]),
     createdBy: CreatedByFromJSON(json["created_by"]),
     id: json["id"],
@@ -136,6 +151,7 @@ export function IntegrationKeyReadToJSONTyped(
   }
 
   return {
+    bank_id: IntegrationKeyBankIDToJSON(value["bankId"]),
     created_at: value["createdAt"].toISOString(),
     created_by: CreatedByToJSON(value["createdBy"]),
     id: value["id"],

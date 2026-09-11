@@ -22,10 +22,18 @@ Authorization: Bearer aeq_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 Your account administrator generates the key once in the dashboard (Data
 Engine → API Push → Integration keys). It authenticates your middleware as a
-dedicated service account with data-push rights only, is shown exactly once
-at generation (the platform stores only a hash), and can be revoked
-instantly from the same screen. Rotate by generating a new key, switching
-your middleware, then revoking the old one.
+dedicated machine identity with one exact institution-scoped Integration
+Writer binding (`DATA` / `restricted` / `ingest`). The administrator must
+select the bank when issuing the key. It is shown exactly once at generation
+(the platform stores only a hash) and can be revoked instantly from the same
+screen. Rotate by generating a new key for the confirmed bank, switching your
+middleware, verifying a push, then revoking the old one.
+
+Keys issued before bank scoping have no institution target and cannot call the
+push routes. They remain visible to administrators as **Unscoped — rotate**.
+The platform does not infer a bank or backfill authority. A key used against a
+different bank returns `404` so the machine principal cannot probe which sibling
+institutions exist.
 
 > **Production note.** Deployments may additionally front these endpoints
 > with OAuth2 client-credentials or mTLS; the resource design below does
@@ -45,7 +53,8 @@ your middleware, then revoking the old one.
 > **Bank identifier.** `{bank_id}` is your **institution ID** — the short
 > identifier you were onboarded with (format `BK-XXXXXXXX`, shown in
 > Settings → Institution profile). It is the bank's one and only identifier
-> across the platform. Lowercase input is accepted and normalized.
+> across the platform. It must match the institution selected when the
+> integration key was issued. Lowercase input is accepted and normalized.
 
 ### 2.1 Open a push batch
 

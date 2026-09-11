@@ -8,7 +8,7 @@
 
 Runs the three-call flow documented in docs/API_INTEGRATION.md §2 (open push
 batch → stage record pages ≤ 5,000 records → commit) with a bearer token: an
-admin access token or an ``aeq_live_…`` integration key. This is an ingestion
+``aeq_live_…`` integration key issued for the exact ``--bank`` target. This is an ingestion
 CLIENT any bank's IT could run — it carries NO data of its own and is not a
 seed path: every row still passes the standard validation/translation pipeline
 and lands with lineage under ``source_system = "API_PUSH"``.
@@ -130,7 +130,11 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--base-url", required=True)
-    parser.add_argument("--token", required=True, help="admin access token or aeq_live_… key")
+    parser.add_argument(
+        "--token",
+        required=True,
+        help="aeq_live_… integration key issued for the exact --bank target",
+    )
     parser.add_argument("--bank", required=True, help="bank platform id, e.g. BK-0PMD7Z5M")
     parser.add_argument("--as-of", required=True, help="ISO business date the rows describe")
     parser.add_argument("--reason", required=True)

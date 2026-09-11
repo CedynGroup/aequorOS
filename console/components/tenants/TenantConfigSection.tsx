@@ -140,6 +140,18 @@ const keyColumns: Column<TenantIntegrationKey>[] = [
     render: (k) => <span className="font-mono text-caption text-slate">{k.key_prefix}…</span>,
   },
   {
+    key: 'bank',
+    header: 'Institution',
+    sortable: true,
+    sortAccessor: (k) => k.bank_id ?? '',
+    render: (k) =>
+      k.bank_id ? (
+        <span className="font-mono text-caption text-navy">{k.bank_id}</span>
+      ) : (
+        <span className="text-caption font-medium text-danger">Unscoped — rotate</span>
+      ),
+  },
+  {
     key: 'status',
     header: 'Status',
     sortable: true,

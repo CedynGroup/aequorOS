@@ -6,7 +6,7 @@ A Ghanaian savings-&-loans as a continuous time series, **2016-08-31 → 2026-08
 Per-book files carry an `as_of_date` column. `push_sdi.py` groups by date and runs the
 three-call flow per date — start light, then widen:
 ```bash
-BASE_URL=http://localhost:8001 TOKEN=<admin or aeq_live_… key> BANK=BK-XREAZES1 \
+BASE_URL=http://localhost:8001 TOKEN=<aeq_live_… key issued for BANK> BANK=BK-XREAZES1 \
   python onboarding/aequoros_sdi/push_sdi.py --cadence monthly   # 10y month-ends
 #                                            --cadence weekly    # + Friday LMTD closes
 #                                            --cadence daily     # + recent daily EOD

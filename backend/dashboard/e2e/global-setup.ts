@@ -39,6 +39,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       "analyst",
       "viewer",
       "account_admin",
+      "integration_admin",
       "legacy_account_admin",
     ] as const) {
       await writeStorageState(role, E2E_BASE_URL, E2E_TMP);
@@ -78,6 +79,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     "analyst",
     "viewer",
     "account_admin",
+    "integration_admin",
     "legacy_account_admin",
   ] as const) {
     await writeStorageState(role, E2E_BASE_URL, E2E_TMP);

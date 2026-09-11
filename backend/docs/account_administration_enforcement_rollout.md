@@ -14,17 +14,16 @@ The following routes require one active organization-scoped binding for module
 - `GET /api/v1/auth/sso/access-requests`
 - `POST /api/v1/auth/sso/access-requests/{user_id}/reject`
 - `GET /api/v1/integration-keys`
+- `POST /api/v1/integration-keys`
 - `POST /api/v1/integration-keys/{key_id}/revoke`
 
 `GET /api/v1/organization/users` instead requires permission `view` over that
 same resource. Account administration does not imply directory view. SSO
 access-request approval and grant administration still require an `org_owner`
-binding. Integration-key issuance remains on its existing compatibility gate
-until the bank-scoped machine-principal cutover in issue #175. The dashboard
-nevertheless hides the Generate control unless the user has this explicit
-organization-scoped Account administration authority. Consequently, a legacy
-`admin` or `account_admin` scalar-role holder without an explicit binding loses
-the Generate control before the issuance endpoint changes.
+binding. Integration-key issuance and its dashboard Generate control use the
+same explicit Account administration authority. Issuance also requires an exact
+bank target; machine-key rotation is covered separately by
+`integration_key_machine_principal_rollout.md`.
 
 ## Inventory
 
@@ -137,7 +136,7 @@ are revoked in the same transaction.
 | Preserve initial ownership and grant administration | `human`          | `org_owner`                                                                        | `organization`      | `NULL`           | `account`      | `restricted`        |
 | Read the organization directory                     | `human`          | one institution-approved bundle from `viewer`, `auditor`, `analyst`, or `approver` | `organization`      | `NULL`           | `account`      | `restricted`        |
 
-To preserve the Generate control during this transition, operators must create
+To preserve integration-key lifecycle controls, operators must create
 exactly one of the first two rows for the affected human: either the
 organization-scoped `account_admin` / `account` / `restricted` row or the
 organization-scoped `org_owner` / `account` / `restricted` row. A scalar role

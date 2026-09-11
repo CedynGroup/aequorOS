@@ -415,15 +415,18 @@ function MemberDetail({
                     />
                   )}
                 </dl>
-                {grant.effective && grant.roleBundle !== "org_owner" && (
-                  <button
-                    type="button"
-                    onClick={() => onRevoke(grant)}
-                    className="mt-4 text-caption font-medium text-danger hover:underline"
-                  >
-                    Revoke this access
-                  </button>
-                )}
+                {grant.effective &&
+                  !["org_owner", "integration_writer"].includes(
+                    grant.roleBundle,
+                  ) && (
+                    <button
+                      type="button"
+                      onClick={() => onRevoke(grant)}
+                      className="mt-4 text-caption font-medium text-danger hover:underline"
+                    >
+                      Revoke this access
+                    </button>
+                  )}
               </li>
             ))}
           </ul>

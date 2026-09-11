@@ -535,7 +535,7 @@ _PUSH_SDI = '''#!/usr/bin/env python3
 """Push the per-book AequorOS SDI time-series files, grouped by as_of_date, through
 the Data Engine API (three-call flow per date, docs/API_INTEGRATION.md §2).
 
-    BASE_URL=http://localhost:8001 TOKEN=<admin token or aeq_live_...> BANK=BK-XREAZES1 \\\\
+    BASE_URL=http://localhost:8001 TOKEN=<aeq_live_... key for BANK> BANK=BK-XREAZES1 \\\\
         python push_sdi.py --cadence monthly   # start light; then weekly, then daily, then all
 """
 from __future__ import annotations

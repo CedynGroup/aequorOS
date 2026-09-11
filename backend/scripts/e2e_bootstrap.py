@@ -28,6 +28,7 @@ Usage: DATABASE_URL=sqlite+pysqlite:///<path> uv run python scripts/e2e_bootstra
 
 from __future__ import annotations
 
+import hashlib
 import os
 from uuid import UUID
 
@@ -45,7 +46,7 @@ from app.core.authorization import (
 )
 from app.core.security import hash_password
 from app.db.base import Base
-from app.models import Organization, User
+from app.models import IntegrationKey, Organization, User
 from app.services import authorization
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
@@ -72,6 +73,7 @@ E2E_USERS = {
     "grant_member": UUID("eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5"),
     "account_admin": UUID("eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6"),
     "legacy_account_admin": UUID("eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7"),
+    "integration_admin": UUID("eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8"),
 }
 
 
@@ -115,6 +117,7 @@ def main() -> None:
                             "grant_member",
                             "account_admin",
                             "legacy_account_admin",
+                            "integration_admin",
                         }
                         else role
                     ),
@@ -135,9 +138,31 @@ def main() -> None:
         )
         users["account_admin"].role = "account_admin"
         users["legacy_account_admin"].role = "account_admin"
+        users["integration_admin"].role = "account_admin"
         session.commit()
         _enrol_signing_keys(session)
         materialize_canonical_test_book(session)
+        legacy_service_user = User(
+            organization_id=DEMO_ORG_ID,
+            email="e2e.legacy.integration@service.aequoros.invalid",
+            display_name="E2E legacy unscoped integration",
+            role="viewer",
+            auth_provider="service",
+            is_active=True,
+        )
+        session.add(legacy_service_user)
+        session.flush()
+        session.add(
+            IntegrationKey(
+                organization_id=DEMO_ORG_ID,
+                bank_id=None,
+                service_user_id=legacy_service_user.id,
+                label="Legacy core banking feed",
+                key_prefix="aeq_live_LEGY…",
+                key_hash=hashlib.sha256(b"e2e legacy unscoped integration key").hexdigest(),
+                created_by=users["admin"].id,
+            )
+        )
         for role, bundle in (
             ("admin", RoleBundle.ANALYST),
             ("approver", RoleBundle.APPROVER),
@@ -196,6 +221,42 @@ def main() -> None:
                 "e2e-bootstrap",
             ),
             reason="exercise scoped Account administration in the dashboard",
+        )
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["integration_admin"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ACCOUNT_ADMIN,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.ACCOUNT,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="exercise integration-key administration in the dashboard",
+        )
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["integration_admin"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.DATA,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="make the authorized API Push page visible for browser evidence",
         )
         session.commit()
         _materialize_live_plane(session)

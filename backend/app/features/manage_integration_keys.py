@@ -17,7 +17,6 @@ from app.api.deps import (
     DbSession,
     TenantContext,
     require_account_administration,
-    require_integration_key_issuance_compatibility,
 )
 from app.schemas.integration_keys import (
     IntegrationKeyIssued,
@@ -31,10 +30,6 @@ from app.services import integration_keys
 router = APIRouter(tags=["integration-keys"])
 
 AdminCtx = Annotated[TenantContext, Depends(require_account_administration)]
-IssueCtx = Annotated[
-    TenantContext,
-    Depends(require_integration_key_issuance_compatibility),
-]
 
 
 @router.get(
@@ -53,9 +48,9 @@ def list_integration_keys(db: DbSession, ctx: AdminCtx) -> IntegrationKeyListRea
     operation_id="issueIntegrationKey",
 )
 def issue_integration_key(
-    payload: IntegrationKeyIssueRequest, db: DbSession, ctx: IssueCtx
+    payload: IntegrationKeyIssueRequest, db: DbSession, ctx: AdminCtx
 ) -> IntegrationKeyIssued:
-    return integration_keys.issue_key(db, ctx, payload.label)
+    return integration_keys.issue_key(db, ctx, payload.bank_id, payload.label)
 
 
 @router.post(

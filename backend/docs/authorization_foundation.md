@@ -238,10 +238,9 @@ The same migration converts every persisted scalar `admin` to
 `account_admin`, increments `authorization_version`, and revokes outstanding
 refresh families with `authorization_changed`. The scalar `account_admin` value
 does not authorize SSO connection or access-request administration,
-integration-key list/revoke, or organization-directory reads. Those routes
-evaluate explicit organization-wide ACCOUNT/restricted bindings; only
-integration-key issuance retains the scalar compatibility gate until issue
-#175. The generic `require_role("admin")` dependency remains operational and
+integration-key lifecycle operations, or organization-directory reads. Those
+routes evaluate explicit organization-wide ACCOUNT/restricted bindings. The
+generic `require_role("admin")` dependency remains operational and
 excludes `account_admin`. It sits outside the analyst/approver ladder and cannot reach
 attestation policy, placement-template mutation, or regulatory submission. This
 avoids grandfathering operational superuser authority while binding enforcement
@@ -334,7 +333,7 @@ credential lifecycles and do not carry `authv`.
 ## Account administration enforcement (built 2026-09-08)
 
 SSO connection read/write, SSO access-request list/reject, and integration-key
-list/revoke require one complete active human binding with organization-wide
+issue/list/revoke require one complete active human binding with organization-wide
 institution coverage, ACCOUNT/restricted scope, and `administer` permission.
 Either the `account_admin` or `org_owner` bundle can supply that authority.
 `GET /api/v1/organization/users` separately requires ACCOUNT/restricted `view`;
@@ -342,12 +341,13 @@ administration does not imply directory access. Scalar roles and operational
 Analyst/Approver grants satisfy none of these checks.
 
 SSO approval and binding administration continue to require the `org_owner`
-bundle itself. Integration-key issuance remains on its legacy scalar
-`admin`/`account_admin` compatibility gate pending the bank-scoped machine
-principal contract in issue #175, although the dashboard Generate control is
-shown only with projected Account administration authority. The deployment
-inventory and exact grant rows are owned by
-`account_administration_enforcement_rollout.md`.
+bundle itself. Integration-key issuance additionally requires one exact bank
+target and atomically creates a machine-only Integration Writer binding for
+DATA/restricted `ingest`. All four push-batch routes require that complete
+binding; human Analyst grants cannot satisfy it, and a machine key targeting a
+sibling bank receives 404. Legacy null-bank keys receive no inferred target or
+compatibility grant. Their deployment inventory and mandatory rotation are
+owned by `integration_key_machine_principal_rollout.md`.
 
 ## Executable verification
 
