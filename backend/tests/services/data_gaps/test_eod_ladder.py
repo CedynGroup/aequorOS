@@ -34,7 +34,7 @@ from sqlalchemy import func, select
 from app.db.session import get_sessionmaker
 from app.models.canonical import CanonicalPosition, CanonicalPositionSnapshot
 from scripts.ingest_push import read_rows
-from tests.api.helpers import ORG_1, headers
+from tests.api.helpers import ORG_1, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -110,18 +110,19 @@ def _positions(step: int) -> list[dict[str, Any]]:
 def _push(
     db_client: TestClient, key: str, as_of: str, entities: dict[str, list[dict[str, Any]]]
 ) -> dict[str, Any]:
+    push_headers = integration_key_headers(SAMPLE_BANK_ID)
     opened = db_client.post(
         f"{BASE}/push-batches",
-        headers=headers(),
+        headers=push_headers,
         json={"as_of_date": as_of, "idempotency_key": key, "reason": f"EOD ladder {as_of}"},
     )
     assert opened.status_code == 201, opened.text
     push_id = opened.json()["push_batch_id"]
     staged = db_client.post(
-        f"{BASE}/push-batches/{push_id}/records", headers=headers(), json={"entities": entities}
+        f"{BASE}/push-batches/{push_id}/records", headers=push_headers, json={"entities": entities}
     )
     assert staged.status_code == 200, staged.text
-    committed = db_client.post(f"{BASE}/push-batches/{push_id}/commit", headers=headers())
+    committed = db_client.post(f"{BASE}/push-batches/{push_id}/commit", headers=push_headers)
     assert committed.status_code == 201, committed.text
     batch = committed.json()["batch"]
     assert batch["status"] in ("accepted", "accepted_with_warnings"), batch["validation_report"]
