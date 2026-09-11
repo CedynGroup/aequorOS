@@ -119,8 +119,10 @@ def test_upgrade_keeps_legacy_keys_unscoped_and_creates_no_binding(
     }
 
     # The shared fixture subsequently downgrades the entire migration chain.
-    # Remove the service principal before the original integration-key
+    # Normalize the service principal before the original integration-key
     # migration restores the password/OIDC-only auth-provider constraint.
+    # Deleting it would invoke the audit_events actor FK's SET NULL action,
+    # which the deliberately restricted application role cannot perform.
     with migrated_postgres_schema.app_engine.begin() as connection:
         connection.execute(
             text("SELECT set_config('app.organization_id', :organization_id, true)"),
@@ -130,7 +132,10 @@ def test_upgrade_keeps_legacy_keys_unscoped_and_creates_no_binding(
             text("DELETE FROM integration_keys WHERE id = :key_id"), {"key_id": key_id}
         )
         connection.execute(
-            text("DELETE FROM users WHERE id = :service_user_id"),
+            text(
+                "UPDATE users SET auth_provider = 'password' "
+                "WHERE id = :service_user_id"
+            ),
             {"service_user_id": service_user_id},
         )
 
@@ -235,6 +240,9 @@ def test_downgrade_refuses_to_discard_issued_bank_targets(
             text("DELETE FROM integration_keys WHERE id = :key_id"), {"key_id": key_id}
         )
         connection.execute(
-            text("DELETE FROM users WHERE id = :service_user_id"),
+            text(
+                "UPDATE users SET auth_provider = 'password' "
+                "WHERE id = :service_user_id"
+            ),
             {"service_user_id": service_user_id},
         )
