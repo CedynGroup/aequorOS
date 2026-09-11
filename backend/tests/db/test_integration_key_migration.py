@@ -39,6 +39,10 @@ def test_upgrade_keeps_legacy_keys_unscoped_and_creates_no_binding(
 
     with migrated_postgres_schema.app_engine.begin() as connection:
         connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
+        connection.execute(
             text(
                 "INSERT INTO organizations (id, name, created_at, updated_at) "
                 "VALUES (:id, 'Legacy key migration proof', :now, :now)"
@@ -84,7 +88,11 @@ def test_upgrade_keeps_legacy_keys_unscoped_and_creates_no_binding(
     command.upgrade(alembic_config_for_app(), "head")
     clear_database_caches()
 
-    with migrated_postgres_schema.app_engine.connect() as connection:
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
         bank_id = connection.scalar(
             text("SELECT bank_id FROM integration_keys WHERE id = :key_id"),
             {"key_id": key_id},
@@ -126,6 +134,10 @@ def test_downgrade_refuses_to_discard_issued_bank_targets(
     now = datetime.now(UTC)
 
     with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
         connection.execute(
             text(
                 "INSERT INTO organizations (id, name, created_at, updated_at) "
@@ -187,6 +199,10 @@ def test_downgrade_refuses_to_discard_issued_bank_targets(
     # Leave the fixture on the prior revision so its normal base downgrade can
     # complete. This is explicit cleanup after proving the guarded refusal.
     with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
         connection.execute(
             text("UPDATE integration_keys SET bank_id = NULL WHERE id = :key_id"),
             {"key_id": key_id},
