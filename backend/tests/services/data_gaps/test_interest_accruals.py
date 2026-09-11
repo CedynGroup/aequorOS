@@ -42,7 +42,7 @@ from app.models import CanonicalReferenceRow
 from app.services.regulatory_reporting.bog_forms.layout import load_layout
 from app.services.regulatory_reporting.bog_forms.linemaps import line_maps_for
 from scripts import ingest_push
-from tests.api.helpers import ORG_1, headers
+from tests.api.helpers import ORG_1, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -76,6 +76,7 @@ class _ClientProxy:
 
     def __init__(self, client: TestClient) -> None:
         self._client = client
+        self._headers = integration_key_headers(SAMPLE_BANK_ID)
 
     def __enter__(self) -> _ClientProxy:
         return self
@@ -84,7 +85,7 @@ class _ClientProxy:
         return False
 
     def post(self, url: str, json: Any = None) -> Any:
-        return self._client.post(url, headers=headers(), json=json)
+        return self._client.post(url, headers=self._headers, json=json)
 
 
 @pytest.fixture

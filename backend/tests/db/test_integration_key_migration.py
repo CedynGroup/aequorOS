@@ -127,8 +127,11 @@ def test_upgrade_keeps_legacy_keys_unscoped_and_creates_no_binding(
             {"organization_id": organization_id},
         )
         connection.execute(
-            text("DELETE FROM organizations WHERE id = :organization_id"),
-            {"organization_id": organization_id},
+            text("DELETE FROM integration_keys WHERE id = :key_id"), {"key_id": key_id}
+        )
+        connection.execute(
+            text("DELETE FROM users WHERE id = :service_user_id"),
+            {"service_user_id": service_user_id},
         )
 
 
@@ -229,6 +232,9 @@ def test_downgrade_refuses_to_discard_issued_bank_targets(
             {"organization_id": organization_id},
         )
         connection.execute(
-            text("DELETE FROM organizations WHERE id = :organization_id"),
-            {"organization_id": organization_id},
+            text("DELETE FROM integration_keys WHERE id = :key_id"), {"key_id": key_id}
+        )
+        connection.execute(
+            text("DELETE FROM users WHERE id = :service_user_id"),
+            {"service_user_id": service_user_id},
         )
