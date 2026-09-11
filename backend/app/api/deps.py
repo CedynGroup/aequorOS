@@ -82,6 +82,15 @@ IMPERSONATION_READ_ONLY_ROUTES: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
+INTEGRATION_KEY_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("POST", "/api/v1/banks/{bank_id}/push-batches"),
+        ("POST", "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/records"),
+        ("POST", "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}/commit"),
+        ("GET", "/api/v1/banks/{bank_id}/push-batches/{push_batch_id}"),
+    }
+)
+
 
 def refuse_impersonated_mutation(request: Request, principal: TenantContext) -> None:
     """Refuse any unsafe-method request made under an impersonated session.
@@ -128,6 +137,21 @@ def get_current_principal(
     authenticated route, before any handler or narrower ``ctx`` dependency runs.
     """
     principal = _authenticate_principal(credentials)
+    if principal.integration_key_id is not None:
+        route_path = getattr(request.scope.get("route"), "path", None)
+        if (request.method.upper(), route_path) not in INTEGRATION_KEY_ROUTES:
+            authorization_denied(
+                reason="integration_key_route_not_allowed",
+                method=request.method.upper(),
+                route=route_path,
+                organization_id=principal.organization_id,
+                integration_key_id=str(principal.integration_key_id),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Integration keys are valid only for API Push.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     if principal.authorization_version is not None:
         session = get_sessionmaker()()
         session.info["organization_id"] = principal.organization_id
