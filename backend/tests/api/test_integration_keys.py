@@ -400,9 +400,7 @@ def test_integration_key_cannot_read_ordinary_tenant_data(
     )
 
     assert response.status_code == 401
-    assert response.json()["error"]["message"] == (
-        "Integration keys are valid only for API Push."
-    )
+    assert response.json()["error"]["message"] == ("Integration keys are valid only for API Push.")
     with _session() as db:
         key = db.get(IntegrationKey, UUID(issued["record"]["id"]))
         assert key is not None

@@ -237,7 +237,7 @@ def build_adapter_config(
     )
 
 
-def _prepare_extraction(
+def _prepare_extraction(  # noqa: PLR0913 - transaction ownership is explicit per caller
     db: Session,
     ctx: TenantContext,
     bank: Bank,
@@ -283,7 +283,7 @@ def _prepare_extraction(
     return adapter, mapping_record, mapping, source_path, extraction
 
 
-def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orchestration
+def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction options are explicit
     db: Session,
     ctx: TenantContext,
     bank_id: str,
