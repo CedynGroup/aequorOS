@@ -20846,6 +20846,10 @@
       "IntegrationKeyIssueRequest": {
         "additionalProperties": false,
         "properties": {
+          "bank_id": {
+            "title": "Integration key bank ID",
+            "type": "string"
+          },
           "label": {
             "maxLength": 80,
             "minLength": 1,
@@ -20854,6 +20858,7 @@
           }
         },
         "required": [
+          "bank_id",
           "label"
         ],
         "title": "IntegrationKeyIssueRequest",
@@ -20897,6 +20902,17 @@
       "IntegrationKeyRead": {
         "additionalProperties": false,
         "properties": {
+          "bank_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integration key bank ID"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -20954,6 +20970,7 @@
         },
         "required": [
           "id",
+          "bank_id",
           "label",
           "key_prefix",
           "created_at",

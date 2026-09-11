@@ -9,18 +9,35 @@ like an uploaded workbook would.
 from __future__ import annotations
 
 from typing import Any
+from weakref import WeakKeyDictionary
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy import text as sql_text
 
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.db.session import get_sessionmaker
-from app.models import CanonicalGlAccount, CanonicalLoanEvent, CanonicalReferenceRow
+from app.models import Bank, CanonicalGlAccount, CanonicalLoanEvent, CanonicalReferenceRow, User
+from app.services import authorization
+from app.services.institution_types import FALLBACK_TYPE_CODE
 from app.services.push_ingestion import IDENTITY_MAPPING_NAME
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.api.test_ingestion import seed_bank
 
+pytestmark = pytest.mark.committing_db
+
 AS_OF = "2026-06-30"
+_MACHINE_BEARERS: WeakKeyDictionary[TestClient, dict[tuple[str, str], dict[str, str]]] = (
+    WeakKeyDictionary()
+)
 
 GL_ACCOUNTS = [
     {
@@ -93,12 +110,77 @@ YIELD_CURVE = [
 ]
 
 
+def _machine_headers(
+    client: TestClient,
+    bank_id: str,
+    organization_id: str = ORG_1,
+) -> dict[str, str]:
+    per_client = _MACHINE_BEARERS.setdefault(client, {})
+    cache_key = (organization_id, bank_id)
+    if cache_key in per_client:
+        return per_client[cache_key]
+    user_id = USER_2 if organization_id == ORG_2 else USER_1
+    session = get_sessionmaker()()
+    session.info["organization_id"] = organization_id
+    try:
+        authorization.create_role_binding(
+            session,
+            organization_id=organization_id,
+            principal_user_id=user_id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ACCOUNT_ADMIN,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.ACCOUNT,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "push-api-test"),
+            reason="issue the push API test machine credential",
+        )
+        user = session.get(User, user_id)
+        assert user is not None
+        version = user.authorization_version
+    finally:
+        session.close()
+    issued = client.post(
+        "/api/v1/integration-keys",
+        headers=headers(
+            organization_id,
+            user_id=user_id,
+            roles=("viewer",),
+            authorization_version=version,
+        ),
+        json={"bank_id": bank_id, "label": f"Push API tests for {bank_id}"},
+    )
+    assert issued.status_code == 201, issued.text
+    bearer = {"Authorization": f"Bearer {issued.json()['key']}"}
+    per_client[cache_key] = bearer
+    return bearer
+
+
+def _human_headers(organization_id: str = ORG_1) -> dict[str, str]:
+    user_id = USER_2 if organization_id == ORG_2 else USER_1
+    session = get_sessionmaker()()
+    session.info["organization_id"] = organization_id
+    try:
+        user = session.get(User, user_id)
+        assert user is not None
+        return headers(
+            organization_id,
+            user_id=user_id,
+            authorization_version=user.authorization_version,
+        )
+    finally:
+        session.close()
+
+
 def open_push(
     client: TestClient, bank_id: str, key: str, as_of: str = AS_OF, org: str = ORG_1
 ) -> Any:
     return client.post(
         f"/api/v1/banks/{bank_id}/push-batches",
-        headers=headers(org),
+        headers=_machine_headers(client, bank_id, org),
         json={"as_of_date": as_of, "idempotency_key": key, "reason": "Nightly middleware push."},
     )
 
@@ -106,13 +188,16 @@ def open_push(
 def stage(client: TestClient, bank_id: str, push_id: str, page: dict[str, Any]) -> Any:
     return client.post(
         f"/api/v1/banks/{bank_id}/push-batches/{push_id}/records",
-        headers=headers(),
+        headers=_machine_headers(client, bank_id),
         json=page,
     )
 
 
 def commit(client: TestClient, bank_id: str, push_id: str) -> Any:
-    return client.post(f"/api/v1/banks/{bank_id}/push-batches/{push_id}/commit", headers=headers())
+    return client.post(
+        f"/api/v1/banks/{bank_id}/push-batches/{push_id}/commit",
+        headers=_machine_headers(client, bank_id),
+    )
 
 
 def push_everything(client: TestClient, bank_id: str, key: str) -> tuple[str, dict[str, Any]]:
@@ -182,7 +267,7 @@ class TestPushHappyPath:
         assert tables["yield_curve"]["rows_accepted"] == 2
 
         positions = db_client.get(
-            f"/api/v1/banks/{bank_id}/canonical-positions", headers=headers()
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=_human_headers()
         ).json()["positions"]
         by_reference = {position["source_reference"]: position for position in positions}
         assert set(by_reference) == {"LN-0001", "FXH-0001"}
@@ -191,7 +276,8 @@ class TestPushHappyPath:
         assert by_reference["LN-0001"]["validation_status"] == "accepted"
 
         walk = db_client.get(
-            f"/api/v1/lineage/{by_reference['LN-0001']['lineage_id']}", headers=headers()
+            f"/api/v1/lineage/{by_reference['LN-0001']['lineage_id']}",
+            headers=_human_headers(),
         ).json()
         assert [node["operation_type"] for node in walk["nodes"]] == [
             "VALIDATION",
@@ -220,7 +306,7 @@ class TestPushHappyPath:
         push_everything(db_client, bank_id, "push-identity-001")
 
         configs = db_client.get(
-            f"/api/v1/banks/{bank_id}/mapping-configs", headers=headers()
+            f"/api/v1/banks/{bank_id}/mapping-configs", headers=_human_headers()
         ).json()["configs"]
         api_push_configs = [c for c in configs if c["source_system"] == "API_PUSH"]
         assert len(api_push_configs) == 1
@@ -241,7 +327,8 @@ class TestPushIdempotency:
         assert again.json()["batch"]["id"] == first["batch"]["id"]
 
         status = db_client.get(
-            f"/api/v1/banks/{bank_id}/push-batches/{push_id}", headers=headers()
+            f"/api/v1/banks/{bank_id}/push-batches/{push_id}",
+            headers=_machine_headers(db_client, bank_id),
         ).json()
         assert status["status"] == "committed"
         assert status["committed_batch_id"] == first["batch"]["id"]
@@ -279,7 +366,7 @@ class TestPushMapping:
         bank_id = seed_bank(db_client)
         response = db_client.post(
             f"/api/v1/banks/{bank_id}/mapping-configs",
-            headers=headers(),
+            headers=_human_headers(),
             json={
                 "source_system": "API_PUSH",
                 "name": "Middleware field aliases",
@@ -401,7 +488,7 @@ class TestPushValidation:
 
         failures = db_client.get(
             f"/api/v1/banks/{bank_id}/ingestion-batches/{batch['id']}/translation-failures",
-            headers=headers(),
+            headers=_human_headers(),
         ).json()["failures"]
         assert len(failures) == 1
         assert failures[0]["error_code"] == "coercion_error"
@@ -418,8 +505,38 @@ class TestPushTenantIsolation:
         bank_id = seed_bank(db_client)
         push_id, started = push_everything(db_client, bank_id, "push-tenant-001")
 
-        foreign = headers(ORG_2)
-        assert open_push(db_client, bank_id, "push-tenant-002", org=ORG_2).status_code == 404
+        foreign_bank_id = "BK-PUSH0002"
+        session = get_sessionmaker()()
+        session.info["organization_id"] = ORG_2
+        try:
+            session.add(
+                Bank(
+                    id=foreign_bank_id,
+                    organization_id=ORG_2,
+                    name="Other tenant push bank",
+                    short_name="Other push",
+                    currency="GHS",
+                    jurisdiction_code="GH",
+                    license_type="universal_bank",
+                    institution_type=FALLBACK_TYPE_CODE,
+                )
+            )
+            session.commit()
+        finally:
+            session.close()
+        foreign = _machine_headers(db_client, foreign_bank_id, ORG_2)
+        assert (
+            db_client.post(
+                f"/api/v1/banks/{bank_id}/push-batches",
+                headers=foreign,
+                json={
+                    "as_of_date": AS_OF,
+                    "idempotency_key": "push-tenant-002",
+                    "reason": "cross-tenant probe",
+                },
+            ).status_code
+            == 404
+        )
         assert (
             db_client.get(
                 f"/api/v1/banks/{bank_id}/push-batches/{push_id}", headers=foreign
@@ -435,7 +552,7 @@ class TestPushTenantIsolation:
         assert (
             db_client.get(
                 f"/api/v1/banks/{bank_id}/ingestion-batches/{started['batch']['id']}",
-                headers=foreign,
+                headers=_human_headers(ORG_2),
             ).status_code
             == 404
         )

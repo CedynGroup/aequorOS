@@ -650,6 +650,7 @@ export * from "./InstitutionProfileRead";
 export * from "./InstitutionScope";
 export * from "./InstitutionTypeApplicability";
 export * from "./InstitutionTypeRead";
+export * from "./IntegrationKeyBankID";
 export * from "./IntegrationKeyIssueRequest";
 export * from "./IntegrationKeyIssued";
 export * from "./IntegrationKeyListRead";

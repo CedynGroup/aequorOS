@@ -2124,6 +2124,7 @@ export interface TenantSsoConfig {
 
 /** Integration-key metadata only — the SHA-256 hash and raw key are NEVER returned. */
 export interface TenantIntegrationKey {
+  bank_id: string | null;
   label: string;
   key_prefix: string;
   status: 'active' | 'revoked';

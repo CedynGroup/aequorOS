@@ -14,7 +14,7 @@ export type PushFlowStep = {
   curl: string;
 };
 
-const H = `-H 'Content-Type: application/json' -H 'X-Org-Id: $ORG_ID' -H 'X-User-Id: $USER_ID'`;
+const H = `-H 'Content-Type: application/json' -H 'Authorization: Bearer $INTEGRATION_KEY'`;
 
 export const PUSH_FLOW_STEPS: PushFlowStep[] = [
   {
@@ -185,14 +185,11 @@ export const EXAMPLE_SCRIPT = `#!/usr/bin/env bash
 set -euo pipefail
 
 BASE_URL="http://127.0.0.1:8003/api/v1"          # your endpoint
-ORG_ID="OR-DEM00001"    # X-Org-Id
-USER_ID="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"   # X-User-Id (service account)
+INTEGRATION_KEY="aeq_live_…"                     # issued for this exact bank
+BANK_ID="BK-XXXXXXXX"                            # the key's institution target
 AS_OF="2026-04-30"
 
-hdr=(-H "Content-Type: application/json" -H "X-Org-Id: $ORG_ID" -H "X-User-Id: $USER_ID")
-
-# The bank you are pushing for (first bank in this org shown here):
-BANK_ID=$(curl -s "$BASE_URL/banks" "\${hdr[@]}" | jq -r '.banks[0].id')
+hdr=(-H "Content-Type: application/json" -H "Authorization: Bearer $INTEGRATION_KEY")
 
 # 1. Open a push batch. The idempotency key makes retries safe.
 PUSH_ID=$(curl -s -X POST "$BASE_URL/banks/$BANK_ID/push-batches" "\${hdr[@]}" \\

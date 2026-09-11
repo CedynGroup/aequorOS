@@ -3133,10 +3133,10 @@ export function useIntegrationKeys(enabled: boolean) {
 export function useIssueIntegrationKey() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (label: string) =>
+    mutationFn: ({ bankId, label }: { bankId: string; label: string }) =>
       apiCall(() =>
         integrationKeysApi.issueIntegrationKey({
-          integrationKeyIssueRequest: { label },
+          integrationKeyIssueRequest: { bankId, label },
         }),
       ),
     onSuccess: () => {

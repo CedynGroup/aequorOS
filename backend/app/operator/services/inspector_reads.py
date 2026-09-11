@@ -58,9 +58,7 @@ _SEVERITY_RANK: dict[str, int] = {"critical": 3, "high": 2, "medium": 1, "low": 
 def _require_organization(db: Session, organization_id: str) -> Organization:
     organization = db.scalar(select(Organization).where(Organization.id == organization_id))
     if organization is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
     return organization
 
 
@@ -203,9 +201,7 @@ def _ingestion_batch_read(batch: IngestionBatch) -> TenantIngestionBatchRead:
     )
 
 
-def list_tenant_ingestion(
-    db: Session, organization_id: str, limit: int
-) -> TenantIngestionListRead:
+def list_tenant_ingestion(db: Session, organization_id: str, limit: int) -> TenantIngestionListRead:
     """Recent ingestion batches, newest-first (status / source / as-of / row +
     error counts) — the upload health feed for one tenant."""
     _require_organization(db, organization_id)
@@ -278,9 +274,7 @@ def get_tenant_config(db: Session, organization_id: str) -> TenantConfigRead:
 
     banks = list(
         db.scalars(
-            select(Bank)
-            .where(Bank.organization_id == organization_id)
-            .order_by(Bank.created_at)
+            select(Bank).where(Bank.organization_id == organization_id).order_by(Bank.created_at)
         )
     )
     bank_reads = [
@@ -391,6 +385,7 @@ def get_tenant_config(db: Session, organization_id: str) -> TenantConfigRead:
     )
     integration_keys = [
         TenantIntegrationKeyRead(
+            bank_id=key.bank_id,
             label=key.label,
             key_prefix=key.key_prefix,
             status="revoked" if key.revoked_at is not None else "active",

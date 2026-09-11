@@ -404,6 +404,7 @@ def test_config_never_returns_secret_material(
     operator_db.add(
         IntegrationKey(
             organization_id=organization_id,
+            bank_id=_bank,
             service_user_id=service_user.id,
             label="core-middleware",
             key_prefix="aeq_live_ABCD",
@@ -435,6 +436,7 @@ def test_config_never_returns_secret_material(
     assert body["sso"]["secret_configured"] is True
     assert body["sso"]["allowed_email_domains"] == ["testbank.example"]
     key = body["integration_keys"][0]
+    assert key["bank_id"] == _bank
     assert key["key_prefix"] == "aeq_live_ABCD"
     assert key["status"] == "active"
     assert body["banks"][0]["jurisdiction_code"] == "GH"

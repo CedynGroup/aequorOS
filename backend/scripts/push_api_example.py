@@ -8,11 +8,11 @@ validation report. Stdlib only; point it at any running backend:
 
     .venv/bin/python scripts/push_api_example.py \
         --base-url http://127.0.0.1:8003 \
-        --org-id 11111111-1111-4111-8111-111111111111 \
-        --user-id aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa \
+        --token "$AEQ_INTEGRATION_KEY" \
+        --bank-id BK-XXXXXXXX \
         --as-of 2026-04-30
 
-Without ``--bank-id`` the first bank visible to the tenant is used.
+The key must have been issued for the exact ``--bank-id`` target.
 """
 
 from __future__ import annotations
@@ -36,11 +36,10 @@ PRODUCT_FILE = DATA_DIR / "04_products.csv"
 
 
 class PushClient:
-    def __init__(self, base_url: str, org_id: str, user_id: str) -> None:
+    def __init__(self, base_url: str, token: str) -> None:
         self.base_url = base_url.rstrip("/")
         self.headers = {
-            "X-Org-Id": org_id,
-            "X-User-Id": user_id,
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
@@ -144,9 +143,8 @@ def print_report(started: dict[str, Any]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8003")
-    parser.add_argument("--org-id", default="11111111-1111-4111-8111-111111111111")
-    parser.add_argument("--user-id", default="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-    parser.add_argument("--bank-id", default=None, help="Defaults to the tenant's first bank.")
+    parser.add_argument("--token", required=True, help="Bank-scoped aeq_live_… key")
+    parser.add_argument("--bank-id", required=True, help="The key's exact bank platform id")
     parser.add_argument("--as-of", default="2026-04-30")
     parser.add_argument(
         "--idempotency-key",
@@ -155,14 +153,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    client = PushClient(args.base_url, args.org_id, args.user_id)
+    client = PushClient(args.base_url, args.token)
     bank_id = args.bank_id
-    if bank_id is None:
-        banks = client.call("GET", "/banks")["banks"]
-        if not banks:
-            sys.exit("No banks visible to this tenant; pass --bank-id.")
-        bank_id = banks[0]["id"]
-        print(f"Using bank {bank_id} ({banks[0].get('name', 'unnamed')})")
 
     key = args.idempotency_key or f"push-example-{args.as_of}"
     opened = client.call(
