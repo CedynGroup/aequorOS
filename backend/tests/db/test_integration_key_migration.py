@@ -118,6 +118,15 @@ def test_upgrade_keeps_legacy_keys_unscoped_and_creates_no_binding(
         "ix_integration_keys_organization_bank"
     }
 
+    # The shared fixture subsequently downgrades the entire migration chain.
+    # Remove the service principal before the original integration-key
+    # migration restores the password/OIDC-only auth-provider constraint.
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("DELETE FROM organizations WHERE id = :organization_id"),
+            {"organization_id": organization_id},
+        )
+
 
 @pytest.mark.skipif(
     os.getenv("TEST_DATABASE_URL") is None,
@@ -209,3 +218,9 @@ def test_downgrade_refuses_to_discard_issued_bank_targets(
         )
     command.downgrade(alembic_config_for_app(), "202608290047")
     clear_database_caches()
+
+    with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("DELETE FROM organizations WHERE id = :organization_id"),
+            {"organization_id": organization_id},
+        )
