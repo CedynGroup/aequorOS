@@ -123,6 +123,10 @@ def test_upgrade_keeps_legacy_keys_unscoped_and_creates_no_binding(
     # migration restores the password/OIDC-only auth-provider constraint.
     with migrated_postgres_schema.app_engine.begin() as connection:
         connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
+        connection.execute(
             text("DELETE FROM organizations WHERE id = :organization_id"),
             {"organization_id": organization_id},
         )
@@ -220,6 +224,10 @@ def test_downgrade_refuses_to_discard_issued_bank_targets(
     clear_database_caches()
 
     with migrated_postgres_schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :organization_id, true)"),
+            {"organization_id": organization_id},
+        )
         connection.execute(
             text("DELETE FROM organizations WHERE id = :organization_id"),
             {"organization_id": organization_id},
