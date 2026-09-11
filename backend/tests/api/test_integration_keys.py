@@ -289,6 +289,28 @@ def test_all_push_routes_require_and_accept_the_issued_machine(
     assert committed.status_code == 201, committed.text
 
 
+def test_integration_key_cannot_read_ordinary_tenant_data(
+    db_client: TestClient,
+) -> None:
+    seed_bank(db_client)
+    issued = _issue(db_client)
+    bearer = _bearer(issued)
+
+    response = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/reporting-periods/{uuid4()}/facts",
+        headers=bearer,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["message"] == (
+        "Integration keys are valid only for API Push."
+    )
+    with _session() as db:
+        key = db.get(IntegrationKey, UUID(issued["record"]["id"]))
+        assert key is not None
+        assert key.last_used_at is None
+
+
 def test_human_analyst_binding_cannot_satisfy_any_machine_push_route(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
