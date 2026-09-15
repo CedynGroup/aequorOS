@@ -14,7 +14,7 @@ export type PushFlowStep = {
   curl: string;
 };
 
-const H = `-H 'Content-Type: application/json' -H 'Authorization: Bearer $INTEGRATION_KEY'`;
+const H = `-H 'Content-Type: application/json' -H "Authorization: Bearer $INTEGRATION_KEY"`;
 
 export const PUSH_FLOW_STEPS: PushFlowStep[] = [
   {
