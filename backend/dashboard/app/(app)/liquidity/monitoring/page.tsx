@@ -9,8 +9,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import StatusPill from '@/components/ui/StatusPill';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import DataTable, { type Column } from '@/components/ui/DataTable';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useModuleScope } from '@/components/shell/BankContext';
+import { useBankContext, useModuleScope } from '@/components/shell/BankContext';
 import SdiLiquidityMonitoringView from '@/components/liquidity/SdiLiquidityMonitoringView';
 import StressedLadderPanel from '@/components/liquidity/StressedLadderPanel';
 import CashflowWindowPanel from '@/components/liquidity/CashflowWindowPanel';
@@ -22,6 +21,7 @@ import {
 } from '@/lib/api/hooks';
 import { fmtDateUTC, num } from '@/lib/api/values';
 import { currencyCode, fmtCurrency, fmtPct, regShort } from '@/lib/format';
+import { isHrefVisible } from '@/lib/modules';
 import type {
   LiquidityHaircutRead,
   LiquidityThresholdRead,
@@ -95,14 +95,19 @@ const haircutColumns: Column<LiquidityHaircutRead>[] = [
 ];
 
 function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
-  const dashboard = useLiquidityDashboard(bankId);
+  const dashboard = useLiquidityDashboard(
+    moduleScope.liquidityAggregatedView ? bankId : undefined,
+  );
   const thresholds = useLiquidityThresholdRegister(bankId);
   const haircuts = useLiquidityHaircutSchedule(bankId);
   const latestRunId = dashboard.data?.latestRunId;
-  const latestRun = useRegulatoryRun(bankId, latestRunId);
+  const latestRun = useRegulatoryRun(
+    moduleScope.liquidityConfidentialView ? bankId : undefined,
+    latestRunId,
+  );
 
   const metrics = dashboard.data?.metrics;
   const fxGap = metrics?.fxFundingGapGhs != null ? num(metrics.fxFundingGapGhs) : null;
@@ -225,10 +230,15 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
                     Regulatory Reporting
                   </Link>{' '}
                   (return code LMT). Per-currency funding gaps and the USD funding
-                  stress ride every liquidity run on the{' '}
-                  <Link href="/liquidity/stress" className="text-action hover:underline">
-                    Stress tab
-                  </Link>
+                  stress ride every liquidity run
+                  {isHrefVisible('/liquidity/stress', moduleScope) ? (
+                    <>
+                      {' '}on the{' '}
+                      <Link href="/liquidity/stress" className="text-action hover:underline">
+                        Stress tab
+                      </Link>
+                    </>
+                  ) : null}
                   .
                 </p>
               </div>

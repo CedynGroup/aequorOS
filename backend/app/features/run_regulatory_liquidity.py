@@ -5,7 +5,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import (
+    DbSession,
+    LiquidityAggregatedResource,
+    LiquidityConfidentialResource,
+    ScopedMutationTenant,
+    Tenant,
+    get_mutation_tenant_context,
+)
+from app.core.authorization import Module, Permission, Sensitivity
 from app.schemas.regulatory_liquidity import (
     Bsd3PreviewRead,
     LiquidityDashboardRead,
@@ -16,7 +24,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunListRead,
     RegulatoryRunRead,
 )
-from app.services import regulatory_capital, regulatory_liquidity
+from app.services import regulatory_capital, regulatory_liquidity, scoped_authorization
 
 router = APIRouter(tags=["regulatory-liquidity"])
 
@@ -31,12 +39,26 @@ def create_regulatory_run(
     bank_id: str,
     payload: RegulatoryRunCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> RegulatoryRunRead:
     # Single entry point for regulatory runs; the schema validates the
     # module/scenario combination and the module picks the engine service.
     if payload.module == "capital":
-        return regulatory_capital.create_capital_run(db, ctx, bank_id, payload)
+        return regulatory_capital.create_capital_run(
+            db,
+            get_mutation_tenant_context(ctx),
+            bank_id,
+            payload,
+        )
+    scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="regulatory_liquidity_run",
+    )
     return regulatory_liquidity.create_liquidity_run(db, ctx, bank_id, payload)
 
 
@@ -50,8 +72,17 @@ def run_all_liquidity_scenarios(
     bank_id: str,
     payload: LiquidityScenarioBatchCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> RegulatoryRunBatchRead:
+    scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="regulatory_liquidity_run_all",
+    )
     return regulatory_liquidity.run_all_liquidity_scenarios(db, ctx, bank_id, payload)
 
 
@@ -92,9 +123,7 @@ def list_regulatory_runs(  # noqa: PLR0913
     response_model=RegulatoryRunRead,
     operation_id="getRegulatoryRun",
 )
-def get_regulatory_run(
-    bank_id: str, run_id: UUID, db: DbSession, ctx: Tenant
-) -> RegulatoryRunRead:
+def get_regulatory_run(bank_id: str, run_id: UUID, db: DbSession, ctx: Tenant) -> RegulatoryRunRead:
     return regulatory_liquidity.get_regulatory_run(db, ctx, bank_id, run_id)
 
 
@@ -106,10 +135,15 @@ def get_regulatory_run(
 def get_liquidity_dashboard(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: LiquidityAggregatedResource,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> LiquidityDashboardRead:
-    return regulatory_liquidity.get_liquidity_dashboard(db, ctx, bank_id, reporting_period_id)
+    return regulatory_liquidity.get_liquidity_dashboard(
+        db,
+        access.ctx,
+        access.bank.id,
+        reporting_period_id,
+    )
 
 
 @router.get(
@@ -121,6 +155,11 @@ def get_bsd3_preview(
     bank_id: str,
     reporting_period_id: Annotated[UUID, Query()],
     db: DbSession,
-    ctx: Tenant,
+    access: LiquidityConfidentialResource,
 ) -> Bsd3PreviewRead:
-    return regulatory_liquidity.get_bsd3_preview(db, ctx, bank_id, reporting_period_id)
+    return regulatory_liquidity.get_bsd3_preview(
+        db,
+        access.ctx,
+        access.bank.id,
+        reporting_period_id,
+    )

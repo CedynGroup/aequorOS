@@ -100,11 +100,20 @@ export default function LiquidityCockpit() {
   const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const isSdi = moduleScope.institutionClass === "sdi";
+  const aggregatedBankId = moduleScope.liquidityAggregatedView
+    ? bankId
+    : undefined;
+  const confidentialBankId = moduleScope.liquidityConfidentialView
+    ? bankId
+    : undefined;
 
-  const dashboard = useLiquidityDashboard(isSdi ? undefined : bankId);
-  const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
-  const ewis = useEwiDashboard(isSdi ? undefined : bankId);
-  const cfp = useCfpSummary(isSdi ? undefined : bankId);
+  const dashboard = useLiquidityDashboard(isSdi ? undefined : aggregatedBankId);
+  const latestRun = useRegulatoryRun(
+    confidentialBankId,
+    dashboard.data?.latestRunId,
+  );
+  const ewis = useEwiDashboard(isSdi ? undefined : confidentialBankId);
+  const cfp = useCfpSummary(isSdi ? undefined : confidentialBankId);
 
   const data = dashboard.data;
   const run = latestRun.data;
@@ -344,13 +353,15 @@ export default function LiquidityCockpit() {
                 subtitle="Move from current posture to the relevant control without losing context."
               >
                 <div className="space-y-2">
-                  <Link
-                    href="/liquidity/buffer"
-                    className="flex items-center justify-between gap-3 border-b border-border-light pb-2 text-body text-navy hover:text-action"
-                  >
-                    Buffer concentration and haircuts{" "}
-                    <ArrowUpRight size={14} aria-hidden />
-                  </Link>
+                  {isHrefVisible("/liquidity/buffer", moduleScope) && (
+                    <Link
+                      href="/liquidity/buffer"
+                      className="flex items-center justify-between gap-3 border-b border-border-light pb-2 text-body text-navy hover:text-action"
+                    >
+                      Buffer concentration and haircuts{" "}
+                      <ArrowUpRight size={14} aria-hidden />
+                    </Link>
+                  )}
                   {isHrefVisible("/liquidity/monitoring", moduleScope) && (
                     <Link
                       href="/liquidity/monitoring"
@@ -360,13 +371,15 @@ export default function LiquidityCockpit() {
                       <ArrowUpRight size={14} aria-hidden />
                     </Link>
                   )}
-                  <Link
-                    href="/liquidity/cfp"
-                    className="flex items-center justify-between gap-3 pt-2 text-body text-navy hover:text-action"
-                  >
-                    CFP actions and activation log{" "}
-                    <ArrowUpRight size={14} aria-hidden />
-                  </Link>
+                  {isHrefVisible("/liquidity/cfp", moduleScope) && (
+                    <Link
+                      href="/liquidity/cfp"
+                      className="flex items-center justify-between gap-3 pt-2 text-body text-navy hover:text-action"
+                    >
+                      CFP actions and activation log{" "}
+                      <ArrowUpRight size={14} aria-hidden />
+                    </Link>
+                  )}
                 </div>
               </SectionCard>
             </div>

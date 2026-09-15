@@ -183,9 +183,21 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       ),
       hasInstitutionAuthority: institutionCapabilities.length > 0,
       institutionClass: bank?.institutionTypeDetail?.institutionClass ?? null,
-      liquidityMonitoringAccess: hasEffectiveCapability(
+      liquidityAggregatedView: hasEffectiveCapability(
         institutionCapabilities,
         "liq",
+        "aggregated",
+        "view",
+      ),
+      liquidityConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "liq",
+        "confidential",
+        "view",
+      ),
+      riskConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "risk",
         "confidential",
         "view",
       ),

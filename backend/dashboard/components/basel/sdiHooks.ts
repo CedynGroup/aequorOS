@@ -15,7 +15,9 @@ import {
   apiBaseUrl,
   liquidityMonitoringApi,
 } from '@/lib/api/client';
+import { scopedQueryKey } from '@/lib/api/queryPolicy';
 import { getAccessToken, setAccessToken } from '@/lib/api/token';
+import { useQueryAuthorityScope } from '@/lib/api/useQueryScope';
 
 async function bearer(): Promise<string> {
   const cached = getAccessToken();
@@ -298,16 +300,18 @@ export function useLoanClassification(bankId: string | undefined) {
 export const useSdiLoanClassification = useLoanClassification;
 
 export function useSdiLiquidityPosition(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['sdi-liquidity-position', bankId],
+    queryKey: scopedQueryKey('sdi-liquidity-position', scope, bankId ?? null),
     queryFn: () => sdiFetch<SdiLiquidityPosition>(`/banks/${bankId}/sdi/liquidity-position`),
     enabled: Boolean(bankId),
   });
 }
 
 export function useLiquidityMonitoring(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['liquidity-monitoring', bankId],
+    queryKey: scopedQueryKey('liquidity-monitoring', scope, bankId ?? null),
     queryFn: async (): Promise<LiquidityMonitoring> => {
       const response = await apiCall(() =>
         liquidityMonitoringApi.getLiquidityMonitoring({ bankId: bankId! })

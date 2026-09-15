@@ -18,6 +18,7 @@ from app.api.deps import (
     CapitalAggregatedView,
     CapitalRestrictedView,
     DbSession,
+    LiquidityConfidentialResource,
     Tenant,
     TenantContext,
 )
@@ -348,14 +349,14 @@ def get_sdi_capital_assurance(
 def get_sdi_liquidity_position(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: LiquidityConfidentialResource,
     as_of: Annotated[date | None, Query()] = None,
 ) -> SdiLiquidityPositionRead:
     """Binding SDI LMTD liquidity measures: Table 1, reserves, and maturity ladder."""
-    bank = banks_service.resolve_bank_reference(db, ctx, bank_id)
-    when = _effective_as_of(db, ctx, bank, as_of)
-    position = sdi_views.get_sdi_liquidity_position(db, ctx, bank, when)
-    readiness = sdi_readiness.assess_sdi_readiness(db, ctx, bank, when)
+    bank = access.bank
+    when = _effective_as_of(db, access.ctx, bank, as_of)
+    position = sdi_views.get_sdi_liquidity_position(db, access.ctx, bank, when)
+    readiness = sdi_readiness.assess_sdi_readiness(db, access.ctx, bank, when)
     return SdiLiquidityPositionRead(
         as_of=position.as_of.isoformat(),
         ratios=[

@@ -1,8 +1,10 @@
 """Scenario analysis endpoints — compute-only what-if + saved analyses.
 
-The analysis POST is deliberately Tenant-gated (not MutationTenant): it
-mutates nothing, so a viewer can explore scenarios. Saving, and deleting a
-saved analysis, are analyst acts.
+The analysis POST mutates nothing, so it remains on the read-only principal
+dependency. Liquidity analysis nevertheless requires exact LIQ/confidential
+``run`` authority in the service; other modules retain their current behavior
+until their matrix cutovers. Saving and deleting use the transitional scoped
+mutation principal boundary.
 """
 
 from __future__ import annotations
@@ -12,7 +14,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import (
+    DbSession,
+    ScopedMutationTenant,
+    Tenant,
+)
 from app.schemas.scenario_workbench import (
     AnalysisRunCreate,
     AnalysisRunRead,
@@ -21,7 +27,7 @@ from app.schemas.scenario_workbench import (
     SavedAnalysisRead,
     WorkbenchModule,
 )
-from app.services import analysis_workbench
+from app.services import analysis_workbench, scenario_workbench_authorization
 
 router = APIRouter(tags=["scenario-workbench"])
 
@@ -52,9 +58,15 @@ def save_scenario_analysis(
     module: WorkbenchModule,
     payload: SavedAnalysisCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> SavedAnalysisRead:
-    return analysis_workbench.save_analysis(db, ctx, bank_id, module, payload)
+    return analysis_workbench.save_analysis(
+        db,
+        scenario_workbench_authorization.mutation_context(module, ctx),
+        bank_id,
+        module,
+        payload,
+    )
 
 
 @router.get(
@@ -98,6 +110,12 @@ def delete_scenario_analysis(
     module: WorkbenchModule,
     analysis_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> None:
-    analysis_workbench.delete_analysis(db, ctx, bank_id, module, analysis_id)
+    analysis_workbench.delete_analysis(
+        db,
+        scenario_workbench_authorization.mutation_context(module, ctx),
+        bank_id,
+        module,
+        analysis_id,
+    )

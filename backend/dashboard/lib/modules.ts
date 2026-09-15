@@ -140,11 +140,10 @@ export type ModuleScope = {
   hasInstitutionAuthority: boolean;
   institutionClass: string | null;
   /**
-   * Server-evaluated access to the exact institution's Liquidity Monitoring
-   * detail surface. Omitted/false is deny so navigation never infers authority
-   * from a legacy role or the broader liquidity module entitlement.
+   * Server-evaluated exact Liquidity capabilities for the selected
+   * institution. Omitted/false is deny, so navigation and controls never infer
+   * authority from a legacy role or the broader institution-type entitlement.
    */
-  liquidityMonitoringAccess?: boolean;
   /** Exact CAP/aggregated view authority for dashboards and summary checks. */
   capitalAggregatedView?: boolean;
   /** Exact CAP/confidential view authority for plans and run detail. */
@@ -153,6 +152,9 @@ export type ModuleScope = {
   capitalRestrictedView?: boolean;
   /** Exact CAP/confidential run authority. */
   capitalRun?: boolean;
+  liquidityAggregatedView?: boolean;
+  liquidityConfidentialView?: boolean;
+  riskConfidentialView?: boolean;
   /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than
@@ -249,12 +251,35 @@ function bindingControlledSubrouteHidden(
   path: string,
   scope: ModuleScope,
 ): boolean {
-  if (
-    (path === "/liquidity/monitoring" ||
-      path.startsWith("/liquidity/monitoring/")) &&
-    scope.liquidityMonitoringAccess !== true
-  ) {
-    return true;
+  if (path === "/liquidity" || path.startsWith("/liquidity/")) {
+    const confidentialRoutes = [
+      "/liquidity/forecast",
+      "/liquidity/monitoring",
+      "/liquidity/cfp",
+    ];
+    if (
+      confidentialRoutes.some(
+        (route) => path === route || path.startsWith(`${route}/`),
+      )
+    ) {
+      return scope.liquidityConfidentialView !== true;
+    }
+    if (
+      path === "/liquidity/stress" ||
+      path.startsWith("/liquidity/stress/")
+    ) {
+      return (
+        scope.liquidityConfidentialView !== true ||
+        scope.riskConfidentialView !== true
+      );
+    }
+    if (
+      scope.institutionClass === "sdi" &&
+      path === "/liquidity"
+    ) {
+      return scope.liquidityConfidentialView !== true;
+    }
+    return scope.liquidityAggregatedView !== true;
   }
   if (
     (path === "/basel/planning" || path.startsWith("/basel/planning/")) &&

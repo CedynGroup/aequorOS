@@ -20,7 +20,7 @@ import CrmHaircutCard from '@/components/institution/registers/CrmHaircutCard';
 import EclAssumptionCard from '@/components/institution/registers/EclAssumptionCard';
 
 export default function BoardRegistersPage() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
 
@@ -44,8 +44,12 @@ export default function BoardRegistersPage() {
           </p>
         ) : (
           <>
-            <ThresholdRegisterCard bankId={bankId} />
-            <EwiRegisterCard bankId={bankId} periodId={periodId} />
+            {moduleScope.liquidityConfidentialView && (
+              <>
+                <ThresholdRegisterCard bankId={bankId} />
+                <EwiRegisterCard bankId={bankId} periodId={periodId} />
+              </>
+            )}
             <CreditThresholdCard bankId={bankId} />
             <CrmHaircutCard bankId={bankId} />
             <EclAssumptionCard bankId={bankId} />

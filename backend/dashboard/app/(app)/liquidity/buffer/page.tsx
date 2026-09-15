@@ -64,11 +64,14 @@ const bufferColumns = (): Column<BufferRow>[] => [
 ];
 
 export default function LiquidityBuffer() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
   const dashboard = useLiquidityDashboard(bankId);
-  const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
+  const latestRun = useRegulatoryRun(
+    moduleScope.liquidityConfidentialView ? bankId : undefined,
+    dashboard.data?.latestRunId,
+  );
 
   const data = dashboard.data;
   const run = latestRun.data;

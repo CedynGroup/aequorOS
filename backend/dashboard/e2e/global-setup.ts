@@ -5,7 +5,11 @@
 
 import type { FullConfig } from "@playwright/test";
 import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../playwright.config";
-import { mintBackendToken, writeStorageState } from "./support/mint";
+import {
+  E2E_STORAGE_ROLES,
+  mintBackendToken,
+  writeStorageState,
+} from "./support/mint";
 
 const SAMPLE_BANK_ID = "BK-SAMP0001";
 
@@ -33,15 +37,7 @@ async function api(
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   if (process.env.E2E_CAPABILITY_ONLY === "1") {
-    for (const role of [
-      "admin",
-      "approver",
-      "analyst",
-      "viewer",
-      "account_admin",
-      "integration_admin",
-      "legacy_account_admin",
-    ] as const) {
+    for (const role of E2E_STORAGE_ROLES) {
       await writeStorageState(role, E2E_BASE_URL, E2E_TMP);
     }
     return;
@@ -73,15 +69,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     ownership_foreign_pct: "40",
   });
 
-  for (const role of [
-    "admin",
-    "approver",
-    "analyst",
-    "viewer",
-    "account_admin",
-    "integration_admin",
-    "legacy_account_admin",
-  ] as const) {
+  for (const role of E2E_STORAGE_ROLES) {
     await writeStorageState(role, E2E_BASE_URL, E2E_TMP);
   }
 }

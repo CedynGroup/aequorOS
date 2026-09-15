@@ -296,6 +296,7 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
         "require_capital_plan_approve",
         "require_ilaap_refresh",
         "require_grant_administration",
+        "get_scoped_mutation_tenant_context",
         "require_role_admin",
         "require_role_approver",
         "require_role_analyst",
@@ -362,6 +363,39 @@ def get_mutation_tenant_context(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This action requires the 'analyst' role or higher.",
+        )
+    return principal
+
+
+def get_scoped_mutation_tenant_context(
+    principal: Annotated[TenantContext, Depends(get_current_principal)],
+) -> TenantContext:
+    """Require an interactive human for a service-enforced scoped mutation.
+
+    This dependency deliberately checks no scalar role. The product service
+    resolves the target resource and requires the exact stored binding before
+    any write, enqueue, or network side effect. Its named presence keeps the
+    route-table mutation guard honest while later module cutovers share one
+    principal boundary.
+    """
+
+    if principal.impersonation_context is not None:
+        authorization_denied(
+            reason="impersonation_read_only_mutation",
+            organization_id=principal.organization_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Impersonation sessions are read-only; this action is not permitted.",
+        )
+    if principal.actor_user_id is None or principal.authorization_version is None:
+        authorization_denied(
+            reason="human_scoped_binding_required",
+            organization_id=principal.organization_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action requires an active scoped binding.",
         )
     return principal
 
@@ -638,65 +672,38 @@ def require_liquidity_monitoring_view(
 ) -> LiquidityMonitoringAccess:
     """Require one exact active LIQ/confidential view binding for the bank."""
 
-    from app.services import authorization as authorization_service  # noqa: PLC0415
-    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
-
-    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    return _require_liquidity_view(
+        request,
+        db,
+        ctx,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_monitoring",
+        denial_detail="Liquidity Monitoring access requires an active scoped binding.",
     )
-    if bank is None:
-        cross_tenant_attempt(
-            reason="bank_not_visible_to_tenant",
-            organization_id=ctx.organization_id,
-            bank_id=bank_id,
-            module="liq",
-        )
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    if ctx.actor_user_id is None or ctx.authorization_version is None:
-        authorization_denied(
-            reason="liquidity_monitoring_human_binding_required",
-            organization_id=ctx.organization_id,
-            bank_id=bank.id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Liquidity Monitoring access requires an active scoped binding.",
-        )
 
-    try:
-        decision = authorization_service.evaluate_liquidity_monitoring_view(
-            db,
-            organization_id=ctx.organization_id,
-            principal_id=ctx.actor_user_id,
-            institution=bank,
-            surface="liquidity_monitoring",
-        )
-    except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
-        authorization_denied(
-            reason="binding_evaluation_failed",
-            organization_id=ctx.organization_id,
-            actor_user_id=str(ctx.actor_user_id),
-            bank_id=bank.id,
-            module="liq",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Liquidity Monitoring access requires an active scoped binding.",
-        ) from exc
 
-    if not decision.allowed:
-        authorization_denied(
-            reason=decision.reason,
-            organization_id=ctx.organization_id,
-            actor_user_id=str(ctx.actor_user_id),
-            bank_id=bank.id,
-            module="liq",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Liquidity Monitoring access requires an active scoped binding.",
-        )
+def _require_liquidity_view(  # noqa: PLR0913 - complete authorization sentence
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+    *,
+    sensitivity: Sensitivity,
+    surface: str,
+    denial_detail: str = "Liquidity access requires an active scoped binding.",
+) -> LiquidityMonitoringAccess:
+    from app.core.authorization import Module, Permission  # noqa: PLC0415
+    from app.services import scoped_authorization  # noqa: PLC0415
+
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        str(request.path_params.get("bank_id", "")),
+        permission=Permission.VIEW,
+        module=Module.LIQUIDITY,
+        sensitivity=sensitivity,
+        surface=surface,
+        denial_detail=denial_detail,
+    )
     return LiquidityMonitoringAccess(ctx=ctx, bank=bank)
 
 
@@ -1068,6 +1075,38 @@ def require_ilaap_refresh(
     return capital_access
 
 
+def require_liquidity_aggregated_view(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> LiquidityMonitoringAccess:
+    """Require LIQ/aggregated view authority for one institution."""
+
+    return _require_liquidity_view(
+        request,
+        db,
+        ctx,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="liquidity_aggregated_view",
+    )
+
+
+def require_liquidity_confidential_view(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> LiquidityMonitoringAccess:
+    """Require LIQ/confidential view authority for one institution."""
+
+    return _require_liquidity_view(
+        request,
+        db,
+        ctx,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_confidential_view",
+    )
+
+
 def get_approver_tenant_context(
     principal: Annotated[TenantContext, Depends(get_mutation_tenant_context)],
 ) -> TenantContext:
@@ -1094,6 +1133,7 @@ def get_approver_tenant_context(
 
 Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
 MutationTenant = Annotated[TenantContext, Depends(get_mutation_tenant_context)]
+ScopedMutationTenant = Annotated[TenantContext, Depends(get_scoped_mutation_tenant_context)]
 ApproverTenant = Annotated[TenantContext, Depends(get_approver_tenant_context)]
 GrantAdminTenant = Annotated[TenantContext, Depends(require_grant_administration)]
 LiquidityMonitoringResource = Annotated[
@@ -1115,6 +1155,12 @@ CapitalPlanApproveAccess = Annotated[
     InstitutionPermissionAccess, Depends(require_capital_plan_approve)
 ]
 IlaapRefreshAccess = Annotated[InstitutionPermissionAccess, Depends(require_ilaap_refresh)]
+LiquidityAggregatedResource = Annotated[
+    LiquidityMonitoringAccess, Depends(require_liquidity_aggregated_view)
+]
+LiquidityConfidentialResource = Annotated[
+    LiquidityMonitoringAccess, Depends(require_liquidity_confidential_view)
+]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 
 

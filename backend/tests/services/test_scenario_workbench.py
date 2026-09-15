@@ -20,6 +20,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.models import BankReportingPeriod, RegulatoryRun
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.scenario_workbench import (
@@ -32,6 +40,7 @@ from app.schemas.scenario_workbench import (
 )
 from app.services import (
     analysis_workbench,
+    authorization,
     regulatory_capital,
     regulatory_liquidity,
     stress_scenarios,
@@ -44,7 +53,11 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID,
+    actor_user_id=DEMO_USER_ID,
+    authorization_version=1,
+)
 FOREIGN = TenantContext(organization_id=ISOLATED_ORG_ID, actor_user_id=DEMO_USER_ID)
 REPORTING_DATE = date(2026, 3, 31)
 
@@ -69,8 +82,27 @@ def _system_refs(*codes: str) -> list[ScenarioRefIn]:
     return [ScenarioRefIn(kind="system", code=code) for code in codes]
 
 
+def _grant_liquidity_analyst(db: Session) -> None:
+    authorization.create_role_binding(
+        db,
+        organization_id=DEMO_ORG_ID,
+        principal_user_id=DEMO_USER_ID,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.ANALYST,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION,
+            SAMPLE_BANK_ID,
+            ModuleScope.LIQUIDITY,
+            SensitivityScope.ALL,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "scenario-test"),
+        reason="exercise the Liquidity scenario workbench with exact authority",
+    )
+
+
 def test_catalogue_merges_system_and_custom_with_vocabulary(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
+    _grant_liquidity_analyst(db_session)
     period_id = _period_id(db_session)
 
     catalogue = stress_scenarios.list_catalogue(
@@ -106,6 +138,7 @@ def test_catalogue_merges_system_and_custom_with_vocabulary(db_session: Session)
 
 def test_custom_scenario_crud_guards(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
+    _grant_liquidity_analyst(db_session)
 
     # System codes are reserved.
     with pytest.raises(HTTPException) as excinfo:
@@ -194,6 +227,7 @@ def test_custom_scenario_crud_guards(db_session: Session) -> None:
 def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session) -> None:
     """The keystone: workbench numbers == official-run numbers, no run rows."""
     materialize_canonical_test_book(db_session)
+    _grant_liquidity_analyst(db_session)
     period_id = _period_id(db_session)
 
     # Official immutable runs (the governance path).
@@ -278,6 +312,7 @@ def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session)
 
 def test_overrides_failures_as_data_and_saved_analyses(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
+    _grant_liquidity_analyst(db_session)
     period_id = _period_id(db_session)
     runs_before = _run_count(db_session)
 

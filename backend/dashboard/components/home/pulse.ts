@@ -150,7 +150,9 @@ export function usePulseCards(
   const scoped = (module: LiveModule) =>
     isHrefVisible(LIVE_MODULE_HREFS[module], scope);
   const dataBankId = hasData ? bankId : undefined;
-  const liq = useLiquidityDashboard(dataBankId);
+  const liq = useLiquidityDashboard(
+    scope.liquidityAggregatedView ? dataBankId : undefined,
+  );
   const cap = useCapitalDashboard(scoped("capital") ? dataBankId : undefined);
   const irr = useIrrDashboard(scoped("irr") ? dataBankId : undefined);
   const fx = useFxDashboard(scoped("fx") ? dataBankId : undefined);

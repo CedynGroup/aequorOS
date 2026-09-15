@@ -1,8 +1,10 @@
 # Authorization foundation (as built through 2026-09-05)
 
 This document records the first bounded server-side slice of `docs/rbac.md`.
-The policy kernel remains additive. Liquidity Monitoring is the first product
-route enforced by it; the authorization-version check, effective-authority
+The policy kernel remains additive. Liquidity Monitoring and the remaining
+Liquidity dashboards, runs, forecasts, CFP lifecycle, thresholds/haircuts,
+scenario-workbench entries, regulatory-run rows, and SDI liquidity position
+are enforced by it; the authorization-version check, effective-authority
 projection, institution-discovery boundary, and Org Owner grant-administration
 boundary are also enforcing. Tenant grant create/list/revoke and the Members
 aggregation are live. Subsequent product cutovers are tracked in the

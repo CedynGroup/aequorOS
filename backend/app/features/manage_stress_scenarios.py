@@ -7,7 +7,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import (
+    DbSession,
+    ScopedMutationTenant,
+    Tenant,
+)
 from app.schemas.scenario_workbench import (
     ScenarioCatalogueRead,
     StressScenarioArchive,
@@ -16,7 +20,7 @@ from app.schemas.scenario_workbench import (
     StressScenarioUpdate,
     WorkbenchModule,
 )
-from app.services import stress_scenarios
+from app.services import scenario_workbench_authorization, stress_scenarios
 
 router = APIRouter(tags=["scenario-workbench"])
 
@@ -50,9 +54,15 @@ def create_stress_scenario(
     module: WorkbenchModule,
     payload: StressScenarioCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> StressScenarioRead:
-    return stress_scenarios.create_scenario(db, ctx, bank_id, module, payload)
+    return stress_scenarios.create_scenario(
+        db,
+        scenario_workbench_authorization.mutation_context(module, ctx),
+        bank_id,
+        module,
+        payload,
+    )
 
 
 @router.patch(
@@ -66,9 +76,16 @@ def update_stress_scenario(  # noqa: PLR0913 - path + payload of one write
     scenario_id: UUID,
     payload: StressScenarioUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> StressScenarioRead:
-    return stress_scenarios.update_scenario(db, ctx, bank_id, module, scenario_id, payload)
+    return stress_scenarios.update_scenario(
+        db,
+        scenario_workbench_authorization.mutation_context(module, ctx),
+        bank_id,
+        module,
+        scenario_id,
+        payload,
+    )
 
 
 @router.post(
@@ -82,6 +99,13 @@ def archive_stress_scenario(  # noqa: PLR0913 - path + payload of one write
     scenario_id: UUID,
     payload: StressScenarioArchive,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> StressScenarioRead:
-    return stress_scenarios.set_archived(db, ctx, bank_id, module, scenario_id, payload)
+    return stress_scenarios.set_archived(
+        db,
+        scenario_workbench_authorization.mutation_context(module, ctx),
+        bank_id,
+        module,
+        scenario_id,
+        payload,
+    )

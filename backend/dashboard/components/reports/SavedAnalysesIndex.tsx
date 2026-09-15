@@ -42,10 +42,13 @@ const WORKBENCH_HREFS: Record<WorkbenchModule, string> = {
 type AnalysisRow = SavedAnalysisSummaryRead & { periodLabel: string | null };
 
 export default function SavedAnalysesIndex() {
-  const { bank, periods } = useBankContext();
+  const { bank, periods, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
-  const liquidity = useSavedAnalyses(bankId, 'liquidity');
+  const liquidity = useSavedAnalyses(
+    moduleScope.liquidityAggregatedView ? bankId : undefined,
+    'liquidity',
+  );
   const capital = useSavedAnalyses(bankId, 'capital');
   const irr = useSavedAnalyses(bankId, 'irr');
   const fx = useSavedAnalyses(bankId, 'fx');

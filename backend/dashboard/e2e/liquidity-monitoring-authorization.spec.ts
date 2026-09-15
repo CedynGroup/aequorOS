@@ -42,13 +42,20 @@ test.describe("unbound Liquidity Monitoring user", () => {
   });
 });
 
-test.describe("bound Liquidity Monitoring user", () => {
-  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+test.describe("exactly bound Liquidity user", () => {
+  test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
-  test("shows navigation and opens the detail surface", async ({ page }) => {
+  test("shows only authorized Liquidity reads", async ({ page }) => {
     await page.goto("/liquidity");
+    await expect(
+      page.getByRole("heading", { name: "Liquidity Cockpit" }),
+    ).toBeVisible();
     const link = page.getByRole("link", { name: "Monitoring Tools" });
     await expect(link).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /Capital|IRR|FX|FTP/i }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Stress" })).toHaveCount(0);
     await link.click();
     await expect(page).toHaveURL(/\/liquidity\/monitoring$/);
     await expect(

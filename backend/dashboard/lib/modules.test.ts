@@ -11,7 +11,8 @@ import {
 } from "./modules";
 
 const resolved = (
-  liquidityMonitoringAccess: boolean,
+  liquidityAggregatedView: boolean,
+  liquidityConfidentialView = liquidityAggregatedView,
   capital: Partial<ModuleScope> = {},
 ): ModuleScope => ({
   modules: new Set([
@@ -29,7 +30,9 @@ const resolved = (
   organizationModules: new Set(["settings"]),
   hasInstitutionAuthority: true,
   institutionClass: "bank",
-  liquidityMonitoringAccess,
+  liquidityAggregatedView,
+  liquidityConfidentialView,
+  riskConfidentialView: true,
   capitalAggregatedView: true,
   capitalConfidentialView: true,
   capitalRestrictedView: true,
@@ -38,17 +41,36 @@ const resolved = (
   isResolved: true,
 });
 
-const denied = resolved(false);
+const denied = resolved(false, false);
 assert.equal(isHrefVisible("/liquidity/monitoring", denied), false);
 assert.equal(isPathVisible("/liquidity/monitoring", denied), false);
 assert.equal(isPathVisible("/liquidity/monitoring/detail", denied), false);
-assert.equal(isHrefVisible("/liquidity", denied), true);
-assert.equal(isPathVisible("/liquidity", denied), true);
+assert.equal(isHrefVisible("/liquidity", denied), false);
+assert.equal(isPathVisible("/liquidity", denied), false);
 assert.equal(isHrefVisible("/basel", denied), true);
 
-const allowed = resolved(true);
+const aggregatedOnly = resolved(true, false);
+assert.equal(isHrefVisible("/liquidity", aggregatedOnly), true);
+assert.equal(isHrefVisible("/liquidity/buffer", aggregatedOnly), true);
+assert.equal(isHrefVisible("/liquidity/stress", aggregatedOnly), false);
+assert.equal(isHrefVisible("/liquidity/forecast", aggregatedOnly), false);
+assert.equal(isHrefVisible("/liquidity/cfp", aggregatedOnly), false);
+
+const confidentialOnly = resolved(false, true);
+assert.equal(isHrefVisible("/liquidity", confidentialOnly), false);
+assert.equal(isHrefVisible("/liquidity/monitoring", confidentialOnly), true);
+assert.equal(isHrefVisible("/liquidity/cfp", confidentialOnly), true);
+
+const allowed = resolved(true, true);
 assert.equal(isHrefVisible("/liquidity/monitoring", allowed), true);
 assert.equal(isPathVisible("/liquidity/monitoring", allowed), true);
+assert.equal(isHrefVisible("/liquidity/stress", allowed), true);
+const liquidityOnly = {
+  ...allowed,
+  modules: new Set(["liquidity"] as const),
+  riskConfidentialView: false,
+};
+assert.equal(isHrefVisible("/liquidity/stress", liquidityOnly), false);
 assert.equal(
   hasEffectiveCapability(
     [
@@ -66,7 +88,7 @@ assert.equal(
   false,
 );
 
-const aggregatedCapitalOnly = resolved(true, {
+const aggregatedCapitalOnly = resolved(true, true, {
   capitalConfidentialView: false,
   capitalRestrictedView: false,
   capitalRun: false,
@@ -78,14 +100,14 @@ assert.equal(isPathVisible("/basel/stress", aggregatedCapitalOnly), true);
 assert.equal(isHrefVisible("/basel/planning", aggregatedCapitalOnly), false);
 assert.equal(isPathVisible("/basel/planning", aggregatedCapitalOnly), false);
 
-const confidentialCapitalOnly = resolved(true, {
+const confidentialCapitalOnly = resolved(true, true, {
   capitalAggregatedView: false,
 });
 assert.equal(isHrefVisible("/basel", confidentialCapitalOnly), false);
 assert.equal(isPathVisible("/basel", confidentialCapitalOnly), false);
 assert.equal(isHrefVisible("/basel/planning", confidentialCapitalOnly), true);
 
-const deniedCapital = resolved(true, {
+const deniedCapital = resolved(true, true, {
   capitalAggregatedView: false,
   capitalConfidentialView: false,
 });
@@ -98,7 +120,8 @@ const ownerOnly: ModuleScope = {
   organizationModules: new Set(["settings"]),
   hasInstitutionAuthority: false,
   institutionClass: null,
-  liquidityMonitoringAccess: false,
+  liquidityAggregatedView: false,
+  liquidityConfidentialView: false,
   isResolved: true,
 };
 assert.equal(isHrefVisible("/settings", ownerOnly), true);
@@ -129,7 +152,8 @@ const unresolved: ModuleScope = {
   organizationModules: new Set(),
   hasInstitutionAuthority: false,
   institutionClass: null,
-  liquidityMonitoringAccess: false,
+  liquidityAggregatedView: false,
+  liquidityConfidentialView: false,
   isResolved: false,
 };
 assert.equal(isHrefVisible("/liquidity/monitoring", unresolved), false);

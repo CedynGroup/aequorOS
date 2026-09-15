@@ -23,6 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.liquidity.engine import (
     FACT_GROUP_SECURITIES,
@@ -91,6 +92,7 @@ from app.services import (
     filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
+    scoped_authorization,
     withdrawal_impact,
 )
 from app.services.audit import record_event
@@ -238,6 +240,18 @@ def list_regulatory_runs(  # noqa: PLR0913
         RegulatoryRun.organization_id == ctx.organization_id,
         RegulatoryRun.bank_id == bank.id,
     )
+    if module is None or module == MODULE_LIQUIDITY:
+        liquidity_decision = scoped_authorization.evaluate_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.VIEW,
+            module=Module.LIQUIDITY,
+            sensitivity=Sensitivity.AGGREGATED,
+            surface="regulatory_run_list_liquidity",
+        )
+        if liquidity_decision is None or not liquidity_decision.allowed:
+            conditions += (RegulatoryRun.module != MODULE_LIQUIDITY,)
     if module is not None:
         conditions += (RegulatoryRun.module == module,)
     if reporting_period_id is not None:
@@ -276,7 +290,20 @@ def get_regulatory_run(
     db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
 ) -> RegulatoryRunRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    return _read_run(db, _run_or_404(db, ctx, bank.id, run_id))
+    run = _run_or_404(db, ctx, bank.id, run_id)
+    if run.module == MODULE_LIQUIDITY:
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.VIEW,
+            module=Module.LIQUIDITY,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+            surface="regulatory_run_detail_liquidity",
+            denial_status=status.HTTP_404_NOT_FOUND,
+            denial_detail="Regulatory run not found.",
+        )
+    return _read_run(db, run)
 
 
 def get_liquidity_dashboard(

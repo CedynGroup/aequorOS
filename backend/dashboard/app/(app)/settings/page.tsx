@@ -27,7 +27,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import RunBadge from "@/components/ui/RunBadge";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
-import { useBankContext } from "@/components/shell/BankContext";
+import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
 import {
   useTheme,
   type ThemePreference,
@@ -290,8 +290,12 @@ function AppearancePanel() {
 
 function DataComputePanel({ bankId }: { bankId: string | undefined }) {
   const health = useRiskServiceHealth();
+  const canViewCashflow = useModuleScope().liquidityConfidentialView === true;
   // Tiny query against the cashflow proxy — 503 means the ML sidecar is offline.
-  const sidecarProbe = useCashflowHistory(bankId, 30);
+  const sidecarProbe = useCashflowHistory(
+    canViewCashflow ? bankId : undefined,
+    30,
+  );
   const connections = useMarketDataConnections(bankId);
 
   const riskServiceTone: StatusTone = health.isLoading
@@ -305,16 +309,20 @@ function DataComputePanel({ bankId }: { bankId: string | undefined }) {
       ? "OK"
       : "Down";
 
-  const sidecarTone: StatusTone = sidecarProbe.isLoading
+  const sidecarTone: StatusTone = !canViewCashflow
     ? "slate"
-    : sidecarProbe.data
-      ? "success"
-      : "amber";
-  const sidecarStatus = sidecarProbe.isLoading
-    ? "Checking…"
-    : sidecarProbe.data
-      ? "OK"
-      : "Offline";
+    : sidecarProbe.isLoading
+      ? "slate"
+      : sidecarProbe.data
+        ? "success"
+        : "amber";
+  const sidecarStatus = !canViewCashflow
+    ? "Restricted"
+    : sidecarProbe.isLoading
+      ? "Checking…"
+      : sidecarProbe.data
+        ? "OK"
+        : "Offline";
 
   const connectionRows = connections.data?.connections ?? [];
   const activeConnections = connectionRows.filter(

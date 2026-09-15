@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import PageHeader from '@/components/ui/PageHeader';
+import { useModuleScope } from '@/components/shell/BankContext';
 import KpiStat from '@/components/ui/KpiStat';
 import QueryBoundary from '@/components/ui/QueryBoundary';
 import SectionCard from '@/components/ui/SectionCard';
@@ -115,9 +116,12 @@ export default function SdiLiquidityMonitoringView({
   institutionClass: string | null;
 }) {
   const isSdi = institutionClass === 'sdi';
+  const scope = useModuleScope();
   const monitoring = useLiquidityMonitoring(bankId);
   const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bankId : undefined);
-  const baselLiquidity = useLiquidityDashboard(isSdi ? undefined : bankId);
+  const baselLiquidity = useLiquidityDashboard(
+    !isSdi && scope.liquidityAggregatedView ? bankId : undefined,
+  );
   const data = monitoring.data;
   const sdiData = sdiLiquidity.data;
   const baselData = baselLiquidity.data;

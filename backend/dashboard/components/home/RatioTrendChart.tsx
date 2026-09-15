@@ -60,6 +60,7 @@ export default function RatioTrendChart({
     bankId,
     periodId,
     moduleScope.capitalAggregatedView === true,
+    moduleScope.liquidityAggregatedView === true,
   );
 
   const rows = useMemo<TrendRow[]>(() => {
