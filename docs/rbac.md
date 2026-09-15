@@ -301,7 +301,7 @@ deliberately capped to avoid role explosion.
 | **Org Owner**                     | _(top of `admin`)_        | Bank's account owner                         | Org Admin **+** `billing:*`, `org:transfer`, `org:delete`             | cross-tenant anything                           |
 | **Billing Manager**               | _(new, optional)_         | Subscription & seats                         | `billing:*`                                                           | domain data                                     |
 
-**Migration note (as built through 2026-08-28):** today's single `admin`
+**Migration note (as built through 2026-09-09):** today's single `admin`
 conflated account administration with operational superuser authority — a
 segregation-of-duties smell (Snowflake's rule: never mix account-management
 privileges with entity privileges in one role). Foundation migration
@@ -312,6 +312,10 @@ analyst/approver rank is not grandfathered. Initial ownership is automatic only
 for exactly one active human legacy administrator. Zero/multiple-candidate
 organizations receive no owner binding and are persisted in
 `organization_owner_assignments` for explicit staff designation.
+Migration `202609090051` leaves those ownership decisions untouched while
+restoring least-privilege Account administration to eligible administrators in
+unowned multi-candidate organizations; the authoritative rollout behavior is in
+`backend/docs/account_administration_enforcement_rollout.md`.
 
 ### 6.2 A user can hold more than one scoped bundle
 

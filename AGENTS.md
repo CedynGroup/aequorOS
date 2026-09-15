@@ -152,6 +152,12 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   organization capabilities. SSO approval/grant administration still requires the
   `org_owner` bundle. Integration-key issuance remains the compatibility exception until
   the bank-scoped machine-principal cutover tracked by issue #175.
+  **Unowned-tenant compatibility restoration (built 2026-09-09; migration
+  `202609090051`).** Eligible administrators in unresolved multi-candidate
+  organizations regain only organization-wide ACCOUNT/restricted `account_admin`
+  authority. Ownership and directory view remain unassigned; explicit staff owner
+  designation is still required. The authoritative rollout contract is
+  `backend/docs/account_administration_enforcement_rollout.md`.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).
