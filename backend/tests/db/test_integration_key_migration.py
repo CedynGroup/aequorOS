@@ -29,7 +29,7 @@ pytestmark = pytest.mark.committing_db
 def test_upgrade_keeps_legacy_keys_unscoped_and_creates_no_binding(
     migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    command.downgrade(alembic_config_for_app(), "202608290047")
+    command.downgrade(alembic_config_for_app(), "202609090051")
     clear_database_caches()
     organization_id = "OR-KEYM0001"
     creator_id = uuid4()
@@ -214,7 +214,7 @@ def test_downgrade_refuses_to_discard_issued_bank_targets(
         )
 
     with pytest.raises(RuntimeError, match="Cannot safely downgrade"):
-        command.downgrade(alembic_config_for_app(), "202608290047")
+        command.downgrade(alembic_config_for_app(), "202609090051")
     clear_database_caches()
 
     # Leave the fixture on the prior revision so its normal base downgrade can
@@ -228,7 +228,7 @@ def test_downgrade_refuses_to_discard_issued_bank_targets(
             text("UPDATE integration_keys SET bank_id = NULL WHERE id = :key_id"),
             {"key_id": key_id},
         )
-    command.downgrade(alembic_config_for_app(), "202608290047")
+    command.downgrade(alembic_config_for_app(), "202609090051")
     clear_database_caches()
 
     with migrated_postgres_schema.app_engine.begin() as connection:

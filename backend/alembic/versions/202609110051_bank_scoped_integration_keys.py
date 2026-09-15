@@ -1,7 +1,7 @@
 """Bind integration keys to one exact institution.
 
 Revision ID: 202609110051
-Revises: 202608290047
+Revises: 202609090051
 
 Existing keys deliberately remain NULL-scoped. No bank or machine authority is
 inferred during migration; those credentials are denied until operators rotate
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "202609110051"
-down_revision = "202608290047"
+down_revision = "202609090051"
 branch_labels = None
 depends_on = None
 
