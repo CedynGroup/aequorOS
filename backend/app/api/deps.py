@@ -724,7 +724,7 @@ def require_integration_push_ingest(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
 
     # Locking the key serializes this request with revocation. The lock remains
-    # held through the route's service commit, so a key cannot be revoked after
+    # held through the route-boundary commit, so a key cannot be revoked after
     # authorization but before its storage/database mutation completes.
     integration_keys.lock_authenticated_key(db, ctx)
     bank = db.scalar(

@@ -6,8 +6,7 @@ returns the same batch + validation report shape, so downstream tooling does
 not care how the data arrived. Public contract: docs/API_INTEGRATION.md.
 
 The ``bank_id`` path segment accepts the platform institution ID
-(BK-XXXXXXXX) — the identifier banks are onboarded with — or the internal
-bank UUID for backward compatibility.
+(BK-XXXXXXXX) — the identifier banks are onboarded with.
 
 Auth: an integration key (`aeq_live_...`) is the bearer credential. It resolves
 to a tenant-scoped service account through the separate integration-key

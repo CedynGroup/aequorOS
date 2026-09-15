@@ -286,7 +286,7 @@ def test_restoration_grants_only_unresolved_eligible_administrators_and_is_idemp
         for organization_id in (ZERO_ORG, MANY_ORG, OWNED_ORG, EXISTING_ORG)
     }
 
-    command.upgrade(config, "head")
+    command.upgrade(config, "202609090051")
     clear_database_caches()
 
     assert _account_bindings(migrated_postgres_schema, ZERO_ORG) == []
@@ -387,7 +387,8 @@ def test_restoration_grants_only_unresolved_eligible_administrators_and_is_idemp
     }
 
     command.stamp(config, "202608290047")
-    command.upgrade(config, "head")
+    # Replay only the restoration under test, not later schema migrations.
+    command.upgrade(config, "202609090051")
     clear_database_caches()
 
     assert {
@@ -431,3 +432,17 @@ def test_restoration_grants_only_unresolved_eligible_administrators_and_is_idemp
             text("UPDATE users SET auth_provider = 'password' WHERE id = :user_id"),
             {"user_id": zero_service},
         )
+
+    # The restored human grants must also permit the subsequent migration chain.
+    command.upgrade(config, "head")
+    clear_database_caches()
+    for organization_id in (ZERO_ORG, MANY_ORG, OWNED_ORG, EXISTING_ORG):
+        assert _account_bindings(migrated_postgres_schema, organization_id) == snapshot["bindings"][
+            organization_id
+        ]
+        assert _owner_state(migrated_postgres_schema, organization_id) == snapshot["assignments"][
+            organization_id
+        ]
+        assert _owner_bindings(migrated_postgres_schema, organization_id) == snapshot["owners"][
+            organization_id
+        ]

@@ -301,7 +301,7 @@ deliberately capped to avoid role explosion.
 | **Org Owner**                     | _(top of `admin`)_        | Bank's account owner                         | Org Admin **+** `billing:*`, `org:transfer`, `org:delete`             | cross-tenant anything                           |
 | **Billing Manager**               | _(new, optional)_         | Subscription & seats                         | `billing:*`                                                           | domain data                                     |
 
-**Migration note (as built through 2026-09-09):** today's single `admin`
+**Migration note (as built through 2026-09-11):** today's single `admin`
 conflated account administration with operational superuser authority — a
 segregation-of-duties smell (Snowflake's rule: never mix account-management
 privileges with entity privileges in one role). Foundation migration
@@ -316,6 +316,11 @@ Migration `202609090051` leaves those ownership decisions untouched while
 restoring least-privilege Account administration to eligible administrators in
 unowned multi-candidate organizations; the authoritative rollout behavior is in
 `backend/docs/account_administration_enforcement_rollout.md`.
+Migration `202609110051` follows `202609090051` in the same linear chain and
+preserves that human compatibility authority. It adds the integration-key bank
+target without assigning banks or machine bindings to existing credentials; see
+the [machine-principal rollout](../backend/docs/integration_key_machine_principal_rollout.md)
+for inventory, rotation, and rollback.
 
 ### 6.2 A user can hold more than one scoped bundle
 

@@ -14,7 +14,7 @@ Base URL: `http://<host>:8003/api/v1` (adjust per environment).
 
 ## 1. Authentication
 
-An **integration key**, sent as the bearer credential on every request:
+An **integration key**, sent as the bearer credential on every API Push request:
 
 ```
 Authorization: Bearer aeq_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -34,6 +34,11 @@ push routes. They remain visible to administrators as **Unscoped — rotate**.
 The platform does not infer a bank or backfill authority. A key used against a
 different bank returns `404` so the machine principal cannot probe which sibling
 institutions exist.
+
+Integration keys are accepted only on the four push-batch routes in §2; ordinary
+tenant reads and human-session endpoints return `401`. Human access tokens
+cannot call API Push (`403`). Use an authorized human session for mapping
+configuration and ingestion diagnostics.
 
 > **Production note.** Deployments may additionally front these endpoints
 > with OAuth2 client-credentials or mTLS; the resource design below does
@@ -185,7 +190,7 @@ forgiving spreadsheet path):
 Records that fail these rules do not fail the request: they land in the
 batch's `translation_failures` (raw record preserved, per-field error
 messages) and the rest of the batch proceeds — same semantics as file
-ingestion. Fetch them at
+ingestion. Using an authorized human session, fetch them at
 `GET /banks/{bank_id}/ingestion-batches/{batch_id}/translation-failures`.
 
 ### 3.1 `gl_account`
@@ -399,7 +404,8 @@ as-is by the calculation modules. Valid keys under `"reference"`:
 
 ## 4. Mapping configs (when your field names differ)
 
-If your middleware cannot emit canonical field names, activate a
+If your middleware cannot emit canonical field names, use an authorized human
+session to activate a
 `MappingConfig` with `source_system: "API_PUSH"` via
 `POST /banks/{bank_id}/mapping-configs`. `source_table` is the payload key
 (`"gl_account"`, `"position"`, a reference kind, …); `fields` maps canonical
@@ -500,11 +506,12 @@ the same dataset:
 cd backend
 .venv/bin/python scripts/push_api_example.py \
   --base-url http://127.0.0.1:8003 \
-  --org-id 11111111-1111-4111-8111-111111111111 \
-  --user-id aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa \
-  --bank-id <bank uuid> \
+  --token "$AEQ_INTEGRATION_KEY" \
+  --bank-id BK-XXXXXXXX \
   --as-of 2026-04-30
 ```
+
+Set `AEQ_INTEGRATION_KEY` to a key issued for the exact `--bank-id` target.
 
 Condensed transcript:
 
