@@ -969,7 +969,8 @@ def main() -> None:
         "Per-book files carry an `as_of_date` column. `push_sdi.py` groups by date and runs the",
         "three-call flow per date — start light, then widen:",
         "```bash",
-        f"BASE_URL=http://localhost:8001 TOKEN=<admin or aeq_live_… key> BANK={args.bank} \\",
+        "BASE_URL=http://localhost:8001 "
+        f"TOKEN='<aeq_live_… key issued for BANK>' BANK={args.bank} \\",
         "  python onboarding/aequoros_sdi/push_sdi.py --cadence monthly   # 10y month-ends",
         "#                                            --cadence weekly    # + Friday LMTD closes",
         "#                                            --cadence daily     # + recent daily EOD",
