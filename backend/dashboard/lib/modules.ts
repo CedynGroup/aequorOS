@@ -157,6 +157,16 @@ export type ModuleScope = {
   liquidityAggregatedView?: boolean;
   liquidityConfidentialView?: boolean;
   riskConfidentialView?: boolean;
+  /** Exact IRRBB/aggregated/view authority for every `/irr` dashboard page. */
+  irrbbAggregatedView?: boolean;
+  /** Exact IRRBB/confidential/view authority for saved-analysis detail and indexes. */
+  irrbbConfidentialView?: boolean;
+  /** Exact IRRBB/confidential/run authority for regulatory and compute-only engines. */
+  irrbbRun?: boolean;
+  /** Exact IRRBB/confidential/create authority for saved scenario artifacts. */
+  irrbbCreate?: boolean;
+  /** Exact IRRBB/confidential/edit authority for saved scenario artifacts. */
+  irrbbEdit?: boolean;
   /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than
@@ -295,6 +305,12 @@ function bindingControlledSubrouteHidden(
   ) {
     return true;
   }
+  if (path === "/irr/scenarios" || path.startsWith("/irr/scenarios/")) {
+    return scope.irrbbConfidentialView !== true;
+  }
+  if (path === "/irr" || path.startsWith("/irr/")) {
+    return scope.irrbbAggregatedView !== true;
+  }
   return false;
 }
 
@@ -307,6 +323,8 @@ const LIQUIDITY_AGGREGATED_VIEW = "Liquidity Monitoring · Aggregated · View";
 const LIQUIDITY_CONFIDENTIAL_VIEW =
   "Liquidity Monitoring · Confidential · View";
 const RISK_CONFIDENTIAL_VIEW = "Risk & Limits · Confidential · View";
+const IRRBB_AGGREGATED_VIEW = "IRRBB · Aggregated · View";
+const IRRBB_CONFIDENTIAL_VIEW = "IRRBB · Confidential · View";
 
 function permissionReason(permissions: readonly string[]): string | undefined {
   if (permissions.length === 0) return undefined;
@@ -353,6 +371,21 @@ function liquidityPermissionReason(
     missing.push(RISK_CONFIDENTIAL_VIEW);
   }
   return permissionReason(missing);
+}
+
+function irrbbPermissionReason(
+  path: string,
+  scope: ModuleScope,
+): string | undefined {
+  if (path !== "/irr" && !path.startsWith("/irr/")) return undefined;
+  if (path === "/irr/scenarios" || path.startsWith("/irr/scenarios/")) {
+    return scope.irrbbConfidentialView === true
+      ? undefined
+      : permissionReason([IRRBB_CONFIDENTIAL_VIEW]);
+  }
+  return scope.irrbbAggregatedView === true
+    ? undefined
+    : permissionReason([IRRBB_AGGREGATED_VIEW]);
 }
 
 const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings"]);
@@ -438,7 +471,9 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
     }
   }
 
-  const reason = liquidityPermissionReason(path, scope);
+  const reason =
+    liquidityPermissionReason(path, scope) ??
+    irrbbPermissionReason(path, scope);
   if (reason) {
     return { state: "disabled", reason };
   }

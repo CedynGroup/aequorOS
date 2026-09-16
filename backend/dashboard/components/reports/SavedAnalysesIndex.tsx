@@ -51,7 +51,10 @@ export default function SavedAnalysesIndex() {
     "liquidity",
   );
   const capital = useSavedAnalyses(bankId, "capital");
-  const irr = useSavedAnalyses(bankId, "irr");
+  const irr = useSavedAnalyses(
+    moduleScope.irrbbConfidentialView ? bankId : undefined,
+    "irr",
+  );
   const fx = useSavedAnalyses(bankId, "fx");
   const ftp = useSavedAnalyses(bankId, "ftp");
 

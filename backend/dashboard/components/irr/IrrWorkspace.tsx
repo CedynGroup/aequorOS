@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Shared frame for every IRRBB workspace tab: page header (freshness badge,
@@ -7,21 +7,24 @@
  * data wiring identical so each page is purely presentational.
  */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from "react";
+import { Play } from "lucide-react";
 import type {
   IrrDashboardRead,
   IrrMetricsRead,
   RegulatoryRunRead,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import { useBankContext } from '@/components/shell/BankContext';
-import LiveEngineNote from '@/components/live/LiveEngineNote';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import DisabledWithReason from "@/components/ui/DisabledWithReason";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { useBankContext } from "@/components/shell/BankContext";
+import LiveEngineNote from "@/components/live/LiveEngineNote";
 import {
   useIrrDashboard,
   useRegulatoryRun,
-} from '@/lib/api/hooks';
-import { fmtDateUTC } from '@/lib/api/values';
+  useRunAllIrrScenarios,
+} from "@/lib/api/hooks";
+import { fmtDateUTC } from "@/lib/api/values";
 
 export type IrrTabContext = {
   data: IrrDashboardRead;
@@ -44,8 +47,12 @@ export default function IrrWorkspace({
   subtitle: string;
   children: (ctx: IrrTabContext) => ReactNode;
 }) {
-  const { bank } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
+  const periodId = period?.id;
+  const canRun = moduleScope.irrbbRunAccess === true;
+  const runAll = useRunAllIrrScenarios(bankId);
+  const [runError, setRunError] = useState<string | null>(null);
 
   const dashboard = useIrrDashboard(bankId);
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
@@ -53,19 +60,54 @@ export default function IrrWorkspace({
   const data = dashboard.data;
   const m = data?.metrics;
 
+  const runScenarios = async () => {
+    if (!periodId || !canRun) return;
+    setRunError(null);
+    try {
+      await runAll.mutateAsync({ reportingPeriodId: periodId });
+    } catch {
+      setRunError("The IRRBB scenarios could not be run.");
+    }
+  };
 
   return (
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Interest Rate Risk', href: '/irr' },
+          { label: "Modules", href: "/" },
+          { label: "Interest Rate Risk", href: "/irr" },
           { label: crumb },
         ]}
         title="Interest Rate Risk"
         subtitle={subtitle}
-        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
+        action={
+          data ? (
+            <div className="flex items-center gap-2">
+              <LiveEngineNote live={data.live} stored={data.stored} />
+              <DisabledWithReason
+                disabled={!canRun}
+                reason="Requires IRRBB run permission for confidential data. An Organization Owner can grant an Analyst IRRBB binding."
+              >
+                <button
+                  type="button"
+                  className="btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!canRun || !periodId || runAll.isPending}
+                  onClick={() => void runScenarios()}
+                >
+                  <Play size={14} aria-hidden />
+                  {runAll.isPending ? "Running…" : "Run IRRBB scenarios"}
+                </button>
+              </DisabledWithReason>
+            </div>
+          ) : undefined
+        }
       />
+
+      {runError ? (
+        <p className="mx-8 mt-4 text-caption text-critical" role="alert">
+          {runError}
+        </p>
+      ) : null}
 
       <QueryBoundary
         isLoading={dashboard.isLoading}

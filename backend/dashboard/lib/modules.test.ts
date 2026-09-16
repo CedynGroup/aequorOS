@@ -14,7 +14,7 @@ import {
 const resolved = (
   liquidityAggregatedView: boolean,
   liquidityConfidentialView = liquidityAggregatedView,
-  capital: Partial<ModuleScope> = {},
+  capabilities: Partial<ModuleScope> = {},
 ): ModuleScope => ({
   entitledModules: new Set([
     "command_center",
@@ -39,6 +39,7 @@ const resolved = (
     "institution",
     "reports",
     "settings",
+    "irrbb",
   ]),
   organizationModules: new Set(["settings"]),
   hasInstitutionAuthority: true,
@@ -50,7 +51,12 @@ const resolved = (
   capitalConfidentialView: true,
   capitalRestrictedView: true,
   capitalRun: true,
-  ...capital,
+  irrbbAggregatedView: true,
+  irrbbConfidentialView: true,
+  irrbbRun: true,
+  irrbbCreate: true,
+  irrbbEdit: true,
+  ...capabilities,
   isResolved: true,
 });
 
@@ -77,6 +83,22 @@ assert.deepEqual(
       "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
   },
 );
+const deniedIrrbb = resolved(true, true, {
+  irrbbAggregatedView: false,
+  irrbbConfidentialView: false,
+});
+assert.equal(isHrefVisible("/irr", deniedIrrbb), false);
+assert.equal(isPathVisible("/irr/sensitivity", deniedIrrbb), false);
+assert.deepEqual(hrefAccess("/irr", deniedIrrbb), {
+  state: "disabled",
+  reason:
+    "Requires IRRBB · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.deepEqual(hrefAccess("/irr/scenarios", deniedIrrbb), {
+  state: "disabled",
+  reason:
+    "Requires IRRBB · Confidential · View. Ask your organization owner or admin to grant it.",
+});
 
 const aggregatedOnly = resolved(true, false);
 assert.equal(isHrefVisible("/liquidity", aggregatedOnly), true);
@@ -161,6 +183,11 @@ const ownerOnly: ModuleScope = {
   institutionClass: null,
   liquidityAggregatedView: false,
   liquidityConfidentialView: false,
+  irrbbAggregatedView: false,
+  irrbbConfidentialView: false,
+  irrbbRun: false,
+  irrbbCreate: false,
+  irrbbEdit: false,
   isResolved: true,
 };
 assert.equal(isHrefVisible("/settings", ownerOnly), true);
@@ -193,6 +220,11 @@ const unresolved: ModuleScope = {
   institutionClass: null,
   liquidityAggregatedView: false,
   liquidityConfidentialView: false,
+  irrbbAggregatedView: false,
+  irrbbConfidentialView: false,
+  irrbbRun: false,
+  irrbbCreate: false,
+  irrbbEdit: false,
   isResolved: false,
 };
 assert.equal(isHrefVisible("/liquidity/monitoring", unresolved), false);

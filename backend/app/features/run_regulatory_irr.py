@@ -5,14 +5,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, Tenant
+from app.core.authorization import Permission, Sensitivity
 from app.schemas.regulatory_irr import (
     IrrDashboardRead,
     IrrEarAnalysisRead,
     IrrScenarioBatchCreate,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
-from app.services import regulatory_irr
+from app.services import irr_authorization, regulatory_irr
 
 router = APIRouter(tags=["regulatory-irr"])
 
@@ -27,8 +28,17 @@ def run_all_irr_scenarios(
     bank_id: str,
     payload: IrrScenarioBatchCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: Tenant,
 ) -> RegulatoryRunBatchRead:
+    irr_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="irrbb_run_all_scenarios",
+        denial_detail="Running IRRBB calculations requires an active scoped binding.",
+    )
     return regulatory_irr.run_all_irr_scenarios(db, ctx, bank_id, payload)
 
 
@@ -50,6 +60,15 @@ def compute_ear_analysis(  # noqa: PLR0913 - the workbench seam names its full s
     The stored regulatory runs keep the 12-month ±200 bp figures; bounds are
     validated in the service (1..60 months, ±25..±500 bp on the 25 bp grid).
     """
+    irr_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="irrbb_ear_analysis",
+        denial_detail="Running IRRBB analysis requires an active scoped binding.",
+    )
     return regulatory_irr.compute_ear_analysis(
         db,
         ctx,
@@ -71,4 +90,12 @@ def get_irr_dashboard(
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> IrrDashboardRead:
+    irr_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="irrbb_dashboard",
+    )
     return regulatory_irr.get_irr_dashboard(db, ctx, bank_id, reporting_period_id)

@@ -19,14 +19,25 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.models import BankFinancialFact, ParamStressShock
+from app.core.authorization import (
+    BindingStatus,
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
+from app.models import AuthorizationBinding, BankFinancialFact, ParamStressShock
 from tests.real_data import (
     REAL_BANK_ID,
     REAL_ORG_ID,
+    REAL_USER_ID,
     other_headers,
     real_headers,
     requires_real_data,
@@ -55,6 +66,51 @@ OPTIONAL_EVE_SCENARIOS = ["parallel_up_450", "parallel_down_450"]
 IRR_FACT_GROUPS = {"irr_position", "irr_swap"}
 GAP_BUCKET_COUNT = 9  # the engine's fixed repricing ladder (overnight … 5y+)
 IRR_VALIDATION_RULES = {"eve_within_limit", "ear_within_limit", "duration_gap_reasonable"}
+
+
+@pytest.fixture(autouse=True)
+def _grant_explicit_irrbb_test_authority(real_session: Session) -> None:
+    """Keep the opt-in primary-data suite independent of production grants.
+
+    The fixture transaction is rolled back by ``real_session``. It inserts the
+    exact rows the exercised surfaces require without invalidating the real
+    user's sessions or changing their authorization version.
+    """
+
+    real_session.info["organization_id"] = REAL_ORG_ID
+    real_session.add_all(
+        [
+            AuthorizationBinding(
+                organization_id=REAL_ORG_ID,
+                principal_user_id=REAL_USER_ID,
+                principal_type=PrincipalType.HUMAN.value,
+                role_bundle=RoleBundle.VIEWER.value,
+                institution_scope=InstitutionScope.INSTITUTION.value,
+                institution_id=REAL_BANK_ID,
+                module_scope=ModuleScope.IRRBB.value,
+                sensitivity_scope=SensitivityScope.AGGREGATED.value,
+                granted_by_type=GrantorType.SYSTEM.value,
+                granted_by_id="real-data-test",
+                grant_reason="Transaction-local IRRBB dashboard authority",
+                status=BindingStatus.ACTIVE.value,
+            ),
+            AuthorizationBinding(
+                organization_id=REAL_ORG_ID,
+                principal_user_id=REAL_USER_ID,
+                principal_type=PrincipalType.HUMAN.value,
+                role_bundle=RoleBundle.ANALYST.value,
+                institution_scope=InstitutionScope.INSTITUTION.value,
+                institution_id=REAL_BANK_ID,
+                module_scope=ModuleScope.IRRBB.value,
+                sensitivity_scope=SensitivityScope.CONFIDENTIAL.value,
+                granted_by_type=GrantorType.SYSTEM.value,
+                granted_by_id="real-data-test",
+                grant_reason="Transaction-local IRRBB run authority",
+                status=BindingStatus.ACTIVE.value,
+            ),
+        ]
+    )
+    real_session.commit()
 
 
 def _dec(value: Any) -> Decimal:

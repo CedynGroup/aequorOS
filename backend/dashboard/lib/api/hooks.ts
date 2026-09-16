@@ -4065,6 +4065,7 @@ export function useArchiveStressScenario(
 export function useSavedAnalyses(
   bankId: string | undefined,
   module: WorkbenchModule,
+  enabled = true,
 ) {
   const scope = useQueryAuthorityScope();
   return useQuery({
@@ -4078,7 +4079,7 @@ export function useSavedAnalyses(
       apiCall(() =>
         scenarioWorkbenchApi.listScenarioAnalyses({ bankId: bankId!, module }),
       ),
-    enabled: Boolean(bankId),
+    enabled: Boolean(bankId) && enabled,
   });
 }
 
