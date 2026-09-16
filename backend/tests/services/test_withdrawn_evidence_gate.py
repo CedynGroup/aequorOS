@@ -70,7 +70,7 @@ SEALED_AT = datetime(2026, 8, 12, 6, 6, 9, tzinfo=UTC)
 
 
 def _ctx(user: UUID | None = USER_1) -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=user)
+    return TenantContext(organization_id=ORG_1, actor_user_id=user, authorization_version=1)
 
 
 def _bank(db_session: Session) -> Bank:

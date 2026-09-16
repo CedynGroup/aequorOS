@@ -594,13 +594,14 @@ def test_bank_regulatory_plane_is_unchanged_by_the_boundary_guard(
         "scenario_code": "baseline",
     }
 
-    for role in ("viewer", "examiner"):
+    for role in ("viewer", "examiner", "analyst"):
         refused = db_client.post(
             "/api/v1/banks/BK-NOEXIST9/regulatory-runs",
             headers=headers(roles=(role,)),
             json=official_run,
         )
-        assert refused.status_code == 403, f"{role}: {refused.text}"
+        # Scoped authorization hides a missing bank regardless of scalar role.
+        assert refused.status_code == 404, f"{role}: {refused.text}"
 
     impersonated = db_client.post(
         "/api/v1/banks/BK-NOEXIST9/regulatory-runs",
@@ -608,14 +609,6 @@ def test_bank_regulatory_plane_is_unchanged_by_the_boundary_guard(
         json=official_run,
     )
     assert impersonated.status_code == 403, impersonated.text
-
-    # An analyst still passes the gate (the 404 is the handler's own).
-    admitted = db_client.post(
-        "/api/v1/banks/BK-NOEXIST9/regulatory-runs",
-        headers=headers(roles=("analyst",)),
-        json=official_run,
-    )
-    assert admitted.status_code not in (401, 403), admitted.text
 
     # Reads are untouched for every read-only principal.
     read_only_principals = (
