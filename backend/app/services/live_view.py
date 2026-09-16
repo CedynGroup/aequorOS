@@ -34,7 +34,7 @@ from app.schemas.live import (
     OfficialRunRequest,
     RefreshRequest,
 )
-from app.services import fact_derivation, job_queue, scoped_authorization
+from app.services import fact_derivation, job_queue, module_scope, scoped_authorization
 from app.services.audit import record_event
 
 _MODULE_ORDER = {
@@ -229,15 +229,16 @@ def mint_official_run(
 ) -> JobEnqueuedRead:
     """Enqueue an immediate immutable official run (the "Mint for filing" button)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scoped_authorization.require_resolved_bank_permission(
-        db,
-        ctx,
-        bank,
-        permission=Permission.RUN,
-        module=Module.LIQUIDITY,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        surface="mint_official_run",
-    )
+    if module_scope.runs_module(db, bank, "liquidity"):
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.RUN,
+            module=Module.LIQUIDITY,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+            surface="mint_official_run",
+        )
     job = job_queue.enqueue(
         db,
         ctx.organization_id,

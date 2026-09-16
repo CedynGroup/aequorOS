@@ -30,6 +30,7 @@ from app.db.session import get_sessionmaker
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
+    Bank,
     BankFinancialFact,
     BankReportingPeriod,
     CfpActivationEvent,
@@ -391,18 +392,30 @@ def test_official_enqueue_denies_before_job_or_audit(
         ] == before
 
 
-def test_official_enqueue_accepts_exact_run_binding_without_scalar_authority(
-    db_client: TestClient,
+@pytest.mark.parametrize("role", ["viewer", "analyst"])
+def test_official_enqueue_preserves_mixed_module_gate(
+    db_client: TestClient, role: str,
 ) -> None:
     _seed_book()
     version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
 
+    with get_sessionmaker()() as session:
+        before = [
+            session.scalar(select(func.count()).select_from(model)) for model in (Job, AuditEvent)
+        ]
     response = db_client.post(
         f"{BASE}/official-runs",
-        headers=_auth(version, "viewer"),
+        headers=_auth(version, role),
         json={"as_of_date": "2026-03-31", "reason": "authorized filing request"},
     )
 
+    if role == "viewer":
+        assert response.status_code == 403, response.text
+        with get_sessionmaker()() as session:
+            assert [
+                session.scalar(select(func.count()).select_from(model)) for model in (Job, AuditEvent)
+            ] == before
+        return
     assert response.status_code == 202, response.text
     with get_sessionmaker()() as session:
         job = session.get(Job, UUID(response.json()["job_id"]))
@@ -565,3 +578,33 @@ def test_alerts_filter_liquidity_before_counts_and_limit(db_client: TestClient) 
     assert body["by_module"] == {"liquidity": 1, "capital": 1}
     assert body["by_severity"] == {"critical": 1, "high": 1}
     assert [item["module"] for item in body["items"]] == ["liquidity"]
+
+
+@pytest.mark.parametrize("operation", ["official-runs", "data-activations"])
+def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
+    db_client: TestClient, operation: str,
+) -> None:
+    _seed_book()
+    with get_sessionmaker()() as session:
+        bank = session.get(Bank, SAMPLE_BANK_ID)
+        assert bank is not None
+        bank.institution_type = "savings_and_loans"
+        session.commit()
+    payload: dict[str, str | bool] = {
+        "as_of_date": "2026-03-31", "reason": "SDI official request",
+    }
+    if operation == "data-activations":
+        payload["run_calculations"] = True
+    response = db_client.post(
+        f"{BASE}/{operation}", headers=_auth(1, "analyst"), json=payload,
+    )
+    if operation == "official-runs":
+        assert response.status_code == 202, response.text
+        with get_sessionmaker()() as session:
+            job = session.get(Job, UUID(response.json()["job_id"]))
+            assert job is not None
+            assert job.job_type == "official_run"
+            assert job.bank_id == SAMPLE_BANK_ID
+    else:
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["details"]["error_code"] == "no_canonical_data"

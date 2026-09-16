@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
+from app.api.deps import DbSession, MutationTenant, Tenant
 from app.schemas.live import (
     BankAlertsRead,
     BankFreshnessRead,
@@ -82,7 +82,7 @@ def mint_official_run(
     bank_id: str,
     payload: OfficialRunRequest,
     db: DbSession,
-    ctx: ScopedMutationTenant,
+    ctx: MutationTenant,
 ) -> JobEnqueuedRead:
     return live_view.mint_official_run(db, ctx, bank_id, payload)
 
