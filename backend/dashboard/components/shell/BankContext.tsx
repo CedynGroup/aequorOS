@@ -213,24 +213,6 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
-      capitalCreate: hasEffectiveCapability(
-        institutionCapabilities,
-        "cap",
-        "confidential",
-        "create",
-      ),
-      capitalEdit: hasEffectiveCapability(
-        institutionCapabilities,
-        "cap",
-        "confidential",
-        "edit",
-      ),
-      capitalApprove: hasEffectiveCapability(
-        institutionCapabilities,
-        "cap",
-        "confidential",
-        "approve",
-      ),
       isResolved: !banksQuery.isLoading && !profileQuery.isLoading,
     }),
     [

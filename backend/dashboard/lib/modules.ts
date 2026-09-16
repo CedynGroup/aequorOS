@@ -148,10 +148,6 @@ export type ModuleScope = {
   capitalRestrictedView?: boolean;
   /** Exact CAP/confidential maker permissions. */
   capitalRun?: boolean;
-  capitalCreate?: boolean;
-  capitalEdit?: boolean;
-  /** Non-contextual approval authority is false until the server says otherwise. */
-  capitalApprove?: boolean;
   /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than

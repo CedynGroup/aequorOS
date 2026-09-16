@@ -31,9 +31,6 @@ const resolved = (
   capitalConfidentialView: true,
   capitalRestrictedView: true,
   capitalRun: true,
-  capitalCreate: true,
-  capitalEdit: true,
-  capitalApprove: false,
   ...capital,
   isResolved: true,
 });
@@ -70,8 +67,6 @@ const aggregatedCapitalOnly = resolved(true, {
   capitalConfidentialView: false,
   capitalRestrictedView: false,
   capitalRun: false,
-  capitalCreate: false,
-  capitalEdit: false,
 });
 assert.equal(isHrefVisible("/basel", aggregatedCapitalOnly), true);
 assert.equal(isPathVisible("/basel/rwa", aggregatedCapitalOnly), true);
