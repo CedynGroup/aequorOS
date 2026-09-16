@@ -47,6 +47,77 @@ test.describe("unbound Capital user", () => {
 test.describe("bound Capital user", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
+  test("confidential-only planning recovers on Retry without querying denied surfaces", async ({
+    page,
+  }) => {
+    // Narrow the browser's authority projection to exercise independently gated
+    // queries. The API authorization matrix tests the actual binding decisions.
+    await page.route("**/auth/me", async (route) => {
+      const response = await route.fetch();
+      const profile = await response.json();
+      profile.effective_authority.organization_capabilities = [];
+      for (const institution of profile.effective_authority
+        .institution_capabilities) {
+        institution.capabilities = institution.capabilities.filter(
+          (capability: {
+            module: string;
+            sensitivity: string;
+            permission: string;
+          }) =>
+            capability.module === "cap" &&
+            capability.sensitivity === "confidential" &&
+            capability.permission === "view",
+        );
+      }
+      await route.fulfill({ response, json: profile });
+    });
+    let failPlan = true;
+    let recoveredRequests = 0;
+    await page.route("**/banks/*/capital-plan", async (route) => {
+      if (failPlan) {
+        await route.fulfill({
+          status: 503,
+          json: {
+            error: { code: "unavailable", message: "Temporary plan outage" },
+          },
+        });
+      } else {
+        recoveredRequests += 1;
+        await route.continue();
+      }
+    });
+    const deniedRequests: string[] = [];
+    page.on("request", (request) => {
+      if (
+        /\/banks\/[^/]+\/(capital\/dashboard|forecast\/runs)/.test(
+          request.url(),
+        )
+      ) {
+        deniedRequests.push(request.url());
+      }
+    });
+    await page.goto("/basel/planning");
+    const retry = page.getByRole("button", { name: "Retry", exact: true });
+    await expect(retry).toBeVisible();
+    failPlan = false;
+    await retry.click();
+    await expect(
+      page.getByRole("heading", { name: "ICAAP and ILAAP governance" }),
+    ).toBeVisible();
+    await expect(retry).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Refresh ILAAP evidence" }),
+    ).toHaveCount(0);
+    expect(recoveredRequests).toBeGreaterThan(0);
+    expect(deniedRequests).toEqual([]);
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "capital-confidential-retry.png"),
+        fullPage: true,
+      });
+    }
+  });
+
   test("shows Basel navigation and opens the governed planning surface", async ({
     page,
   }) => {
