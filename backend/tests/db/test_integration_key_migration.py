@@ -132,10 +132,7 @@ def test_upgrade_keeps_legacy_keys_unscoped_and_creates_no_binding(
             text("DELETE FROM integration_keys WHERE id = :key_id"), {"key_id": key_id}
         )
         connection.execute(
-            text(
-                "UPDATE users SET auth_provider = 'password' "
-                "WHERE id = :service_user_id"
-            ),
+            text("UPDATE users SET auth_provider = 'password' WHERE id = :service_user_id"),
             {"service_user_id": service_user_id},
         )
 
@@ -240,9 +237,6 @@ def test_downgrade_refuses_to_discard_issued_bank_targets(
             text("DELETE FROM integration_keys WHERE id = :key_id"), {"key_id": key_id}
         )
         connection.execute(
-            text(
-                "UPDATE users SET auth_provider = 'password' "
-                "WHERE id = :service_user_id"
-            ),
+            text("UPDATE users SET auth_provider = 'password' WHERE id = :service_user_id"),
             {"service_user_id": service_user_id},
         )
