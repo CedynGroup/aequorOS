@@ -274,7 +274,9 @@ export default function SdiLiquidityMonitoringView({
                         ? "crit"
                         : baselData?.metrics.lcrStatus === "amber"
                           ? "warn"
-                          : "ok"
+                          : baselData?.metrics.lcrStatus === "green"
+                            ? "ok"
+                            : undefined
                     }
                     hint="Basel 30-day liquidity coverage"
                   />
@@ -290,7 +292,9 @@ export default function SdiLiquidityMonitoringView({
                         ? "crit"
                         : baselData?.metrics.nsfrStatus === "amber"
                           ? "warn"
-                          : "ok"
+                          : baselData?.metrics.nsfrStatus === "green"
+                            ? "ok"
+                            : undefined
                     }
                     hint="Basel available ÷ required stable funding"
                   />
