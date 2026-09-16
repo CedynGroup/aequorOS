@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import type { LiquidityDashboardLineRead } from "@aequoros/risk-service-api";
 import PageHeader from "@/components/ui/PageHeader";
 import RatioGauge from "@/components/ui/RatioGauge";
@@ -34,7 +34,7 @@ import {
   regShort,
   centralBankName,
 } from "@/lib/format";
-import { isHrefVisible } from "@/lib/modules";
+import { hrefAccess } from "@/lib/modules";
 
 type LineRow = {
   item: string;
@@ -357,33 +357,43 @@ export default function LiquidityCockpit() {
                 subtitle="Move from current posture to the relevant control without losing context."
               >
                 <div className="space-y-2">
-                  {isHrefVisible("/liquidity/buffer", moduleScope) && (
-                    <Link
-                      href="/liquidity/buffer"
-                      className="flex items-center justify-between gap-3 border-b border-border-light pb-2 text-body text-navy hover:text-action"
-                    >
-                      Buffer concentration and haircuts{" "}
-                      <ArrowUpRight size={14} aria-hidden />
-                    </Link>
-                  )}
-                  {isHrefVisible("/liquidity/monitoring", moduleScope) && (
-                    <Link
-                      href="/liquidity/monitoring"
-                      className="flex items-center justify-between gap-3 border-b border-border-light py-2 text-body text-navy hover:text-action"
-                    >
-                      Thresholds and maturity monitoring{" "}
-                      <ArrowUpRight size={14} aria-hidden />
-                    </Link>
-                  )}
-                  {isHrefVisible("/liquidity/cfp", moduleScope) && (
-                    <Link
-                      href="/liquidity/cfp"
-                      className="flex items-center justify-between gap-3 pt-2 text-body text-navy hover:text-action"
-                    >
-                      CFP actions and activation log{" "}
-                      <ArrowUpRight size={14} aria-hidden />
-                    </Link>
-                  )}
+                  {[
+                    {
+                      href: "/liquidity/buffer",
+                      label: "Buffer concentration and haircuts",
+                      className: "border-b border-border-light pb-2",
+                    },
+                    {
+                      href: "/liquidity/monitoring",
+                      label: "Thresholds and maturity monitoring",
+                      className: "border-b border-border-light py-2",
+                    },
+                    {
+                      href: "/liquidity/cfp",
+                      label: "CFP actions and activation log",
+                      className: "pt-2",
+                    },
+                  ].map((control) => {
+                    const access = hrefAccess(control.href, moduleScope);
+                    if (access.state === "hidden") return null;
+                    return (
+                      <PermissionLink
+                        key={control.href}
+                        href={control.href}
+                        reason={
+                          access.state === "disabled"
+                            ? access.reason
+                            : undefined
+                        }
+                        wrapperClassName="w-full"
+                        className={`flex w-full items-center justify-between gap-3 text-body text-navy hover:text-action ${control.className}`}
+                        disabledClassName="text-slate-light hover:text-slate-light"
+                      >
+                        {control.label}
+                        <ArrowUpRight size={14} aria-hidden />
+                      </PermissionLink>
+                    );
+                  })}
                 </div>
               </SectionCard>
             </div>

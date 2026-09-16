@@ -44,8 +44,7 @@ _MODULES = {
     "ftp": regulatory_ftp,
 }
 _FULL_HTTP_QUERY_COUNTS = {
-    # Scoped LIQ view adds bank resolution, principal, binding, and institution checks.
-    "liquidity": 18,
+    "liquidity": 14,
     # Scoped CAP view adds bank resolution plus principal, binding, and institution checks.
     "capital": 19,
     "irr": 16,

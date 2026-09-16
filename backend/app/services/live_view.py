@@ -288,13 +288,14 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     return bank
 
 
-def list_live_snapshots(
+def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved bank
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     *,
     module: str,
     days: int = 45,
+    resolved_bank: Bank | None = None,
 ) -> LiveSnapshotListRead:
     """The plane-2 daily ladder, oldest first, capped at ``days`` rows.
 
@@ -302,17 +303,7 @@ def list_live_snapshots(
     edge. The series only has rows for days a refresh actually ran — gaps
     are honest, not zero-filled.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
-    if module == "liquidity":
-        scoped_authorization.require_resolved_bank_permission(
-            db,
-            ctx,
-            bank,
-            permission=Permission.VIEW,
-            module=Module.LIQUIDITY,
-            sensitivity=Sensitivity.AGGREGATED,
-            surface="live_snapshots",
-        )
+    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
     rows = list(
         db.scalars(
             select(LiveMetricSnapshot)

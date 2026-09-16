@@ -7,7 +7,6 @@
  * ALCO prep. Read-only: saving and deleting stay in the owning workbench.
  */
 
-import Link from "next/link";
 import { ChevronRight, FlaskConical } from "lucide-react";
 import type {
   SavedAnalysisSummaryRead,
@@ -17,10 +16,11 @@ import SectionCard from "@/components/ui/SectionCard";
 import StatusPill from "@/components/ui/StatusPill";
 import EmptyState from "@/components/ui/EmptyState";
 import DataTable, { type Column } from "@/components/ui/DataTable";
+import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import { PageSkeleton } from "@/components/ui/QueryBoundary";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useSavedAnalyses } from "@/lib/api/hooks";
-import { isHrefVisible } from "@/lib/modules";
+import { hrefAccess } from "@/lib/modules";
 import { fmtTimestamp } from "@/lib/api/values";
 
 const MODULE_LABELS: Record<WorkbenchModule, string> = {
@@ -127,16 +127,21 @@ export default function SavedAnalysesIndex() {
       key: "open",
       header: "",
       align: "right",
-      render: (r) =>
-        isHrefVisible(WORKBENCH_HREFS[r.module], moduleScope) ? (
-          <Link
+      render: (r) => {
+        const access = hrefAccess(WORKBENCH_HREFS[r.module], moduleScope);
+        if (access.state === "hidden") return null;
+        return (
+          <PermissionLink
             href={WORKBENCH_HREFS[r.module]}
+            reason={access.state === "disabled" ? access.reason : undefined}
             className="inline-flex items-center gap-1 text-caption font-medium text-action hover:text-action-hover whitespace-nowrap"
+            disabledClassName="text-slate-light hover:text-slate-light"
           >
             Open workbench
             <ChevronRight size={12} aria-hidden />
-          </Link>
-        ) : null,
+          </PermissionLink>
+        );
+      },
     },
   ];
 

@@ -70,7 +70,7 @@ SEALED_AT = datetime(2026, 8, 12, 6, 6, 9, tzinfo=UTC)
 
 
 def _ctx(user: UUID | None = USER_1) -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=user, authorization_version=1)
+    return TenantContext(organization_id=ORG_1, actor_user_id=user)
 
 
 def _bank(db_session: Session) -> Bank:
@@ -376,7 +376,7 @@ def test_every_run_read_carries_the_evidence_block(db_session: Session) -> None:
     """A run detail read cannot present an orphaned run as current."""
     _seed_book(db_session)
     _seed_duplicate_second_source(db_session)
-    run = _seal_run(db_session)
+    run = _seal_run(db_session, module="capital")
 
     clean = regulatory_liquidity.get_regulatory_run(db_session, _ctx(), SAMPLE_BANK_ID, run.id)
     assert clean.evidence.status == "current"
@@ -400,7 +400,7 @@ def test_the_run_history_list_carries_it_too(db_session: Session) -> None:
     """A list page is where an orphaned run would most easily pass as current."""
     _seed_book(db_session)
     _seed_duplicate_second_source(db_session)
-    run = _seal_run(db_session)
+    run = _seal_run(db_session, module="capital")
     _withdraw(db_session)
     db_session.info.pop("withdrawal_impact.register", None)
 

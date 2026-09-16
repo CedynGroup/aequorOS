@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   hasEffectiveCapability,
+  hrefAccess,
   isHrefVisible,
   isPersonalSettingsPath,
   isPathVisible,
@@ -15,6 +16,18 @@ const resolved = (
   liquidityConfidentialView = liquidityAggregatedView,
   capital: Partial<ModuleScope> = {},
 ): ModuleScope => ({
+  entitledModules: new Set([
+    "command_center",
+    "risk",
+    "alerts",
+    "liquidity",
+    "capital",
+    "regulatory_reporting",
+    "data_engine",
+    "institution",
+    "reports",
+    "settings",
+  ]),
   modules: new Set([
     "command_center",
     "risk",
@@ -48,6 +61,22 @@ assert.equal(isPathVisible("/liquidity/monitoring/detail", denied), false);
 assert.equal(isHrefVisible("/liquidity", denied), false);
 assert.equal(isPathVisible("/liquidity", denied), false);
 assert.equal(isHrefVisible("/basel", denied), true);
+assert.deepEqual(hrefAccess("/liquidity/monitoring", denied), {
+  state: "disabled",
+  reason:
+    "Requires Liquidity Monitoring · Confidential · View. Ask your organization owner or admin to grant it.",
+});
+assert.deepEqual(
+  hrefAccess("/liquidity/stress", {
+    ...denied,
+    riskConfidentialView: false,
+  }),
+  {
+    state: "disabled",
+    reason:
+      "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
+  },
+);
 
 const aggregatedOnly = resolved(true, false);
 assert.equal(isHrefVisible("/liquidity", aggregatedOnly), true);
@@ -55,6 +84,11 @@ assert.equal(isHrefVisible("/liquidity/buffer", aggregatedOnly), true);
 assert.equal(isHrefVisible("/liquidity/stress", aggregatedOnly), false);
 assert.equal(isHrefVisible("/liquidity/forecast", aggregatedOnly), false);
 assert.equal(isHrefVisible("/liquidity/cfp", aggregatedOnly), false);
+assert.deepEqual(hrefAccess("/liquidity/cfp", aggregatedOnly), {
+  state: "disabled",
+  reason:
+    "Requires Liquidity Monitoring · Confidential · View. Ask your organization owner or admin to grant it.",
+});
 
 const confidentialOnly = resolved(false, true);
 assert.equal(isHrefVisible("/liquidity", confidentialOnly), false);
@@ -71,6 +105,11 @@ const liquidityOnly = {
   riskConfidentialView: false,
 };
 assert.equal(isHrefVisible("/liquidity/stress", liquidityOnly), false);
+assert.deepEqual(hrefAccess("/liquidity/stress", liquidityOnly), {
+  state: "disabled",
+  reason:
+    "Requires Risk & Limits · Confidential · View. Ask your organization owner or admin to grant it.",
+});
 assert.equal(
   hasEffectiveCapability(
     [
@@ -169,15 +208,11 @@ assert.equal(landingPathFor(resolved(true)), "/");
 assert.equal(landingPathFor(ownerOnly), "/settings");
 assert.equal(landingPathFor(unresolved), null);
 
-const liquidityOnly: ModuleScope = {
-  ...resolved(true),
-  modules: new Set(["liquidity"]),
-};
 assert.equal(isPathVisible("/", liquidityOnly), false);
 assert.equal(landingPathFor(liquidityOnly), "/liquidity");
 
 const capitalPlanningOnly: ModuleScope = {
-  ...resolved(true, { capitalAggregatedView: false }),
+  ...resolved(true, true, { capitalAggregatedView: false }),
   modules: new Set(["capital"]),
 };
 assert.equal(landingPathFor(capitalPlanningOnly), "/basel/planning");
@@ -206,6 +241,13 @@ assert.equal(hubRedirectFor("/settings/members", operationalOnly), null);
 assert.equal(hubRedirectFor("/settings/authentication", operationalOnly), null);
 assert.equal(hubRedirectFor("/liquidity/monitoring", denied), null);
 assert.equal(hubRedirectFor("/fx", ownerOnly), null);
+const structurallyExcluded = {
+  ...denied,
+  entitledModules: new Set(["capital"] as const),
+};
+assert.deepEqual(hrefAccess("/liquidity", structurallyExcluded), {
+  state: "hidden",
+});
 
 console.log(
   "modules.test.ts: binding-controlled navigation and deep links passed.",

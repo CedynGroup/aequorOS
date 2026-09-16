@@ -55,7 +55,15 @@ test.describe("exactly bound Liquidity user", () => {
     await expect(
       page.getByRole("link", { name: /Capital|IRR|FX|FTP/i }),
     ).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Stress" })).toHaveCount(0);
+    const stress = page.getByRole("link", { name: "Stress" });
+    await expect(stress).toHaveAttribute("aria-disabled", "true");
+    await stress.hover();
+    await expect(
+      page.getByRole("tooltip").filter({
+        hasText:
+          "Requires Risk & Limits · Confidential · View. Ask your organization owner or admin to grant it.",
+      }),
+    ).toBeVisible();
     await link.click();
     await expect(page).toHaveURL(/\/liquidity\/monitoring$/);
     await expect(
@@ -110,9 +118,18 @@ test.describe("aggregated-only Liquidity user", () => {
     await expect(
       page.getByText(/pp above minimum|above minimum requirement/),
     ).toHaveCount(0);
-    await expect(
-      page.getByRole("link", { name: "Monitoring Tools" }),
-    ).toHaveCount(0);
+    const monitoring = page.getByRole("link", {
+      name: "Monitoring Tools",
+    });
+    await expect(monitoring).toHaveAttribute("aria-disabled", "true");
+    const tooltipId = await monitoring.getAttribute("aria-describedby");
+    expect(tooltipId).toBeTruthy();
+    await monitoring.hover();
+    const tooltip = page.locator(`[id="${tooltipId}"]`);
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText(
+      "Requires Liquidity Monitoring · Confidential · View. Ask your organization owner or admin to grant it.",
+    );
     expect(confidentialRequests).toEqual([]);
     if (evidenceDir) {
       await page.screenshot({

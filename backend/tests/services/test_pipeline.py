@@ -633,7 +633,7 @@ def test_live_snapshot_ladder_reads_back_through_the_service(db_session: Session
     """The read endpoint's service returns the daily series oldest-first."""
     _seed(db_session)
     pipeline.run_refresh(db_session, _refresh_job(db_session))
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
     out = live_view.list_live_snapshots(
         db_session, ctx, SAMPLE_BANK_ID, module="liquidity", days=30
     )

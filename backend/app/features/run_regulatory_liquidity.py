@@ -143,6 +143,7 @@ def get_liquidity_dashboard(
         access.ctx,
         access.bank.id,
         reporting_period_id,
+        resolved_bank=access.bank,
     )
 
 

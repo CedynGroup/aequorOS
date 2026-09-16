@@ -1,8 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Gauge,
@@ -24,13 +23,14 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   BookOpenCheck,
-} from 'lucide-react';
-import Logo from './Logo';
-import { centralBankName } from '@/lib/format';
-import { isHrefVisible } from '@/lib/modules';
-import { useModuleScope } from './BankContext';
+} from "lucide-react";
+import Logo from "./Logo";
+import { PermissionLink } from "@/components/ui/DisabledWithReason";
+import { centralBankName } from "@/lib/format";
+import { hrefAccess } from "@/lib/modules";
+import { useModuleScope } from "./BankContext";
 
-const COLLAPSE_STORAGE_KEY = 'aeq-sidebar-collapsed';
+const COLLAPSE_STORAGE_KEY = "aeq-sidebar-collapsed";
 
 type NavItem = {
   href: string;
@@ -40,50 +40,53 @@ type NavItem = {
   sdiLabel?: string;
 };
 
-const SDI_CLASS = 'sdi';
+const SDI_CLASS = "sdi";
 
 const groups: { label: string; items: NavItem[] }[] = [
   {
-    label: 'Command',
+    label: "Command",
     items: [
-      { href: '/', label: 'Command Center', icon: LayoutDashboard },
-      { href: '/risk', label: 'Risk & Limits', icon: Gauge },
-      { href: '/alerts', label: 'Alerts', icon: BellRing },
+      { href: "/", label: "Command Center", icon: LayoutDashboard },
+      { href: "/risk", label: "Risk & Limits", icon: Gauge },
+      { href: "/alerts", label: "Alerts", icon: BellRing },
     ],
   },
   {
-    label: 'Markets',
+    label: "Markets",
     items: [
-      { href: '/markets', label: 'Markets', icon: CandlestickChart },
-      { href: '/positions', label: 'Positions', icon: Layers },
+      { href: "/markets", label: "Markets", icon: CandlestickChart },
+      { href: "/positions", label: "Positions", icon: Layers },
     ],
   },
   {
-    label: 'Modules',
+    label: "Modules",
     items: [
-      { href: '/irr', label: 'IRRBB', icon: Activity },
-      { href: '/liquidity', label: 'Liquidity', icon: Droplet },
-      { href: '/credit', label: 'Credit', icon: BookOpenCheck },
-      { href: '/fx', label: 'FX', icon: DollarSign },
-      { href: '/basel', label: 'Basel Capital', sdiLabel: 'Regulatory Capital', icon: ShieldCheck },
-      { href: '/ftp', label: 'FTP', icon: GitBranch },
-      { href: '/forecasting', label: 'Forecasting', icon: TrendingUp },
-      { href: '/behavioral', label: 'Behavioral', icon: BrainCircuit },
+      { href: "/irr", label: "IRRBB", icon: Activity },
+      { href: "/liquidity", label: "Liquidity", icon: Droplet },
+      { href: "/credit", label: "Credit", icon: BookOpenCheck },
+      { href: "/fx", label: "FX", icon: DollarSign },
+      {
+        href: "/basel",
+        label: "Basel Capital",
+        sdiLabel: "Regulatory Capital",
+        icon: ShieldCheck,
+      },
+      { href: "/ftp", label: "FTP", icon: GitBranch },
+      { href: "/forecasting", label: "Forecasting", icon: TrendingUp },
+      { href: "/behavioral", label: "Behavioral", icon: BrainCircuit },
     ],
   },
   {
-    label: 'Data',
-    items: [
-      { href: '/data-engine', label: 'Data Engine', icon: Database },
-    ],
+    label: "Data",
+    items: [{ href: "/data-engine", label: "Data Engine", icon: Database }],
   },
   {
-    label: 'Governance',
+    label: "Governance",
     items: [
-      { href: '/reports', label: 'Reports', icon: FileBarChart2 },
-      { href: '/institution', label: 'Institution Profile', icon: Landmark },
-      { href: '/submissions', label: 'Regulatory Reporting', icon: FileCheck2 },
-      { href: '/settings', label: 'Settings', icon: Settings },
+      { href: "/reports", label: "Reports", icon: FileBarChart2 },
+      { href: "/institution", label: "Institution Profile", icon: Landmark },
+      { href: "/submissions", label: "Regulatory Reporting", icon: FileCheck2 },
+      { href: "/settings", label: "Settings", icon: Settings },
     ],
   },
 ];
@@ -99,13 +102,18 @@ export default function Sidebar() {
   const visibleGroups = groups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => isHrefVisible(item.href, moduleScope)),
+      items: group.items
+        .map((item) => ({
+          ...item,
+          access: hrefAccess(item.href, moduleScope),
+        }))
+        .filter((item) => item.access.state !== "hidden"),
     }))
     .filter((group) => group.items.length > 0);
 
   useEffect(() => {
     try {
-      setCollapsed(window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1');
+      setCollapsed(window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === "1");
     } catch {
       // storage unavailable — stay expanded
     }
@@ -115,7 +123,7 @@ export default function Sidebar() {
     setCollapsed((v) => {
       const next = !v;
       try {
-        window.localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? '1' : '0');
+        window.localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? "1" : "0");
       } catch {
         // ignore
       }
@@ -124,19 +132,19 @@ export default function Sidebar() {
   };
 
   const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
+    if (href === "/") return pathname === "/";
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
   return (
     <aside
       className={`${
-        collapsed ? 'w-[68px]' : 'w-64'
+        collapsed ? "w-[68px]" : "w-64"
       } shrink-0 bg-nav text-white flex flex-col h-screen lg:sticky top-0 transition-[width] duration-200`}
     >
       <div
         className={`h-16 flex items-center border-b border-white/10 ${
-          collapsed ? 'justify-center px-2' : 'px-5'
+          collapsed ? "justify-center px-2" : "px-5"
         }`}
       >
         <Logo variant="dark" showWordmark={!collapsed} />
@@ -160,23 +168,33 @@ export default function Sidebar() {
                   item.sdiLabel && moduleScope.institutionClass === SDI_CLASS
                     ? item.sdiLabel
                     : item.label;
+                const reason =
+                  item.access.state === "disabled"
+                    ? item.access.reason
+                    : undefined;
                 return (
                   <li key={item.href} className="relative group">
-                    <Link
+                    <PermissionLink
                       href={item.href}
+                      reason={reason}
                       aria-label={label}
+                      wrapperClassName="w-full"
+                      placement="right"
                       className={`flex items-center gap-3 rounded text-body transition-colors ${
-                        collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2'
+                        collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2"
                       } ${
                         active
-                          ? 'bg-white/10 text-white'
-                          : 'text-white/75 hover:bg-white/5 hover:text-white'
+                          ? "bg-white/10 text-white"
+                          : "text-white/75 hover:bg-white/5 hover:text-white"
                       }`}
+                      disabledClassName="w-full text-white/35 hover:bg-transparent hover:text-white/35"
                     >
                       <Icon size={16} className="shrink-0" aria-hidden />
-                      {!collapsed && <span className="flex-1 truncate">{label}</span>}
-                    </Link>
-                    {collapsed && (
+                      {!collapsed && (
+                        <span className="flex-1 truncate">{label}</span>
+                      )}
+                    </PermissionLink>
+                    {collapsed && !reason && (
                       <span
                         role="tooltip"
                         className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 whitespace-nowrap rounded bg-nav border border-white/15 px-2.5 py-1.5 text-caption text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shadow-pop"
@@ -207,9 +225,9 @@ export default function Sidebar() {
         <button
           type="button"
           onClick={toggleCollapsed}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={`w-full inline-flex items-center gap-2 rounded px-2 py-2 text-caption text-white/60 hover:text-white hover:bg-white/5 transition-colors ${
-            collapsed ? 'justify-center' : ''
+            collapsed ? "justify-center" : ""
           }`}
         >
           {collapsed ? (

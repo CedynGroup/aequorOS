@@ -32,6 +32,7 @@ import {
   effectiveOrganizationModules,
   hasEffectiveCapability,
   isPersonalSettingsPath,
+  moduleSetFrom,
   type ModuleScope,
 } from "@/lib/modules";
 import Logo from "./Logo";
@@ -177,6 +178,9 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       modules: effectiveInstitutionModules(
         bank?.institutionTypeDetail?.defaultModules,
         institutionCapabilities,
+      ),
+      entitledModules: moduleSetFrom(
+        bank?.institutionTypeDetail?.defaultModules,
       ),
       organizationModules: effectiveOrganizationModules(
         organizationCapabilities,

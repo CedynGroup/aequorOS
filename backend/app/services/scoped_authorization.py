@@ -27,7 +27,7 @@ from app.core.authorization import (
     Sensitivity,
 )
 from app.core.observability import authorization_denied, cross_tenant_attempt
-from app.models import Bank
+from app.models import AuthorizationBinding, Bank, User
 from app.services import authorization
 from app.services.public_ids import normalize_public_id
 
@@ -205,4 +205,125 @@ def require_bank_permission(  # noqa: PLR0913 - complete authorization sentence
         denial_status=denial_status,
         denial_detail=denial_detail,
     )
+    return bank
+
+
+def require_bank_permission_prefetched(  # noqa: PLR0913 - complete authorization sentence
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    *,
+    permission: Permission,
+    module: Module,
+    sensitivity: Sensitivity,
+    surface: str,
+    conditions: Sequence[ConditionCheck] = (),
+    denial_status: int = status.HTTP_403_FORBIDDEN,
+    denial_detail: str = DEFAULT_DENIAL_DETAIL,
+) -> Bank:
+    """Resolve the bank and principal grants in one query, then evaluate normally."""
+
+    normalized = normalize_public_id(bank_id)
+    if ctx.actor_user_id is None or ctx.authorization_version is None:
+        bank = resolve_bank(db, ctx, normalized, module=module)
+        require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=permission,
+            module=module,
+            sensitivity=sensitivity,
+            surface=surface,
+            conditions=conditions,
+            denial_status=denial_status,
+            denial_detail=denial_detail,
+        )
+        return bank
+    rows = db.execute(
+        select(Bank, User, AuthorizationBinding)
+        .select_from(Bank)
+        .outerjoin(
+            User,
+            (User.id == ctx.actor_user_id)
+            & (User.organization_id == ctx.organization_id)
+            & User.is_active.is_(True)
+            & (User.auth_provider != "service"),
+        )
+        .outerjoin(
+            AuthorizationBinding,
+            (AuthorizationBinding.organization_id == ctx.organization_id)
+            & (AuthorizationBinding.principal_user_id == ctx.actor_user_id)
+            & (AuthorizationBinding.principal_type == PrincipalType.HUMAN.value),
+        )
+        .where(
+            Bank.id == normalized,
+            Bank.organization_id == ctx.organization_id,
+        )
+    ).all()
+    if not rows:
+        cross_tenant_attempt(
+            reason="bank_not_visible_to_tenant",
+            organization_id=ctx.organization_id,
+            bank_id=normalized,
+            module=module.value,
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    bank = rows[0][0]
+    principal = PrincipalLocator(
+        ctx.organization_id,
+        ctx.actor_user_id,
+        PrincipalType.HUMAN,
+    )
+    resource = ResourceLocator(
+        ctx.organization_id,
+        InstitutionScope.INSTITUTION,
+        bank.id,
+        module,
+        sensitivity,
+    )
+    try:
+        decision = authorization.evaluate_prefetched_permission(
+            principal,
+            permission,
+            resource,
+            [binding for _, _, binding in rows if binding is not None],
+            principal_active=rows[0][1] is not None,
+            conditions=tuple(conditions),
+        )
+    except Exception as exc:  # noqa: BLE001 - enforcement must deny closed
+        authorization.record_binding_evaluation_failure(
+            principal,
+            permission,
+            resource,
+            surface=surface,
+            error=exc,
+        )
+        authorization_denied(
+            reason="binding_evaluation_failed",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            bank_id=bank.id,
+            module=module.value,
+            sensitivity=sensitivity.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=denial_status, detail=denial_detail) from exc
+    authorization.record_binding_decision(
+        decision,
+        surface=surface,
+        severity="info" if decision.allowed else "warning",
+    )
+    if not decision.allowed:
+        authorization_denied(
+            reason=decision.reason,
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            bank_id=bank.id,
+            module=module.value,
+            sensitivity=sensitivity.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=denial_status, detail=denial_detail)
     return bank

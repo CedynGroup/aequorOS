@@ -23,6 +23,13 @@
 > same authority sentence used by review, detail, revoke, and audit evidence.
 > Every other product route retains its existing authorization behavior until
 > its separate rollout.
+>
+> **Permission-only disabled controls:** When a Liquidity control is unavailable
+> only because the current user lacks an exact permission, keep it visible and
+> disabled. Its hover/focus tooltip must name the required product permission
+> (module, sensitivity, and action) and direct the user to their organization
+> owner or admin. Structural exclusions and unauthorized tenant/object
+> references remain hidden.
 
 This document specifies how AequorOS grants access to bank users, what each user
 type can see and do, how the three settings surfaces (personal / org-admin /

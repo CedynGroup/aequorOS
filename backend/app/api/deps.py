@@ -690,11 +690,17 @@ def _require_liquidity_view(  # noqa: PLR0913 - complete authorization sentence
     sensitivity: Sensitivity,
     surface: str,
     denial_detail: str = "Liquidity access requires an active scoped binding.",
+    prefetch: bool = False,
 ) -> LiquidityMonitoringAccess:
     from app.core.authorization import Module, Permission  # noqa: PLC0415
     from app.services import scoped_authorization  # noqa: PLC0415
 
-    bank = scoped_authorization.require_bank_permission(
+    require_permission = (
+        scoped_authorization.require_bank_permission_prefetched
+        if prefetch
+        else scoped_authorization.require_bank_permission
+    )
+    bank = require_permission(
         db,
         ctx,
         str(request.path_params.get("bank_id", "")),
@@ -1088,6 +1094,7 @@ def require_liquidity_aggregated_view(
         ctx,
         sensitivity=Sensitivity.AGGREGATED,
         surface="liquidity_aggregated_view",
+        prefetch=True,
     )
 
 

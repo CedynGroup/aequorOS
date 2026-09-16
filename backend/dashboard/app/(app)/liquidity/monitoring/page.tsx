@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import { Percent } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat from "@/components/ui/KpiStat";
@@ -21,7 +22,7 @@ import {
 } from "@/lib/api/hooks";
 import { fmtDateUTC, num } from "@/lib/api/values";
 import { currencyCode, fmtCurrency, fmtPct, regShort } from "@/lib/format";
-import { isHrefVisible } from "@/lib/modules";
+import { hrefAccess } from "@/lib/modules";
 import type {
   LiquidityHaircutRead,
   LiquidityThresholdRead,
@@ -101,6 +102,7 @@ const haircutColumns: Column<LiquidityHaircutRead>[] = [
 function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
   const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
+  const stressAccess = hrefAccess("/liquidity/stress", moduleScope);
 
   const dashboard = useLiquidityDashboard(
     moduleScope.liquidityAggregatedView ? bankId : undefined,
@@ -252,16 +254,22 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
                   </Link>{" "}
                   (return code LMT). Per-currency funding gaps and the USD
                   funding stress ride every liquidity run
-                  {isHrefVisible("/liquidity/stress", moduleScope) ? (
+                  {stressAccess.state !== "hidden" ? (
                     <>
                       {" "}
                       on the{" "}
-                      <Link
+                      <PermissionLink
                         href="/liquidity/stress"
+                        reason={
+                          stressAccess.state === "disabled"
+                            ? stressAccess.reason
+                            : undefined
+                        }
                         className="text-action hover:underline"
+                        disabledClassName="text-slate-light hover:no-underline"
                       >
                         Stress tab
-                      </Link>
+                      </PermissionLink>
                     </>
                   ) : null}
                   .
