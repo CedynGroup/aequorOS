@@ -291,6 +291,10 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
     {
         "require_account_administration",
         "require_integration_push_ingest",
+        "require_capital_run",
+        "require_capital_plan_write",
+        "require_capital_plan_approve",
+        "require_ilaap_refresh",
         "require_grant_administration",
         "require_role_admin",
         "require_role_approver",
