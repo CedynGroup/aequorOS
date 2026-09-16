@@ -177,7 +177,7 @@ export default function Sidebar() {
                     <PermissionLink
                       href={item.href}
                       reason={reason}
-                      aria-label={label}
+                      ariaLabel={label}
                       wrapperClassName="w-full"
                       placement="right"
                       className={`flex items-center gap-3 rounded text-body transition-colors ${

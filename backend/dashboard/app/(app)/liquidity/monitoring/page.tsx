@@ -170,13 +170,13 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
               <KpiStat
                 label="FX funding gap"
                 value={fxGap !== null ? fmtCurrency(fxGap) : "—"}
-                status={fxGap !== null && fxGap < 0 ? "warn" : "ok"}
+                status={fxGap === null ? undefined : fxGap < 0 ? "warn" : "ok"}
                 hint={`Non-${currencyCode()} assets minus liabilities (latest baseline run)`}
               />
               <KpiStat
                 label="FX share of liabilities"
                 value={fxShare !== null ? fmtPct(fxShare, 2) : "—"}
-                status={"ok"}
+                status={fxShare === null ? undefined : "ok"}
                 hint="Foreign-currency funding dependence"
               />
             </div>

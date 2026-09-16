@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.capital.engine import CapitalComputationError
 from app.domain.capital.engine import MissingParameterError as CapitalMissingParameter
 from app.domain.liquidity.engine import LiquidityComputationError
@@ -34,6 +35,7 @@ from app.schemas.window_analytics import (
     WindowRatioPointRead,
     WindowRatioStatRead,
 )
+from app.services import scoped_authorization
 from app.services.regulatory_capital import (
     CapitalRunError,
 )
@@ -88,9 +90,19 @@ def compute_window(
     """Ratio series + window statistics + daily aggregates for [start, end]."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     _validate_window(start_date, end_date)
+    decision = scoped_authorization.evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="window_analytics",
+    )
+    liquidity_allowed = decision is not None and decision.allowed
     periods = _periods_in_window(db, ctx, bank, start_date, end_date)
     ratios = [
-        *_liquidity_series(db, ctx, bank, periods),
+        *(_liquidity_series(db, ctx, bank, periods) if liquidity_allowed else []),
         *_capital_series(db, ctx, bank, periods),
     ]
     return WindowAnalyticsRead(
@@ -99,7 +111,9 @@ def compute_window(
         end_date=end_date,
         period_count=len(periods),
         ratios=ratios,
-        daily=_daily_stats(db, ctx, bank, start_date, end_date),
+        daily=_daily_stats(
+            db, ctx, bank, start_date, end_date, liquidity_allowed=liquidity_allowed
+        ),
     )
 
 
@@ -220,9 +234,15 @@ def _ratio_stat(
 
 
 def _daily_stats(
-    db: Session, ctx: TenantContext, bank: Bank, start_date: date, end_date: date
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    start_date: date,
+    end_date: date,
+    *,
+    liquidity_allowed: bool,
 ) -> list[WindowDailyStatRead]:
-    rows = db.scalars(
+    query = (
         select(LiveMetricSnapshot)
         .where(
             LiveMetricSnapshot.organization_id == ctx.organization_id,
@@ -232,8 +252,10 @@ def _daily_stats(
         )
         .order_by(LiveMetricSnapshot.snapshot_date)
     )
+    if not liquidity_allowed:
+        query = query.where(LiveMetricSnapshot.module != "liquidity")
     values_by_module: dict[str, list[Decimal]] = {}
-    for row in rows:
+    for row in db.scalars(query):
         key = _PRIMARY_METRIC_KEY.get(row.module)
         if key is None:
             continue

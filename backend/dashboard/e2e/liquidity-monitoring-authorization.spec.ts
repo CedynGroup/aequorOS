@@ -45,10 +45,72 @@ test.describe("unbound Liquidity Monitoring user", () => {
 test.describe("exactly bound Liquidity user", () => {
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
+  test("confidential-only monitoring omits unavailable metric status and names collapsed links", async ({
+    page,
+  }) => {
+    await page.route("**/auth/me", async (route) => {
+      const response = await route.fetch();
+      const profile = await response.json();
+      for (const institution of profile.effective_authority
+        .institution_capabilities) {
+        institution.capabilities = institution.capabilities.filter(
+          (capability: { module: string; sensitivity: string }) =>
+            capability.module !== "liq" ||
+            capability.sensitivity === "confidential",
+        );
+      }
+      await route.fulfill({ response, json: profile });
+    });
+    const aggregateRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/liquidity/dashboard")) {
+        aggregateRequests.push(request.url());
+      }
+    });
+    await page.goto("/liquidity/monitoring");
+    for (const label of ["FX funding gap", "FX share of liabilities"]) {
+      const card = page.locator(".card").filter({
+        has: page.getByText(label, { exact: true }),
+      });
+      await expect(card).toBeVisible();
+      await expect(card.getByText("—", { exact: true })).toBeVisible();
+      await expect(card).not.toHaveCSS("box-shadow", /inset/);
+    }
+    expect(aggregateRequests).toEqual([]);
+    await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    const liquidity = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "Liquidity", exact: true });
+    await expect(liquidity).toHaveAttribute("aria-disabled", "true");
+    const reason =
+      "Requires Liquidity Monitoring · Aggregated · View. Ask your organization owner or admin to grant it.";
+    await liquidity.hover();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: reason }),
+    ).toBeVisible();
+    await liquidity.focus();
+    await expect(liquidity).toBeFocused();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: reason }),
+    ).toBeVisible();
+    await liquidity.press("Enter");
+    await expect(page).toHaveURL(/\/liquidity\/monitoring$/);
+  });
+
   test("shows only authorized Liquidity reads", async ({ page }) => {
     await page.goto("/liquidity");
     await expect(
       page.getByRole("heading", { name: "Liquidity Cockpit" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    const sidebarLiquidity = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "Liquidity", exact: true });
+    await expect(sidebarLiquidity).toBeVisible();
+    await expect(sidebarLiquidity).toHaveAttribute("href", "/liquidity");
+    await sidebarLiquidity.focus();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: /^Liquidity$/ }),
     ).toBeVisible();
     const link = page.getByRole("link", { name: "Monitoring Tools" });
     await expect(link).toBeVisible();

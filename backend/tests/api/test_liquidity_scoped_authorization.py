@@ -14,7 +14,8 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, event, func, select
+from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import (
@@ -44,7 +45,13 @@ from app.models import (
     User,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import authorization, data_activation, regulatory_capital, regulatory_liquidity
+from app.services import (
+    authorization,
+    data_activation,
+    regulatory_capital,
+    regulatory_liquidity,
+    window_analytics,
+)
 from tests.api.helpers import ORG_1, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
@@ -626,3 +633,70 @@ def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
     else:
         assert response.status_code == 409, response.text
         assert response.json()["error"]["details"]["error_code"] == "no_canonical_data"
+
+
+@pytest.mark.parametrize("liquidity_sensitivity", [None, SensitivityScope.CONFIDENTIAL])
+def test_window_filters_liquidity_before_reads_and_computation(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    liquidity_sensitivity: SensitivityScope | None,
+) -> None:
+    period_id = _seed_book()
+    with get_sessionmaker()() as session:
+        session.execute(delete(LiveMetricSnapshot))
+        for module, key in (("liquidity", "lcr_pct"), ("capital", "car_pct")):
+            session.add(
+                LiveMetricSnapshot(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    reporting_period_id=period_id,
+                    snapshot_date=date(2026, 3, 31),
+                    module=module,
+                    metrics={key: "123"},
+                    status="green",
+                    computed_at=utc_now(),
+                )
+            )
+        session.commit()
+    version = _grant(RoleBundle.VIEWER, module=ModuleScope.CAPITAL)
+    if liquidity_sensitivity is not None:
+        version = _grant(RoleBundle.VIEWER, sensitivity=liquidity_sensitivity)
+
+    def forbid_liquidity_series(*args: object, **kwargs: object) -> None:
+        pytest.fail("Unauthorized Liquidity series was read or computed")
+
+    def forbid_liquidity_snapshot(session: Session, instance: object) -> None:
+        if isinstance(instance, LiveMetricSnapshot) and instance.module == "liquidity":
+            pytest.fail("Unauthorized Liquidity daily snapshot was read")
+
+    params = {"start_date": "2026-03-01", "end_date": "2026-03-31"}
+    event.listen(Session, "loaded_as_persistent", forbid_liquidity_snapshot)
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(window_analytics, "_liquidity_series", forbid_liquidity_series)
+            filtered = db_client.get(
+                f"{BASE}/analytics/window", params=params, headers=_auth(version, "analyst")
+            )
+    finally:
+        event.remove(Session, "loaded_as_persistent", forbid_liquidity_snapshot)
+    assert filtered.status_code == 200, filtered.text
+    payload = filtered.json()
+    assert [row["ratio"] for row in payload["ratios"]] == ["car_pct", "cet1_ratio_pct"]
+    assert [row["module"] for row in payload["daily"]] == ["capital"]
+    assert payload["daily"][0]["avg"] == "123.000000"
+
+    version = _grant(RoleBundle.VIEWER, sensitivity=SensitivityScope.AGGREGATED)
+    allowed = db_client.get(
+        f"{BASE}/analytics/window", params=params, headers=_auth(version, "viewer")
+    )
+    assert allowed.status_code == 200, allowed.text
+    full = allowed.json()
+    assert [row["ratio"] for row in full["ratios"]] == [
+        "lcr_pct",
+        "nsfr_pct",
+        "car_pct",
+        "cet1_ratio_pct",
+    ]
+    assert [row["module"] for row in full["daily"]] == ["liquidity", "capital"]
+    assert [row for row in full["ratios"] if row["module"] != "liquidity"] == payload["ratios"]
+    assert [row for row in full["daily"] if row["module"] != "liquidity"] == payload["daily"]
