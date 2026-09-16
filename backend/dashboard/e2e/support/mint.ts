@@ -66,6 +66,11 @@ export const E2E_USERS: Record<
     roles: ["account_admin"],
     authv: 2,
   },
+  integration_admin: {
+    id: "eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8",
+    roles: ["account_admin"],
+    authv: 3,
+  },
   legacy_account_admin: {
     id: "eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7",
     roles: ["account_admin"],

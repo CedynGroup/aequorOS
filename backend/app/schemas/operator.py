@@ -593,6 +593,7 @@ class TenantIntegrationKeyRead(ClosedModel):
     are NEVER returned. ``key_prefix`` is the display fragment ("aeq_live_AB12…")
     shown once at issuance."""
 
+    bank_id: str | None
     label: str
     key_prefix: str
     status: Literal["active", "revoked"]

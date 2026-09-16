@@ -36,7 +36,7 @@ from app.db.session import get_sessionmaker
 from app.domain.ingestion.attributes import attribute_key, attributes_from_columns
 from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.models import CanonicalPosition, CanonicalPositionSnapshot
-from tests.api.helpers import ORG_1, headers
+from tests.api.helpers import ORG_1, headers, integration_key_headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "onboarding" / "sample_bank" / "loans_template.csv"
@@ -276,21 +276,22 @@ def _materialize(db_client: TestClient) -> str:
 def _push(
     db_client: TestClient, key: str, as_of: str, entities: dict[str, list[dict[str, Any]]]
 ) -> dict[str, Any]:
+    push_headers = integration_key_headers(SAMPLE_BANK_ID)
     opened = db_client.post(
         f"/api/v1/banks/{SAMPLE_BANK_ID}/push-batches",
-        headers=headers(),
+        headers=push_headers,
         json={"as_of_date": as_of, "idempotency_key": key, "reason": f"data-gaps test {key}"},
     )
     assert opened.status_code == 201, opened.text
     push_id = opened.json()["push_batch_id"]
     staged = db_client.post(
         f"/api/v1/banks/{SAMPLE_BANK_ID}/push-batches/{push_id}/records",
-        headers=headers(),
+        headers=push_headers,
         json={"entities": entities},
     )
     assert staged.status_code == 200, staged.text
     committed = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/push-batches/{push_id}/commit", headers=headers()
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/push-batches/{push_id}/commit", headers=push_headers
     )
     assert committed.status_code == 201, committed.text
     body = committed.json()

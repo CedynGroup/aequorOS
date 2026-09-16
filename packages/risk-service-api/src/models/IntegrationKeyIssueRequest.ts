@@ -22,6 +22,12 @@ export interface IntegrationKeyIssueRequest {
    * @type {string}
    * @memberof IntegrationKeyIssueRequest
    */
+  bankId: string;
+  /**
+   *
+   * @type {string}
+   * @memberof IntegrationKeyIssueRequest
+   */
   label: string;
 }
 
@@ -31,6 +37,7 @@ export interface IntegrationKeyIssueRequest {
 export function instanceOfIntegrationKeyIssueRequest(
   value: object,
 ): value is IntegrationKeyIssueRequest {
+  if (!("bankId" in value) || value["bankId"] === undefined) return false;
   if (!("label" in value) || value["label"] === undefined) return false;
   return true;
 }
@@ -50,6 +57,7 @@ export function IntegrationKeyIssueRequestFromJSONTyped(
   }
   return {
     ...json,
+    bankId: json["bank_id"],
     label: json["label"],
   };
 }
@@ -69,6 +77,7 @@ export function IntegrationKeyIssueRequestToJSONTyped(
   }
 
   return {
+    bank_id: value["bankId"],
     label: value["label"],
   };
 }

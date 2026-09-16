@@ -6,8 +6,7 @@ returns the same batch + validation report shape, so downstream tooling does
 not care how the data arrived. Public contract: docs/API_INTEGRATION.md.
 
 The ``bank_id`` path segment accepts the platform institution ID
-(BK-XXXXXXXX) — the identifier banks are onboarded with — or the internal
-bank UUID for backward compatibility.
+(BK-XXXXXXXX) — the identifier banks are onboarded with.
 
 Auth: an integration key (`aeq_live_...`) is the bearer credential. It resolves
 to a tenant-scoped service account through the separate integration-key
@@ -21,13 +20,12 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, IntegrationPushResource
 from app.features.ingest_data import IngestionStorage
 from app.features.manage_banks import BankReference
 from app.schemas.ingestion import IngestionBatchStartRead
 from app.schemas.push import PushBatchOpen, PushBatchStatusRead, PushRecordsPage
 from app.services import push_ingestion
-from app.services.banks import resolve_bank_reference
 
 router = APIRouter(tags=["ingestion"])
 
@@ -42,11 +40,18 @@ def open_push_batch(
     bank_id: BankReference,
     payload: PushBatchOpen,
     db: DbSession,
-    ctx: MutationTenant,
+    access: IntegrationPushResource,
     storage: IngestionStorage,
 ) -> PushBatchStatusRead:
-    bank = resolve_bank_reference(db, ctx, bank_id)
-    return push_ingestion.open_push_batch(db, ctx, bank.id, payload, storage)
+    result = push_ingestion.open_push_batch(
+        db,
+        access.ctx,
+        access.bank.id,
+        payload,
+        storage,
+    )
+    db.commit()
+    return result
 
 
 @router.post(
@@ -59,11 +64,19 @@ def stage_push_batch_records(  # noqa: PLR0913 - mirrors the other ingestion rou
     push_batch_id: UUID,
     payload: PushRecordsPage,
     db: DbSession,
-    ctx: MutationTenant,
+    access: IntegrationPushResource,
     storage: IngestionStorage,
 ) -> PushBatchStatusRead:
-    bank = resolve_bank_reference(db, ctx, bank_id)
-    return push_ingestion.stage_push_records(db, ctx, bank.id, push_batch_id, payload, storage)
+    result = push_ingestion.stage_push_records(
+        db,
+        access.ctx,
+        access.bank.id,
+        push_batch_id,
+        payload,
+        storage,
+    )
+    db.commit()
+    return result
 
 
 @router.post(
@@ -76,11 +89,18 @@ def commit_push_batch(
     bank_id: BankReference,
     push_batch_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    access: IntegrationPushResource,
     storage: IngestionStorage,
 ) -> IngestionBatchStartRead:
-    bank = resolve_bank_reference(db, ctx, bank_id)
-    return push_ingestion.commit_push_batch(db, ctx, bank.id, push_batch_id, storage)
+    result = push_ingestion.commit_push_batch(
+        db,
+        access.ctx,
+        access.bank.id,
+        push_batch_id,
+        storage,
+    )
+    db.commit()
+    return result
 
 
 @router.get(
@@ -92,8 +112,17 @@ def get_push_batch(
     bank_id: BankReference,
     push_batch_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: IntegrationPushResource,
     storage: IngestionStorage,
 ) -> PushBatchStatusRead:
-    bank = resolve_bank_reference(db, ctx, bank_id)
-    return push_ingestion.get_push_batch(db, ctx, bank.id, push_batch_id, storage)
+    result = push_ingestion.get_push_batch(
+        db,
+        access.ctx,
+        access.bank.id,
+        push_batch_id,
+        storage,
+    )
+    # The read service has no transaction of its own. Commit the authorized
+    # credential's throttled last-used stamp while its revocation lock is held.
+    db.commit()
+    return result

@@ -113,7 +113,12 @@ _ETL_INLINE_DEDUP_MAX_RECORDS = 5000
 
 
 def create_mapping_config(
-    db: Session, ctx: TenantContext, bank_id: str, payload: MappingConfigCreate
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    payload: MappingConfigCreate,
+    *,
+    commit: bool = True,
 ) -> MappingConfigRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     # Versions and the single-active guarantee are scoped per (bank, source_system,
@@ -170,7 +175,10 @@ def create_mapping_config(
             "reason": payload.reason,
         },
     )
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return MappingConfigRead.model_validate(record, from_attributes=True)
 
 
@@ -229,12 +237,14 @@ def build_adapter_config(
     )
 
 
-def _prepare_extraction(
+def _prepare_extraction(  # noqa: PLR0913 - transaction ownership is explicit per caller
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     payload: IngestionBatchCreate,
     storage: StorageClient,
+    *,
+    commit: bool,
 ):
     """Resolve mapping, materialize the source, and extract raw records.
 
@@ -248,7 +258,9 @@ def _prepare_extraction(
 
     def fail(code: str, message: str) -> _BatchFailure:
         batch = _new_batch(ctx, bank, payload, adapter, mapping_record)
-        return _BatchFailure(_fail_batch(db, ctx, batch, payload.reason, code, message))
+        return _BatchFailure(
+            _fail_batch(db, ctx, batch, payload.reason, code, message, commit=commit)
+        )
 
     try:
         source_path = _materialize_source(db, bank, payload, storage)
@@ -271,17 +283,19 @@ def _prepare_extraction(
     return adapter, mapping_record, mapping, source_path, extraction
 
 
-def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orchestration
+def start_ingestion(  # noqa: PLR0913, PLR0915 - lifecycle and transaction options are explicit
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     payload: IngestionBatchCreate,
     storage: StorageClient,
+    *,
+    commit: bool = True,
 ) -> IngestionBatchStartRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     try:
         adapter, mapping_record, mapping, source_path, extraction = _prepare_extraction(
-            db, ctx, bank, payload, storage
+            db, ctx, bank, payload, storage, commit=commit
         )
     except _BatchFailure as failure:
         return failure.response
@@ -319,6 +333,7 @@ def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orches
         lambda: _persist_raw_artifact(
             ctx, bank_slug(db, bank), batch, extract_node, source_path, storage
         ),
+        commit=commit,
     )
     if storage_failure is not None:
         return storage_failure
@@ -476,6 +491,7 @@ def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orches
         ctx,
         (bank, payload, adapter, mapping_record),
         lambda: _persist_report_artifact(ctx, bank_slug(db, bank), batch, validate_node, storage),
+        commit=commit,
     )
     if storage_failure is not None:
         return storage_failure
@@ -485,7 +501,10 @@ def start_ingestion(  # noqa: PLR0915 - the batch lifecycle is one linear orches
     _enqueue_live_refresh(db, ctx, bank, payload, batch)
     if not etl_inline_dedup:
         _enqueue_etl_dedup(db, ctx, bank, batch)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return IngestionBatchStartRead(
         batch=IngestionBatchRead.model_validate(batch, from_attributes=True), reused=False
     )
@@ -1449,6 +1468,8 @@ def _fail_batch(  # noqa: PLR0913 - mirrors record_event's shape
     reason: str,
     code: str,
     message: str,
+    *,
+    commit: bool = True,
 ) -> IngestionBatchStartRead:
     """Persist a batch that never reached translation; failures are history too."""
     batch.status = "failed"
@@ -1457,7 +1478,10 @@ def _fail_batch(  # noqa: PLR0913 - mirrors record_event's shape
     batch.completed_at = utc_now()
     db.add(batch)
     _record_batch_event(db, ctx, batch, reason)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return IngestionBatchStartRead(
         batch=IngestionBatchRead.model_validate(batch, from_attributes=True), reused=False
     )
@@ -1853,6 +1877,8 @@ def _artifact_step(
     ctx: TenantContext,
     batch_context: tuple[Bank, IngestionBatchCreate, SourceAdapter, MappingConfigRecord],
     persist: Callable[[], None],
+    *,
+    commit: bool,
 ) -> IngestionBatchStartRead | None:
     """Run a storage persistence step; a StorageError fails the batch loudly.
 
@@ -1864,6 +1890,8 @@ def _artifact_step(
         persist()
         return None
     except StorageError as exc:
+        if not commit:
+            raise
         db.rollback()
         bank, payload, adapter, mapping_record = batch_context
         batch = _new_batch(ctx, bank, payload, adapter, mapping_record)

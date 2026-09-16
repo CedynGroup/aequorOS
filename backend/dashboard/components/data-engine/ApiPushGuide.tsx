@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { Download, KeyRound, ShieldAlert, Webhook } from "lucide-react";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { useBankContext } from "@/components/shell/BankContext";
 import CopyButton from "@/components/ui/CopyButton";
 import StatusPill from "@/components/ui/StatusPill";
 import { apiOrigin } from "@/lib/api/client";
@@ -90,10 +91,10 @@ export function ConnectionCard() {
           </p>
           <p className="mt-1 text-body text-navy/80 leading-relaxed">
             The key identifies + authorizes your institution as a service
-            account (verified server-side, analyst rights — data push only). It
-            is shown once at generation and stored only as a hash. If a key is
-            exposed, revoke it here immediately; rotate by generating a new key
-            before revoking the old one.
+            account with one exact bank-scoped Integration Writer grant. It is
+            shown once at generation and stored only as a hash. It cannot push
+            for a sibling bank. If a key is exposed, revoke it here immediately;
+            rotate by generating a new key before revoking the old one.
           </p>
         </div>
       </div>
@@ -103,6 +104,7 @@ export function ConnectionCard() {
 }
 
 function IntegrationKeysPanel() {
+  const { bank } = useBankContext();
   const { effectiveAuthority } = useUserProfile();
   const isAdmin = hasAccountAdministrationAuthority(effectiveAuthority);
   const keysQuery = useIntegrationKeys(isAdmin);
@@ -110,7 +112,10 @@ function IntegrationKeysPanel() {
   const revoke = useRevokeIntegrationKey();
   const [label, setLabel] = useState("");
   // The one moment the raw key is visible — held in memory only, never listed.
-  const [freshKey, setFreshKey] = useState<string | null>(null);
+  const [freshKey, setFreshKey] = useState<{
+    value: string;
+    bankId: string;
+  } | null>(null);
 
   if (!isAdmin) {
     return (
@@ -133,12 +138,16 @@ function IntegrationKeysPanel() {
           <p className="text-caption font-medium text-navy">
             Key generated — copy it now. It will not be shown again.
           </p>
+          <p className="mt-1 text-caption text-slate">
+            Authorized institution:{" "}
+            <span className="font-mono text-navy">{freshKey.bankId}</span>
+          </p>
           <div className="mt-2 flex items-center gap-2">
             <code className="text-body font-mono text-navy break-all">
-              {freshKey}
+              {freshKey.value}
             </code>
             <CopyButton
-              text={freshKey}
+              text={freshKey.value}
               label="Integration key"
               className="shrink-0"
             />
@@ -157,15 +166,30 @@ function IntegrationKeysPanel() {
         className="mt-3 flex items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!label.trim() || issue.isPending) return;
-          issue.mutate(label.trim(), {
-            onSuccess: (result) => {
-              setFreshKey(result.key);
-              setLabel("");
+          if (!bank || !label.trim() || issue.isPending) return;
+          issue.mutate(
+            { bankId: bank.id, label: label.trim() },
+            {
+              onSuccess: (result) => {
+                setFreshKey({
+                  value: result.key,
+                  bankId: result.record.bankId!,
+                });
+                setLabel("");
+              },
             },
-          });
+          );
         }}
       >
+        <div className="rounded border border-border bg-surface px-3 py-2">
+          <p className="text-micro uppercase tracking-wider text-slate">
+            Authorized institution
+          </p>
+          <p className="text-caption font-medium text-navy">
+            {bank?.name ?? "No institution selected"}{" "}
+            {bank && <span className="font-mono text-slate">({bank.id})</span>}
+          </p>
+        </div>
         <input
           value={label}
           onChange={(event) => setLabel(event.target.value)}
@@ -176,7 +200,7 @@ function IntegrationKeysPanel() {
         />
         <button
           type="submit"
-          disabled={!label.trim() || issue.isPending}
+          disabled={!bank || !label.trim() || issue.isPending}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 shrink-0"
         >
           {issue.isPending ? "Generating…" : "Generate key"}
@@ -199,12 +223,18 @@ function IntegrationKeysPanel() {
                 <p className="text-caption text-slate font-mono">
                   {key.keyPrefix}
                   <span className="ml-2 font-sans">
+                    {key.bankId ? `institution ${key.bankId} · ` : ""}
                     created {fmtRelative(key.createdAt)}
                     {key.lastUsedAt
                       ? ` · last used ${fmtRelative(key.lastUsedAt)}`
                       : " · never used"}
                   </span>
                 </p>
+                {!key.bankId && (
+                  <p className="mt-1 text-caption font-medium text-critical">
+                    Unscoped — rotate. This legacy key cannot push data.
+                  </p>
+                )}
               </div>
               {key.revokedAt ? (
                 <StatusPill tone="slate">Revoked</StatusPill>
@@ -217,7 +247,7 @@ function IntegrationKeysPanel() {
                     disabled={revoke.isPending}
                     onClick={() => {
                       const reason = window.prompt(
-                        `Revoke "${key.label}"? Middleware using it stops authenticating immediately. Reason:`,
+                        `Revoke "${key.label}"${key.bankId ? ` for ${key.bankId}` : ""}? Middleware using it stops authenticating immediately. Reason:`,
                       );
                       if (reason?.trim()) {
                         revoke.mutate({ keyId: key.id, reason: reason.trim() });
