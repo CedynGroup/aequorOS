@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.models import (
     Bank,
@@ -33,7 +34,7 @@ from app.schemas.live import (
     OfficialRunRequest,
     RefreshRequest,
 )
-from app.services import fact_derivation, job_queue
+from app.services import fact_derivation, job_queue, scoped_authorization
 from app.services.audit import record_event
 
 _MODULE_ORDER = {
@@ -72,14 +73,22 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
-    rows = list(
-        db.scalars(
-            select(LiveMetric).where(
-                LiveMetric.organization_id == ctx.organization_id,
-                LiveMetric.bank_id == bank.id,
-            )
-        )
+    decision = scoped_authorization.evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="live_summary",
     )
+    query = select(LiveMetric).where(
+        LiveMetric.organization_id == ctx.organization_id,
+        LiveMetric.bank_id == bank.id,
+    )
+    if decision is None or not decision.allowed:
+        query = query.where(LiveMetric.module != "liquidity")
+    rows = list(db.scalars(query))
     is_stale = _cache_is_behind_the_book(db, ctx, bank, {row.module: row for row in rows})
     rows.sort(key=lambda row: _MODULE_ORDER.get(row.module, 99))
     modules = [
@@ -220,6 +229,15 @@ def mint_official_run(
 ) -> JobEnqueuedRead:
     """Enqueue an immediate immutable official run (the "Mint for filing" button)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="mint_official_run",
+    )
     job = job_queue.enqueue(
         db,
         ctx.organization_id,
@@ -284,6 +302,16 @@ def list_live_snapshots(
     are honest, not zero-filled.
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
+    if module == "liquidity":
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.VIEW,
+            module=Module.LIQUIDITY,
+            sensitivity=Sensitivity.AGGREGATED,
+            surface="live_snapshots",
+        )
     rows = list(
         db.scalars(
             select(LiveMetricSnapshot)

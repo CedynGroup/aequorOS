@@ -20,6 +20,7 @@ import DataTable, { type Column } from '@/components/ui/DataTable';
 import { PageSkeleton } from '@/components/ui/QueryBoundary';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useSavedAnalyses } from '@/lib/api/hooks';
+import { isHrefVisible } from '@/lib/modules';
 import { fmtTimestamp } from '@/lib/api/values';
 
 const MODULE_LABELS: Record<WorkbenchModule, string> = {
@@ -126,7 +127,7 @@ export default function SavedAnalysesIndex() {
       key: 'open',
       header: '',
       align: 'right',
-      render: (r) => (
+      render: (r) => isHrefVisible(WORKBENCH_HREFS[r.module], moduleScope) ? (
         <Link
           href={WORKBENCH_HREFS[r.module]}
           className="inline-flex items-center gap-1 text-caption font-medium text-action hover:text-action-hover whitespace-nowrap"
@@ -134,7 +135,7 @@ export default function SavedAnalysesIndex() {
           Open workbench
           <ChevronRight size={12} aria-hidden />
         </Link>
-      ),
+      ) : null,
     },
   ];
 

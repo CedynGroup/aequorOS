@@ -9,6 +9,7 @@ mutations, filtered registries, hidden details, and denial before side effects.
 
 from __future__ import annotations
 
+from datetime import date
 from uuid import UUID
 
 import pytest
@@ -24,12 +25,17 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.models import (
+    AuditEvent,
     AuthorizationBinding,
     BankReportingPeriod,
     CfpActivationEvent,
     ContingencyFundingPlan,
+    Job,
+    LiveMetric,
+    LiveMetricSnapshot,
     Notification,
     RegulatoryRun,
     User,
@@ -347,3 +353,109 @@ def test_t6_liquidity_run_detail_is_hidden_without_confidential_authority(
 
     assert denied.status_code == 404
     assert denied.json()["error"]["message"] == "Regulatory run not found."
+
+
+@pytest.mark.parametrize("binding", [None, "aggregated", "viewer", "capital"])
+def test_official_enqueue_denies_before_job_or_audit(
+    db_client: TestClient, binding: str | None,
+) -> None:
+    _seed_book()
+    version = 1
+    if binding is not None:
+        version = _grant(
+            RoleBundle.VIEWER if binding == "viewer" else RoleBundle.ANALYST,
+            module=ModuleScope.CAPITAL if binding == "capital" else ModuleScope.LIQUIDITY,
+            sensitivity=(
+                SensitivityScope.AGGREGATED
+                if binding == "aggregated"
+                else SensitivityScope.CONFIDENTIAL
+            ),
+        )
+    with get_sessionmaker()() as session:
+        before = [
+            session.scalar(select(func.count()).select_from(model)) for model in (Job, AuditEvent)
+        ]
+
+    response = db_client.post(
+        f"{BASE}/official-runs",
+        headers=_auth(version, "analyst"),
+        json={"as_of_date": "2026-03-31", "reason": "filing request"},
+    )
+
+    assert response.status_code == 403, response.text
+    with get_sessionmaker()() as session:
+        assert [
+            session.scalar(select(func.count()).select_from(model)) for model in (Job, AuditEvent)
+        ] == before
+
+
+def test_official_enqueue_accepts_exact_run_binding_without_scalar_authority(
+    db_client: TestClient,
+) -> None:
+    _seed_book()
+    version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
+
+    response = db_client.post(
+        f"{BASE}/official-runs",
+        headers=_auth(version, "viewer"),
+        json={"as_of_date": "2026-03-31", "reason": "authorized filing request"},
+    )
+
+    assert response.status_code == 202, response.text
+    with get_sessionmaker()() as session:
+        job = session.get(Job, UUID(response.json()["job_id"]))
+        assert job is not None
+        assert job.job_type == "official_run"
+        assert job.bank_id == SAMPLE_BANK_ID
+
+
+def test_shared_live_views_filter_liquidity_and_require_exact_snapshot_authority(
+    db_client: TestClient,
+) -> None:
+    period_id = _seed_book()
+    with get_sessionmaker()() as session:
+        session.execute(delete(LiveMetric))
+        session.execute(delete(LiveMetricSnapshot))
+        for module in ("liquidity", "capital"):
+            session.add(LiveMetric(
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                module=module,
+                metrics={"ratio": 123},
+                status="green",
+                computed_at=utc_now(),
+            ))
+            session.add(LiveMetricSnapshot(
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                reporting_period_id=period_id,
+                snapshot_date=date(2026, 3, 31),
+                module=module,
+                metrics={"ratio": 123},
+                status="green",
+                computed_at=utc_now(),
+            ))
+        session.commit()
+    version = _grant(RoleBundle.VIEWER, module=ModuleScope.CAPITAL)
+    summary = db_client.get(f"{BASE}/live-summary", headers=_auth(version))
+    assert summary.status_code == 200, summary.text
+    assert [row["module"] for row in summary.json()["modules"]] == ["capital"]
+    denied = db_client.get(
+        f"{BASE}/live-snapshots?module=liquidity", headers=_auth(version),
+    )
+    assert denied.status_code == 403
+    capital = db_client.get(
+        f"{BASE}/live-snapshots?module=capital", headers=_auth(version),
+    )
+    assert capital.status_code == 200, capital.text
+    assert len(capital.json()["snapshots"]) == 1
+
+    version = _grant(RoleBundle.VIEWER, sensitivity=SensitivityScope.AGGREGATED)
+    summary = db_client.get(f"{BASE}/live-summary", headers=_auth(version, "viewer"))
+    assert summary.status_code == 200, summary.text
+    assert [row["module"] for row in summary.json()["modules"]] == ["liquidity", "capital"]
+    snapshots = db_client.get(
+        f"{BASE}/live-snapshots?module=liquidity", headers=_auth(version, "viewer"),
+    )
+    assert snapshots.status_code == 200, snapshots.text
+    assert snapshots.json()["snapshots"][0]["metrics"] == {"ratio": 123}
