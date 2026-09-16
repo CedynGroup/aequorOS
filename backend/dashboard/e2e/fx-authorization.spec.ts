@@ -1,0 +1,104 @@
+// Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
+import { expect, test } from "@playwright/test";
+import path from "path";
+import { E2E_TMP } from "../playwright.config";
+
+const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+
+test.describe("unbound FX user", () => {
+  test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
+
+  test("hides navigation, 404s deep links, and sends no FX requests", async ({
+    page,
+  }) => {
+    const fxRequests: string[] = [];
+    page.on("request", (request) => {
+      if (/\/banks\/[^/]+\/fx(?:\/|$)/.test(request.url())) {
+        fxRequests.push(request.url());
+      }
+    });
+
+    await page.goto("/");
+    await expect(
+      page.getByText("No authorized institutions", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("navigation")).toHaveCount(0);
+
+    await page.goto("/fx");
+    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await page.goto("/fx/scenarios");
+    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    expect(fxRequests).toEqual([]);
+
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "fx-unbound.png"),
+        fullPage: true,
+      });
+    }
+  });
+});
+
+test.describe("bound FX user", () => {
+  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+
+  test("keeps the FX run action visible with an exact grant reason", async ({
+    page,
+  }) => {
+    await page.route("**/auth/me", async (route) => {
+      const response = await route.fetch();
+      const profile = await response.json();
+      profile.effective_authority.organization_capabilities = [];
+      for (const institution of profile.effective_authority
+        .institution_capabilities) {
+        institution.capabilities = institution.capabilities.filter(
+          (capability: {
+            module: string;
+            sensitivity: string;
+            permission: string;
+          }) =>
+            capability.module === "fx" &&
+            capability.permission === "view" &&
+            ["aggregated", "confidential"].includes(capability.sensitivity),
+        );
+      }
+      await route.fulfill({ response, json: profile });
+    });
+
+    await page.goto("/fx/scenarios");
+    await page.getByRole("button", { name: "Scenarios & run" }).click();
+    const run = page.getByRole("button", { name: "Run enterprise stress" });
+    await expect(run).toBeVisible();
+    await expect(run).toBeDisabled();
+    await expect(run.locator("..")).toHaveAttribute(
+      "title",
+      "Requires FX run permission at confidential sensitivity. An organization owner can grant it.",
+    );
+
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "fx-run-disabled.png"),
+        fullPage: true,
+      });
+    }
+  });
+
+  test("shows FX navigation and opens the exposure dashboard", async ({
+    page,
+  }) => {
+    await page.goto("/fx");
+    await expect(
+      page.getByRole("heading", { name: "FX Exposure" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "VaR & Stress" }),
+    ).toBeVisible();
+
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "fx-bound.png"),
+        fullPage: true,
+      });
+    }
+  });
+});

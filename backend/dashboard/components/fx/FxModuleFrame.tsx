@@ -41,11 +41,16 @@ export default function FxModuleFrame({
   subtitle?: string;
   children: (ctx: FxFrameContext) => ReactNode;
 }) {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
-  const dashboard = useFxDashboard(bankId);
-  const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
+  const dashboard = useFxDashboard(
+    moduleScope.fxAggregatedView ? bankId : undefined
+  );
+  const latestRun = useRegulatoryRun(
+    moduleScope.fxConfidentialView ? bankId : undefined,
+    dashboard.data?.latestRunId
+  );
 
   const data = dashboard.data;
 

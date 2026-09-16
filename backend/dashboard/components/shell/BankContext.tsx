@@ -247,6 +247,24 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      fxAggregatedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "fx",
+        "aggregated",
+        "view",
+      ),
+      fxConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "fx",
+        "confidential",
+        "view",
+      ),
+      fxRun: hasEffectiveCapability(
+        institutionCapabilities,
+        "fx",
+        "confidential",
+        "run",
+      ),
       isResolved: !banksQuery.isLoading && !profileQuery.isLoading,
     }),
     [

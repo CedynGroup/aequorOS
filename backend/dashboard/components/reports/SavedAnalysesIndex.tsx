@@ -55,7 +55,10 @@ export default function SavedAnalysesIndex() {
     moduleScope.irrbbConfidentialView ? bankId : undefined,
     "irr",
   );
-  const fx = useSavedAnalyses(bankId, "fx");
+  const fx = useSavedAnalyses(
+    moduleScope.fxConfidentialView ? bankId : undefined,
+    "fx",
+  );
   const ftp = useSavedAnalyses(bankId, "ftp");
 
   const moduleQueries = [
