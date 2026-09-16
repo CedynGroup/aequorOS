@@ -118,14 +118,12 @@ export default function LiquidityCockpit() {
   const data = dashboard.data;
   const run = latestRun.data;
 
-  // Liquidity floors from the stored run's parameter snapshot. The 100%
-  // fallback is the BASEL figure (BCBS 238 ¶17), not a Ghanaian requirement:
-  // BoG has published no LCR directive and nothing at all on NSFR
-  // (backend/docs/bog_parameter_sources.md §2.6). Label it accordingly.
-  const thresholds = runThresholds(run);
-  const lcrMin = thresholds["lcr_min"] ?? 100;
-  const lcrRedFloor = thresholds["lcr_amber_floor"] ?? 90;
-  const nsfrMin = thresholds["nsfr_min"] ?? 100;
+  const thresholds = runThresholds(
+    moduleScope.liquidityConfidentialView ? run : undefined,
+  );
+  const lcrMin = thresholds["lcr_min"] ?? null;
+  const lcrRedFloor = thresholds["lcr_amber_floor"];
+  const nsfrMin = thresholds["nsfr_min"] ?? null;
   const nsfrRedFloor = thresholds["nsfr_amber_floor"] ?? nsfrMin;
 
   const outflowRows = (data?.outflows ?? []).map(toRow);
@@ -161,8 +159,7 @@ export default function LiquidityCockpit() {
     largestHqla && hqlaTotal > 0
       ? (num(largestHqla.weightedAmount) / hqlaTotal) * 100
       : null;
-  const lcrHeadroomGhs =
-    hqlaTotal - num(data?.metrics.netOutflows30dGhs) * (lcrMin / 100);
+
   const nsfrSurplus =
     num(data?.metrics.asfTotalGhs) - num(data?.metrics.rsfTotalGhs);
   const ewi = ewis.data;
@@ -214,23 +211,29 @@ export default function LiquidityCockpit() {
               footer={provenance}
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-                <KpiStat
-                  label="LCR headroom"
-                  value={`${(num(data.metrics.lcrPct) - lcrMin).toFixed(1)} pp`}
-                  status={
-                    data.metrics.lcrStatus === "red"
-                      ? "crit"
-                      : data.metrics.lcrStatus === "amber"
-                        ? "warn"
-                        : "ok"
-                  }
-                  hint={`${fmtCurrency(lcrHeadroomGhs)} above minimum requirement`}
-                />
+                {lcrMin !== null && (
+                  <KpiStat
+                    label="LCR headroom"
+                    value={`${(num(data.metrics.lcrPct) - lcrMin).toFixed(1)} pp`}
+                    status={
+                      data.metrics.lcrStatus === "red"
+                        ? "crit"
+                        : data.metrics.lcrStatus === "amber"
+                          ? "warn"
+                          : "ok"
+                    }
+                    hint={`${fmtCurrency(hqlaTotal - num(data.metrics.netOutflows30dGhs) * (lcrMin / 100))} above minimum requirement`}
+                  />
+                )}
                 <KpiStat
                   label="NSFR funding surplus"
                   value={fmtCurrency(nsfrSurplus)}
                   status={nsfrSurplus < 0 ? "crit" : "ok"}
-                  hint={`${(num(data.metrics.nsfrPct) - nsfrMin).toFixed(1)} pp above minimum`}
+                  hint={
+                    nsfrMin !== null
+                      ? `${(num(data.metrics.nsfrPct) - nsfrMin).toFixed(1)} pp above minimum`
+                      : undefined
+                  }
                 />
                 <KpiStat
                   label="Largest HQLA concentration"
@@ -274,7 +277,9 @@ export default function LiquidityCockpit() {
                   <KpiStat
                     label="CFP readiness"
                     value={
-                      approvedCfp ? `v${approvedCfp.version}` : "No approved plan"
+                      approvedCfp
+                        ? `v${approvedCfp.version}`
+                        : "No approved plan"
                     }
                     status={
                       approvedCfp
@@ -386,15 +391,22 @@ export default function LiquidityCockpit() {
             {/* Headline gauges + component KPIs */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               <div className="lg:col-span-2">
-                <RatioGauge
-                  label="Liquidity Coverage Ratio"
-                  value={num(data.metrics.lcrPct)}
-                  threshold={lcrMin}
-                  internalBuffer={lcrRedFloor}
-                  bufferLabel="Red floor"
-                  status={statusTone(data.metrics.lcrStatus)}
-                  decimals={2}
-                />
+                {lcrMin !== null ? (
+                  <RatioGauge
+                    label="Liquidity Coverage Ratio"
+                    value={num(data.metrics.lcrPct)}
+                    threshold={lcrMin}
+                    internalBuffer={lcrRedFloor}
+                    bufferLabel="Red floor"
+                    status={statusTone(data.metrics.lcrStatus)}
+                    decimals={2}
+                  />
+                ) : (
+                  <KpiStat
+                    label="Liquidity Coverage Ratio"
+                    value={fmtPct(num(data.metrics.lcrPct), 2)}
+                  />
+                )}
               </div>
               <KpiStat
                 label="HQLA stock"
@@ -419,13 +431,20 @@ export default function LiquidityCockpit() {
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               <div className="lg:col-span-2">
-                <RatioGauge
-                  label="Net Stable Funding Ratio"
-                  value={num(data.metrics.nsfrPct)}
-                  threshold={nsfrMin}
-                  status={statusTone(data.metrics.nsfrStatus)}
-                  decimals={2}
-                />
+                {nsfrMin !== null ? (
+                  <RatioGauge
+                    label="Net Stable Funding Ratio"
+                    value={num(data.metrics.nsfrPct)}
+                    threshold={nsfrMin}
+                    status={statusTone(data.metrics.nsfrStatus)}
+                    decimals={2}
+                  />
+                ) : (
+                  <KpiStat
+                    label="Net Stable Funding Ratio"
+                    value={fmtPct(num(data.metrics.nsfrPct), 2)}
+                  />
+                )}
               </div>
               <KpiStat
                 label="Available stable funding"
@@ -442,49 +461,54 @@ export default function LiquidityCockpit() {
             </div>
 
             {/* Regulatory floors — LCR & NSFR are floor limits (direction above) */}
-            <SectionCard
-              title="Liquidity floors"
-              subtitle={`Basel LCR/NSFR minimums from the active parameter set — ${centralBankName()} has published no LCR requirement and none on NSFR (green ≥ minimum, amber down to the red floor)`}
-              computedAt={computedAt}
-              footer={provenance}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5">
-                <LimitBar
-                  label={
-                    <span className="inline-flex items-center gap-2">
-                      LCR
-                      <Sparkline data={lcrTrend} width={64} height={16} />
-                    </span>
-                  }
-                  value={num(data.metrics.lcrPct)}
-                  limit={lcrRedFloor}
-                  warnAt={lcrMin}
-                  direction="above"
-                  unit="%"
-                  limitLabel="Red floor"
-                  warnLabel="Basel minimum"
-                  format={(v) => v.toFixed(1)}
-                />
-                <LimitBar
-                  label={
-                    <span className="inline-flex items-center gap-2">
-                      NSFR
-                      <Sparkline data={nsfrTrend} width={64} height={16} />
-                    </span>
-                  }
-                  value={num(data.metrics.nsfrPct)}
-                  limit={nsfrRedFloor}
-                  warnAt={nsfrMin}
-                  direction="above"
-                  unit="%"
-                  limitLabel={
-                    nsfrRedFloor === nsfrMin ? "Basel minimum" : "Red floor"
-                  }
-                  warnLabel="Basel minimum"
-                  format={(v) => v.toFixed(1)}
-                />
-              </div>
-            </SectionCard>
+            {lcrMin !== null &&
+              lcrRedFloor !== undefined &&
+              nsfrMin !== null &&
+              nsfrRedFloor !== null && (
+                <SectionCard
+                  title="Liquidity floors"
+                  subtitle={`Basel LCR/NSFR minimums from the active parameter set — ${centralBankName()} has published no LCR requirement and none on NSFR (green ≥ minimum, amber down to the red floor)`}
+                  computedAt={computedAt}
+                  footer={provenance}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5">
+                    <LimitBar
+                      label={
+                        <span className="inline-flex items-center gap-2">
+                          LCR
+                          <Sparkline data={lcrTrend} width={64} height={16} />
+                        </span>
+                      }
+                      value={num(data.metrics.lcrPct)}
+                      limit={lcrRedFloor}
+                      warnAt={lcrMin}
+                      direction="above"
+                      unit="%"
+                      limitLabel="Red floor"
+                      warnLabel="Basel minimum"
+                      format={(v) => v.toFixed(1)}
+                    />
+                    <LimitBar
+                      label={
+                        <span className="inline-flex items-center gap-2">
+                          NSFR
+                          <Sparkline data={nsfrTrend} width={64} height={16} />
+                        </span>
+                      }
+                      value={num(data.metrics.nsfrPct)}
+                      limit={nsfrRedFloor}
+                      warnAt={nsfrMin}
+                      direction="above"
+                      unit="%"
+                      limitLabel={
+                        nsfrRedFloor === nsfrMin ? "Basel minimum" : "Red floor"
+                      }
+                      warnLabel="Basel minimum"
+                      format={(v) => v.toFixed(1)}
+                    />
+                  </div>
+                </SectionCard>
+              )}
 
             {/* Trend + net-outflow decomposition */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -494,11 +518,13 @@ export default function LiquidityCockpit() {
                 subtitle={`Ratios across ${data.trend.length} reporting periods`}
                 height={260}
                 actions={
-                  <StatusPill tone="success">
-                    LCR compliant{" "}
-                    {data.trend.filter((p) => num(p.lcrPct) >= lcrMin).length}{" "}
-                    of {data.trend.length}
-                  </StatusPill>
+                  lcrMin !== null ? (
+                    <StatusPill tone="success">
+                      LCR compliant{" "}
+                      {data.trend.filter((p) => num(p.lcrPct) >= lcrMin).length}{" "}
+                      of {data.trend.length}
+                    </StatusPill>
+                  ) : undefined
                 }
                 footer={
                   hasInlineTrendPoints ? (
