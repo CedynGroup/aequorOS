@@ -97,6 +97,9 @@ export default function CapitalPlanning() {
   const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  const dashboardBankId = moduleScope.capitalAggregatedView
+    ? bankId
+    : undefined;
   const planningBankId = moduleScope.capitalConfidentialView
     ? bankId
     : undefined;
@@ -104,10 +107,7 @@ export default function CapitalPlanning() {
     ? planningBankId
     : undefined;
 
-  const dashboard = useCapitalDashboard(
-    moduleScope.capitalAggregatedView ? bankId : undefined,
-    periodId,
-  );
+  const dashboard = useCapitalDashboard(dashboardBankId, periodId);
   const capitalPlan = useCapitalPlan(planningBankId);
   const canRefreshIlaap =
     moduleScope.capitalRun === true &&
@@ -231,9 +231,9 @@ export default function CapitalPlanning() {
         }
         error={dashboard.error ?? capitalPlan.error ?? forecastRuns.error}
         onRetry={() => {
-          void dashboard.refetch();
-          void capitalPlan.refetch();
-          void forecastRuns.refetch();
+          if (dashboardBankId) void dashboard.refetch();
+          if (planningBankId) void capitalPlan.refetch();
+          if (forecastBankId) void forecastRuns.refetch();
         }}
       >
         <div className="px-8 py-6 space-y-6">
