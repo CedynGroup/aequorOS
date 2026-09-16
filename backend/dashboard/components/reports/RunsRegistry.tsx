@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Official Runs registry — the governance console's audit trail. A filterable
@@ -8,46 +8,47 @@
  * run's RunBadge provenance.
  */
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowUpRight, FileBarChart2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowUpRight, FileBarChart2 } from "lucide-react";
 import type {
   RegulatoryModule,
   RegulatoryRunSummaryRead,
-} from '@aequoros/risk-service-api';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import CopyButton from '@/components/ui/CopyButton';
-import RunBadge from '@/components/ui/RunBadge';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonTable } from '@/components/ui/Skeleton';
-import { fmtDateUTC, fmtTimestamp, labelize, shortId } from '@/lib/api/values';
+} from "@aequoros/risk-service-api";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import CopyButton from "@/components/ui/CopyButton";
+import RunBadge from "@/components/ui/RunBadge";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import { fmtDateUTC, fmtTimestamp, labelize, shortId } from "@/lib/api/values";
+import { useModuleScope } from "@/components/shell/BankContext";
 import {
   groupRunsByDay,
   MODULE_HREFS,
   MODULE_LABELS,
   useOfficialRunsRegistry,
-} from './hooks';
+} from "./hooks";
 
 const MODULE_FILTERS: { code: RegulatoryModule | null; label: string }[] = [
-  { code: null, label: 'All modules' },
-  { code: 'liquidity', label: 'Liquidity' },
-  { code: 'capital', label: 'Capital' },
-  { code: 'credit', label: 'Credit' },
-  { code: 'irr', label: 'IRRBB' },
-  { code: 'fx', label: 'FX' },
-  { code: 'ftp', label: 'FTP' },
-  { code: 'forecast', label: 'Forecast' },
-  { code: 'optimizer', label: 'Optimizer' },
-  { code: 'whatif', label: 'What-if' },
+  { code: null, label: "All modules" },
+  { code: "liquidity", label: "Liquidity" },
+  { code: "capital", label: "Capital" },
+  { code: "credit", label: "Credit" },
+  { code: "irr", label: "IRRBB" },
+  { code: "fx", label: "FX" },
+  { code: "ftp", label: "FTP" },
+  { code: "forecast", label: "Forecast" },
+  { code: "optimizer", label: "Optimizer" },
+  { code: "whatif", label: "What-if" },
   // Closed alongside the credit addition: both run types existed with no filter.
-  { code: 'reverse_stress', label: 'Reverse Stress' },
-  { code: 'enterprise_stress', label: 'Enterprise Stress' },
+  { code: "reverse_stress", label: "Reverse Stress" },
+  { code: "enterprise_stress", label: "Enterprise Stress" },
 ];
 
-type StatusFilter = 'all' | 'succeeded' | 'failed';
+type StatusFilter = "all" | "succeeded" | "failed";
 
 export default function RunsRegistry({
   bankId,
@@ -55,19 +56,36 @@ export default function RunsRegistry({
   bankId: string | undefined;
 }) {
   const router = useRouter();
+  const moduleScope = useModuleScope();
   const [moduleFilter, setModuleFilter] = useState<RegulatoryModule | null>(
-    null
+    null,
   );
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const moduleFilters = useMemo(
+    () =>
+      moduleScope.capitalConfidentialView
+        ? MODULE_FILTERS
+        : MODULE_FILTERS.filter((filter) => filter.code !== "capital"),
+    [moduleScope.capitalConfidentialView],
+  );
+
+  useEffect(() => {
+    if (
+      moduleFilter === "capital" &&
+      moduleScope.capitalConfidentialView !== true
+    ) {
+      setModuleFilter(null);
+    }
+  }, [moduleFilter, moduleScope.capitalConfidentialView]);
 
   const { query, runs, total } = useOfficialRunsRegistry(bankId, moduleFilter);
 
   const filtered = useMemo(
     () =>
-      statusFilter === 'all'
+      statusFilter === "all"
         ? runs
         : runs.filter((run) => run.status === statusFilter),
-    [runs, statusFilter]
+    [runs, statusFilter],
   );
 
   const groups = useMemo(() => groupRunsByDay(filtered), [filtered]);
@@ -76,11 +94,13 @@ export default function RunsRegistry({
 
   const columns: Column<RegulatoryRunSummaryRead>[] = [
     {
-      key: 'module',
-      header: 'Module',
+      key: "module",
+      header: "Module",
       render: (run) => (
         <span className="inline-flex items-center gap-1.5 font-medium text-navy whitespace-nowrap">
-          {run.module ? MODULE_LABELS[run.module] ?? labelize(run.module) : '—'}
+          {run.module
+            ? (MODULE_LABELS[run.module] ?? labelize(run.module))
+            : "—"}
           <ArrowUpRight
             size={12}
             className="text-slate-light group-hover:text-action transition-colors"
@@ -90,15 +110,15 @@ export default function RunsRegistry({
       ),
     },
     {
-      key: 'scenario',
-      header: 'Scenario',
+      key: "scenario",
+      header: "Scenario",
       render: (run) => (
         <span className="text-navy/85">{labelize(run.scenarioCode)}</span>
       ),
     },
     {
-      key: 'period',
-      header: 'Period',
+      key: "period",
+      header: "Period",
       render: (run) => (
         <span className="font-mono text-caption text-slate">
           {run.periodLabel}
@@ -106,17 +126,17 @@ export default function RunsRegistry({
       ),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (run) => (
-        <StatusPill tone={run.status === 'succeeded' ? 'success' : 'critical'}>
+        <StatusPill tone={run.status === "succeeded" ? "success" : "critical"}>
           {labelize(run.status)}
         </StatusPill>
       ),
     },
     {
-      key: 'hash',
-      header: 'Input hash',
+      key: "hash",
+      header: "Input hash",
       render: (run) => (
         <span
           className="inline-flex items-center gap-1.5"
@@ -131,8 +151,8 @@ export default function RunsRegistry({
       ),
     },
     {
-      key: 'engine',
-      header: 'Engine',
+      key: "engine",
+      header: "Engine",
       render: (run) => (
         <span className="font-mono text-caption text-slate whitespace-nowrap">
           {run.engineVersion}
@@ -140,9 +160,9 @@ export default function RunsRegistry({
       ),
     },
     {
-      key: 'created',
-      header: 'Created',
-      align: 'right',
+      key: "created",
+      header: "Created",
+      align: "right",
       render: (run) => (
         <span className="font-mono text-caption text-slate tnum whitespace-nowrap">
           {fmtTimestamp(run.createdAt)}
@@ -184,7 +204,7 @@ export default function RunsRegistry({
         role="group"
         aria-label="Filter runs by module"
       >
-        {MODULE_FILTERS.map((filter) => {
+        {moduleFilters.map((filter) => {
           const active = filter.code === moduleFilter;
           return (
             <button
@@ -194,8 +214,8 @@ export default function RunsRegistry({
               onClick={() => setModuleFilter(filter.code)}
               className={`px-3 py-1.5 rounded-full text-caption font-medium border transition-colors ${
                 active
-                  ? 'btn-primary border-transparent'
-                  : 'bg-surface-raised text-slate border-border hover:text-navy hover:border-navy/30'
+                  ? "btn-primary border-transparent"
+                  : "bg-surface-raised text-slate border-border hover:text-navy hover:border-navy/30"
               }`}
             >
               {filter.label}
@@ -216,9 +236,9 @@ export default function RunsRegistry({
               Icon={FileBarChart2}
               title="No persisted runs yet"
               description={
-                moduleFilter || statusFilter !== 'all'
-                  ? 'No runs match the current filters — clear them or run a scenario batch from a module dashboard.'
-                  : 'Every calculation run from the Liquidity, Basel Capital, IRRBB, FX, FTP, and Forecasting modules is registered here with its engine version and input hash.'
+                moduleFilter || statusFilter !== "all"
+                  ? "No runs match the current filters — clear them or run a scenario batch from a module dashboard."
+                  : "Every calculation run from the Liquidity, Basel Capital, IRRBB, FX, FTP, and Forecasting modules is registered here with its engine version and input hash."
               }
             />
           </div>
@@ -231,7 +251,7 @@ export default function RunsRegistry({
                     {group.label}
                   </p>
                   <p className="text-micro uppercase tracking-wider text-slate">
-                    {group.runs.length} run{group.runs.length === 1 ? '' : 's'}
+                    {group.runs.length} run{group.runs.length === 1 ? "" : "s"}
                   </p>
                 </div>
                 <DataTable

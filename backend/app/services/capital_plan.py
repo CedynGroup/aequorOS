@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ConditionCheck, ConditionKind, Permission
 from app.db.base import utc_now
 from app.models import (
     Bank,
@@ -84,9 +85,7 @@ def _approved_plan(db: Session, ctx: TenantContext, bank: Bank) -> CapitalPlan |
 
 
 def _read(plan: CapitalPlan) -> CapitalPlanRead:
-    overdue = (
-        plan.approval_expires_at is not None and plan.approval_expires_at < utc_now().date()
-    )
+    overdue = plan.approval_expires_at is not None and plan.approval_expires_at < utc_now().date()
     return CapitalPlanRead(
         id=plan.id,
         bank_id=plan.bank_id,
@@ -238,11 +237,45 @@ def get_capital_plan(db: Session, ctx: TenantContext, bank_id: str) -> CapitalPl
             db,
             ctx,
             bank,
-            CapitalPlanContent.model_validate(reference.content)
-            if reference is not None
-            else None,
+            CapitalPlanContent.model_validate(reference.content) if reference is not None else None,
         ),
         latest_ilaap=_ilaap_read(latest_ilaap) if latest_ilaap is not None else None,
+    )
+
+
+def required_draft_permission(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+) -> Permission:
+    """Choose create for a new plan version and edit for an existing draft."""
+
+    current = _current_plan(db, ctx, bank)
+    return (
+        Permission.EDIT if current is not None and current.status == "draft" else Permission.CREATE
+    )
+
+
+def maker_checker_conditions(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+) -> tuple[ConditionCheck, ...]:
+    """Resolve the plan's preparer before evaluating approval authority."""
+
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    plan = _current_plan(db, ctx, bank)
+    distinct = plan is None or plan.prepared_by is None or plan.prepared_by != ctx.actor_user_id
+    return (
+        ConditionCheck(
+            kind=ConditionKind.MAKER_CHECKER,
+            passed=distinct,
+            reason=(
+                "capital plan approver is distinct from preparer"
+                if distinct
+                else "capital plan preparer cannot approve the same plan"
+            ),
+        ),
     )
 
 
@@ -382,9 +415,7 @@ def refresh_ilaap(
     statuses = {
         row.metric_code: row.status
         for row in db.scalars(
-            select(RegulatoryMetricResult).where(
-                RegulatoryMetricResult.run_id == baseline.id
-            )
+            select(RegulatoryMetricResult).where(RegulatoryMetricResult.run_id == baseline.id)
         )
     }
     stressed = db.scalars(

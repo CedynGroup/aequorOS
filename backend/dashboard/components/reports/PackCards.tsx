@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Regulatory pack cards for the Reports library: the two Bank of Ghana
@@ -8,18 +8,18 @@
  * pages use — this card deck never rebuilds the returns themselves.
  */
 
-import Link from 'next/link';
-import { ChevronRight, FileCheck2, Presentation } from 'lucide-react';
-import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { useBankContext } from '@/components/shell/BankContext';
+import Link from "next/link";
+import { ChevronRight, FileCheck2, Presentation } from "lucide-react";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   isNoBaselineRunError,
   useBsd2Preview,
   useBsd3Preview,
-} from '@/lib/api/hooks';
-import { shortId } from '@/lib/api/values';
-import { regShort } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { shortId } from "@/lib/api/values";
+import { regShort } from "@/lib/format";
 
 type PackQuery = {
   isLoading: boolean;
@@ -32,13 +32,14 @@ function packStatus(query: PackQuery): {
   label: string;
   ready: boolean;
 } {
-  if (query.isLoading) return { tone: 'slate', label: 'Checking…', ready: false };
-  if (query.data) return { tone: 'success', label: 'Ready', ready: true };
+  if (query.isLoading)
+    return { tone: "slate", label: "Checking…", ready: false };
+  if (query.data) return { tone: "success", label: "Ready", ready: true };
   if (isNoBaselineRunError(query.error)) {
-    return { tone: 'amber', label: 'Baseline run required', ready: false };
+    return { tone: "amber", label: "Baseline run required", ready: false };
   }
-  if (query.error) return { tone: 'slate', label: 'Unavailable', ready: false };
-  return { tone: 'slate', label: 'Unavailable', ready: false };
+  if (query.error) return { tone: "slate", label: "Unavailable", ready: false };
+  return { tone: "slate", label: "Unavailable", ready: false };
 }
 
 export default function PackCards({
@@ -48,8 +49,11 @@ export default function PackCards({
   bankId: string | undefined;
   periodId: string | undefined;
 }) {
-  const { period } = useBankContext();
-  const bsd2 = useBsd2Preview(bankId, periodId);
+  const { period, moduleScope } = useBankContext();
+  const bsd2 = useBsd2Preview(
+    moduleScope.capitalConfidentialView ? bankId : undefined,
+    periodId,
+  );
   const bsd3 = useBsd3Preview(bankId, periodId);
 
   const packs: {
@@ -60,21 +64,25 @@ export default function PackCards({
     status: { tone: StatusTone; label: string; ready: boolean };
     runId?: string;
   }[] = [
+    ...(moduleScope.capitalConfidentialView
+      ? [
+          {
+            form: "CAR-RWA",
+            title: `${regShort()} Capital Adequacy Return`,
+            description:
+              "Capital structure, risk-weighted assets, and capital ratios — generated from the latest successful baseline capital run; official packages live in the Regulatory Reporting hub.",
+            href: "/submissions/returns?code=CAR-RWA",
+            status: packStatus(bsd2),
+            runId: bsd2.data?.runId,
+          },
+        ]
+      : []),
     {
-      form: 'CAR-RWA',
-      title: `${regShort()} Capital Adequacy Return`,
-      description:
-        'Capital structure, risk-weighted assets, and capital ratios — generated from the latest successful baseline capital run; official packages live in the Regulatory Reporting hub.',
-      href: '/submissions/returns?code=CAR-RWA',
-      status: packStatus(bsd2),
-      runId: bsd2.data?.runId,
-    },
-    {
-      form: 'LCR-NSFR',
+      form: "LCR-NSFR",
       title: `${regShort()} Liquidity Return (LCR & NSFR)`,
       description:
-        'Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.',
-      href: '/submissions/returns?code=LCR-NSFR',
+        "Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.",
+      href: "/submissions/returns?code=LCR-NSFR",
       status: packStatus(bsd3),
       runId: bsd3.data?.runId,
     },

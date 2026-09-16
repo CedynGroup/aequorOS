@@ -7,7 +7,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
+from app.api.deps import (
+    CapitalConfidentialView,
+    CapitalPlanApproveAccess,
+    CapitalPlanWrite,
+    DbSession,
+    IlaapRefreshAccess,
+)
 from app.schemas.capital_plan import (
     CapitalPlanApprove,
     CapitalPlanPut,
@@ -27,8 +33,10 @@ router = APIRouter(tags=["capital-plan"])
     response_model=CapitalPlanSummaryRead,
     operation_id="getCapitalPlan",
 )
-def get_capital_plan(bank_id: str, db: DbSession, ctx: Tenant) -> CapitalPlanSummaryRead:
-    return capital_plan.get_capital_plan(db, ctx, bank_id)
+def get_capital_plan(
+    bank_id: str, db: DbSession, access: CapitalConfidentialView
+) -> CapitalPlanSummaryRead:
+    return capital_plan.get_capital_plan(db, access.ctx, bank_id)
 
 
 @router.put(
@@ -37,9 +45,9 @@ def get_capital_plan(bank_id: str, db: DbSession, ctx: Tenant) -> CapitalPlanSum
     operation_id="putCapitalPlanDraft",
 )
 def put_capital_plan(
-    bank_id: str, payload: CapitalPlanPut, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: CapitalPlanPut, db: DbSession, access: CapitalPlanWrite
 ) -> CapitalPlanRead:
-    return capital_plan.put_capital_plan(db, ctx, bank_id, payload)
+    return capital_plan.put_capital_plan(db, access.ctx, bank_id, payload)
 
 
 @router.post(
@@ -48,9 +56,12 @@ def put_capital_plan(
     operation_id="approveCapitalPlan",
 )
 def approve_capital_plan(
-    bank_id: str, payload: CapitalPlanApprove, db: DbSession, ctx: ApproverTenant
+    bank_id: str,
+    payload: CapitalPlanApprove,
+    db: DbSession,
+    access: CapitalPlanApproveAccess,
 ) -> CapitalPlanRead:
-    return capital_plan.approve_capital_plan(db, ctx, bank_id, payload)
+    return capital_plan.approve_capital_plan(db, access.ctx, bank_id, payload)
 
 
 @router.post(
@@ -60,9 +71,9 @@ def approve_capital_plan(
     operation_id="refreshIlaapComponent",
 )
 def refresh_ilaap(
-    bank_id: str, payload: IlaapRefreshCreate, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: IlaapRefreshCreate, db: DbSession, access: IlaapRefreshAccess
 ) -> IlaapSnapshotRead:
-    return capital_plan.refresh_ilaap(db, ctx, bank_id, payload)
+    return capital_plan.refresh_ilaap(db, access.ctx, bank_id, payload)
 
 
 @router.get(
@@ -73,7 +84,7 @@ def refresh_ilaap(
 def list_ilaap_snapshots(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CapitalConfidentialView,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> IlaapSnapshotListRead:
-    return capital_plan.list_ilaap_snapshots(db, ctx, bank_id, reporting_period_id)
+    return capital_plan.list_ilaap_snapshots(db, access.ctx, bank_id, reporting_period_id)

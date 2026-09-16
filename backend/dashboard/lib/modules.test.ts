@@ -7,7 +7,10 @@ import {
   type ModuleScope,
 } from "./modules";
 
-const resolved = (liquidityMonitoringAccess: boolean): ModuleScope => ({
+const resolved = (
+  liquidityMonitoringAccess: boolean,
+  capital: Partial<ModuleScope> = {},
+): ModuleScope => ({
   modules: new Set([
     "command_center",
     "risk",
@@ -24,6 +27,14 @@ const resolved = (liquidityMonitoringAccess: boolean): ModuleScope => ({
   hasInstitutionAuthority: true,
   institutionClass: "bank",
   liquidityMonitoringAccess,
+  capitalAggregatedView: true,
+  capitalConfidentialView: true,
+  capitalRestrictedView: true,
+  capitalRun: true,
+  capitalCreate: true,
+  capitalEdit: true,
+  capitalApprove: false,
+  ...capital,
   isResolved: true,
 });
 
@@ -54,6 +65,35 @@ assert.equal(
   ),
   false,
 );
+
+const aggregatedCapitalOnly = resolved(true, {
+  capitalConfidentialView: false,
+  capitalRestrictedView: false,
+  capitalRun: false,
+  capitalCreate: false,
+  capitalEdit: false,
+});
+assert.equal(isHrefVisible("/basel", aggregatedCapitalOnly), true);
+assert.equal(isPathVisible("/basel/rwa", aggregatedCapitalOnly), true);
+assert.equal(isPathVisible("/basel/structure", aggregatedCapitalOnly), true);
+assert.equal(isPathVisible("/basel/stress", aggregatedCapitalOnly), true);
+assert.equal(isHrefVisible("/basel/planning", aggregatedCapitalOnly), false);
+assert.equal(isPathVisible("/basel/planning", aggregatedCapitalOnly), false);
+
+const confidentialCapitalOnly = resolved(true, {
+  capitalAggregatedView: false,
+});
+assert.equal(isHrefVisible("/basel", confidentialCapitalOnly), false);
+assert.equal(isPathVisible("/basel", confidentialCapitalOnly), false);
+assert.equal(isHrefVisible("/basel/planning", confidentialCapitalOnly), true);
+
+const deniedCapital = resolved(true, {
+  capitalAggregatedView: false,
+  capitalConfidentialView: false,
+});
+assert.equal(isHrefVisible("/basel", deniedCapital), false);
+assert.equal(isPathVisible("/basel/rwa", deniedCapital), false);
+assert.equal(isPathVisible("/basel/planning", deniedCapital), false);
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),

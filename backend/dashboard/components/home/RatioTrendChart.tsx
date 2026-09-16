@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Ratio trend — LCR, NSFR and CAR across every reporting period, merged from
@@ -8,7 +8,7 @@
  * next to triple-digit liquidity ratios.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -18,9 +18,12 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from 'recharts';
-import RangeTabs, { RANGE_MONTHS, type RangePreset } from '@/components/ui/RangeTabs';
-import ChartFrame from '@/components/ui/ChartFrame';
+} from "recharts";
+import RangeTabs, {
+  RANGE_MONTHS,
+  type RangePreset,
+} from "@/components/ui/RangeTabs";
+import ChartFrame from "@/components/ui/ChartFrame";
 import {
   axisProps,
   chartLegendProps,
@@ -28,10 +31,10 @@ import {
   chartTooltipProps,
   CHART_GRID,
   seriesColor,
-} from '@/lib/chartTheme';
-import { num } from '@/lib/api/values';
-import { useModuleScope } from '@/components/shell/BankContext';
-import { useEffectiveRatioDashboards } from '@/lib/api/hooks';
+} from "@/lib/chartTheme";
+import { num } from "@/lib/api/values";
+import { useModuleScope } from "@/components/shell/BankContext";
+import { useEffectiveRatioDashboards } from "@/lib/api/hooks";
 
 type TrendRow = {
   t: number;
@@ -48,13 +51,15 @@ export default function RatioTrendChart({
   bankId: string | undefined;
   periodId: string;
 }) {
-  const [range, setRange] = useState<RangePreset>('1Y');
+  const [range, setRange] = useState<RangePreset>("1Y");
   // An SDI does not file Basel LCR/NSFR (docs/sdi.md §4.6) — its capital headline
   // is the s.29 CAR; liquidity is supervised via LMTD on the Liquidity page.
-  const isSdi = useModuleScope().institutionClass === 'sdi';
+  const moduleScope = useModuleScope();
+  const isSdi = moduleScope.institutionClass === "sdi";
   const { liquidity: liq, capital: cap } = useEffectiveRatioDashboards(
     bankId,
     periodId,
+    moduleScope.capitalAggregatedView === true,
   );
 
   const rows = useMemo<TrendRow[]>(() => {
@@ -97,8 +102,8 @@ export default function RatioTrendChart({
       title="Ratio trend"
       subtitle={
         isSdi
-          ? 'CAR (s.29) per reporting period'
-          : 'LCR & NSFR (left axis) · CAR (right axis) per reporting period'
+          ? "CAR (s.29) per reporting period"
+          : "LCR & NSFR (left axis) · CAR (right axis) per reporting period"
       }
       height={280}
       loading={isLoading}
@@ -107,9 +112,10 @@ export default function RatioTrendChart({
         <>
           <span>
             {rows.length} periods
-            {!isSdi && windowMove !== null &&
-              ` · LCR ${windowMove >= 0 ? '+' : ''}${windowMove.toFixed(1)}pp over the window`}
-            {' · '}
+            {!isSdi &&
+              windowMove !== null &&
+              ` · LCR ${windowMove >= 0 ? "+" : ""}${windowMove.toFixed(1)}pp over the window`}
+            {" · "}
             {storedCount} with stored results
           </span>
         </>

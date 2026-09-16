@@ -140,6 +140,18 @@ export type ModuleScope = {
    * from a legacy role or the broader liquidity module entitlement.
    */
   liquidityMonitoringAccess?: boolean;
+  /** Exact CAP/aggregated view authority for dashboards and summary checks. */
+  capitalAggregatedView?: boolean;
+  /** Exact CAP/confidential view authority for plans and run detail. */
+  capitalConfidentialView?: boolean;
+  /** Exact CAP/restricted view authority for assurance evidence. */
+  capitalRestrictedView?: boolean;
+  /** Exact CAP/confidential maker permissions. */
+  capitalRun?: boolean;
+  capitalCreate?: boolean;
+  capitalEdit?: boolean;
+  /** Non-contextual approval authority is false until the server says otherwise. */
+  capitalApprove?: boolean;
   /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than
@@ -236,11 +248,32 @@ function bindingControlledSubrouteHidden(
   path: string,
   scope: ModuleScope,
 ): boolean {
-  return (
+  if (
     (path === "/liquidity/monitoring" ||
       path.startsWith("/liquidity/monitoring/")) &&
     scope.liquidityMonitoringAccess !== true
-  );
+  ) {
+    return true;
+  }
+  if (
+    (path === "/basel/planning" || path.startsWith("/basel/planning/")) &&
+    scope.capitalConfidentialView !== true
+  ) {
+    return true;
+  }
+  if (
+    (path === "/basel" ||
+      path === "/basel/rwa" ||
+      path.startsWith("/basel/rwa/") ||
+      path === "/basel/structure" ||
+      path.startsWith("/basel/structure/") ||
+      path === "/basel/stress" ||
+      path.startsWith("/basel/stress/")) &&
+    scope.capitalAggregatedView !== true
+  ) {
+    return true;
+  }
+  return false;
 }
 
 const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings"]);

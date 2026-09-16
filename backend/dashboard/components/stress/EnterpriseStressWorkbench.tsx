@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Enterprise stress workbench (docs/stress.md §4) — the real workbench that
@@ -13,16 +13,16 @@
  * run itself is bank-wide (enterprise), coupling solvency and liquidity.
  */
 
-import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { Activity, FileBarChart, Play } from 'lucide-react';
-import SectionCard from '@/components/ui/SectionCard';
-import SubTabs from '@/components/ui/SubTabs';
-import KpiStat from '@/components/ui/KpiStat';
-import ChartFrame from '@/components/ui/ChartFrame';
-import StatusPill from '@/components/ui/StatusPill';
-import EmptyState from '@/components/ui/EmptyState';
-import { ApiError } from '@/lib/api/client';
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { Activity, FileBarChart, Play } from "lucide-react";
+import SectionCard from "@/components/ui/SectionCard";
+import SubTabs from "@/components/ui/SubTabs";
+import KpiStat from "@/components/ui/KpiStat";
+import ChartFrame from "@/components/ui/ChartFrame";
+import StatusPill from "@/components/ui/StatusPill";
+import EmptyState from "@/components/ui/EmptyState";
+import { ApiError } from "@/lib/api/client";
 import {
   assessAgainstFloor,
   floorNotAssessedReason,
@@ -31,95 +31,116 @@ import {
   fmtPctOrNull,
   num,
   numOrNull,
-} from '@/lib/api/values';
-import { currencyCode, fmtInt } from '@/lib/format';
-import { useBankContext } from '@/components/shell/BankContext';
-import { type SdiLiquidityPosition, useSdiCapitalSummary, useSdiLiquidityPosition } from '@/components/basel/sdiHooks';
-import ScenarioLibrary from './ScenarioLibrary';
-import ScenarioBuilder from './ScenarioBuilder';
-import ProjectionPaths from './charts/ProjectionPaths';
-import DriverWaterfall from './charts/DriverWaterfall';
-import ScenarioComparison from './ScenarioComparison';
-import AppendixIITables from './AppendixIITables';
-import ManagementActionsPanel from './ManagementActionsPanel';
-import SignoffPanel from './SignoffPanel';
-import RunRegistry from './RunRegistry';
+} from "@/lib/api/values";
+import { currencyCode, fmtInt } from "@/lib/format";
+import { useBankContext } from "@/components/shell/BankContext";
+import {
+  type SdiLiquidityPosition,
+  useSdiCapitalSummary,
+  useSdiLiquidityPosition,
+} from "@/components/basel/sdiHooks";
+import ScenarioLibrary from "./ScenarioLibrary";
+import ScenarioBuilder from "./ScenarioBuilder";
+import ProjectionPaths from "./charts/ProjectionPaths";
+import DriverWaterfall from "./charts/DriverWaterfall";
+import ScenarioComparison from "./ScenarioComparison";
+import AppendixIITables from "./AppendixIITables";
+import ManagementActionsPanel from "./ManagementActionsPanel";
+import SignoffPanel from "./SignoffPanel";
+import RunRegistry from "./RunRegistry";
 import {
   useMacroScenario,
   useMacroScenarios,
   useManagementActionPlans,
   useRunEnterpriseStress,
   useEnterpriseStressRegistry,
-} from './hooks';
-import type { EnterpriseStressRead, MacroScenarioSummary } from './types';
+} from "./hooks";
+import type { EnterpriseStressRead, MacroScenarioSummary } from "./types";
 
-export type StressModuleLens = 'capital' | 'liquidity' | 'irr' | 'fx' | 'ftp';
+export type StressModuleLens = "capital" | "liquidity" | "irr" | "fx" | "ftp";
 
 const LENS_LABEL: Record<StressModuleLens, string> = {
-  capital: 'Capital lens',
-  liquidity: 'Liquidity lens',
-  irr: 'IRRBB lens',
-  fx: 'FX lens',
-  ftp: 'FTP lens',
+  capital: "Capital lens",
+  liquidity: "Liquidity lens",
+  irr: "IRRBB lens",
+  fx: "FX lens",
+  ftp: "FTP lens",
 };
 
-type Tab = 'run' | 'results' | 'compare' | 'appendix' | 'actions' | 'governance' | 'registry';
+type Tab =
+  | "run"
+  | "results"
+  | "compare"
+  | "appendix"
+  | "actions"
+  | "governance"
+  | "registry";
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'results', label: 'Results' },
-  { key: 'compare', label: 'Comparison' },
-  { key: 'appendix', label: 'Appendix II' },
-  { key: 'actions', label: 'Management actions' },
-  { key: 'governance', label: 'Governance & sign-off' },
-  { key: 'registry', label: 'Run registry' },
-  { key: 'run', label: 'Scenarios & run' },
+  { key: "results", label: "Results" },
+  { key: "compare", label: "Comparison" },
+  { key: "appendix", label: "Appendix II" },
+  { key: "actions", label: "Management actions" },
+  { key: "governance", label: "Governance & sign-off" },
+  { key: "registry", label: "Run registry" },
+  { key: "run", label: "Scenarios & run" },
 ];
 
-export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?: StressModuleLens }) {
+export default function EnterpriseStressWorkbench({
+  moduleLens,
+}: {
+  moduleLens?: StressModuleLens;
+}) {
   const { bank, period, periods, moduleScope, isLoading } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
-  const isSdiTenant = moduleScope.institutionClass === 'sdi';
+  const isSdiTenant = moduleScope.institutionClass === "sdi";
 
-  const [tab, setTab] = useState<Tab>('results');
+  const [tab, setTab] = useState<Tab>("results");
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editScenarioId, setEditScenarioId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [focusedRun, setFocusedRun] = useState<EnterpriseStressRead | null>(null);
+  const [focusedRun, setFocusedRun] = useState<EnterpriseStressRead | null>(
+    null,
+  );
 
   // Run configuration
-  const [runScenarioId, setRunScenarioId] = useState('');
+  const [runScenarioId, setRunScenarioId] = useState("");
   const [horizon, setHorizon] = useState(3);
-  const [carTarget, setCarTarget] = useState('13');
-  const [planId, setPlanId] = useState('');
+  const [carTarget, setCarTarget] = useState("13");
+  const [planId, setPlanId] = useState("");
   const [includeIrr, setIncludeIrr] = useState(true);
   const [includeFx, setIncludeFx] = useState(true);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const [runError, setRunError] = useState<string | null>(null);
 
-  const approved = useMacroScenarios({ status: 'approved' });
+  const approved = useMacroScenarios({ status: "approved" });
   const approvedScenarios = useMemo<MacroScenarioSummary[]>(
     () => approved.data?.scenarios ?? [],
-    [approved.data]
+    [approved.data],
   );
   const plans = useManagementActionPlans(bankId);
   const approvedPlans = useMemo(
-    () => (plans.data?.plans ?? []).filter((p) => p.status === 'approved'),
-    [plans.data]
+    () => (plans.data?.plans ?? []).filter((p) => p.status === "approved"),
+    [plans.data],
   );
   const editScenario = useMacroScenario(editScenarioId ?? undefined);
   const registry = useEnterpriseStressRegistry(
     bankId,
     periodId,
-    approvedScenarios.map((s) => s.id)
+    approvedScenarios.map((s) => s.id),
   );
   const runMutation = useRunEnterpriseStress(bankId);
-  const sdiCapital = useSdiCapitalSummary(isSdiTenant ? bankId : undefined);
-  const sdiLiquidity = useSdiLiquidityPosition(isSdiTenant ? bankId : undefined);
+  const sdiCapital = useSdiCapitalSummary(
+    isSdiTenant && moduleScope.capitalAggregatedView ? bankId : undefined,
+  );
+  const sdiLiquidity = useSdiLiquidityPosition(
+    isSdiTenant ? bankId : undefined,
+  );
 
   useEffect(() => {
     if (isSdiTenant) {
-      setCarTarget('10');
+      setCarTarget("10");
       setIncludeFx(false);
     }
   }, [isSdiTenant]);
@@ -129,23 +150,27 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
     if (focusedRun) return focusedRun;
     const runs = registry.data ?? [];
     if (runs.length === 0) return null;
-    return [...runs].sort((a, b) => num(b.summary.car_erosion_pp) - num(a.summary.car_erosion_pp))[0];
+    return [...runs].sort(
+      (a, b) => num(b.summary.car_erosion_pp) - num(a.summary.car_erosion_pp),
+    )[0];
   }, [focusedRun, registry.data]);
 
   const toggleSelect = (s: MacroScenarioSummary) => {
-    setSelectedIds((ids) => (ids.includes(s.id) ? ids.filter((i) => i !== s.id) : [...ids, s.id]));
+    setSelectedIds((ids) =>
+      ids.includes(s.id) ? ids.filter((i) => i !== s.id) : [...ids, s.id],
+    );
   };
 
   const openBuilder = (scenarioId?: string) => {
     setEditScenarioId(scenarioId ?? null);
     setBuilderOpen(true);
-    setTab('run');
+    setTab("run");
   };
 
   const runStress = async () => {
     setRunError(null);
     if (!bankId || !periodId || !runScenarioId || !reason.trim()) {
-      setRunError('Select an approved scenario and enter a run reason.');
+      setRunError("Select an approved scenario and enter a run reason.");
       return;
     }
     try {
@@ -160,10 +185,12 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
         reason: reason.trim(),
       });
       setFocusedRun(result);
-      setTab('results');
+      setTab("results");
     } catch (e) {
       setRunError(
-        e instanceof ApiError ? `${e.errorCode ?? e.code ?? 'error'}: ${e.message}` : 'The stress run failed.'
+        e instanceof ApiError
+          ? `${e.errorCode ?? e.code ?? "error"}: ${e.message}`
+          : "The stress run failed.",
       );
     }
   };
@@ -188,7 +215,10 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
           title="Institution context unavailable"
           description="The stress workbench needs an active institution before it can load its scenario library and run registry."
           action={
-            <Link href="/data-engine" className="btn-primary px-4 py-2 text-body font-medium">
+            <Link
+              href="/data-engine"
+              className="btn-primary px-4 py-2 text-body font-medium"
+            >
               Open Data Engine
             </Link>
           }
@@ -205,7 +235,10 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
           title="A reporting period is required"
           description="No derived reporting period is available for this institution. Activate a canonical book in the Data Engine to create the period and enable governed stress runs."
           action={
-            <Link href="/data-engine" className="btn-primary px-4 py-2 text-body font-medium">
+            <Link
+              href="/data-engine"
+              className="btn-primary px-4 py-2 text-body font-medium"
+            >
               Open Data Engine
             </Link>
           }
@@ -219,11 +252,13 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
       {/* Header strip */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">
-          {moduleLens && <StatusPill tone="action">{LENS_LABEL[moduleLens]}</StatusPill>}
+          {moduleLens && (
+            <StatusPill tone="action">{LENS_LABEL[moduleLens]}</StatusPill>
+          )}
           <span className="text-caption text-slate">
             {isSdiTenant
-              ? 'Enterprise solvency and proportionate risk stress for a specialised deposit-taking institution'
-              : 'Enterprise-wide stress · one macro scenario → all engines → Appendix II (¶40, ¶50, ¶68)'}
+              ? "Enterprise solvency and proportionate risk stress for a specialised deposit-taking institution"
+              : "Enterprise-wide stress · one macro scenario → all engines → Appendix II (¶40, ¶50, ¶68)"}
           </span>
         </div>
         <Link
@@ -236,7 +271,7 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
 
       <SubTabs items={TABS} active={tab} onChange={(k) => setTab(k as Tab)} />
 
-      {tab === 'run' && (
+      {tab === "run" && (
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
           <div className="xl:col-span-2 space-y-6">
             <ScenarioLibrary
@@ -250,7 +285,9 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
             {builderOpen ? (
               <ScenarioBuilder
                 defaultBankId={bankId}
-                editScenario={editScenarioId ? editScenario.data ?? null : null}
+                editScenario={
+                  editScenarioId ? (editScenario.data ?? null) : null
+                }
                 onSaved={() => {
                   setBuilderOpen(false);
                   setEditScenarioId(null);
@@ -264,12 +301,18 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
             ) : (
               <SectionCard
                 title="Run enterprise stress"
-                subtitle={isSdiTenant ? 'Run an approved scenario against the simplified Section 29 capital regime and material SDI risks' : 'Drive an approved scenario through every engine into the immutable 3-year projection'}
+                subtitle={
+                  isSdiTenant
+                    ? "Run an approved scenario against the simplified Section 29 capital regime and material SDI risks"
+                    : "Drive an approved scenario through every engine into the immutable 3-year projection"
+                }
               >
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label className="block">
-                      <span className="text-caption text-slate">Approved scenario</span>
+                      <span className="text-caption text-slate">
+                        Approved scenario
+                      </span>
                       <select
                         className={selectCls}
                         value={runScenarioId}
@@ -284,54 +327,103 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
                       </select>
                     </label>
                     <label className="block">
-                      <span className="text-caption text-slate">Management-action plan (optional)</span>
-                      <select className={selectCls} value={planId} onChange={(e) => setPlanId(e.target.value)}>
+                      <span className="text-caption text-slate">
+                        Management-action plan (optional)
+                      </span>
+                      <select
+                        className={selectCls}
+                        value={planId}
+                        onChange={(e) => setPlanId(e.target.value)}
+                      >
                         <option value="">None (pre-action only)</option>
                         {approvedPlans.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
                         ))}
                       </select>
                     </label>
                     <label className="block">
-                      <span className="text-caption text-slate">Horizon (years, ≥3)</span>
+                      <span className="text-caption text-slate">
+                        Horizon (years, ≥3)
+                      </span>
                       <input
                         type="number"
                         min={3}
                         max={10}
                         className={selectCls}
                         value={horizon}
-                        onChange={(e) => setHorizon(Math.max(3, Math.min(10, Number(e.target.value) || 3)))}
+                        onChange={(e) =>
+                          setHorizon(
+                            Math.max(
+                              3,
+                              Math.min(10, Number(e.target.value) || 3),
+                            ),
+                          )
+                        }
                       />
                     </label>
                     <label className="block">
-                      <span className="text-caption text-slate">Capital adequacy target (%)</span>
-                      <input className={selectCls} value={carTarget} onChange={(e) => setCarTarget(e.target.value)} />
+                      <span className="text-caption text-slate">
+                        Capital adequacy target (%)
+                      </span>
+                      <input
+                        className={selectCls}
+                        value={carTarget}
+                        onChange={(e) => setCarTarget(e.target.value)}
+                      />
                     </label>
                   </div>
                   <div className="flex flex-wrap gap-4">
                     <label className="flex items-center gap-2 text-caption text-slate">
-                      <input type="checkbox" className="h-4 w-4 accent-action" checked={includeIrr} onChange={(e) => setIncludeIrr(e.target.checked)} />
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-action"
+                        checked={includeIrr}
+                        onChange={(e) => setIncludeIrr(e.target.checked)}
+                      />
                       Include IRRBB
                     </label>
                     {!isSdiTenant && (
                       <label className="flex items-center gap-2 text-caption text-slate">
-                        <input type="checkbox" className="h-4 w-4 accent-action" checked={includeFx} onChange={(e) => setIncludeFx(e.target.checked)} />
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-action"
+                          checked={includeFx}
+                          onChange={(e) => setIncludeFx(e.target.checked)}
+                        />
                         Include FX
                       </label>
                     )}
                   </div>
                   <label className="block">
-                    <span className="text-caption text-slate">Run reason (required — governance)</span>
-                    <input className={selectCls} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isSdiTenant ? 'Quarterly proportionate stress' : 'Quarterly ICAAP stress'} />
+                    <span className="text-caption text-slate">
+                      Run reason (required — governance)
+                    </span>
+                    <input
+                      className={selectCls}
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder={
+                        isSdiTenant
+                          ? "Quarterly proportionate stress"
+                          : "Quarterly ICAAP stress"
+                      }
+                    />
                   </label>
-                  {runError && <p className="text-caption text-critical">{runError}</p>}
+                  {runError && (
+                    <p className="text-caption text-critical">{runError}</p>
+                  )}
                   <button
                     type="button"
                     className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:opacity-50"
                     disabled={runMutation.isPending}
                     onClick={() => void runStress()}
                   >
-                    <Play size={15} /> {runMutation.isPending ? 'Running…' : 'Run enterprise stress'}
+                    <Play size={15} />{" "}
+                    {runMutation.isPending
+                      ? "Running…"
+                      : "Run enterprise stress"}
                   </button>
                 </div>
               </SectionCard>
@@ -340,17 +432,17 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
         </div>
       )}
 
-      {tab === 'results' && (
+      {tab === "results" && (
         <ResultsView
           run={effectiveRun}
-          onConfigure={() => setTab('run')}
+          onConfigure={() => setTab("run")}
           isSdiTenant={isSdiTenant}
           sdiCapitalFloor={sdiCapital.data?.car_min_pct}
           sdiLiquidity={sdiLiquidity.data}
         />
       )}
 
-      {tab === 'compare' && (
+      {tab === "compare" && (
         <ScenarioComparison
           runs={registry.data ?? []}
           focusedRunId={effectiveRun?.run_id}
@@ -358,28 +450,30 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
           sdiCapitalFloor={sdiCapital.data?.car_min_pct}
           onFocus={(run) => {
             setFocusedRun(run);
-            setTab('results');
+            setTab("results");
           }}
         />
       )}
 
-      {tab === 'appendix' &&
+      {tab === "appendix" &&
         (effectiveRun ? (
           <AppendixIITables tables={effectiveRun.appendix_ii} />
         ) : (
-          <NoRun onConfigure={() => setTab('run')} />
+          <NoRun onConfigure={() => setTab("run")} />
         ))}
 
-      {tab === 'actions' &&
+      {tab === "actions" &&
         (effectiveRun ? (
           <ManagementActionsPanel run={effectiveRun} />
         ) : (
-          <NoRun onConfigure={() => setTab('run')} />
+          <NoRun onConfigure={() => setTab("run")} />
         ))}
 
-      {tab === 'governance' && <SignoffPanel run={effectiveRun} bankId={bankId} />}
+      {tab === "governance" && (
+        <SignoffPanel run={effectiveRun} bankId={bankId} />
+      )}
 
-      {tab === 'registry' && (
+      {tab === "registry" && (
         <RunRegistry
           bankId={bankId}
           periodId={periodId}
@@ -388,7 +482,7 @@ export default function EnterpriseStressWorkbench({ moduleLens }: { moduleLens?:
           activeRunId={effectiveRun?.run_id}
           onOpen={(run) => {
             setFocusedRun(run);
-            setTab('results');
+            setTab("results");
           }}
         />
       )}
@@ -436,8 +530,8 @@ function ResultsView({
   const lcrAssessment = assessAgainstFloor(stressedLcr, lcrFloor);
   const capitalGap = num(s.capital_gap);
   const carPathLabel = isSdiTenant
-    ? 'Section 29 capital adequacy path'
-    : 'Capital adequacy path';
+    ? "Section 29 capital adequacy path"
+    : "Capital adequacy path";
 
   return (
     <div className="space-y-6">
@@ -445,17 +539,17 @@ function ResultsView({
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <KpiStat
           label="Stressed CAR"
-          value={fmtPctOrNull(stressedCar, 2, 'Not computed')}
+          value={fmtPctOrNull(stressedCar, 2, "Not computed")}
           status={floorStatus(carAssessment)}
           hint={
             carAssessment.assessed
               ? `Base ${fmtPctOrNull(baselineCar, 2)} · floor ${fmtFloorPct(carAssessment.floor)}`
-              : floorNotAssessedReason(carAssessment, 'capital adequacy')
+              : floorNotAssessedReason(carAssessment, "capital adequacy")
           }
         />
         <KpiStat
           label="CAR erosion"
-          value={carErosion === null ? '—' : `${carErosion.toFixed(2)} pp`}
+          value={carErosion === null ? "—" : `${carErosion.toFixed(2)} pp`}
           status="warn"
           hint="Base → stress, final year"
         />
@@ -468,12 +562,12 @@ function ResultsView({
         ) : liquidityAssessed ? (
           <KpiStat
             label="Stressed LCR"
-            value={fmtPctOrNull(stressedLcr, 1, 'Not computed')}
+            value={fmtPctOrNull(stressedLcr, 1, "Not computed")}
             status={floorStatus(lcrAssessment)}
             hint={
               lcrAssessment.assessed
                 ? `Base ${fmtPctOrNull(baselineLcr, 1)} · floor ${fmtFloorPct(lcrAssessment.floor)}`
-                : floorNotAssessedReason(lcrAssessment, 'liquidity coverage')
+                : floorNotAssessedReason(lcrAssessment, "liquidity coverage")
             }
           />
         ) : (
@@ -486,23 +580,47 @@ function ResultsView({
         )}
         <KpiStat
           label="Stays above minima"
-          value={s.stress_stays_above_all_minima ? 'Yes' : `Breach Y${s.first_breach_year ?? '—'}`}
-          status={s.stress_stays_above_all_minima ? 'ok' : 'crit'}
-          hint={s.binding_minima.length ? `Binding: ${s.binding_minima.join(', ')}` : 'All minima held'}
+          value={
+            s.stress_stays_above_all_minima
+              ? "Yes"
+              : `Breach Y${s.first_breach_year ?? "—"}`
+          }
+          status={s.stress_stays_above_all_minima ? "ok" : "crit"}
+          hint={
+            s.binding_minima.length
+              ? `Binding: ${s.binding_minima.join(", ")}`
+              : "All minima held"
+          }
         />
         <KpiStat
           label="Capital gap"
           value={`${currencyCode()}'000 ${fmtInt(capitalGap)}`}
-          status={capitalGap > 0 ? 'warn' : 'ok'}
+          status={capitalGap > 0 ? "warn" : "ok"}
           hint="Worst-year, pre-action"
         />
         {isSdiTenant ? (
-          <KpiStat label="Capital regime" value="s.29" hint="Simplified SDI capital adequacy" />
+          <KpiStat
+            label="Capital regime"
+            value="s.29"
+            hint="Simplified SDI capital adequacy"
+          />
         ) : coupling ? (
           <KpiStat
             label="Solvency × liquidity"
-            value={coupling.both_breached ? 'Both breach' : coupling.car_breached || coupling.lcr_breached ? 'One breach' : 'Both hold'}
-            status={coupling.both_breached ? 'crit' : coupling.car_breached || coupling.lcr_breached ? 'warn' : 'ok'}
+            value={
+              coupling.both_breached
+                ? "Both breach"
+                : coupling.car_breached || coupling.lcr_breached
+                  ? "One breach"
+                  : "Both hold"
+            }
+            status={
+              coupling.both_breached
+                ? "crit"
+                : coupling.car_breached || coupling.lcr_breached
+                  ? "warn"
+                  : "ok"
+            }
             hint="¶59(f) interlinkage"
           />
         ) : (
@@ -530,11 +648,19 @@ function ResultsView({
             projection={run.projection}
             metricKey="car_pct"
             threshold={carAssessment.assessed ? carAssessment.floor : undefined}
-            thresholdLabel={carAssessment.assessed ? `CAR floor ${fmtFloorPct(carAssessment.floor)}` : undefined}
+            thresholdLabel={
+              carAssessment.assessed
+                ? `CAR floor ${fmtFloorPct(carAssessment.floor)}`
+                : undefined
+            }
           />
         </ChartFrame>
         {isSdiTenant ? (
-          <ChartFrame title="Liquidity — SDI (LMTD)" subtitle="Basel LCR/NSFR excluded for an SDI (§4.6)" height={240}>
+          <ChartFrame
+            title="Liquidity — SDI (LMTD)"
+            subtitle="Basel LCR/NSFR excluded for an SDI (§4.6)"
+            height={240}
+          >
             <SdiLiquidityNotAssessed position={sdiLiquidity} />
           </ChartFrame>
         ) : liquidityAssessed ? (
@@ -543,34 +669,58 @@ function ResultsView({
             subtitle={
               lcrAssessment.assessed
                 ? `Liquidity coverage path vs the ${fmtFloorPct(lcrAssessment.floor)} floor`
-                : 'Liquidity coverage path — no LCR floor configured, path shown without a compliance verdict'
+                : "Liquidity coverage path — no LCR floor configured, path shown without a compliance verdict"
             }
             height={240}
           >
             <ProjectionPaths
               projection={run.projection}
               metricKey="lcr_pct"
-              threshold={lcrAssessment.assessed ? lcrAssessment.floor : undefined}
-              thresholdLabel={lcrAssessment.assessed ? `LCR floor ${fmtFloorPct(lcrAssessment.floor)}` : undefined}
+              threshold={
+                lcrAssessment.assessed ? lcrAssessment.floor : undefined
+              }
+              thresholdLabel={
+                lcrAssessment.assessed
+                  ? `LCR floor ${fmtFloorPct(lcrAssessment.floor)}`
+                  : undefined
+              }
             />
           </ChartFrame>
         ) : (
-          <ChartFrame title="LCR — not assessed" subtitle="This run carries no Basel liquidity leg" height={240}>
+          <ChartFrame
+            title="LCR — not assessed"
+            subtitle="This run carries no Basel liquidity leg"
+            height={240}
+          >
             <NotAssessed
               lines={[
-                'This stress run produced no Basel liquidity result, so no coverage path and no floor comparison can be shown.',
-                'Basel LCR/NSFR do apply to this institution — the absence is a missing measurement, not an exemption.',
+                "This stress run produced no Basel liquidity result, so no coverage path and no floor comparison can be shown.",
+                "Basel LCR/NSFR do apply to this institution — the absence is a missing measurement, not an exemption.",
               ]}
             />
           </ChartFrame>
         )}
         {!isSdiTenant && (
           <>
-            <ChartFrame title="CET1 — base vs stress" subtitle="Common equity Tier 1 ratio path" height={240}>
-              <ProjectionPaths projection={run.projection} metricKey="cet1_ratio_pct" />
+            <ChartFrame
+              title="CET1 — base vs stress"
+              subtitle="Common equity Tier 1 ratio path"
+              height={240}
+            >
+              <ProjectionPaths
+                projection={run.projection}
+                metricKey="cet1_ratio_pct"
+              />
             </ChartFrame>
-            <ChartFrame title="Tier 1 & leverage" subtitle="Tier 1 ratio path over the horizon" height={240}>
-              <ProjectionPaths projection={run.projection} metricKey="tier1_ratio_pct" />
+            <ChartFrame
+              title="Tier 1 & leverage"
+              subtitle="Tier 1 ratio path over the horizon"
+              height={240}
+            >
+              <ProjectionPaths
+                projection={run.projection}
+                metricKey="tier1_ratio_pct"
+              />
             </ChartFrame>
           </>
         )}
@@ -579,19 +729,30 @@ function ResultsView({
       <DriverWaterfall run={run} />
 
       {isSdiTenant ? (
-        <SectionCard title="Liquidity regime" subtitle="SDI liquidity stress (docs/sdi.md §4.6)">
+        <SectionCard
+          title="Liquidity regime"
+          subtitle="SDI liquidity stress (docs/sdi.md §4.6)"
+        >
           <SdiLiquidityNotAssessed position={sdiLiquidity} />
         </SectionCard>
       ) : coupling ? (
-        <SectionCard title="Solvency–liquidity narrative" subtitle="The directive's interlinkage read (¶59(f))">
-          <p className="text-body text-navy/85 leading-relaxed">{coupling.narrative}</p>
+        <SectionCard
+          title="Solvency–liquidity narrative"
+          subtitle="The directive's interlinkage read (¶59(f))"
+        >
+          <p className="text-body text-navy/85 leading-relaxed">
+            {coupling.narrative}
+          </p>
         </SectionCard>
       ) : (
-        <SectionCard title="Solvency–liquidity narrative" subtitle="The directive's interlinkage read (¶59(f))">
+        <SectionCard
+          title="Solvency–liquidity narrative"
+          subtitle="The directive's interlinkage read (¶59(f))"
+        >
           <NotAssessed
             lines={[
-              'This run carries no solvency–liquidity coupling block, so the ¶59(f) interlinkage was not evaluated.',
-              'No narrative is substituted.',
+              "This run carries no solvency–liquidity coupling block, so the ¶59(f) interlinkage was not evaluated.",
+              "No narrative is substituted.",
             ]}
           />
         </SectionCard>
@@ -611,18 +772,28 @@ function NotAssessed({ lines }: { lines: string[] }) {
   );
 }
 
-function SdiLiquidityNotAssessed({ position }: { position: SdiLiquidityPosition | undefined }) {
-  const breached = position?.ratios.filter((ratio) => ratio.status === 'below_minimum').length ?? 0;
-  const reserveBreaches = position?.reserves.filter((reserve) => reserve.status === 'below_minimum').length ?? 0;
+function SdiLiquidityNotAssessed({
+  position,
+}: {
+  position: SdiLiquidityPosition | undefined;
+}) {
+  const breached =
+    position?.ratios.filter((ratio) => ratio.status === "below_minimum")
+      .length ?? 0;
+  const reserveBreaches =
+    position?.reserves.filter((reserve) => reserve.status === "below_minimum")
+      .length ?? 0;
   return (
     <div className="flex h-full flex-col justify-center px-6 text-center text-caption text-slate">
       <p>
-        Liquidity stress is not assessed because no BoG SDI liquidity-stress methodology is configured.
-        Basel LCR/NSFR and a synthetic survival-horizon result are intentionally not substituted.
+        Liquidity stress is not assessed because no BoG SDI liquidity-stress
+        methodology is configured. Basel LCR/NSFR and a synthetic
+        survival-horizon result are intentionally not substituted.
       </p>
       {position && (
         <p className="mt-3 text-navy">
-          Baseline LMTD evidence as of {position.as_of}: {breached} Table 1 breach(es) and {reserveBreaches} reserve breach(es).
+          Baseline LMTD evidence as of {position.as_of}: {breached} Table 1
+          breach(es) and {reserveBreaches} reserve breach(es).
         </p>
       )}
     </div>
@@ -637,7 +808,11 @@ function NoRun({ onConfigure }: { onConfigure?: () => void }) {
       description="Run an approved scenario from the Scenarios & run tab, or re-open one from the run registry, to see its projection charts, driver attribution and the Appendix II tables."
       action={
         onConfigure ? (
-          <button type="button" className="btn-primary px-4 py-2 text-body font-medium" onClick={onConfigure}>
+          <button
+            type="button"
+            className="btn-primary px-4 py-2 text-body font-medium"
+            onClick={onConfigure}
+          >
             Go to Scenarios &amp; run
           </button>
         ) : undefined
@@ -647,4 +822,4 @@ function NoRun({ onConfigure }: { onConfigure?: () => void }) {
 }
 
 const selectCls =
-  'mt-1 w-full rounded-md border border-border-light bg-transparent px-3 py-2 text-body text-navy';
+  "mt-1 w-full rounded-md border border-border-light bg-transparent px-3 py-2 text-body text-navy";

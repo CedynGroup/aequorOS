@@ -1,22 +1,22 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { ArrowRight, Layers } from 'lucide-react';
-import type { CapitalLineRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import SectionCard from '@/components/ui/SectionCard';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import { useBankContext } from '@/components/shell/BankContext';
+import Link from "next/link";
+import { ArrowRight, Layers } from "lucide-react";
+import type { CapitalLineRead } from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import SectionCard from "@/components/ui/SectionCard";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   isNoBaselineRunError,
   useCapitalDashboard,
   useCapitalStructure,
-} from '@/lib/api/hooks';
-import { num, shortId } from '@/lib/api/values';
-import { seriesColor } from '@/lib/chartTheme';
-import { fmtCurrencyFull } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { num, shortId } from "@/lib/api/values";
+import { seriesColor } from "@/lib/chartTheme";
+import { fmtCurrencyFull } from "@/lib/format";
 
 function TierBlock({
   title,
@@ -85,40 +85,40 @@ function TierBlock({
 }
 
 export default function CapitalStructurePage() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
-  const structure = useCapitalStructure(bankId);
-  const dashboard = useCapitalDashboard(bankId);
+  const capitalBankId = moduleScope.capitalAggregatedView ? bankId : undefined;
+  const structure = useCapitalStructure(capitalBankId);
+  const dashboard = useCapitalDashboard(capitalBankId);
 
   const data = structure.data;
   const needsBaseline = isNoBaselineRunError(structure.error);
   const totalRwa = num(dashboard.data?.metrics.totalRwaGhs);
   const gpCapNote = dashboard.data?.validations.find(
-    (v) => v.ruleCode === 'tier2_gp_cap_applied'
+    (v) => v.ruleCode === "tier2_gp_cap_applied",
   );
 
   const pctOfRwa = (value: number) =>
-    totalRwa > 0 ? `${((value / totalRwa) * 100).toFixed(2)}% of RWA` : '—';
+    totalRwa > 0 ? `${((value / totalRwa) * 100).toFixed(2)}% of RWA` : "—";
 
   const cet1 = num(data?.cet1CapitalGhs);
   const at1 = num(data?.at1CapitalGhs);
   const tier2 = num(data?.tier2CapitalGhs);
   const total = num(data?.totalCapitalGhs);
   const compositionSegments = [
-    { label: 'CET1', value: cet1, color: seriesColor(0) },
-    { label: 'AT1', value: at1, color: seriesColor(1) },
-    { label: 'Tier 2', value: tier2, color: seriesColor(2) },
+    { label: "CET1", value: cet1, color: seriesColor(0) },
+    { label: "AT1", value: at1, color: seriesColor(1) },
+    { label: "Tier 2", value: tier2, color: seriesColor(2) },
   ].filter((s) => s.value > 0);
-
 
   return (
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Basel Capital', href: '/basel' },
-          { label: 'Capital Structure' },
+          { label: "Modules", href: "/" },
+          { label: "Basel Capital", href: "/basel" },
+          { label: "Capital Structure" },
         ]}
         title="Capital Structure"
         subtitle="Tier 1 (CET1, AT1), Tier 2, and regulatory deductions"
@@ -175,11 +175,13 @@ export default function CapitalStructurePage() {
                   <span>
                     {data.runId ? (
                       <>
-                        Official run{' '}
-                        <span className="font-mono text-navy">{shortId(data.runId)}</span>
+                        Official run{" "}
+                        <span className="font-mono text-navy">
+                          {shortId(data.runId)}
+                        </span>
                       </>
                     ) : (
-                      'Current live capital computation'
+                      "Current live capital computation"
                     )}
                   </span>
                 }
@@ -193,9 +195,9 @@ export default function CapitalStructurePage() {
                         (s) =>
                           `${s.label} ${
                             total > 0 ? ((s.value / total) * 100).toFixed(1) : 0
-                          }%`
+                          }%`,
                       )
-                      .join(', ')}
+                      .join(", ")}
                   >
                     {compositionSegments.map((s) => (
                       <div
@@ -210,7 +212,10 @@ export default function CapitalStructurePage() {
                   </div>
                   <div className="mt-3 flex items-center gap-6 flex-wrap text-caption">
                     {compositionSegments.map((s) => (
-                      <span key={s.label} className="inline-flex items-center gap-2">
+                      <span
+                        key={s.label}
+                        className="inline-flex items-center gap-2"
+                      >
                         <span
                           className="w-2 h-2 rounded-sm"
                           style={{ background: s.color }}
@@ -223,7 +228,7 @@ export default function CapitalStructurePage() {
                         <span className="font-mono text-slate tnum">
                           {total > 0
                             ? `${((s.value / total) * 100).toFixed(1)}%`
-                            : '—'}
+                            : "—"}
                         </span>
                       </span>
                     ))}

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Board Pack — a print-optimized composite report: cover page, cross-module
@@ -9,29 +9,29 @@
  * per-section breaks, forced light palette. Tables and KPIs, not charts.
  */
 
-import '@/app/print.css';
+import "@/app/print.css";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, Printer } from 'lucide-react';
-import type { LiveStatus } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat, { type KpiStatus } from '@/components/ui/KpiStat';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
-import { useBankContext, useModuleScope } from '@/components/shell/BankContext';
-import { isHrefVisible } from '@/lib/modules';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, Printer } from "lucide-react";
+import type { LiveStatus } from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/Skeleton";
+import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
+import { isHrefVisible } from "@/lib/modules";
 import {
   LIVE_MODULE_LABELS,
   livePrimaryMetric,
-} from '@/components/live/moduleDisplay';
+} from "@/components/live/moduleDisplay";
 import {
   BoardPage,
   ModuleBrief,
   type MetricRow,
-} from '@/components/reports/BoardPackSections';
-import { useLatestRunsByModule } from '@/components/reports/hooks';
+} from "@/components/reports/BoardPackSections";
+import { useLatestRunsByModule } from "@/components/reports/hooks";
 import {
   useBankAlerts,
   useCapitalDashboard,
@@ -41,20 +41,26 @@ import {
   useIrrDashboard,
   useLiquidityDashboard,
   useLiveSummary,
-} from '@/lib/api/hooks';
+} from "@/lib/api/hooks";
 import {
   fmtDateUTC,
   fmtTimestamp,
   labelize,
   num,
   statusTone,
-} from '@/lib/api/values';
-import { fmtCurrency, fmtNum, fmtPct, regShort, centralBankName } from '@/lib/format';
+} from "@/lib/api/values";
+import {
+  fmtCurrency,
+  fmtNum,
+  fmtPct,
+  regShort,
+  centralBankName,
+} from "@/lib/format";
 
 const LIVE_KPI_STATUS: Record<LiveStatus, KpiStatus | undefined> = {
-  green: 'ok',
-  amber: 'warn',
-  red: 'crit',
+  green: "ok",
+  amber: "warn",
+  red: "crit",
   na: undefined,
 };
 
@@ -69,11 +75,23 @@ export default function BoardPackPage() {
   // gating avoids a 403 for a module it is not entitled to.
   const scope = useModuleScope();
   const liq = useLiquidityDashboard(bankId, periodId);
-  const cap = useCapitalDashboard(bankId, periodId);
+  const cap = useCapitalDashboard(
+    scope.capitalAggregatedView ? bankId : undefined,
+    periodId,
+  );
   const credit = useCreditDashboard(bankId, periodId);
-  const irr = useIrrDashboard(isHrefVisible('/irr/limits', scope) ? bankId : undefined, periodId);
-  const fx = useFxDashboard(isHrefVisible('/fx/limits', scope) ? bankId : undefined, periodId);
-  const ftp = useFtpDashboard(isHrefVisible('/ftp/products', scope) ? bankId : undefined, periodId);
+  const irr = useIrrDashboard(
+    isHrefVisible("/irr/limits", scope) ? bankId : undefined,
+    periodId,
+  );
+  const fx = useFxDashboard(
+    isHrefVisible("/fx/limits", scope) ? bankId : undefined,
+    periodId,
+  );
+  const ftp = useFtpDashboard(
+    isHrefVisible("/ftp/products", scope) ? bankId : undefined,
+    periodId,
+  );
   const { byModule } = useLatestRunsByModule(bankId);
 
   // Client-only timestamp — avoids an SSR/hydration mismatch on the cover.
@@ -87,7 +105,10 @@ export default function BoardPackPage() {
       <>
         <div className="no-print">
           <PageHeader
-            breadcrumbs={[{ label: 'Reports', href: '/reports' }, { label: 'Board pack' }]}
+            breadcrumbs={[
+              { label: "Reports", href: "/reports" },
+              { label: "Board pack" },
+            ]}
             title="Board Pack"
             subtitle="Print-optimized executive report"
           />
@@ -107,7 +128,10 @@ export default function BoardPackPage() {
       {/* Screen-only toolbar — the print pipeline never sees it. */}
       <div className="no-print">
         <PageHeader
-          breadcrumbs={[{ label: 'Reports', href: '/reports' }, { label: 'Board pack' }]}
+          breadcrumbs={[
+            { label: "Reports", href: "/reports" },
+            { label: "Board pack" },
+          ]}
           title="Board Pack"
           subtitle="Cover · executive summary · module briefs — A4 print layout"
           asOf={fmtDateUTC(period.periodEnd)}
@@ -157,14 +181,15 @@ export default function BoardPackPage() {
                 <dt className="text-micro font-medium uppercase tracking-wider text-slate">
                   Institution
                 </dt>
-                <dd className="mt-1 text-h3 text-navy">{bank?.name ?? '—'}</dd>
+                <dd className="mt-1 text-h3 text-navy">{bank?.name ?? "—"}</dd>
               </div>
               <div>
                 <dt className="text-micro font-medium uppercase tracking-wider text-slate">
                   License · Regulator
                 </dt>
                 <dd className="mt-1 text-navy">
-                  {bank ? labelize(bank.licenseType) : '—'} · {centralBankName()}
+                  {bank ? labelize(bank.licenseType) : "—"} ·{" "}
+                  {centralBankName()}
                 </dd>
               </div>
               <div>
@@ -172,7 +197,7 @@ export default function BoardPackPage() {
                   As-of period
                 </dt>
                 <dd className="mt-1 text-navy">
-                  {period.label} ·{' '}
+                  {period.label} ·{" "}
                   <span className="font-mono tnum">
                     {fmtDateUTC(period.periodEnd)}
                   </span>
@@ -183,7 +208,7 @@ export default function BoardPackPage() {
                   Generated
                 </dt>
                 <dd className="mt-1 font-mono text-navy tnum">
-                  {generatedAt ? fmtTimestamp(generatedAt) : '—'}
+                  {generatedAt ? fmtTimestamp(generatedAt) : "—"}
                 </dd>
               </div>
               <div>
@@ -191,7 +216,7 @@ export default function BoardPackPage() {
                   Reporting currency
                 </dt>
                 <dd className="mt-1 font-mono text-navy">
-                  {bank?.currency ?? '—'}
+                  {bank?.currency ?? "—"}
                 </dd>
               </div>
               <div>
@@ -206,9 +231,9 @@ export default function BoardPackPage() {
                       always claimed the reassuring half of it. */}
                   {live.data
                     ? live.data.isStale
-                      ? 'Recomputing — new data ingested since these figures'
-                      : 'Current with the latest ingested data'
-                    : '—'}
+                      ? "Recomputing — new data ingested since these figures"
+                      : "Current with the latest ingested data"
+                    : "—"}
                 </dd>
                 {live.data?.reconciliation?.blocksFiling ? (
                   <div className="sm:col-span-2">
@@ -260,14 +285,14 @@ export default function BoardPackPage() {
               {(live.data?.modules ?? []).map((view) => {
                 const metric = livePrimaryMetric(
                   view.module,
-                  view.metrics as Record<string, unknown>
+                  view.metrics as Record<string, unknown>,
                 );
                 return (
                   <KpiStat
                     key={view.module}
                     label={LIVE_MODULE_LABELS[view.module]}
-                    value={metric?.value ?? '—'}
-                    hint={metric?.label ?? 'Not yet computed'}
+                    value={metric?.value ?? "—"}
+                    hint={metric?.label ?? "Not yet computed"}
                     status={LIVE_KPI_STATUS[view.status]}
                     className="bp-avoid-break"
                   />
@@ -275,13 +300,13 @@ export default function BoardPackPage() {
               })}
               <KpiStat
                 label="Open breach alerts"
-                value={alerts.data ? fmtNum(alerts.data.total) : '—'}
+                value={alerts.data ? fmtNum(alerts.data.total) : "—"}
                 hint="Across all module limits"
                 status={
                   alerts.data
                     ? alerts.data.total > 0
-                      ? 'crit'
-                      : 'ok'
+                      ? "crit"
+                      : "ok"
                     : undefined
                 }
                 className="bp-avoid-break"
@@ -306,29 +331,29 @@ export default function BoardPackPage() {
                 code="02"
                 statusTone={statusTone(liq.data.metrics.lcrStatus)}
                 statusLabel={`LCR ${labelize(liq.data.metrics.lcrStatus)}`}
-                run={byModule.get('liquidity')}
+                run={byModule.get("liquidity")}
                 computedAt={liq.data.live?.computedAt}
                 rows={[
                   {
-                    label: 'Liquidity Coverage Ratio',
+                    label: "Liquidity Coverage Ratio",
                     hint: `${regShort()} minimum 100%`,
                     value: fmtPct(num(liq.data.metrics.lcrPct), 2),
                     tone: statusTone(liq.data.metrics.lcrStatus),
                     toneLabel: labelize(liq.data.metrics.lcrStatus),
                   },
                   {
-                    label: 'Net Stable Funding Ratio',
+                    label: "Net Stable Funding Ratio",
                     hint: `${regShort()} minimum 100%`,
                     value: fmtPct(num(liq.data.metrics.nsfrPct), 2),
                     tone: statusTone(liq.data.metrics.nsfrStatus),
                     toneLabel: labelize(liq.data.metrics.nsfrStatus),
                   },
                   {
-                    label: 'High-quality liquid assets',
+                    label: "High-quality liquid assets",
                     value: fmtCurrency(num(liq.data.metrics.hqlaTotalGhs)),
                   },
                   {
-                    label: 'Net outflows (30 days)',
+                    label: "Net outflows (30 days)",
                     value: fmtCurrency(num(liq.data.metrics.netOutflows30dGhs)),
                   },
                 ]}
@@ -354,40 +379,40 @@ export default function BoardPackPage() {
                   total: cap.data.validations.length,
                   failed: cap.data.validations.filter((v) => !v.passed).length,
                 }}
-                run={byModule.get('capital')}
+                run={byModule.get("capital")}
                 computedAt={cap.data.live?.computedAt}
                 rows={[
                   {
-                    label: 'Capital Adequacy Ratio',
-                    hint: 'CRD minimum 13% incl. buffers',
+                    label: "Capital Adequacy Ratio",
+                    hint: "CRD minimum 13% incl. buffers",
                     value: fmtPct(num(cap.data.metrics.carPct), 2),
                     tone: statusTone(cap.data.metrics.carStatus),
                     toneLabel: labelize(cap.data.metrics.carStatus),
                   },
                   {
-                    label: 'CET1 ratio',
+                    label: "CET1 ratio",
                     value: fmtPct(num(cap.data.metrics.cet1RatioPct), 2),
                     tone: statusTone(cap.data.metrics.cet1Status),
                     toneLabel: labelize(cap.data.metrics.cet1Status),
                   },
                   {
-                    label: 'Tier 1 ratio',
+                    label: "Tier 1 ratio",
                     value: fmtPct(num(cap.data.metrics.tier1RatioPct), 2),
                     tone: statusTone(cap.data.metrics.tier1Status),
                     toneLabel: labelize(cap.data.metrics.tier1Status),
                   },
                   {
-                    label: 'Leverage ratio',
+                    label: "Leverage ratio",
                     value: fmtPct(num(cap.data.metrics.leverageRatioPct), 2),
                     tone: statusTone(cap.data.metrics.leverageStatus),
                     toneLabel: labelize(cap.data.metrics.leverageStatus),
                   },
                   {
-                    label: 'Total risk-weighted assets',
+                    label: "Total risk-weighted assets",
                     value: fmtCurrency(num(cap.data.metrics.totalRwaGhs)),
                   },
                   {
-                    label: 'Total regulatory capital',
+                    label: "Total regulatory capital",
                     value: fmtCurrency(num(cap.data.metrics.totalCapitalGhs)),
                   },
                 ]}
@@ -407,44 +432,50 @@ export default function BoardPackPage() {
               <ModuleBrief
                 name="Credit / Loan Book"
                 code="03"
-                statusTone={statusTone(credit.data.metrics.nplStatus ?? 'na')}
-                statusLabel={`NPL ${labelize(credit.data.metrics.nplStatus ?? 'na')}`}
+                statusTone={statusTone(credit.data.metrics.nplStatus ?? "na")}
+                statusLabel={`NPL ${labelize(credit.data.metrics.nplStatus ?? "na")}`}
                 validations={{
                   total: credit.data.validations.length,
-                  failed: credit.data.validations.filter((v) => !v.passed).length,
+                  failed: credit.data.validations.filter((v) => !v.passed)
+                    .length,
                 }}
-                run={byModule.get('credit')}
+                run={byModule.get("credit")}
                 computedAt={credit.data.live?.computedAt}
                 rows={[
                   {
-                    label: 'NPL ratio',
+                    label: "NPL ratio",
                     hint:
                       credit.data.metrics.nplLimitPct != null
                         ? `${centralBankName()} ceiling ${fmtNum(num(credit.data.metrics.nplLimitPct), 0)}%`
-                        : 'Prudential ceiling not configured',
+                        : "Prudential ceiling not configured",
                     value: fmtPct(num(credit.data.metrics.nplRatioPct), 2),
-                    tone: statusTone(credit.data.metrics.nplStatus ?? 'na'),
-                    toneLabel: labelize(credit.data.metrics.nplStatus ?? 'na'),
+                    tone: statusTone(credit.data.metrics.nplStatus ?? "na"),
+                    toneLabel: labelize(credit.data.metrics.nplStatus ?? "na"),
                   },
                   {
-                    label: 'Non-performing exposure',
+                    label: "Non-performing exposure",
                     value: fmtCurrency(num(credit.data.metrics.nplExposureGhs)),
                   },
                   {
-                    label: 'Provision coverage',
-                    hint: 'Specific provisions held ÷ NPL',
+                    label: "Provision coverage",
+                    hint: "Specific provisions held ÷ NPL",
                     value:
                       credit.data.metrics.provisionCoveragePct != null
-                        ? fmtPct(num(credit.data.metrics.provisionCoveragePct), 2)
-                        : '—',
+                        ? fmtPct(
+                            num(credit.data.metrics.provisionCoveragePct),
+                            2,
+                          )
+                        : "—",
                   },
                   {
-                    label: 'Gross loan book',
+                    label: "Gross loan book",
                     value: fmtCurrency(num(credit.data.metrics.grossLoansGhs)),
                   },
                   {
-                    label: 'Provisions required',
-                    value: fmtCurrency(num(credit.data.metrics.totalProvisionRequiredGhs)),
+                    label: "Provisions required",
+                    value: fmtCurrency(
+                      num(credit.data.metrics.totalProvisionRequiredGhs),
+                    ),
                   },
                 ]}
               />
@@ -469,37 +500,37 @@ export default function BoardPackPage() {
                   total: irr.data.validations.length,
                   failed: irr.data.validations.filter((v) => !v.passed).length,
                 }}
-                run={byModule.get('irr')}
+                run={byModule.get("irr")}
                 computedAt={irr.data.live?.computedAt}
                 rows={[
                   {
-                    label: 'Worst ΔEVE / Tier 1',
+                    label: "Worst ΔEVE / Tier 1",
                     hint: `Worst scenario: ${labelize(
-                      irr.data.metrics.worstScenarioCode
+                      irr.data.metrics.worstScenarioCode,
                     )}`,
                     value: fmtPct(
                       num(irr.data.metrics.worstEveChangePctTier1),
-                      2
+                      2,
                     ),
                     tone: statusTone(irr.data.metrics.eveStatus),
                     toneLabel: labelize(irr.data.metrics.eveStatus),
                   },
                   {
-                    label: 'Worst ΔEVE',
+                    label: "Worst ΔEVE",
                     value: fmtCurrency(num(irr.data.metrics.worstEveChangeGhs)),
                   },
                   {
-                    label: 'Duration gap',
+                    label: "Duration gap",
                     value: `${num(irr.data.metrics.durationGap).toFixed(2)} yrs`,
                   },
                   {
-                    label: 'NII (base, 12m)',
+                    label: "NII (base, 12m)",
                     value: fmtCurrency(num(irr.data.metrics.niiBaseGhs)),
                   },
                   {
-                    label: 'EaR +200bp / −200bp',
+                    label: "EaR +200bp / −200bp",
                     value: `${fmtCurrency(
-                      num(irr.data.metrics.earUp200Ghs)
+                      num(irr.data.metrics.earUp200Ghs),
                     )} / ${fmtCurrency(num(irr.data.metrics.earDown200Ghs))}`,
                   },
                 ]}
@@ -525,41 +556,41 @@ export default function BoardPackPage() {
                   total: fx.data.validations.length,
                   failed: fx.data.validations.filter((v) => !v.passed).length,
                 }}
-                run={byModule.get('fx')}
+                run={byModule.get("fx")}
                 computedAt={fx.data.live?.computedAt}
                 rows={[
                   {
-                    label: 'Net open position / Tier 1',
+                    label: "Net open position / Tier 1",
                     hint: `Aggregate limit ${fmtPct(
                       num(fx.data.metrics.nopAggregateLimitPct),
-                      0
+                      0,
                     )}`,
                     value: fmtPct(num(fx.data.metrics.nopPctTier1), 2),
                     tone: statusTone(fx.data.metrics.nopStatus),
                     toneLabel: labelize(fx.data.metrics.nopStatus),
                   },
                   {
-                    label: 'Net open position',
+                    label: "Net open position",
                     value: fmtCurrency(num(fx.data.metrics.nopGhs)),
                   },
                   {
                     label: `Largest single currency (${fx.data.metrics.singleCcyMaxCurrency})`,
                     hint: `Single-currency limit ${fmtPct(
                       num(fx.data.metrics.nopSingleLimitPct),
-                      0
+                      0,
                     )}`,
                     value: fmtPct(num(fx.data.metrics.singleCcyMaxPct), 2),
                     tone: statusTone(fx.data.metrics.singleCcyStatus),
                     toneLabel: labelize(fx.data.metrics.singleCcyStatus),
                   },
                   {
-                    label: 'Standalone VaR (total)',
+                    label: "Standalone VaR (total)",
                     value: fmtCurrency(
-                      num(fx.data.metrics.standaloneVarTotalGhs)
+                      num(fx.data.metrics.standaloneVarTotalGhs),
                     ),
                   },
                   {
-                    label: 'Stressed VaR',
+                    label: "Stressed VaR",
                     value: fmtCurrency(num(fx.data.metrics.stressedVarGhs)),
                   },
                 ]}
@@ -581,44 +612,44 @@ export default function BoardPackPage() {
                 code="05"
                 statusTone={statusTone(ftp.data.metrics.nmdCoreStatus)}
                 statusLabel={`Core NMD ${labelize(
-                  ftp.data.metrics.nmdCoreStatus
+                  ftp.data.metrics.nmdCoreStatus,
                 )}`}
                 validations={{
                   total: ftp.data.validations.length,
                   failed: ftp.data.validations.filter((v) => !v.passed).length,
                 }}
-                run={byModule.get('ftp')}
+                run={byModule.get("ftp")}
                 computedAt={ftp.data.live?.computedAt}
                 rows={[
                   {
-                    label: 'Portfolio NIM',
+                    label: "Portfolio NIM",
                     value: fmtPct(num(ftp.data.metrics.portfolioNimPct), 2),
                   },
                   {
-                    label: 'Blended assigned FTP',
+                    label: "Blended assigned FTP",
                     value: fmtPct(
                       num(ftp.data.metrics.blendedAssignedFtpPct),
-                      2
+                      2,
                     ),
                   },
                   {
-                    label: 'Core NMD share',
+                    label: "Core NMD share",
                     hint: `Band ${fmtPct(
                       num(ftp.data.metrics.nmdCoreMinPct),
-                      0
+                      0,
                     )}–${fmtPct(num(ftp.data.metrics.nmdCoreMaxPct), 0)}`,
                     value: fmtPct(num(ftp.data.metrics.nmdCorePct), 2),
                     tone: statusTone(ftp.data.metrics.nmdCoreStatus),
                     toneLabel: labelize(ftp.data.metrics.nmdCoreStatus),
                   },
                   {
-                    label: 'Products below minimum margin',
+                    label: "Products below minimum margin",
                     value: `${fmtNum(
-                      ftp.data.metrics.productsBelowMinMargin
+                      ftp.data.metrics.productsBelowMinMargin,
                     )} of ${fmtNum(ftp.data.metrics.totalProducts)}`,
                   },
                   {
-                    label: 'Total funded balance',
+                    label: "Total funded balance",
                     value: fmtCurrency(num(ftp.data.metrics.totalBalanceGhs)),
                   },
                 ]}

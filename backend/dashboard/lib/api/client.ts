@@ -20,6 +20,7 @@ import {
   BehavioralModelsApi,
   CashflowForecastApi,
   CashflowWindowApi,
+  CapitalPlanApi,
   Configuration,
   ForecastingApi,
   InstitutionProfileApi,
@@ -110,6 +111,7 @@ export const banksApi = new BanksApi(configuration);
 export const behavioralModelsApi = new BehavioralModelsApi(configuration);
 export const regulatoryLiquidityApi = new RegulatoryLiquidityApi(configuration);
 export const regulatoryCapitalApi = new RegulatoryCapitalApi(configuration);
+export const capitalPlanApi = new CapitalPlanApi(configuration);
 export const regulatoryIrrApi = new RegulatoryIrrApi(configuration);
 export const regulatoryFxApi = new RegulatoryFxApi(configuration);
 export const regulatoryFtpApi = new RegulatoryFtpApi(configuration);

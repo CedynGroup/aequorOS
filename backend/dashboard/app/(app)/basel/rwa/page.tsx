@@ -1,25 +1,22 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { ArrowRight, Layers } from 'lucide-react';
-import type { CapitalLineRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import ChartFrame from '@/components/ui/ChartFrame';
-import SectionCard from '@/components/ui/SectionCard';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import DonutChart from '@/components/charts/DonutChart';
-import RwaBucketChart from '@/components/basel/charts/RwaBucketChart';
-import { useBankContext } from '@/components/shell/BankContext';
-import {
-  isNoBaselineRunError,
-  useRwaBreakdown,
-} from '@/lib/api/hooks';
-import { num, shortId } from '@/lib/api/values';
-import { seriesColor } from '@/lib/chartTheme';
-import { currencyCode, fmtCurrency, regShort } from '@/lib/format';
+import Link from "next/link";
+import { ArrowRight, Layers } from "lucide-react";
+import type { CapitalLineRead } from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import ChartFrame from "@/components/ui/ChartFrame";
+import SectionCard from "@/components/ui/SectionCard";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import DonutChart from "@/components/charts/DonutChart";
+import RwaBucketChart from "@/components/basel/charts/RwaBucketChart";
+import { useBankContext } from "@/components/shell/BankContext";
+import { isNoBaselineRunError, useRwaBreakdown } from "@/lib/api/hooks";
+import { num, shortId } from "@/lib/api/values";
+import { seriesColor } from "@/lib/chartTheme";
+import { currencyCode, fmtCurrency, regShort } from "@/lib/format";
 
 type Row = {
   item: string;
@@ -41,26 +38,26 @@ function toRow(line: CapitalLineRead): Row {
 function rwaColumns(
   itemHeader: string,
   weightHeader: string,
-  amountHeader: string
+  amountHeader: string,
 ): Column<Row>[] {
   return [
-    { key: 'item', header: itemHeader, render: (r) => r.item, width: '44%' },
+    { key: "item", header: itemHeader, render: (r) => r.item, width: "44%" },
     {
-      key: 'exposure',
+      key: "exposure",
       header: `Exposure (${currencyCode()})`,
       numeric: true,
       render: (r) =>
-        r.exposureGHS === null ? '—' : fmtCurrency(r.exposureGHS),
+        r.exposureGHS === null ? "—" : fmtCurrency(r.exposureGHS),
     },
     {
-      key: 'weight',
+      key: "weight",
       header: weightHeader,
       numeric: true,
       render: (r) =>
-        r.weightPct === null ? '—' : `${r.weightPct.toFixed(0)}%`,
+        r.weightPct === null ? "—" : `${r.weightPct.toFixed(0)}%`,
     },
     {
-      key: 'rwa',
+      key: "rwa",
       header: amountHeader,
       numeric: true,
       render: (r) => fmtCurrency(r.rwaGHS),
@@ -69,10 +66,12 @@ function rwaColumns(
 }
 
 export default function RWABreakdown() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
-  const breakdown = useRwaBreakdown(bankId);
+  const breakdown = useRwaBreakdown(
+    moduleScope.capitalAggregatedView ? bankId : undefined,
+  );
 
   const data = breakdown.data;
   const needsBaseline = isNoBaselineRunError(breakdown.error);
@@ -100,20 +99,23 @@ export default function RWABreakdown() {
 
   const splitSlices = data
     ? [
-        { name: 'Credit risk', value: creditRwa, color: seriesColor(0) },
-        { name: 'Operational risk', value: operationalRwa, color: seriesColor(1) },
-        { name: 'Market risk', value: marketRwa, color: seriesColor(2) },
+        { name: "Credit risk", value: creditRwa, color: seriesColor(0) },
+        {
+          name: "Operational risk",
+          value: operationalRwa,
+          color: seriesColor(1),
+        },
+        { name: "Market risk", value: marketRwa, color: seriesColor(2) },
       ]
     : [];
-
 
   return (
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Basel Capital', href: '/basel' },
-          { label: 'RWA' },
+          { label: "Modules", href: "/" },
+          { label: "Basel Capital", href: "/basel" },
+          { label: "RWA" },
         ]}
         title="RWA Breakdown"
         subtitle={`Risk-weighted assets by risk type · ${regShort()} CRD standardized approach`}
@@ -177,8 +179,8 @@ export default function RWABreakdown() {
                   height={Math.max(200, bucketData.length * 34 + 40)}
                   footer={
                     <span>
-                      Zero-RWA classes (0% risk weight) are listed in the
-                      detail table below for transparency.
+                      Zero-RWA classes (0% risk weight) are listed in the detail
+                      table below for transparency.
                     </span>
                   }
                 >
@@ -211,7 +213,7 @@ export default function RWABreakdown() {
                           <span className="font-mono text-slate w-12 text-right tnum">
                             {totalRwa > 0
                               ? `${((s.value / totalRwa) * 100).toFixed(1)}%`
-                              : '—'}
+                              : "—"}
                           </span>
                         </li>
                       ))}
@@ -228,21 +230,27 @@ export default function RWABreakdown() {
                   <span>
                     {data.runId ? (
                       <>
-                        Official run{' '}
-                        <span className="font-mono text-navy">{shortId(data.runId)}</span>
+                        Official run{" "}
+                        <span className="font-mono text-navy">
+                          {shortId(data.runId)}
+                        </span>
                       </>
                     ) : (
-                      'Current live capital computation'
+                      "Current live capital computation"
                     )}
                   </span>
                 }
               >
                 <DataTable
-                  columns={rwaColumns('Exposure class', 'Risk weight', `RWA (${currencyCode()})`)}
+                  columns={rwaColumns(
+                    "Exposure class",
+                    "Risk weight",
+                    `RWA (${currencyCode()})`,
+                  )}
                   rows={[
                     ...creditRows,
                     {
-                      item: 'TOTAL CREDIT RISK RWA',
+                      item: "TOTAL CREDIT RISK RWA",
                       exposureGHS: null,
                       weightPct: null,
                       rwaGHS: creditRwa,
@@ -260,11 +268,15 @@ export default function RWABreakdown() {
                   noPadding
                 >
                   <DataTable
-                    columns={rwaColumns('Line', 'Charge rate', `Amount (${currencyCode()})`)}
+                    columns={rwaColumns(
+                      "Line",
+                      "Charge rate",
+                      `Amount (${currencyCode()})`,
+                    )}
                     rows={[
                       ...marketRows,
                       {
-                        item: 'TOTAL MARKET RISK RWA',
+                        item: "TOTAL MARKET RISK RWA",
                         exposureGHS: null,
                         weightPct: null,
                         rwaGHS: marketRwa,
@@ -281,11 +293,15 @@ export default function RWABreakdown() {
                   noPadding
                 >
                   <DataTable
-                    columns={rwaColumns('Line', 'Alpha', `Amount (${currencyCode()})`)}
+                    columns={rwaColumns(
+                      "Line",
+                      "Alpha",
+                      `Amount (${currencyCode()})`,
+                    )}
                     rows={[
                       ...operationalRows,
                       {
-                        item: 'TOTAL OPERATIONAL RISK RWA',
+                        item: "TOTAL OPERATIONAL RISK RWA",
                         exposureGHS: null,
                         weightPct: null,
                         rwaGHS: operationalRwa,
@@ -298,28 +314,33 @@ export default function RWABreakdown() {
               </div>
 
               <p className="text-caption text-slate">
-                Total RWA = Credit{' '}
+                Total RWA = Credit{" "}
                 <span className="font-mono text-navy">
                   {fmtCurrency(creditRwa)}
-                </span>{' '}
-                + Market{' '}
+                </span>{" "}
+                + Market{" "}
                 <span className="font-mono text-navy">
                   {fmtCurrency(marketRwa)}
-                </span>{' '}
-                + Operational{' '}
+                </span>{" "}
+                + Operational{" "}
                 <span className="font-mono text-navy">
                   {fmtCurrency(operationalRwa)}
-                </span>{' '}
-                ={' '}
+                </span>{" "}
+                ={" "}
                 <span className="font-mono font-medium text-navy">
                   {fmtCurrency(totalRwa)}
                 </span>
-                . {data.runId ? (
+                .{" "}
+                {data.runId ? (
                   <>
-                    Official run <span className="font-mono text-navy">{shortId(data.runId)}</span>.
+                    Official run{" "}
+                    <span className="font-mono text-navy">
+                      {shortId(data.runId)}
+                    </span>
+                    .
                   </>
                 ) : (
-                  'Current live capital computation.'
+                  "Current live capital computation."
                 )}
               </p>
             </div>
