@@ -30,10 +30,12 @@ from app.db.session import get_sessionmaker
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
+    BankFinancialFact,
     BankReportingPeriod,
     CfpActivationEvent,
     ContingencyFundingPlan,
     Job,
+    LiveFinding,
     LiveMetric,
     LiveMetricSnapshot,
     Notification,
@@ -459,3 +461,107 @@ def test_shared_live_views_filter_liquidity_and_require_exact_snapshot_authority
     )
     assert snapshots.status_code == 200, snapshots.text
     assert snapshots.json()["snapshots"][0]["metrics"] == {"ratio": 123}
+
+
+@pytest.mark.parametrize("binding", [None, "aggregated", "viewer", "capital"])
+def test_activation_run_denies_before_derivation_or_writes(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch, binding: str | None,
+) -> None:
+    from app.services import data_activation
+
+    _seed_book()
+    version = 1
+    if binding is not None:
+        version = _grant(
+            RoleBundle.VIEWER if binding == "viewer" else RoleBundle.ANALYST,
+            module=ModuleScope.CAPITAL if binding == "capital" else ModuleScope.LIQUIDITY,
+            sensitivity=(
+                SensitivityScope.AGGREGATED
+                if binding == "aggregated"
+                else SensitivityScope.CONFIDENTIAL
+            ),
+        )
+    calls = []
+
+    def forbidden_derivation(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError("Unauthorized derivation")
+
+    monkeypatch.setattr(data_activation, "derive_facts", forbidden_derivation)
+    models = (BankFinancialFact, RegulatoryRun, AuditEvent, Job)
+    with get_sessionmaker()() as session:
+        before = [session.scalar(select(func.count()).select_from(model)) for model in models]
+    response = db_client.post(
+        f"{BASE}/data-activations",
+        headers=_auth(version, "analyst"),
+        json={
+            "as_of_date": "2026-03-31",
+            "reason": "filing request",
+            "run_calculations": True,
+        },
+    )
+    assert response.status_code == 403, response.text
+    assert calls == []
+    with get_sessionmaker()() as session:
+        assert [
+            session.scalar(select(func.count()).select_from(model)) for model in models
+        ] == before
+
+
+@pytest.mark.parametrize("run_calculations", [False, True])
+def test_activation_reaches_derivation_with_required_authority(
+    db_client: TestClient, run_calculations: bool,
+) -> None:
+    period_id = _seed_book()
+    with get_sessionmaker()() as session:
+        period = session.get(BankReportingPeriod, period_id)
+        assert period is not None
+        as_of_date = period.period_end.isoformat()
+    version = (
+        _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
+        if run_calculations else 1
+    )
+    response = db_client.post(
+        f"{BASE}/data-activations",
+        headers=_auth(version, "analyst"),
+        json={
+            "as_of_date": as_of_date,
+            "reason": "activate canonical book",
+            "run_calculations": run_calculations,
+        },
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["details"]["error_code"] == "no_canonical_data"
+
+
+def test_alerts_filter_liquidity_before_counts_and_limit(db_client: TestClient) -> None:
+    _seed_book()
+    with get_sessionmaker()() as session:
+        session.execute(delete(LiveFinding))
+        for module, severity in (("liquidity", "critical"), ("capital", "high")):
+            session.add(LiveFinding(
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                module=module,
+                rule_id=f"{module}_breach",
+                severity=severity,
+                message=f"{module} protected metric breach",
+            ))
+        session.commit()
+    version = _grant(RoleBundle.VIEWER, module=ModuleScope.CAPITAL)
+    response = db_client.get(f"{BASE}/alerts?limit=1", headers=_auth(version))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total"] == 1
+    assert body["by_module"] == {"capital": 1}
+    assert body["by_severity"] == {"high": 1}
+    assert [item["module"] for item in body["items"]] == ["capital"]
+
+    version = _grant(RoleBundle.VIEWER, sensitivity=SensitivityScope.AGGREGATED)
+    response = db_client.get(f"{BASE}/alerts?limit=1", headers=_auth(version, "viewer"))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total"] == 2
+    assert body["by_module"] == {"liquidity": 1, "capital": 1}
+    assert body["by_severity"] == {"critical": 1, "high": 1}
+    assert [item["module"] for item in body["items"]] == ["liquidity"]

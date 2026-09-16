@@ -27,6 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.models import AuditEvent, Bank
 from app.schemas.data_activation import (
     ActivationGroupRead,
@@ -53,6 +54,7 @@ from app.services import (
     regulatory_fx,
     regulatory_irr,
     regulatory_liquidity,
+    scoped_authorization,
 )
 from app.services.audit import record_event
 from app.services.fact_derivation import DerivationError, DerivationResult, derive_facts
@@ -66,6 +68,16 @@ def activate_bank_data(
 ) -> DataActivationRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
+    if payload.run_calculations:
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.RUN,
+            module=Module.LIQUIDITY,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+            surface="data_activation",
+        )
 
     try:
         derivation = derive_facts(db, ctx, bank.id, payload.as_of_date)

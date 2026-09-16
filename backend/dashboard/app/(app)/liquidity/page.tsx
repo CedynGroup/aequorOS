@@ -246,108 +246,107 @@ export default function LiquidityCockpit() {
                   }
                   hint={largestHqla?.description ?? "No HQLA instruments"}
                 />
-                <KpiStat
-                  label="Early-warning posture"
-                  value={
-                    actionIndicators.length > 0
-                      ? `${actionIndicators.length} action`
-                      : watchIndicators.length > 0
-                        ? `${watchIndicators.length} watch`
-                        : "Normal"
-                  }
-                  status={
-                    actionIndicators.length > 0
-                      ? "crit"
-                      : watchIndicators.length > 0
-                        ? "warn"
-                        : "ok"
-                  }
-                  hint={
-                    ewi
-                      ? escalationLabel(ewi.escalationState)
-                      : "EWI view is not available yet"
-                  }
-                />
-                <KpiStat
-                  label="CFP readiness"
-                  value={
-                    approvedCfp ? `v${approvedCfp.version}` : "No approved plan"
-                  }
-                  status={
-                    approvedCfp
-                      ? approvedCfp.approvalOverdue
-                        ? "warn"
-                        : "ok"
-                      : "warn"
-                  }
-                  hint={
-                    approvedCfp
-                      ? `${fundingOptions.length} funding options · ${actionPlans.length} actions`
-                      : "Approval is required before activation"
-                  }
-                />
+                {moduleScope.liquidityConfidentialView && ewi && (
+                  <KpiStat
+                    label="Early-warning posture"
+                    value={
+                      actionIndicators.length > 0
+                        ? `${actionIndicators.length} action`
+                        : watchIndicators.length > 0
+                          ? `${watchIndicators.length} watch`
+                          : "Normal"
+                    }
+                    status={
+                      actionIndicators.length > 0
+                        ? "crit"
+                        : watchIndicators.length > 0
+                          ? "warn"
+                          : "ok"
+                    }
+                    hint={
+                      ewi
+                        ? escalationLabel(ewi.escalationState)
+                        : "EWI view is not available yet"
+                    }
+                  />
+                )}
+                {moduleScope.liquidityConfidentialView && cfp.data && (
+                  <KpiStat
+                    label="CFP readiness"
+                    value={
+                      approvedCfp ? `v${approvedCfp.version}` : "No approved plan"
+                    }
+                    status={
+                      approvedCfp
+                        ? approvedCfp.approvalOverdue
+                          ? "warn"
+                          : "ok"
+                        : "warn"
+                    }
+                    hint={
+                      approvedCfp
+                        ? `${fundingOptions.length} funding options · ${actionPlans.length} actions`
+                        : "Approval is required before activation"
+                    }
+                  />
+                )}
               </div>
             </SectionCard>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <SectionCard
-                className="xl:col-span-2"
-                title="Escalation and contingency readiness"
-                subtitle="EWI classifications are calculated server-side; the CFP remains a Board-owned activation control."
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="border-r-0 md:border-r md:border-border-light md:pr-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-body font-medium text-navy">
-                        Early-warning indicators
-                      </p>
-                      <StatusPill tone={escalationTone(ewi?.escalationState)}>
-                        {escalationLabel(ewi?.escalationState)}
-                      </StatusPill>
-                    </div>
-                    {ewi ? (
+              {moduleScope.liquidityConfidentialView && ewi && cfp.data && (
+                <SectionCard
+                  className="xl:col-span-2"
+                  title="Escalation and contingency readiness"
+                  subtitle="EWI classifications are calculated server-side; the CFP remains a Board-owned activation control."
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="border-r-0 md:border-r md:border-border-light md:pr-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-body font-medium text-navy">
+                          Early-warning indicators
+                        </p>
+                        <StatusPill tone={escalationTone(ewi?.escalationState)}>
+                          {escalationLabel(ewi?.escalationState)}
+                        </StatusPill>
+                      </div>
                       <p className="mt-2 text-caption text-slate leading-relaxed">
                         {actionIndicators.length} action trigger
                         {actionIndicators.length === 1 ? "" : "s"} ·{" "}
                         {watchIndicators.length} watch trigger
                         {watchIndicators.length === 1 ? "" : "s"}.
                       </p>
-                    ) : (
-                      <p className="mt-2 text-caption text-slate">
-                        The EWI evaluation is awaiting a compatible live
-                        liquidity context.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-body font-medium text-navy">
-                        Contingency Funding Plan
-                      </p>
-                      <StatusPill
-                        tone={
-                          approvedCfp
-                            ? approvedCfp.approvalOverdue
-                              ? "amber"
-                              : "success"
-                            : "slate"
-                        }
-                      >
-                        {approvedCfp
-                          ? approvedCfp.approvalOverdue
-                            ? "review overdue"
-                            : "approved"
-                          : "not approved"}
-                      </StatusPill>
                     </div>
-                    <p className="mt-2 text-caption text-slate leading-relaxed">
-                      {approvedCfp
-                        ? `Plan v${approvedCfp.version} has ${fundingOptions.length} documented funding option${fundingOptions.length === 1 ? "" : "s"} and ${actionPlans.length} action${actionPlans.length === 1 ? "" : "s"}.`
-                        : "No Board-approved plan is available for activation."}
-                    </p>
+                    <div>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-body font-medium text-navy">
+                          Contingency Funding Plan
+                        </p>
+                        <StatusPill
+                          tone={
+                            approvedCfp
+                              ? approvedCfp.approvalOverdue
+                                ? "amber"
+                                : "success"
+                              : "slate"
+                          }
+                        >
+                          {approvedCfp
+                            ? approvedCfp.approvalOverdue
+                              ? "review overdue"
+                              : "approved"
+                            : "not approved"}
+                        </StatusPill>
+                      </div>
+                      <p className="mt-2 text-caption text-slate leading-relaxed">
+                        {approvedCfp
+                          ? `Plan v${approvedCfp.version} has ${fundingOptions.length} documented funding option${fundingOptions.length === 1 ? "" : "s"} and ${actionPlans.length} action${actionPlans.length === 1 ? "" : "s"}.`
+                          : "No Board-approved plan is available for activation."}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </SectionCard>
+                </SectionCard>
+              )}
               <SectionCard
                 title="Control workspace"
                 subtitle="Move from current posture to the relevant control without losing context."
