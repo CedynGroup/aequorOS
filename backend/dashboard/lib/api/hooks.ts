@@ -1009,8 +1009,9 @@ export function useBsd3Preview(
   bankId: string | undefined,
   periodId: string | undefined,
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["bsd3", bankId, periodId],
+    queryKey: scopedQueryKey("bsd3", scope, bankId ?? null, periodId ?? null),
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.getBsd3Preview({

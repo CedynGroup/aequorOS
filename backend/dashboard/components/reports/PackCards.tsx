@@ -54,7 +54,10 @@ export default function PackCards({
     moduleScope.capitalConfidentialView ? bankId : undefined,
     periodId,
   );
-  const bsd3 = useBsd3Preview(bankId, periodId);
+  const bsd3 = useBsd3Preview(
+    moduleScope.liquidityConfidentialView ? bankId : undefined,
+    periodId,
+  );
 
   const packs: {
     form: string;
@@ -77,15 +80,19 @@ export default function PackCards({
           },
         ]
       : []),
-    {
-      form: "LCR-NSFR",
-      title: `${regShort()} Liquidity Return (LCR & NSFR)`,
-      description:
-        "Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.",
-      href: "/submissions/returns?code=LCR-NSFR",
-      status: packStatus(bsd3),
-      runId: bsd3.data?.runId,
-    },
+    ...(moduleScope.liquidityConfidentialView
+      ? [
+          {
+            form: "LCR-NSFR",
+            title: `${regShort()} Liquidity Return (LCR & NSFR)`,
+            description:
+              "Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.",
+            href: "/submissions/returns?code=LCR-NSFR",
+            status: packStatus(bsd3),
+            runId: bsd3.data?.runId,
+          },
+        ]
+      : []),
   ];
 
   return (
