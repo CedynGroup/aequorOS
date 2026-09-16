@@ -70,28 +70,49 @@ test.describe("exactly bound Liquidity user", () => {
   });
 });
 
-
 test.describe("aggregated-only Liquidity user", () => {
-  test.use({ storageState: path.join(E2E_TMP, "liquidity_aggregated_viewer.json") });
+  test.use({
+    storageState: path.join(E2E_TMP, "liquidity_aggregated_viewer.json"),
+  });
 
-  test("omits confidential assessments and requests from the cockpit", async ({ page }) => {
+  test("omits confidential assessments and requests from the cockpit", async ({
+    page,
+  }) => {
     const confidentialRequests: string[] = [];
     page.on("request", (request) => {
-      if (/\/banks\/[^/]+\/(liquidity\/(ewis|cfp)|regulatory-runs\/|liquidity-thresholds|liquidity-haircuts)/.test(request.url())) {
+      if (
+        /\/banks\/[^/]+\/(liquidity\/(ewis|cfp)|regulatory-runs\/|liquidity-thresholds|liquidity-haircuts)/.test(
+          request.url(),
+        )
+      ) {
         confidentialRequests.push(request.url());
       }
     });
-    const dashboardResponse = page.waitForResponse((response) =>
-      response.url().includes("/liquidity/dashboard") && response.status() === 200,
+    const dashboardResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/liquidity/dashboard") &&
+        response.status() === 200,
     );
     await page.goto("/liquidity");
     await dashboardResponse;
-    await expect(page.getByText("Largest HQLA concentration", { exact: true })).toBeVisible();
-    await expect(page.getByText("LCR headroom", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Early-warning posture", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("CFP readiness", { exact: true })).toHaveCount(0);
-    await expect(page.getByText(/pp above minimum|above minimum requirement/)).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Monitoring Tools" })).toHaveCount(0);
+    await expect(
+      page.getByText("Largest HQLA concentration", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("LCR headroom", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByText("Early-warning posture", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByText("CFP readiness", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByText(/pp above minimum|above minimum requirement/),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Monitoring Tools" }),
+    ).toHaveCount(0);
     expect(confidentialRequests).toEqual([]);
     if (evidenceDir) {
       await page.screenshot({

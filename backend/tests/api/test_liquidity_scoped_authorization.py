@@ -44,7 +44,7 @@ from app.models import (
     User,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import authorization, regulatory_capital, regulatory_liquidity
+from app.services import authorization, data_activation, regulatory_capital, regulatory_liquidity
 from tests.api.helpers import ORG_1, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
@@ -360,7 +360,8 @@ def test_t6_liquidity_run_detail_is_hidden_without_confidential_authority(
 
 @pytest.mark.parametrize("binding", [None, "aggregated", "viewer", "capital"])
 def test_official_enqueue_denies_before_job_or_audit(
-    db_client: TestClient, binding: str | None,
+    db_client: TestClient,
+    binding: str | None,
 ) -> None:
     _seed_book()
     version = 1
@@ -394,7 +395,8 @@ def test_official_enqueue_denies_before_job_or_audit(
 
 @pytest.mark.parametrize("role", ["viewer", "analyst"])
 def test_official_enqueue_preserves_mixed_module_gate(
-    db_client: TestClient, role: str,
+    db_client: TestClient,
+    role: str,
 ) -> None:
     _seed_book()
     version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
@@ -413,7 +415,8 @@ def test_official_enqueue_preserves_mixed_module_gate(
         assert response.status_code == 403, response.text
         with get_sessionmaker()() as session:
             assert [
-                session.scalar(select(func.count()).select_from(model)) for model in (Job, AuditEvent)
+                session.scalar(select(func.count()).select_from(model))
+                for model in (Job, AuditEvent)
             ] == before
         return
     assert response.status_code == 202, response.text
@@ -432,35 +435,41 @@ def test_shared_live_views_filter_liquidity_and_require_exact_snapshot_authority
         session.execute(delete(LiveMetric))
         session.execute(delete(LiveMetricSnapshot))
         for module in ("liquidity", "capital"):
-            session.add(LiveMetric(
-                organization_id=ORG_1,
-                bank_id=SAMPLE_BANK_ID,
-                module=module,
-                metrics={"ratio": 123},
-                status="green",
-                computed_at=utc_now(),
-            ))
-            session.add(LiveMetricSnapshot(
-                organization_id=ORG_1,
-                bank_id=SAMPLE_BANK_ID,
-                reporting_period_id=period_id,
-                snapshot_date=date(2026, 3, 31),
-                module=module,
-                metrics={"ratio": 123},
-                status="green",
-                computed_at=utc_now(),
-            ))
+            session.add(
+                LiveMetric(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    module=module,
+                    metrics={"ratio": 123},
+                    status="green",
+                    computed_at=utc_now(),
+                )
+            )
+            session.add(
+                LiveMetricSnapshot(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    reporting_period_id=period_id,
+                    snapshot_date=date(2026, 3, 31),
+                    module=module,
+                    metrics={"ratio": 123},
+                    status="green",
+                    computed_at=utc_now(),
+                )
+            )
         session.commit()
     version = _grant(RoleBundle.VIEWER, module=ModuleScope.CAPITAL)
     summary = db_client.get(f"{BASE}/live-summary", headers=_auth(version))
     assert summary.status_code == 200, summary.text
     assert [row["module"] for row in summary.json()["modules"]] == ["capital"]
     denied = db_client.get(
-        f"{BASE}/live-snapshots?module=liquidity", headers=_auth(version),
+        f"{BASE}/live-snapshots?module=liquidity",
+        headers=_auth(version),
     )
     assert denied.status_code == 403
     capital = db_client.get(
-        f"{BASE}/live-snapshots?module=capital", headers=_auth(version),
+        f"{BASE}/live-snapshots?module=capital",
+        headers=_auth(version),
     )
     assert capital.status_code == 200, capital.text
     assert len(capital.json()["snapshots"]) == 1
@@ -470,7 +479,8 @@ def test_shared_live_views_filter_liquidity_and_require_exact_snapshot_authority
     assert summary.status_code == 200, summary.text
     assert [row["module"] for row in summary.json()["modules"]] == ["liquidity", "capital"]
     snapshots = db_client.get(
-        f"{BASE}/live-snapshots?module=liquidity", headers=_auth(version, "viewer"),
+        f"{BASE}/live-snapshots?module=liquidity",
+        headers=_auth(version, "viewer"),
     )
     assert snapshots.status_code == 200, snapshots.text
     assert snapshots.json()["snapshots"][0]["metrics"] == {"ratio": 123}
@@ -478,10 +488,10 @@ def test_shared_live_views_filter_liquidity_and_require_exact_snapshot_authority
 
 @pytest.mark.parametrize("binding", [None, "aggregated", "viewer", "capital"])
 def test_activation_run_denies_before_derivation_or_writes(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch, binding: str | None,
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    binding: str | None,
 ) -> None:
-    from app.services import data_activation
-
     _seed_book()
     version = 1
     if binding is not None:
@@ -523,7 +533,8 @@ def test_activation_run_denies_before_derivation_or_writes(
 
 @pytest.mark.parametrize("run_calculations", [False, True])
 def test_activation_reaches_derivation_with_required_authority(
-    db_client: TestClient, run_calculations: bool,
+    db_client: TestClient,
+    run_calculations: bool,
 ) -> None:
     period_id = _seed_book()
     with get_sessionmaker()() as session:
@@ -532,7 +543,8 @@ def test_activation_reaches_derivation_with_required_authority(
         as_of_date = period.period_end.isoformat()
     version = (
         _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
-        if run_calculations else 1
+        if run_calculations
+        else 1
     )
     response = db_client.post(
         f"{BASE}/data-activations",
@@ -552,14 +564,16 @@ def test_alerts_filter_liquidity_before_counts_and_limit(db_client: TestClient) 
     with get_sessionmaker()() as session:
         session.execute(delete(LiveFinding))
         for module, severity in (("liquidity", "critical"), ("capital", "high")):
-            session.add(LiveFinding(
-                organization_id=ORG_1,
-                bank_id=SAMPLE_BANK_ID,
-                module=module,
-                rule_id=f"{module}_breach",
-                severity=severity,
-                message=f"{module} protected metric breach",
-            ))
+            session.add(
+                LiveFinding(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    module=module,
+                    rule_id=f"{module}_breach",
+                    severity=severity,
+                    message=f"{module} protected metric breach",
+                )
+            )
         session.commit()
     version = _grant(RoleBundle.VIEWER, module=ModuleScope.CAPITAL)
     response = db_client.get(f"{BASE}/alerts?limit=1", headers=_auth(version))
@@ -582,7 +596,8 @@ def test_alerts_filter_liquidity_before_counts_and_limit(db_client: TestClient) 
 
 @pytest.mark.parametrize("operation", ["official-runs", "data-activations"])
 def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
-    db_client: TestClient, operation: str,
+    db_client: TestClient,
+    operation: str,
 ) -> None:
     _seed_book()
     with get_sessionmaker()() as session:
@@ -591,12 +606,15 @@ def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
         bank.institution_type = "savings_and_loans"
         session.commit()
     payload: dict[str, str | bool] = {
-        "as_of_date": "2026-03-31", "reason": "SDI official request",
+        "as_of_date": "2026-03-31",
+        "reason": "SDI official request",
     }
     if operation == "data-activations":
         payload["run_calculations"] = True
     response = db_client.post(
-        f"{BASE}/{operation}", headers=_auth(1, "analyst"), json=payload,
+        f"{BASE}/{operation}",
+        headers=_auth(1, "analyst"),
+        json=payload,
     )
     if operation == "official-runs":
         assert response.status_code == 202, response.text

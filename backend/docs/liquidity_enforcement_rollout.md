@@ -12,15 +12,15 @@ sensitivity, and permission is denied immediately (403 unless the object-hiding
 
 ## Affected authority
 
-| Surface | Required authority |
-| --- | --- |
-| Liquidity dashboard, live summaries/history, alerts, saved-analysis summaries, and regulatory-run list rows | LIQ / `aggregated` / `view` |
-| Full regulatory-run and saved-analysis detail, and BSD-3 preview | LIQ / `confidential` / `view` |
-| Monitoring Tools, EWI dashboard, CFP reads/events, forecasts/history, cash-flow window, thresholds, haircuts, SDI liquidity position, and scenario details | LIQ / `confidential` / `view` |
-| Create one or all Liquidity regulatory runs; execute scenario analysis | LIQ / `confidential` / `run` |
-| Create a CFP draft, custom scenario, or saved analysis | LIQ / `confidential` / `create` |
-| Update a CFP draft or custom scenario; archive a scenario; delete a saved analysis | LIQ / `confidential` / `edit` |
-| Approve, activate, or de-escalate a CFP | LIQ / `confidential` / `approve`, with maker-checker still a global veto for approval |
+| Surface                                                                                                                                                    | Required authority                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Liquidity dashboard, live summaries/history, alerts, saved-analysis summaries, and regulatory-run list rows                                                | LIQ / `aggregated` / `view`                                                           |
+| Full regulatory-run and saved-analysis detail, and BSD-3 preview                                                                                           | LIQ / `confidential` / `view`                                                         |
+| Monitoring Tools, EWI dashboard, CFP reads/events, forecasts/history, cash-flow window, thresholds, haircuts, SDI liquidity position, and scenario details | LIQ / `confidential` / `view`                                                         |
+| Create one or all Liquidity regulatory runs; execute scenario analysis                                                                                     | LIQ / `confidential` / `run`                                                          |
+| Create a CFP draft, custom scenario, or saved analysis                                                                                                     | LIQ / `confidential` / `create`                                                       |
+| Update a CFP draft or custom scenario; archive a scenario; delete a saved analysis                                                                         | LIQ / `confidential` / `edit`                                                         |
+| Approve, activate, or de-escalate a CFP                                                                                                                    | LIQ / `confidential` / `approve`, with maker-checker still a global veto for approval |
 
 Regulatory-run lists remove unauthorized LIQ rows before total counts, offsets,
 and limits. Live summaries omit unauthorized Liquidity metrics; alerts omit
@@ -195,12 +195,12 @@ Create a row only after the institution confirms the person, institution, duty,
 and sensitivity. Use the authorization service so `authv` advances and refresh
 families are revoked in the same transaction.
 
-| Confirmed need | `principal_type` | `role_bundle` | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
-| --- | --- | --- | --- | --- | --- | --- |
-| Read dashboard summaries and LIQ rows in the shared run registry | `human` | `viewer` or institution-approved `auditor`/`analyst`/`approver` | `institution` | exact `BK-*` | `liq` | `aggregated` |
-| Read forecasts, CFP, thresholds, haircuts, SDI positions, scenario details, and full run snapshots | `human` | `viewer` or institution-approved `auditor`/`analyst`/`approver` | `institution` | exact `BK-*` | `liq` | `confidential` |
-| Create runs and analyses; create/edit CFP drafts and scenario artifacts | `human` | `analyst` | `institution` | exact `BK-*` | `liq` | `confidential` |
-| Approve, activate, and de-escalate CFPs | `human` | `approver` | `institution` | exact `BK-*` | `liq` | `confidential` |
+| Confirmed need                                                                                     | `principal_type` | `role_bundle`                                                   | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
+| -------------------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------------------------- | ------------------- | ---------------- | -------------- | ------------------- |
+| Read dashboard summaries and LIQ rows in the shared run registry                                   | `human`          | `viewer` or institution-approved `auditor`/`analyst`/`approver` | `institution`       | exact `BK-*`     | `liq`          | `aggregated`        |
+| Read forecasts, CFP, thresholds, haircuts, SDI positions, scenario details, and full run snapshots | `human`          | `viewer` or institution-approved `auditor`/`analyst`/`approver` | `institution`       | exact `BK-*`     | `liq`          | `confidential`      |
+| Create runs and analyses; create/edit CFP drafts and scenario artifacts                            | `human`          | `analyst`                                                       | `institution`       | exact `BK-*`     | `liq`          | `confidential`      |
+| Approve, activate, and de-escalate CFPs                                                            | `human`          | `approver`                                                      | `institution`       | exact `BK-*`     | `liq`          | `confidential`      |
 
 If an institution explicitly approves coverage across all its banks, replace
 only `institution_scope` with `organization` and `institution_id` with `NULL`.
