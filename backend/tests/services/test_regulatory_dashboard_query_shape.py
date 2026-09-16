@@ -45,7 +45,8 @@ _MODULES = {
 }
 _FULL_HTTP_QUERY_COUNTS = {
     "liquidity": 14,
-    "capital": 15,
+    # Scoped CAP view adds bank resolution plus principal, binding, and institution checks.
+    "capital": 19,
     "irr": 16,
     "fx": 12,
     "ftp": 12,

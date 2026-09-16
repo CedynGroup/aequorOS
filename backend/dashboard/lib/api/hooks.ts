@@ -75,6 +75,7 @@ import {
   attestationApi,
   banksApi,
   behavioralModelsApi,
+  capitalPlanApi,
   cashflowForecastApi,
   cashflowWindowApi,
   creditParamsApi,
@@ -267,12 +268,56 @@ export function useCapitalDashboard(
   });
 }
 
+export function useCapitalPlan(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
+  return useQuery({
+    queryKey: dashboardQueryKey(
+      "capital-plan",
+      scope,
+      bankId,
+      dashboardSemantic(undefined),
+    ),
+    queryFn: () =>
+      apiCall(() =>
+        capitalPlanApi.getCapitalPlan({
+          bankId: bankId!,
+        }),
+      ),
+    enabled: Boolean(bankId),
+  });
+}
+
+export function useRefreshIlaap(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
+  return useMutation({
+    mutationFn: (payload: { reportingPeriodId: string; notes?: string }) =>
+      apiCall(() =>
+        capitalPlanApi.refreshIlaapComponent({
+          bankId: bankId!,
+          ilaapRefreshCreate: payload,
+        }),
+      ),
+    onSuccess: () => {
+      void invalidateScopedPrefixes(
+        queryClient,
+        ["capital-plan"],
+        scope,
+        bankId,
+      );
+    },
+  });
+}
+
 export function useEffectiveRatioDashboards(
   bankId: string | undefined,
   periodId: string,
+  capitalAuthorized = true,
 ) {
   const currentLiq = useLiquidityDashboard(bankId);
-  const currentCap = useCapitalDashboard(bankId);
+  const currentCap = useCapitalDashboard(
+    capitalAuthorized ? bankId : undefined,
+  );
   const liqSelection = useRef<{ periodId: string; mismatch: boolean } | null>(
     null,
   );
@@ -302,7 +347,7 @@ export function useEffectiveRatioDashboards(
     periodId,
   );
   const periodCap = useCapitalDashboard(
-    needsPeriodCap ? bankId : undefined,
+    capitalAuthorized && needsPeriodCap ? bankId : undefined,
     periodId,
   );
   return {

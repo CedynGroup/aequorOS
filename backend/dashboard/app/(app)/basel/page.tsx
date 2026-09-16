@@ -1,26 +1,23 @@
-'use client';
+"use client";
 
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat, { type KpiStatus } from '@/components/ui/KpiStat';
-import LimitBar from '@/components/ui/LimitBar';
-import ChartFrame from '@/components/ui/ChartFrame';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import Sparkline from '@/components/ui/Sparkline';
-import ValidationList from '@/components/ui/ValidationList';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import DonutChart from '@/components/charts/DonutChart';
-import RatioTrendChart from '@/components/liquidity/charts/RatioTrendChart';
-import CapitalWaterfallChart from '@/components/basel/charts/CapitalWaterfallChart';
-import SdiCapitalView from '@/components/basel/SdiCapitalView';
-import FloorNotAssessed from '@/components/basel/FloorNotAssessed';
-import { runComputedAt } from '@/components/liquidity/runData';
-import { useBankContext } from '@/components/shell/BankContext';
-import LiveEngineNote from '@/components/live/LiveEngineNote';
-import {
-  useCapitalDashboard,
-  useRegulatoryRun,
-} from '@/lib/api/hooks';
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
+import LimitBar from "@/components/ui/LimitBar";
+import ChartFrame from "@/components/ui/ChartFrame";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import Sparkline from "@/components/ui/Sparkline";
+import ValidationList from "@/components/ui/ValidationList";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import DonutChart from "@/components/charts/DonutChart";
+import RatioTrendChart from "@/components/liquidity/charts/RatioTrendChart";
+import CapitalWaterfallChart from "@/components/basel/charts/CapitalWaterfallChart";
+import SdiCapitalView from "@/components/basel/SdiCapitalView";
+import FloorNotAssessed from "@/components/basel/FloorNotAssessed";
+import { runComputedAt } from "@/components/liquidity/runData";
+import { useBankContext } from "@/components/shell/BankContext";
+import LiveEngineNote from "@/components/live/LiveEngineNote";
+import { useCapitalDashboard, useRegulatoryRun } from "@/lib/api/hooks";
 import {
   assessAgainstFloor,
   floorStatus,
@@ -29,12 +26,12 @@ import {
   numOrNull,
   statusTone,
   type FloorAssessment,
-} from '@/lib/api/values';
-import { seriesColor } from '@/lib/chartTheme';
-import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
+} from "@/lib/api/values";
+import { seriesColor } from "@/lib/chartTheme";
+import { fmtCurrency, fmtPct, regShort } from "@/lib/format";
 
-function kpiStatus(status: 'green' | 'amber' | 'red' | string): KpiStatus {
-  return status === 'red' ? 'crit' : status === 'amber' ? 'warn' : 'ok';
+function kpiStatus(status: "green" | "amber" | "red" | string): KpiStatus {
+  return status === "red" ? "crit" : status === "amber" ? "warn" : "ok";
 }
 
 /**
@@ -45,9 +42,11 @@ function kpiStatus(status: 'green' | 'amber' | 'red' | string): KpiStatus {
  */
 function gatedKpiStatus(
   assessment: FloorAssessment,
-  engineStatus: string
+  engineStatus: string,
 ): KpiStatus {
-  return assessment.assessed ? kpiStatus(engineStatus) : floorStatus(assessment);
+  return assessment.assessed
+    ? kpiStatus(engineStatus)
+    : floorStatus(assessment);
 }
 
 /** The KPI caption under a ratio: the resolved floor, or its stated absence. */
@@ -65,10 +64,10 @@ function floorHint(floor: number | null, absence: string): string {
  * and therefore the same answer, as the KPI edge and the floors panel.
  */
 const FLOOR_RULE_CODES = {
-  car_above_minimum: 'capital adequacy',
-  cet1_above_minimum: 'CET1',
-  tier1_above_minimum: 'Tier 1',
-  leverage_above_minimum: 'leverage-ratio',
+  car_above_minimum: "capital adequacy",
+  cet1_above_minimum: "CET1",
+  tier1_above_minimum: "Tier 1",
+  leverage_above_minimum: "leverage-ratio",
 } as const;
 
 export default function BaselOverview() {
@@ -76,10 +75,18 @@ export default function BaselOverview() {
   const bankId = bank?.id;
   const institutionClass = moduleScope.institutionClass;
   const isScopeResolved = moduleScope.isResolved;
-  const shouldLoadBaselDashboard = isScopeResolved && institutionClass !== 'sdi';
+  const shouldLoadBaselDashboard =
+    isScopeResolved &&
+    moduleScope.capitalAggregatedView === true &&
+    institutionClass !== "sdi";
 
-  const dashboard = useCapitalDashboard(shouldLoadBaselDashboard ? bankId : undefined);
-  const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
+  const dashboard = useCapitalDashboard(
+    shouldLoadBaselDashboard ? bankId : undefined,
+  );
+  const latestRun = useRegulatoryRun(
+    moduleScope.capitalConfidentialView ? bankId : undefined,
+    dashboard.data?.latestRunId,
+  );
 
   const data = dashboard.data;
   const run = latestRun.data;
@@ -120,19 +127,19 @@ export default function BaselOverview() {
   const leverageMin = numOrNull(data?.buffers.leverageMinPct);
   const carAssessment = assessAgainstFloor(
     numOrNull(data?.metrics.carPct),
-    carMin
+    carMin,
   );
   const tier1Assessment = assessAgainstFloor(
     numOrNull(data?.metrics.tier1RatioPct),
-    tier1Min
+    tier1Min,
   );
   const cet1Assessment = assessAgainstFloor(
     numOrNull(data?.metrics.cet1RatioPct),
-    cet1Min
+    cet1Min,
   );
   const leverageAssessment = assessAgainstFloor(
     numOrNull(data?.metrics.leverageRatioPct),
-    leverageMin
+    leverageMin,
   );
   const floorByRuleCode: Record<string, number | null> = {
     car_above_minimum: carMin,
@@ -145,17 +152,17 @@ export default function BaselOverview() {
   const rwaSlices = data
     ? [
         {
-          name: 'Credit risk',
+          name: "Credit risk",
           value: num(data.rwaComposition.creditRwaGhs),
           color: seriesColor(0),
         },
         {
-          name: 'Operational risk',
+          name: "Operational risk",
           value: num(data.rwaComposition.operationalRwaGhs),
           color: seriesColor(1),
         },
         {
-          name: 'Market risk',
+          name: "Market risk",
           value: num(data.rwaComposition.marketRwaGhs),
           color: seriesColor(2),
         },
@@ -195,7 +202,7 @@ export default function BaselOverview() {
   const deductions = structure
     ? structure.cet1Deductions.reduce(
         (s, c) => s + Math.abs(num(c.weightedAmount)),
-        0
+        0,
       )
     : 0;
 
@@ -205,7 +212,8 @@ export default function BaselOverview() {
   // row is restated as "not assessed" so the Validations card cannot claim a
   // pass the KPI edge and the floors panel are refusing to claim.
   const validations = (data?.validations ?? []).map((item) => {
-    const what = FLOOR_RULE_CODES[item.ruleCode as keyof typeof FLOOR_RULE_CODES];
+    const what =
+      FLOOR_RULE_CODES[item.ruleCode as keyof typeof FLOOR_RULE_CODES];
     if (what === undefined || floorByRuleCode[item.ruleCode] !== null) {
       return item;
     }
@@ -214,15 +222,13 @@ export default function BaselOverview() {
       assessed: false,
       message:
         `No ${what} minimum resolves from this institution's active parameter ` +
-        'set, so this rule cannot be evaluated for the current period.',
+        "set, so this rule cannot be evaluated for the current period.",
     };
   });
 
   const computedAt = runComputedAt(run);
   const provenance = data ? (
-    <span>
-      Computed from current positions and the active parameter set
-    </span>
+    <span>Computed from current positions and the active parameter set</span>
   ) : undefined;
 
   // Avoid showing or fetching the bank Basel experience while the bank payload
@@ -233,7 +239,7 @@ export default function BaselOverview() {
 
   // An SDI sees the simplified s.29 capital view, not the Basel 3-tier overview
   // (docs/sdi.md §4.2). The hooks above are inert for this branch.
-  if (institutionClass === 'sdi') {
+  if (institutionClass === "sdi") {
     return <SdiCapitalView bankId={bankId} />;
   }
 
@@ -241,13 +247,17 @@ export default function BaselOverview() {
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Basel Capital' },
-          { label: 'Overview' },
+          { label: "Modules", href: "/" },
+          { label: "Basel Capital" },
+          { label: "Overview" },
         ]}
         title="Basel Capital"
         subtitle={`Capital Adequacy Ratio · Tier 1 / Tier 2 · ${regShort()} CRD framework`}
-        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
+        action={
+          data ? (
+            <LiveEngineNote live={data.live} stored={data.stored} />
+          ) : undefined
+        }
       />
 
       <QueryBoundary
@@ -257,7 +267,6 @@ export default function BaselOverview() {
       >
         {data && (
           <div className="px-8 py-6 space-y-6">
-
             {/* Headline ratios */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiStat
@@ -269,7 +278,7 @@ export default function BaselOverview() {
                 sparkline={<Sparkline data={carTrend} />}
                 hint={
                   carMin === null
-                    ? 'No capital adequacy minimum on file — compliance not assessed'
+                    ? "No capital adequacy minimum on file — compliance not assessed"
                     : `${regShort()} minimum ${fmtFloorPct(carMin)}`
                 }
               />
@@ -277,12 +286,15 @@ export default function BaselOverview() {
                 label="Tier 1 ratio"
                 value={num(data.metrics.tier1RatioPct).toFixed(2)}
                 unit="%"
-                status={gatedKpiStatus(tier1Assessment, data.metrics.tier1Status)}
+                status={gatedKpiStatus(
+                  tier1Assessment,
+                  data.metrics.tier1Status,
+                )}
                 delta={tier1Delta}
                 sparkline={<Sparkline data={tier1Trend} />}
                 hint={floorHint(
                   tier1Min,
-                  'No Tier 1 minimum on file — compliance not assessed'
+                  "No Tier 1 minimum on file — compliance not assessed",
                 )}
               />
               <KpiStat
@@ -294,7 +306,7 @@ export default function BaselOverview() {
                 sparkline={<Sparkline data={cet1Trend} />}
                 hint={floorHint(
                   cet1Min,
-                  'No CET1 minimum on file — compliance not assessed'
+                  "No CET1 minimum on file — compliance not assessed",
                 )}
               />
               <KpiStat
@@ -303,11 +315,11 @@ export default function BaselOverview() {
                 unit="%"
                 status={gatedKpiStatus(
                   leverageAssessment,
-                  data.metrics.leverageStatus
+                  data.metrics.leverageStatus,
                 )}
                 hint={floorHint(
                   leverageMin,
-                  'No leverage-ratio minimum on file — compliance not assessed'
+                  "No leverage-ratio minimum on file — compliance not assessed",
                 )}
               />
             </div>
@@ -346,7 +358,7 @@ export default function BaselOverview() {
                     unit="%"
                     limitLabel={`${regShort()} minimum`}
                     warnLabel={
-                      data.buffers.carEarlyWarningLabel || 'Early warning'
+                      data.buffers.carEarlyWarningLabel || "Early warning"
                     }
                     format={(v) => v.toFixed(1)}
                   />
@@ -445,7 +457,7 @@ export default function BaselOverview() {
                     )}
                     {carMin === null && (
                       <span>
-                        {' '}
+                        {" "}
                         No capital adequacy minimum resolved for this
                         institution, so no floor line is drawn.
                       </span>
@@ -497,7 +509,7 @@ export default function BaselOverview() {
                         <span className="font-mono text-slate w-12 text-right tnum">
                           {totalRwa > 0
                             ? `${((s.value / totalRwa) * 100).toFixed(1)}%`
-                            : '—'}
+                            : "—"}
                         </span>
                       </li>
                     ))}
@@ -514,9 +526,9 @@ export default function BaselOverview() {
                 height={280}
                 footer={
                   <span>
-                    CET1 {fmtCurrency(num(structure.cet1CapitalGhs))} ·
-                    Tier 1 {fmtCurrency(num(structure.tier1CapitalGhs))} ·
-                    Total {fmtCurrency(num(structure.totalCapitalGhs))} ·{' '}
+                    CET1 {fmtCurrency(num(structure.cet1CapitalGhs))} · Tier 1{" "}
+                    {fmtCurrency(num(structure.tier1CapitalGhs))} · Total{" "}
+                    {fmtCurrency(num(structure.totalCapitalGhs))} ·{" "}
                     {fmtPct(num(data.metrics.carPct), 2)} of RWA
                   </span>
                 }
@@ -569,11 +581,13 @@ export default function BaselOverview() {
                   label="Headroom"
                   // Headroom is distance to the minimum. With no minimum there
                   // is no distance to state — not a zero one.
-                  value={carMin === null ? null : numOrNull(data.buffers.headroomPp)}
+                  value={
+                    carMin === null ? null : numOrNull(data.buffers.headroomPp)
+                  }
                   suffix=" pp"
                   note={
                     carMin === null
-                      ? 'No minimum resolved to measure headroom against'
+                      ? "No minimum resolved to measure headroom against"
                       : `Above the ${regShort()} minimum`
                   }
                   emphasis={
@@ -604,7 +618,11 @@ export default function BaselOverview() {
 
 function CapitalScopeLoading() {
   return (
-    <div className="px-8 py-6" aria-busy="true" aria-label="Loading regulatory capital scope">
+    <div
+      className="px-8 py-6"
+      aria-busy="true"
+      aria-label="Loading regulatory capital scope"
+    >
       <div className="h-7 w-56 animate-pulse rounded bg-surface-hover" />
       <div className="mt-3 h-4 w-96 max-w-full animate-pulse rounded bg-surface-hover" />
     </div>
@@ -614,7 +632,7 @@ function CapitalScopeLoading() {
 function BufferCell({
   label,
   value,
-  suffix = '%',
+  suffix = "%",
   note,
   emphasis,
 }: {
@@ -630,13 +648,13 @@ function BufferCell({
   emphasis?: string;
 }) {
   const valueColor =
-    emphasis === 'breach' || emphasis === 'critical'
-      ? 'text-critical'
-      : emphasis === 'approaching' || emphasis === 'amber'
-      ? 'text-warning'
-      : emphasis
-      ? 'text-success'
-      : 'text-navy';
+    emphasis === "breach" || emphasis === "critical"
+      ? "text-critical"
+      : emphasis === "approaching" || emphasis === "amber"
+        ? "text-warning"
+        : emphasis
+          ? "text-success"
+          : "text-navy";
   return (
     <div className="space-y-1">
       <p className="text-micro font-medium uppercase tracking-wider text-slate">
@@ -644,10 +662,10 @@ function BufferCell({
       </p>
       <p
         className={`font-mono tnum ${
-          value === null ? 'text-body text-slate' : `text-h1 ${valueColor}`
+          value === null ? "text-body text-slate" : `text-h1 ${valueColor}`
         }`}
       >
-        {value === null ? 'Not resolved' : `${value.toFixed(2)}${suffix}`}
+        {value === null ? "Not resolved" : `${value.toFixed(2)}${suffix}`}
       </p>
       {note && <p className="text-caption text-slate leading-snug">{note}</p>}
     </div>

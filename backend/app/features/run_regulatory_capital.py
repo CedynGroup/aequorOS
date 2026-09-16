@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import CapitalAggregatedView, CapitalConfidentialView, CapitalRun, DbSession
 from app.schemas.regulatory_capital import (
     Bsd2PreviewRead,
     CapitalDashboardRead,
@@ -29,9 +29,9 @@ def run_all_capital_scenarios(
     bank_id: str,
     payload: CapitalScenarioBatchCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: CapitalRun,
 ) -> RegulatoryRunBatchRead:
-    return regulatory_capital.run_all_capital_scenarios(db, ctx, bank_id, payload)
+    return regulatory_capital.run_all_capital_scenarios(db, access.ctx, bank_id, payload)
 
 
 @router.get(
@@ -42,10 +42,10 @@ def run_all_capital_scenarios(
 def get_capital_dashboard(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CapitalAggregatedView,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> CapitalDashboardRead:
-    return regulatory_capital.get_capital_dashboard(db, ctx, bank_id, reporting_period_id)
+    return regulatory_capital.get_capital_dashboard(db, access.ctx, bank_id, reporting_period_id)
 
 
 @router.get(
@@ -56,10 +56,10 @@ def get_capital_dashboard(
 def get_rwa_breakdown(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CapitalAggregatedView,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> RwaBreakdownRead:
-    return regulatory_capital.get_rwa_breakdown(db, ctx, bank_id, reporting_period_id)
+    return regulatory_capital.get_rwa_breakdown(db, access.ctx, bank_id, reporting_period_id)
 
 
 @router.get(
@@ -70,10 +70,10 @@ def get_rwa_breakdown(
 def get_capital_structure(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CapitalAggregatedView,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> CapitalStructureRead:
-    return regulatory_capital.get_capital_structure(db, ctx, bank_id, reporting_period_id)
+    return regulatory_capital.get_capital_structure(db, access.ctx, bank_id, reporting_period_id)
 
 
 @router.get(
@@ -85,6 +85,6 @@ def get_bsd2_preview(
     bank_id: str,
     reporting_period_id: Annotated[UUID, Query()],
     db: DbSession,
-    ctx: Tenant,
+    access: CapitalConfidentialView,
 ) -> Bsd2PreviewRead:
-    return regulatory_capital.get_bsd2_preview(db, ctx, bank_id, reporting_period_id)
+    return regulatory_capital.get_bsd2_preview(db, access.ctx, bank_id, reporting_period_id)

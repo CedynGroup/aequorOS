@@ -189,6 +189,30 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "view",
       ),
+      capitalAggregatedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "cap",
+        "aggregated",
+        "view",
+      ),
+      capitalConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "cap",
+        "confidential",
+        "view",
+      ),
+      capitalRestrictedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "cap",
+        "restricted",
+        "view",
+      ),
+      capitalRun: hasEffectiveCapability(
+        institutionCapabilities,
+        "cap",
+        "confidential",
+        "run",
+      ),
       isResolved: !banksQuery.isLoading && !profileQuery.isLoading,
     }),
     [

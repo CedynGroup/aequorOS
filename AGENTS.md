@@ -115,11 +115,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   coverage is named. `ResourceLocator` also names its target scope: an institution target
   requires an exact `BK-*`, while an organization target forbids one; missing/null never
   broadens. The evaluator is deny-by-default, ignores scalar role/token permission claims,
-  returns an audit-ready trace, and accepts global condition vetoes. Liquidity Monitoring is
-  the first enforcing product route: it requires exact active LIQ/confidential view authority
-  and denies without a legacy-role fallback; all other product routes retain their existing
-  gates. Migration `202608250044` backfills no bindings or Owner/Admin authority. Token `authv`
-  enforcement is
+  returns an audit-ready trace, and accepts global condition vetoes. Product-route
+  cutovers are documented in
+  `backend/docs/authorization_foundation.md` §Product rollout boundary; use the linked
+  rollout contracts for each surface's exact permissions. Migration `202608250044`
+  backfills no bindings or Owner/Admin authority. Token `authv` enforcement is
   live: pre-migration/stale tokens 401; every future role/scope/status/security mutation must
   call `authorization.invalidate_user_authorization` in-transaction to bump the user version
   and revoke refresh families.

@@ -1,28 +1,30 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowRight, TrendingUp } from 'lucide-react';
-import type { ForecastRunSummaryRead } from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import LimitBar from '@/components/ui/LimitBar';
-import ChartFrame from '@/components/ui/ChartFrame';
-import SectionCard from '@/components/ui/SectionCard';
-import SubTabs from '@/components/ui/SubTabs';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import CapitalPlanChart from '@/components/basel/charts/CapitalPlanChart';
-import IllustrativeBadge from '@/components/liquidity/IllustrativeBadge';
-import { runComputedAt } from '@/components/liquidity/runData';
-import { useBankContext } from '@/components/shell/BankContext';
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowRight, TrendingUp } from "lucide-react";
+import type { ForecastRunSummaryRead } from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import LimitBar from "@/components/ui/LimitBar";
+import ChartFrame from "@/components/ui/ChartFrame";
+import SectionCard from "@/components/ui/SectionCard";
+import SubTabs from "@/components/ui/SubTabs";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import CapitalPlanChart from "@/components/basel/charts/CapitalPlanChart";
+import IllustrativeBadge from "@/components/liquidity/IllustrativeBadge";
+import { runComputedAt } from "@/components/liquidity/runData";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useCapitalDashboard,
+  useCapitalPlan,
   useForecastRun,
   useForecastRuns,
-} from '@/lib/api/hooks';
-import FloorNotAssessed from '@/components/basel/FloorNotAssessed';
+  useRefreshIlaap,
+} from "@/lib/api/hooks";
+import FloorNotAssessed from "@/components/basel/FloorNotAssessed";
 import {
   assessAgainstFloor,
   floorStatus,
@@ -31,12 +33,17 @@ import {
   labelize,
   num,
   numOrNull,
-} from '@/lib/api/values';
-import { fmtCurrency, fmtPct, regShort } from '@/lib/format';
+} from "@/lib/api/values";
+import { fmtCurrency, fmtPct, regShort } from "@/lib/format";
 
-import { SCENARIO_LABELS } from '@/components/forecasting/lib';
+import { SCENARIO_LABELS } from "@/components/forecasting/lib";
 
-const SCENARIO_ORDER = ['base', 'adverse', 'severely_adverse', 'custom'] as const;
+const SCENARIO_ORDER = [
+  "base",
+  "adverse",
+  "severely_adverse",
+  "custom",
+] as const;
 
 type PathRow = {
   label: string;
@@ -48,52 +55,73 @@ type PathRow = {
 };
 
 const pathColumns: Column<PathRow>[] = [
-  { key: 'year', header: 'Projection year', render: (r) => r.label, width: '24%' },
   {
-    key: 'car',
-    header: 'CAR',
+    key: "year",
+    header: "Projection year",
+    render: (r) => r.label,
+    width: "24%",
+  },
+  {
+    key: "car",
+    header: "CAR",
     numeric: true,
     render: (r) => fmtPct(r.car, 2),
   },
   {
-    key: 'tier1',
-    header: 'Tier 1',
+    key: "tier1",
+    header: "Tier 1",
     numeric: true,
     render: (r) => fmtPct(r.tier1, 2),
   },
   {
-    key: 'cet1',
-    header: 'CET1',
+    key: "cet1",
+    header: "CET1",
     numeric: true,
     render: (r) => fmtPct(r.cet1, 2),
   },
   {
-    key: 'ni',
-    header: 'Net income',
+    key: "ni",
+    header: "Net income",
     numeric: true,
     render: (r) => fmtCurrency(r.netIncome),
   },
   {
-    key: 'assets',
-    header: 'Total assets',
+    key: "assets",
+    header: "Total assets",
     numeric: true,
     render: (r) => fmtCurrency(r.totalAssets),
   },
 ];
 
 export default function CapitalPlanning() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  const dashboardBankId = moduleScope.capitalAggregatedView
+    ? bankId
+    : undefined;
+  const planningBankId = moduleScope.capitalConfidentialView
+    ? bankId
+    : undefined;
+  const forecastBankId = moduleScope.modules?.has("forecasting")
+    ? planningBankId
+    : undefined;
 
-  const dashboard = useCapitalDashboard(bankId, periodId);
-  const forecastRuns = useForecastRuns(bankId, { limit: 100 });
+  const dashboard = useCapitalDashboard(dashboardBankId, periodId);
+  const capitalPlan = useCapitalPlan(planningBankId);
+  const canRefreshIlaap =
+    moduleScope.capitalRun === true &&
+    moduleScope.liquidityMonitoringAccess === true;
+  const refreshIlaap = useRefreshIlaap(canRefreshIlaap ? bankId : undefined);
+  const forecastRuns = useForecastRuns(forecastBankId, { limit: 100 });
 
   // Latest succeeded forecast run per scenario for the selected period.
   const latestByScenario = useMemo(() => {
     const map = new Map<string, ForecastRunSummaryRead>();
     const runs = (forecastRuns.data?.runs ?? [])
-      .filter((r) => r.reportingPeriodId === periodId && r.status === 'succeeded')
+      .filter(
+        (r) => r.reportingPeriodId === periodId && r.status === "succeeded",
+      )
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     for (const run of runs) {
       if (!map.has(run.scenarioCode)) map.set(run.scenarioCode, run);
@@ -102,18 +130,18 @@ export default function CapitalPlanning() {
   }, [forecastRuns.data, periodId]);
 
   const availableScenarios = SCENARIO_ORDER.filter((s) =>
-    latestByScenario.has(s)
+    latestByScenario.has(s),
   );
   const [scenarioChoice, setScenarioChoice] = useState<string | null>(null);
   const activeScenario =
     scenarioChoice && latestByScenario.has(scenarioChoice)
       ? scenarioChoice
-      : availableScenarios[0] ?? null;
+      : (availableScenarios[0] ?? null);
 
   const activeRunId = activeScenario
     ? latestByScenario.get(activeScenario)?.id
     : undefined;
-  const forecastRun = useForecastRun(bankId, activeRunId);
+  const forecastRun = useForecastRun(forecastBankId, activeRunId);
 
   const data = dashboard.data;
   // NEW-51. Same rule as the Basel overview: the CAR ladder is the tenant's
@@ -161,11 +189,11 @@ export default function CapitalPlanning() {
   // must not wear the green edge that reads as "still above the minimum".
   const proCarFloorStatus = floorStatus(assessAgainstFloor(proCar, carMin));
   const proCarStatus =
-    proCarFloorStatus === 'ok' &&
+    proCarFloorStatus === "ok" &&
     proCar !== null &&
     carEarlyWarning !== null &&
     proCar < carEarlyWarning
-      ? 'warn'
+      ? "warn"
       : proCarFloorStatus;
 
   const path = forecastRun.data?.path ?? [];
@@ -189,291 +217,381 @@ export default function CapitalPlanning() {
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Basel Capital', href: '/basel' },
-          { label: 'Planning' },
+          { label: "Modules", href: "/" },
+          { label: "Basel Capital", href: "/basel" },
+          { label: "Planning" },
         ]}
         title="Capital Planning"
         subtitle="Multi-year capital ratio projection from stored forecast runs · what-if planner on the current base"
       />
 
       <QueryBoundary
-        isLoading={dashboard.isLoading || forecastRuns.isLoading}
-        error={dashboard.error ?? forecastRuns.error}
+        isLoading={
+          dashboard.isLoading || capitalPlan.isLoading || forecastRuns.isLoading
+        }
+        error={dashboard.error ?? capitalPlan.error ?? forecastRuns.error}
         onRetry={() => {
-          void dashboard.refetch();
-          void forecastRuns.refetch();
+          if (dashboardBankId) void dashboard.refetch();
+          if (planningBankId) void capitalPlan.refetch();
+          if (forecastBankId) void forecastRuns.refetch();
         }}
       >
-        {data && (
         <div className="px-8 py-6 space-y-6">
-          {/* ------- Forecast-driven projection (real stored runs) ------- */}
-          {availableScenarios.length === 0 ? (
-            <EmptyState
-              Icon={TrendingUp}
-              title="No forecast runs for this period"
-              description="Capital ratio projections come from stored balance-sheet forecast runs. Run a scenario in the Forecasting module to see the five-year CAR, Tier 1, and CET1 path here."
-              action={
-                <Link
-                  href="/forecasting"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
-                >
-                  Open Forecasting
-                  <ArrowRight size={13} aria-hidden />
-                </Link>
-              }
-            />
-          ) : (
-            <>
-              <SubTabs
-                items={availableScenarios.map((s) => ({
-                  key: s,
-                  label: `${SCENARIO_LABELS[s] ?? labelize(s)} scenario`,
-                }))}
-                active={activeScenario ?? ''}
-                onChange={setScenarioChoice}
-              />
-
-              {summary && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <KpiStat
-                    label="Year-5 CAR"
-                    value={fmtPct(num(summary.year5CarPct), 2)}
-                    status={floorStatus(
-                      assessAgainstFloor(numOrNull(summary.year5CarPct), carMin)
-                    )}
-                    hint={
-                      carMin === null
-                        ? 'No capital adequacy minimum on file — compliance not assessed'
-                        : `${regShort()} minimum ${fmtFloorPct(carMin)}`
-                    }
-                  />
-                  <KpiStat
-                    label="Minimum CAR on path"
-                    value={fmtPct(num(summary.minCarPct), 2)}
-                    status={floorStatus(
-                      assessAgainstFloor(numOrNull(summary.minCarPct), carMin)
-                    )}
-                    hint={
-                      carMin === null
-                        ? 'Worst projected year — no minimum on file to assess it against'
-                        : 'Worst projected year'
-                    }
-                  />
-                  <KpiStat
-                    label="Average ROE"
-                    value={fmtPct(num(summary.avgRoePct), 2)}
-                    hint="Across the projection"
-                  />
-                  <KpiStat
-                    label="Cumulative net income"
-                    value={fmtCurrency(num(summary.cumulativeNetIncome))}
-                    hint="Retained earnings feed CET1"
-                  />
-                </div>
-              )}
-
-              <ChartFrame
-                title={`Capital ratio projection — ${
-                  SCENARIO_LABELS[activeScenario ?? ''] ?? labelize(activeScenario ?? '')
-                }`}
-                subtitle="Five-year CAR / Tier 1 / CET1 path from the stored forecast run"
-                height={300}
-                loading={forecastRun.isLoading}
-                footer={
-                  forecastRun.data || carMin === null ? (
-                    <>
-                      {forecastRun.data && (
-                        <span>
-                          Forecast run {forecastRun.data.scenarioCode} · engine{' '}
-                          {forecastRun.data.engineVersion} · created{' '}
-                          {fmtDateUTC(forecastRun.data.createdAt)}
-                        </span>
-                      )}
-                      {carMin === null && (
-                        <span>
-                          {forecastRun.data ? ' · ' : ''}
-                          No capital adequacy minimum resolved for this
-                          institution, so no floor line is drawn.
-                        </span>
-                      )}
-                    </>
-                  ) : undefined
-                }
-              >
-                {chartData.length > 0 ? (
-                  <CapitalPlanChart
-                    data={chartData}
-                    carMin={carMin}
-                    earlyWarning={carEarlyWarning}
-                    earlyWarningLabel={
-                      data?.buffers.carEarlyWarningLabel || 'Early warning'
-                    }
-                    height={300}
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-body text-slate">
-                    {forecastRun.isLoading
-                      ? 'Loading projection…'
-                      : 'No projection path on this run.'}
-                  </div>
-                )}
-              </ChartFrame>
-
-              {pathRows.length > 0 && (
-                <SectionCard
-                  title="Projection detail"
-                  subtitle="Per-year ratios and drivers from the forecast engine"
-                  noPadding
-                  computedAt={runComputedAt(forecastRun.data)}
-                >
-                  <DataTable columns={pathColumns} rows={pathRows} />
-                </SectionCard>
-              )}
-            </>
-          )}
-
-          {/* ------- What-if planner (client-side, illustrative) ------- */}
           <SectionCard
-            title="What-if capital planner"
-            subtitle="Pro-forma ratios recomputed client-side from the latest stored RWA and capital base — not a regulatory calculation"
-            actions={<IllustrativeBadge label="What-if · client-side" />}
-            footer={
-              <span>
-                Base position: RWA {fmtCurrency(totalRwa)} · total
-                capital {fmtCurrency(totalCapital)} · CAR{' '}
-                {fmtPct(currentCar, 2)} (stored values). Sliders apply simple
-                arithmetic on these figures; run a forecast scenario for a
-                governed projection.
-              </span>
+            title="ICAAP and ILAAP governance"
+            subtitle="Capital plans and quarterly liquidity evidence use the institution's scoped authority."
+            actions={
+              canRefreshIlaap && periodId ? (
+                <button
+                  type="button"
+                  className="btn-primary px-3 py-2 text-caption font-medium"
+                  disabled={refreshIlaap.isPending}
+                  onClick={() =>
+                    refreshIlaap.mutate({
+                      reportingPeriodId: periodId,
+                    })
+                  }
+                >
+                  {refreshIlaap.isPending
+                    ? "Refreshing ILAAP…"
+                    : "Refresh ILAAP evidence"}
+                </button>
+              ) : undefined
             }
           >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Sliders */}
-              <div className="space-y-5">
-                <PlannerSlider
-                  label="RWA growth"
-                  value={rwaGrowthPct}
-                  onChange={setRwaGrowthPct}
-                  min={-20}
-                  max={40}
-                  step={1}
-                  display={`${rwaGrowthPct >= 0 ? '+' : ''}${rwaGrowthPct}%`}
-                  hint={`Pro-forma RWA ${fmtCurrency(proRwa)}`}
-                />
-                <PlannerSlider
-                  label="Retained earnings added to CET1"
-                  value={retainedPct}
-                  onChange={setRetainedPct}
-                  min={0}
-                  max={25}
-                  step={0.5}
-                  display={`${retainedPct.toFixed(1)}% of capital`}
-                  hint={fmtCurrency(retained)}
-                />
-                <PlannerSlider
-                  label="New AT1 issuance"
-                  value={at1IssuePct}
-                  onChange={setAt1IssuePct}
-                  min={0}
-                  max={15}
-                  step={0.5}
-                  display={`${at1IssuePct.toFixed(1)}% of capital`}
-                  hint={fmtCurrency(at1New)}
-                />
-                <PlannerSlider
-                  label="New Tier 2 issuance"
-                  value={tier2IssuePct}
-                  onChange={setTier2IssuePct}
-                  min={0}
-                  max={15}
-                  step={0.5}
-                  display={`${tier2IssuePct.toFixed(1)}% of capital`}
-                  hint={fmtCurrency(tier2New)}
-                />
+            <div className="grid gap-4 md:grid-cols-3">
+              <div>
+                <p className="text-caption text-slate">Current plan</p>
+                <p className="mt-1 text-body font-medium text-navy">
+                  {capitalPlan.data?.current
+                    ? `Version ${capitalPlan.data.current.version} · ${labelize(
+                        capitalPlan.data.current.status,
+                      )}`
+                    : "No current plan"}
+                </p>
               </div>
-
-              {/* Pro-forma outcome */}
-              <div className="space-y-5">
-                <div className="grid grid-cols-3 gap-4">
-                  <KpiStat
-                    label="Pro-forma CAR"
-                    value={proCar === null ? 'Not computable' : proCar.toFixed(2)}
-                    unit={proCar === null ? undefined : '%'}
-                    delta={proCar === null ? undefined : proCar - currentCar}
-                    status={proCarStatus}
-                    hint={
-                      proCar === null
-                        ? 'No risk-weighted assets in the base position'
-                        : carMin === null
-                        ? `Now ${fmtPct(currentCar, 2)} · no minimum on file to assess against`
-                        : `Now ${fmtPct(currentCar, 2)}`
-                    }
-                  />
-                  <KpiStat
-                    label="Pro-forma Tier 1"
-                    value={
-                      proTier1Ratio === null
-                        ? 'Not computable'
-                        : proTier1Ratio.toFixed(2)
-                    }
-                    unit={proTier1Ratio === null ? undefined : '%'}
-                    hint={`Now ${fmtPct(num(data?.metrics.tier1RatioPct), 2)}`}
-                  />
-                  <KpiStat
-                    label="Pro-forma CET1"
-                    value={
-                      proCet1Ratio === null
-                        ? 'Not computable'
-                        : proCet1Ratio.toFixed(2)
-                    }
-                    unit={proCet1Ratio === null ? undefined : '%'}
-                    hint={`Now ${fmtPct(num(data?.metrics.cet1RatioPct), 2)}`}
-                  />
-                </div>
-                {proCar === null ? (
-                  <p className="text-caption text-slate leading-relaxed">
-                    The base position carries no risk-weighted assets, so no
-                    pro-forma capital ratio can be worked out and none is shown
-                    against the {regShort()} floors.
-                  </p>
-                ) : carMin === null ? (
-                  <FloorNotAssessed
-                    label="Pro-forma CAR"
-                    value={proCar}
-                    reason="No capital adequacy minimum on file for this institution"
-                  />
-                ) : (
-                  <LimitBar
-                    label={`Pro-forma CAR vs ${regShort()} floors`}
-                    value={proCar}
-                    limit={carMin}
-                    warnAt={carEarlyWarning ?? undefined}
-                    direction="above"
-                    unit="%"
-                    limitLabel={`${regShort()} minimum`}
-                    warnLabel={data?.buffers.carEarlyWarningLabel || 'Early warning'}
-                    format={(v) => v.toFixed(1)}
-                  />
-                )}
-                <p className="text-caption text-slate leading-relaxed">
-                  Pro-forma capital = CET1 {fmtCurrency(proCet1)} + AT1{' '}
-                  {fmtCurrency(at1 + at1New)} + Tier 2{' '}
-                  {fmtCurrency(tier2 + tier2New)} ={' '}
-                  <span className="font-mono text-navy">
-                    {fmtCurrency(proTotal)}
-                  </span>{' '}
-                  over RWA{' '}
-                  <span className="font-mono text-navy">
-                    {fmtCurrency(proRwa)}
-                  </span>
-                  .
+              <div>
+                <p className="text-caption text-slate">Approved plan</p>
+                <p className="mt-1 text-body font-medium text-navy">
+                  {capitalPlan.data?.approved
+                    ? `Version ${capitalPlan.data.approved.version}`
+                    : "No approved plan"}
+                </p>
+              </div>
+              <div>
+                <p className="text-caption text-slate">Latest ILAAP evidence</p>
+                <p className="mt-1 text-body font-medium text-navy">
+                  {capitalPlan.data?.latestIlaap
+                    ? fmtDateUTC(capitalPlan.data.latestIlaap.asOfDate)
+                    : "No snapshot"}
                 </p>
               </div>
             </div>
+            {!canRefreshIlaap ? (
+              <p className="mt-4 text-caption text-slate">
+                Refresh requires both Capital run authority and Liquidity
+                confidential view authority for this institution.
+              </p>
+            ) : null}
+            {refreshIlaap.error ? (
+              <p className="mt-4 text-caption text-critical">
+                {refreshIlaap.error.message}
+              </p>
+            ) : null}
           </SectionCard>
+
+          {data ? (
+            <>
+              {/* ------- Forecast-driven projection (real stored runs) ------- */}
+              {availableScenarios.length === 0 ? (
+                <EmptyState
+                  Icon={TrendingUp}
+                  title="No forecast runs for this period"
+                  description="Capital ratio projections come from stored balance-sheet forecast runs. Run a scenario in the Forecasting module to see the five-year CAR, Tier 1, and CET1 path here."
+                  action={
+                    <Link
+                      href="/forecasting"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+                    >
+                      Open Forecasting
+                      <ArrowRight size={13} aria-hidden />
+                    </Link>
+                  }
+                />
+              ) : (
+                <>
+                  <SubTabs
+                    items={availableScenarios.map((s) => ({
+                      key: s,
+                      label: `${SCENARIO_LABELS[s] ?? labelize(s)} scenario`,
+                    }))}
+                    active={activeScenario ?? ""}
+                    onChange={setScenarioChoice}
+                  />
+
+                  {summary && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <KpiStat
+                        label="Year-5 CAR"
+                        value={fmtPct(num(summary.year5CarPct), 2)}
+                        status={floorStatus(
+                          assessAgainstFloor(
+                            numOrNull(summary.year5CarPct),
+                            carMin,
+                          ),
+                        )}
+                        hint={
+                          carMin === null
+                            ? "No capital adequacy minimum on file — compliance not assessed"
+                            : `${regShort()} minimum ${fmtFloorPct(carMin)}`
+                        }
+                      />
+                      <KpiStat
+                        label="Minimum CAR on path"
+                        value={fmtPct(num(summary.minCarPct), 2)}
+                        status={floorStatus(
+                          assessAgainstFloor(
+                            numOrNull(summary.minCarPct),
+                            carMin,
+                          ),
+                        )}
+                        hint={
+                          carMin === null
+                            ? "Worst projected year — no minimum on file to assess it against"
+                            : "Worst projected year"
+                        }
+                      />
+                      <KpiStat
+                        label="Average ROE"
+                        value={fmtPct(num(summary.avgRoePct), 2)}
+                        hint="Across the projection"
+                      />
+                      <KpiStat
+                        label="Cumulative net income"
+                        value={fmtCurrency(num(summary.cumulativeNetIncome))}
+                        hint="Retained earnings feed CET1"
+                      />
+                    </div>
+                  )}
+
+                  <ChartFrame
+                    title={`Capital ratio projection — ${
+                      SCENARIO_LABELS[activeScenario ?? ""] ??
+                      labelize(activeScenario ?? "")
+                    }`}
+                    subtitle="Five-year CAR / Tier 1 / CET1 path from the stored forecast run"
+                    height={300}
+                    loading={forecastRun.isLoading}
+                    footer={
+                      forecastRun.data || carMin === null ? (
+                        <>
+                          {forecastRun.data && (
+                            <span>
+                              Forecast run {forecastRun.data.scenarioCode} ·
+                              engine {forecastRun.data.engineVersion} · created{" "}
+                              {fmtDateUTC(forecastRun.data.createdAt)}
+                            </span>
+                          )}
+                          {carMin === null && (
+                            <span>
+                              {forecastRun.data ? " · " : ""}
+                              No capital adequacy minimum resolved for this
+                              institution, so no floor line is drawn.
+                            </span>
+                          )}
+                        </>
+                      ) : undefined
+                    }
+                  >
+                    {chartData.length > 0 ? (
+                      <CapitalPlanChart
+                        data={chartData}
+                        carMin={carMin}
+                        earlyWarning={carEarlyWarning}
+                        earlyWarningLabel={
+                          data?.buffers.carEarlyWarningLabel || "Early warning"
+                        }
+                        height={300}
+                      />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-body text-slate">
+                        {forecastRun.isLoading
+                          ? "Loading projection…"
+                          : "No projection path on this run."}
+                      </div>
+                    )}
+                  </ChartFrame>
+
+                  {pathRows.length > 0 && (
+                    <SectionCard
+                      title="Projection detail"
+                      subtitle="Per-year ratios and drivers from the forecast engine"
+                      noPadding
+                      computedAt={runComputedAt(forecastRun.data)}
+                    >
+                      <DataTable columns={pathColumns} rows={pathRows} />
+                    </SectionCard>
+                  )}
+                </>
+              )}
+
+              {/* ------- What-if planner (client-side, illustrative) ------- */}
+              <SectionCard
+                title="What-if capital planner"
+                subtitle="Pro-forma ratios recomputed client-side from the latest stored RWA and capital base — not a regulatory calculation"
+                actions={<IllustrativeBadge label="What-if · client-side" />}
+                footer={
+                  <span>
+                    Base position: RWA {fmtCurrency(totalRwa)} · total capital{" "}
+                    {fmtCurrency(totalCapital)} · CAR {fmtPct(currentCar, 2)}{" "}
+                    (stored values). Sliders apply simple arithmetic on these
+                    figures; run a forecast scenario for a governed projection.
+                  </span>
+                }
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Sliders */}
+                  <div className="space-y-5">
+                    <PlannerSlider
+                      label="RWA growth"
+                      value={rwaGrowthPct}
+                      onChange={setRwaGrowthPct}
+                      min={-20}
+                      max={40}
+                      step={1}
+                      display={`${rwaGrowthPct >= 0 ? "+" : ""}${rwaGrowthPct}%`}
+                      hint={`Pro-forma RWA ${fmtCurrency(proRwa)}`}
+                    />
+                    <PlannerSlider
+                      label="Retained earnings added to CET1"
+                      value={retainedPct}
+                      onChange={setRetainedPct}
+                      min={0}
+                      max={25}
+                      step={0.5}
+                      display={`${retainedPct.toFixed(1)}% of capital`}
+                      hint={fmtCurrency(retained)}
+                    />
+                    <PlannerSlider
+                      label="New AT1 issuance"
+                      value={at1IssuePct}
+                      onChange={setAt1IssuePct}
+                      min={0}
+                      max={15}
+                      step={0.5}
+                      display={`${at1IssuePct.toFixed(1)}% of capital`}
+                      hint={fmtCurrency(at1New)}
+                    />
+                    <PlannerSlider
+                      label="New Tier 2 issuance"
+                      value={tier2IssuePct}
+                      onChange={setTier2IssuePct}
+                      min={0}
+                      max={15}
+                      step={0.5}
+                      display={`${tier2IssuePct.toFixed(1)}% of capital`}
+                      hint={fmtCurrency(tier2New)}
+                    />
+                  </div>
+
+                  {/* Pro-forma outcome */}
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-3 gap-4">
+                      <KpiStat
+                        label="Pro-forma CAR"
+                        value={
+                          proCar === null ? "Not computable" : proCar.toFixed(2)
+                        }
+                        unit={proCar === null ? undefined : "%"}
+                        delta={
+                          proCar === null ? undefined : proCar - currentCar
+                        }
+                        status={proCarStatus}
+                        hint={
+                          proCar === null
+                            ? "No risk-weighted assets in the base position"
+                            : carMin === null
+                              ? `Now ${fmtPct(currentCar, 2)} · no minimum on file to assess against`
+                              : `Now ${fmtPct(currentCar, 2)}`
+                        }
+                      />
+                      <KpiStat
+                        label="Pro-forma Tier 1"
+                        value={
+                          proTier1Ratio === null
+                            ? "Not computable"
+                            : proTier1Ratio.toFixed(2)
+                        }
+                        unit={proTier1Ratio === null ? undefined : "%"}
+                        hint={`Now ${fmtPct(num(data?.metrics.tier1RatioPct), 2)}`}
+                      />
+                      <KpiStat
+                        label="Pro-forma CET1"
+                        value={
+                          proCet1Ratio === null
+                            ? "Not computable"
+                            : proCet1Ratio.toFixed(2)
+                        }
+                        unit={proCet1Ratio === null ? undefined : "%"}
+                        hint={`Now ${fmtPct(num(data?.metrics.cet1RatioPct), 2)}`}
+                      />
+                    </div>
+                    {proCar === null ? (
+                      <p className="text-caption text-slate leading-relaxed">
+                        The base position carries no risk-weighted assets, so no
+                        pro-forma capital ratio can be worked out and none is
+                        shown against the {regShort()} floors.
+                      </p>
+                    ) : carMin === null ? (
+                      <FloorNotAssessed
+                        label="Pro-forma CAR"
+                        value={proCar}
+                        reason="No capital adequacy minimum on file for this institution"
+                      />
+                    ) : (
+                      <LimitBar
+                        label={`Pro-forma CAR vs ${regShort()} floors`}
+                        value={proCar}
+                        limit={carMin}
+                        warnAt={carEarlyWarning ?? undefined}
+                        direction="above"
+                        unit="%"
+                        limitLabel={`${regShort()} minimum`}
+                        warnLabel={
+                          data?.buffers.carEarlyWarningLabel || "Early warning"
+                        }
+                        format={(v) => v.toFixed(1)}
+                      />
+                    )}
+                    <p className="text-caption text-slate leading-relaxed">
+                      Pro-forma capital = CET1 {fmtCurrency(proCet1)} + AT1{" "}
+                      {fmtCurrency(at1 + at1New)} + Tier 2{" "}
+                      {fmtCurrency(tier2 + tier2New)} ={" "}
+                      <span className="font-mono text-navy">
+                        {fmtCurrency(proTotal)}
+                      </span>{" "}
+                      over RWA{" "}
+                      <span className="font-mono text-navy">
+                        {fmtCurrency(proRwa)}
+                      </span>
+                      .
+                    </p>
+                  </div>
+                </div>
+              </SectionCard>
+            </>
+          ) : (
+            <SectionCard
+              title="Aggregated capital projections"
+              subtitle="Projection charts and the illustrative planner are classified separately from the capital-plan register."
+            >
+              <p className="text-body text-slate">
+                CAP aggregated view authority is required to load the ratio,
+                structure, and RWA panels on this page.
+              </p>
+            </SectionCard>
+          )}
         </div>
-        )}
       </QueryBoundary>
     </>
   );

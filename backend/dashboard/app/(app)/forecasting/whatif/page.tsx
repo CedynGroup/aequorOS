@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * What-if Lab — two-panel shock laboratory over the deterministic 5-year
@@ -19,74 +19,75 @@
  * breach, and it never asserts a pass.
  */
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { FlaskConical, Loader2, PlayCircle } from 'lucide-react';
+import { useState } from "react";
+import Link from "next/link";
+import { FlaskConical, Loader2, PlayCircle } from "lucide-react";
 import type {
   ProjectionYearRead,
   RegulatoryRunRead,
   WhatIfResultRead,
   WhatIfShockCode,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import StatusPill from '@/components/ui/StatusPill';
-import EmptyState from '@/components/ui/EmptyState';
-import SectionCard from '@/components/ui/SectionCard';
-import ChartFrame from '@/components/ui/ChartFrame';
-import DeltaBadge from '@/components/ui/DeltaBadge';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import RunProvenance from '@/components/forecasting/RunProvenance';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import StatusPill from "@/components/ui/StatusPill";
+import EmptyState from "@/components/ui/EmptyState";
+import SectionCard from "@/components/ui/SectionCard";
+import ChartFrame from "@/components/ui/ChartFrame";
+import DeltaBadge from "@/components/ui/DeltaBadge";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import RunProvenance from "@/components/forecasting/RunProvenance";
 import ScenarioLinesChart, {
   type ScenarioPoint,
-} from '@/components/forecasting/charts/ScenarioLinesChart';
-import { ASSUMPTION_FIELDS } from '@/components/forecasting/lib';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useSdiCapitalSummary } from '@/components/basel/sdiHooks';
+} from "@/components/forecasting/charts/ScenarioLinesChart";
+import { ASSUMPTION_FIELDS } from "@/components/forecasting/lib";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useSdiCapitalSummary } from "@/components/basel/sdiHooks";
 import {
   useCapitalDashboard,
   useRegulatoryRun,
   useRegulatoryRuns,
   useRunWhatIf,
-} from '@/lib/api/hooks';
+} from "@/lib/api/hooks";
 import {
   assessAgainstFloor,
   floorStatus,
   fmtFloorPct,
   num,
   numOrNull,
-} from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from '@/lib/format';
+} from "@/lib/api/values";
+import { fmtCurrency, fmtCurrencySigned, fmtPct, regShort } from "@/lib/format";
 
 // ---------------------------------------------------------------------------
 // Shock library — the four shock codes the what-if endpoint accepts.
 // ---------------------------------------------------------------------------
 
-const SHOCKS: { code: WhatIfShockCode; label: string; description: string }[] = [
-  {
-    code: 'rate_shock_up_400',
-    label: 'Interest rate shock +400bps',
-    description:
-      'Sustained policy tightening — funding costs reprice faster than the loan book.',
-  },
-  {
-    code: 'cedi_depreciation_20',
-    label: 'Local-currency depreciation 20%',
-    description:
-      'Local-currency depreciation inflates FX-linked risk-weighted assets across the horizon.',
-  },
-  {
-    code: 'default_spike',
-    label: 'Loan default spike (2.5× credit losses)',
-    description:
-      'Sectoral concentration risk materializes — annual credit losses multiply 2.5×.',
-  },
-  {
-    code: 'mpr_cut_200',
-    label: 'Policy rate cut −200bps',
-    description:
-      'Easing cycle compresses the net interest margin as assets reprice downward.',
-  },
-];
+const SHOCKS: { code: WhatIfShockCode; label: string; description: string }[] =
+  [
+    {
+      code: "rate_shock_up_400",
+      label: "Interest rate shock +400bps",
+      description:
+        "Sustained policy tightening — funding costs reprice faster than the loan book.",
+    },
+    {
+      code: "cedi_depreciation_20",
+      label: "Local-currency depreciation 20%",
+      description:
+        "Local-currency depreciation inflates FX-linked risk-weighted assets across the horizon.",
+    },
+    {
+      code: "default_spike",
+      label: "Loan default spike (2.5× credit losses)",
+      description:
+        "Sectoral concentration risk materializes — annual credit losses multiply 2.5×.",
+    },
+    {
+      code: "mpr_cut_200",
+      label: "Policy rate cut −200bps",
+      description:
+        "Easing cycle compresses the net interest margin as assets reprice downward.",
+    },
+  ];
 
 // ---------------------------------------------------------------------------
 // Normalized view — fresh results and stored regulatory runs carry the same
@@ -176,10 +177,10 @@ function fromResult(result: WhatIfResultRead): WhatIfView | null {
       netIncome: comparison(year5.netIncome),
     },
     baseAssumptions: assumptionMap(
-      result.baseAssumptions as unknown as Record<string, unknown>
+      result.baseAssumptions as unknown as Record<string, unknown>,
     ),
     shockedAssumptions: assumptionMap(
-      result.shockedAssumptions as unknown as Record<string, unknown>
+      result.shockedAssumptions as unknown as Record<string, unknown>,
     ),
     provenance: {
       runId: result.runId,
@@ -239,10 +240,10 @@ function fromStoredRun(run: RegulatoryRunRead): WhatIfView | null {
       netIncomeDelta: num(d.net_income_delta),
     })),
     year5: {
-      carPct: comparison('car_pct'),
-      lcrPct: comparison('lcr_pct'),
-      nsfrPct: comparison('nsfr_pct'),
-      netIncome: comparison('net_income'),
+      carPct: comparison("car_pct"),
+      lcrPct: comparison("lcr_pct"),
+      nsfrPct: comparison("nsfr_pct"),
+      netIncome: comparison("net_income"),
     },
     baseAssumptions: assumptionMap(metrics.base_assumptions),
     shockedAssumptions: assumptionMap(metrics.shocked_assumptions),
@@ -260,8 +261,8 @@ function fromStoredRun(run: RegulatoryRunRead): WhatIfView | null {
 
 const WHATIF_METRICS = [
   {
-    code: 'carPct',
-    label: 'CAR',
+    code: "carPct",
+    label: "CAR",
     fmt: (v: number) => fmtPct(v, 2),
     tick: (v: number) => `${Math.round(v)}%`,
     // NEW-37: the CAR floor is tenant data, not a constant — it is resolved at
@@ -271,35 +272,35 @@ const WHATIF_METRICS = [
     thresholdLabel: undefined,
   },
   {
-    code: 'lcrPct',
-    label: 'LCR',
+    code: "lcrPct",
+    label: "LCR",
     fmt: (v: number) => fmtPct(v, 1),
     tick: (v: number) => `${Math.round(v)}%`,
     // 100% is the BCBS 238 standard, not a Bank of Ghana requirement — the
     // regulator has published no LCR minimum, so the line must be attributed
     // to Basel (README "Regulatory attribution rules"). Same for NSFR.
     threshold: 100,
-    thresholdLabel: 'Basel minimum 100%',
+    thresholdLabel: "Basel minimum 100%",
   },
   {
-    code: 'nsfrPct',
-    label: 'NSFR',
+    code: "nsfrPct",
+    label: "NSFR",
     fmt: (v: number) => fmtPct(v, 1),
     tick: (v: number) => `${Math.round(v)}%`,
     threshold: 100,
-    thresholdLabel: 'Basel minimum 100%',
+    thresholdLabel: "Basel minimum 100%",
   },
   {
-    code: 'netIncome',
-    label: 'Net income',
+    code: "netIncome",
+    label: "Net income",
     fmt: (v: number) => fmtCurrency(v),
     tick: (v: number) => fmtCurrency(v, undefined, { decimals: 1 }),
     threshold: undefined,
     thresholdLabel: undefined,
   },
   {
-    code: 'totalAssets',
-    label: 'Total assets',
+    code: "totalAssets",
+    label: "Total assets",
     fmt: (v: number) => fmtCurrency(v),
     tick: (v: number) => fmtCurrency(v, undefined, { decimals: 1 }),
     threshold: undefined,
@@ -307,7 +308,7 @@ const WHATIF_METRICS = [
   },
 ] as const;
 
-type WhatIfMetricCode = (typeof WHATIF_METRICS)[number]['code'];
+type WhatIfMetricCode = (typeof WHATIF_METRICS)[number]["code"];
 
 /**
  * The lowest CAR the engine actually COMPUTED across a projected path.
@@ -328,7 +329,7 @@ export default function WhatIfLab() {
   const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
-  const isSdi = moduleScope.institutionClass === 'sdi';
+  const isSdi = moduleScope.institutionClass === "sdi";
 
   // ---- The CAR floor (NEW-37) -------------------------------------------
   // Bank: the capital module's own configured minimum, the same field the limit
@@ -336,29 +337,41 @@ export default function WhatIfLab() {
   // floor. Neither is loaded for the other regime, and neither carries a
   // fallback — an unresolved floor stays null and nothing here claims a verdict.
   const capital = useCapitalDashboard(
-    moduleScope.isResolved && !isSdi ? bankId : undefined
+    moduleScope.isResolved && moduleScope.capitalAggregatedView && !isSdi
+      ? bankId
+      : undefined,
   );
-  const sdiCapital = useSdiCapitalSummary(isSdi ? bankId : undefined);
+  const sdiCapital = useSdiCapitalSummary(
+    isSdi && moduleScope.capitalAggregatedView ? bankId : undefined,
+  );
   const carFloorPct = isSdi
     ? numOrNull(sdiCapital.data?.car_min_pct)
     : numOrNull(capital.data?.buffers.carMinPct);
 
-  const [activeShock, setActiveShock] = useState<WhatIfShockCode>(
-    'rate_shock_up_400'
-  );
+  const [activeShock, setActiveShock] =
+    useState<WhatIfShockCode>("rate_shock_up_400");
 
   // Latest stored run per shock, for reload on mount (unchanged wiring).
-  const runsQuery = useRegulatoryRuns(bankId, { module: 'whatif', limit: 50 });
+  const runsQuery = useRegulatoryRuns(bankId, { module: "whatif", limit: 50 });
   const latestIds = new Map<string, string>();
   for (const run of runsQuery.data?.runs ?? []) {
     if (!latestIds.has(run.scenarioCode)) {
       latestIds.set(run.scenarioCode, run.id);
     }
   }
-  const storedRate = useRegulatoryRun(bankId, latestIds.get('rate_shock_up_400'));
-  const storedCedi = useRegulatoryRun(bankId, latestIds.get('cedi_depreciation_20'));
-  const storedDefault = useRegulatoryRun(bankId, latestIds.get('default_spike'));
-  const storedMpr = useRegulatoryRun(bankId, latestIds.get('mpr_cut_200'));
+  const storedRate = useRegulatoryRun(
+    bankId,
+    latestIds.get("rate_shock_up_400"),
+  );
+  const storedCedi = useRegulatoryRun(
+    bankId,
+    latestIds.get("cedi_depreciation_20"),
+  );
+  const storedDefault = useRegulatoryRun(
+    bankId,
+    latestIds.get("default_spike"),
+  );
+  const storedMpr = useRegulatoryRun(bankId, latestIds.get("mpr_cut_200"));
   const storedByShock: Record<string, RegulatoryRunRead | undefined> = {
     rate_shock_up_400: storedRate.data,
     cedi_depreciation_20: storedCedi.data,
@@ -372,7 +385,7 @@ export default function WhatIfLab() {
   >({});
   const runWhatIf = useRunWhatIf(bankId);
   const pendingShock = runWhatIf.isPending
-    ? runWhatIf.variables?.shockCode ?? null
+    ? (runWhatIf.variables?.shockCode ?? null)
     : null;
 
   const runShock = (shockCode: WhatIfShockCode) => {
@@ -382,7 +395,7 @@ export default function WhatIfLab() {
       {
         onSuccess: (result) =>
           setFreshResults((prev) => ({ ...prev, [result.shockCode]: result })),
-      }
+      },
     );
   };
 
@@ -400,22 +413,22 @@ export default function WhatIfLab() {
    * failures are data (e.g. balance_sheet_infeasible), never a blank screen. */
   const failureFor = (code: WhatIfShockCode) => {
     const fresh = freshResults[code];
-    if (fresh && fresh.status === 'failed') {
+    if (fresh && fresh.status === "failed") {
       return {
-        code: fresh.error?.code ?? 'run_failed',
+        code: fresh.error?.code ?? "run_failed",
         message:
           fresh.error?.message ??
-          'The what-if projection failed. Review the run inputs and retry.',
+          "The what-if projection failed. Review the run inputs and retry.",
         runId: fresh.runId,
       };
     }
     const stored = storedByShock[code];
-    if (stored && stored.status === 'failed') {
+    if (stored && stored.status === "failed") {
       return {
-        code: stored.error?.code ?? 'run_failed',
+        code: stored.error?.code ?? "run_failed",
         message:
           stored.error?.message ??
-          'The what-if projection failed. Review the run inputs and retry.',
+          "The what-if projection failed. Review the run inputs and retry.",
         runId: stored.id,
       };
     }
@@ -430,9 +443,9 @@ export default function WhatIfLab() {
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Balance Sheet Forecasting', href: '/forecasting' },
-          { label: 'What-if Lab' },
+          { label: "Modules", href: "/" },
+          { label: "Balance Sheet Forecasting", href: "/forecasting" },
+          { label: "What-if Lab" },
         ]}
         title="What-if Lab"
         subtitle="Deterministic macro shocks re-projected against the unshocked base run on identical canonical inputs"
@@ -460,14 +473,23 @@ export default function WhatIfLab() {
                 {activeFailure.message}
               </p>
               <p className="mt-2 text-caption text-slate">
-                Engine diagnostic <code className="font-mono">{activeFailure.code}</code>
-                {' · '}run <code className="font-mono">{activeFailure.runId.slice(0, 8)}</code>
-                {' — '}adjust the assumptions in the{' '}
-                <Link href="/forecasting/scenario" className="text-action hover:underline">
+                Engine diagnostic{" "}
+                <code className="font-mono">{activeFailure.code}</code>
+                {" · "}run{" "}
+                <code className="font-mono">
+                  {activeFailure.runId.slice(0, 8)}
+                </code>
+                {" — "}adjust the assumptions in the{" "}
+                <Link
+                  href="/forecasting/scenario"
+                  className="text-action hover:underline"
+                >
                   Scenario Builder
-                </Link>{' '}
+                </Link>{" "}
                 or choose a milder shock, then run again.
-                {activeView ? ' The last successful projection is shown below.' : ''}
+                {activeView
+                  ? " The last successful projection is shown below."
+                  : ""}
               </p>
             </div>
           )}
@@ -493,7 +515,7 @@ export default function WhatIfLab() {
                       ? null
                       : assessAgainstFloor(
                           lowestComputedCar(view.shockedPath),
-                          carFloorPct
+                          carFloorPct,
                         );
                   const carStatus =
                     carAssessment === null ? null : floorStatus(carAssessment);
@@ -505,8 +527,8 @@ export default function WhatIfLab() {
                       aria-pressed={isActive}
                       className={`w-full text-left rounded-md border p-3.5 transition-colors ${
                         isActive
-                          ? 'border-action bg-action-light/40'
-                          : 'border-border-light bg-surface-raised hover:border-border'
+                          ? "border-action bg-action-light/40"
+                          : "border-border-light bg-surface-raised hover:border-border"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -515,11 +537,13 @@ export default function WhatIfLab() {
                         </p>
                         {isRunning ? (
                           <StatusPill tone="pending">Running</StatusPill>
-                        ) : carStatus === 'crit' ? (
+                        ) : carStatus === "crit" ? (
                           <StatusPill tone="critical">CAR breach</StatusPill>
-                        ) : carStatus === 'ok' ? (
-                          <StatusPill tone="success">CAR clears floor</StatusPill>
-                        ) : carStatus === 'warn' ? (
+                        ) : carStatus === "ok" ? (
+                          <StatusPill tone="success">
+                            CAR clears floor
+                          </StatusPill>
+                        ) : carStatus === "warn" ? (
                           <StatusPill tone="amber">CAR not assessed</StatusPill>
                         ) : (
                           <StatusPill tone="slate">Not run</StatusPill>
@@ -530,10 +554,10 @@ export default function WhatIfLab() {
                       </p>
                       {view && (
                         <p className="mt-2 text-caption text-slate">
-                          Y5 CAR{' '}
+                          Y5 CAR{" "}
                           <span className="font-mono tnum text-navy">
                             {fmtPct(view.year5.carPct.shocked, 2)}
-                          </span>{' '}
+                          </span>{" "}
                           <DeltaBadge
                             value={view.year5.carPct.delta}
                             suffix=" pp"
@@ -556,7 +580,7 @@ export default function WhatIfLab() {
                   ) : (
                     <PlayCircle size={13} aria-hidden />
                   )}
-                  {activeView ? 'Re-run' : 'Run'} {activeMeta.label}
+                  {activeView ? "Re-run" : "Run"} {activeMeta.label}
                 </button>
 
                 <p className="text-caption text-slate leading-relaxed">
@@ -580,8 +604,8 @@ export default function WhatIfLab() {
                   Icon={FlaskConical}
                   title={
                     pendingShock === activeShock
-                      ? 'Running shock projection…'
-                      : 'Shock not yet run for this period'
+                      ? "Running shock projection…"
+                      : "Shock not yet run for this period"
                   }
                   description={`Run “${activeMeta.label}” to compare the shocked 5-year path against the deterministic base projection on identical canonical inputs.`}
                 />
@@ -614,15 +638,15 @@ function ShockResult({
   /** Resolved CAR minimum, or null when none is on file (NEW-37). */
   carFloorPct: number | null;
 }) {
-  const [metricCode, setMetricCode] = useState<WhatIfMetricCode>('carPct');
+  const [metricCode, setMetricCode] = useState<WhatIfMetricCode>("carPct");
   const metric = WHATIF_METRICS.find((m) => m.code === metricCode)!;
 
   // CAR's reference line is the resolved floor, never a literal. Unresolved ⇒
   // no line at all, so the chart cannot imply a threshold it does not know.
   const threshold: number | undefined =
-    metricCode === 'carPct' ? carFloorPct ?? undefined : metric.threshold;
+    metricCode === "carPct" ? (carFloorPct ?? undefined) : metric.threshold;
   const thresholdLabel: string | undefined =
-    metricCode === 'carPct'
+    metricCode === "carPct"
       ? carFloorPct === null
         ? undefined
         : `${regShort()} minimum ${fmtFloorPct(carFloorPct)}`
@@ -644,7 +668,7 @@ function ShockResult({
     shocked: view.shockedAssumptions[field.apiKey],
   })).filter(
     (d) =>
-      d.base !== undefined && d.shocked !== undefined && d.base !== d.shocked
+      d.base !== undefined && d.shocked !== undefined && d.base !== d.shocked,
   );
 
   return (
@@ -681,7 +705,7 @@ function ShockResult({
       <ChartFrame
         title="Base vs shocked path"
         subtitle={
-          metricCode === 'carPct' && carFloorPct === null
+          metricCode === "carPct" && carFloorPct === null
             ? `${shockLabel} · both paths persisted on the what-if run · no capital adequacy minimum on file, so no floor is drawn`
             : `${shockLabel} · both paths persisted on the what-if run`
         }
@@ -710,8 +734,8 @@ function ShockResult({
         <ScenarioLinesChart
           data={chartData}
           series={[
-            { key: 'base', name: 'Base', colorIndex: 0 },
-            { key: 'shocked', name: 'Shocked', colorIndex: 3, dashed: true },
+            { key: "base", name: "Base", colorIndex: 0 },
+            { key: "shocked", name: "Shocked", colorIndex: 3, dashed: true },
           ]}
           valueFormatter={metric.fmt}
           tickFormatter={metric.tick}
@@ -746,10 +770,21 @@ function ShockResult({
                       key={d.year}
                       className="border-b border-border-light last:border-b-0"
                     >
-                      <td className="px-4 py-2 font-medium text-navy">Y{d.year}</td>
-                      <DeltaCell value={d.carDeltaPp} fmt={(v) => v.toFixed(2)} />
-                      <DeltaCell value={d.lcrDeltaPp} fmt={(v) => v.toFixed(2)} />
-                      <DeltaCell value={d.nsfrDeltaPp} fmt={(v) => v.toFixed(2)} />
+                      <td className="px-4 py-2 font-medium text-navy">
+                        Y{d.year}
+                      </td>
+                      <DeltaCell
+                        value={d.carDeltaPp}
+                        fmt={(v) => v.toFixed(2)}
+                      />
+                      <DeltaCell
+                        value={d.lcrDeltaPp}
+                        fmt={(v) => v.toFixed(2)}
+                      />
+                      <DeltaCell
+                        value={d.nsfrDeltaPp}
+                        fmt={(v) => v.toFixed(2)}
+                      />
                       <DeltaCell
                         value={d.netIncomeDelta}
                         fmt={(v) => fmtCurrency(Math.abs(v))}
@@ -802,12 +837,14 @@ function ShockResult({
                       <td className="px-4 py-2 text-right">
                         <DeltaBadge
                           value={shocked - base}
-                          suffix={field.unit.trim() === 'pp' ? ' pp' : field.unit}
+                          suffix={
+                            field.unit.trim() === "pp" ? " pp" : field.unit
+                          }
                           decimals={2}
                           invert={
-                            field.key === 'creditLossRatePct' ||
-                            field.key === 'costToIncomePct' ||
-                            field.key === 'fxDepreciationPct'
+                            field.key === "creditLossRatePct" ||
+                            field.key === "costToIncomePct" ||
+                            field.key === "fxDepreciationPct"
                           }
                         />
                       </td>
@@ -827,7 +864,7 @@ function ComparisonCell({
   label,
   comparison,
   fmt,
-  deltaSuffix = '',
+  deltaSuffix = "",
   currencyDelta = false,
 }: {
   label: string;
@@ -849,13 +886,17 @@ function ComparisonCell({
         {currencyDelta ? (
           <span
             className={`font-mono font-medium tnum ${
-              comparison.delta < 0 ? 'text-critical' : 'text-success'
+              comparison.delta < 0 ? "text-critical" : "text-success"
             }`}
           >
             {fmtCurrencySigned(comparison.delta)}
           </span>
         ) : (
-          <DeltaBadge value={comparison.delta} suffix={deltaSuffix} decimals={2} />
+          <DeltaBadge
+            value={comparison.delta}
+            suffix={deltaSuffix}
+            decimals={2}
+          />
         )}
       </p>
     </div>
@@ -872,12 +913,12 @@ function DeltaCell({
   signed?: boolean;
 }) {
   const display = signed
-    ? `${value >= 0 ? '+' : '-'}${fmt(value)}`
-    : `${value >= 0 ? '+' : ''}${fmt(value)}`;
+    ? `${value >= 0 ? "+" : "-"}${fmt(value)}`
+    : `${value >= 0 ? "+" : ""}${fmt(value)}`;
   return (
     <td
       className={`px-4 py-2 text-right font-mono tnum ${
-        value < 0 ? 'text-critical' : value > 0 ? 'text-success' : 'text-slate'
+        value < 0 ? "text-critical" : value > 0 ? "text-success" : "text-slate"
       }`}
     >
       {display}

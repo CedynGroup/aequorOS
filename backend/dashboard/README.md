@@ -39,6 +39,9 @@ and dynamic detail routes. The route groups under `app/(app)/`:
 `app/inspect` is the tenant inspector; `app/api/*` holds the server-only route
 handlers for attestation step-up, auth, and impersonation cookies.
 
+Capital navigation, planning, and ILAAP access requirements are documented in
+[Capital dashboard access](../docs/capital_enforcement_rollout.md#dashboard-access).
+
 ### What is deliberately NOT here
 
 - **No mock data layer.** There is no `lib/data/` module. If a screen has

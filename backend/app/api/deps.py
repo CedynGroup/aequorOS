@@ -11,6 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import security
+from app.core.authorization import (
+    ConditionCheck,
+    InstitutionScope,
+    Module,
+    Permission,
+    ResourceLocator,
+    Sensitivity,
+)
 from app.core.config import get_settings
 from app.core.observability import authorization_denied, cross_tenant_attempt
 from app.db.session import get_sessionmaker
@@ -55,6 +63,12 @@ class LiquidityMonitoringAccess:
 
 @dataclass(frozen=True)
 class IntegrationPushAccess:
+    ctx: TenantContext
+    bank: Bank
+
+
+@dataclass(frozen=True)
+class InstitutionPermissionAccess:
     ctx: TenantContext
     bank: Bank
 
@@ -277,6 +291,10 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
     {
         "require_account_administration",
         "require_integration_push_ingest",
+        "require_capital_run",
+        "require_capital_plan_write",
+        "require_capital_plan_approve",
+        "require_ilaap_refresh",
         "require_grant_administration",
         "require_role_admin",
         "require_role_approver",
@@ -792,6 +810,264 @@ def require_integration_push_ingest(
     return IntegrationPushAccess(ctx=ctx, bank=bank)
 
 
+def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is explicit
+    request: Request,
+    db: DbSession,
+    ctx: TenantContext,
+    *,
+    module: Module,
+    sensitivity: Sensitivity,
+    permission: Permission,
+    surface: str,
+    detail: str,
+    conditions: tuple[ConditionCheck, ...] = (),
+    bank: Bank | None = None,
+) -> InstitutionPermissionAccess:
+    """Require one complete active binding for an exact tenant institution."""
+
+    from app.services import authorization as authorization_service  # noqa: PLC0415
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    resolved_bank = bank or db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    if resolved_bank is None:
+        cross_tenant_attempt(
+            reason="bank_not_visible_to_tenant",
+            organization_id=ctx.organization_id,
+            bank_id=bank_id,
+            module=module.value,
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    if ctx.actor_user_id is None:
+        authorization_denied(
+            reason="scoped_binding_principal_required",
+            organization_id=ctx.organization_id,
+            bank_id=resolved_bank.id,
+            module=module.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+    principal = authorization_service.principal_locator(ctx)
+    resource = ResourceLocator(
+        ctx.organization_id,
+        InstitutionScope.INSTITUTION,
+        resolved_bank.id,
+        module,
+        sensitivity,
+    )
+    try:
+        decision = authorization_service.evaluate_permission(
+            db,
+            principal,
+            permission,
+            resource,
+            conditions=conditions,
+        )
+    except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
+        authorization_service.record_binding_evaluation_failure(
+            principal,
+            permission,
+            resource,
+            surface=surface,
+            error=exc,
+        )
+        authorization_denied(
+            reason="binding_evaluation_failed",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            bank_id=resolved_bank.id,
+            module=module.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail) from exc
+
+    authorization_service.record_binding_decision(
+        decision,
+        surface=surface,
+        severity="info" if decision.allowed else "warning",
+    )
+    if not decision.allowed:
+        authorization_denied(
+            reason=decision.reason,
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            bank_id=resolved_bank.id,
+            module=module.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+    return InstitutionPermissionAccess(ctx=ctx, bank=resolved_bank)
+
+
+def require_capital_aggregated_view(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.AGGREGATED,
+        permission=Permission.VIEW,
+        surface="capital_aggregated_view",
+        detail="Capital access requires an active scoped binding.",
+    )
+
+
+def require_capital_confidential_view(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="capital_confidential_view",
+        detail="Capital access requires an active scoped binding.",
+    )
+
+
+def require_capital_restricted_view(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="capital_restricted_view",
+        detail="Capital assurance access requires an active scoped binding.",
+    )
+
+
+def require_capital_run(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="capital_run",
+        detail="Running Capital calculations requires an active scoped binding.",
+    )
+
+
+def require_capital_plan_write(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> InstitutionPermissionAccess:
+    from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    if bank is None:
+        return _require_institution_permission(
+            request,
+            db,
+            ctx,
+            module=Module.CAPITAL,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+            permission=Permission.CREATE,
+            surface="capital_plan_create",
+            detail="Changing a capital plan requires an active scoped binding.",
+        )
+    permission = capital_plan.required_draft_permission(db, ctx, bank)
+    return _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=permission,
+        surface=f"capital_plan_{permission.value}",
+        detail="Changing a capital plan requires an active scoped binding.",
+        bank=bank,
+    )
+
+
+def require_capital_plan_approve(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> InstitutionPermissionAccess:
+    from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    access = _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.APPROVE,
+        surface="capital_plan_approve",
+        detail="Approving a capital plan requires an active scoped binding.",
+        conditions=capital_plan.maker_checker_conditions(
+            db,
+            ctx,
+            bank_id,
+        ),
+    )
+    return access
+
+
+def require_ilaap_refresh(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> InstitutionPermissionAccess:
+    """Require independent CAP/run and LIQ/view decisions before ILAAP storage."""
+
+    capital_access = _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="ilaap_refresh_capital",
+        detail="Refreshing ILAAP requires Capital run and Liquidity view authority.",
+    )
+    _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="ilaap_refresh_liquidity",
+        detail="Refreshing ILAAP requires Capital run and Liquidity view authority.",
+        bank=capital_access.bank,
+    )
+    return capital_access
+
+
 def get_approver_tenant_context(
     principal: Annotated[TenantContext, Depends(get_mutation_tenant_context)],
 ) -> TenantContext:
@@ -824,6 +1100,21 @@ LiquidityMonitoringResource = Annotated[
     LiquidityMonitoringAccess, Depends(require_liquidity_monitoring_view)
 ]
 IntegrationPushResource = Annotated[IntegrationPushAccess, Depends(require_integration_push_ingest)]
+CapitalAggregatedView = Annotated[
+    InstitutionPermissionAccess, Depends(require_capital_aggregated_view)
+]
+CapitalConfidentialView = Annotated[
+    InstitutionPermissionAccess, Depends(require_capital_confidential_view)
+]
+CapitalRestrictedView = Annotated[
+    InstitutionPermissionAccess, Depends(require_capital_restricted_view)
+]
+CapitalRun = Annotated[InstitutionPermissionAccess, Depends(require_capital_run)]
+CapitalPlanWrite = Annotated[InstitutionPermissionAccess, Depends(require_capital_plan_write)]
+CapitalPlanApproveAccess = Annotated[
+    InstitutionPermissionAccess, Depends(require_capital_plan_approve)
+]
+IlaapRefreshAccess = Annotated[InstitutionPermissionAccess, Depends(require_ilaap_refresh)]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 
 

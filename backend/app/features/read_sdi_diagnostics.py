@@ -14,7 +14,13 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
-from app.api.deps import DbSession, Tenant, TenantContext
+from app.api.deps import (
+    CapitalAggregatedView,
+    CapitalRestrictedView,
+    DbSession,
+    Tenant,
+    TenantContext,
+)
 from app.models import Bank, CanonicalPosition
 from app.schemas.sdi import (
     CapitalCheckRead,
@@ -103,12 +109,13 @@ def get_sdi_readiness(
 def get_sdi_capital_checks(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CapitalAggregatedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> SdiCapitalChecksRead:
     """The simplified-capital checks: minimum paid-up capital + statutory-reserve-
     fund adequacy, with provenance + confirmation status (docs/sdi.md §4.2)."""
-    bank = banks_service.resolve_bank_reference(db, ctx, bank_id)
+    ctx = access.ctx
+    bank = access.bank
     when = _effective_as_of(db, ctx, bank, as_of)
     results = [
         sdi_capital_checks.check_paid_up_capital(db, ctx, bank, when),
@@ -236,7 +243,7 @@ def get_sdi_loan_classification(
 def get_sdi_capital_summary(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CapitalAggregatedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> SdiCapitalSummaryRead:
     """The live s.29 capital-adequacy ratio: CAR = Net Own Funds ÷ Risk-Weighted
@@ -244,7 +251,8 @@ def get_sdi_capital_summary(
     + position data (the Basel live engine cannot serve an SDI); risk weights come
     from the simplified control-plane buckets, unconfirmed ones flagged (docs/sdi.md
     §4.2)."""
-    bank = banks_service.resolve_bank_reference(db, ctx, bank_id)
+    ctx = access.ctx
+    bank = access.bank
     when = _effective_as_of(db, ctx, bank, as_of)
     summary = sdi_capital.compute_sdi_capital_summary(db, ctx, bank, when)
     return SdiCapitalSummaryRead(
@@ -308,12 +316,13 @@ def _capital_history_point_read(
 def get_sdi_capital_assurance(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CapitalRestrictedView,
     as_of: Annotated[date | None, Query()] = None,
     history_limit: Annotated[int, Query(ge=1, le=60)] = 12,
 ) -> SdiCapitalAssuranceRead:
     """Evidence-aware SDI capital history, reconciliations, and filing blockers."""
-    bank = banks_service.resolve_bank_reference(db, ctx, bank_id)
+    ctx = access.ctx
+    bank = access.bank
     when = _effective_as_of(db, ctx, bank, as_of)
     assurance = sdi_capital_assurance.get_sdi_capital_assurance(
         db, ctx, bank, when, history_limit=history_limit

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Stress board-pack composer (docs/stress.md §4 item 8). Composes a board-ready
@@ -17,17 +17,20 @@
  * amber tile and a caption that names the reason.
  */
 
-import { useMemo, useState } from 'react';
-import { Printer } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import SectionCard from '@/components/ui/SectionCard';
-import KpiStat from '@/components/ui/KpiStat';
-import StatusPill from '@/components/ui/StatusPill';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import ChartFrame from '@/components/ui/ChartFrame';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useSdiCapitalSummary, useSdiLiquidityPosition } from '@/components/basel/sdiHooks';
+import { useMemo, useState } from "react";
+import { Printer } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import SectionCard from "@/components/ui/SectionCard";
+import KpiStat from "@/components/ui/KpiStat";
+import StatusPill from "@/components/ui/StatusPill";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import ChartFrame from "@/components/ui/ChartFrame";
+import { useBankContext } from "@/components/shell/BankContext";
+import {
+  useSdiCapitalSummary,
+  useSdiLiquidityPosition,
+} from "@/components/basel/sdiHooks";
 import {
   assessAgainstFloor,
   floorNotAssessedReason,
@@ -38,33 +41,38 @@ import {
   numOrNull,
   fmtDateUTC,
   shortId,
-} from '@/lib/api/values';
-import { useEnterpriseStressRegistry, useMacroScenarios } from '@/components/stress/hooks';
-import ProjectionPaths from '@/components/stress/charts/ProjectionPaths';
-import DriverWaterfall from '@/components/stress/charts/DriverWaterfall';
-import ScenarioComparison from '@/components/stress/ScenarioComparison';
-import ManagementActionsPanel from '@/components/stress/ManagementActionsPanel';
-import AppendixIITables from '@/components/stress/AppendixIITables';
+} from "@/lib/api/values";
+import {
+  useEnterpriseStressRegistry,
+  useMacroScenarios,
+} from "@/components/stress/hooks";
+import ProjectionPaths from "@/components/stress/charts/ProjectionPaths";
+import DriverWaterfall from "@/components/stress/charts/DriverWaterfall";
+import ScenarioComparison from "@/components/stress/ScenarioComparison";
+import ManagementActionsPanel from "@/components/stress/ManagementActionsPanel";
+import AppendixIITables from "@/components/stress/AppendixIITables";
 
 export default function StressBoardPack() {
   const { bank, period, periods, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
-  const isSdi = moduleScope.institutionClass === 'sdi';
+  const isSdi = moduleScope.institutionClass === "sdi";
   const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bankId : undefined);
-  const sdiCapital = useSdiCapitalSummary(isSdi ? bankId : undefined);
+  const sdiCapital = useSdiCapitalSummary(
+    isSdi && moduleScope.capitalAggregatedView ? bankId : undefined,
+  );
 
-  const approved = useMacroScenarios({ status: 'approved' });
+  const approved = useMacroScenarios({ status: "approved" });
   const scenarioIds = useMemo(
     () => (approved.data?.scenarios ?? []).map((s) => s.id),
-    [approved.data]
+    [approved.data],
   );
   const registry = useEnterpriseStressRegistry(bankId, periodId, scenarioIds);
   const runs = useMemo(() => registry.data ?? [], [registry.data]);
 
-  const [selectedRunId, setSelectedRunId] = useState('');
-  const [analystNote, setAnalystNote] = useState('');
-  const [croNote, setCroNote] = useState('');
+  const [selectedRunId, setSelectedRunId] = useState("");
+  const [analystNote, setAnalystNote] = useState("");
+  const [croNote, setCroNote] = useState("");
   const [sections, setSections] = useState({
     charts: true,
     driver: true,
@@ -75,7 +83,7 @@ export default function StressBoardPack() {
 
   const run = useMemo(
     () => runs.find((r) => r.run_id === selectedRunId) ?? runs[0] ?? null,
-    [runs, selectedRunId]
+    [runs, selectedRunId],
   );
 
   // Bank: the run's own coupling minimum. SDI: the s.29 floor from the control
@@ -86,24 +94,30 @@ export default function StressBoardPack() {
   const lcrFloor = numOrNull(run?.outcome.coupling?.lcr_min_pct);
   const carAssessment = assessAgainstFloor(
     numOrNull(run?.summary.stressed_car_end_pct),
-    carFloor
+    carFloor,
   );
   const lcrAssessment = assessAgainstFloor(
     numOrNull(run?.summary.stressed_lcr_pct),
-    lcrFloor
+    lcrFloor,
   );
   const floorCaption = (floor: number | null, what: string) =>
-    floor === null ? `No ${what} floor configured` : `Floor ${fmtFloorPct(floor)}`;
+    floor === null
+      ? `No ${what} floor configured`
+      : `Floor ${fmtFloorPct(floor)}`;
 
   return (
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Governance', href: '/reports' },
-          { label: 'Stress board pack' },
+          { label: "Governance", href: "/reports" },
+          { label: "Stress board pack" },
         ]}
         title="Stress Board-Pack Composer"
-        subtitle={isSdi ? 'Compose a proportionate SDI stress pack from an immutable run — simplified capital, baseline LMTD evidence, commentary, and management actions' : 'Compose a board-ready ICAAP stress pack from an immutable run — Appendix II tables, charts, commentary, management actions'}
+        subtitle={
+          isSdi
+            ? "Compose a proportionate SDI stress pack from an immutable run — simplified capital, baseline LMTD evidence, commentary, and management actions"
+            : "Compose a board-ready ICAAP stress pack from an immutable run — Appendix II tables, charts, commentary, management actions"
+        }
         action={
           <button
             type="button"
@@ -116,24 +130,34 @@ export default function StressBoardPack() {
         }
       />
 
-      <QueryBoundary isLoading={registry.isLoading || approved.isLoading} error={registry.error ?? approved.error} onRetry={() => registry.refetch()}>
+      <QueryBoundary
+        isLoading={registry.isLoading || approved.isLoading}
+        error={registry.error ?? approved.error}
+        onRetry={() => registry.refetch()}
+      >
         <div className="px-8 py-6 space-y-6">
           {/* Composer controls (hidden on print) */}
           <div className="print:hidden">
-            <SectionCard title="Compose" subtitle="Pick a run and the sections to include">
+            <SectionCard
+              title="Compose"
+              subtitle="Pick a run and the sections to include"
+            >
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <label className="block">
                     <span className="text-caption text-slate">Run</span>
                     <select
                       className="mt-1 w-full rounded-md border border-border-light bg-transparent px-3 py-2 text-body text-navy"
-                      value={run?.run_id ?? ''}
+                      value={run?.run_id ?? ""}
                       onChange={(e) => setSelectedRunId(e.target.value)}
                     >
-                      {runs.length === 0 && <option value="">No runs available</option>}
+                      {runs.length === 0 && (
+                        <option value="">No runs available</option>
+                      )}
                       {runs.map((r) => (
                         <option key={r.run_id} value={r.run_id}>
-                          {r.scenario_code} · {fmtDateUTC(new Date(r.created_at))}
+                          {r.scenario_code} ·{" "}
+                          {fmtDateUTC(new Date(r.created_at))}
                         </option>
                       ))}
                     </select>
@@ -141,19 +165,27 @@ export default function StressBoardPack() {
                   <div className="flex flex-wrap items-end gap-3">
                     {(
                       [
-                        ['charts', 'Projection charts'],
-                        ['driver', 'Driver attribution'],
-                        ['comparison', 'Comparison'],
-                        ['actions', 'Management actions'],
-                        ['appendix', 'Appendix II'],
+                        ["charts", "Projection charts"],
+                        ["driver", "Driver attribution"],
+                        ["comparison", "Comparison"],
+                        ["actions", "Management actions"],
+                        ["appendix", "Appendix II"],
                       ] as const
                     ).map(([key, label]) => (
-                      <label key={key} className="flex items-center gap-1.5 text-caption text-slate">
+                      <label
+                        key={key}
+                        className="flex items-center gap-1.5 text-caption text-slate"
+                      >
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-action"
                           checked={sections[key]}
-                          onChange={(e) => setSections((s) => ({ ...s, [key]: e.target.checked }))}
+                          onChange={(e) =>
+                            setSections((s) => ({
+                              ...s,
+                              [key]: e.target.checked,
+                            }))
+                          }
                         />
                         {label}
                       </label>
@@ -162,12 +194,24 @@ export default function StressBoardPack() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <label className="block">
-                    <span className="text-caption text-slate">Analyst commentary</span>
-                    <textarea className="mt-1 w-full min-h-24 rounded-md border border-border-light bg-transparent px-3 py-2 text-body text-navy" value={analystNote} onChange={(e) => setAnalystNote(e.target.value)} />
+                    <span className="text-caption text-slate">
+                      Analyst commentary
+                    </span>
+                    <textarea
+                      className="mt-1 w-full min-h-24 rounded-md border border-border-light bg-transparent px-3 py-2 text-body text-navy"
+                      value={analystNote}
+                      onChange={(e) => setAnalystNote(e.target.value)}
+                    />
                   </label>
                   <label className="block">
-                    <span className="text-caption text-slate">CRO / board challenge</span>
-                    <textarea className="mt-1 w-full min-h-24 rounded-md border border-border-light bg-transparent px-3 py-2 text-body text-navy" value={croNote} onChange={(e) => setCroNote(e.target.value)} />
+                    <span className="text-caption text-slate">
+                      CRO / board challenge
+                    </span>
+                    <textarea
+                      className="mt-1 w-full min-h-24 rounded-md border border-border-light bg-transparent px-3 py-2 text-body text-navy"
+                      value={croNote}
+                      onChange={(e) => setCroNote(e.target.value)}
+                    />
                   </label>
                 </div>
               </div>
@@ -184,37 +228,70 @@ export default function StressBoardPack() {
             <div className="space-y-6">
               {/* Cover */}
               <SectionCard
-                title={`${isSdi ? 'SDI Stress Test' : 'ICAAP Stress Test'} — ${run.scenario_code}`}
-                subtitle={`${bank?.name ?? ''} · reporting period ${period ? fmtDateUTC(new Date(period.periodEnd)) : ''}`}
-                actions={<StatusPill tone={run.summary.stress_stays_above_all_minima ? 'success' : 'critical'}>{run.summary.stress_stays_above_all_minima ? 'Above all minima' : 'Breach'}</StatusPill>}
+                title={`${isSdi ? "SDI Stress Test" : "ICAAP Stress Test"} — ${run.scenario_code}`}
+                subtitle={`${bank?.name ?? ""} · reporting period ${period ? fmtDateUTC(new Date(period.periodEnd)) : ""}`}
+                actions={
+                  <StatusPill
+                    tone={
+                      run.summary.stress_stays_above_all_minima
+                        ? "success"
+                        : "critical"
+                    }
+                  >
+                    {run.summary.stress_stays_above_all_minima
+                      ? "Above all minima"
+                      : "Breach"}
+                  </StatusPill>
+                }
               >
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <KpiStat
                     label="Stressed CAR"
-                    value={fmtPctOrNull(numOrNull(run.summary.stressed_car_end_pct))}
+                    value={fmtPctOrNull(
+                      numOrNull(run.summary.stressed_car_end_pct),
+                    )}
                     status={floorStatus(carAssessment)}
                     hint={`Base ${fmtPctOrNull(numOrNull(run.summary.baseline_car_end_pct))} · ${
-                      floorNotAssessedReason(carAssessment, 'CAR') ?? floorCaption(carFloor, 'CAR')
+                      floorNotAssessedReason(carAssessment, "CAR") ??
+                      floorCaption(carFloor, "CAR")
                     }`}
                   />
-                  <KpiStat label="CAR erosion" value={`${num(run.summary.car_erosion_pp).toFixed(2)} pp`} status="warn" />
+                  <KpiStat
+                    label="CAR erosion"
+                    value={`${num(run.summary.car_erosion_pp).toFixed(2)} pp`}
+                    status="warn"
+                  />
                   {run.summary.stressed_lcr_pct === null ? (
-                    <KpiStat label="Liquidity regime" value="LMTD" status="ok" hint="Basel LCR/NSFR n/a for SDIs (§4.6)" />
+                    <KpiStat
+                      label="Liquidity regime"
+                      value="LMTD"
+                      status="ok"
+                      hint="Basel LCR/NSFR n/a for SDIs (§4.6)"
+                    />
                   ) : (
                     <KpiStat
                       label="Stressed LCR"
-                      value={fmtPctOrNull(numOrNull(run.summary.stressed_lcr_pct), 1)}
+                      value={fmtPctOrNull(
+                        numOrNull(run.summary.stressed_lcr_pct),
+                        1,
+                      )}
                       status={floorStatus(lcrAssessment)}
                       hint={
-                        floorNotAssessedReason(lcrAssessment, 'LCR') ??
-                        floorCaption(lcrFloor, 'LCR')
+                        floorNotAssessedReason(lcrAssessment, "LCR") ??
+                        floorCaption(lcrFloor, "LCR")
                       }
                     />
                   )}
-                  <KpiStat label="Capital gap" value={`GHS'000 ${num(run.summary.capital_gap).toLocaleString()}`} status={num(run.summary.capital_gap) > 0 ? 'warn' : 'ok'} />
+                  <KpiStat
+                    label="Capital gap"
+                    value={`GHS'000 ${num(run.summary.capital_gap).toLocaleString()}`}
+                    status={num(run.summary.capital_gap) > 0 ? "warn" : "ok"}
+                  />
                 </div>
                 <p className="mt-4 text-micro text-slate">
-                  Immutable run {shortId(run.run_id, 10)} · input hash {shortId(run.input_hash, 12)} · engine {run.engine_version} · reproducible
+                  Immutable run {shortId(run.run_id, 10)} · input hash{" "}
+                  {shortId(run.input_hash, 12)} · engine {run.engine_version} ·
+                  reproducible
                 </p>
               </SectionCard>
 
@@ -223,14 +300,22 @@ export default function StressBoardPack() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {analystNote && (
                       <div>
-                        <p className="text-caption font-medium uppercase tracking-wider text-slate mb-1">Analyst commentary</p>
-                        <p className="text-body text-navy/85 leading-relaxed whitespace-pre-wrap">{analystNote}</p>
+                        <p className="text-caption font-medium uppercase tracking-wider text-slate mb-1">
+                          Analyst commentary
+                        </p>
+                        <p className="text-body text-navy/85 leading-relaxed whitespace-pre-wrap">
+                          {analystNote}
+                        </p>
                       </div>
                     )}
                     {croNote && (
                       <div>
-                        <p className="text-caption font-medium uppercase tracking-wider text-slate mb-1">CRO / board challenge</p>
-                        <p className="text-body text-navy/85 leading-relaxed whitespace-pre-wrap">{croNote}</p>
+                        <p className="text-caption font-medium uppercase tracking-wider text-slate mb-1">
+                          CRO / board challenge
+                        </p>
+                        <p className="text-body text-navy/85 leading-relaxed whitespace-pre-wrap">
+                          {croNote}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -241,26 +326,56 @@ export default function StressBoardPack() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <ChartFrame
                     title="CAR — base vs stress"
-                    subtitle={carFloor === null ? 'No CAR floor configured — no floor line drawn' : `Against the ${fmtFloorPct(carFloor)} floor on this run`}
+                    subtitle={
+                      carFloor === null
+                        ? "No CAR floor configured — no floor line drawn"
+                        : `Against the ${fmtFloorPct(carFloor)} floor on this run`
+                    }
                     height={240}
                   >
-                    <ProjectionPaths projection={run.projection} metricKey="car_pct" threshold={carFloor} thresholdLabel="CAR floor" />
+                    <ProjectionPaths
+                      projection={run.projection}
+                      metricKey="car_pct"
+                      threshold={carFloor}
+                      thresholdLabel="CAR floor"
+                    />
                   </ChartFrame>
                   {run.summary.stressed_lcr_pct === null ? (
-                    <ChartFrame title="Liquidity — SDI (LMTD)" subtitle="Basel LCR/NSFR excluded (§4.6)" height={240}>
+                    <ChartFrame
+                      title="Liquidity — SDI (LMTD)"
+                      subtitle="Basel LCR/NSFR excluded (§4.6)"
+                      height={240}
+                    >
                       <SdiLiquidityBoardDisclosure
                         asOf={sdiLiquidity.data?.as_of}
-                        table1Breaches={sdiLiquidity.data?.ratios.filter((ratio) => ratio.status === 'below_minimum').length}
-                        reserveBreaches={sdiLiquidity.data?.reserves.filter((reserve) => reserve.status === 'below_minimum').length}
+                        table1Breaches={
+                          sdiLiquidity.data?.ratios.filter(
+                            (ratio) => ratio.status === "below_minimum",
+                          ).length
+                        }
+                        reserveBreaches={
+                          sdiLiquidity.data?.reserves.filter(
+                            (reserve) => reserve.status === "below_minimum",
+                          ).length
+                        }
                       />
                     </ChartFrame>
                   ) : (
                     <ChartFrame
                       title="LCR — base vs stress"
-                      subtitle={lcrFloor === null ? 'No LCR floor configured — no floor line drawn' : `Against the ${fmtFloorPct(lcrFloor)} floor on this run`}
+                      subtitle={
+                        lcrFloor === null
+                          ? "No LCR floor configured — no floor line drawn"
+                          : `Against the ${fmtFloorPct(lcrFloor)} floor on this run`
+                      }
                       height={240}
                     >
-                      <ProjectionPaths projection={run.projection} metricKey="lcr_pct" threshold={lcrFloor} thresholdLabel="LCR floor" />
+                      <ProjectionPaths
+                        projection={run.projection}
+                        metricKey="lcr_pct"
+                        threshold={lcrFloor}
+                        thresholdLabel="LCR floor"
+                      />
                     </ChartFrame>
                   )}
                 </div>
@@ -280,7 +395,9 @@ export default function StressBoardPack() {
 
               {sections.actions && <ManagementActionsPanel run={run} />}
 
-              {sections.appendix && <AppendixIITables tables={run.appendix_ii} flat />}
+              {sections.appendix && (
+                <AppendixIITables tables={run.appendix_ii} flat />
+              )}
             </div>
           )}
         </div>
@@ -301,12 +418,13 @@ function SdiLiquidityBoardDisclosure({
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 text-center text-caption text-slate">
       <p>
-        SDI liquidity stress is not assessed because no BoG SDI liquidity-stress methodology is configured.
-        Basel LCR/NSFR are not substituted.
+        SDI liquidity stress is not assessed because no BoG SDI liquidity-stress
+        methodology is configured. Basel LCR/NSFR are not substituted.
       </p>
       {asOf && (
         <p className="mt-3 text-navy">
-          Baseline LMTD evidence as of {asOf}: {table1Breaches ?? 0} Table 1 breach(es), {reserveBreaches ?? 0} reserve breach(es).
+          Baseline LMTD evidence as of {asOf}: {table1Breaches ?? 0} Table 1
+          breach(es), {reserveBreaches ?? 0} reserve breach(es).
         </p>
       )}
     </div>

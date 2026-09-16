@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Alert Center — every open limit-breach finding across the live modules,
@@ -9,35 +9,41 @@
  * dead acknowledge buttons.
  */
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { ArrowRight, BellRing, Info } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import SectionCard from '@/components/ui/SectionCard';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import EmptyState from '@/components/ui/EmptyState';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useBankAlerts } from '@/lib/api/hooks';
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowRight, BellRing, Info } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import SectionCard from "@/components/ui/SectionCard";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import EmptyState from "@/components/ui/EmptyState";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useBankAlerts } from "@/lib/api/hooks";
 import {
   useSdiCapitalChecks,
   useSdiCapitalSummary,
   useSdiLargeExposures,
   useSdiLiquidityPosition,
-} from '@/components/basel/sdiHooks';
-import AlertStream, { type AlertGroupBy } from '@/components/alerts/AlertStream';
+} from "@/components/basel/sdiHooks";
+import AlertStream, {
+  type AlertGroupBy,
+} from "@/components/alerts/AlertStream";
 
 const ALERTS_LIMIT = 200; // backend maximum per read
 
 export default function AlertCenterPage() {
   const { bank, moduleScope } = useBankContext();
   const alerts = useBankAlerts(bank?.id, ALERTS_LIMIT);
-  const isSdi = moduleScope.institutionClass === 'sdi';
+  const isSdi = moduleScope.institutionClass === "sdi";
   const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bank?.id : undefined);
-  const sdiCapital = useSdiCapitalSummary(isSdi ? bank?.id : undefined);
-  const sdiChecks = useSdiCapitalChecks(isSdi ? bank?.id : undefined);
+  const sdiCapital = useSdiCapitalSummary(
+    isSdi && moduleScope.capitalAggregatedView ? bank?.id : undefined,
+  );
+  const sdiChecks = useSdiCapitalChecks(
+    isSdi && moduleScope.capitalAggregatedView ? bank?.id : undefined,
+  );
   const sdiExposures = useSdiLargeExposures(isSdi ? bank?.id : undefined);
-  const [groupBy, setGroupBy] = useState<AlertGroupBy>('module');
+  const [groupBy, setGroupBy] = useState<AlertGroupBy>("module");
 
   const data = alerts.data;
   const critical = data?.bySeverity?.critical ?? 0;
@@ -46,19 +52,36 @@ export default function AlertCenterPage() {
   const sdiSignals = isSdi
     ? [
         ...(sdiLiquidity.data?.ratios ?? [])
-          .filter((row) => row.status === 'below_minimum')
-          .map((row) => ({ label: row.label, detail: 'LMTD Table 1 ratio below its floor' })),
+          .filter((row) => row.status === "below_minimum")
+          .map((row) => ({
+            label: row.label,
+            detail: "LMTD Table 1 ratio below its floor",
+          })),
         ...(sdiLiquidity.data?.reserves ?? [])
-          .filter((row) => row.status === 'below_minimum')
-          .map((row) => ({ label: row.label, detail: 'Liquidity reserve below its floor' })),
+          .filter((row) => row.status === "below_minimum")
+          .map((row) => ({
+            label: row.label,
+            detail: "Liquidity reserve below its floor",
+          })),
         ...(sdiChecks.data?.checks ?? [])
           .filter((row) => row.compliant === false)
-          .map((row) => ({ label: row.check.replaceAll('_', ' '), detail: row.detail })),
+          .map((row) => ({
+            label: row.check.replaceAll("_", " "),
+            detail: row.detail,
+          })),
         ...(sdiExposures.data?.exposures ?? [])
-          .filter((row) => row.status === 'above_limit')
-          .map((row) => ({ label: row.counterparty_name, detail: 'Large exposure above its applicable limit' })),
-        ...(sdiCapital.data?.status === 'red'
-          ? [{ label: 'Capital adequacy ratio', detail: 'Section 29 capital adequacy is below its floor' }]
+          .filter((row) => row.status === "above_limit")
+          .map((row) => ({
+            label: row.counterparty_name,
+            detail: "Large exposure above its applicable limit",
+          })),
+        ...(sdiCapital.data?.status === "red"
+          ? [
+              {
+                label: "Capital adequacy ratio",
+                detail: "Section 29 capital adequacy is below its floor",
+              },
+            ]
           : []),
       ]
     : [];
@@ -66,7 +89,7 @@ export default function AlertCenterPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: 'Command' }, { label: 'Alerts' }]}
+        breadcrumbs={[{ label: "Command" }, { label: "Alerts" }]}
         title="Alert Center"
         subtitle="Open limit breaches across every live module, reconciled by the pipeline on each refresh — breaches clear automatically when the data does."
         action={
@@ -75,15 +98,15 @@ export default function AlertCenterPage() {
             role="group"
             aria-label="Group alerts by"
           >
-            {(['module', 'severity'] as const).map((option) => (
+            {(["module", "severity"] as const).map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => setGroupBy(option)}
                 className={`px-3 py-1.5 text-caption font-medium transition-colors ${
                   groupBy === option
-                    ? 'bg-action-light text-action'
-                    : 'bg-surface-raised text-slate hover:text-navy'
+                    ? "bg-action-light text-action"
+                    : "bg-surface-raised text-slate hover:text-navy"
                 }`}
               >
                 By {option}
@@ -104,25 +127,25 @@ export default function AlertCenterPage() {
               <KpiStat
                 label="Open alerts"
                 value={data.total}
-                status={data.total > 0 ? 'crit' : 'ok'}
+                status={data.total > 0 ? "crit" : "ok"}
                 hint="current reporting period"
               />
               <KpiStat
                 label="Critical"
                 value={critical}
-                status={critical > 0 ? 'crit' : 'ok'}
+                status={critical > 0 ? "crit" : "ok"}
                 hint="hard limit breaches"
               />
               <KpiStat
                 label="High"
                 value={high}
-                status={high > 0 ? 'warn' : 'ok'}
+                status={high > 0 ? "warn" : "ok"}
                 hint="early warnings"
               />
               <KpiStat
                 label="Modules affected"
                 value={modulesAffected}
-                status={modulesAffected > 0 ? 'warn' : 'ok'}
+                status={modulesAffected > 0 ? "warn" : "ok"}
                 hint="modules with open findings"
               />
             </div>
@@ -133,13 +156,23 @@ export default function AlertCenterPage() {
                 subtitle="Read directly from the SDI liquidity, capital, and large-exposure controls while persistent pipeline alerts are reconciled."
               >
                 {sdiSignals.length === 0 ? (
-                  <p className="text-body text-slate">No current SDI control breach is reported by the available diagnostic data.</p>
+                  <p className="text-body text-slate">
+                    No current SDI control breach is reported by the available
+                    diagnostic data.
+                  </p>
                 ) : (
                   <ul className="space-y-3">
                     {sdiSignals.map((signal) => (
-                      <li key={`${signal.label}-${signal.detail}`} className="border-l-2 border-critical pl-3">
-                        <p className="text-body font-medium text-navy capitalize">{signal.label}</p>
-                        <p className="mt-1 text-caption text-slate">{signal.detail}</p>
+                      <li
+                        key={`${signal.label}-${signal.detail}`}
+                        className="border-l-2 border-critical pl-3"
+                      >
+                        <p className="text-body font-medium text-navy capitalize">
+                          {signal.label}
+                        </p>
+                        <p className="mt-1 text-caption text-slate">
+                          {signal.detail}
+                        </p>
                       </li>
                     ))}
                   </ul>
@@ -167,15 +200,19 @@ export default function AlertCenterPage() {
                 <AlertStream items={data.items} groupBy={groupBy} />
                 {data.total > data.items.length && (
                   <p className="text-caption text-slate">
-                    Showing the first {data.items.length} of {data.total} open alerts
-                    (API page limit).
+                    Showing the first {data.items.length} of {data.total} open
+                    alerts (API page limit).
                   </p>
                 )}
               </>
             )}
 
             <div className="card px-5 py-3.5 flex items-start gap-3">
-              <Info size={15} className="text-slate shrink-0 mt-0.5" aria-hidden />
+              <Info
+                size={15}
+                className="text-slate shrink-0 mt-0.5"
+                aria-hidden
+              />
               <p className="text-caption text-slate leading-relaxed">
                 The live-findings API serves open critical/high findings for the
                 latest reporting period. Cleared breaches are superseded by the
