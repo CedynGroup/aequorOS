@@ -139,11 +139,6 @@ export type ModuleScope = {
   /** True only when the selected institution has at least one exact capability. */
   hasInstitutionAuthority: boolean;
   institutionClass: string | null;
-  /**
-   * Server-evaluated exact Liquidity capabilities for the selected
-   * institution. Omitted/false is deny, so navigation and controls never infer
-   * authority from a legacy role or the broader institution-type entitlement.
-   */
   /** Exact CAP/aggregated view authority for dashboards and summary checks. */
   capitalAggregatedView?: boolean;
   /** Exact CAP/confidential view authority for plans and run detail. */
@@ -152,6 +147,11 @@ export type ModuleScope = {
   capitalRestrictedView?: boolean;
   /** Exact CAP/confidential run authority. */
   capitalRun?: boolean;
+  /**
+   * Server-evaluated exact Liquidity capabilities for the selected
+   * institution. Omitted/false is deny, so navigation and controls never infer
+   * authority from a legacy role or the broader institution-type entitlement.
+   */
   liquidityAggregatedView?: boolean;
   liquidityConfidentialView?: boolean;
   riskConfidentialView?: boolean;
