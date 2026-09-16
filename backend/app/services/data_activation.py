@@ -310,8 +310,7 @@ def _implied_rating_outcome(
         scenarios_succeeded=1,
         scenarios_failed=0,
         headline=(
-            f"{pit.get('rating_grade', '—')} · PIT upper PD "
-            f"{pd_band.get('upper_pct', '—')}%"
+            f"{pit.get('rating_grade', '—')} · PIT upper PD {pd_band.get('upper_pct', '—')}%"
         ),
     )
 

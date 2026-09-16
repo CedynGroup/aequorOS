@@ -76,6 +76,11 @@ export const E2E_USERS: Record<
     roles: ["account_admin"],
     authv: 1,
   },
+  liquidity_aggregated_viewer: {
+    id: "eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea",
+    roles: ["viewer"],
+    authv: 2,
+  },
   liquidity_viewer: {
     id: "eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9",
     roles: ["viewer"],
@@ -92,6 +97,7 @@ export const E2E_STORAGE_ROLES = [
   "account_admin",
   "legacy_account_admin",
   "liquidity_viewer",
+  "liquidity_aggregated_viewer",
 ] as const satisfies readonly (keyof typeof E2E_USERS)[];
 
 export async function mintBackendToken(

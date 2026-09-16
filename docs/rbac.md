@@ -9,10 +9,8 @@
 > indivisible scoped bindings, adds exact resource evaluation and authorization
 > version invalidation. Capital's access matrix and rollout requirements are
 > owned by the [Capital enforcement rollout](../backend/docs/capital_enforcement_rollout.md).
-> Liquidity Monitoring and the remaining Liquidity
-> dashboards, runs, forecasts, CFP lifecycle, thresholds/haircuts,
-> scenario-workbench entries, regulatory-run rows, and SDI liquidity position
-> now require exact active LIQ authority, with no scalar-role fallback.
+> See the [Liquidity rollout contract](../backend/docs/liquidity_enforcement_rollout.md)
+> for Liquidity enforcement scope and exact required grants.
 > The institution-target slice (2026-08-27) makes resource target scope explicit
 > (organization or one exact institution; `NULL` never broadens) and records
 > binding decisions on Liquidity Monitoring and denies closed when no complete
@@ -91,7 +89,7 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
    settings. Single-connection SSO configuration lives in its built, separate
    `sso_connections` table.
 4. Endpoint enforcement still uses **one flat legacy role per user** outside
-   the migrated Liquidity Monitoring and Capital surfaces. Exact
+   the migrated Liquidity and Capital surfaces. Exact
    institution/module/sensitivity bindings enforce those cutovers and have an
    Org Owner administration surface; desk/currency scope is not represented yet.
 5. Assignment-time scoped-grant SoD now returns authoritative allow/warn/block
@@ -503,7 +501,7 @@ bindings, requires every dimension within one row to match, unions complete
 rows, verifies the active principal and institution ownership, then applies all
 workflow-supplied conditions as global vetoes. It returns an audit-ready trace.
 
-Liquidity Monitoring and Capital construct canonical institution targets, emit
+Liquidity and Capital construct canonical institution targets, emit
 `authz.binding_decision`, deny on evaluator failure, and never fall back to
 `roles[]`. Capital also applies action and sensitivity-specific decisions,
 maker-checker approval, hidden run objects, and a dual CAP+LIQ gate before ILAAP
@@ -984,7 +982,7 @@ The static `ROLE_PERMISSIONS` map, scoped binding table, exact evaluator, and
 `authv` invalidation seam are **BUILT**. The effective-authority projection,
 institution filtering, capability-driven shell/navigation/deep-link boundary,
 authority-partitioned caches, and governed binding-creation/Members slice are built.
-Liquidity Monitoring and Capital are enforcing product surfaces. Remaining
+Liquidity and Capital are enforcing product surfaces. Remaining
 Phase-0 work is further endpoint cutovers, their matching module-action controls, and
 per-persona default landings (the root already routes to the first authorized surface)
 ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).

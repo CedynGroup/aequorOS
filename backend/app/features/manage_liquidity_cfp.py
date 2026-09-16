@@ -3,8 +3,8 @@
 The EWI GET is the server-side replacement for the dashboard's illustrative
 CFP page: indicator values, Board trigger levels, RAG states and the
 escalation state are computed here, never in the frontend. Register and plan
-writes are audited; register updates, approval and activation are
-approver-gated (Board acts), while drafting a plan is analyst work.
+writes are audited. The binding requirements and held register-update gate
+are documented in docs/liquidity_enforcement_rollout.md.
 """
 
 from __future__ import annotations

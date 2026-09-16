@@ -264,19 +264,13 @@ function bindingControlledSubrouteHidden(
     ) {
       return scope.liquidityConfidentialView !== true;
     }
-    if (
-      path === "/liquidity/stress" ||
-      path.startsWith("/liquidity/stress/")
-    ) {
+    if (path === "/liquidity/stress" || path.startsWith("/liquidity/stress/")) {
       return (
         scope.liquidityConfidentialView !== true ||
         scope.riskConfidentialView !== true
       );
     }
-    if (
-      scope.institutionClass === "sdi" &&
-      path === "/liquidity"
-    ) {
+    if (scope.institutionClass === "sdi" && path === "/liquidity") {
       return scope.liquidityConfidentialView !== true;
     }
     return scope.liquidityAggregatedView !== true;

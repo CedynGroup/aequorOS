@@ -175,16 +175,16 @@ export function usePulseCards(
     hasData && scoped(module) ? bankId : undefined;
   const ladders = {
     liquidity: useLiveSnapshots(
-      scope.liquidityAggregatedView ? ladderId('liquidity') : undefined,
-      'liquidity',
+      scope.liquidityAggregatedView ? ladderId("liquidity") : undefined,
+      "liquidity",
     ),
-    capital: useLiveSnapshots(ladderId('capital'), 'capital'),
-    credit: useLiveSnapshots(ladderId('credit'), 'credit'),
-    irr: useLiveSnapshots(ladderId('irr'), 'irr'),
-    fx: useLiveSnapshots(ladderId('fx'), 'fx'),
-    ftp: useLiveSnapshots(ladderId('ftp'), 'ftp'),
-    rating: useLiveSnapshots(ladderId('rating'), 'rating'),
-    forecast: useLiveSnapshots(ladderId('forecast'), 'forecast'),
+    capital: useLiveSnapshots(ladderId("capital"), "capital"),
+    credit: useLiveSnapshots(ladderId("credit"), "credit"),
+    irr: useLiveSnapshots(ladderId("irr"), "irr"),
+    fx: useLiveSnapshots(ladderId("fx"), "fx"),
+    ftp: useLiveSnapshots(ladderId("ftp"), "ftp"),
+    rating: useLiveSnapshots(ladderId("rating"), "rating"),
+    forecast: useLiveSnapshots(ladderId("forecast"), "forecast"),
   } as const;
 
   const baseCards: Record<LiveModule, PulseCardModel> = {

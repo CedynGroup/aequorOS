@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
-import { ShieldCheck } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import ChartFrame from '@/components/ui/ChartFrame';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import HQLAStackChart from '@/components/charts/HQLAStackChart';
-import { runComputedAt } from '@/components/liquidity/runData';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useLiquidityDashboard, useRegulatoryRun } from '@/lib/api/hooks';
-import { num } from '@/lib/api/values';
-import { CHART_SERIES, seriesColor } from '@/lib/chartTheme';
-import { currencyCode, fmtCurrency, fmtPct, regShort } from '@/lib/format';
+import { ShieldCheck } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import ChartFrame from "@/components/ui/ChartFrame";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import HQLAStackChart from "@/components/charts/HQLAStackChart";
+import { runComputedAt } from "@/components/liquidity/runData";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useLiquidityDashboard, useRegulatoryRun } from "@/lib/api/hooks";
+import { num } from "@/lib/api/values";
+import { CHART_SERIES, seriesColor } from "@/lib/chartTheme";
+import { currencyCode, fmtCurrency, fmtPct, regShort } from "@/lib/format";
 
 type BufferRow = {
   code: string;
@@ -30,36 +30,36 @@ type BufferRow = {
 // currency (module-level constants evaluate before the binding).
 const bufferColumns = (): Column<BufferRow>[] => [
   {
-    key: 'instrument',
-    header: 'Instrument',
-    width: '38%',
+    key: "instrument",
+    header: "Instrument",
+    width: "38%",
     render: (r) => r.instrument,
   },
   {
-    key: 'mv',
+    key: "mv",
     header: `Market value (${currencyCode()})`,
     numeric: true,
     render: (r) =>
-      r.marketValueGHS === null ? '—' : fmtCurrency(r.marketValueGHS),
+      r.marketValueGHS === null ? "—" : fmtCurrency(r.marketValueGHS),
   },
   {
-    key: 'haircut',
-    header: 'Haircut',
+    key: "haircut",
+    header: "Haircut",
     numeric: true,
     render: (r) =>
-      r.haircutPct === null ? '—' : `${r.haircutPct.toFixed(1)}%`,
+      r.haircutPct === null ? "—" : `${r.haircutPct.toFixed(1)}%`,
   },
   {
-    key: 'weighted',
-    header: 'Post-haircut value',
+    key: "weighted",
+    header: "Post-haircut value",
     numeric: true,
     render: (r) => fmtCurrency(r.weightedGHS),
   },
   {
-    key: 'share',
-    header: 'Share',
+    key: "share",
+    header: "Share",
     numeric: true,
-    render: (r) => (r.sharePct === null ? '—' : `${r.sharePct.toFixed(1)}%`),
+    render: (r) => (r.sharePct === null ? "—" : `${r.sharePct.toFixed(1)}%`),
   },
 ];
 
@@ -103,19 +103,19 @@ export default function LiquidityBuffer() {
   }));
 
   const allLevel1 = data?.validations.find(
-    (v) => v.ruleCode === 'hqla_all_level1'
+    (v) => v.ruleCode === "hqla_all_level1",
   );
   const largest = rows.reduce<BufferRow | null>(
     (best, r) => (best === null || r.weightedGHS > best.weightedGHS ? r : best),
-    null
+    null,
   );
 
   const computedAt = runComputedAt(run);
   const provenance = data ? (
     <span>
       {data.stored
-        ? 'Computed from stored engine results'
-        : 'Computed live from current positions'}
+        ? "Computed from stored engine results"
+        : "Computed live from current positions"}
     </span>
   ) : undefined;
 
@@ -123,9 +123,9 @@ export default function LiquidityBuffer() {
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Liquidity Risk', href: '/liquidity' },
-          { label: 'Buffer' },
+          { label: "Modules", href: "/" },
+          { label: "Liquidity Risk", href: "/liquidity" },
+          { label: "Buffer" },
         ]}
         title="Liquidity Buffer"
         subtitle="High quality liquid asset composition · Basel III LCR numerator"
@@ -147,7 +147,11 @@ export default function LiquidityBuffer() {
               />
               <KpiStat
                 label="Coverage of net outflows"
-                value={netOutflows > 0 ? fmtPct((hqlaTotal / netOutflows) * 100, 1) : '—'}
+                value={
+                  netOutflows > 0
+                    ? fmtPct((hqlaTotal / netOutflows) * 100, 1)
+                    : "—"
+                }
                 hint="= LCR for the 30-day horizon"
               />
               <KpiStat
@@ -162,11 +166,13 @@ export default function LiquidityBuffer() {
                 <div className="flex items-center gap-2">
                   <ShieldCheck
                     size={18}
-                    className={allLevel1?.passed ? 'text-success' : 'text-warning'}
+                    className={
+                      allLevel1?.passed ? "text-success" : "text-warning"
+                    }
                     aria-hidden
                   />
-                  <StatusPill tone={allLevel1?.passed ? 'success' : 'amber'}>
-                    {allLevel1?.passed ? 'All Level 1' : 'Includes < Level 1'}
+                  <StatusPill tone={allLevel1?.passed ? "success" : "amber"}>
+                    {allLevel1?.passed ? "All Level 1" : "Includes < Level 1"}
                   </StatusPill>
                 </div>
                 {allLevel1 && (
@@ -232,8 +238,8 @@ export default function LiquidityBuffer() {
               computedAt={computedAt}
               footer={
                 <span>
-                  Baseline runs carry {regShort()}-eligible instruments at face value;
-                  market-value haircuts are applied by the stress engine
+                  Baseline runs carry {regShort()}-eligible instruments at face
+                  value; market-value haircuts are applied by the stress engine
                   (hqla_securities_haircut) on the Stress tab.
                 </span>
               }
@@ -243,11 +249,11 @@ export default function LiquidityBuffer() {
                 rows={[
                   ...rows,
                   {
-                    code: 'TOTAL',
-                    instrument: 'TOTAL HQLA',
+                    code: "TOTAL",
+                    instrument: "TOTAL HQLA",
                     marketValueGHS: rows.reduce(
                       (s, r) => s + (r.marketValueGHS ?? 0),
-                      0
+                      0,
                     ),
                     haircutPct: null,
                     weightedGHS: hqlaTotal,

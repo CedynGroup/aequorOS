@@ -63,10 +63,10 @@ export default function RiskLimitMonitorPage() {
   // shows no limit bars for engines it does not run. Liquidity + capital are in
   // every institution's set.
   const scope = useModuleScope();
-  const isSdi = scope.institutionClass === 'sdi';
-  const irrScoped = isHrefVisible('/irr/limits', scope);
-  const fxScoped = isHrefVisible('/fx/limits', scope);
-  const ftpScoped = isHrefVisible('/ftp/products', scope);
+  const isSdi = scope.institutionClass === "sdi";
+  const irrScoped = isHrefVisible("/irr/limits", scope);
+  const fxScoped = isHrefVisible("/fx/limits", scope);
+  const ftpScoped = isHrefVisible("/ftp/products", scope);
   const liquidityAggregated = scope.liquidityAggregatedView === true;
   const liquidityConfidential = scope.liquidityConfidentialView === true;
 

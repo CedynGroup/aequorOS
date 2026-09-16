@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * SDI simplified-capital hooks (docs/sdi.md §4.2). Fetch the /sdi/capital-checks
@@ -7,23 +7,23 @@
  * instead of the Basel 3-tier build for a savings-&-loans tenant.
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { getSession } from 'next-auth/react';
+import { useQuery } from "@tanstack/react-query";
+import { getSession } from "next-auth/react";
 import {
   apiCall,
   ApiError,
   apiBaseUrl,
   liquidityMonitoringApi,
-} from '@/lib/api/client';
-import { scopedQueryKey } from '@/lib/api/queryPolicy';
-import { getAccessToken, setAccessToken } from '@/lib/api/token';
-import { useQueryAuthorityScope } from '@/lib/api/useQueryScope';
+} from "@/lib/api/client";
+import { scopedQueryKey } from "@/lib/api/queryPolicy";
+import { getAccessToken, setAccessToken } from "@/lib/api/token";
+import { useQueryAuthorityScope } from "@/lib/api/useQueryScope";
 
 async function bearer(): Promise<string> {
   const cached = getAccessToken();
   if (cached) return cached;
   const session = await getSession();
-  const token = session?.accessToken ?? '';
+  const token = session?.accessToken ?? "";
   if (token) setAccessToken(token);
   return token;
 }
@@ -32,7 +32,7 @@ async function sdiFetch<T>(path: string): Promise<T> {
   const token = await bearer();
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: {
-      'content-type': 'application/json',
+      "content-type": "application/json",
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
   });
@@ -41,11 +41,18 @@ async function sdiFetch<T>(path: string): Promise<T> {
     try {
       const body = await response.json();
       const envelope = body?.error ?? body;
-      if (envelope && typeof envelope.message === 'string') message = envelope.message;
+      if (envelope && typeof envelope.message === "string")
+        message = envelope.message;
     } catch {
       // non-JSON body
     }
-    throw new ApiError({ message, status: response.status, code: null, errorCode: null, details: null });
+    throw new ApiError({
+      message,
+      status: response.status,
+      code: null,
+      errorCode: null,
+      details: null,
+    });
   }
   return (await response.json()) as T;
 }
@@ -57,7 +64,7 @@ export type CapitalCheck = {
   required_ghs: string | null;
   detail: string;
   source_citation: string;
-  confirmation_status: 'confirmed' | 'pending';
+  confirmation_status: "confirmed" | "pending";
 };
 
 export type SdiCapitalChecks = { as_of: string; checks: CapitalCheck[] };
@@ -117,7 +124,7 @@ export type RiskWeightBand = {
   weight_pct: string;
   exposure_ghs: string;
   rwa_ghs: string;
-  confirmation_status: 'confirmed' | 'pending';
+  confirmation_status: "confirmed" | "pending";
 };
 
 export type SdiRwaRiskClass = {
@@ -134,13 +141,13 @@ export type SdiCapitalSummary = {
   total_rwa_ghs: string;
   car_pct: string | null;
   car_min_pct: string;
-  status: 'green' | 'red' | 'na';
-  car_min_confirmation: 'confirmed' | 'pending';
+  status: "green" | "red" | "na";
+  car_min_confirmation: "confirmed" | "pending";
   computable: boolean;
   bands: RiskWeightBand[];
   pending_parameters: string[];
   /** 'code_default' while no approved risk-class scope exists for the tenant. */
-  composition_source: 'control_plane' | 'code_default';
+  composition_source: "control_plane" | "code_default";
   /** Every known risk class, in scope or not, with what it contributed. */
   risk_classes: SdiRwaRiskClass[];
   /** One sentence stating what the ratio charges for and what it omits. */
@@ -158,7 +165,7 @@ export type SdiCapitalHistoryPoint = {
   required_provision_ghs: string;
   actual_provision_ghs: string | null;
   provision_coverage_pct: string | null;
-  assessment_status: 'provisional' | 'review_required' | 'not_computable';
+  assessment_status: "provisional" | "review_required" | "not_computable";
 };
 
 export type SdiCapitalAssurance = {
@@ -167,9 +174,9 @@ export type SdiCapitalAssurance = {
   history: SdiCapitalHistoryPoint[];
   mapped_gl_capital_ghs: string | null;
   capital_to_gl_difference_ghs: string | null;
-  gl_reconciliation_status: 'mapped' | 'not_mapped' | 'mapping_incomplete';
+  gl_reconciliation_status: "mapped" | "not_mapped" | "mapping_incomplete";
   reserve_change_ghs: string | null;
-  filing_status: 'blocked';
+  filing_status: "blocked";
   filing_blockers: string[];
 };
 
@@ -178,7 +185,7 @@ export type SdiLiquidityRatio = {
   label: string;
   value_pct: string | null;
   threshold_pct: string;
-  status: 'ok' | 'below_minimum' | 'not_computable';
+  status: "ok" | "below_minimum" | "not_computable";
   threshold_source: string;
 };
 
@@ -187,9 +194,9 @@ export type SdiLiquidityReserve = {
   label: string;
   value_pct: string | null;
   threshold_pct: string;
-  status: 'ok' | 'below_minimum' | 'not_computable';
+  status: "ok" | "below_minimum" | "not_computable";
   source_citation: string;
-  confirmation_status: 'confirmed' | 'pending';
+  confirmation_status: "confirmed" | "pending";
 };
 
 export type SdiMaturityBucket = {
@@ -232,7 +239,7 @@ export type LiquidityMonitoring = {
 
 export type SdiReadiness = {
   module: string;
-  status: 'ready' | 'partial' | 'blocked';
+  status: "ready" | "partial" | "blocked";
   reasons: string[];
 };
 
@@ -253,7 +260,7 @@ export type SdiExposure = {
   pct_net_own_funds: string | null;
   single_obligor_limit_pct: string;
   large_exposure_limit_pct: string;
-  status: 'ok' | 'above_limit' | 'not_computable';
+  status: "ok" | "above_limit" | "not_computable";
   exempt: boolean;
 };
 
@@ -266,32 +273,36 @@ export type SdiLargeExposures = {
 
 export function useSdiCapitalChecks(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['sdi-capital-checks', bankId],
-    queryFn: () => sdiFetch<SdiCapitalChecks>(`/banks/${bankId}/sdi/capital-checks`),
+    queryKey: ["sdi-capital-checks", bankId],
+    queryFn: () =>
+      sdiFetch<SdiCapitalChecks>(`/banks/${bankId}/sdi/capital-checks`),
     enabled: Boolean(bankId),
   });
 }
 
 export function useSdiCapitalSummary(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['sdi-capital-summary', bankId],
-    queryFn: () => sdiFetch<SdiCapitalSummary>(`/banks/${bankId}/sdi/capital-summary`),
+    queryKey: ["sdi-capital-summary", bankId],
+    queryFn: () =>
+      sdiFetch<SdiCapitalSummary>(`/banks/${bankId}/sdi/capital-summary`),
     enabled: Boolean(bankId),
   });
 }
 
 export function useSdiCapitalAssurance(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['sdi-capital-assurance', bankId],
-    queryFn: () => sdiFetch<SdiCapitalAssurance>(`/banks/${bankId}/sdi/capital-assurance`),
+    queryKey: ["sdi-capital-assurance", bankId],
+    queryFn: () =>
+      sdiFetch<SdiCapitalAssurance>(`/banks/${bankId}/sdi/capital-assurance`),
     enabled: Boolean(bankId),
   });
 }
 
 export function useLoanClassification(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['loan-classification', bankId],
-    queryFn: () => sdiFetch<SdiLoanClassification>(`/banks/${bankId}/loan-classification`),
+    queryKey: ["loan-classification", bankId],
+    queryFn: () =>
+      sdiFetch<SdiLoanClassification>(`/banks/${bankId}/loan-classification`),
     enabled: Boolean(bankId),
   });
 }
@@ -302,8 +313,9 @@ export const useSdiLoanClassification = useLoanClassification;
 export function useSdiLiquidityPosition(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('sdi-liquidity-position', scope, bankId ?? null),
-    queryFn: () => sdiFetch<SdiLiquidityPosition>(`/banks/${bankId}/sdi/liquidity-position`),
+    queryKey: scopedQueryKey("sdi-liquidity-position", scope, bankId ?? null),
+    queryFn: () =>
+      sdiFetch<SdiLiquidityPosition>(`/banks/${bankId}/sdi/liquidity-position`),
     enabled: Boolean(bankId),
   });
 }
@@ -311,10 +323,10 @@ export function useSdiLiquidityPosition(bankId: string | undefined) {
 export function useLiquidityMonitoring(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: scopedQueryKey('liquidity-monitoring', scope, bankId ?? null),
+    queryKey: scopedQueryKey("liquidity-monitoring", scope, bankId ?? null),
     queryFn: async (): Promise<LiquidityMonitoring> => {
       const response = await apiCall(() =>
-        liquidityMonitoringApi.getLiquidityMonitoring({ bankId: bankId! })
+        liquidityMonitoringApi.getLiquidityMonitoring({ bankId: bankId! }),
       );
       return {
         as_of: response.asOf,
@@ -327,9 +339,11 @@ export function useLiquidityMonitoring(bankId: string | undefined) {
         })),
         funding_concentration: {
           total_deposits_ghs: response.fundingConcentration.totalDepositsGhs,
-          top_five_deposits_ghs: response.fundingConcentration.topFiveDepositsGhs,
+          top_five_deposits_ghs:
+            response.fundingConcentration.topFiveDepositsGhs,
           top_five_pct: response.fundingConcentration.topFivePct,
-          unattributed_deposits_ghs: response.fundingConcentration.unattributedDepositsGhs,
+          unattributed_deposits_ghs:
+            response.fundingConcentration.unattributedDepositsGhs,
           providers: response.fundingConcentration.providers.map((row) => ({
             name: row.name,
             deposit_ghs: row.depositGhs,
@@ -338,14 +352,17 @@ export function useLiquidityMonitoring(bankId: string | undefined) {
           })),
         },
         counterbalancing_capacity: {
-          gross_unencumbered_ghs: response.counterbalancingCapacity.grossUnencumberedGhs,
-          monetized_value_ghs: response.counterbalancingCapacity.monetizedValueGhs,
+          gross_unencumbered_ghs:
+            response.counterbalancingCapacity.grossUnencumberedGhs,
+          monetized_value_ghs:
+            response.counterbalancingCapacity.monetizedValueGhs,
           bog_eligible_ghs: response.counterbalancingCapacity.bogEligibleGhs,
-          uncalibrated_asset_count: response.counterbalancingCapacity.uncalibratedAssetCount,
+          uncalibrated_asset_count:
+            response.counterbalancingCapacity.uncalibratedAssetCount,
         },
         readiness: response.readiness.map((row) => ({
           module: row.module,
-          status: row.status as SdiReadiness['status'],
+          status: row.status as SdiReadiness["status"],
           reasons: row.reasons,
         })),
       };
@@ -356,16 +373,20 @@ export function useLiquidityMonitoring(bankId: string | undefined) {
 
 export function useSdiLargeExposures(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['sdi-large-exposures', bankId],
-    queryFn: () => sdiFetch<SdiLargeExposures>(`/banks/${bankId}/sdi/large-exposures`),
+    queryKey: ["sdi-large-exposures", bankId],
+    queryFn: () =>
+      sdiFetch<SdiLargeExposures>(`/banks/${bankId}/sdi/large-exposures`),
     enabled: Boolean(bankId),
   });
 }
 
 export function useSdiReadiness(bankId: string | undefined) {
   return useQuery({
-    queryKey: ['sdi-readiness', bankId],
-    queryFn: () => sdiFetch<{ as_of: string; modules: SdiReadiness[] }>(`/banks/${bankId}/sdi/readiness`),
+    queryKey: ["sdi-readiness", bankId],
+    queryFn: () =>
+      sdiFetch<{ as_of: string; modules: SdiReadiness[] }>(
+        `/banks/${bankId}/sdi/readiness`,
+      ),
     enabled: Boolean(bankId),
   });
 }
