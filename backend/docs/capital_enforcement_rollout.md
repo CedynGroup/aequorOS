@@ -23,8 +23,8 @@ Unauthorized Capital run IDs return 404, and Capital rows are removed before
 regulatory-run counts and pagination are calculated.
 
 Capital execution requires CAP `run` with sensitivity `confidential`.
-Capital-plan draft creation and revision require CAP `create` and `edit`
-respectively at that same sensitivity. Approval requires CAP `approve` and an
+Creating a new capital-plan version requires CAP `create`; changing an existing
+draft requires CAP `edit`, both at that same sensitivity. Approval requires CAP `approve` and an
 independent checker. ILAAP refresh additionally requires a second, independent
 LIQ `view` decision with sensitivity `confidential`; neither decision may use
 scope fields from the other binding.
@@ -33,6 +33,21 @@ Capital entries in `/scenario-workbench/capital` apply the same CAP
 `run`/`create`/`view`/`edit` split. No route infers authority from `users.role`,
 token `roles[]`, a different module, a different sensitivity, or separate
 partial bindings.
+
+## Dashboard access
+
+Capital navigation and deep links follow the server's effective-authority
+projection. `/basel`, RWA, structure, and stress pages use the aggregated-view
+permission above; `/basel/planning` uses confidential view. A denied deep link
+returns the dashboard's not-found view. SDI assurance evidence requests use the
+separate restricted-view permission.
+
+In **Basel → Planning**, the **ICAAP and ILAAP governance** panel shows current
+and approved plan versions and the latest ILAAP snapshot. **Refresh ILAAP
+evidence** appears only when both refresh permissions above are present and a
+reporting period is selected. Forecast projections also require Forecasting
+access; the capital dashboard and illustrative planner require aggregated view.
+After a grant change, sign in again to obtain the new authorization version.
 
 ## Inventory
 
@@ -185,6 +200,8 @@ SELECT
             'denied: no active exact CAP binding'
     END AS capital_result,
     CASE
+        WHEN principal_type = 'machine' THEN
+            'denied: Capital routes require a human binding'
         WHEN cap_maker AND liq_confidential_view THEN
             'allowed: ILAAP refresh'
         ELSE

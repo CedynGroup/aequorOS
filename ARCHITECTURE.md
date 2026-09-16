@@ -82,11 +82,8 @@ organization-wide scope. It ignores scalar role and token-permission claims and
 applies workflow-supplied demo-mode, maker-checker, step-up, and limit
 conditions as global vetoes. Its decision includes an audit-ready trace.
 
-Liquidity Monitoring is the first enforcing product route: it requires `view`
-on an exact institution target (or an explicitly organization-wide binding)
-for LIQ/confidential and emits `authz.binding_decision`. It denies when no
-complete active binding matches or evaluation fails; scalar roles are not a
-fallback. Other product routes retain their existing authorization behavior.
+Product-route cutovers and their authoritative rollout contracts are listed in
+[Authorization foundation — Product rollout boundary](backend/docs/authorization_foundation.md#product-rollout-boundary).
 Follow-on migration `202608280046` creates an explicit
 organization-wide `org_owner`
 binding only where an organization had exactly one active human legacy admin;

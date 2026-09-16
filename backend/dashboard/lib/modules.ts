@@ -146,7 +146,7 @@ export type ModuleScope = {
   capitalConfidentialView?: boolean;
   /** Exact CAP/restricted view authority for assurance evidence. */
   capitalRestrictedView?: boolean;
-  /** Exact CAP/confidential maker permissions. */
+  /** Exact CAP/confidential run authority. */
   capitalRun?: boolean;
   /**
    * False while the bank payload is still loading. Until it flips true the scope

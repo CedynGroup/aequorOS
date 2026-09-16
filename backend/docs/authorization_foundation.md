@@ -5,8 +5,8 @@ The policy kernel remains additive. Liquidity Monitoring is the first product
 route enforced by it; the authorization-version check, effective-authority
 projection, institution-discovery boundary, and Org Owner grant-administration
 boundary are also enforcing. Tenant grant create/list/revoke and the Members
-aggregation are live, while every other product route keeps its existing data
-permission check until its separate rollout.
+aggregation are live. Subsequent product cutovers are tracked in the
+[product rollout boundary](#product-rollout-boundary).
 
 ## Authority model
 
@@ -141,9 +141,10 @@ limit, and other workflow context before any side effect.
 `GET /banks` returns only institutions with at least one projected capability.
 Bank detail, reporting-period, and fact routes apply the same coverage decision
 and return `404` for an uncovered institution. This is an addressability and
-discovery boundary only: except for Liquidity Monitoring, it does not replace a
-product route's existing data authorization. Projection failures return `503`
-and emit denial/error telemetry rather than falling back to legacy authority.
+discovery boundary only: each product route must still enforce its own data
+authorization as described in the [rollout boundary](#product-rollout-boundary).
+Projection failures return `503` and emit denial/error telemetry rather than
+falling back to legacy authority.
 
 The dashboard shell, command palette, module tabs, route guard, and query policy
 consume this server projection. Capability and product caches are partitioned by
@@ -380,8 +381,11 @@ Two generative suites add coverage beyond the fixed examples:
 
 ## Product rollout boundary
 
-Liquidity Monitoring is enforcing. Existing operational routes outside that
-surface keep their current checks, while grant administration itself requires
-the owner binding. Explanation endpoints, further product-route cutovers,
+Liquidity Monitoring is enforcing as described above. Capital's route matrix,
+access requirements, and deployment inventory are owned by the
+[Capital enforcement rollout](capital_enforcement_rollout.md). Existing
+operational routes outside these cutovers keep their current checks, while
+grant administration itself requires the owner binding. Explanation endpoints,
+further product-route cutovers,
 invite/lifecycle actions, scheduled grants, and owner designation/transfer
 remain separate work.
