@@ -171,6 +171,14 @@ export type ModuleScope = {
   isResolved: boolean;
 };
 
+export function isBaselineOnlyScope(scope: ModuleScope): boolean {
+  return (
+    scope.isResolved &&
+    !scope.hasInstitutionAuthority &&
+    scope.organizationModules.size === 0
+  );
+}
+
 /** Build a scope from the API `default_modules` list. Empty/absent → null. */
 export function moduleSetFrom(
   defaultModules: readonly string[] | null | undefined,
@@ -323,6 +331,27 @@ const IRRBB_AGGREGATED_VIEW = "IRRBB · Aggregated · View";
 const IRRBB_CONFIDENTIAL_VIEW = "IRRBB · Confidential · View";
 const IRRBB_CONFIDENTIAL_RUN = "IRRBB · Confidential · Run";
 
+const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
+  command_center: "Risk & Limits · Aggregated · View",
+  risk: "Risk & Limits · Confidential · View",
+  alerts: "Risk & Limits · Confidential · View",
+  markets: "Markets · Published · View",
+  positions: "Risk & Limits · Confidential · View",
+  irrbb: "IRRBB · Aggregated · View",
+  liquidity: LIQUIDITY_AGGREGATED_VIEW,
+  credit: "Risk & Limits · Confidential · View",
+  fx: "Foreign Exchange · Aggregated · View",
+  capital: "Basel Capital · Aggregated · View",
+  ftp: "Funds Transfer Pricing · Aggregated · View",
+  forecasting: "Forecasting · Aggregated · View",
+  behavioral: "Behavioral Models · Aggregated · View",
+  data_engine: "Data Engine · Restricted · View",
+  reports: "Regulatory Reporting · Published · View",
+  institution: "Account Administration · Restricted · View",
+  regulatory_reporting: "Regulatory Reporting · Published · View",
+  settings: "Account Administration · Restricted · Administer",
+};
+
 function permissionReason(permissions: readonly string[]): string | undefined {
   if (permissions.length === 0) return undefined;
   const required =
@@ -407,6 +436,9 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   if (!scope.isResolved) return true;
   if (isPersonalSettingsPath(path)) return true;
   const moduleKey = moduleForPath(path);
+  if (path === "/" && isBaselineOnlyScope(scope)) {
+    return true;
+  }
   if (
     moduleKey &&
     ORGANIZATION_ROUTES.has(moduleKey) &&
@@ -452,6 +484,13 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (isPersonalSettingsPath(path)) return { state: "enabled" };
   const moduleKey = moduleForPath(path);
   if (moduleKey) {
+    if (isBaselineOnlyScope(scope)) {
+      if (moduleKey === "settings") return { state: "enabled" };
+      return {
+        state: "disabled",
+        reason: permissionReason([MODULE_ENTRY_REQUIREMENTS[moduleKey]])!,
+      };
+    }
     if (ORGANIZATION_ROUTES.has(moduleKey)) {
       return scope.organizationModules.has(moduleKey)
         ? { state: "enabled" }
@@ -523,6 +562,9 @@ const LANDING_CANDIDATES: readonly string[] = [
  */
 export function landingPathFor(scope: ModuleScope): string | null {
   if (!scope.isResolved) return null;
+  if (isBaselineOnlyScope(scope)) {
+    return "/";
+  }
   return (
     LANDING_CANDIDATES.find((href) => isHrefVisible(href, scope)) ??
     "/settings/profile"
@@ -532,12 +574,13 @@ export function landingPathFor(scope: ModuleScope): string | null {
 /**
  * Where a hub URL should send a user it is hidden from, or null to 404.
  *
- * Two URLs are destinations people type or are sent to rather than deep links
+ * Hub URLs are destinations people type or are sent to rather than deep links
  * into someone else's data, so a hidden one redirects instead of 404ing:
  *   - `/`         → the first visible surface (`landingPathFor`);
  *   - `/settings` → personal settings, which every active session can open,
  *                   when organization settings need authority the user lacks.
- * Every other hidden path stays not-found (docs/rbac.md §8.2).
+ * A member with no institution authority also returns from public product
+ * structure to `/`; hidden object-specific paths still stay not-found.
  */
 export function hubRedirectFor(
   pathname: string,
@@ -550,5 +593,13 @@ export function hubRedirectFor(
     return landing && landing !== "/" ? landing : null;
   }
   if (path === "/settings") return "/settings/profile";
+  const moduleKey = moduleForPath(path);
+  if (
+    moduleKey &&
+    !ORGANIZATION_ROUTES.has(moduleKey) &&
+    isBaselineOnlyScope(scope)
+  ) {
+    return "/";
+  }
   return null;
 }

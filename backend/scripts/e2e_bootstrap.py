@@ -47,7 +47,7 @@ from app.core.authorization import (
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models import IntegrationKey, Organization, User
-from app.services import authorization
+from app.services import authorization, membership
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
 from app.services.organization_ownership import assign_initial_owner
@@ -76,6 +76,7 @@ E2E_USERS = {
     "integration_admin": UUID("eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8"),
     "liquidity_viewer": UUID("eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9"),
     "liquidity_aggregated_viewer": UUID("eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea"),
+    "invite_fresh": UUID("eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb"),
 }
 
 
@@ -122,6 +123,7 @@ def main() -> None:
                             "integration_admin",
                             "liquidity_viewer",
                             "liquidity_aggregated_viewer",
+                            "invite_fresh",
                         }
                         else role
                     ),
@@ -131,6 +133,13 @@ def main() -> None:
                 session.add(user)
             users[role] = user
         session.flush()
+        for user in users.values():
+            membership.ensure_baseline_membership(
+                session,
+                user=user,
+                granted_by_id="e2e-bootstrap",
+                commit=False,
+            )
         # create_all does not run the initial-owner migration. Mirror the landed
         # #127 bootstrap so the Members journey exercises real owner authority.
         assign_initial_owner(

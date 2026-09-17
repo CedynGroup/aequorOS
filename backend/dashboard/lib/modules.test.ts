@@ -258,7 +258,31 @@ const nothingVisible: ModuleScope = {
 };
 assert.equal(landingPathFor(nothingVisible), "/settings/profile");
 
-// Hub redirects: only `/` and `/settings` redirect when hidden; deep links 404.
+const memberOnly: ModuleScope = {
+  modules: new Set(),
+  organizationModules: new Set(),
+  hasInstitutionAuthority: false,
+  institutionClass: null,
+  liquidityAggregatedView: false,
+  liquidityConfidentialView: false,
+  isResolved: true,
+};
+assert.equal(landingPathFor(memberOnly), "/");
+assert.equal(isPathVisible("/", memberOnly), true);
+assert.deepEqual(hrefAccess("/liquidity", memberOnly), {
+  state: "disabled",
+  reason:
+    "Requires Liquidity Monitoring · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.deepEqual(hrefAccess("/basel", memberOnly), {
+  state: "disabled",
+  reason:
+    "Requires Basel Capital · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(hrefAccess("/settings", memberOnly).state, "enabled");
+
+// Hubs redirect when hidden; a member without institution authority also
+// returns from public product-module paths to the root empty workspace.
 assert.equal(hubRedirectFor("/", ownerOnly), "/settings");
 assert.equal(hubRedirectFor("/", resolved(true)), null);
 assert.equal(hubRedirectFor("/", unresolved), null);
@@ -271,6 +295,7 @@ assert.equal(hubRedirectFor("/settings/members", operationalOnly), null);
 assert.equal(hubRedirectFor("/settings/authentication", operationalOnly), null);
 assert.equal(hubRedirectFor("/liquidity/monitoring", denied), null);
 assert.equal(hubRedirectFor("/fx", ownerOnly), null);
+assert.equal(hubRedirectFor("/liquidity/monitoring", memberOnly), "/");
 const structurallyExcluded = {
   ...denied,
   entitledModules: new Set(["capital"] as const),

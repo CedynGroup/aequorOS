@@ -130,6 +130,7 @@ class OwnerAssignmentBasis(StrEnum):
 class RoleBundle(StrEnum):
     """Fixed role bundles; custom user-defined roles are not supported yet."""
 
+    MEMBER = "member"
     VIEWER = "viewer"
     AUDITOR = "auditor"
     ANALYST = "analyst"
@@ -141,6 +142,10 @@ class RoleBundle(StrEnum):
 
 ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingProxyType(
     {
+        # Active tenant membership is explicit, but it is not product-data
+        # authority. Shell/profile access is authenticated self-service and the
+        # evaluator must never turn this row into an institution or module grant.
+        RoleBundle.MEMBER: frozenset(),
         RoleBundle.VIEWER: frozenset({Permission.VIEW}),
         # Sensitivity remains a binding dimension: this does not make raw data
         # visible unless the binding explicitly covers that classification.

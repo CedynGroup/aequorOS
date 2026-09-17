@@ -176,10 +176,6 @@ def owner_read_access_exists(
     evaluator unions rows, so adding the sentence beside it is still exact.
     """
 
-    from app.services.grant_administration import (  # noqa: PLC0415 - avoid a service cycle
-        binding_is_effective,
-    )
-
     rows = db.scalars(
         select(AuthorizationBinding).where(
             AuthorizationBinding.organization_id == organization_id,
@@ -193,7 +189,7 @@ def owner_read_access_exists(
             AuthorizationBinding.status == BindingStatus.ACTIVE.value,
         )
     )
-    return any(binding_is_effective(row, now=now) for row in rows)
+    return any(authorization.binding_is_effective(row, now=now) for row in rows)
 
 
 def ensure_owner_read_access(

@@ -46,6 +46,7 @@ _OTHER_PRINCIPAL_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 # contract the evaluator output is compared with, not a restatement through an
 # implementation helper that would reproduce the same bug.
 _REFERENCE_ROLE_PERMISSIONS: dict[RoleBundle, frozenset[Permission]] = {
+    RoleBundle.MEMBER: frozenset(),
     RoleBundle.VIEWER: frozenset({Permission.VIEW}),
     RoleBundle.AUDITOR: frozenset({Permission.VIEW}),
     RoleBundle.ANALYST: frozenset(
@@ -352,3 +353,67 @@ def test_lifecycle_boundaries_fail_closed(
 
     assert decision.allowed is expected_active
     assert decision.binding_trace[0].active is expected_active
+
+
+@settings(max_examples=100)
+@given(
+    bindings=_binding_collections(),
+    permission=st.sampled_from(tuple(Permission)),
+    module=st.sampled_from(tuple(Module)),
+    sensitivity=st.sampled_from(tuple(Sensitivity)),
+    institution_id=st.sampled_from((None, _BANK)),
+    baseline_id=st.uuids(version=4),
+)
+def test_baseline_membership_never_changes_resource_decisions(  # noqa: PLR0913
+    bindings: list[BindingGrant],
+    permission: Permission,
+    module: Module,
+    sensitivity: Sensitivity,
+    institution_id: str | None,
+    baseline_id: UUID,
+) -> None:
+    principal = PrincipalLocator(_ORG, _PRINCIPAL_ID, PrincipalType.HUMAN)
+    resource = ResourceLocator(
+        _ORG,
+        (InstitutionScope.ORGANIZATION if institution_id is None else InstitutionScope.INSTITUTION),
+        institution_id,
+        module,
+        sensitivity,
+    )
+    without_baseline = [
+        binding for binding in bindings if binding.role_bundle is not RoleBundle.MEMBER
+    ]
+    baseline = BindingGrant(
+        binding_id=baseline_id,
+        organization_id=_ORG,
+        principal_id=_PRINCIPAL_ID,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.MEMBER,
+        institution_scope=InstitutionScope.ORGANIZATION,
+        institution_id=None,
+        module_scope=ModuleScope.ACCOUNT,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        status=BindingStatus.ACTIVE,
+        valid_from=_NOW,
+        valid_until=None,
+        revoked_at=None,
+    )
+
+    before = evaluate_permission(
+        principal,
+        permission,
+        resource,
+        without_baseline,
+        now=_NOW,
+    )
+    after = evaluate_permission(
+        principal,
+        permission,
+        resource,
+        [*without_baseline, baseline],
+        now=_NOW,
+    )
+
+    assert after.allowed is before.allowed
+    assert after.reason == before.reason
+    assert after.matching_binding_ids == before.matching_binding_ids

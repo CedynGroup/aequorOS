@@ -154,6 +154,12 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   or transaction context carry `requires_contextual_authorization` and are never execution
   authority; bank detail/period/fact routes 404 without institution coverage; shell
   navigation and deep links consume the projection, never token roles.
+  Every active human also holds one system-managed `member` binding at
+  organization-wide ACCOUNT/restricted scope. Its permission set is empty: it opens only
+  the console shell, own profile/effective-authority reads, personal settings, and the
+  disabled module catalogue; it never changes an institution or module decision.
+  `app/services/membership.py` creates it atomically at activation and ends it only on
+  deactivation; Members cannot grant or revoke it.
   **Account administration cutover (built 2026-09-08).** SSO connection read/write,
   SSO request list/reject, and integration-key list/revoke require one organization-wide
   ACCOUNT/restricted `administer` binding; `/organization/users` separately requires

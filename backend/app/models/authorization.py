@@ -142,6 +142,14 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             postgresql_where=sql_text("role_bundle = 'org_owner' AND status = 'active'"),
             sqlite_where=sql_text("role_bundle = 'org_owner' AND status = 'active'"),
         ),
+        Index(
+            "uq_authorization_bindings_active_member",
+            "organization_id",
+            "principal_user_id",
+            unique=True,
+            postgresql_where=sql_text("role_bundle = 'member' AND status = 'active'"),
+            sqlite_where=sql_text("role_bundle = 'member' AND status = 'active'"),
+        ),
     )
 
     organization_id: Mapped[str] = mapped_column(

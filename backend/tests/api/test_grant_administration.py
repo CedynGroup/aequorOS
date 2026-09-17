@@ -623,9 +623,7 @@ def test_institution_directory_is_account_plane_and_owner_gated(
     assert listed[BANK_A] == ("Aequor Bank Ghana", "Aequor Ghana")
     assert listed[BANK_B] == ("Aequor Rural Bank", "Aequor Rural")
     with _session() as db:
-        assert set(listed) == set(
-            db.scalars(select(Bank.id).where(Bank.organization_id == ORG_1))
-        )
+        assert set(listed) == set(db.scalars(select(Bank.id).where(Bank.organization_id == ORG_1)))
     names = [entry["name"] for entry in directory.json()["institutions"]]
     assert names == sorted(names)
 
@@ -868,6 +866,11 @@ def test_sso_approval_activates_identity_only_with_a_complete_grant(
                 )
             )
         )
-        assert len(bindings) == 1
-        assert bindings[0].module_scope == "liq"
-        assert bindings[0].sensitivity_scope == "confidential"
+        assert {binding.role_bundle for binding in bindings} == {"member", "analyst"}
+        baseline = next(binding for binding in bindings if binding.role_bundle == "member")
+        assert baseline.institution_scope == "organization"
+        assert baseline.module_scope == "account"
+        assert baseline.sensitivity_scope == "restricted"
+        grant = next(binding for binding in bindings if binding.role_bundle == "analyst")
+        assert grant.module_scope == "liq"
+        assert grant.sensitivity_scope == "confidential"

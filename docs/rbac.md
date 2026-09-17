@@ -356,7 +356,8 @@ count (Okta caps at 100/org) to prevent proliferation.
 
 > **Foundation boundary:** `app/core/authorization.py` stores a small action
 > enum separately from the resource's concrete module. Its v1 bundles grant:
-> Viewer/Auditor = `view`; Analyst = `view|create|edit|run|validate|export`;
+> Member = no evaluator permission; Viewer/Auditor = `view`;
+> Analyst = `view|create|edit|run|validate|export`;
 > Approver = `view|review|approve`; Account Admin = `administer`; and the
 > machine-only Integration Writer = `ingest`. `configure`, `sign_off`, and
 > `submit` are reserved but are not in any v1 bundle. The richer namespaces and
@@ -554,6 +555,16 @@ Query caches are partitioned by tenant, actor, `authv`, and institution.
 Personal profile self-service remains available to an active user without an Account
 binding; organization settings require organization-wide Account administration.
 
+Every active human member also holds one system-managed `member` binding:
+organization-wide, Account/restricted. The bundle has an empty permission set,
+so adding or removing it cannot change any institution or product-module
+decision. It is the explicit, audited authority to load the shell, read the
+member's own profile and effective-authority projection, use personal settings,
+and see the module catalogue. With no separate institution grant, module entries
+remain visible but disabled with the exact permission tooltip, and a module deep
+link returns to `/` and the "No authorized institutions yet" panel. Cross-tenant,
+unknown-object, and non-existent routes remain 404.
+
 Remaining rollout work:
 
 - **Module action cutovers:** this effective-authority dashboard slice gates an
@@ -722,6 +733,14 @@ impersonation-gated**, not full super-admin. Minimize standing super-admins.
 > login immediately; their cases/scenarios/reports transfer to a custodian.
 > Deactivate ≠ delete.
 
+Activation writes the baseline `member` binding in the same transaction. This
+applies to invite acceptance, JIT request approval, and operator tenant
+provisioning; migration `202609160053` backfills exactly one row for every
+existing active human in every organization. Settings → Members may display the
+row as evidence but cannot grant or revoke it. Deactivation revokes it, audits
+the lifecycle event, advances `authv`, and ends refresh families. Reactivation
+must create a fresh active baseline row atomically with the status change.
+
 ### 11.2 Invite-by-email flow
 
 1. **Admin opens Members → Invite**: enters email(s), picks **role preset(s)** and **scope** (entities/desks), only offering grants the admin themselves may give. System **checks the seat limit** before allowing send.
@@ -746,7 +765,7 @@ _who may sign in_; provisioning decides _who exists_.
 
 ### 11.4 JIT + SCIM + verified domains
 
-- **JIT** — **BUILT in request-access form** (opt-in `jit_enabled` per connection): first OIDC login from an allowed email domain records a deactivated stub with no binding-derived authority. An Org Owner must approve one complete scoped grant in Members; identity activation and the one binding are atomic. Phase 2 adds group→role mapping (which can then safely auto-activate). **JIT does not deprovision** → SCIM below is the governance answer.
+- **JIT** — **BUILT in request-access form** (opt-in `jit_enabled` per connection): first OIDC login from an allowed email domain records a deactivated stub with no binding-derived authority. An Org Owner must approve one complete scoped grant in Members; identity activation, baseline membership, and the selected product grant are atomic. Phase 2 adds group→role mapping (which can then safely auto-activate). **JIT does not deprovision** → SCIM below is the governance answer.
 - **SCIM 2.0** — the IdP syncs create/update/**deactivate** to AequorOS. **Mandatory for bank tenants** — SCIM-driven deprovisioning is the single most-probed enterprise security-questionnaire item. Key on a **stable IdP id (`externalId`/`sub`), never email**, or JIT+SCIM produce duplicate records.
 - **Verified domains** — a tenant verifies a domain via DNS TXT; then auto-suggest membership and/or **enforce SSO** for all users on that domain (domain capture stops shadow personal accounts).
 - **Rule:** JIT creates, SCIM governs, SSO authenticates, verified domains bound the population — all keyed on one stable identifier.

@@ -123,9 +123,9 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert admin.role == "account_admin"
     assert admin.auth_provider == "password"
     assert admin.is_active is True
-    # Two explicit ownership sentences (owner + organization-wide read), each
-    # advancing the version once.
-    assert admin.authorization_version == 3
+    # Baseline membership plus two explicit ownership sentences (owner +
+    # organization-wide read), each advancing the version once.
+    assert admin.authorization_version == 4
     assert admin.password_hash is not None
     assert security.verify_password(one_time_password, admin.password_hash)
     owner_binding = operator_db.scalar(
@@ -157,13 +157,25 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert read_binding.granted_by_type == "system"
     assert read_binding.granted_by_id == "tenant_provisioning:dev@aequoros.com"
     assert "Org Owner read access" in read_binding.grant_reason
+    member_binding = operator_db.scalar(
+        select(AuthorizationBinding).where(
+            AuthorizationBinding.organization_id == organization_id,
+            AuthorizationBinding.role_bundle == "member",
+        )
+    )
+    assert member_binding is not None
+    assert member_binding.principal_user_id == admin.id
+    assert member_binding.institution_scope == "organization"
+    assert member_binding.module_scope == "account"
+    assert member_binding.sensitivity_scope == "restricted"
+    assert member_binding.granted_by_id == "tenant_provisioning"
     assert (
         operator_db.scalar(
             select(func.count())
             .select_from(AuthorizationBinding)
             .where(AuthorizationBinding.organization_id == organization_id)
         )
-        == 2
+        == 3
     )
     owner_state = operator_db.get(OrganizationOwnerAssignment, organization_id)
     assert owner_state is not None

@@ -33,56 +33,62 @@ export const E2E_USERS: Record<
   string,
   { id: string; roles: string[]; authv: number }
 > = {
-  // Bootstrap gives admin two initial-ownership grants (owner and read access)
-  // and an organization-wide Analyst grant, each advancing authv once.
+  // Bootstrap gives every human baseline membership. Admin then receives two
+  // initial-ownership grants (owner and read access) and an organization-wide
+  // Analyst grant, each advancing authv once.
   // The exact Liquidity-only fixture grant belongs to liquidity_viewer below.
   admin: {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     roles: ["admin"],
-    authv: 4,
+    authv: 5,
   },
   approver: {
     id: "eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2",
     roles: ["approver"],
-    authv: 2,
+    authv: 3,
   },
   analyst: {
     id: "eeeeeeee-3333-4eee-8eee-eeeeeeeeeee3",
     roles: ["analyst"],
-    authv: 2,
+    authv: 3,
   },
   viewer: {
     id: "eeeeeeee-4444-4eee-8eee-eeeeeeeeeee4",
     roles: ["viewer"],
-    authv: 1,
+    authv: 2,
   },
   grant_member: {
     id: "eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5",
     roles: ["viewer"],
-    authv: 1,
+    authv: 2,
   },
   account_admin: {
     id: "eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6",
     roles: ["account_admin"],
-    authv: 2,
+    authv: 3,
   },
   integration_admin: {
     id: "eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8",
     roles: ["account_admin"],
-    authv: 3,
+    authv: 4,
   },
   legacy_account_admin: {
     id: "eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7",
     roles: ["account_admin"],
-    authv: 1,
+    authv: 2,
   },
   liquidity_aggregated_viewer: {
     id: "eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea",
     roles: ["viewer"],
-    authv: 2,
+    authv: 3,
   },
   liquidity_viewer: {
     id: "eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9",
+    roles: ["viewer"],
+    authv: 3,
+  },
+  invite_fresh: {
+    id: "eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb",
     roles: ["viewer"],
     authv: 2,
   },
@@ -98,6 +104,7 @@ export const E2E_STORAGE_ROLES = [
   "legacy_account_admin",
   "liquidity_viewer",
   "liquidity_aggregated_viewer",
+  "invite_fresh",
 ] as const satisfies readonly (keyof typeof E2E_USERS)[];
 
 export async function mintBackendToken(
