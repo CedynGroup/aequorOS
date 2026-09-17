@@ -104,10 +104,6 @@ def _grant_analyst(
     )
 
 
-def _grant_liquidity_analyst(db: Session) -> None:
-    _grant_analyst(db, ModuleScope.LIQUIDITY)
-
-
 def test_catalogue_merges_system_and_custom_with_vocabulary(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     _grant_analyst(db_session)
