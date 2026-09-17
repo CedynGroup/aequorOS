@@ -941,6 +941,11 @@ def test_queued_official_run_mints_authorized_fx_results(
     period_id = _seed_book()
     _grant(
         role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.IRRBB,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        role_bundle=RoleBundle.ANALYST,
         module_scope=ModuleScope.LIQUIDITY,
         sensitivity_scope=SensitivityScope.CONFIDENTIAL,
     )
@@ -983,6 +988,11 @@ def test_queued_official_run_mints_authorized_fx_results(
 def test_official_enqueue_requires_exact_confidential_fx_run(
     db_client: TestClient, fx_scope: str
 ) -> None:
+    _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.IRRBB,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
     _, version = _grant(
         role_bundle=RoleBundle.ANALYST,
         module_scope=ModuleScope.LIQUIDITY,

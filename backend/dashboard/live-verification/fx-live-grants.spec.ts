@@ -65,6 +65,7 @@ test("real FX grants enforce sensitivity across API, Reports and workbench", asy
     version += 1;
   }
   async function signIn() {
+    await page.goto("about:blank");
     await page.context().clearCookies();
     await page.context().addCookies([
       {

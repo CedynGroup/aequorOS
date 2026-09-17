@@ -5,6 +5,10 @@ import { E2E_TMP } from "../playwright.config";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "wait" });
+});
+
 test.describe("unbound FX user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
 
