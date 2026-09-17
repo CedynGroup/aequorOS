@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import {
   Search,
   ChevronDown,
@@ -13,20 +13,20 @@ import {
   Loader2,
   LogOut,
   UserRound,
-} from 'lucide-react';
-import { useSession, signOut } from 'next-auth/react';
-import { useBankContext } from './BankContext';
-import { useTheme } from './ThemeProvider';
-import { fmtRelative } from '@/lib/api/values';
-import { avatarColor, initialsFrom, roleLabel } from '@/lib/api/identity';
-import { useUserProfile } from '@/components/profile/ProfileProvider';
-import { LOGIN_URL } from '@/lib/loginUrl';
-import { useLiveSummary, useRefreshBankData } from '@/lib/api/hooks';
-import CommandPalette from './CommandPalette';
-import UnifiedBell from '@/components/shell/UnifiedBell';
-import { regShort } from '@/lib/format';
-import { useImpersonation } from '@/components/impersonation/useImpersonation';
-import { leaveImpersonation } from '@/lib/api/impersonation';
+} from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import { useBankContext } from "./BankContext";
+import { useTheme } from "./ThemeProvider";
+import { fmtRelative } from "@/lib/api/values";
+import { avatarColor, initialsFrom, roleLabel } from "@/lib/api/identity";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { LOGIN_URL } from "@/lib/loginUrl";
+import { useLiveSummary, useRefreshBankData } from "@/lib/api/hooks";
+import CommandPalette from "./CommandPalette";
+import UnifiedBell from "@/components/shell/UnifiedBell";
+import { regShort } from "@/lib/format";
+import { useImpersonation } from "@/components/impersonation/useImpersonation";
+import { leaveImpersonation } from "@/lib/api/impersonation";
 
 export default function Header({
   onMobileMenu,
@@ -40,13 +40,13 @@ export default function Header({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen((v) => !v);
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function Header({
     // While inspecting, drop the sticky header below the fixed staff banner
     // (2.5rem) so the two never overlap. No offset on a normal session.
     <header
-      style={impersonating ? { top: '2.5rem' } : undefined}
+      style={impersonating ? { top: "2.5rem" } : undefined}
       className="h-16 bg-surface-raised border-b border-border-light flex items-center justify-between px-4 md:px-6 sticky top-0 z-30"
     >
       <div className="flex items-center gap-3 min-w-0">
@@ -75,15 +75,16 @@ export default function Header({
         )}
         <div className="text-body min-w-0">
           <span className="font-medium text-navy truncate">
-            {bank?.name ?? '—'}
+            {bank?.name ?? "—"}
           </span>
           <span className="hidden md:inline mx-2 text-slate-light">|</span>
           <span className="hidden md:inline text-slate text-caption">
             {bank
               ? `${regShort()} licensed · ${
-                  bank.institutionTypeDetail?.displayName ?? capitalize(bank.licenseType)
+                  bank.institutionTypeDetail?.displayName ??
+                  capitalize(bank.licenseType)
                 }`
-              : '—'}
+              : "—"}
           </span>
         </div>
       </div>
@@ -110,7 +111,11 @@ export default function Header({
           <Search size={16} aria-hidden />
         </button>
 
-          <BankClock now={now} timezone={bank?.jurisdiction?.timezone} locale={bank?.jurisdiction?.locale} />
+        <BankClock
+          now={now}
+          timezone={bank?.jurisdiction?.timezone}
+          locale={bank?.jurisdiction?.locale}
+        />
 
         <LiveFreshnessPill />
 
@@ -121,7 +126,10 @@ export default function Header({
         <UserMenu />
       </div>
 
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+      />
     </header>
   );
 }
@@ -138,14 +146,14 @@ function BankClock({
   if (!now || !timezone) return null;
 
   const formatter = new Intl.DateTimeFormat(locale ?? undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
+    hour: "2-digit",
+    minute: "2-digit",
     timeZone: timezone,
-    timeZoneName: 'short',
+    timeZoneName: "short",
   });
   const fullFormatter = new Intl.DateTimeFormat(locale ?? undefined, {
-    dateStyle: 'full',
-    timeStyle: 'short',
+    dateStyle: "full",
+    timeStyle: "short",
     timeZone: timezone,
   });
 
@@ -159,7 +167,6 @@ function BankClock({
     </span>
   );
 }
-
 
 /** How old the live tier may be before the header stops calling it current.
  * The scheduled refresh runs hourly and every accepted ingestion batch also
@@ -212,7 +219,7 @@ function LiveFreshnessPill() {
           sourceAsOfDate &&
           refresh.mutate({
             asOfDate: sourceAsOfDate,
-            reason: 'Recompute live figures (header)',
+            reason: "Recompute live figures (header)",
           })
         }
         title="The live tier has not recomputed recently — click to recompute now. It refreshes automatically as data arrives and on the hourly schedule."
@@ -224,15 +231,15 @@ function LiveFreshnessPill() {
           <AlertTriangle size={11} aria-hidden />
         )}
         {refresh.isPending
-          ? 'Recomputing…'
-          : `Refresh delayed${latest ? ` (${fmtRelative(latest)})` : ''}`}
+          ? "Recomputing…"
+          : `Refresh delayed${latest ? ` (${fmtRelative(latest)})` : ""}`}
       </button>
     );
   }
 
   return (
     <span
-      title={`Live figures — recomputed automatically as data arrives and on the hourly schedule${latest ? `; engines last ran ${fmtRelative(latest)}` : ''}.`}
+      title={`Live figures — recomputed automatically as data arrives and on the hourly schedule${latest ? `; engines last ran ${fmtRelative(latest)}` : ""}.`}
       className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 mx-1 rounded-full border border-success/30 bg-success-light text-success text-caption font-medium whitespace-nowrap"
     >
       <RadioTower size={11} aria-hidden />
@@ -248,11 +255,11 @@ function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} theme`}
-      title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} theme`}
+      aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} theme`}
+      title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} theme`}
       className="w-9 h-9 inline-flex items-center justify-center rounded text-slate hover:bg-surface hover:text-navy transition-colors"
     >
-      {resolvedTheme === 'dark' ? (
+      {resolvedTheme === "dark" ? (
         <Sun size={16} aria-hidden />
       ) : (
         <Moon size={16} aria-hidden />
@@ -272,22 +279,22 @@ function UserMenu() {
   // While inspecting there is no tenant session; show the operator's identity
   // and a "read-only" role so the avatar menu is never a confusing blank.
   const email = impersonating
-    ? (operator ?? '')
-    : (profile?.email ?? session?.user?.email ?? '');
+    ? (operator ?? "")
+    : (profile?.email ?? session?.user?.email ?? "");
   const roles = session?.user?.roles ?? [];
   const name = impersonating
-    ? (operator ?? 'AequorOS staff')
-    : profile?.displayName || session?.user?.name || email || 'Signed in';
+    ? (operator ?? "AequorOS staff")
+    : profile?.displayName || session?.user?.name || email || "Signed in";
   const role = impersonating
-    ? 'Staff inspection · read-only'
+    ? "Staff inspection · read-only"
     : profile?.role
       ? roleLabel(profile.role)
       : roles.length
         ? roleLabel(roles[0])
-        : 'Signed in';
+        : "Signed in";
   const initials = initialsFrom(name);
   const avatarBackground = avatarColor(
-    impersonating ? (operator ?? 'AequorOS staff') : (profile?.userId ?? email),
+    impersonating ? (operator ?? "AequorOS staff") : (profile?.userId ?? email),
   );
 
   useEffect(() => {
@@ -298,13 +305,13 @@ function UserMenu() {
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
@@ -331,7 +338,11 @@ function UserMenu() {
             {role}
           </span>
         </span>
-        <ChevronDown size={12} className="hidden lg:block text-slate" aria-hidden />
+        <ChevronDown
+          size={12}
+          className="hidden lg:block text-slate"
+          aria-hidden
+        />
       </button>
 
       {open && (
@@ -382,10 +393,8 @@ function UserMenu() {
                   onClick={() => {
                     setOpen(false);
                     void signOut({
-                      redirectTo: new URL(
-                        LOGIN_URL,
-                        window.location.origin,
-                      ).href,
+                      redirectTo: new URL(LOGIN_URL, window.location.origin)
+                        .href,
                     });
                   }}
                   className="w-full flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"

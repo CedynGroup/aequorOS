@@ -12,10 +12,12 @@ const EXPIRED = "Thu, 01 Jan 1970 00:00:00 GMT";
 export function authSessionCookieNamesToClear(
   cookieHeader: string | null,
 ): string[] {
-  return [...new Set<string>([
-    ...SESSION_COOKIE_BASE_NAMES,
-    ...presentAuthSessionCookieNames(cookieHeader),
-  ])];
+  return [
+    ...new Set<string>([
+      ...SESSION_COOKIE_BASE_NAMES,
+      ...presentAuthSessionCookieNames(cookieHeader),
+    ]),
+  ];
 }
 
 export function presentAuthSessionCookieNames(
@@ -26,10 +28,15 @@ export function presentAuthSessionCookieNames(
     const separator = part.indexOf("=");
     if (separator < 0) continue;
     const name = part.slice(0, separator).trim();
-    if (SESSION_COOKIE_BASE_NAMES.some((baseName) =>
-      name === baseName ||
-      (name.startsWith(`${baseName}.`) && /^\d+$/.test(name.slice(baseName.length + 1))),
-    )) names.add(name);
+    if (
+      SESSION_COOKIE_BASE_NAMES.some(
+        (baseName) =>
+          name === baseName ||
+          (name.startsWith(`${baseName}.`) &&
+            /^\d+$/.test(name.slice(baseName.length + 1))),
+      )
+    )
+      names.add(name);
   }
   return [...names];
 }
@@ -68,16 +75,19 @@ export async function cleanAuthResponseCookies(
     request.method === "POST" &&
     response.status < 400
   ) {
-    const destination = response.headers.get("location") ??
+    const destination =
+      response.headers.get("location") ??
       (response.headers.get("content-type")?.includes("application/json")
         ? (await response.clone().json()).url
         : undefined);
-    clearAll = typeof destination === "string" &&
+    clearAll =
+      typeof destination === "string" &&
       !new URL(destination, request.url).searchParams.has("error");
   }
   if (!clearAll && issued.size === 0) return response;
-  const names = authSessionCookieNamesToClear(request.headers.get("cookie"))
-    .filter((name) => clearAll || !issued.has(name));
+  const names = authSessionCookieNamesToClear(
+    request.headers.get("cookie"),
+  ).filter((name) => clearAll || !issued.has(name));
   for (const header of expiredAuthSessionCookieHeaders(names)) {
     response.headers.append("set-cookie", header);
   }

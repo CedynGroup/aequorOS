@@ -24,9 +24,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   stay that way. When the corporate entity lands, make it a SIBLING of `banks`
   (a `CO-` platform id alongside `BK-`/`OR-`), never a nullable-heavy `banks`
   row — a corporate has no licence, no jurisdiction regulator, no return family.
-  Changing the host touches `AUTH_URL`, `CORS_ORIGINS`, and `NEXT_PUBLIC_LOGIN_URL`
-  on BOTH Coolify apps; the last is a **build arg** inlined at compile time, so
-  it needs a rebuild, not a restart.
+  Host-change configuration is owned by
+  [dashboard deployment guidance](backend/dashboard/README.md#deploy-to-bankaequoroscom).
 - **Staff control plane (built 2026-08-09..11; specs docs/internal/developer.md +
   staff_UI.md, both carry dated as-built notes).** The operator API is the backend's
   THIRD entrypoint (`app/operator/`, uvicorn `app.operator.main:app` :8100, compose
