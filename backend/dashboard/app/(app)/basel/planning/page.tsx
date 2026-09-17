@@ -111,7 +111,7 @@ export default function CapitalPlanning() {
   const capitalPlan = useCapitalPlan(planningBankId);
   const canRefreshIlaap =
     moduleScope.capitalRun === true &&
-    moduleScope.liquidityMonitoringAccess === true;
+    moduleScope.liquidityConfidentialView === true;
   const refreshIlaap = useRefreshIlaap(canRefreshIlaap ? bankId : undefined);
   const forecastRuns = useForecastRuns(forecastBankId, { limit: 100 });
 

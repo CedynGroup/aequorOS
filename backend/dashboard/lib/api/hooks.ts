@@ -313,8 +313,10 @@ export function useEffectiveRatioDashboards(
   bankId: string | undefined,
   periodId: string,
   capitalAuthorized = true,
+  liquidityEnabled = true,
 ) {
-  const currentLiq = useLiquidityDashboard(bankId);
+  const liquidityBankId = liquidityEnabled ? bankId : undefined;
+  const currentLiq = useLiquidityDashboard(liquidityBankId);
   const currentCap = useCapitalDashboard(
     capitalAuthorized ? bankId : undefined,
   );
@@ -343,7 +345,7 @@ export function useEffectiveRatioDashboards(
   const needsPeriodLiq = liqSelection.current.mismatch;
   const needsPeriodCap = capSelection.current.mismatch;
   const periodLiq = useLiquidityDashboard(
-    needsPeriodLiq ? bankId : undefined,
+    needsPeriodLiq ? liquidityBankId : undefined,
     periodId,
   );
   const periodCap = useCapitalDashboard(
@@ -366,16 +368,18 @@ export function useRegulatoryRuns(
     offset?: number;
   } = {},
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [
+    queryKey: scopedQueryKey(
       "reg-runs",
+      scope,
       bankId,
       filters.module ?? null,
       filters.reportingPeriodId ?? null,
       filters.scenarioCode ?? null,
       filters.limit ?? 25,
       filters.offset ?? 0,
-    ],
+    ),
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.listRegulatoryRuns({
@@ -395,8 +399,9 @@ export function useRegulatoryRun(
   bankId: string | undefined,
   runId: string | null | undefined,
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["reg-run", bankId, runId],
+    queryKey: scopedQueryKey("reg-run", scope, bankId ?? null, runId ?? null),
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.getRegulatoryRun({
@@ -1004,8 +1009,9 @@ export function useBsd3Preview(
   bankId: string | undefined,
   periodId: string | undefined,
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["bsd3", bankId, periodId],
+    queryKey: scopedQueryKey("bsd3", scope, bankId ?? null, periodId ?? null),
     queryFn: () =>
       apiCall(() =>
         regulatoryLiquidityApi.getBsd3Preview({
@@ -1163,8 +1169,16 @@ export function useCashflowForecast(
   mode: CashflowForecastMode,
   scenario: CashflowForecastScenario,
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["cashflow-forecast", bankId, horizon, mode, scenario],
+    queryKey: scopedQueryKey(
+      "cashflow-forecast",
+      scope,
+      bankId ?? null,
+      horizon,
+      mode,
+      scenario,
+    ),
     queryFn: () =>
       apiCall(() =>
         cashflowForecastApi.getCashflowForecast({
@@ -1182,8 +1196,9 @@ export function useCashflowForecast(
 }
 
 export function useCashflowHistory(bankId: string | undefined, days: number) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["cashflow-history", bankId, days],
+    queryKey: scopedQueryKey("cashflow-history", scope, bankId ?? null, days),
     queryFn: () =>
       apiCall(() =>
         cashflowForecastApi.getCashflowHistory({
@@ -3786,8 +3801,14 @@ export function useEwiDashboard(
   bankId: string | undefined,
   periodId?: string | undefined,
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["ewi-dashboard", bankId, periodId],
+    queryKey: scopedQueryKey(
+      "ewi-dashboard",
+      scope,
+      bankId ?? null,
+      periodId ?? null,
+    ),
     queryFn: () =>
       apiCall(async () => {
         // The EWI service uses a valid HTTP 200 availability envelope while
@@ -3816,8 +3837,9 @@ export function useEwiDashboard(
 }
 
 export function useCfpSummary(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["cfp-summary", bankId],
+    queryKey: scopedQueryKey("cfp-summary", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() =>
         liquidityCfpApi.getContingencyFundingPlan({ bankId: bankId! }),
@@ -3827,8 +3849,9 @@ export function useCfpSummary(bankId: string | undefined) {
 }
 
 export function useCfpEvents(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["cfp-events", bankId],
+    queryKey: scopedQueryKey("cfp-events", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() =>
         liquidityCfpApi.listContingencyFundingPlanEvents({ bankId: bankId! }),
@@ -3838,8 +3861,9 @@ export function useCfpEvents(bankId: string | undefined) {
 }
 
 export function useLiquidityThresholdRegister(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["liq-thresholds", bankId],
+    queryKey: scopedQueryKey("liq-thresholds", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() =>
         liquidityThresholdsApi.getLiquidityThresholdRegister({
@@ -3851,8 +3875,9 @@ export function useLiquidityThresholdRegister(bankId: string | undefined) {
 }
 
 export function useLiquidityHaircutSchedule(bankId: string | undefined) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["liq-haircuts", bankId],
+    queryKey: scopedQueryKey("liq-haircuts", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() =>
         liquidityThresholdsApi.getLiquidityHaircutSchedule({ bankId: bankId! }),
@@ -3908,8 +3933,15 @@ export function useScenarioCatalogue(
   module: WorkbenchModule,
   periodId: string | undefined,
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["scenario-catalogue", bankId, module, periodId],
+    queryKey: scopedQueryKey(
+      "scenario-catalogue",
+      scope,
+      bankId ?? null,
+      module,
+      periodId ?? null,
+    ),
     queryFn: () =>
       apiCall(() =>
         scenarioWorkbenchApi.listScenarioCatalogue({
@@ -3943,6 +3975,7 @@ export function useCreateStressScenario(
   module: WorkbenchModule,
 ) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: StressScenarioCreate) =>
       apiCall(() =>
@@ -3953,9 +3986,12 @@ export function useCreateStressScenario(
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["scenario-catalogue", bankId, module],
-      });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ["scenario-catalogue"],
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -3965,6 +4001,7 @@ export function useUpdateStressScenario(
   module: WorkbenchModule,
 ) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: ({
       scenarioId,
@@ -3982,9 +4019,12 @@ export function useUpdateStressScenario(
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["scenario-catalogue", bankId, module],
-      });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ["scenario-catalogue"],
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -3994,6 +4034,7 @@ export function useArchiveStressScenario(
   module: WorkbenchModule,
 ) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: ({
       scenarioId,
@@ -4011,9 +4052,12 @@ export function useArchiveStressScenario(
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["scenario-catalogue", bankId, module],
-      });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ["scenario-catalogue"],
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -4022,8 +4066,14 @@ export function useSavedAnalyses(
   bankId: string | undefined,
   module: WorkbenchModule,
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["scenario-analyses", bankId, module],
+    queryKey: scopedQueryKey(
+      "scenario-analyses",
+      scope,
+      bankId ?? null,
+      module,
+    ),
     queryFn: () =>
       apiCall(() =>
         scenarioWorkbenchApi.listScenarioAnalyses({ bankId: bankId!, module }),
@@ -4037,6 +4087,7 @@ export function useSaveScenarioAnalysis(
   module: WorkbenchModule,
 ) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: SavedAnalysisCreate) =>
       apiCall(() =>
@@ -4047,9 +4098,12 @@ export function useSaveScenarioAnalysis(
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["scenario-analyses", bankId, module],
-      });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ["scenario-analyses"],
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -4059,6 +4113,7 @@ export function useDeleteScenarioAnalysis(
   module: WorkbenchModule,
 ) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (analysisId: string) =>
       apiCall(() =>
@@ -4069,9 +4124,12 @@ export function useDeleteScenarioAnalysis(
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["scenario-analyses", bankId, module],
-      });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ["scenario-analyses"],
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -4151,9 +4209,12 @@ export function useUpdateLiquidityThresholdRegister(
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["liq-thresholds", bankId],
-      });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ["liq-thresholds"],
+        scope,
+        bankId,
+      );
       // Threshold generations feed the monitoring/liquidity views.
       void invalidateScopedPrefixes(
         queryClient,
@@ -4167,6 +4228,7 @@ export function useUpdateLiquidityThresholdRegister(
 
 export function useUpdateLiquidityEwiRegister(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (payload: EwiRegisterPut) =>
       apiCall(() =>
@@ -4177,9 +4239,12 @@ export function useUpdateLiquidityEwiRegister(bankId: string | undefined) {
       ),
     onSuccess: () => {
       // Prefix-invalidates every period's dashboard read.
-      void queryClient.invalidateQueries({
-        queryKey: ["ewi-dashboard", bankId],
-      });
+      void invalidateScopedPrefixes(
+        queryClient,
+        ["ewi-dashboard"],
+        scope,
+        bankId,
+      );
     },
   });
 }
@@ -4301,8 +4366,15 @@ export function useCashflowWindow(
   end: string | undefined,
   enabled: boolean,
 ) {
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["cashflow-window", bankId, start ?? null, end ?? null],
+    queryKey: scopedQueryKey(
+      "cashflow-window",
+      scope,
+      bankId ?? null,
+      start ?? null,
+      end ?? null,
+    ),
     queryFn: () =>
       apiCall(() =>
         cashflowWindowApi.computeCashflowWindow({

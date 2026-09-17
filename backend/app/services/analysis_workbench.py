@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Permission, Sensitivity
 from app.db.base import utc_now
 from app.domain.capital.engine import (
     CapitalComputationError,
@@ -74,6 +75,7 @@ from app.services import (
     regulatory_fx,
     regulatory_irr,
     regulatory_liquidity,
+    scenario_workbench_authorization,
 )
 from app.services.audit import record_event
 from app.services.scenario_catalog import SYSTEM_SCENARIOS, system_shocks, validate_shocks
@@ -355,6 +357,15 @@ def run_analysis(
 ) -> AnalysisRunRead:
     """Compute the requested scenarios side by side. Writes nothing."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scenario_workbench_authorization.require_liquidity_permission(
+        db,
+        ctx,
+        bank,
+        module,
+        permission=Permission.RUN,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_scenario_analysis_run",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     resolved = [_resolve_ref(db, ctx, bank, module, period, ref) for ref in payload.scenarios]
     results = [_compute_one(db, ctx, bank, period, module, entry) for entry in resolved]
@@ -409,6 +420,15 @@ def save_analysis(
 ) -> SavedAnalysisRead:
     """Recompute server-side and snapshot — clients never supply numbers."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scenario_workbench_authorization.require_liquidity_permission(
+        db,
+        ctx,
+        bank,
+        module,
+        permission=Permission.CREATE,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_scenario_analysis_save",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     resolved = [_resolve_ref(db, ctx, bank, module, period, ref) for ref in payload.scenarios]
     results = [_compute_one(db, ctx, bank, period, module, entry) for entry in resolved]
@@ -456,6 +476,15 @@ def list_analyses(  # noqa: PLR0913 - one read carries its full scoping
     offset: int = 0,
 ) -> SavedAnalysisListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scenario_workbench_authorization.require_liquidity_permission(
+        db,
+        ctx,
+        bank,
+        module,
+        permission=Permission.VIEW,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="liquidity_scenario_analysis_list",
+    )
     conditions = [
         SavedScenarioAnalysis.organization_id == ctx.organization_id,
         SavedScenarioAnalysis.bank_id == bank.id,
@@ -480,6 +509,17 @@ def get_analysis(
     db: Session, ctx: TenantContext, bank_id: str, module: WorkbenchModule, analysis_id: UUID
 ) -> SavedAnalysisRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scenario_workbench_authorization.require_liquidity_permission(
+        db,
+        ctx,
+        bank,
+        module,
+        permission=Permission.VIEW,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_scenario_analysis_detail",
+        denial_status=status.HTTP_404_NOT_FOUND,
+        denial_detail="Analysis not found.",
+    )
     row = db.scalar(
         select(SavedScenarioAnalysis).where(
             SavedScenarioAnalysis.id == analysis_id,
@@ -497,6 +537,15 @@ def delete_analysis(
     db: Session, ctx: TenantContext, bank_id: str, module: WorkbenchModule, analysis_id: UUID
 ) -> None:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scenario_workbench_authorization.require_liquidity_permission(
+        db,
+        ctx,
+        bank,
+        module,
+        permission=Permission.EDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_scenario_analysis_delete",
+    )
     row = db.scalar(
         select(SavedScenarioAnalysis).where(
             SavedScenarioAnalysis.id == analysis_id,

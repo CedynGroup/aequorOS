@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { isHrefVisible } from "@/lib/modules";
+import { PermissionLink } from "@/components/ui/DisabledWithReason";
+import { hrefAccess, type HrefAccess } from "@/lib/modules";
 import { useModuleScope } from "./BankContext";
 import {
   Search,
@@ -37,6 +38,7 @@ type Item = {
   keywords?: string;
   institutionScope?: "bank" | "sdi";
   requiresCapitalConfidentialView?: boolean;
+  requiresLiquidityConfidentialView?: boolean;
 };
 
 const items: Item[] = [
@@ -150,6 +152,7 @@ const items: Item[] = [
     icon: Droplet,
     group: "Governance",
     keywords: "regulatory filing return bog",
+    requiresLiquidityConfidentialView: true,
   },
 
   {
@@ -428,18 +431,23 @@ export default function CommandPalette({
   // Scope the palette to the active institution type (docs/sdi.md §3.1/§6.3):
   // an SDI tenant cannot jump to a module (or a bank-only BSD deep link) it is
   // not entitled to. Unscoped tenants (banks) keep every command.
-  const scopedItems = useMemo(
-    () =>
-      items.filter(
+  const scopedItems = useMemo(() => {
+    return items
+      .filter(
         (item) =>
-          isHrefVisible(item.href, moduleScope) &&
           (!item.requiresCapitalConfidentialView ||
             moduleScope.capitalConfidentialView === true) &&
           (!item.institutionScope ||
             item.institutionScope === moduleScope.institutionClass),
-      ),
-    [moduleScope],
-  );
+      )
+      .map((item) => {
+        const access = item.requiresLiquidityConfidentialView
+          ? hrefAccess("/liquidity/monitoring", moduleScope)
+          : hrefAccess(item.href, moduleScope);
+        return { ...item, access };
+      })
+      .filter((item) => item.access.state !== "hidden");
+  }, [moduleScope]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return scopedItems;
@@ -475,8 +483,10 @@ export default function CommandPalette({
       }
       if (e.key === "Enter" && filtered[active]) {
         e.preventDefault();
-        router.push(filtered[active].href);
-        onClose();
+        if (filtered[active].access.state === "enabled") {
+          router.push(filtered[active].href);
+          onClose();
+        }
       }
     };
     window.addEventListener("keydown", onKey);
@@ -486,7 +496,7 @@ export default function CommandPalette({
   if (!open) return null;
 
   // Group items
-  const groups: Record<string, Item[]> = {};
+  const groups: Record<string, (Item & { access: HrefAccess })[]> = {};
   filtered.forEach((it) => {
     groups[it.group] = groups[it.group] ?? [];
     groups[it.group].push(it);
@@ -538,13 +548,19 @@ export default function CommandPalette({
                     const idx = runningIdx++;
                     const isActive = idx === active;
                     const Icon = it.icon;
+                    const reason =
+                      it.access.state === "disabled"
+                        ? it.access.reason
+                        : undefined;
                     return (
                       <li key={it.id}>
-                        <button
-                          type="button"
+                        <PermissionLink
+                          href={it.href}
+                          reason={reason}
+                          wrapperClassName="w-full"
+                          ariaLabel={it.label}
                           onMouseEnter={() => setActive(idx)}
                           onClick={() => {
-                            router.push(it.href);
                             onClose();
                           }}
                           className={`w-full flex items-center gap-3 px-4 py-2 text-body text-left ${
@@ -552,6 +568,7 @@ export default function CommandPalette({
                               ? "bg-action-light text-navy"
                               : "text-navy/85 hover:bg-surface"
                           }`}
+                          disabledClassName="text-slate-light hover:bg-transparent"
                         >
                           <Icon
                             size={14}
@@ -571,7 +588,7 @@ export default function CommandPalette({
                             }
                             aria-hidden
                           />
-                        </button>
+                        </PermissionLink>
                       </li>
                     );
                   })}

@@ -20,6 +20,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.models import BankReportingPeriod, Notification, User
 from app.schemas.liquidity_cfp import (
     CfpActivationCreate,
@@ -29,7 +37,7 @@ from app.schemas.liquidity_cfp import (
     EwiIndicatorUpdate,
     EwiRegisterPut,
 )
-from app.services import liquidity_cfp, liquidity_ewi
+from app.services import authorization, liquidity_cfp, liquidity_ewi
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -38,10 +46,15 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.services.test_le_and_lmt import _CanonicalSeeder
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID,
+    actor_user_id=DEMO_USER_ID,
+    authorization_version=1,
+)
 CHECKER = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+    authorization_version=1,
 )
 REPORTING_DATE = date(2026, 3, 31)
 PRIOR_DATE = date(2026, 2, 28)
@@ -73,6 +86,30 @@ def _ensure_checker(db: Session) -> None:
         db.commit()
 
 
+def _grant_cfp_authority(db: Session) -> None:
+    for principal_id, bundle in (
+        (MAKER.actor_user_id, RoleBundle.ANALYST),
+        (MAKER.actor_user_id, RoleBundle.APPROVER),
+        (CHECKER.actor_user_id, RoleBundle.APPROVER),
+    ):
+        assert principal_id is not None
+        authorization.create_role_binding(
+            db,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=principal_id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=bundle,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.LIQUIDITY,
+                SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "cfp-test"),
+            reason="exercise CFP lifecycle with exact maker and checker authority",
+        )
+
+
 def _seed_ewi_book(db: Session) -> None:
     """Current book: 100M loans (40M stage 3); 62.5M liabilities — 30M CALL +
     10M fixed (183d) + 10M retail CURRENT (no counterparty) + 12.5M-cedi USD
@@ -84,25 +121,41 @@ def _seed_ewi_book(db: Session) -> None:
     seeder.position("EWI/L1", "LOAN", Decimal("60000000"), ifrs9_stage=1)
     seeder.position("EWI/L2", "LOAN", Decimal("40000000"), ifrs9_stage=3)
     seeder.position(
-        "EWI/D1", "DEPOSIT", Decimal("30000000"), counterparty=cp_a,
-        deposit_account_type="CALL", interest_rate=Decimal("18"),
+        "EWI/D1",
+        "DEPOSIT",
+        Decimal("30000000"),
+        counterparty=cp_a,
+        deposit_account_type="CALL",
+        interest_rate=Decimal("18"),
     )
     seeder.position(
-        "EWI/D2", "DEPOSIT", Decimal("10000000"), counterparty=cp_b,
-        deposit_account_type="FIXED", maturity=date(2026, 9, 30),
+        "EWI/D2",
+        "DEPOSIT",
+        Decimal("10000000"),
+        counterparty=cp_b,
+        deposit_account_type="FIXED",
+        maturity=date(2026, 9, 30),
         interest_rate=Decimal("22"),
     )
     seeder.position("EWI/D3", "DEPOSIT", Decimal("10000000"), deposit_account_type="CURRENT")
     seeder.position(
-        "EWI/D4", "DEPOSIT", Decimal("12500000"), counterparty=cp_c, currency="USD",
-        deposit_account_type="FIXED", maturity=date(2026, 6, 29),
+        "EWI/D4",
+        "DEPOSIT",
+        Decimal("12500000"),
+        counterparty=cp_c,
+        currency="USD",
+        deposit_account_type="FIXED",
+        maturity=date(2026, 6, 29),
         interest_rate=Decimal("5"),
     )
     prior = _CanonicalSeeder(db, as_of=PRIOR_DATE)
     prior_cp = prior.counterparty("EWI/CP-P", "Alpha Holdings", "CORPORATE")
     prior.position("EWI/P-L1", "LOAN", Decimal("80000000"), ifrs9_stage=1)
     prior.position(
-        "EWI/P-D1", "DEPOSIT", Decimal("20000000"), counterparty=prior_cp,
+        "EWI/P-D1",
+        "DEPOSIT",
+        Decimal("20000000"),
+        counterparty=prior_cp,
         deposit_account_type="CALL",
     )
 
@@ -274,6 +327,7 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
     materialize_canonical_test_book(db_session)
     _seed_ewi_book(db_session)
     _ensure_checker(db_session)
+    _grant_cfp_authority(db_session)
     period_id = _period_id(db_session)
 
     # Activation requires a Board-approved plan.
@@ -290,9 +344,7 @@ def test_cfp_lifecycle_maker_checker_completeness_and_74_notifications(
     incomplete = _full_content().model_copy(
         update={
             "funding_options": [
-                option
-                for option in _full_content().funding_options
-                if option.horizon != "intraday"
+                option for option in _full_content().funding_options if option.horizon != "intraday"
             ]
         }
     )

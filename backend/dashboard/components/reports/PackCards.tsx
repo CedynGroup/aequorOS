@@ -10,6 +10,7 @@
 
 import Link from "next/link";
 import { ChevronRight, FileCheck2, Presentation } from "lucide-react";
+import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
 import { useBankContext } from "@/components/shell/BankContext";
@@ -20,6 +21,7 @@ import {
 } from "@/lib/api/hooks";
 import { shortId } from "@/lib/api/values";
 import { regShort } from "@/lib/format";
+import { hrefAccess } from "@/lib/modules";
 
 type PackQuery = {
   isLoading: boolean;
@@ -54,7 +56,11 @@ export default function PackCards({
     moduleScope.capitalConfidentialView ? bankId : undefined,
     periodId,
   );
-  const bsd3 = useBsd3Preview(bankId, periodId);
+  const bsd3 = useBsd3Preview(
+    moduleScope.liquidityConfidentialView ? bankId : undefined,
+    periodId,
+  );
+  const liquidityAccess = hrefAccess("/liquidity/monitoring", moduleScope);
 
   const packs: {
     form: string;
@@ -63,6 +69,7 @@ export default function PackCards({
     href: string;
     status: { tone: StatusTone; label: string; ready: boolean };
     runId?: string;
+    permissionReason?: string;
   }[] = [
     ...(moduleScope.capitalConfidentialView
       ? [
@@ -77,15 +84,30 @@ export default function PackCards({
           },
         ]
       : []),
-    {
-      form: "LCR-NSFR",
-      title: `${regShort()} Liquidity Return (LCR & NSFR)`,
-      description:
-        "Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.",
-      href: "/submissions/returns?code=LCR-NSFR",
-      status: packStatus(bsd3),
-      runId: bsd3.data?.runId,
-    },
+    ...(liquidityAccess.state !== "hidden"
+      ? [
+          {
+            form: "LCR-NSFR",
+            title: `${regShort()} Liquidity Return (LCR & NSFR)`,
+            description:
+              "Liquidity Coverage Ratio and Net Stable Funding Ratio — generated from the latest successful baseline liquidity run; official packages live in the Regulatory Reporting hub.",
+            href: "/submissions/returns?code=LCR-NSFR",
+            status:
+              liquidityAccess.state === "disabled"
+                ? {
+                    tone: "slate" as const,
+                    label: "Permission required",
+                    ready: false,
+                  }
+                : packStatus(bsd3),
+            runId: bsd3.data?.runId,
+            permissionReason:
+              liquidityAccess.state === "disabled"
+                ? liquidityAccess.reason
+                : undefined,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -112,13 +134,15 @@ export default function PackCards({
               {pack.description}
             </p>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <Link
+              <PermissionLink
                 href={pack.href}
+                reason={pack.permissionReason}
                 className="inline-flex items-center gap-1 text-caption font-medium text-action hover:text-action-hover"
+                disabledClassName="text-slate-light hover:text-slate-light"
               >
                 Open returns workspace
                 <ChevronRight size={12} aria-hidden />
-              </Link>
+              </PermissionLink>
               {pack.runId && (
                 <span
                   className="font-mono text-[10px] text-slate tnum"

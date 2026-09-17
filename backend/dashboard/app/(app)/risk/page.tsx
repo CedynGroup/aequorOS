@@ -67,8 +67,12 @@ export default function RiskLimitMonitorPage() {
   const irrScoped = isHrefVisible("/irr/limits", scope);
   const fxScoped = isHrefVisible("/fx/limits", scope);
   const ftpScoped = isHrefVisible("/ftp/products", scope);
+  const liquidityAggregated = scope.liquidityAggregatedView === true;
+  const liquidityConfidential = scope.liquidityConfidentialView === true;
 
-  const liquidity = useLiquidityDashboard(isSdi ? undefined : bankId);
+  const liquidity = useLiquidityDashboard(
+    !isSdi && liquidityAggregated ? bankId : undefined,
+  );
   const capital = useCapitalDashboard(
     !isSdi && scope.capitalAggregatedView ? bankId : undefined,
   );
@@ -78,10 +82,12 @@ export default function RiskLimitMonitorPage() {
   const liveSummary = useLiveSummary(bankId);
   const alerts = useBankAlerts(bankId, 200);
   const liquidityRun = useRegulatoryRun(
-    bankId,
+    liquidityConfidential ? bankId : undefined,
     liquidity.data?.latestRunId ?? undefined,
   );
-  const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bankId : undefined);
+  const sdiLiquidity = useSdiLiquidityPosition(
+    isSdi && liquidityConfidential ? bankId : undefined,
+  );
   const sdiCapital = useSdiCapitalSummary(
     isSdi && scope.capitalAggregatedView ? bankId : undefined,
   );

@@ -589,7 +589,9 @@ def test_bank_regulatory_plane_is_unchanged_by_the_boundary_guard(
     """The audit's own finding was that these routes are correctly guarded — this
     proves the boundary guard neither loosened nor broke them."""
     official_run = {
-        "module": "liquidity",
+        # Capital remains on the pre-cutover scalar mutation gate; Liquidity's
+        # exact-binding denial and object hiding are covered separately.
+        "module": "capital",
         "reporting_period_id": str(uuid4()),
         "scenario_code": "baseline",
     }

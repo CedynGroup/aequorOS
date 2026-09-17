@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Governance → Board Registers: the editor surface over the Board's four
@@ -10,17 +10,17 @@
  * reason; the Edit actions mirror that gate client-side.
  */
 
-import PageHeader from '@/components/ui/PageHeader';
-import { useBankContext } from '@/components/shell/BankContext';
-import { fmtDateUTC } from '@/lib/api/values';
-import ThresholdRegisterCard from '@/components/institution/registers/ThresholdRegisterCard';
-import EwiRegisterCard from '@/components/institution/registers/EwiRegisterCard';
-import CreditThresholdCard from '@/components/institution/registers/CreditThresholdCard';
-import CrmHaircutCard from '@/components/institution/registers/CrmHaircutCard';
-import EclAssumptionCard from '@/components/institution/registers/EclAssumptionCard';
+import PageHeader from "@/components/ui/PageHeader";
+import { useBankContext } from "@/components/shell/BankContext";
+import { fmtDateUTC } from "@/lib/api/values";
+import ThresholdRegisterCard from "@/components/institution/registers/ThresholdRegisterCard";
+import EwiRegisterCard from "@/components/institution/registers/EwiRegisterCard";
+import CreditThresholdCard from "@/components/institution/registers/CreditThresholdCard";
+import CrmHaircutCard from "@/components/institution/registers/CrmHaircutCard";
+import EclAssumptionCard from "@/components/institution/registers/EclAssumptionCard";
 
 export default function BoardRegistersPage() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
 
@@ -28,8 +28,8 @@ export default function BoardRegistersPage() {
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Governance', href: '/institution' },
-          { label: 'Board Registers' },
+          { label: "Governance", href: "/institution" },
+          { label: "Board Registers" },
         ]}
         title="Board Registers"
         subtitle="The Board's adopted risk configuration — liquidity thresholds, EWI trigger levels, CRM haircuts and ECL assumptions, each generation recorded with approval evidence"
@@ -44,8 +44,12 @@ export default function BoardRegistersPage() {
           </p>
         ) : (
           <>
-            <ThresholdRegisterCard bankId={bankId} />
-            <EwiRegisterCard bankId={bankId} periodId={periodId} />
+            {moduleScope.liquidityConfidentialView && (
+              <>
+                <ThresholdRegisterCard bankId={bankId} />
+                <EwiRegisterCard bankId={bankId} periodId={periodId} />
+              </>
+            )}
             <CreditThresholdCard bankId={bankId} />
             <CrmHaircutCard bankId={bankId} />
             <EclAssumptionCard bankId={bankId} />

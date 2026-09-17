@@ -575,6 +575,38 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
     )
 
 
+def evaluate_prefetched_permission(  # noqa: PLR0913 - complete authorization sentence
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    bindings: Sequence[AuthorizationBinding],
+    *,
+    principal_active: bool,
+    conditions: tuple[ConditionCheck, ...] = (),
+    now: datetime | None = None,
+) -> AuthorizationDecision:
+    """Evaluate rows loaded with the target resource in one database query."""
+
+    conditions = (
+        *request_wide_condition_checks(),
+        *runtime_condition_checks(permission, resource, conditions),
+    )
+    if not principal_active:
+        return _deny_with_trace(
+            principal, permission, resource, conditions, now, "principal_not_active"
+        )
+    if resource.organization_id != principal.organization_id:
+        return _deny_with_trace(principal, permission, resource, conditions, now)
+    return evaluate_grants(
+        principal,
+        permission,
+        resource,
+        [_binding_grant(binding) for binding in bindings],
+        conditions=conditions,
+        now=now,
+    )
+
+
 def evaluate_liquidity_monitoring_views(
     db: Session,
     *,

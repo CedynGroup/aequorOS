@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
 from app.db.session import get_sessionmaker
-from app.models import BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric
+from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric
 from app.services import job_queue, pipeline
 from tests.adapters.excel_csv import fixtures
 from tests.api.helpers import ORG_1, ORG_2, headers
@@ -215,6 +215,11 @@ def test_refresh_endpoint_enqueues_and_is_pollable(db_client: TestClient) -> Non
 
 def test_mint_official_run_enqueues(db_client: TestClient) -> None:
     _seed_and_refresh(db_client)
+    with get_sessionmaker()() as session:
+        bank = session.get(Bank, SAMPLE_BANK_ID)
+        assert bank is not None
+        bank.institution_type = "savings_and_loans"
+        session.commit()
     response = db_client.post(
         f"{_BASE}/official-runs", headers=headers(), json={"as_of_date": AS_OF, "reason": "filing"}
     )

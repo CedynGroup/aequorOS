@@ -135,7 +135,7 @@ export default function EnterpriseStressWorkbench({
     isSdiTenant && moduleScope.capitalAggregatedView ? bankId : undefined,
   );
   const sdiLiquidity = useSdiLiquidityPosition(
-    isSdiTenant ? bankId : undefined,
+    isSdiTenant && moduleScope.liquidityConfidentialView ? bankId : undefined,
   );
 
   useEffect(() => {

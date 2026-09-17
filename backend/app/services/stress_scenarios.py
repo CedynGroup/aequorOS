@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Permission, Sensitivity
 from app.models import Bank, BankReportingPeriod, StressScenario
 from app.schemas.scenario_workbench import (
     ScenarioCatalogueEntryRead,
@@ -29,6 +30,7 @@ from app.schemas.scenario_workbench import (
     StressScenarioUpdate,
     WorkbenchModule,
 )
+from app.services import scenario_workbench_authorization
 from app.services.audit import record_event
 from app.services.scenario_catalog import (
     SHOCK_VOCABULARY,
@@ -91,6 +93,15 @@ def list_catalogue(  # noqa: PLR0913 - one read carries its full scoping
     include_archived: bool = False,
 ) -> ScenarioCatalogueRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scenario_workbench_authorization.require_liquidity_permission(
+        db,
+        ctx,
+        bank,
+        module,
+        permission=Permission.VIEW,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_scenario_catalogue",
+    )
     as_of = date.today()  # noqa: DTZ011 - date-only business resolution
     if reporting_period_id is not None:
         period = db.scalar(
@@ -163,6 +174,15 @@ def create_scenario(
     payload: StressScenarioCreate,
 ) -> StressScenarioRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scenario_workbench_authorization.require_liquidity_permission(
+        db,
+        ctx,
+        bank,
+        module,
+        permission=Permission.CREATE,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_scenario_create",
+    )
     system_codes = {definition.code for definition in SYSTEM_SCENARIOS[module]}
     if payload.code in system_codes:
         raise HTTPException(
@@ -216,6 +236,15 @@ def update_scenario(  # noqa: PLR0913 - one write carries its full scoping
     payload: StressScenarioUpdate,
 ) -> StressScenarioRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scenario_workbench_authorization.require_liquidity_permission(
+        db,
+        ctx,
+        bank,
+        module,
+        permission=Permission.EDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_scenario_edit",
+    )
     scenario = _get_scenario_or_404(db, ctx, bank, module, scenario_id)
     if payload.name is not None:
         scenario.name = payload.name
@@ -245,6 +274,15 @@ def set_archived(  # noqa: PLR0913 - one write carries its full scoping
     payload: StressScenarioArchive,
 ) -> StressScenarioRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scenario_workbench_authorization.require_liquidity_permission(
+        db,
+        ctx,
+        bank,
+        module,
+        permission=Permission.EDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_scenario_archive",
+    )
     scenario = _get_scenario_or_404(db, ctx, bank, module, scenario_id)
     scenario.is_archived = payload.is_archived
     record_event(

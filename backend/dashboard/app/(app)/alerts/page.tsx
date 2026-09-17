@@ -35,7 +35,9 @@ export default function AlertCenterPage() {
   const { bank, moduleScope } = useBankContext();
   const alerts = useBankAlerts(bank?.id, ALERTS_LIMIT);
   const isSdi = moduleScope.institutionClass === "sdi";
-  const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bank?.id : undefined);
+  const sdiLiquidity = useSdiLiquidityPosition(
+    isSdi && moduleScope.liquidityConfidentialView ? bank?.id : undefined,
+  );
   const sdiCapital = useSdiCapitalSummary(
     isSdi && moduleScope.capitalAggregatedView ? bank?.id : undefined,
   );

@@ -12,8 +12,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.models import Bank, LiveFinding
 from app.schemas.live import AlertItemRead, BankAlertsRead
+from app.services import scoped_authorization
 
 _ALERT_SEVERITIES = ("critical", "high")
 _SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -25,16 +27,24 @@ def get_bank_alerts(
 ) -> BankAlertsRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
 
-    findings = list(
-        db.scalars(
-            select(LiveFinding).where(
-                LiveFinding.organization_id == ctx.organization_id,
-                LiveFinding.bank_id == bank.id,
-                LiveFinding.status.in_(_OPEN_STATUSES),
-                LiveFinding.severity.in_(_ALERT_SEVERITIES),
-            )
-        )
+    decision = scoped_authorization.evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="bank_alerts",
     )
+    query = select(LiveFinding).where(
+        LiveFinding.organization_id == ctx.organization_id,
+        LiveFinding.bank_id == bank.id,
+        LiveFinding.status.in_(_OPEN_STATUSES),
+        LiveFinding.severity.in_(_ALERT_SEVERITIES),
+    )
+    if decision is None or not decision.allowed:
+        query = query.where(LiveFinding.module != "liquidity")
+    findings = list(db.scalars(query))
     findings.sort(
         key=lambda finding: (
             _SEVERITY_RANK.get(finding.severity, 99),

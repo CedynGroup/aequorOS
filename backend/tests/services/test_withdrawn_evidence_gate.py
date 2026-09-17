@@ -376,7 +376,7 @@ def test_every_run_read_carries_the_evidence_block(db_session: Session) -> None:
     """A run detail read cannot present an orphaned run as current."""
     _seed_book(db_session)
     _seed_duplicate_second_source(db_session)
-    run = _seal_run(db_session)
+    run = _seal_run(db_session, module="capital")
 
     clean = regulatory_liquidity.get_regulatory_run(db_session, _ctx(), SAMPLE_BANK_ID, run.id)
     assert clean.evidence.status == "current"
@@ -400,7 +400,7 @@ def test_the_run_history_list_carries_it_too(db_session: Session) -> None:
     """A list page is where an orphaned run would most easily pass as current."""
     _seed_book(db_session)
     _seed_duplicate_second_source(db_session)
-    run = _seal_run(db_session)
+    run = _seal_run(db_session, module="capital")
     _withdraw(db_session)
     db_session.info.pop("withdrawal_impact.register", None)
 

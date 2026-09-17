@@ -74,7 +74,10 @@ export default function BoardPackPage() {
   // Scope the module fetches (docs/sdi.md §3.2): an SDI does not run FX/FTP, so
   // gating avoids a 403 for a module it is not entitled to.
   const scope = useModuleScope();
-  const liq = useLiquidityDashboard(bankId, periodId);
+  const liq = useLiquidityDashboard(
+    scope.liquidityAggregatedView ? bankId : undefined,
+    periodId,
+  );
   const cap = useCapitalDashboard(
     scope.capitalAggregatedView ? bankId : undefined,
     periodId,

@@ -74,6 +74,8 @@ E2E_USERS = {
     "account_admin": UUID("eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6"),
     "legacy_account_admin": UUID("eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7"),
     "integration_admin": UUID("eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8"),
+    "liquidity_viewer": UUID("eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9"),
+    "liquidity_aggregated_viewer": UUID("eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea"),
 }
 
 
@@ -118,6 +120,8 @@ def main() -> None:
                             "account_admin",
                             "legacy_account_admin",
                             "integration_admin",
+                            "liquidity_viewer",
+                            "liquidity_aggregated_viewer",
                         }
                         else role
                     ),
@@ -189,20 +193,38 @@ def main() -> None:
         authorization.create_role_binding(
             session,
             organization_id=DEMO_ORG_ID,
-            principal_user_id=users["admin"].id,
+            principal_user_id=users["liquidity_viewer"].id,
             principal_type=PrincipalType.HUMAN,
             role_bundle=RoleBundle.VIEWER,
             scope=authorization.BindingScope(
                 InstitutionScope.INSTITUTION,
                 SAMPLE_BANK_ID,
                 ModuleScope.LIQUIDITY,
-                SensitivityScope.CONFIDENTIAL,
+                SensitivityScope.ALL,
             ),
             grantor=authorization.GrantorRef(
                 GrantorType.SYSTEM,
                 "e2e-bootstrap",
             ),
-            reason="exercise the binding-enforced Liquidity Monitoring journey",
+            reason="exercise exact Liquidity read authority without granting another module",
+        )
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["liquidity_aggregated_viewer"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.LIQUIDITY,
+                SensitivityScope.AGGREGATED,
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="exercise exact Liquidity read authority without granting another module",
         )
         authorization.create_role_binding(
             session,

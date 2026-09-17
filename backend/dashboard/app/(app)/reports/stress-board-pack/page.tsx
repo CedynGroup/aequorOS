@@ -57,7 +57,9 @@ export default function StressBoardPack() {
   const bankId = bank?.id;
   const periodId = period?.id;
   const isSdi = moduleScope.institutionClass === "sdi";
-  const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bankId : undefined);
+  const sdiLiquidity = useSdiLiquidityPosition(
+    isSdi && moduleScope.liquidityConfidentialView ? bankId : undefined,
+  );
   const sdiCapital = useSdiCapitalSummary(
     isSdi && moduleScope.capitalAggregatedView ? bankId : undefined,
   );

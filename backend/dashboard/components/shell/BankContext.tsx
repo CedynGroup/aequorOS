@@ -32,6 +32,7 @@ import {
   effectiveOrganizationModules,
   hasEffectiveCapability,
   isPersonalSettingsPath,
+  moduleSetFrom,
   type ModuleScope,
 } from "@/lib/modules";
 import Logo from "./Logo";
@@ -178,14 +179,29 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         bank?.institutionTypeDetail?.defaultModules,
         institutionCapabilities,
       ),
+      entitledModules: moduleSetFrom(
+        bank?.institutionTypeDetail?.defaultModules,
+      ),
       organizationModules: effectiveOrganizationModules(
         organizationCapabilities,
       ),
       hasInstitutionAuthority: institutionCapabilities.length > 0,
       institutionClass: bank?.institutionTypeDetail?.institutionClass ?? null,
-      liquidityMonitoringAccess: hasEffectiveCapability(
+      liquidityAggregatedView: hasEffectiveCapability(
         institutionCapabilities,
         "liq",
+        "aggregated",
+        "view",
+      ),
+      liquidityConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "liq",
+        "confidential",
+        "view",
+      ),
+      riskConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "risk",
         "confidential",
         "view",
       ),

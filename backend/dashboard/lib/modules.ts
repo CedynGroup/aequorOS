@@ -134,17 +134,13 @@ export type ModuleScope = {
    * carries no registry detail. Only meaningful once `isResolved` is true.
    */
   modules: ReadonlySet<ModuleKey> | null;
+  /** Institution-type entitlement before effective capabilities are applied. */
+  entitledModules?: ReadonlySet<ModuleKey> | null;
   /** Exact organization-level modules projected by the binding evaluator. */
   organizationModules: ReadonlySet<ModuleKey>;
   /** True only when the selected institution has at least one exact capability. */
   hasInstitutionAuthority: boolean;
   institutionClass: string | null;
-  /**
-   * Server-evaluated access to the exact institution's Liquidity Monitoring
-   * detail surface. Omitted/false is deny so navigation never infers authority
-   * from a legacy role or the broader liquidity module entitlement.
-   */
-  liquidityMonitoringAccess?: boolean;
   /** Exact CAP/aggregated view authority for dashboards and summary checks. */
   capitalAggregatedView?: boolean;
   /** Exact CAP/confidential view authority for plans and run detail. */
@@ -153,6 +149,14 @@ export type ModuleScope = {
   capitalRestrictedView?: boolean;
   /** Exact CAP/confidential run authority. */
   capitalRun?: boolean;
+  /**
+   * Server-evaluated exact Liquidity capabilities for the selected
+   * institution. Omitted/false is deny, so navigation and controls never infer
+   * authority from a legacy role or the broader institution-type entitlement.
+   */
+  liquidityAggregatedView?: boolean;
+  liquidityConfidentialView?: boolean;
+  riskConfidentialView?: boolean;
   /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than
@@ -249,12 +253,29 @@ function bindingControlledSubrouteHidden(
   path: string,
   scope: ModuleScope,
 ): boolean {
-  if (
-    (path === "/liquidity/monitoring" ||
-      path.startsWith("/liquidity/monitoring/")) &&
-    scope.liquidityMonitoringAccess !== true
-  ) {
-    return true;
+  if (path === "/liquidity" || path.startsWith("/liquidity/")) {
+    const confidentialRoutes = [
+      "/liquidity/forecast",
+      "/liquidity/monitoring",
+      "/liquidity/cfp",
+    ];
+    if (
+      confidentialRoutes.some(
+        (route) => path === route || path.startsWith(`${route}/`),
+      )
+    ) {
+      return scope.liquidityConfidentialView !== true;
+    }
+    if (path === "/liquidity/stress" || path.startsWith("/liquidity/stress/")) {
+      return (
+        scope.liquidityConfidentialView !== true ||
+        scope.riskConfidentialView !== true
+      );
+    }
+    if (scope.institutionClass === "sdi" && path === "/liquidity") {
+      return scope.liquidityConfidentialView !== true;
+    }
+    return scope.liquidityAggregatedView !== true;
   }
   if (
     (path === "/basel/planning" || path.startsWith("/basel/planning/")) &&
@@ -275,6 +296,63 @@ function bindingControlledSubrouteHidden(
     return true;
   }
   return false;
+}
+
+export type HrefAccess =
+  | { state: "enabled" }
+  | { state: "disabled"; reason: string }
+  | { state: "hidden" };
+
+const LIQUIDITY_AGGREGATED_VIEW = "Liquidity Monitoring · Aggregated · View";
+const LIQUIDITY_CONFIDENTIAL_VIEW =
+  "Liquidity Monitoring · Confidential · View";
+const RISK_CONFIDENTIAL_VIEW = "Risk & Limits · Confidential · View";
+
+function permissionReason(permissions: readonly string[]): string | undefined {
+  if (permissions.length === 0) return undefined;
+  const required =
+    permissions.length === 1
+      ? permissions[0]
+      : `${permissions.slice(0, -1).join(", ")} and ${permissions.at(-1)}`;
+  const pronoun = permissions.length === 1 ? "it" : "them";
+  return `Requires ${required}. Ask your organization owner or admin to grant ${pronoun}.`;
+}
+
+function liquidityPermissionReason(
+  path: string,
+  scope: ModuleScope,
+): string | undefined {
+  if (path !== "/liquidity" && !path.startsWith("/liquidity/")) {
+    return undefined;
+  }
+
+  const missing: string[] = [];
+  const confidentialRoutes = [
+    "/liquidity/forecast",
+    "/liquidity/monitoring",
+    "/liquidity/cfp",
+    "/liquidity/stress",
+  ];
+  const requiresConfidential =
+    confidentialRoutes.some(
+      (route) => path === route || path.startsWith(`${route}/`),
+    ) ||
+    (scope.institutionClass === "sdi" && path === "/liquidity");
+
+  if (requiresConfidential) {
+    if (scope.liquidityConfidentialView !== true) {
+      missing.push(LIQUIDITY_CONFIDENTIAL_VIEW);
+    }
+  } else if (scope.liquidityAggregatedView !== true) {
+    missing.push(LIQUIDITY_AGGREGATED_VIEW);
+  }
+  if (
+    (path === "/liquidity/stress" || path.startsWith("/liquidity/stress/")) &&
+    scope.riskConfidentialView !== true
+  ) {
+    missing.push(RISK_CONFIDENTIAL_VIEW);
+  }
+  return permissionReason(missing);
 }
 
 const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings"]);
@@ -324,24 +402,53 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
  * deep links for an SDI (docs/sdi.md §6.3).
  */
 export function isHrefVisible(href: string, scope: ModuleScope): boolean {
+  return hrefAccess(href, scope).state === "enabled";
+}
+
+/**
+ * Navigation treatment for an href. Structural and object-scope exclusions stay
+ * hidden; a resolved Liquidity permission gap stays visible but disabled with
+ * the exact grant sentence the user needs.
+ */
+export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (scope.institutionClass === "sdi" && /[?&]code=BSD/i.test(href))
-    return false;
+    return { state: "hidden" };
   const path = normalize(href);
-  if (bindingControlledSubrouteHidden(path, scope)) return false;
   // Hide class-specific subroutes until the class is known. In particular,
   // Capital is a core module but its Basel and SDI tabs are not interchangeable.
-  if (subrouteHidden(path, scope)) return false;
-  if (isPersonalSettingsPath(path)) return true;
+  if (subrouteHidden(path, scope)) return { state: "hidden" };
+  if (isPersonalSettingsPath(path)) return { state: "enabled" };
   const moduleKey = moduleForPath(path);
   if (moduleKey) {
     if (ORGANIZATION_ROUTES.has(moduleKey)) {
-      return scope.organizationModules.has(moduleKey);
+      return scope.organizationModules.has(moduleKey)
+        ? { state: "enabled" }
+        : { state: "hidden" };
     }
-    if (!scope.isResolved) return CORE_MODULES.has(moduleKey);
-    if (!scope.hasInstitutionAuthority) return false;
-    if (scope.modules && !scope.modules.has(moduleKey)) return false;
+    if (!scope.isResolved) {
+      return moduleKey === "liquidity"
+        ? { state: "hidden" }
+        : CORE_MODULES.has(moduleKey)
+          ? { state: "enabled" }
+          : { state: "hidden" };
+    }
+    if (!scope.hasInstitutionAuthority) return { state: "hidden" };
+    if (scope.entitledModules && !scope.entitledModules.has(moduleKey)) {
+      return { state: "hidden" };
+    }
   }
-  return true;
+
+  const reason = liquidityPermissionReason(path, scope);
+  if (reason) {
+    return { state: "disabled", reason };
+  }
+  if (bindingControlledSubrouteHidden(path, scope)) {
+    return { state: "hidden" };
+  }
+  if (moduleKey && scope.modules && !scope.modules.has(moduleKey)) {
+    return { state: "hidden" };
+  }
+  return { state: "enabled" };
 }
 
 /**

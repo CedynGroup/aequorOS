@@ -3,8 +3,8 @@
 The EWI GET is the server-side replacement for the dashboard's illustrative
 CFP page: indicator values, Board trigger levels, RAG states and the
 escalation state are computed here, never in the frontend. Register and plan
-writes are audited; register updates, approval and activation are
-approver-gated (Board acts), while drafting a plan is analyst work.
+writes are audited. The binding requirements and held register-update gate
+are documented in docs/liquidity_enforcement_rollout.md.
 """
 
 from __future__ import annotations
@@ -14,7 +14,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
+from app.api.deps import (
+    ApproverTenant,
+    DbSession,
+    LiquidityConfidentialResource,
+    ScopedMutationTenant,
+)
 from app.schemas.liquidity_cfp import (
     CfpActivationCreate,
     CfpApprove,
@@ -39,10 +44,15 @@ router = APIRouter(tags=["liquidity-cfp"])
 def get_ewi_dashboard(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: LiquidityConfidentialResource,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> EwiDashboardRead:
-    return liquidity_cfp.ewi_dashboard(db, ctx, bank_id, reporting_period_id)
+    return liquidity_cfp.ewi_dashboard(
+        db,
+        access.ctx,
+        access.bank.id,
+        reporting_period_id,
+    )
 
 
 @router.put(
@@ -64,8 +74,12 @@ def update_ewi_register(
     response_model=CfpSummaryRead,
     operation_id="getContingencyFundingPlan",
 )
-def get_cfp(bank_id: str, db: DbSession, ctx: Tenant) -> CfpSummaryRead:
-    return liquidity_cfp.get_cfp(db, ctx, bank_id)
+def get_cfp(
+    bank_id: str,
+    db: DbSession,
+    access: LiquidityConfidentialResource,
+) -> CfpSummaryRead:
+    return liquidity_cfp.get_cfp(db, access.ctx, access.bank.id)
 
 
 @router.put(
@@ -73,7 +87,12 @@ def get_cfp(bank_id: str, db: DbSession, ctx: Tenant) -> CfpSummaryRead:
     response_model=CfpRead,
     operation_id="putContingencyFundingPlanDraft",
 )
-def put_cfp(bank_id: str, payload: CfpPut, db: DbSession, ctx: MutationTenant) -> CfpRead:
+def put_cfp(
+    bank_id: str,
+    payload: CfpPut,
+    db: DbSession,
+    ctx: ScopedMutationTenant,
+) -> CfpRead:
     return liquidity_cfp.put_cfp(db, ctx, bank_id, payload)
 
 
@@ -83,7 +102,10 @@ def put_cfp(bank_id: str, payload: CfpPut, db: DbSession, ctx: MutationTenant) -
     operation_id="approveContingencyFundingPlan",
 )
 def approve_cfp(
-    bank_id: str, payload: CfpApprove, db: DbSession, ctx: ApproverTenant
+    bank_id: str,
+    payload: CfpApprove,
+    db: DbSession,
+    ctx: ScopedMutationTenant,
 ) -> CfpRead:
     return liquidity_cfp.approve_cfp(db, ctx, bank_id, payload)
 
@@ -95,7 +117,10 @@ def approve_cfp(
     operation_id="activateContingencyFundingPlan",
 )
 def activate_cfp(
-    bank_id: str, payload: CfpActivationCreate, db: DbSession, ctx: ApproverTenant
+    bank_id: str,
+    payload: CfpActivationCreate,
+    db: DbSession,
+    ctx: ScopedMutationTenant,
 ) -> CfpEventRead:
     return liquidity_cfp.activate_cfp(db, ctx, bank_id, payload)
 
@@ -107,7 +132,10 @@ def activate_cfp(
     operation_id="deEscalateContingencyFundingPlan",
 )
 def de_escalate_cfp(
-    bank_id: str, payload: CfpActivationCreate, db: DbSession, ctx: ApproverTenant
+    bank_id: str,
+    payload: CfpActivationCreate,
+    db: DbSession,
+    ctx: ScopedMutationTenant,
 ) -> CfpEventRead:
     return liquidity_cfp.de_escalate_cfp(db, ctx, bank_id, payload)
 
@@ -117,5 +145,9 @@ def de_escalate_cfp(
     response_model=CfpEventListRead,
     operation_id="listContingencyFundingPlanEvents",
 )
-def list_cfp_events(bank_id: str, db: DbSession, ctx: Tenant) -> CfpEventListRead:
-    return liquidity_cfp.list_events(db, ctx, bank_id)
+def list_cfp_events(
+    bank_id: str,
+    db: DbSession,
+    access: LiquidityConfidentialResource,
+) -> CfpEventListRead:
+    return liquidity_cfp.list_events(db, access.ctx, access.bank.id)

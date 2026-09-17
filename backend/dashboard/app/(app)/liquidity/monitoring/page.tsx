@@ -1,31 +1,32 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { Percent } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import SectionCard from '@/components/ui/SectionCard';
-import EmptyState from '@/components/ui/EmptyState';
-import StatusPill from '@/components/ui/StatusPill';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useModuleScope } from '@/components/shell/BankContext';
-import SdiLiquidityMonitoringView from '@/components/liquidity/SdiLiquidityMonitoringView';
-import StressedLadderPanel from '@/components/liquidity/StressedLadderPanel';
-import CashflowWindowPanel from '@/components/liquidity/CashflowWindowPanel';
+import Link from "next/link";
+import { PermissionLink } from "@/components/ui/DisabledWithReason";
+import { Percent } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import SectionCard from "@/components/ui/SectionCard";
+import EmptyState from "@/components/ui/EmptyState";
+import StatusPill from "@/components/ui/StatusPill";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
+import SdiLiquidityMonitoringView from "@/components/liquidity/SdiLiquidityMonitoringView";
+import StressedLadderPanel from "@/components/liquidity/StressedLadderPanel";
+import CashflowWindowPanel from "@/components/liquidity/CashflowWindowPanel";
 import {
   useLiquidityDashboard,
   useLiquidityHaircutSchedule,
   useLiquidityThresholdRegister,
   useRegulatoryRun,
-} from '@/lib/api/hooks';
-import { fmtDateUTC, num } from '@/lib/api/values';
-import { currencyCode, fmtCurrency, fmtPct, regShort } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { fmtDateUTC, num } from "@/lib/api/values";
+import { currencyCode, fmtCurrency, fmtPct, regShort } from "@/lib/format";
+import { hrefAccess } from "@/lib/modules";
 import type {
   LiquidityHaircutRead,
   LiquidityThresholdRead,
-} from '@aequoros/risk-service-api';
+} from "@aequoros/risk-service-api";
 
 // LMTD 2026 ¶11(b)–(e): the Board's internal threshold register over the
 // directive's published minimums, plus the LRMD ¶60–63 liquidity-value
@@ -33,91 +34,107 @@ import type {
 
 const thresholdColumns: Column<LiquidityThresholdRead>[] = [
   {
-    key: 'code',
-    header: 'Threshold',
-    width: '34%',
+    key: "code",
+    header: "Threshold",
+    width: "34%",
     render: (r) => (
       <div>
         <p className="font-medium text-navy">{r.thresholdCode}</p>
         <p className="text-caption text-slate">
-          {r.institutionClass === 'sdi' ? 'Binding for SDIs (¶9)' : 'Monitoring tool for banks'}
+          {r.institutionClass === "sdi"
+            ? "Binding for SDIs (¶9)"
+            : "Monitoring tool for banks"}
         </p>
       </div>
     ),
   },
   {
-    key: 'value',
-    header: 'Active level',
+    key: "value",
+    header: "Active level",
     numeric: true,
     render: (r) => fmtPct(num(r.thresholdPct), 2),
   },
   {
-    key: 'source',
-    header: 'Source',
+    key: "source",
+    header: "Source",
     render: (r) =>
-      r.source === 'board_register' ? (
+      r.source === "board_register" ? (
         <StatusPill tone="success">Board register</StatusPill>
       ) : (
         <StatusPill tone="slate">Directive minimum</StatusPill>
       ),
   },
   {
-    key: 'evidence',
-    header: 'Approval evidence',
+    key: "evidence",
+    header: "Approval evidence",
     render: (r) =>
       r.approvedBy ? (
         <div>
           <p className="text-body text-navy">{r.approvedBy}</p>
           <p className="text-caption text-slate">
-            Effective {r.effectiveFrom ? fmtDateUTC(r.effectiveFrom) : '—'}
+            Effective {r.effectiveFrom ? fmtDateUTC(r.effectiveFrom) : "—"}
           </p>
         </div>
       ) : (
-        <span className="text-caption text-slate">Regulatory default — no Board row yet</span>
+        <span className="text-caption text-slate">
+          Regulatory default — no Board row yet
+        </span>
       ),
   },
 ];
 
 const haircutColumns: Column<LiquidityHaircutRead>[] = [
-  { key: 'asset_class', header: 'Asset class', render: (r) => r.assetClass },
+  { key: "asset_class", header: "Asset class", render: (r) => r.assetClass },
   {
-    key: 'haircut',
-    header: 'Estimated haircut',
+    key: "haircut",
+    header: "Estimated haircut",
     numeric: true,
     render: (r) => fmtPct(num(r.haircutPct), 2),
   },
   {
-    key: 'effective',
-    header: 'Effective',
+    key: "effective",
+    header: "Effective",
     render: (r) => fmtDateUTC(r.effectiveFrom),
   },
-  { key: 'approved', header: 'Reviewed by', render: (r) => r.approvedBy },
+  { key: "approved", header: "Reviewed by", render: (r) => r.approvedBy },
 ];
 
 function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const bankId = bank?.id;
+  const stressAccess = hrefAccess("/liquidity/stress", moduleScope);
 
-  const dashboard = useLiquidityDashboard(bankId);
+  const dashboard = useLiquidityDashboard(
+    moduleScope.liquidityAggregatedView ? bankId : undefined,
+  );
   const thresholds = useLiquidityThresholdRegister(bankId);
   const haircuts = useLiquidityHaircutSchedule(bankId);
   const latestRunId = dashboard.data?.latestRunId;
-  const latestRun = useRegulatoryRun(bankId, latestRunId);
+  const latestRun = useRegulatoryRun(
+    moduleScope.liquidityConfidentialView ? bankId : undefined,
+    latestRunId,
+  );
 
   const metrics = dashboard.data?.metrics;
-  const fxGap = metrics?.fxFundingGapGhs != null ? num(metrics.fxFundingGapGhs) : null;
+  const fxGap =
+    metrics?.fxFundingGapGhs != null ? num(metrics.fxFundingGapGhs) : null;
   const fxShare =
-    metrics?.fxShareOfLiabilitiesPct != null ? num(metrics.fxShareOfLiabilitiesPct) : null;
-  const boardRows = thresholds.data?.thresholds.filter((row) => row.source === 'board_register') ?? [];
+    metrics?.fxShareOfLiabilitiesPct != null
+      ? num(metrics.fxShareOfLiabilitiesPct)
+      : null;
+  const boardRows =
+    thresholds.data?.thresholds.filter(
+      (row) => row.source === "board_register",
+    ) ?? [];
 
   return (
     <>
       {!embedded && (
         <PageHeader
           breadcrumbs={[
-            { label: 'Modules', href: '/' },
-            { label: 'Liquidity Risk', href: '/liquidity' },
-            { label: 'Monitoring Tools' },
+            { label: "Modules", href: "/" },
+            { label: "Liquidity Risk", href: "/liquidity" },
+            { label: "Monitoring Tools" },
           ]}
           title="Liquidity Monitoring Tools"
           subtitle={`Board threshold register (LMTD ¶11) · liquidity-value schedule (LRMD ¶60–63) · per-currency funding mismatch`}
@@ -135,29 +152,31 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
               <KpiStat
                 label="Board-adopted thresholds"
                 value={`${boardRows.length} / ${thresholds.data.thresholds.length}`}
-                status={boardRows.length > 0 ? 'ok' : 'warn'}
+                status={boardRows.length > 0 ? "ok" : "warn"}
                 hint={
                   boardRows.length > 0
-                    ? 'Remaining levels run on directive minimums'
-                    : 'All levels currently run on directive minimums'
+                    ? "Remaining levels run on directive minimums"
+                    : "All levels currently run on directive minimums"
                 }
               />
               <KpiStat
                 label="Haircut schedule rows"
                 value={String(haircuts.data?.haircuts.length ?? 0)}
-                status={(haircuts.data?.haircuts.length ?? 0) > 0 ? 'ok' : 'warn'}
+                status={
+                  (haircuts.data?.haircuts.length ?? 0) > 0 ? "ok" : "warn"
+                }
                 hint="Unlisted classes report zero haircut with the gap noted (¶60–63)"
               />
               <KpiStat
                 label="FX funding gap"
-                value={fxGap !== null ? fmtCurrency(fxGap) : '—'}
-                status={fxGap !== null && fxGap < 0 ? 'warn' : 'ok'}
+                value={fxGap !== null ? fmtCurrency(fxGap) : "—"}
+                status={fxGap === null ? undefined : fxGap < 0 ? "warn" : "ok"}
                 hint={`Non-${currencyCode()} assets minus liabilities (latest baseline run)`}
               />
               <KpiStat
                 label="FX share of liabilities"
-                value={fxShare !== null ? fmtPct(fxShare, 2) : '—'}
-                status={'ok'}
+                value={fxShare !== null ? fmtPct(fxShare, 2) : "—"}
+                status={fxShare === null ? undefined : "ok"}
                 hint="Foreign-currency funding dependence"
               />
             </div>
@@ -177,12 +196,15 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
               footer={
                 <span>
                   Effective-dated generations with approval evidence answer the
-                  examiner&apos;s &ldquo;show me your Board-approved thresholds&rdquo;;
-                  updates are approver-gated and audited.
+                  examiner&apos;s &ldquo;show me your Board-approved
+                  thresholds&rdquo;; updates are approver-gated and audited.
                 </span>
               }
             >
-              <DataTable columns={thresholdColumns} rows={thresholds.data.thresholds} />
+              <DataTable
+                columns={thresholdColumns}
+                rows={thresholds.data.thresholds}
+              />
             </SectionCard>
 
             <SectionCard
@@ -192,13 +214,16 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
               footer={
                 <span>
                   LMT Table 9&apos;s &ldquo;Estimated Haircut&rdquo; and
-                  &ldquo;Monetized Value of Collateral&rdquo; columns resolve from
-                  this schedule.
+                  &ldquo;Monetized Value of Collateral&rdquo; columns resolve
+                  from this schedule.
                 </span>
               }
             >
               {haircuts.data && haircuts.data.haircuts.length > 0 ? (
-                <DataTable columns={haircutColumns} rows={haircuts.data.haircuts} />
+                <DataTable
+                  columns={haircutColumns}
+                  rows={haircuts.data.haircuts}
+                />
               ) : (
                 <div className="p-5">
                   <EmptyState
@@ -216,19 +241,37 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
             >
               <div className="text-body text-navy/85 leading-relaxed space-y-3">
                 <p>
-                  All eleven monitoring-tool tables — the contractual mismatch ladder,
-                  concentration schedules, collateral and re-hypothecation views,
-                  significant-currency splits and the unencumbered-assets schedule —
-                  generate from canonical position data and export in the return
-                  format from the{' '}
-                  <Link href="/submissions" className="text-action hover:underline">
+                  All eleven monitoring-tool tables — the contractual mismatch
+                  ladder, concentration schedules, collateral and
+                  re-hypothecation views, significant-currency splits and the
+                  unencumbered-assets schedule — generate from canonical
+                  position data and export in the return format from the{" "}
+                  <Link
+                    href="/submissions"
+                    className="text-action hover:underline"
+                  >
                     Regulatory Reporting
-                  </Link>{' '}
-                  (return code LMT). Per-currency funding gaps and the USD funding
-                  stress ride every liquidity run on the{' '}
-                  <Link href="/liquidity/stress" className="text-action hover:underline">
-                    Stress tab
-                  </Link>
+                  </Link>{" "}
+                  (return code LMT). Per-currency funding gaps and the USD
+                  funding stress ride every liquidity run
+                  {stressAccess.state !== "hidden" ? (
+                    <>
+                      {" "}
+                      on the{" "}
+                      <PermissionLink
+                        href="/liquidity/stress"
+                        reason={
+                          stressAccess.state === "disabled"
+                            ? stressAccess.reason
+                            : undefined
+                        }
+                        className="text-action hover:underline"
+                        disabledClassName="text-slate-light hover:no-underline"
+                      >
+                        Stress tab
+                      </PermissionLink>
+                    </>
+                  ) : null}
                   .
                 </p>
               </div>
@@ -244,12 +287,20 @@ export default function MonitoringTools() {
   const { bank } = useBankContext();
   const scope = useModuleScope();
   if (!scope.isResolved) return null;
-  if (scope.institutionClass === 'sdi') {
-    return <SdiLiquidityMonitoringView bankId={bank?.id} institutionClass={scope.institutionClass} />;
+  if (scope.institutionClass === "sdi") {
+    return (
+      <SdiLiquidityMonitoringView
+        bankId={bank?.id}
+        institutionClass={scope.institutionClass}
+      />
+    );
   }
   return (
     <>
-      <SdiLiquidityMonitoringView bankId={bank?.id} institutionClass={scope.institutionClass} />
+      <SdiLiquidityMonitoringView
+        bankId={bank?.id}
+        institutionClass={scope.institutionClass}
+      />
       <BankMonitoringTools embedded />
     </>
   );

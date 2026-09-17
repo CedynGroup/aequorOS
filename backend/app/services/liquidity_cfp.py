@@ -23,6 +23,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    ConditionCheck,
+    ConditionKind,
+    Module,
+    Permission,
+    Sensitivity,
+)
 from app.db.base import utc_now
 from app.models import Bank, CfpActivationEvent, ContingencyFundingPlan
 from app.schemas.liquidity_cfp import (
@@ -37,7 +44,7 @@ from app.schemas.liquidity_cfp import (
     EwiDashboardRead,
     EwiEvaluationRead,
 )
-from app.services import notifications
+from app.services import notifications, scoped_authorization
 from app.services.audit import record_event
 from app.services.jurisdictions import regulator_short
 from app.services.liquidity_ewi import (
@@ -62,9 +69,7 @@ _CONTENT_BLOCKS = (
 )
 
 
-def _current_plan(
-    db: Session, ctx: TenantContext, bank: Bank
-) -> ContingencyFundingPlan | None:
+def _current_plan(db: Session, ctx: TenantContext, bank: Bank) -> ContingencyFundingPlan | None:
     return db.scalar(
         select(ContingencyFundingPlan)
         .where(
@@ -76,9 +81,7 @@ def _current_plan(
     )
 
 
-def _approved_plan(
-    db: Session, ctx: TenantContext, bank: Bank
-) -> ContingencyFundingPlan | None:
+def _approved_plan(db: Session, ctx: TenantContext, bank: Bank) -> ContingencyFundingPlan | None:
     return db.scalar(
         select(ContingencyFundingPlan)
         .where(
@@ -146,9 +149,7 @@ def ewi_dashboard(
         indicators=evaluations,
         escalation_state=escalation_state(evaluations, cfp_active=cfp_active),
         cfp_approved_version=approved.version if approved is not None else None,
-        cfp_approval_expires_at=(
-            approved.approval_expires_at if approved is not None else None
-        ),
+        cfp_approval_expires_at=(approved.approval_expires_at if approved is not None else None),
         cfp_active=cfp_active,
     )
 
@@ -157,6 +158,18 @@ def put_cfp(db: Session, ctx: TenantContext, bank_id: str, payload: CfpPut) -> C
     """Create or update the draft plan (a new draft supersedes no approval)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     current = _current_plan(db, ctx, bank)
+    permission = (
+        Permission.EDIT if current is not None and current.status == "draft" else Permission.CREATE
+    )
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=permission,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface=f"liquidity_cfp_draft_{permission.value}",
+    )
     if current is not None and current.status == "draft":
         plan = current
         plan.content = payload.content.model_dump(mode="json")
@@ -199,9 +212,7 @@ def _require_directive_complete(content: CfpContent) -> None:
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error_code": "cfp_missing_intraday",
-                "message": (
-                    "Funding options must cover the intraday horizon (LRMD ¶75(b))."
-                ),
+                "message": ("Funding options must cover the intraday horizon (LRMD ¶75(b))."),
             },
         )
     audiences = {plan.audience for plan in content.communication_plans}
@@ -222,6 +233,22 @@ def approve_cfp(db: Session, ctx: TenantContext, bank_id: str, payload: CfpAppro
     bank = _get_bank_or_404(db, ctx, bank_id)
     plan = _current_plan(db, ctx, bank)
     if plan is None or plan.status != "draft":
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.APPROVE,
+            module=Module.LIQUIDITY,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+            surface="liquidity_cfp_approve",
+            conditions=(
+                ConditionCheck(
+                    ConditionKind.MAKER_CHECKER,
+                    True,
+                    "no draft exists, so there is no maker identity to compare",
+                ),
+            ),
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -229,13 +256,44 @@ def approve_cfp(db: Session, ctx: TenantContext, bank_id: str, payload: CfpAppro
                 "message": "There is no draft plan awaiting approval.",
             },
         )
-    if plan.prepared_by is not None and plan.prepared_by == ctx.actor_user_id:
+    self_approval = plan.prepared_by is not None and plan.prepared_by == ctx.actor_user_id
+    decision = scoped_authorization.evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.APPROVE,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_cfp_approve",
+        conditions=(
+            ConditionCheck(
+                ConditionKind.MAKER_CHECKER,
+                not self_approval,
+                (
+                    "the approver is not the plan preparer"
+                    if not self_approval
+                    else "the plan preparer cannot approve the same plan"
+                ),
+            ),
+        ),
+    )
+    if (
+        self_approval
+        and decision is not None
+        and decision.matching_binding_ids
+        and decision.reason == "condition_denied:maker_checker"
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error_code": "self_approval",
                 "message": "The preparer of a plan cannot approve it (maker-checker).",
             },
+        )
+    if decision is None or not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=scoped_authorization.DEFAULT_DENIAL_DETAIL,
         )
     _require_directive_complete(CfpContent.model_validate(plan.content))
     now = utc_now()
@@ -272,9 +330,7 @@ def _event_read(event: CfpActivationEvent, version: int) -> CfpEventRead:
         cfp_version=version,
         event_type=event.event_type,  # pyright: ignore[reportArgumentType]
         reason=event.reason,
-        ewi_snapshot=[
-            EwiEvaluationRead.model_validate(entry) for entry in event.ewi_snapshot
-        ],
+        ewi_snapshot=[EwiEvaluationRead.model_validate(entry) for entry in event.ewi_snapshot],
         approval_overdue=event.approval_overdue,
         regulator_notification_id=event.regulator_notification_id,
         created_by=event.created_by,
@@ -374,6 +430,22 @@ def activate_cfp(
     db: Session, ctx: TenantContext, bank_id: str, payload: CfpActivationCreate
 ) -> CfpEventRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.APPROVE,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_cfp_activate",
+        conditions=(
+            ConditionCheck(
+                ConditionKind.MAKER_CHECKER,
+                True,
+                "activation is an approver control after plan approval",
+            ),
+        ),
+    )
     plan = _approved_plan(db, ctx, bank)
     if plan is None:
         raise HTTPException(
@@ -398,6 +470,22 @@ def de_escalate_cfp(
     db: Session, ctx: TenantContext, bank_id: str, payload: CfpActivationCreate
 ) -> CfpEventRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.APPROVE,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="liquidity_cfp_de_escalate",
+        conditions=(
+            ConditionCheck(
+                ConditionKind.MAKER_CHECKER,
+                True,
+                "de-escalation is an approver control after plan approval",
+            ),
+        ),
+    )
     plan = _approved_plan(db, ctx, bank)
     if plan is None or not plan.active:
         raise HTTPException(
@@ -421,6 +509,4 @@ def list_events(db: Session, ctx: TenantContext, bank_id: str) -> CfpEventListRe
         )
         .order_by(CfpActivationEvent.created_at.desc())
     ).all()
-    return CfpEventListRead(
-        events=[_event_read(event, version) for event, version in records]
-    )
+    return CfpEventListRead(events=[_event_read(event, version) for event, version in records])

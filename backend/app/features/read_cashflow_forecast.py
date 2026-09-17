@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession, Tenant
+from app.api.deps import DbSession, LiquidityConfidentialResource
 from app.schemas.cashflow_forecast import (
     CashflowForecastMode,
     CashflowForecastRead,
@@ -25,13 +25,18 @@ router = APIRouter(tags=["cashflow-forecast"])
 def get_cashflow_forecast(  # noqa: PLR0913 - typed query contract names every control
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: LiquidityConfidentialResource,
     horizon: Annotated[CashflowHorizon, Query()] = CashflowHorizon.DAYS_30,
     mode: Annotated[CashflowForecastMode, Query()] = "lstm",
     scenario: Annotated[CashflowForecastScenario, Query()] = "baseline",
 ) -> CashflowForecastRead:
     return cashflow_forecast.get_forecast(
-        db, ctx, bank_id, horizon=int(horizon), mode=mode, scenario=scenario
+        db,
+        access.ctx,
+        access.bank.id,
+        horizon=int(horizon),
+        mode=mode,
+        scenario=scenario,
     )
 
 
@@ -43,7 +48,7 @@ def get_cashflow_forecast(  # noqa: PLR0913 - typed query contract names every c
 def get_cashflow_history(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: LiquidityConfidentialResource,
     days: Annotated[int, Query(ge=30, le=365)] = 90,
 ) -> CashflowHistoryRead:
-    return cashflow_forecast.get_history(db, ctx, bank_id, days=days)
+    return cashflow_forecast.get_history(db, access.ctx, access.bank.id, days=days)

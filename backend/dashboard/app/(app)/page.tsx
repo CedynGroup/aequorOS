@@ -122,7 +122,9 @@ export default function CommandCenterPage() {
           <UnreconciledBookBanner bankId={bankId} />
           <BreachBanner bankId={bankId} />
 
-          {isSdi && <SdiLiquiditySummary bankId={bankId} />}
+          {isSdi && moduleScope.liquidityConfidentialView && (
+            <SdiLiquiditySummary bankId={bankId} />
+          )}
 
           {lens.panels.map((panel) => {
             switch (panel) {

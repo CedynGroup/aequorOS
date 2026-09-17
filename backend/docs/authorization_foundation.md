@@ -1,8 +1,8 @@
 # Authorization foundation (as built through 2026-09-05)
 
 This document records the first bounded server-side slice of `docs/rbac.md`.
-The policy kernel remains additive. Liquidity Monitoring is the first product
-route enforced by it; the authorization-version check, effective-authority
+The policy kernel remains additive. Product enforcement is tracked in the
+[rollout contracts](#product-rollout-boundary); the authorization-version check, effective-authority
 projection, institution-discovery boundary, and Org Owner grant-administration
 boundary are also enforcing. Tenant grant create/list/revoke and the Members
 aggregation are live. Subsequent product cutovers are tracked in the
@@ -165,47 +165,13 @@ institution `view` capabilities, applies the same request-wide vetoes, and is
 shared by profile bootstrap and bank list/detail/period/fact coverage. It grants
 no tenant mutation capability and never advertises Liquidity Monitoring access.
 
-## Liquidity Monitoring enforcement (as built 2026-09-04)
+## Liquidity enforcement
 
-`GET /banks/{bank_id}/liquidity-monitoring` is the first real resource path to
-construct an exact institution-scoped locator. For normal human tenant sessions
-it evaluates `view` on LIQ/confidential and emits `authz.binding_decision` with
-the outcome, reason, target, matching binding IDs, and per-binding reasons.
-The binding result is authoritative: no complete active match returns `403`,
-and evaluator failure denies closed. Bank resolution remains tenant-scoped and
-precedes the binding decision, so an unknown or cross-tenant institution still
-returns `404` without disclosing whether it exists elsewhere.
-
-The cutover is deliberately immediate default-deny. No migration, fixture, or
-runtime path infers Liquidity Monitoring authority from a scalar legacy role,
-and no broad binding is created or backfilled. A user who lacks one exact
-institution binding or an explicitly organization-wide LIQ/confidential
-binding loses this surface at deployment. Binding create and revoke already
-advance `authv`, so the next request after a grant change must use a freshly
-issued session and observes the new authority.
-
-Operator impersonation and integration-key credentials keep their separate
-lifecycles and do not satisfy this human-binding gate. The dashboard derives
-Liquidity Monitoring visibility from the non-contextual LIQ/confidential/view
-capability in the server projection; the bank list/detail compatibility boolean
-is computed from that same capability. It hides the Monitoring Tools tab,
-in-page links, and deep route when access is absent, without inferring authority
-from the session role.
-
-The pre-cutover shadow evidence had three outcomes:
-
-- legacy allow plus no exact binding was the expected divergence and is the
-  intended tightening under immediate default-deny;
-- legacy allow plus a complete matching active binding was parity and remains
-  allowed; and
-- legacy allow plus shadow evaluation failure exposed a fail-open defect in the
-  pilot. Enforcement removes the exception-swallowing path, records
-  `binding_evaluation_failed`, and returns `403`.
-
-The institution-target slice requires no new migration. Initial ownership is
-the separate migration `202608280046`, described below. Organization
-membership, token `org`, the session's `app.organization_id`,
-organization-scoped foreign keys, and FORCE RLS remain the outer boundary.
+The [Liquidity rollout contract](liquidity_enforcement_rollout.md) owns the
+surface/permission matrix, immediate-deny behavior, credential exclusions,
+dashboard access rules, and deployment inventory. Organization membership,
+token `org`, the session's `app.organization_id`, organization-scoped foreign
+keys, and FORCE RLS remain the outer boundary.
 
 ## Initial Org Owner assignment (migration 202608280046)
 
@@ -410,7 +376,8 @@ Two generative suites add coverage beyond the fixed examples:
 
 ## Product rollout boundary
 
-Liquidity Monitoring is enforcing as described above. Capital's route matrix,
+Liquidity enforcement scope and held configuration routes are owned by the
+[Liquidity rollout contract](liquidity_enforcement_rollout.md). Capital's route matrix,
 access requirements, and deployment inventory are owned by the
 [Capital enforcement rollout](capital_enforcement_rollout.md). Existing
 operational routes outside these cutovers keep their current checks, while

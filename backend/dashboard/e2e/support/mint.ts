@@ -33,14 +33,13 @@ export const E2E_USERS: Record<
   string,
   { id: string; roles: string[]; authv: number }
 > = {
-  // Bootstrap authorization mutations for admin, one version each: initial
-  // ownership (two sentences — owner + organization-wide read), the
-  // organization-wide Analyst grant, and the exact Liquidity Monitoring
-  // fixture grant. Grant journeys pass later versions explicitly.
+  // Bootstrap gives admin two initial-ownership grants (owner and read access)
+  // and an organization-wide Analyst grant, each advancing authv once.
+  // The exact Liquidity-only fixture grant belongs to liquidity_viewer below.
   admin: {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     roles: ["admin"],
-    authv: 5,
+    authv: 4,
   },
   approver: {
     id: "eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2",
@@ -77,7 +76,29 @@ export const E2E_USERS: Record<
     roles: ["account_admin"],
     authv: 1,
   },
+  liquidity_aggregated_viewer: {
+    id: "eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea",
+    roles: ["viewer"],
+    authv: 2,
+  },
+  liquidity_viewer: {
+    id: "eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9",
+    roles: ["viewer"],
+    authv: 2,
+  },
 };
+
+export const E2E_STORAGE_ROLES = [
+  "integration_admin",
+  "admin",
+  "approver",
+  "analyst",
+  "viewer",
+  "account_admin",
+  "legacy_account_admin",
+  "liquidity_viewer",
+  "liquidity_aggregated_viewer",
+] as const satisfies readonly (keyof typeof E2E_USERS)[];
 
 export async function mintBackendToken(
   role: keyof typeof E2E_USERS,
