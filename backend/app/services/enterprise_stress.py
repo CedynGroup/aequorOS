@@ -1951,9 +1951,6 @@ def get_latest_enterprise_stress(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID, scenario_id: UUID
 ) -> EnterpriseStressRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    resolved_scenario_id, scenario_code = macro_scenarios.resolve_identity_for_read(
-        db, ctx, scenario_id
-    )
     run = db.scalar(
         select(RegulatoryRun)
         .where(
@@ -1961,7 +1958,7 @@ def get_latest_enterprise_stress(
             RegulatoryRun.bank_id == bank.id,
             RegulatoryRun.reporting_period_id == reporting_period_id,
             RegulatoryRun.module == MODULE_ENTERPRISE_STRESS,
-            RegulatoryRun.scenario_code == scenario_code,
+            RegulatoryRun.inputs["scenario"]["id"].as_string() == str(scenario_id),
             RegulatoryRun.status == "succeeded",
         )
         .order_by(RegulatoryRun.created_at.desc())
@@ -1976,7 +1973,7 @@ def get_latest_enterprise_stress(
         db,
         ctx,
         bank,
-        _read(run, resolved_scenario_id, scenario_code),
+        _read(run, scenario_id, str(run.inputs["scenario"]["code"])),
         sensitivity=Sensitivity.CONFIDENTIAL,
     )
 

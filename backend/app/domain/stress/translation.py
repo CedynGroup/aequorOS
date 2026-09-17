@@ -595,6 +595,8 @@ def translate(
         value = _shock_value(scenario_paths, mapping)
         if value != mapping.neutral:
             result[mapping.shock_key] = value
+    if module == "irr" and "long_bp" in result:
+        result.setdefault("short_bp", Decimal(0))
     if (
         module == "irr"
         and "short_bp" in result

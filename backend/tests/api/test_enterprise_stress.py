@@ -257,6 +257,98 @@ def test_enterprise_stress_runs_a_system_default_without_approval(
     assert reopened.json()["scenario_id"] == str(scenario.id)
     assert reopened.json()["scenario_code"] == scenario.code
 
+    latest = db_client.get(
+        LATEST_URL.format(bank_id=bank_id),
+        params={"reporting_period_id": period_id, "scenario_id": str(scenario.id)},
+        headers=headers(),
+    )
+    assert latest.status_code == 200, latest.text
+    assert latest.json()["run_id"] == body["run_id"]
+    assert latest.json()["scenario_id"] == str(scenario.id)
+
+
+def test_latest_run_distinguishes_system_and_tenant_scenarios_with_same_code(
+    db_client: TestClient,
+) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    system = default_macro_scenarios.DEFAULT_BY_CODE["system_adverse_bog_style"]
+    tenant_id = _create_scenario(db_client, code=system.code)
+    _approve_scenario(db_client, tenant_id, _seed_checker(db_client))
+    run_ids = {}
+    for scenario_id in (str(system.id), tenant_id, tenant_id):
+        response = db_client.post(
+            RUNS_URL.format(bank_id=bank_id),
+            headers=headers(),
+            json={
+                "scenario_id": scenario_id,
+                "reporting_period_id": period_id,
+                "reason": "Exercise scenario identity with a shared code.",
+            },
+        )
+        assert response.status_code == 201, response.text
+        run_ids[scenario_id] = response.json()["run_id"]
+
+    for scenario_id, run_id in run_ids.items():
+        params = {"reporting_period_id": period_id, "scenario_id": scenario_id}
+        latest = db_client.get(
+            LATEST_URL.format(bank_id=bank_id), params=params, headers=headers()
+        )
+        assert latest.status_code == 200, latest.text
+        assert latest.json()["run_id"] == run_id
+        assert latest.json()["scenario_id"] == scenario_id
+        foreign = db_client.get(
+            LATEST_URL.format(bank_id=bank_id), params=params, headers=headers(ORG_2)
+        )
+        assert foreign.status_code == 404
+
+
+@pytest.mark.parametrize("rotation", ["steepener", "flattener"])
+def test_cloned_rotation_with_flat_policy_rate_runs(
+    db_client: TestClient, rotation: str
+) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    system = default_macro_scenarios.DEFAULT_BY_CODE[f"system_irr_{rotation}"]
+    clone = db_client.post(
+        f"{SCENARIO_URL}/{system.id}/clone",
+        headers=headers(),
+        json={"reason": "Customize the long end independently."},
+    )
+    assert clone.status_code == 201, clone.text
+    scenario_id = clone.json()["id"]
+    paths = [
+        {
+            "variable": point["variable"],
+            "year_index": point["year_index"],
+            "base_value": point["base_value"],
+            "stress_value": (
+                point["base_value"]
+                if point["variable"] == "policy_rate"
+                else point["stress_value"]
+            ),
+        }
+        for point in clone.json()["paths"]
+    ]
+    edited = db_client.patch(
+        f"{SCENARIO_URL}/{scenario_id}",
+        headers=headers(),
+        json={"paths": paths, "reason": "Keep policy rates flat."},
+    )
+    assert edited.status_code == 200, edited.text
+    _approve_scenario(db_client, scenario_id, _seed_checker(db_client))
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": scenario_id,
+            "reporting_period_id": period_id,
+            "reason": "Run the approved long-end rotation.",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert Decimal(response.json()["outcome"]["irr"]["delta_eve"]) != 0
+
 
 def test_enterprise_stress_requires_an_approved_scenario(db_client: TestClient) -> None:
     bank_id = seed_bank(db_client)

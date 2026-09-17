@@ -809,13 +809,3 @@ def resolve_for_official_run(
         is_runnable=True,
     )
 
-
-def resolve_identity_for_read(
-    db: Session, ctx: TenantContext, scenario_id: UUID
-) -> tuple[UUID, str]:
-    """Resolve scenario identity without loading paths."""
-    system = _system_or_none(scenario_id)
-    if system is not None:
-        return system.id, system.code
-    scenario = _get_scenario_or_404(db, ctx, scenario_id)
-    return scenario.id, scenario.code
