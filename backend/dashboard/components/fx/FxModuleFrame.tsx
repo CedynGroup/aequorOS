@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Shared chrome for every FX workspace tab: page header with breadcrumbs,
@@ -7,18 +7,18 @@
  * a render prop so the payload is fetched (and cached) once per query key.
  */
 
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 import type {
   FxDashboardRead,
   FxMetricsRead,
   RegulatoryRunRead,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import { useBankContext } from '@/components/shell/BankContext';
-import LiveEngineNote from '@/components/live/LiveEngineNote';
-import { useFxDashboard, useRegulatoryRun } from '@/lib/api/hooks';
-import { fmtDateUTC } from '@/lib/api/values';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { useBankContext } from "@/components/shell/BankContext";
+import LiveEngineNote from "@/components/live/LiveEngineNote";
+import { useFxDashboard, useRegulatoryRun } from "@/lib/api/hooks";
+import { fmtDateUTC } from "@/lib/api/values";
 
 export type FxFrameContext = {
   data: FxDashboardRead;
@@ -45,11 +45,11 @@ export default function FxModuleFrame({
   const bankId = bank?.id;
 
   const dashboard = useFxDashboard(
-    moduleScope.fxAggregatedView ? bankId : undefined
+    moduleScope.fxAggregatedView ? bankId : undefined,
   );
   const latestRun = useRegulatoryRun(
     moduleScope.fxConfidentialView ? bankId : undefined,
-    dashboard.data?.latestRunId
+    dashboard.data?.latestRunId,
   );
 
   const data = dashboard.data;
@@ -58,13 +58,17 @@ export default function FxModuleFrame({
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'FX Risk' },
+          { label: "Modules", href: "/" },
+          { label: "FX Risk" },
           { label: crumb },
         ]}
         title={title}
         subtitle={subtitle}
-        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
+        action={
+          data ? (
+            <LiveEngineNote live={data.live} stored={data.stored} />
+          ) : undefined
+        }
       />
 
       <QueryBoundary

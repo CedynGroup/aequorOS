@@ -652,9 +652,7 @@ def _irr_positions(rows: Sequence[FinancialFactRow]) -> list[IrrPosition]:
     return positions
 
 
-def _base_curve(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> dict[Decimal, Decimal]:
+def _base_curve(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> dict[Decimal, Decimal]:
     rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamStressShock, as_of
     )
@@ -740,6 +738,7 @@ _CONCENTRATION_POSITION_TYPES = ("LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDIN
 _FUNDING_POSITION_TYPES = ("DEPOSIT", "INTERBANK_BORROWING")
 _DERIVATIVE_POSITION_TYPES = ("DERIVATIVE", "FX_HEDGE", "INTEREST_RATE_SWAP")
 
+
 @dataclass(frozen=True)
 class _ExposureRow:
     """One current-generation position snapshot flattened for the Phase-4 methods.
@@ -764,6 +763,7 @@ class _ExposureRow:
     regulatory_category: str | None
     product_risk_weight_code: str | None
     product_code: str | None
+
 
 # Documented PD/LGD defaults used when the source carries none on the snapshot
 # (¶45); a snapshot attribute always wins. Sovereign-ish classes get a zero PD so
@@ -881,16 +881,12 @@ def _load_exposure_rows(
                 counterparty_type=(
                     counterparty.counterparty_type if counterparty is not None else None
                 ),
-                counterparty_resident=(
-                    counterparty.resident if counterparty is not None else None
-                ),
+                counterparty_resident=(counterparty.resident if counterparty is not None else None),
                 counterparty_country=(
                     counterparty.country_code if counterparty is not None else None
                 ),
                 group_key=group_key,
-                regulatory_category=(
-                    product.regulatory_category if product is not None else None
-                ),
+                regulatory_category=(product.regulatory_category if product is not None else None),
                 product_risk_weight_code=(
                     product.risk_weight_code if product is not None else None
                 ),
@@ -1055,9 +1051,7 @@ def _build_concentration_inputs(
         if row.balance_ghs <= _ZERO:
             continue
         sector = (
-            row.attributes.get("sector")
-            or row.attributes.get("industry")
-            or row.counterparty_type
+            row.attributes.get("sector") or row.attributes.get("industry") or row.counterparty_type
         )
         collateral = row.attributes.get("collateral_type") or row.attributes.get(
             "collateral_asset_class"
@@ -1185,9 +1179,7 @@ def _pillar2_overlay(
         if eve_loss > _ZERO:
             irrbb = thousands(eve_loss)
     if outcome.fx is not None:
-        nop_uplift = max(
-            outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1, _ZERO
-        )
+        nop_uplift = max(outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1, _ZERO)
         addon = tier1 * nop_uplift / _HUNDRED
         if addon > _ZERO:
             country_fx = thousands(addon)
@@ -1260,9 +1252,7 @@ class _ResolvedPlan:
 
     @property
     def fully_supplied_by_institution(self) -> bool:
-        return all(
-            entry["source"] == BANK_PLAN_SOURCE for entry in self.provenance.values()
-        )
+        return all(entry["source"] == BANK_PLAN_SOURCE for entry in self.provenance.values())
 
     @property
     def platform_default_fields(self) -> tuple[str, ...]:
@@ -1771,9 +1761,7 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         raise EnterpriseStressError(exc.code, exc.message) from exc
 
     baseline_income, baseline_credit_loss = _baseline_pnl(projection)
-    irr_inputs = (
-        _irr_inputs(db, ctx, bank, period, as_of, tier1) if payload.include_irr else None
-    )
+    irr_inputs = _irr_inputs(db, ctx, bank, period, as_of, tier1) if payload.include_irr else None
     fx_inputs = _fx_inputs(db, ctx, bank, period, as_of, tier1) if payload.include_fx else None
 
     outcome = run_enterprise_stress(
@@ -1955,9 +1943,7 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
             "input_hash": input_hash,
             "car_erosion_pp": outcome_json["capital"]["car_erosion_pp"],  # type: ignore[index]
             "stress_stays_above_all_minima": projection.stress_stays_above_all_minima,
-            "management_action_plan_id": (
-                None if plan_model is None else str(plan_model.id)
-            ),
+            "management_action_plan_id": (None if plan_model is None else str(plan_model.id)),
             "with_actions_stays_above_all_minima": (
                 None if management_result is None else management_result.stays_above_all_minima
             ),
@@ -1966,7 +1952,11 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
     )
     db.commit()
     return enterprise_run_visibility.project_response(
-        db, ctx, bank, _read(run, scenario), sensitivity=Sensitivity.CONFIDENTIAL,
+        db,
+        ctx,
+        bank,
+        _read(run, scenario),
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
 
 
@@ -2003,7 +1993,11 @@ def get_latest_enterprise_stress(
             detail="No enterprise stress run exists for this period and scenario.",
         )
     return enterprise_run_visibility.project_response(
-        db, ctx, bank, _read(run, scenario), sensitivity=Sensitivity.CONFIDENTIAL,
+        db,
+        ctx,
+        bank,
+        _read(run, scenario),
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
 
 
@@ -2101,7 +2095,11 @@ def get_enterprise_stress_run(
             detail="The macro scenario for this run no longer exists.",
         )
     return enterprise_run_visibility.project_response(
-        db, ctx, bank, _read(run, scenario), sensitivity=Sensitivity.CONFIDENTIAL,
+        db,
+        ctx,
+        bank,
+        _read(run, scenario),
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
 
 

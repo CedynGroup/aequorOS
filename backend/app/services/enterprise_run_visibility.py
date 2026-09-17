@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import TypeVar
-
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -12,10 +10,8 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.models import Bank
 from app.services import scoped_authorization
 
-ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
 
-
-def project_response(
+def project_response[ResponseModel: BaseModel](
     db: Session,
     ctx: TenantContext,
     bank: Bank,

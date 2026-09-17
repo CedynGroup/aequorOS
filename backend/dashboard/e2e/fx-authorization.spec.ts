@@ -95,6 +95,9 @@ test.describe("bound FX user", () => {
     await expect(
       page.getByRole("link", { name: "VaR & Stress" }),
     ).toBeVisible();
+    await expect(
+      page.getByText("Aggregate NOP / Tier 1", { exact: true }),
+    ).toBeVisible();
 
     if (evidenceDir) {
       await page.screenshot({
@@ -117,9 +120,10 @@ test.describe("FX Reports summary permissions", () => {
         for (const institution of profile.effective_authority.institution_capabilities) {
           institution.capabilities = institution.capabilities.filter(
             (capability: { module: string; sensitivity: string; permission: string }) =>
-              capability.module === "fx" &&
               capability.permission === "view" &&
-              capability.sensitivity === sensitivity,
+              (capability.module === "reg" ||
+                (capability.module === "fx" &&
+                  capability.sensitivity === sensitivity)),
           );
         }
         await route.fulfill({ response, json: profile });
@@ -146,6 +150,12 @@ test.describe("FX Reports summary permissions", () => {
       } else {
         await expect(page.getByRole("button", { name: "All modules", exact: true })).toBeVisible();
         await expect(fxFilter).toHaveCount(0);
+      }
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(evidenceDir, `fx-reports-${sensitivity}.png`),
+          fullPage: true,
+        });
       }
     });
   }

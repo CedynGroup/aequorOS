@@ -19,9 +19,15 @@ The FX dashboard and aggregated `/fx` tabs require FX `view` with sensitivity
 
 FX regulatory-run and saved-analysis lists use FX `view` with sensitivity
 `aggregated`. Their details and the `/fx/scenarios` catalogue use FX `view` with
-sensitivity `confidential`. Lists remove unauthorized FX rows before counts and
-pagination are calculated. Unauthorized FX run, scenario, and analysis IDs return
-404.
+sensitivity `confidential`. Regulatory-run lists remove unauthorized FX rows before
+counts and pagination; saved-analysis lists and scenario catalogues deny with 403
+without their required view authority. Unauthorized FX run and saved-analysis
+detail IDs return 404. Scenario mutation permission denials return 403.
+
+Shared live summaries and alerts omit FX metrics and findings without
+FX/aggregated/view, including their counts. Analytics windows exclude FX daily
+snapshots before computing statistics while retaining non-FX results. Explicit
+`/live-snapshots?module=fx` requests require the same aggregated view authority.
 
 Running the FX scenario batch and compute-only FX analysis requires FX `run`
 with sensitivity `confidential`. Enterprise stress runs with `include_fx=true`
@@ -33,6 +39,12 @@ all at that same sensitivity. No route infers authority from `users.role`, token
 `roles[]`, a different module, a different sensitivity, or separate partial
 bindings.
 
+Tenant-initiated `POST /banks/{bank_id}/official-runs` and data activation with
+`run_calculations=true` also require FX/confidential/run when
+`module_scope.runs_module` includes FX. These checks precede job enqueueing or
+fact derivation and retain the existing mutation gate. Activation without
+calculations does not acquire this FX requirement.
+
 FX authority is institution/module scoped in v1. A binding cannot narrow access
 to one treasury desk or one currency because those resource attributes do not
 exist in the canonical authorization locator. Do not encode desk or currency
@@ -41,6 +53,9 @@ names in grant reasons as if they were enforced scope.
 ## Dashboard access
 
 FX navigation and deep links follow the server's effective-authority projection.
+For an entitled institution, a missing FX view permission leaves the navigation
+link visible but disabled, with a tooltip naming the required grant. Structural
+exclusions and institutions without authority remain hidden.
 A denied `/fx` deep link returns the dashboard's not-found view and sends no FX
 dashboard query. Command Center, Risk, Alerts, and Board Pack request FX data
 only when the same FX/aggregated view capability is present.
@@ -176,11 +191,11 @@ Create no automatic backfill. Operators must create only institution-approved
 rows through the authorization service so `authv` advances and refresh-token
 families are revoked in the same transaction.
 
-| Need                                                           | `principal_type` | `role_bundle`                                 | `institution_scope`                      | `institution_id`                             | `module_scope` | `sensitivity_scope` |
-| -------------------------------------------------------------- | ---------------- | --------------------------------------------- | ---------------------------------------- | -------------------------------------------- | -------------- | ------------------- |
+| Need                                                                        | `principal_type` | `role_bundle`                                 | `institution_scope`                      | `institution_id`                             | `module_scope` | `sensitivity_scope` |
+| --------------------------------------------------------------------------- | ---------------- | --------------------------------------------- | ---------------------------------------- | -------------------------------------------- | -------------- | ------------------- |
 | FX dashboards, navigation, run/analysis lists, and aggregated report blocks | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | `fx`           | `aggregated`        |
-| FX scenario catalogue and run/saved-analysis detail            | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `fx`           | `confidential`      |
-| Run FX, compute analyses, and create/edit FX workbench entries | `human`          | `analyst`                                     | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `fx`           | `confidential`      |
+| FX scenario catalogue and run/saved-analysis detail                         | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `fx`           | `confidential`      |
+| Run FX, compute analyses, and create/edit FX workbench entries              | `human`          | `analyst`                                     | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `fx`           | `confidential`      |
 
 An Analyst FX/confidential row grants `view`, `create`, `edit`, and `run`, but
 does not grant FX/aggregated because sensitivity is exact. Add the aggregated
