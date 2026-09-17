@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from loguru import logger
 from sqlalchemy import delete, func, select
 
+from app.api.deps import TenantContext
 from app.core.authorization import (
     BindingStatus,
     GrantorType,
@@ -29,15 +30,25 @@ from app.models import (
     AuthorizationBinding,
     Bank,
     BankReportingPeriod,
+    LiveFinding,
+    LiveMetric,
+    LiveMetricSnapshot,
     RegulatoryRun,
     SavedScenarioAnalysis,
     StressScenario,
     User,
 )
+from app.schemas.data_activation import DataActivationCreate
 from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
 from app.schemas.scenario_workbench import ScenarioResultRead
-from app.services import analysis_workbench, authorization, regulatory_fx
+from app.services import (
+    analysis_workbench,
+    authorization,
+    data_activation,
+    enterprise_stress,
+    regulatory_fx,
+)
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import (
@@ -739,8 +750,6 @@ def test_fx_regulatory_registry_filters_before_count_and_hides_details(
 
 
 def test_fx_shared_feeds_filter_rows_and_counts(db_client: TestClient) -> None:
-    from app.models import LiveFinding, LiveMetric, LiveMetricSnapshot
-
     now = utc_now()
     with get_sessionmaker()() as session:
         for module in ("capital", "fx"):
@@ -828,10 +837,6 @@ def test_fx_batch_and_activation_deny_before_work(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.api.deps import TenantContext
-    from app.schemas.data_activation import DataActivationCreate
-    from app.services import data_activation
-
     _, version = _grant(
         role_bundle=RoleBundle.ANALYST,
         module_scope=ModuleScope.LIQUIDITY,
@@ -880,8 +885,6 @@ def test_enterprise_fx_permission_precedes_input_reads(
     monkeypatch: pytest.MonkeyPatch,
     include_fx: bool,
 ) -> None:
-    from app.services import enterprise_stress
-
     calls: list[str] = []
 
     def input_probe(*_args: object, **_kwargs: object) -> None:

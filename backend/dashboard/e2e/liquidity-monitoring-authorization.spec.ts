@@ -135,7 +135,9 @@ test.describe("exactly bound Liquidity user", () => {
       }),
     ).toBeVisible();
     await irrbb.press("Enter");
-    const fx = page.getByRole("navigation").getByRole("link", { name: "FX", exact: true });
+    const fx = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "FX", exact: true });
     await expect(fx).toBeVisible();
     await expect(fx).toHaveAttribute("aria-disabled", "true");
     await expect(fx).not.toHaveAttribute("href", /.+/);

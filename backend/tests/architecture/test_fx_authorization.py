@@ -6,7 +6,6 @@ from fastapi.routing import APIRoute
 
 from app.main import create_app
 
-
 _ROUTE_DEPENDENCIES = {
     ("GET", "/api/v1/banks/{bank_id}/fx/dashboard"): "require_fx_aggregated_view",
     ("POST", "/api/v1/banks/{bank_id}/fx/run-all-scenarios"): "require_fx_run",

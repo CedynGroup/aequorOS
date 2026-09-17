@@ -9,11 +9,14 @@ tenant isolation — against the deterministic canonical seeded book.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 
 from app.core.authorization import (
     GrantorType,
@@ -23,11 +26,11 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
-
 from app.db.session import get_sessionmaker
-from app.models import User
+from app.models import AuthorizationBinding, RegulatoryRun, User
 from app.services import authorization
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.api.test_fx_authorization import _grant
 from tests.api.test_ingestion import seed_bank
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
@@ -433,6 +436,30 @@ def test_a_car_target_below_the_governed_floor_is_refused(db_client: TestClient)
     assert details["details"]["governed_car_min_pct"] == "13"
 
 
+def _assert_enterprise_fx_projection(
+    metrics: dict[str, Any], original_metrics: dict[str, Any], *, visible: bool
+) -> None:
+    original_rows = original_metrics["appendix_ii"]["table5_rwa"]["rows"]
+    original_drivers = original_metrics["appendix_ii"]["table6_risk_drivers"]["rows"]
+    assert metrics["outcome"]["capital"] == original_metrics["outcome"]["capital"]
+    assert metrics["outcome"]["liquidity"] == original_metrics["outcome"]["liquidity"]
+    assert metrics["projection"] == original_metrics["projection"]
+    if visible:
+        assert metrics["outcome"] == original_metrics["outcome"]
+        assert metrics["appendix_ii"] == original_metrics["appendix_ii"]
+    else:
+        assert "fx" not in metrics["outcome"]
+        assert metrics["appendix_ii"]["table6_risk_drivers"]["rows"] == [
+            row for row in original_drivers if row["variable"] != "fx_usd_ghs"
+        ]
+        expected_rows = deepcopy(original_rows)
+        for row in expected_rows:
+            if row["pillar2"].pop("country_and_fx") is not None:
+                del row["pillar2"]["total"]
+                del row["total_capital_requirement"]
+        assert metrics["appendix_ii"]["table5_rwa"]["rows"] == expected_rows
+
+
 @pytest.mark.parametrize("include_fx", [True, False])
 @pytest.mark.parametrize("fx_sensitivity", [None, "aggregated", "confidential"])
 def test_enterprise_readers_project_fx_without_hiding_non_fx(
@@ -440,13 +467,6 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
     fx_sensitivity: str | None,
     include_fx: bool,
 ) -> None:
-    from copy import deepcopy
-
-    from sqlalchemy import delete
-
-    from app.models import AuthorizationBinding, RegulatoryRun
-    from tests.api.test_fx_authorization import _grant
-
     bank_id = seed_bank(db_client)
     period_id = _period_id(db_client, bank_id)
     checker = _seed_checker(db_client)
@@ -512,23 +532,7 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
         (latest.json(), fx_sensitivity == "confidential"),
         (detail.json(), fx_sensitivity == "confidential"),
     ):
-        assert metrics["outcome"]["capital"] == original_metrics["outcome"]["capital"]
-        assert metrics["outcome"]["liquidity"] == original_metrics["outcome"]["liquidity"]
-        assert metrics["projection"] == original_metrics["projection"]
-        if visible:
-            assert metrics["outcome"] == original_metrics["outcome"]
-            assert metrics["appendix_ii"] == original_metrics["appendix_ii"]
-        else:
-            assert "fx" not in metrics["outcome"]
-            assert metrics["appendix_ii"]["table6_risk_drivers"]["rows"] == [
-                row for row in original_drivers if row["variable"] != "fx_usd_ghs"
-            ]
-            expected_rows = deepcopy(original_rows)
-            for row in expected_rows:
-                if row["pillar2"].pop("country_and_fx") is not None:
-                    del row["pillar2"]["total"]
-                    del row["total_capital_requirement"]
-            assert metrics["appendix_ii"]["table5_rwa"]["rows"] == expected_rows
+        _assert_enterprise_fx_projection(metrics, original_metrics, visible=visible)
     if fx_sensitivity != "confidential":
         visible_inputs = generic.json()["inputs"]
         assert "fx_depreciation_pct" not in visible_inputs["plan"]
