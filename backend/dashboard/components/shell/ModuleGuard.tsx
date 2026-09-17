@@ -9,9 +9,9 @@
  * gets not-found, not a bank-only screen. Unscoped tenants (banks) and the
  * pre-load window (module set not yet resolved) pass through unchanged.
  *
- * Hub URLs and public product-module paths redirect when an active member has
- * no institution authority. Unknown paths and hidden object-specific routes
- * still resolve as not-found.
+ * Hub redirects and the baseline-only public-route allow-list are owned by
+ * docs/rbac.md §8.2 and lib/modules.ts. Unknown, structurally excluded, and
+ * hidden object-specific paths still resolve as not-found.
  */
 
 import { usePathname, notFound, redirect } from "next/navigation";

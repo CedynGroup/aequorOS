@@ -664,8 +664,9 @@ const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
  *   - `/`         → the first visible surface (`landingPathFor`);
  *   - `/settings` → personal settings, which every active session can open,
  *                   when organization settings need authority the user lacks.
- * A member with no institution authority also returns from public product
- * structure to `/`; hidden object-specific paths still stay not-found.
+ * Baseline-only members return from the explicit public-route allow-list to
+ * `/`; structural exclusions and hidden object-specific paths stay not-found
+ * (docs/rbac.md §8.2).
  */
 export function hubRedirectFor(
   pathname: string,

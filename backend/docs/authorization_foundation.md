@@ -1,4 +1,4 @@
-# Authorization foundation (as built through 2026-09-05)
+# Authorization foundation (as built through 2026-09-16)
 
 This document records the first bounded server-side slice of `docs/rbac.md`.
 The policy kernel remains additive. Product enforcement is tracked in the
@@ -23,20 +23,8 @@ The policy vocabulary lives only in `backend/app/core/authorization.py`:
 - concrete resource modules: LIQ, CAP, IRRBB, FX, FTP, FCST, BEH, DATA, REG,
   Risk, Markets, Account, and Audit;
 - sensitivities: `published`, `aggregated`, `confidential`, and `restricted`;
-- static bundles: Viewer, Auditor, Analyst, Approver, Account Admin, Org Owner,
-  and the machine-only Integration Writer.
-
-The v1 bundle contents are deliberately narrow:
-
-| Bundle             | Granted actions                                       |
-| ------------------ | ----------------------------------------------------- |
-| Viewer             | `view`                                                |
-| Auditor            | `view`                                                |
-| Analyst            | `view`, `create`, `edit`, `run`, `validate`, `export` |
-| Approver           | `view`, `review`, `approve`                           |
-| Account Admin      | `administer`                                          |
-| Org Owner          | `administer`                                          |
-| Integration Writer | `ingest`                                              |
+- static bundles and their exact granted actions: the executable
+  [`RoleBundle` and `ROLE_PERMISSIONS`](../app/core/authorization.py) definitions.
 
 `configure`, `sign_off`, and `submit` are reserved action names but are not in
 any v1 bundle. Workflow-specific authority for them must be designed explicitly
@@ -88,6 +76,34 @@ grantor is active. It requires non-empty grant provenance and creates only an
 active binding. The tenant surface fixes validity to immediate with no expiry
 and exposes only explicit single-binding revocation; scheduled and expiry
 lifecycle remain later work.
+
+## Baseline membership
+
+Every active non-service human has exactly one active, system-managed `member`
+binding at organization-wide Account/restricted scope, with no expiry. Its empty
+evaluator permission set grants no institution, directory, or product authority;
+shell and own-profile access remain authenticated self-service. The dashboard
+behavior is owned by [docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboard).
+
+`app/services/membership.py::ensure_baseline_membership` creates the binding and
+its grant audit atomically with activation in SSO request approval and operator
+tenant provisioning. The partial unique index enforces one active row per user
+and organization. Settings → Members displays the row but cannot grant or revoke
+it. `authentication.deactivate_user` revokes and audits the baseline, deactivates
+the user, advances `authv`, and revokes refresh families with `user_deactivated`
+in one transaction. Future activation paths, including invite acceptance and
+reactivation, must call the same creation service; reactivation creates a fresh
+active row and retains the revoked history.
+
+Migration `202609160053` backfills active non-service users, audits each grant,
+and invalidates affected authorization versions and refresh families. It enumerates
+organizations, sets `app.organization_id` per organization, and explicitly filters
+each tenant mutation. Its `force_rls_suspended` contexts temporarily suspend FORCE
+for the migration owner and restore it afterward. Downgrade invalidates sessions
+for users with membership rows before removing those rows and the added index.
+`tests/db/test_baseline_membership_migration.py` pins the multi-tenant backfill;
+`tests/api/test_baseline_membership.py` and
+`tests/core/test_authorization_properties.py` pin lifecycle and non-authority.
 
 ## Decision semantics and conditions
 
@@ -148,11 +164,10 @@ falling back to legacy authority.
 
 The dashboard shell, command palette, module tabs, route guard, and query policy
 consume this server projection. Capability and product caches are partitioned by
-tenant, actor, `authv`, and institution. An active zero-binding user sees no
-institutions or product navigation, while personal profile self-service remains
-available; organization settings require organization-wide Account
-administration. Context-dependent capabilities may support structural
-navigation, but actions and deep links never treat them as final authorization.
+tenant, actor, `authv`, and institution. Baseline-only shell navigation and
+personal settings follow [docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboard);
+organization settings require organization-wide Account administration.
+Context-dependent capabilities may support structural navigation, but actions and deep links never treat them as final authorization.
 This dashboard slice gates action controls only where the projected capability is
 already final and non-contextual. Module-specific mutations such as run,
 configure, approve, sign-off, and submit remain with their dependency-ordered
@@ -275,7 +290,7 @@ schema, so two authority combinations require two requests and two binding rows.
 Preview returns the canonical authority sentence; create requires that exact
 sentence and refuses if names or scope presentation changed before commit.
 Members may grant Viewer, Auditor, Analyst, Approver, or Account Admin. Org
-Owner and Integration Writer are not tenant-grantable; Account Admin is valid
+Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
 only as organization-wide Account Administration at all sensitivity levels.
 
 The server runs assignment-time separation-of-duties policy and returns the
@@ -289,7 +304,7 @@ Create and revoke both write an `audit_events` record containing actor, grantee,
 role, complete scope (including sensitivity), time, reason, and the canonical
 authority sentence. Both advance the grantee's authorization version and revoke
 their refresh families in the same transaction; unrelated binding rows remain
-active.
+active. Baseline membership ends only through [deactivation](#baseline-membership).
 
 The Members response is tenant-filtered and aggregates identity, lifecycle,
 SSO-access-request state, last activity, authentication method, active grant
@@ -299,8 +314,9 @@ Its Define → Review → Done sentence composer fixes the principal and makes a
 four binding dimensions single-valued. The same sentence is reused in review,
 member detail, revoke confirmation, completion, and audit evidence. SSO request
 approval uses this same service transaction: verified identity alone has no
-binding-derived authority; approval atomically activates the identity and adds
-exactly one complete binding.
+binding-derived authority; approval atomically activates the identity, ensures
+[baseline membership](#baseline-membership), and adds the selected complete
+scoped grant.
 
 The SSO routes retain their split administration boundary: account
 administrators may list or reject never-activated request stubs, but only an Org
@@ -319,7 +335,8 @@ integer `authv`. Every normal app-JWT request compares it with the active user
 row; refresh also requires the current value in addition to the server-side
 token record. A stale version returns 401. `invalidate_user_authorization()`
 locks the user, advances the version, and revokes every refresh family with
-`authorization_changed` in one transaction. The binding creation primitive
+`authorization_changed` by default in one transaction; deactivation supplies
+`user_deactivated` instead. The binding creation primitive
 uses this operation before commit. Future role, scope, status, and security
 mutations must do the same.
 

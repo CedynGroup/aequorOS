@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 import path from "path";
-import { E2E_TMP } from "../playwright.config";
+import { E2E_PASSWORD } from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
 test.describe("fresh active member baseline", () => {
-  test.use({ storageState: path.join(E2E_TMP, "invite_fresh.json") });
+  test.use({ storageState: { cookies: [], origins: [] } });
 
   test("deep links land in the shell with the module catalogue disabled", async ({
     page,
@@ -17,6 +17,13 @@ test.describe("fresh active member baseline", () => {
       }
     });
 
+    await page.goto("/login");
+    await page
+      .getByLabel("Email", { exact: true })
+      .fill("e2e.invite_fresh@aequoros.example");
+    await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
     await page.goto("/liquidity/monitoring");
     await expect(page).toHaveURL(/\/$/);
     await expect(
@@ -69,6 +76,20 @@ test.describe("fresh active member baseline", () => {
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "baseline-membership-shell.png"),
+        fullPage: true,
+      });
+    }
+
+    await navigation
+      .getByRole("link", { name: "Settings", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(
+      page.getByRole("heading", { name: "Profile & preferences", exact: true }),
+    ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "baseline-membership-settings.png"),
         fullPage: true,
       });
     }

@@ -296,7 +296,11 @@ assert.equal(hubRedirectFor("/settings/authentication", operationalOnly), null);
 assert.equal(hubRedirectFor("/liquidity/monitoring", denied), null);
 assert.equal(hubRedirectFor("/fx", ownerOnly), null);
 assert.equal(hubRedirectFor("/liquidity/monitoring", memberOnly), "/");
-for (const route of ["/data-engine", "/data-engine/excel-csv", "/liquidity/stress/"]) {
+for (const route of [
+  "/data-engine",
+  "/data-engine/excel-csv",
+  "/liquidity/stress/",
+]) {
   assert.equal(hubRedirectFor(route, memberOnly), "/");
 }
 for (const route of [
@@ -311,7 +315,10 @@ for (const route of [
   assert.equal(hubRedirectFor(route, memberOnly), null);
 }
 assert.equal(
-  hubRedirectFor("/liquidity/buffer", { ...memberOnly, institutionClass: "sdi" }),
+  hubRedirectFor("/liquidity/buffer", {
+    ...memberOnly,
+    institutionClass: "sdi",
+  }),
   null,
 );
 assert.equal(
@@ -321,7 +328,11 @@ assert.equal(
   }),
   null,
 );
-for (const route of ["/liquidity/forecast", "/liquidity/monitoring", "/liquidity/cfp"]) {
+for (const route of [
+  "/liquidity/forecast",
+  "/liquidity/monitoring",
+  "/liquidity/cfp",
+]) {
   assert.deepEqual(hrefAccess(route, memberOnly), {
     state: "disabled",
     reason:
@@ -333,7 +344,9 @@ assert.deepEqual(hrefAccess("/liquidity/stress", memberOnly), {
   reason:
     "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
 });
-assert.deepEqual(hrefAccess("/basel/planning", memberOnly), { state: "hidden" });
+assert.deepEqual(hrefAccess("/basel/planning", memberOnly), {
+  state: "hidden",
+});
 assert.deepEqual(hrefAccess("/data-engine/batches/foreign-batch", memberOnly), {
   state: "hidden",
 });

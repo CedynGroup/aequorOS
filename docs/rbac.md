@@ -354,14 +354,11 @@ count (Okta caps at 100/org) to prevent proliferation.
 
 ## 7. Permission model
 
-> **Foundation boundary:** `app/core/authorization.py` stores a small action
-> enum separately from the resource's concrete module. Its v1 bundles grant:
-> Member = no evaluator permission; Viewer/Auditor = `view`;
-> Analyst = `view|create|edit|run|validate|export`;
-> Approver = `view|review|approve`; Account Admin = `administer`; and the
-> machine-only Integration Writer = `ingest`. `configure`, `sign_off`, and
-> `submit` are reserved but are not in any v1 bundle. The richer namespaces and
-> matrices below remain target design, not as-built authority.
+> **Foundation boundary:** the executable v1 action and bundle map is
+> [`ROLE_PERMISSIONS`](../backend/app/core/authorization.py); see the
+> [foundation reference](../backend/docs/authorization_foundation.md#authority-model)
+> for its interpretation. The richer namespaces and matrices below remain
+> target design, not as-built authority.
 
 ### 7.1 Permission namespace (`resource:action`)
 
@@ -522,8 +519,9 @@ binding cannot bypass them.
 `users.authorization_version` is already live. Every app token carries `authv`;
 tenant validation and refresh reject a stale version. Any future role, scope,
 status, or security mutation must call
-`invalidate_user_authorization()` in the same transaction, which increments the
-version and revokes every refresh family with `authorization_changed`.
+`invalidate_user_authorization()` in the same transaction; the
+[foundation contract](../backend/docs/authorization_foundation.md#authorization-version-and-deployment-transition)
+owns version advancement and refresh-revocation reasons.
 
 ### 8.2 Frontend (dashboard)
 
@@ -532,9 +530,11 @@ organization and per-institution capabilities from the binding evaluator; `/bank
 filters out uncovered institutions before presentation. The shell, command palette,
 module tabs, and route guard consume that projection without consulting token or
 scalar roles. Unauthorized direct routes resolve as 404 and do not mount product
-queries. The root `/` is the post-sign-in landing, not a deep link: when the
-Command Center lies outside a user's authority the route guard sends them to the
-first surface they can see in sidebar order (`lib/modules.ts::landingPathFor`,
+queries, except for the hubs and baseline-only public routes described below.
+The root `/` is the post-sign-in landing, not a deep link: for users with separate
+institution or organization capabilities, when the Command Center lies outside
+their authority the route guard sends them to the first surface they can see
+in sidebar order (`lib/modules.ts::landingPathFor`,
 the §8.3 order), falling back to personal settings — never a 404 on arrival.
 `/settings` is the other hub: a user without organization-wide Account
 administration is sent to `/settings/profile` rather than 404ed, and "Your
@@ -552,18 +552,20 @@ A member who saves a grant for themselves is told their session ended and sent
 to sign in again (`/login?reason=access_changed`); a session an administrator
 ended says so too (`reason=session_ended`).
 Query caches are partitioned by tenant, actor, `authv`, and institution.
-Personal profile self-service remains available to an active user without an Account
-binding; organization settings require organization-wide Account administration.
+Personal profile self-service remains available to an active user without Account
+administration authority; organization settings require organization-wide
+Account administration.
 
-Every active human member also holds one system-managed `member` binding:
-organization-wide, Account/restricted. The bundle has an empty permission set,
-so adding or removing it cannot change any institution or product-module
-decision. It is the explicit, audited authority to load the shell, read the
-member's own profile and effective-authority projection, use personal settings,
-and see the module catalogue. With no separate institution grant, module entries
-remain visible but disabled with the exact permission tooltip, and a module deep
-link returns to `/` and the "No authorized institutions yet" panel. Cross-tenant,
-unknown-object, and non-existent routes remain 404.
+For members whose only authority is [baseline membership](../backend/docs/authorization_foundation.md#baseline-membership),
+`/` renders the shell and "No authorized institutions yet" workspace. The complete
+module catalogue remains visible but disabled, with exact permission tooltips;
+personal settings stay available. Tooltips use route-specific requirements before
+falling back to module-entry requirements for catalogue entries. Public module
+landing/workspace deep links on the explicit `PUBLIC_MODULE_ROUTES` allow-list in
+`backend/dashboard/lib/modules.ts` return to `/`. Object-detail paths (including
+cross-tenant and unknown objects), structurally excluded paths, and non-existent
+routes remain 404. `backend/dashboard/lib/modules.test.ts` and
+`backend/dashboard/e2e/baseline-membership.spec.ts` pin this boundary.
 
 Remaining rollout work:
 
@@ -733,13 +735,9 @@ impersonation-gated**, not full super-admin. Minimize standing super-admins.
 > login immediately; their cases/scenarios/reports transfer to a custodian.
 > Deactivate ≠ delete.
 
-Activation writes the baseline `member` binding in the same transaction. This
-applies to invite acceptance, JIT request approval, and operator tenant
-provisioning; migration `202609160053` backfills exactly one row for every
-existing active human in every organization. Settings → Members may display the
-row as evidence but cannot grant or revoke it. Deactivation revokes it, audits
-the lifecycle event, advances `authv`, and ends refresh families. Reactivation
-must create a fresh active baseline row atomically with the status change.
+The [baseline membership lifecycle](../backend/docs/authorization_foundation.md#baseline-membership)
+owns activation, deactivation, backfill, and session invalidation. Future invite
+acceptance and reactivation must use that same atomic lifecycle.
 
 ### 11.2 Invite-by-email flow
 
@@ -765,7 +763,7 @@ _who may sign in_; provisioning decides _who exists_.
 
 ### 11.4 JIT + SCIM + verified domains
 
-- **JIT** — **BUILT in request-access form** (opt-in `jit_enabled` per connection): first OIDC login from an allowed email domain records a deactivated stub with no binding-derived authority. An Org Owner must approve one complete scoped grant in Members; identity activation, baseline membership, and the selected product grant are atomic. Phase 2 adds group→role mapping (which can then safely auto-activate). **JIT does not deprovision** → SCIM below is the governance answer.
+- **JIT** — **BUILT in request-access form** (opt-in `jit_enabled` per connection): first OIDC login from an allowed email domain records a deactivated stub with no binding-derived authority. An Org Owner must approve one complete scoped grant in Members; approval follows the [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29). Phase 2 adds group→role mapping (which can then safely auto-activate). **JIT does not deprovision** → SCIM below is the governance answer.
 - **SCIM 2.0** — the IdP syncs create/update/**deactivate** to AequorOS. **Mandatory for bank tenants** — SCIM-driven deprovisioning is the single most-probed enterprise security-questionnaire item. Key on a **stable IdP id (`externalId`/`sub`), never email**, or JIT+SCIM produce duplicate records.
 - **Verified domains** — a tenant verifies a domain via DNS TXT; then auto-suggest membership and/or **enforce SSO** for all users on that domain (domain capture stops shadow personal accounts).
 - **Rule:** JIT creates, SCIM governs, SSO authenticates, verified domains bound the population — all keyed on one stable identifier.
