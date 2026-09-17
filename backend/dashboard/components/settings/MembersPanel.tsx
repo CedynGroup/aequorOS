@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowRight,
   Check,
   ChevronRight,
   Clock3,
@@ -11,6 +12,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { signOut } from "next-auth/react";
 import type {
   BindingCreateRequest,
   BindingCreateResponse,
@@ -20,11 +22,15 @@ import type {
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
-import { useBanks } from "@/lib/api/hooks";
 import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
+import { loginUrlWithReason } from "@/lib/loginUrl";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { avatarColor, initialsFrom } from "@/lib/api/identity";
 import { fmtRelative } from "@/lib/api/values";
-import { ORGANIZATION_MEMBERS_QUERY_KEY } from "@/lib/api/grantAdministration";
+import {
+  ORGANIZATION_MEMBERS_QUERY_KEY,
+  useGrantableInstitutions,
+} from "@/lib/api/grantAdministration";
 import {
   canAddGrantToMember,
   MODULE_OPTIONS,
@@ -85,7 +91,10 @@ export default function MembersPanel() {
     queryFn: () => authorizationApi.listOrganizationMembers(),
     retry: false,
   });
-  const banksQuery = useBanks();
+  // Account-plane directory, NOT the operational bank list: an Owner who reads
+  // no product still needs every institution offered when scoping a grant.
+  const institutionsQuery = useGrantableInstitutions();
+  const { profile } = useUserProfile();
   const [selected, setSelected] = useState<MemberRead | null>(null);
   const [granting, setGranting] = useState<MemberRead | null>(null);
   const [revoking, setRevoking] = useState<BindingRead | null>(null);
@@ -152,7 +161,8 @@ export default function MembersPanel() {
       {granting && (
         <GrantComposer
           member={granting}
-          banks={banksQuery.data?.banks ?? []}
+          banks={institutionsQuery.data?.institutions ?? []}
+          selfUserId={profile?.userId}
           onClose={() => setGranting(null)}
           onSaved={() => {
             void queryClient.invalidateQueries({ queryKey: MEMBERS_KEY });
@@ -464,14 +474,18 @@ function initialDraft(
 function GrantComposer({
   member,
   banks,
+  selfUserId,
   onClose,
   onSaved,
 }: {
   member: MemberRead;
   banks: readonly { id: string; name: string }[];
+  /** The acting user's id: a grant to oneself ends the very session composing it. */
+  selfUserId?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const isSelfGrant = Boolean(selfUserId) && member.userId === selfUserId;
   const [step, setStep] = useState<"define" | "review" | "done">("define");
   const [draft, setDraft] = useState<GrantDraft>(() => initialDraft(banks));
   const [saved, setSaved] = useState<BindingCreateResponse | null>(null);
@@ -816,22 +830,46 @@ function GrantComposer({
                 .join(" ")}
             </div>
           )}
-          <div className="flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy hover:bg-surface-muted"
+          {isSelfGrant && (
+            <p
+              role="status"
+              className="rounded-md border border-warning/25 bg-warning-light/50 px-4 py-3 text-caption leading-relaxed text-navy"
             >
-              Done
-            </button>
-            {!isPendingApproval && (
+              You changed your own access. Saving a grant ends the member&apos;s
+              current sessions, and that includes this one, so sign in again to
+              continue with the new access.
+            </p>
+          )}
+          <div className="flex flex-wrap justify-end gap-3">
+            {isSelfGrant ? (
               <button
                 type="button"
-                onClick={resetForAnother}
+                onClick={() =>
+                  void signOut({ redirectTo: loginUrlWithReason("access_changed") })
+                }
                 className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-body font-medium"
               >
-                <Plus size={15} aria-hidden /> Add another grant
+                Sign in again <ArrowRight size={15} aria-hidden />
               </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy hover:bg-surface-muted"
+                >
+                  Done
+                </button>
+                {!isPendingApproval && (
+                  <button
+                    type="button"
+                    onClick={resetForAnother}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-body font-medium"
+                  >
+                    <Plus size={15} aria-hidden /> Add another grant
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

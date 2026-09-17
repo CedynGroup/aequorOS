@@ -10,6 +10,8 @@ pnpm-debug.log*
 .env.*
 !.env.example
 !.env.*.example
+# Environment dumps copied to a plain-text name (e.g. backend/env.txt).
+env*.txt
 
 # Local Claude Code worktrees.
 .claude/worktrees/

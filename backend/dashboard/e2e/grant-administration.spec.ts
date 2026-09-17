@@ -47,6 +47,15 @@ test.describe("scoped grant administration", () => {
     });
     expect(unrelated.status()).toBe(201);
 
+    // The composer's institution list must come from the account-plane
+    // directory, never from the operational bank list the owner can view.
+    const catalogueRequests: string[] = [];
+    page.on("request", (request) => {
+      if (/\/organization\/institutions(\?|$)/.test(request.url())) {
+        catalogueRequests.push(request.url());
+      }
+    });
+
     await page.goto("/settings");
     const memberRow = page
       .locator("li")
@@ -62,6 +71,10 @@ test.describe("scoped grant administration", () => {
       name: "Add grant for E2E Grant Member",
     });
     await composer.getByLabel("Role bundle").selectOption("analyst");
+    await expect.poll(() => catalogueRequests.length).toBeGreaterThan(0);
+    await expect(
+      composer.getByLabel("Institution coverage").locator("option"),
+    ).toContainText(["Every institution in the organization", "Sample Bank Ltd"]);
     await composer
       .getByLabel("Institution coverage")
       .selectOption("BK-SAMP0001");

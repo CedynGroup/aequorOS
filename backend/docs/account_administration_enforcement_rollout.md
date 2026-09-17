@@ -52,6 +52,16 @@ institution-approved view-capable Account binding.
 
 ## Inventory
 
+For the dashboard-visibility side of any cutover, run the evaluator-backed
+report instead of hand-written SQL — it uses the same projection the API
+serves and flags every active user who would see no module afterwards:
+
+```
+cd backend && uv run python scripts/authorization_access_impact.py --organization OR-XXXXXXXX
+```
+
+The SQL below remains the account-administration inventory.
+
 Run this read-only query as a role that can see all tenant users and bindings.
 It enumerates every active human and machine principal and states the result of
 this cutover without inferring a grant from the scalar role.

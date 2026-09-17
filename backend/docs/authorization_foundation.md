@@ -260,9 +260,38 @@ sessions only for those recorded identities. If a post-migration
 `account_admin` exists, downgrade refuses before changing any role or refresh
 family because the historical schema cannot represent that account safely.
 
+## Org Owner read access (migration 202609160052)
+
+The Owner bundle carries `administer` only and the owner binding names the
+Account module alone, so once the dashboard derived visibility from bindings
+an Owner holding nothing else saw no institution and no module (the founder's
+own account, 2026-09-16). docs/rbac.md §7 gives Owner `view` on every module
+"for administration context but no operational write". That is now a second,
+explicit sentence written with ownership: `viewer` / organization-wide / `all`
+modules / `all` sensitivities. `organization_ownership.ensure_owner_read_access`
+writes it in the provisioning saga and any owner assignment unless an equivalent
+organization-wide all/all row of a view-carrying bundle already exists;
+migration `202609160052` backfills every effective human owner of an active
+user the same way, invalidating only the sessions of owners who received a row.
+Nothing is inferred from the owner bundle, the row appears in Members like any
+grant, and it can be revoked on its own. Maker/checker authority stays out (C9).
+
+Grant administration also has its own institution catalogue:
+`GET /api/v1/organization/institutions` (Org Owner gate) lists every
+institution in the organization for scoping a grant. `/banks` filters to the
+institutions the caller can view, which is empty for an Owner without the read
+sentence, and the Members composer used to read it — so such an Owner could
+only write organization-wide grants.
+
+The cutover gate is `scripts/authorization_access_impact.py`: it projects every
+active human user through `project_effective_authority` and flags
+`no_bindings`, `no_product_view` and `account_plane_only`. Run it against the
+target deployment before any change to binding enforcement and keep the dated
+output with the deployment record.
+
 The staff provisioning saga creates a new organization and exactly one active
-human account administrator, then creates its owner binding and assignment row
-in the same transaction. Existing zero/multiple-candidate tenants still require
+human account administrator, then creates its owner binding, the owner's read
+sentence, and assignment row in the same transaction. Existing zero/multiple-candidate tenants still require
 a later audited operator designation mutation. That action belongs in the staff
 operator plane because a zero-owner tenant has no tenant authority that could
 authorize it. The Members surface depends on this owner and does not add a

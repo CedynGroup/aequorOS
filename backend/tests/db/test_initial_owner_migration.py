@@ -332,9 +332,10 @@ def test_initial_owner_migration_handles_zero_one_and_many_without_guessing(  # 
     # Every legacy administrator, including excluded inactive/service accounts,
     # loses the operational superuser scalar role. Their sessions are invalidated
     # in the same transaction, and account_admin cannot pass either operational
-    # gate that protects regulatory submission. The later compatibility
-    # migration advances the two unresolved eligible administrators once more
-    # when it restores their bounded account-plane authority.
+    # gate that protects regulatory submission. Two later migrations advance a
+    # version once more: 202609090051 restores the two unresolved eligible
+    # administrators' bounded account-plane authority, and 202609160052 writes
+    # the assigned owner's organization-wide read sentence.
     all_admin_ids = {
         zero_inactive,
         zero_service,
@@ -362,7 +363,7 @@ def test_initial_owner_migration_handles_zero_one_and_many_without_guessing(  # 
             for row in rows:
                 if row["id"] in all_admin_ids:
                     assert row["role"] == "account_admin"
-                    expected_version = 3 if row["id"] in {many_a, many_b} else 2
+                    expected_version = 3 if row["id"] in {many_a, many_b, one_owner} else 2
                     assert row["authorization_version"] == expected_version
 
     assert has_role(["account_admin"], "admin") is False
@@ -472,7 +473,10 @@ def test_downgrade_restores_only_recorded_legacy_administrators(
             text("SELECT revoked_at, revoked_reason FROM refresh_tokens WHERE id = :token_id"),
             {"token_id": refresh_id},
         ).one()
-        assert restored == ("admin", 3)
+        # Version 1 → 2 (ownership) → 3 (202609160052 read sentence) on the way
+        # up; 3 → 4 (read sentence removed) → 5 (ownership reverted) on the way
+        # down. Every step that changes authority also ends the sessions.
+        assert restored == ("admin", 5)
         assert revoked.revoked_at is not None
         assert revoked.revoked_reason == "authorization_changed"
 

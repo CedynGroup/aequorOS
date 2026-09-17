@@ -11,6 +11,7 @@ import { Check, Monitor, Moon, Sun } from 'lucide-react';
 import type { ProfileUpdateRequest } from '@aequoros/risk-service-api';
 
 import { useUserProfile } from '@/components/profile/ProfileProvider';
+import CurrentAccountPanel from '@/components/settings/CurrentAccountPanel';
 import {
   useTheme,
   type ThemePreference,
@@ -242,7 +243,12 @@ export default function ProfilePage() {
             </CardBody>
           </Card>
         ) : profile ? (
-          <form onSubmit={onSubmit} className="space-y-6">
+          <div className="space-y-6">
+            {/* Who you are on the platform and the signer ID stamped on every
+                document you certify — personal, so it lives here for every
+                session, not only on the organization hub. */}
+            <CurrentAccountPanel />
+            <form onSubmit={onSubmit} className="space-y-6">
             <Card>
               <CardHeader title="Personal details" />
               <CardBody>
@@ -429,7 +435,8 @@ export default function ProfilePage() {
                 {isSaving ? 'Saving…' : 'Save changes'}
               </button>
             </div>
-          </form>
+            </form>
+          </div>
         ) : null}
       </div>
     </>

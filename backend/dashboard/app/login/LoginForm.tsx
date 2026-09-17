@@ -12,6 +12,9 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
   // NextAuth lands failed SSO attempts back here with ?error=. The most common
   // legitimate case is a recorded access request awaiting account-admin approval.
   const ssoFailed = Boolean(params.get('error'));
+  // Set by the app when it signs someone out on purpose (see lib/loginUrl.ts):
+  // a grant they saved for themselves, or a session an administrator ended.
+  const reason = params.get('reason');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +54,23 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
 
   return (
     <form onSubmit={onSubmit} className="mt-8 space-y-4">
+      {reason === 'access_changed' ? (
+        <p
+          role="status"
+          className="px-3 py-2.5 border border-border rounded-md bg-surface text-caption text-slate leading-relaxed"
+        >
+          Your access was updated, so your previous session ended. Sign in
+          again to continue with your new permissions.
+        </p>
+      ) : reason === 'session_ended' ? (
+        <p
+          role="status"
+          className="px-3 py-2.5 border border-border rounded-md bg-surface text-caption text-slate leading-relaxed"
+        >
+          Your session ended. That usually means an administrator updated your
+          access, or the session expired. Sign in again to continue.
+        </p>
+      ) : null}
       {ssoFailed ? (
         <p
           role="status"

@@ -27,7 +27,7 @@ from app.db.session import get_sessionmaker
 from app.models import AuditEvent, AuthorizationBinding, Bank, RefreshToken, User
 from app.services import authentication, authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
-from tests.api.helpers import ORG_1, USER_1, USER_2, headers
+from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 GRANTEE = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 BANK_A = "BK-GRNT0001"
@@ -585,6 +585,65 @@ def test_members_are_tenant_scoped_and_no_binding_means_no_authority(
         ).status_code
         == 404
     )
+
+
+def test_institution_directory_is_account_plane_and_owner_gated(
+    grant_client: TestClient,
+) -> None:
+    """Scoping a grant must not depend on what the Owner can personally view.
+
+    `/banks` filters to institutions the caller holds a capability for, which is
+    empty for an Owner holding Account alone — so the Members composer used to
+    offer them no institution at all. The directory is gated on the owner
+    binding and lists the whole organization regardless.
+    """
+
+    with _session() as db:
+        # Leave the owner with ONLY the ownership sentence: no operational view.
+        for binding in db.scalars(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.organization_id == ORG_1,
+                AuthorizationBinding.principal_user_id == USER_1,
+                AuthorizationBinding.role_bundle != RoleBundle.ORG_OWNER.value,
+            )
+        ):
+            db.delete(binding)
+        db.commit()
+
+    operational = grant_client.get("/api/v1/banks", headers=_owner_headers())
+    assert operational.status_code == 200, operational.text
+    assert operational.json()["banks"] == []
+
+    directory = grant_client.get("/api/v1/organization/institutions", headers=_owner_headers())
+    assert directory.status_code == 200, directory.text
+    listed = {
+        entry["id"]: (entry["name"], entry["short_name"])
+        for entry in directory.json()["institutions"]
+    }
+    assert listed[BANK_A] == ("Aequor Bank Ghana", "Aequor Ghana")
+    assert listed[BANK_B] == ("Aequor Rural Bank", "Aequor Rural")
+    with _session() as db:
+        assert set(listed) == set(
+            db.scalars(select(Bank.id).where(Bank.organization_id == ORG_1))
+        )
+    names = [entry["name"] for entry in directory.json()["institutions"]]
+    assert names == sorted(names)
+
+    # A member without the owner binding gets the same generic refusal as every
+    # other grant-administration route, whatever their scalar role says.
+    for roles in (("viewer",), ("account_admin",), ("admin",)):
+        denied = grant_client.get(
+            "/api/v1/organization/institutions",
+            headers=headers(user_id=GRANTEE, roles=roles),
+        )
+        assert denied.status_code == 403, denied.text
+
+    # A member of another tenant holds no owner binding here and is refused.
+    other = grant_client.get(
+        "/api/v1/organization/institutions",
+        headers=headers(org_id=ORG_2, user_id=USER_2, roles=("account_admin",)),
+    )
+    assert other.status_code == 403, other.text
 
 
 def test_revoke_ends_current_sign_ins_and_preserves_unrelated_grants(

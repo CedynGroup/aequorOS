@@ -13,6 +13,15 @@ test.describe("explicit Account administrator", () => {
   test("can manage authentication without gaining operational modules", async ({
     page,
   }) => {
+    // Sign-in lands on the root. Account administration alone does not reach
+    // the Command Center, so the guard must route to Settings — not 404.
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/settings(?:[?#]|$)/);
+    await expect(page.getByText(/404|not found/i)).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Authentication (SSO)" }),
+    ).toBeVisible();
+
     await page.goto("/settings");
     await expect(
       page.getByRole("heading", { name: "Authentication (SSO)" }),
@@ -45,6 +54,17 @@ test.describe("explicit Account administrator", () => {
         fullPage: true,
       });
     }
+
+    // When the app signs someone out on purpose — their own grant, or an
+    // administrator changing their access — the sign-in page says why.
+    await page.goto("/login?reason=access_changed");
+    await expect(page.getByRole("status")).toContainText(
+      "Your access was updated",
+    );
+    await page.goto("/login?reason=session_ended");
+    await expect(page.getByRole("status")).toContainText(
+      "Your session ended",
+    );
   });
 });
 

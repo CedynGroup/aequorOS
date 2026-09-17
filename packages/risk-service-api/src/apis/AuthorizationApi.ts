@@ -20,6 +20,7 @@ import type {
   BindingRead,
   BindingRevokeRequest,
   ErrorResponse,
+  InstitutionDirectoryRead,
   MemberListRead,
 } from "../models/index";
 import {
@@ -39,6 +40,8 @@ import {
   BindingRevokeRequestToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  InstitutionDirectoryReadFromJSON,
+  InstitutionDirectoryReadToJSON,
   MemberListReadFromJSON,
   MemberListReadToJSON,
 } from "../models/index";
@@ -174,6 +177,51 @@ export class AuthorizationApi extends runtime.BaseAPI {
       requestParameters,
       initOverrides,
     );
+    return await response.value();
+  }
+
+  /**
+   * Every institution in the organization, for scoping a grant.  Grant administration is account-plane authority and must not borrow its institution catalogue from the operational plane: ``/banks`` filters to the institutions the CALLER can view, which is empty for an Owner holding Account alone, so the Members composer could only write organization-wide grants. This directory is gated on the persisted Org Owner binding like the rest of grant administration and lists the whole organization regardless of what the owner personally reads.
+   * List Organization Institutions
+   */
+  async listOrganizationInstitutionsRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<InstitutionDirectoryRead>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/organization/institutions`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      InstitutionDirectoryReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Every institution in the organization, for scoping a grant.  Grant administration is account-plane authority and must not borrow its institution catalogue from the operational plane: ``/banks`` filters to the institutions the CALLER can view, which is empty for an Owner holding Account alone, so the Members composer could only write organization-wide grants. This directory is gated on the persisted Org Owner binding like the rest of grant administration and lists the whole organization regardless of what the owner personally reads.
+   * List Organization Institutions
+   */
+  async listOrganizationInstitutions(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<InstitutionDirectoryRead> {
+    const response = await this.listOrganizationInstitutionsRaw(initOverrides);
     return await response.value();
   }
 

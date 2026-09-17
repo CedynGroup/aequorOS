@@ -429,6 +429,8 @@ platform:flags     platform:billing     platform:audit   platform:staff
 | `billing:* / org:transfer / org:delete`         |   —    |    —    |    —    |    —     |     —     |     ●     |
 
 ¹ Org Admin/Owner see dashboards for administration context but hold no operational write.
+  Built for Owner on 2026-09-16 as an explicit organization-wide Viewer sentence written
+  with ownership; an Org Admin still receives it only as a separate grant.
 ² `configure` is granted per-preset (FTP owner, ALM assumptions, Risk limits) — not to every Analyst/Approver.
 ³ Board/Exec "Viewer" gets published-dashboard view only; raw `export` is off by default.
 ⁴ `sign_off` / `submit` are **preset add-ons** (CFO, MD, Head of Reg), not blanket to every Approver — and are **SoD-gated** (§7.4).
@@ -522,7 +524,26 @@ organization and per-institution capabilities from the binding evaluator; `/bank
 filters out uncovered institutions before presentation. The shell, command palette,
 module tabs, and route guard consume that projection without consulting token or
 scalar roles. Unauthorized direct routes resolve as 404 and do not mount product
-queries. Query caches are partitioned by tenant, actor, `authv`, and institution.
+queries. The root `/` is the post-sign-in landing, not a deep link: when the
+Command Center lies outside a user's authority the route guard sends them to the
+first surface they can see in sidebar order (`lib/modules.ts::landingPathFor`,
+the §8.3 order), falling back to personal settings — never a 404 on arrival.
+`/settings` is the other hub: a user without organization-wide Account
+administration is sent to `/settings/profile` rather than 404ed, and "Your
+account" (identity + permanent signer ID) renders there for every session, not
+only on the organization hub — an analyst must be able to read the signer ID
+stamped on the documents they certify.
+Ownership is two explicit sentences, never one implied one: the `org_owner`
+Account binding (administer members, grants, SSO, keys) and an organization-wide
+`viewer` / all modules / all sensitivities binding, the §7 "read dashboards for
+administration context" row (provisioning writes both; migration `202609160052`
+backfills existing owners). The Members composer scopes grants from the
+account-plane `GET /organization/institutions` directory, never from `/banks`,
+so an Owner who reads no product can still scope a grant to one institution.
+A member who saves a grant for themselves is told their session ended and sent
+to sign in again (`/login?reason=access_changed`); a session an administrator
+ended says so too (`reason=session_ended`).
+Query caches are partitioned by tenant, actor, `authv`, and institution.
 Personal profile self-service remains available to an active user without an Account
 binding; organization settings require organization-wide Account administration.
 
@@ -887,6 +908,7 @@ GET   /auth/effective-authority                   BUILT: evaluator-derived capab
 
 # members (org admin)
 GET   /organization/members                       BUILT: Org Owner; identity + lifecycle + complete grants
+GET   /organization/institutions                  BUILT: Org Owner; every institution, for scoping grants (account plane)
 GET   /authorization/bindings                     BUILT: Org Owner; optional principal filter
 POST  /authorization/bindings/preview             BUILT: canonical review sentence for one scalar grant
 POST  /authorization/bindings                     BUILT: one scalar binding + reason + SoD decision
@@ -959,8 +981,12 @@ The static `ROLE_PERMISSIONS` map, scoped binding table, exact evaluator, and
 institution filtering, capability-driven shell/navigation/deep-link boundary,
 authority-partitioned caches, and governed binding-creation/Members slice are built.
 Liquidity Monitoring and Capital are enforcing product surfaces. Remaining
-Phase-0 work is further endpoint cutovers, their matching module-action controls, and default landings
+Phase-0 work is further endpoint cutovers, their matching module-action controls, and
+per-persona default landings (the root already routes to the first authorized surface)
 ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).
+Before each cutover run `backend/scripts/authorization_access_impact.py` against the
+target deployment: it projects every active user through the evaluator and flags who
+would see no module afterwards.
 Do not add independent `user_roles`/`user_scopes` tables or infer ownership from
 the scalar `account_admin` role. Initial Owner assignment is built only for the
 exactly-one-candidate migration/onboarding cases; explicit designation and

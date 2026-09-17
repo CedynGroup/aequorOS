@@ -20335,6 +20335,55 @@
         "title": "InstitutionCapabilitiesRead",
         "type": "object"
       },
+      "InstitutionDirectoryEntryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "short_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Name"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "short_name"
+        ],
+        "title": "InstitutionDirectoryEntryRead",
+        "type": "object"
+      },
+      "InstitutionDirectoryRead": {
+        "additionalProperties": false,
+        "description": "Every institution in the organization, for scoping grants.\n\nAccount-plane data: it does not depend on the caller's own operational\ncoverage, unlike ``/banks``.",
+        "properties": {
+          "institutions": {
+            "items": {
+              "$ref": "#/components/schemas/InstitutionDirectoryEntryRead"
+            },
+            "title": "Institutions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "institutions"
+        ],
+        "title": "InstitutionDirectoryRead",
+        "type": "object"
+      },
       "InstitutionProfileFullRead": {
         "additionalProperties": false,
         "description": "The full corporate register for one bank \u2014 the ORASS master-data mirror.",
@@ -79528,6 +79577,93 @@
         "summary": "Mark Notification Read",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/v1/organization/institutions": {
+      "get": {
+        "description": "Every institution in the organization, for scoping a grant.\n\nGrant administration is account-plane authority and must not borrow its\ninstitution catalogue from the operational plane: ``/banks`` filters to the\ninstitutions the CALLER can view, which is empty for an Owner holding\nAccount alone, so the Members composer could only write organization-wide\ngrants. This directory is gated on the persisted Org Owner binding like the\nrest of grant administration and lists the whole organization regardless of\nwhat the owner personally reads.",
+        "operationId": "listOrganizationInstitutions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstitutionDirectoryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Organization Institutions",
+        "tags": [
+          "authorization"
         ]
       }
     },
