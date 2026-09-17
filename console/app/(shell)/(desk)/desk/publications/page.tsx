@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ExternalLink, X } from 'lucide-react';
-import { listDeskPublications, type DeskPublication } from '@/lib/api';
-import { useApi } from '@/lib/use-api';
-import { fmtDate, fmtTs, relTime } from '@/lib/format';
-import { PublicationResults } from '@/components/desk';
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ExternalLink, X } from "lucide-react";
+import { listDeskPublications, type DeskPublication } from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { fmtDate, fmtTs, relTime } from "@/lib/format";
+import { PublicationResults } from "@/components/desk";
 import {
   Button,
   DataTable,
@@ -22,7 +22,7 @@ import {
   SkeletonRows,
   StatusChip,
   type Column,
-} from '@/components/ui';
+} from "@/components/ui";
 
 /**
  * /desk/publications — every fan-out the desk has run, newest first, as a
@@ -35,12 +35,15 @@ export default function PublicationsPage() {
   const router = useRouter();
   const { data, error, loading, reload } = useApi(() => listDeskPublications());
 
-  const [statusFilter, setStatusFilter] = useState('');
-  const [determinationFilter, setDeterminationFilter] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState("");
+  const [determinationFilter, setDeterminationFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const [selected, setSelected] = useState<DeskPublication | null>(null);
 
-  const publications = data?.publications ?? [];
+  const publications = useMemo(
+    () => data?.publications ?? [],
+    [data?.publications],
+  );
 
   const statuses = useMemo(
     () => Array.from(new Set(publications.map((p) => p.status))).sort(),
@@ -50,7 +53,12 @@ export default function PublicationsPage() {
   const filtered = useMemo(() => {
     return publications.filter((p) => {
       if (statusFilter && p.status !== statusFilter) return false;
-      if (determinationFilter && !p.determination_id.toLowerCase().includes(determinationFilter.toLowerCase())) {
+      if (
+        determinationFilter &&
+        !p.determination_id
+          .toLowerCase()
+          .includes(determinationFilter.toLowerCase())
+      ) {
         return false;
       }
       if (dateFilter && fmtDate(p.published_at) !== dateFilter) return false;
@@ -58,12 +66,13 @@ export default function PublicationsPage() {
     });
   }, [publications, statusFilter, determinationFilter, dateFilter]);
 
-  const filtersActive = statusFilter !== '' || determinationFilter !== '' || dateFilter !== '';
+  const filtersActive =
+    statusFilter !== "" || determinationFilter !== "" || dateFilter !== "";
 
   const columns: Column<DeskPublication>[] = [
     {
-      key: 'published',
-      header: 'Published',
+      key: "published",
+      header: "Published",
       sortable: true,
       sortAccessor: (p) => p.published_at,
       render: (p) => (
@@ -73,8 +82,8 @@ export default function PublicationsPage() {
       ),
     },
     {
-      key: 'determination',
-      header: 'Determination',
+      key: "determination",
+      header: "Determination",
       render: (p) => (
         <Link
           href={`/desk/determinations/${p.determination_id}`}
@@ -87,35 +96,44 @@ export default function PublicationsPage() {
       ),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       sortable: true,
       sortAccessor: (p) => p.status,
       render: (p) => <StatusChip value={p.status} />,
     },
     {
-      key: 'banks',
-      header: 'Banks',
+      key: "banks",
+      header: "Banks",
       numeric: true,
       sortable: true,
       sortAccessor: (p) => p.results.length,
       render: (p) => p.results.length,
     },
     {
-      key: 'failed',
-      header: 'Failed',
+      key: "failed",
+      header: "Failed",
       numeric: true,
       render: (p) => {
         const failed = p.results.filter(
-          (r) => Boolean(r.error) || /fail|error|rolled_back/i.test(r.status ?? ''),
+          (r) =>
+            Boolean(r.error) || /fail|error|rolled_back/i.test(r.status ?? ""),
         ).length;
-        return failed > 0 ? <span className="text-critical">{failed}</span> : '0';
+        return failed > 0 ? (
+          <span className="text-critical">{failed}</span>
+        ) : (
+          "0"
+        );
       },
     },
     {
-      key: 'by',
-      header: 'Published by',
-      render: (p) => <span className="font-mono text-caption text-ink">{p.published_by}</span>,
+      key: "by",
+      header: "Published by",
+      render: (p) => (
+        <span className="font-mono text-caption text-ink">
+          {p.published_by}
+        </span>
+      ),
     },
   ];
 
@@ -133,7 +151,10 @@ export default function PublicationsPage() {
       >
         <div className="flex flex-wrap items-end gap-3 border-b border-border-light px-4 py-3">
           <Field label="Status" className="w-40">
-            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
               <option value="">All statuses</option>
               {statuses.map((s) => (
                 <option key={s} value={s}>
@@ -150,7 +171,11 @@ export default function PublicationsPage() {
             />
           </Field>
           <Field label="Date" className="w-44">
-            <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
+            <Input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+            />
           </Field>
           {filtersActive && (
             <Button
@@ -158,9 +183,9 @@ export default function PublicationsPage() {
               size="sm"
               icon={<X size={13} />}
               onClick={() => {
-                setStatusFilter('');
-                setDeterminationFilter('');
-                setDateFilter('');
+                setStatusFilter("");
+                setDeterminationFilter("");
+                setDateFilter("");
               }}
             >
               Clear
@@ -172,17 +197,25 @@ export default function PublicationsPage() {
 
         {error && (
           <div className="p-4">
-            <ErrorPanel error={error} onRetry={reload} context="Loading publications" />
+            <ErrorPanel
+              error={error}
+              onRetry={reload}
+              context="Loading publications"
+            />
           </div>
         )}
 
         {data && filtered.length === 0 && (
           <EmptyState
-            title={filtersActive ? 'No publications match these filters' : 'Nothing published yet'}
+            title={
+              filtersActive
+                ? "No publications match these filters"
+                : "Nothing published yet"
+            }
             hint={
               filtersActive
-                ? 'Clear the filters to see the full fan-out history.'
-                : 'Approve a determination on the Determinations screen and publish it — the fan-out record appears here.'
+                ? "Clear the filters to see the full fan-out history."
+                : "Approve a determination on the Determinations screen and publish it — the fan-out record appears here."
             }
           />
         )}
@@ -194,7 +227,9 @@ export default function PublicationsPage() {
             density="compact"
             pageSize={20}
             onRowClick={(p) => setSelected(p)}
-            getFilterText={(p) => `${p.determination_id} ${p.status} ${p.published_by}`}
+            getFilterText={(p) =>
+              `${p.determination_id} ${p.status} ${p.published_by}`
+            }
             filterPlaceholder="Filter fan-outs…"
           />
         )}
@@ -204,14 +239,18 @@ export default function PublicationsPage() {
         open={selected !== null}
         onClose={() => setSelected(null)}
         title="Publication fan-out"
-        description={selected ? `Published ${fmtDate(selected.published_at)}` : undefined}
+        description={
+          selected ? `Published ${fmtDate(selected.published_at)}` : undefined
+        }
         width="w-[640px]"
         footer={
           selected && (
             <Button
               variant="secondary"
               icon={<ExternalLink size={14} />}
-              onClick={() => router.push(`/desk/determinations/${selected.determination_id}`)}
+              onClick={() =>
+                router.push(`/desk/determinations/${selected.determination_id}`)
+              }
             >
               Open determination
             </Button>

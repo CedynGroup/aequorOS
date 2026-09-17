@@ -11,11 +11,11 @@
  * operator has no tenant NextAuth session, only this hand-off.
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from "next/server";
 import {
   IMPERSONATION_COOKIE,
   IMPERSONATION_MARKER_COOKIE,
-} from '@/lib/impersonation-cookies';
+} from "@/lib/impersonation-cookies";
 
 /** Absolute cap on how long the cookie may live, even if the token claims more. */
 const MAX_TTL_SECONDS = 60 * 60; // 1 hour
@@ -26,10 +26,10 @@ const DEFAULT_TTL_SECONDS = 15 * 60;
 
 /** Decode a JWT payload without verifying (the tenant API is the verifier). */
 function decodeClaims(token: string): Record<string, unknown> | null {
-  const parts = token.split('.');
+  const parts = token.split(".");
   if (parts.length !== 3) return null;
   try {
-    return JSON.parse(Buffer.from(parts[1], 'base64url').toString()) as Record<
+    return JSON.parse(Buffer.from(parts[1], "base64url").toString()) as Record<
       string,
       unknown
     >;
@@ -43,35 +43,41 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     body = (await request.json()) as { token?: unknown };
   } catch {
-    return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  const token = typeof body.token === "string" ? body.token.trim() : "";
   if (!token) {
-    return NextResponse.json({ error: 'token_required' }, { status: 400 });
+    return NextResponse.json({ error: "token_required" }, { status: 400 });
   }
 
   const claims = decodeClaims(token);
   if (!claims) {
-    return NextResponse.json({ error: 'malformed_token' }, { status: 400 });
+    return NextResponse.json({ error: "malformed_token" }, { status: 400 });
   }
   // Only ever accept a token minted for this purpose — never a tenant access
   // token pasted in by mistake, which would carry mutation rights.
-  if (claims.typ !== 'impersonation') {
-    return NextResponse.json({ error: 'not_an_impersonation_token' }, { status: 400 });
+  if (claims.typ !== "impersonation") {
+    return NextResponse.json(
+      { error: "not_an_impersonation_token" },
+      { status: 400 },
+    );
   }
 
-  const expSeconds = typeof claims.exp === 'number' ? claims.exp : null;
+  const expSeconds = typeof claims.exp === "number" ? claims.exp : null;
   const nowSeconds = Math.floor(Date.now() / 1000);
   if (expSeconds !== null && expSeconds <= nowSeconds) {
-    return NextResponse.json({ error: 'token_expired' }, { status: 400 });
+    return NextResponse.json({ error: "token_expired" }, { status: 400 });
   }
   const ttlSeconds =
     expSeconds !== null
-      ? Math.min(MAX_TTL_SECONDS, Math.max(MIN_TTL_SECONDS, expSeconds - nowSeconds))
+      ? Math.min(
+          MAX_TTL_SECONDS,
+          Math.max(MIN_TTL_SECONDS, expSeconds - nowSeconds),
+        )
       : DEFAULT_TTL_SECONDS;
 
-  const secure = process.env.NODE_ENV === 'production';
+  const secure = process.env.NODE_ENV === "production";
   const response = NextResponse.json({ ok: true });
   // The raw token — server-only, XSS-resistant.
   response.cookies.set(IMPERSONATION_COOKIE, token, {
@@ -79,16 +85,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     secure,
     // Lax: the hand-off arrives as a top-level cross-site GET navigation from the
     // console, and the follow-up POST from /inspect is same-origin.
-    sameSite: 'lax',
-    path: '/',
+    sameSite: "lax",
+    path: "/",
     maxAge: ttlSeconds,
   });
   // The client-readable marker — presence only, no token material.
-  response.cookies.set(IMPERSONATION_MARKER_COOKIE, '1', {
+  response.cookies.set(IMPERSONATION_MARKER_COOKIE, "1", {
     httpOnly: false,
     secure,
-    sameSite: 'lax',
-    path: '/',
+    sameSite: "lax",
+    path: "/",
     maxAge: ttlSeconds,
   });
   return response;
