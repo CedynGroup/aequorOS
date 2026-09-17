@@ -9,11 +9,19 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.db.session import get_sessionmaker
-from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric
-from app.services import job_queue, pipeline
+from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric, User
+from app.services import authorization, job_queue, pipeline
 from tests.adapters.excel_csv import fixtures
-from tests.api.helpers import ORG_1, ORG_2, headers
+from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_ingestion import FULL_MAPPING, activate_mapping, seed_bank, start_batch
 from tests.factories.canonical import (
     FIXTURE_AS_OF,
@@ -220,8 +228,28 @@ def test_mint_official_run_enqueues(db_client: TestClient) -> None:
         assert bank is not None
         bank.institution_type = "savings_and_loans"
         session.commit()
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ANALYST,
+            scope=authorization.BindingScope(
+                institution_scope=InstitutionScope.INSTITUTION,
+                institution_id=SAMPLE_BANK_ID,
+                module_scope=ModuleScope.IRRBB,
+                sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "live-engine-test"),
+            reason="Authorize the IRRBB engine in the official run plan",
+        )
+        user = session.get(User, USER_1)
+        assert user is not None
+        authorization_version = user.authorization_version
     response = db_client.post(
-        f"{_BASE}/official-runs", headers=headers(), json={"as_of_date": AS_OF, "reason": "filing"}
+        f"{_BASE}/official-runs",
+        headers=headers(authorization_version=authorization_version),
+        json={"as_of_date": AS_OF, "reason": "filing"},
     )
     assert response.status_code == 202, response.text
     assert response.json()["job_type"] == "official_run"
