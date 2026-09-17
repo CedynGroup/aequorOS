@@ -82,17 +82,25 @@ test.describe("IRRBB analyst", () => {
     await expect(runButton).toBeVisible();
     await expect(runButton).toBeEnabled();
 
-    const batchResponse = page.waitForResponse((response) =>
-      response.url().endsWith("/irr/run-all-scenarios") &&
-      response.request().method() === "POST",
+    const batchResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/irr/run-all-scenarios") &&
+        response.request().method() === "POST",
     );
     await runButton.click();
     const response = await batchResponse;
     expect(response.status()).toBe(201);
     const batch = await response.json();
-    expect(batch.runs.map((run: { scenario_code: string }) => run.scenario_code)).toEqual([
-      "baseline", "parallel_up_200", "parallel_down_200", "short_up_250",
-      "short_down_250", "steepener", "flattener",
+    expect(
+      batch.runs.map((run: { scenario_code: string }) => run.scenario_code),
+    ).toEqual([
+      "baseline",
+      "parallel_up_200",
+      "parallel_down_200",
+      "short_up_250",
+      "short_down_250",
+      "steepener",
+      "flattener",
     ]);
     for (const run of batch.runs) {
       expect(run.module).toBe("irr");
@@ -100,8 +108,18 @@ test.describe("IRRBB analyst", () => {
     }
     await expect(runButton).toBeEnabled();
     const persisted = await page.request.get(
-      response.url().replace("/irr/run-all-scenarios", `/regulatory-runs/${batch.runs[0].id}`),
-      { headers: { Authorization: await response.request().headerValue("authorization") ?? "" } },
+      response
+        .url()
+        .replace(
+          "/irr/run-all-scenarios",
+          `/regulatory-runs/${batch.runs[0].id}`,
+        ),
+      {
+        headers: {
+          Authorization:
+            (await response.request().headerValue("authorization")) ?? "",
+        },
+      },
     );
     expect(persisted.status()).toBe(200);
     expect((await persisted.json()).input_hash).toBe(batch.runs[0].input_hash);
@@ -109,7 +127,10 @@ test.describe("IRRBB analyst", () => {
     await expect(runButton).toBeEnabled();
 
     if (evidenceDir) {
-      await writeFile(path.join(evidenceDir, "irrbb-executed-runs.json"), JSON.stringify(batch, null, 2));
+      await writeFile(
+        path.join(evidenceDir, "irrbb-executed-runs.json"),
+        JSON.stringify(batch, null, 2),
+      );
       await page.screenshot({
         path: path.join(evidenceDir, "irrbb-analyst-enabled-run.png"),
         fullPage: true,
