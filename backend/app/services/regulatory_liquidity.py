@@ -89,6 +89,7 @@ from app.schemas.regulatory_liquidity import (
     RunEvidenceRead,
 )
 from app.services import (
+    enterprise_run_visibility,
     filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
@@ -309,7 +310,18 @@ def list_regulatory_runs(  # noqa: PLR0913
     )
     return RegulatoryRunListRead(
         bank_id=bank.id,
-        runs=[_read_summary(db, run, label) for run, label in rows],
+        runs=[
+            enterprise_run_visibility.project_response(
+                db,
+                ctx,
+                bank,
+                _read_summary(db, run, label),
+                sensitivity=Sensitivity.AGGREGATED,
+            )
+            if run.module == "enterprise_stress"
+            else _read_summary(db, run, label)
+            for run, label in rows
+        ],
         total=total,
         limit=limit,
         offset=offset,
@@ -335,7 +347,16 @@ def get_regulatory_run(
             denial_status=status.HTTP_404_NOT_FOUND,
             denial_detail="Regulatory run not found.",
         )
-    return _read_run(db, run)
+    response = _read_run(db, run)
+    if run.module == "enterprise_stress":
+        return enterprise_run_visibility.project_response(
+            db,
+            ctx,
+            bank,
+            response,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+        )
+    return response
 
 
 def _read_regulatory_run_execution_result(

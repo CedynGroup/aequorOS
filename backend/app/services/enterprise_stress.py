@@ -122,6 +122,7 @@ from app.schemas.enterprise_stress import (
     PlanAssumptionsIn,
 )
 from app.services import (
+    enterprise_run_visibility,
     institution_types,
     jurisdictions,
     macro_scenarios,
@@ -1964,7 +1965,9 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         },
     )
     db.commit()
-    return _read(run, scenario)
+    return enterprise_run_visibility.project_response(
+        db, ctx, bank, _read(run, scenario), sensitivity=Sensitivity.CONFIDENTIAL,
+    )
 
 
 def get_latest_enterprise_stress(
@@ -1999,7 +2002,9 @@ def get_latest_enterprise_stress(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No enterprise stress run exists for this period and scenario.",
         )
-    return _read(run, scenario)
+    return enterprise_run_visibility.project_response(
+        db, ctx, bank, _read(run, scenario), sensitivity=Sensitivity.CONFIDENTIAL,
+    )
 
 
 def _run_summary(run: RegulatoryRun) -> EnterpriseStressRunSummary:
@@ -2095,7 +2100,9 @@ def get_enterprise_stress_run(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The macro scenario for this run no longer exists.",
         )
-    return _read(run, scenario)
+    return enterprise_run_visibility.project_response(
+        db, ctx, bank, _read(run, scenario), sensitivity=Sensitivity.CONFIDENTIAL,
+    )
 
 
 def _resolve_action_plan(

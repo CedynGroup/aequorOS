@@ -431,3 +431,98 @@ def test_a_car_target_below_the_governed_floor_is_refused(db_client: TestClient)
     details = response.json()["error"]["details"]
     assert details["error_code"] == "car_target_below_regulatory_minimum"
     assert details["details"]["governed_car_min_pct"] == "13"
+
+
+@pytest.mark.parametrize("fx_sensitivity", [None, "aggregated", "confidential"])
+def test_enterprise_readers_project_fx_without_hiding_non_fx(
+    db_client: TestClient,
+    fx_sensitivity: str | None,
+) -> None:
+    from copy import deepcopy
+
+    from sqlalchemy import delete
+
+    from app.models import AuthorizationBinding, RegulatoryRun
+    from tests.api.test_fx_authorization import _grant
+
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    checker = _seed_checker(db_client)
+    scenario_id = _create_scenario(db_client)
+    _approve_scenario(db_client, scenario_id, checker)
+    created = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": scenario_id,
+            "reporting_period_id": period_id,
+            "reason": "Verify enterprise result visibility",
+        },
+    )
+    assert created.status_code == 201, created.text
+    run_id = created.json()["run_id"]
+    with get_sessionmaker()() as session:
+        stored = session.get(RegulatoryRun, UUID(run_id))
+        assert stored is not None
+        original_metrics = deepcopy(stored.metrics)
+        original_inputs = deepcopy(stored.inputs)
+        assert original_metrics["outcome"]["fx"]
+        session.execute(
+            delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
+        )
+        session.commit()
+    _, version = _grant(module_scope=ModuleScope.CAPITAL, sensitivity_scope=SensitivityScope.ALL)
+    if fx_sensitivity:
+        _, version = _grant(sensitivity_scope=SensitivityScope(fx_sensitivity))
+    reader_headers = headers(roles=("viewer",), authorization_version=version)
+    base = f"/api/v1/banks/{bank_id}"
+    registry = db_client.get(
+        f"{base}/regulatory-runs",
+        params={"module": "enterprise_stress", "limit": 1},
+        headers=reader_headers,
+    )
+    assert registry.status_code == 200, registry.text
+    assert registry.json()["total"] == 1
+    summary_metrics = registry.json()["runs"][0]["metrics"]
+    generic = db_client.get(f"{base}/regulatory-runs/{run_id}", headers=reader_headers)
+    latest = db_client.get(
+        LATEST_URL.format(bank_id=bank_id),
+        params={"reporting_period_id": period_id, "scenario_id": scenario_id},
+        headers=reader_headers,
+    )
+    detail = db_client.get(
+        f"{RUNS_URL.format(bank_id=bank_id)}/{run_id}",
+        headers=reader_headers,
+    )
+    for response in (generic, latest, detail):
+        assert response.status_code == 200, response.text
+    for metrics, visible in (
+        (summary_metrics, fx_sensitivity == "aggregated"),
+        (generic.json()["metrics"], fx_sensitivity == "confidential"),
+        (latest.json(), fx_sensitivity == "confidential"),
+        (detail.json(), fx_sensitivity == "confidential"),
+    ):
+        assert metrics["outcome"]["capital"] == original_metrics["outcome"]["capital"]
+        assert metrics["outcome"]["liquidity"] == original_metrics["outcome"]["liquidity"]
+        assert metrics["projection"] == original_metrics["projection"]
+        if visible:
+            assert metrics["outcome"]["fx"] == original_metrics["outcome"]["fx"]
+            assert metrics["appendix_ii"] == original_metrics["appendix_ii"]
+        else:
+            assert "fx" not in metrics["outcome"]
+            for row in metrics["appendix_ii"]["table5_rwa"]["rows"]:
+                assert "country_and_fx" not in row["pillar2"]
+                assert "total" not in row["pillar2"]
+                assert "total_capital_requirement" not in row
+                assert "pillar1_requirement" in row
+    if fx_sensitivity != "confidential":
+        visible_inputs = generic.json()["inputs"]
+        assert "fx_depreciation_pct" not in visible_inputs["plan"]
+        assert all(
+            point["variable"] != "fx_usd_ghs" for point in visible_inputs["scenario"]["paths"]
+        )
+        assert visible_inputs["capital_facts"] == original_inputs["capital_facts"]
+    with get_sessionmaker()() as session:
+        stored = session.get(RegulatoryRun, UUID(run_id))
+        assert stored.metrics == original_metrics
+        assert stored.inputs == original_inputs

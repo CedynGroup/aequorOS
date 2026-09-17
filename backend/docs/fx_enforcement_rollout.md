@@ -228,3 +228,15 @@ Before deployment, attach:
 4. Every institution-approved binding row created before release.
 5. Confirmation that no desk or currency scope was promised in v1.
 6. Confirmation that every user whose `authv` changed signed in again.
+
+## Enterprise result visibility
+
+Generic regulatory-run summaries project enterprise FX results using aggregated
+FX view; generic details and enterprise latest/detail use confidential FX view.
+Without the matching permission, responses omit the FX outcome, FX plan and
+scenario inputs, and the Appendix II country/FX charge and totals that expose
+that charge. Non-FX results remain visible, including capital and liquidity
+outcomes, projections, and other Appendix II fields. Every valid enterprise run
+contains these non-FX results, so its registry entry and count remain visible.
+Projection changes response copies only; immutable stored inputs, metrics, and
+hashes are unchanged.
