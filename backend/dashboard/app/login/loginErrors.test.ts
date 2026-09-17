@@ -54,12 +54,27 @@ try {
 console.log("loginErrors.test.ts: truthful sign-in messages passed");
 
 const origin = "http://127.0.0.1:3001";
-for (const target of ["//attacker.example", "https://attacker.example", "/\\attacker.example", "http://localhost:3001/login", "https://aequoros.com/login"]) {
+for (const target of [
+  "//attacker.example",
+  "https://attacker.example",
+  "/\\attacker.example",
+  "http://localhost:3001/login",
+  "https://aequoros.com/login",
+]) {
   assert.equal(sessionRedirect(target, origin), origin);
 }
-assert.equal(sessionRedirect("/login?reason=session_ended", origin), `${origin}/login?reason=session_ended`);
-assert.equal(sessionRedirect(`${origin}/settings`, origin), `${origin}/settings`);
+assert.equal(
+  sessionRedirect("/login?reason=session_ended", origin),
+  `${origin}/login?reason=session_ended`,
+);
+assert.equal(
+  sessionRedirect(`${origin}/settings`, origin),
+  `${origin}/settings`,
+);
 
 assert.equal(sessionRedirect("http://localhost:3001/", origin), origin);
 assert.equal(sessionRedirect("javascript:alert(1)", origin), origin);
-assert.equal(sessionRedirect("/settings?tab=profile#name", origin), `${origin}/settings?tab=profile#name`);
+assert.equal(
+  sessionRedirect("/settings?tab=profile#name", origin),
+  `${origin}/settings?tab=profile#name`,
+);
