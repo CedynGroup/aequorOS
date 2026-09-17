@@ -7,11 +7,15 @@
  * Set NEXT_PUBLIC_LOGIN_URL to that absolute root URL in production; in dev it
  * defaults to the app-local /login.
  */
-export const LOGIN_URL = process.env.NEXT_PUBLIC_LOGIN_URL ?? '/login';
+export const LOGIN_URL = process.env.NEXT_PUBLIC_LOGIN_URL ?? "/login";
 
 /** Why the user is back on the sign-in page; the form turns it into a message. */
 export type LoginReason = "access_changed" | "session_ended";
 
-export function loginUrlWithReason(reason: LoginReason): string {
-  return `${LOGIN_URL}${LOGIN_URL.includes("?") ? "&" : "?"}reason=${reason}`;
+export function loginUrlWithReason(
+  reason: LoginReason,
+  origin?: string,
+): string {
+  const target = origin ? new URL(LOGIN_URL, origin).href : LOGIN_URL;
+  return `${target}${target.includes("?") ? "&" : "?"}reason=${reason}`;
 }

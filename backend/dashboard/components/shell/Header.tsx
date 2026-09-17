@@ -381,7 +381,12 @@ function UserMenu() {
                   role="menuitem"
                   onClick={() => {
                     setOpen(false);
-                    void signOut({ redirectTo: LOGIN_URL });
+                    void signOut({
+                      redirectTo: new URL(
+                        LOGIN_URL,
+                        window.location.origin,
+                      ).href,
+                    });
                   }}
                   className="w-full flex items-center gap-2.5 px-4 py-2 text-body text-navy/85 hover:bg-surface"
                 >

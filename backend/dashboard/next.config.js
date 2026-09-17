@@ -3,6 +3,10 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Preserve middleware redirect origins exactly. Without this, Next dev
+  // normalizes an explicit 127.0.0.1 Location through its configured
+  // "localhost" hostname, crossing into a different browser cookie jar.
+  skipMiddlewareUrlNormalize: true,
   // Isolate the e2e dev-server build cache from a developer's live `.next`.
   // NEXT_PUBLIC_* values are inlined at compile time and `next dev` shares one
   // cache per dir, so an e2e run in the same directory would otherwise bake the

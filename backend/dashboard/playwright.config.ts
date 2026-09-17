@@ -110,7 +110,6 @@ export default defineConfig({
         // cache per directory). Paired with distDir in next.config.js.
         NEXT_DIST_DIR: ".next-e2e",
         AUTH_SECRET: "e2e-nextauth-secret-not-production-000",
-        AUTH_URL: E2E_BASE_URL,
         AUTH_TRUST_HOST: "true",
         SSO_INTERNAL_KEY: "",
       },
