@@ -88,7 +88,7 @@ assert.deepEqual(
       "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
   },
 );
-for (const module of [
+for (const moduleCase of [
   {
     prefix: "/irr",
     label: "IRRBB",
@@ -105,40 +105,40 @@ for (const module of [
   },
 ] as const) {
   const deniedModule = resolved(true, true, {
-    [module.aggregated]: false,
-    [module.confidential]: false,
+    [moduleCase.aggregated]: false,
+    [moduleCase.confidential]: false,
   });
   for (const suffix of [
     "",
     "/?period=current",
     "/sensitivity/detail?period=current",
   ]) {
-    const href = `${module.prefix}${suffix}`;
+    const href = `${moduleCase.prefix}${suffix}`;
     assert.equal(isHrefVisible(href, deniedModule), false);
     assert.equal(isPathVisible(href, deniedModule), false);
     assert.deepEqual(hrefAccess(href, deniedModule), {
       state: "disabled",
-      reason: `Requires ${module.label} · Aggregated · View. Ask your organization owner or admin to grant it.`,
+      reason: `Requires ${moduleCase.label} · Aggregated · View. Ask your organization owner or admin to grant it.`,
     });
     assert.equal(isHrefVisible(href, resolved(true)), true);
     assert.equal(isPathVisible(href, resolved(true)), true);
   }
   for (const suffix of ["/scenarios", "/scenarios/detail?analysis=saved"]) {
-    const href = `${module.prefix}${suffix}`;
+    const href = `${moduleCase.prefix}${suffix}`;
     assert.equal(isPathVisible(href, deniedModule), false);
     assert.deepEqual(hrefAccess(href, deniedModule), {
       state: "disabled",
-      reason: `Requires ${module.label} · ${module.scenarioSensitivity} · View. Ask your organization owner or admin to grant it.`,
+      reason: `Requires ${moduleCase.label} · ${moduleCase.scenarioSensitivity} · View. Ask your organization owner or admin to grant it.`,
     });
   }
   const confidentialOnlyModule = resolved(true, true, {
-    [module.aggregated]: false,
-    [module.confidential]: true,
+    [moduleCase.aggregated]: false,
+    [moduleCase.confidential]: true,
   });
-  assert.equal(isPathVisible(module.prefix, confidentialOnlyModule), false);
+  assert.equal(isPathVisible(moduleCase.prefix, confidentialOnlyModule), false);
   assert.equal(
-    isPathVisible(`${module.prefix}/scenarios`, confidentialOnlyModule),
-    module.scenarioSensitivity === "Confidential",
+    isPathVisible(`${moduleCase.prefix}/scenarios`, confidentialOnlyModule),
+    moduleCase.scenarioSensitivity === "Confidential",
   );
 }
 

@@ -88,7 +88,9 @@ test("real FX grants enforce sensitivity across API, Reports and workbench", asy
   await request("GET", `${bank}/fx/dashboard`, 403);
   await grant("reg", "all");
   const periods = await (
-    await page.request.get(`${api}${bank}/reporting-periods`, { headers: owner })
+    await page.request.get(`${api}${bank}/reporting-periods`, {
+      headers: owner,
+    })
   ).json();
   const fxRun = await page.request.post(`${api}${bank}/fx/run-all-scenarios`, {
     headers: owner,
