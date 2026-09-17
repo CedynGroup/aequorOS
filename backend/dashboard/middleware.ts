@@ -10,6 +10,32 @@ import {
 } from "@/lib/authCookies";
 import { requestOrigin } from "@/lib/requestOrigin";
 
+// Emit only from middleware: auth.ts is instantiated separately in the Edge
+// and Node runtimes, so a guard there warns once per bundle, not per server.
+let hostMismatchWarned = false;
+
+function warnOnDevelopmentHostMismatch(req: Request | undefined): void {
+  if (process.env.NODE_ENV !== "development" || !req || hostMismatchWarned) {
+    return;
+  }
+  const configuredUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
+  if (!configuredUrl) return;
+  try {
+    const configuredHost = new URL(configuredUrl).host;
+    const requestHost = new URL(requestOrigin(req)).host;
+    if (requestHost && requestHost !== configuredHost) {
+      hostMismatchWarned = true;
+      console.warn(
+        `[auth] AUTH_URL host "${configuredHost}" differs from request host ` +
+          `"${requestHost}". Session cookies are host-scoped, so use one host ` +
+          "consistently during development.",
+      );
+    }
+  } catch {
+    // Auth.js reports malformed AUTH_URL configuration through its own logger.
+  }
+}
+
 function expireSessionCookies(response: Response, names: string[]): void {
   for (const cookie of expiredAuthSessionCookieHeaders(names)) {
     response.headers.append("set-cookie", cookie);
@@ -43,6 +69,7 @@ export default async function middleware(
   req: NextRequest,
   event: NextFetchEvent,
 ) {
+  warnOnDevelopmentHostMismatch(req);
   const origin = requestOrigin(req);
   const state: AuthGateState = {};
   const sessionResponse =

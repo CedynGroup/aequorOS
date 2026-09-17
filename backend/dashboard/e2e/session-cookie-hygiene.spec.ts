@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
-import { encode } from "@auth/core/jwt";
+import { decode, encode } from "@auth/core/jwt";
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 
 import { E2E_AUTH_SECRET, E2E_PASSWORD } from "./support/mint";
-import { E2E_TMP } from "../playwright.config";
+import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 
-const EVIDENCE_DIR = path.join(E2E_TMP, "session-cookie-hygiene");
+const EVIDENCE_DIR = process.env.E2E_EVIDENCE_DIR ?? path.join(E2E_TMP, "session-cookie-hygiene");
 
 async function signIn(
   page: import("@playwright/test").Page,
@@ -145,6 +145,7 @@ test.describe("session cookie hygiene", () => {
 
   test("sign out and account switch stay on the current host", async ({
     page,
+    context,
     baseURL,
   }) => {
     const foreignCallback = new URL("/", baseURL!);
@@ -153,8 +154,17 @@ test.describe("session cookie hygiene", () => {
     await signIn(page, "admin");
     expect(new URL(page.url()).origin).toBe(new URL(baseURL!).origin);
 
+    const sessionCookies = (await context.cookies()).filter(c => c.name.startsWith("authjs.session-token"));
+    const token = await decode({ token: sessionCookies.sort((a,b) => a.name.localeCompare(b.name)).map(c => c.value).join(""), secret: E2E_AUTH_SECRET, salt: "authjs.session-token" });
+    await context.addCookies([{ name: "next-auth.session-token.7", value: "legacy-tail", url: baseURL! }]);
+    const signedOut = page.waitForResponse(r => r.url().endsWith("/api/auth/signout") && r.request().method() === "POST");
     await page.locator('button[aria-haspopup="menu"]').click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
+    const signoutResponse = await signedOut;
+    expect(await signoutResponse.headerValue("set-cookie")).toContain("next-auth.session-token.7=;");
+    const revoked = await context.request.post(`${E2E_API_ORIGIN}/api/v1/auth/refresh`, { data: { refresh_token: token!.refreshToken } });
+    expect(revoked.status()).toBe(401);
+    writeFileSync(path.join(EVIDENCE_DIR, "signout.json"), JSON.stringify({ legacyChunkExpiredInSignoutResponse: true, oldRefreshTokenStatus: revoked.status(), host: new URL(page.url()).hostname }, null, 2));
     await expect(page).toHaveURL(/\/login$/);
     expect(new URL(page.url()).hostname).toBe("127.0.0.1");
     await page.waitForLoadState("networkidle");
@@ -165,6 +175,76 @@ test.describe("session cookie hygiene", () => {
       path: path.join(EVIDENCE_DIR, "admin-to-approver.png"),
       fullPage: true,
     });
+  });
+
+  test("malformed cookie families expire on protected and session endpoints", async ({ request, baseURL }) => {
+    const bases = ["authjs.session-token", "__Secure-authjs.session-token", "__Host-authjs.session-token", "next-auth.session-token", "__Secure-next-auth.session-token", "__Host-next-auth.session-token"];
+    const names = bases.flatMap(name => [name, `${name}.0`, `${name}.9`]);
+    const evidence = [];
+    for (const endpoint of ["/settings", "/login", "/api/auth/session"]) {
+      const response = await request.get(endpoint, { headers: { cookie: names.map(n => `${n}=broken`).join("; ") + "; unrelated=keep" }, maxRedirects: 0 });
+      const headers = response.headersArray().filter(h => h.name.toLowerCase() === "set-cookie").map(h => h.value);
+      for (const name of names) expect(headers.some(h => h.startsWith(`${name}=;`) && h.includes("Max-Age=0"))).toBe(true);
+      expect(headers.some(h => h.startsWith("unrelated="))).toBe(false);
+      if (endpoint === "/settings") expect(new URL(response.headers().location, baseURL).origin).toBe(new URL(baseURL!).origin);
+      if (endpoint.endsWith("session")) expect(await response.json()).toBe(null);
+      evidence.push({ endpoint, status: response.status(), location: response.headers().location, expiredCookies: headers.filter(h => h.includes("Max-Age=0")), session: endpoint.endsWith("session") ? await response.json() : undefined });
+    }
+    writeFileSync(path.join(EVIDENCE_DIR, "cookie-cleanup.json"), JSON.stringify(evidence, null, 2));
+  });
+
+  test("wrong credentials retain the invalid-password message", async ({ page }) => {
+    await page.goto("/login");
+    await page.waitForLoadState("networkidle");
+    await page.getByLabel("Email").fill("e2e.analyst@aequoros.example");
+    await page.getByLabel("Password").fill("wrong-password");
+    await page.getByRole("button", { name: /^Sign in/ }).click();
+    await expect(page.locator('form p[role="alert"]')).toContainText("Invalid email or password");
+    await page.screenshot({ path: path.join(EVIDENCE_DIR, "invalid-credentials.png"), fullPage: true });
+  });
+
+  test("conflicting AUTH_URL warns once across runtime bundles", async ({}, testInfo) => {
+    testInfo.setTimeout(120_000);
+    const port = await reservePort();
+    const origin = `http://127.0.0.1:${port}`;
+    const dashboardDir = path.resolve(__dirname, "..");
+    const distDir = ".next-host-warning";
+    let output = "";
+    const child = spawn(
+      process.execPath,
+      [require.resolve("next/dist/bin/next"), "dev", "-H", "127.0.0.1", "-p", String(port)],
+      {
+        cwd: dashboardDir,
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          NEXT_DIST_DIR: distDir,
+          AUTH_URL: "http://localhost:3001",
+          AUTH_SECRET: E2E_AUTH_SECRET,
+          AUTH_TRUST_HOST: "true",
+          SSO_INTERNAL_KEY: "",
+        },
+      },
+    );
+    child.stdout.on("data", chunk => { output += chunk.toString(); });
+    child.stderr.on("data", chunk => { output += chunk.toString(); });
+    try {
+      await waitForLoginPage(origin, child);
+      // Exercise middleware, auth routes, and page rendering in one server.
+      for (let round = 0; round < 2; round += 1) {
+        for (const endpoint of ["/api/auth/session", "/settings", "/login"]) {
+          const response = await fetch(`${origin}${endpoint}`, { redirect: "manual" });
+          expect(response.status).toBe(endpoint === "/settings" ? 307 : 200);
+          await response.text();
+        }
+      }
+    } finally {
+      await stopServer(child);
+      rmSync(path.join(dashboardDir, distDir), { recursive: true, force: true });
+      await testInfo.attach("development-server.log", { body: output, contentType: "text/plain" });
+    }
+    expect(output.match(/\[auth\] AUTH_URL host/g) ?? []).toHaveLength(1);
   });
 
   test("a stopped backend reports the service as unreachable", async ({

@@ -330,30 +330,6 @@ const credentialsProvider = Credentials({
   },
 });
 
-let hostMismatchWarned = false;
-
-function warnOnDevelopmentHostMismatch(req: Request | undefined): void {
-  if (process.env.NODE_ENV !== "development" || !req || hostMismatchWarned) {
-    return;
-  }
-  const configuredUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
-  if (!configuredUrl) return;
-  try {
-    const configuredHost = new URL(configuredUrl).host;
-    const requestHost = new URL(requestOrigin(req)).host;
-    if (requestHost && requestHost !== configuredHost) {
-      hostMismatchWarned = true;
-      console.warn(
-        `[auth] AUTH_URL host "${configuredHost}" differs from request host ` +
-          `"${requestHost}". Session cookies are host-scoped, so use one host ` +
-          "consistently during development.",
-      );
-    }
-  } catch {
-    // Auth.js reports malformed AUTH_URL configuration through its own logger.
-  }
-}
-
 function redirectForRequest(
   req: Request | undefined,
 ): NonNullable<NextAuthConfig["callbacks"]>["redirect"] {
@@ -367,7 +343,6 @@ function redirectForRequest(
 // (sign-in, callback, providers). Middleware's session gate and server-side
 // auth() calls never pay for the backend config fetch.
 const nextAuth = NextAuth(async (req) => {
-  warnOnDevelopmentHostMismatch(req);
   const providers: NextAuthConfig["providers"] = [credentialsProvider];
   if (req?.nextUrl.pathname.startsWith("/api/auth")) {
     // fetchSsoConfig() has already put the issuer through the egress guard, so
