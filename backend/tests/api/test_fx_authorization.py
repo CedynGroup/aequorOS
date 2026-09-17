@@ -283,7 +283,6 @@ def test_no_binding_denies_fx_without_legacy_role_fallback(
     calls: list[str] = []
     monkeypatch.setattr(
         regulatory_fx,
-    scheduler,
         "get_fx_dashboard",
         lambda *_args, **_kwargs: calls.append("called"),
     )

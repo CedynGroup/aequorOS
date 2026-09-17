@@ -3,17 +3,49 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from uuid import UUID, uuid4
 
 import pytest
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.core.config import get_settings
 from app.db.base import utc_now
-from app.models import BankReportingPeriod, Job, LiveMetric
-from app.services import job_queue, scheduler
-from tests.api.helpers import ORG_1
+from app.models import BankReportingPeriod, Job, LiveMetric, RegulatoryRun, User
+from app.services import authorization, job_queue, pipeline, regulatory_fx, scheduler
+from tests.api.helpers import ORG_1, USER_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+
+
+def _grant_fx_run(
+    session: Session,
+    user_id: UUID,
+    sensitivity: SensitivityScope = SensitivityScope.CONFIDENTIAL,
+) -> None:
+    authorization.create_role_binding(
+        session,
+        organization_id=ORG_1,
+        principal_user_id=user_id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.ANALYST,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION,
+            SAMPLE_BANK_ID,
+            ModuleScope.FX,
+            sensitivity,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "scheduler-test"),
+        reason="Authorize scheduled FX execution",
+    )
 
 
 def _tick_job(db_session: Session) -> Job:
@@ -48,6 +80,7 @@ def test_run_tick_enqueues_official_and_reschedules_when_enabled(
     monkeypatch.setenv("OFFICIAL_RUN_ENABLED", "true")
     get_settings.cache_clear()
     materialize_canonical_test_book(db_session)
+    _grant_fx_run(db_session, USER_1)
     db_session.commit()
     _tick_job(db_session)
     # Claim it the way the worker would, so it is running (not re-selected).
@@ -175,3 +208,90 @@ def test_live_refresh_timer_does_not_retry_structural_unavailability(
     assert _count(db_session, "pipeline_refresh") == 0
     assert tick.progress["live_refreshes_enqueued"] == 0
     get_settings.cache_clear()
+
+
+def test_scheduled_fx_uses_later_authorized_analyst(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    owner = db_session.get(User, USER_1)
+    assert owner is not None
+    owner.created_at = utc_now() - timedelta(days=1)
+    analyst = User(
+        id=uuid4(),
+        organization_id=ORG_1,
+        email="scheduled.analyst@example.test",
+        display_name="Scheduled analyst",
+    )
+    db_session.add(analyst)
+    db_session.flush()
+    _grant_fx_run(db_session, analyst.id)
+
+    enqueued = scheduler._enqueue_due_official_runs(db_session, ORG_1, get_settings(), utc_now())
+
+    assert enqueued == [SAMPLE_BANK_ID]
+    job = db_session.scalar(select(Job).where(Job.job_type == "official_run"))
+    assert job is not None
+    assert job.payload["actor_user_id"] == str(analyst.id)
+    pipeline.run_official(db_session, job)
+    runs = list(db_session.scalars(select(RegulatoryRun).where(RegulatoryRun.module == "fx")))
+    assert {run.scenario_code for run in runs} == set(regulatory_fx.FX_RUN_SCENARIO_CODES)
+    assert all(run.status == "succeeded" for run in runs)
+    assert all(run.created_by == analyst.id for run in runs)
+    requested = job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "official_run",
+        bank_id=SAMPLE_BANK_ID,
+        payload={**job.payload, "actor_user_id": str(owner.id)},
+    )
+    pipeline.run_official(db_session, requested)
+    fx_count = db_session.scalar(
+        select(func.count()).select_from(RegulatoryRun).where(RegulatoryRun.module == "fx")
+    )
+    assert fx_count == len(runs)
+    assert requested.payload["actor_user_id"] == str(owner.id)
+
+
+@pytest.mark.parametrize("authority", ["viewer", "split", "inactive"])
+def test_scheduled_fx_without_authorized_principal_denies_closed(
+    db_session: Session, authority: str
+) -> None:
+    materialize_canonical_test_book(db_session)
+    if authority == "split":
+        _grant_fx_run(db_session, USER_1, SensitivityScope.AGGREGATED)
+    elif authority == "inactive":
+        _grant_fx_run(db_session, USER_1)
+        user = db_session.get(User, USER_1)
+        assert user is not None
+        user.is_active = False
+    db_session.commit()
+    records = []
+    sink_id = logger.add(lambda message: records.append(message.record["extra"]))
+    try:
+        enqueued = scheduler._enqueue_due_official_runs(db_session, ORG_1, get_settings(), utc_now())
+    finally:
+        logger.remove(sink_id)
+
+    assert enqueued == []
+    assert _count(db_session, "official_run") == 0
+    assert db_session.scalar(select(func.count()).select_from(RegulatoryRun)) == 0
+    assert any(
+        record.get("reason") == "no_authorized_scheduled_principal"
+        and record.get("bank_id") == SAMPLE_BANK_ID
+        and record.get("surface") == "scheduled_official_run"
+        for record in records
+    )
+
+
+def test_official_worker_requires_explicit_actor(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    _grant_fx_run(db_session, USER_1)
+    job = job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "official_run",
+        bank_id=SAMPLE_BANK_ID,
+        payload={"as_of_date": "2026-08-31"},
+    )
+    with pytest.raises(pipeline.PipelineError, match="active actor"):
+        pipeline.run_official(db_session, job)
+    assert db_session.scalar(select(func.count()).select_from(RegulatoryRun)) == 0

@@ -683,12 +683,14 @@ def _ctx_from_job(session: Session, job: Job, *, require_actor: bool = False) ->
     actor_id = UUID(str(actor_raw)) if actor_raw else None
     if not require_actor:
         return TenantContext(organization_id=job.organization_id, actor_user_id=actor_id)
-    actor_query = select(User).where(
-        User.organization_id == job.organization_id, User.is_active.is_(True)
+    actor = session.scalar(
+        select(User).where(
+            User.id == actor_id,
+            User.organization_id == job.organization_id,
+            User.is_active.is_(True),
+            User.auth_provider != "service",
+        )
     )
-    if actor_id is not None:
-        actor_query = actor_query.where(User.id == actor_id)
-    actor = session.scalar(actor_query.order_by(User.created_at).limit(1))
     if actor is None:
         raise PipelineError("Official run requires an active actor in the job organization.")
     return TenantContext(
