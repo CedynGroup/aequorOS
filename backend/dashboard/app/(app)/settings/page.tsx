@@ -287,7 +287,6 @@ function AppearancePanel() {
   );
 }
 
-
 function DataComputePanel({ bankId }: { bankId: string | undefined }) {
   const health = useRiskServiceHealth();
   const canViewCashflow = useModuleScope().liquidityConfidentialView === true;

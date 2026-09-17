@@ -438,8 +438,8 @@ platform:flags     platform:billing     platform:audit   platform:staff
 | `billing:* / org:transfer / org:delete`         |   —    |    —    |    —    |    —     |     —     |     ●     |
 
 ¹ Org Admin/Owner see dashboards for administration context but hold no operational write.
-  Built for Owner on 2026-09-16 as an explicit organization-wide Viewer sentence written
-  with ownership; an Org Admin still receives it only as a separate grant.
+Built for Owner on 2026-09-16 as an explicit organization-wide Viewer sentence written
+with ownership; an Org Admin still receives it only as a separate grant.
 ² `configure` is granted per-preset (FTP owner, ALM assumptions, Risk limits) — not to every Analyst/Approver.
 ³ Board/Exec "Viewer" gets published-dashboard view only; raw `export` is off by default.
 ⁴ `sign_off` / `submit` are **preset add-ons** (CFO, MD, Head of Reg), not blanket to every Approver — and are **SoD-gated** (§7.4).
