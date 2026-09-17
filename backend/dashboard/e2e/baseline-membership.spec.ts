@@ -73,10 +73,18 @@ test.describe("fresh active member baseline", () => {
       });
     }
 
-    await page.goto("/does-not-exist");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
-    await expect(
-      page.getByText("No authorized institutions yet", { exact: true }),
-    ).toHaveCount(0);
+    for (const route of [
+      "/does-not-exist",
+      "/liquidity/unknown",
+      "/data-engine/batches/00000000-0000-0000-0000-000000000000",
+      "/data-engine/batches/foreign-batch",
+    ]) {
+      await page.goto(route);
+      await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`${route}$`));
+      await expect(
+        page.getByText("No authorized institutions yet", { exact: true }),
+      ).toHaveCount(0);
+    }
   });
 });

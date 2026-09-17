@@ -486,10 +486,12 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (moduleKey) {
     if (isBaselineOnlyScope(scope)) {
       if (moduleKey === "settings") return { state: "enabled" };
-      return {
-        state: "disabled",
-        reason: permissionReason([MODULE_ENTRY_REQUIREMENTS[moduleKey]])!,
-      };
+      const reason =
+        liquidityPermissionReason(path, scope) ??
+        (path === "/" || ROUTE_MODULES.some(([route]) => route === path)
+          ? permissionReason([MODULE_ENTRY_REQUIREMENTS[moduleKey]])
+          : undefined);
+      return reason ? { state: "disabled", reason } : { state: "hidden" };
     }
     if (ORGANIZATION_ROUTES.has(moduleKey)) {
       return scope.organizationModules.has(moduleKey)
@@ -571,6 +573,89 @@ export function landingPathFor(scope: ModuleScope): string | null {
   );
 }
 
+const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
+  "/alerts",
+  "/basel",
+  "/basel/exposures",
+  "/basel/loan-book",
+  "/basel/planning",
+  "/basel/rwa",
+  "/basel/stress",
+  "/basel/structure",
+  "/behavioral",
+  "/behavioral/deposit-stability",
+  "/behavioral/liquidity",
+  "/behavioral/nmd-duration",
+  "/behavioral/prepayment",
+  "/credit",
+  "/credit/activity",
+  "/credit/book",
+  "/credit/concentration",
+  "/credit/delinquency",
+  "/credit/vintages",
+  "/data-engine",
+  "/data-engine/adapters",
+  "/data-engine/api",
+  "/data-engine/database",
+  "/data-engine/excel-csv",
+  "/data-engine/market-data",
+  "/data-engine/positions",
+  "/data-engine/t24",
+  "/forecasting",
+  "/forecasting/assumptions",
+  "/forecasting/nii",
+  "/forecasting/optimizer",
+  "/forecasting/reverse-stress",
+  "/forecasting/scenario",
+  "/forecasting/whatif",
+  "/ftp",
+  "/ftp/expost",
+  "/ftp/lines",
+  "/ftp/products",
+  "/ftp/rules",
+  "/ftp/scenarios",
+  "/fx",
+  "/fx/forwards",
+  "/fx/hedges",
+  "/fx/limits",
+  "/fx/scenarios",
+  "/fx/var",
+  "/institution",
+  "/institution/history",
+  "/institution/outlets",
+  "/institution/parties",
+  "/institution/products",
+  "/institution/registers",
+  "/irr",
+  "/irr/gaps",
+  "/irr/limits",
+  "/irr/scenarios",
+  "/irr/sensitivity",
+  "/liquidity",
+  "/liquidity/buffer",
+  "/liquidity/cfp",
+  "/liquidity/forecast",
+  "/liquidity/monitoring",
+  "/liquidity/nsfr",
+  "/liquidity/stress",
+  "/markets",
+  "/positions",
+  "/reports",
+  "/reports/analyses",
+  "/reports/board-pack",
+  "/reports/stress-board-pack",
+  "/risk",
+  "/submissions",
+  "/submissions/approvals",
+  "/submissions/calendar",
+  "/submissions/compare",
+  "/submissions/history",
+  "/submissions/returns",
+  "/submissions/settings",
+  "/submissions/signatures",
+  "/submissions/templates",
+]);
+
 /**
  * Where a hub URL should send a user it is hidden from, or null to 404.
  *
@@ -596,7 +681,9 @@ export function hubRedirectFor(
   const moduleKey = moduleForPath(path);
   if (
     moduleKey &&
-    !ORGANIZATION_ROUTES.has(moduleKey) &&
+    PUBLIC_MODULE_ROUTES.has(path) &&
+    !subrouteHidden(path, scope) &&
+    (!scope.entitledModules || scope.entitledModules.has(moduleKey)) &&
     isBaselineOnlyScope(scope)
   ) {
     return "/";
