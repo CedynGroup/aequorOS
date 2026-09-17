@@ -38,23 +38,32 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
   }
 });
 
-test("object detail headers retain linked breadcrumbs", async ({ page, request }) => {
+test("object detail headers retain linked breadcrumbs", async ({
+  page,
+  request,
+}) => {
   // A missing source creates a real failed ingestion attempt without writing
   // canonical bank data or requiring an object-store operation.
-  const headers = { Authorization: `Bearer ${await mintBackendToken("admin")}` };
+  const headers = {
+    Authorization: `Bearer ${await mintBackendToken("admin")}`,
+  };
   const bankUrl = `${E2E_API_ORIGIN}/api/v1/banks/BK-SAMP0001`;
   const mapping = await request.post(`${bankUrl}/mapping-configs`, {
     headers,
     data: {
-      source_system: "EXCEL_CSV", name: "Header navigation test",
-      config: {}, activate: true, reason: "Verify persisted ingestion detail navigation",
+      source_system: "EXCEL_CSV",
+      name: "Header navigation test",
+      config: {},
+      activate: true,
+      reason: "Verify persisted ingestion detail navigation",
     },
   });
   expect(mapping.ok(), await mapping.text()).toBeTruthy();
   const attempt = await request.post(`${bankUrl}/ingestion-batches`, {
     headers,
     data: {
-      source_system: "EXCEL_CSV", as_of_date: "2026-08-31",
+      source_system: "EXCEL_CSV",
+      as_of_date: "2026-08-31",
       location: path.join(E2E_TMP, "missing-header-test-source.csv"),
       reason: "Verify failed ingestion detail header",
     },
@@ -68,7 +77,9 @@ test("object detail headers retain linked breadcrumbs", async ({ page, request }
   await expect(
     page.getByRole("heading", { name: /Ingestion batch/ }),
   ).toBeVisible();
-  const header = page.getByRole("heading", { name: /Ingestion batch/ }).locator("..");
+  const header = page
+    .getByRole("heading", { name: /Ingestion batch/ })
+    .locator("..");
   await expect(header.locator("p").first()).toHaveText("Data Engine");
   const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(breadcrumb).toBeVisible();
@@ -90,22 +101,38 @@ test("object detail headers retain linked breadcrumbs", async ({ page, request }
     const detailUrl = page.url();
     await breadcrumb.getByRole("link", { name: label, exact: true }).click();
     await expect(page).toHaveURL(/\/data-engine$/);
-    await expect(page.getByRole("heading", { name: "Data Engine", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Data Engine", exact: true }),
+    ).toBeVisible();
     await page.goto(detailUrl);
     await expect(breadcrumb).toBeVisible();
   }
-
 });
 
-
-test("IRRBB tabs keep the module eyebrow without breadcrumbs", async ({ page }) => {
-  for (const route of ["/irr", "/irr/gaps", "/irr/sensitivity", "/irr/limits"]) {
+test("IRRBB tabs keep the module eyebrow without breadcrumbs", async ({
+  page,
+}) => {
+  for (const route of [
+    "/irr",
+    "/irr/gaps",
+    "/irr/sensitivity",
+    "/irr/limits",
+  ]) {
     await page.goto(route);
-    const heading = page.getByRole("heading", { name: "Interest Rate Risk", exact: true });
+    const heading = page.getByRole("heading", {
+      name: "Interest Rate Risk",
+      exact: true,
+    });
     await expect(heading).toBeVisible();
-    await expect(heading.locator("..").locator("p").first()).toHaveText("IRRBB");
-    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Module sections" })).toBeVisible();
+    await expect(heading.locator("..").locator("p").first()).toHaveText(
+      "IRRBB",
+    );
+    await expect(
+      page.getByRole("navigation", { name: "Breadcrumb" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("navigation", { name: "Module sections" }),
+    ).toBeVisible();
   }
 });
 
@@ -125,13 +152,17 @@ for (const [route, eyebrow] of [
   ["/risk", "Risk & Limits"],
   ["/alerts", "Alerts"],
 ]) {
-  test(`module header at ${route} exposes ${eyebrow} without breadcrumbs`, async ({ page }) => {
+  test(`module header at ${route} exposes ${eyebrow} without breadcrumbs`, async ({
+    page,
+  }) => {
     await page.goto(route);
     const heading = page.getByRole("heading", { level: 1 });
     await expect(heading).toBeVisible();
     const header = heading.locator("..");
     await expect(header.locator("p").first()).toHaveText(eyebrow);
     await expect(header.locator("p").nth(1)).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toHaveCount(0);
+    await expect(
+      page.getByRole("navigation", { name: "Breadcrumb" }),
+    ).toHaveCount(0);
   });
 }
