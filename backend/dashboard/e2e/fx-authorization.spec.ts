@@ -1,7 +1,8 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 import { expect, test } from "@playwright/test";
 import path from "path";
-import { E2E_TMP } from "../playwright.config";
+import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
+import { mintBackendToken } from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -119,26 +120,31 @@ test.describe("FX Reports summary permissions", () => {
     test(`${sensitivity} view controls summary requests and filters`, async ({
       page,
     }) => {
-      await page.route("**/auth/me", async (route) => {
-        const response = await route.fetch();
-        const profile = await response.json();
-        profile.effective_authority.organization_capabilities = [];
-        for (const institution of profile.effective_authority
-          .institution_capabilities) {
-          institution.capabilities = institution.capabilities.filter(
-            (capability: {
-              module: string;
-              sensitivity: string;
-              permission: string;
-            }) =>
-              capability.permission === "view" &&
-              (capability.module === "reg" ||
-                (capability.module === "fx" &&
-                  capability.sensitivity === sensitivity)),
-          );
-        }
-        await route.fulfill({ response, json: profile });
+      // Resolve the fixture before navigation: an in-flight route.fetch can
+      // outlive the document or be continued by unrouteAll during teardown.
+      const response = await page.request.get(`${E2E_API_ORIGIN}/api/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${await mintBackendToken("admin")}` },
       });
+      expect(response.ok()).toBe(true);
+      const profile = await response.json();
+      profile.effective_authority.organization_capabilities = [];
+      for (const institution of profile.effective_authority
+        .institution_capabilities) {
+        institution.capabilities = institution.capabilities.filter(
+          (capability: {
+            module: string;
+            sensitivity: string;
+            permission: string;
+          }) =>
+            capability.permission === "view" &&
+            (capability.module === "reg" ||
+              (capability.module === "fx" &&
+                capability.sensitivity === sensitivity)),
+        );
+      }
+      await page.route("**/auth/me", (route) =>
+        route.fulfill({ json: profile }),
+      );
 
       const summaries: string[] = [];
       page.on("request", (request) => {
@@ -150,6 +156,11 @@ test.describe("FX Reports summary permissions", () => {
       await expect(
         page.getByRole("heading", { name: "Saved analyses", exact: true }),
       ).toBeVisible();
+      // The heading renders before authority resolves; navigation proves the
+      // scoped profile has reached the shell before asserting absent requests.
+      await expect(
+        page.getByRole("link", { name: "FX", exact: true }),
+      ).toBeVisible();
       if (sensitivity === "aggregated") {
         await expect.poll(() => summaries.length).toBeGreaterThan(0);
       } else {
@@ -157,6 +168,9 @@ test.describe("FX Reports summary permissions", () => {
       }
 
       await page.goto("/reports");
+      await expect(
+        page.getByRole("link", { name: "FX", exact: true }),
+      ).toBeVisible();
       const fxFilter = page.getByRole("button", { name: "FX", exact: true });
       if (sensitivity === "aggregated") {
         await expect(fxFilter).toBeVisible();
