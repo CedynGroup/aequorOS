@@ -23,8 +23,7 @@ import {
   checkOutboundUrl,
   guardedFetchFor,
 } from "./lib/outbound";
-import { LOGIN_URL } from "./lib/loginUrl";
-import { requestOrigin } from "./lib/requestOrigin";
+import { requestOrigin, sessionRedirect } from "./lib/requestOrigin";
 
 const apiOrigin = (
   process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? "http://localhost:8000"
@@ -360,20 +359,7 @@ function redirectForRequest(
 ): NonNullable<NextAuthConfig["callbacks"]>["redirect"] {
   return async ({ url, baseUrl }) => {
     const currentOrigin = req ? requestOrigin(req) : baseUrl;
-    const loginOrigin = new URL(LOGIN_URL, currentOrigin).origin;
-    if (url.startsWith("/")) return new URL(url, currentOrigin).href;
-    try {
-      const target = new URL(url);
-      if (
-        target.origin === currentOrigin ||
-        target.origin === loginOrigin
-      ) {
-        return target.href;
-      }
-    } catch {
-      // Invalid redirect input falls back to the request's own origin.
-    }
-    return currentOrigin;
+    return sessionRedirect(url, currentOrigin);
   };
 }
 

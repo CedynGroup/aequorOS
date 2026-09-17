@@ -7,7 +7,7 @@ import {
   loginErrorMessage,
 } from "./loginErrors";
 import { loginUrlWithReason } from "../../lib/loginUrl";
-import { requestOrigin } from "../../lib/requestOrigin";
+import { requestOrigin, sessionRedirect } from "../../lib/requestOrigin";
 
 assert.equal(
   loginErrorMessage({ error: "CredentialsSignin", code: "credentials" }),
@@ -52,3 +52,10 @@ try {
 }
 
 console.log("loginErrors.test.ts: truthful sign-in messages passed");
+
+const origin = "http://127.0.0.1:3001";
+for (const target of ["//attacker.example", "https://attacker.example", "/\\attacker.example", "http://localhost:3001/login", "https://aequoros.com/login"]) {
+  assert.equal(sessionRedirect(target, origin), origin);
+}
+assert.equal(sessionRedirect("/login?reason=session_ended", origin), `${origin}/login?reason=session_ended`);
+assert.equal(sessionRedirect(`${origin}/settings`, origin), `${origin}/settings`);

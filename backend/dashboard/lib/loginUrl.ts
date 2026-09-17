@@ -1,13 +1,9 @@
-/**
- * Where unauthenticated users go to sign in.
- *
- * Production serves the login page at the ROOT of the main domain
- * (https://aequoros.com/login — the marketing app rewrites /login to this
- * dashboard's login page), while the dashboard itself lives under /dashboard.
- * Set NEXT_PUBLIC_LOGIN_URL to that absolute root URL in production; in dev it
- * defaults to the app-local /login.
- */
-export const LOGIN_URL = process.env.NEXT_PUBLIC_LOGIN_URL ?? "/login";
+const configuredLogin = new URL(
+  process.env.NEXT_PUBLIC_LOGIN_URL ?? "/login",
+  "http://localhost",
+);
+export const LOGIN_URL =
+  configuredLogin.pathname + configuredLogin.search + configuredLogin.hash;
 
 /** Why the user is back on the sign-in page; the form turns it into a message. */
 export type LoginReason = "access_changed" | "session_ended";
@@ -16,6 +12,7 @@ export function loginUrlWithReason(
   reason: LoginReason,
   origin?: string,
 ): string {
-  const target = origin ? new URL(LOGIN_URL, origin).href : LOGIN_URL;
-  return `${target}${target.includes("?") ? "&" : "?"}reason=${reason}`;
+  const target = new URL(LOGIN_URL, origin ?? "http://localhost");
+  target.searchParams.set("reason", reason);
+  return origin ? target.href : target.pathname + target.search + target.hash;
 }

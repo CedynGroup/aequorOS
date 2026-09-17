@@ -77,18 +77,6 @@ export function sessionCookieGroups(
   return groups;
 }
 
-export function removeCookies(
-  cookieHeader: string | null,
-  names: ReadonlySet<string>,
-): string | null {
-  const cookies = parseCookieHeader(cookieHeader);
-  for (const name of names) cookies.delete(name);
-  if (cookies.size === 0) return null;
-  return [...cookies.entries()]
-    .map(([name, value]) => `${name}=${value}`)
-    .join("; ");
-}
-
 export function authSessionCookieNamesToClear(
   cookieHeader: string | null,
 ): string[] {
@@ -117,4 +105,42 @@ export function expiredAuthSessionCookieHeaders(
       (secure ? "; Secure" : "")
     );
   });
+}
+
+export async function cleanAuthResponseCookies(
+  request: Request,
+  response: Response,
+): Promise<Response> {
+  const action = new URL(request.url).pathname.split("/").pop();
+  const issued = new Set<string>();
+  for (const header of response.headers.getSetCookie()) {
+    const pair = header.split(";")[0];
+    for (const name of presentAuthSessionCookieNames(pair)) {
+      if (pair.slice(pair.indexOf("=") + 1)) issued.add(name);
+      else issued.delete(name);
+    }
+  }
+  let clearAll = false;
+  if (response.ok && action === "session") {
+    clearAll = (await response.clone().json()) === null;
+  }
+  if (
+    action === "signout" &&
+    request.method === "POST" &&
+    response.status < 400
+  ) {
+    const destination = response.headers.get("location") ??
+      (response.headers.get("content-type")?.includes("application/json")
+        ? (await response.clone().json()).url
+        : undefined);
+    clearAll = typeof destination === "string" &&
+      !new URL(destination, request.url).searchParams.has("error");
+  }
+  if (!clearAll && issued.size === 0) return response;
+  const names = authSessionCookieNamesToClear(request.headers.get("cookie"))
+    .filter((name) => clearAll || !issued.has(name));
+  for (const header of expiredAuthSessionCookieHeaders(names)) {
+    response.headers.append("set-cookie", header);
+  }
+  return response;
 }

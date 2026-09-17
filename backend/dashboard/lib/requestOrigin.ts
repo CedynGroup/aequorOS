@@ -21,3 +21,11 @@ export function requestOrigin(
   const protocol = forwardedProto ?? "http";
   return `${protocol}://${host}`;
 }
+
+export function sessionRedirect(url: string, origin: string): string {
+  try {
+    const target = new URL(url, origin);
+    if (target.origin === origin) return target.href;
+  } catch {}
+  return origin;
+}

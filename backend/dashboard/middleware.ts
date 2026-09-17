@@ -22,11 +22,6 @@ function copySetCookies(target: Response, source: Response): void {
   }
 }
 
-// Gate every matched route behind a session. Unauthenticated visitors are sent
-// to the sign-in page — in production that is the ROOT-level
-// https://aequoros.com/login (see lib/loginUrl.ts), not the app-local
-// /dashboard/login — carrying a callbackUrl back to the page they wanted.
-//
 // NextAuth is initialized LAZILY (auth.ts builds the SSO provider per request),
 // which makes `auth` async: wrapping a middleware yields a PROMISE of the
 // handler. Exporting that promise directly breaks Next ("must export a
