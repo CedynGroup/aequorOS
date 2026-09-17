@@ -240,6 +240,69 @@ quarantined `StressScenario` split with one library):
   reusable across runs — an actual **scenario library**. Persist supervisory (BoG-provided)
   scenarios as a `supervisory` subtype for the bottom-up-supervisory path (¶13).
 
+#### 3.1.1 Code-defined default set and calibration
+
+The platform ships immutable, code-defined defaults from
+`backend/app/services/default_macro_scenarios.py`. They are resolved at read/run time, not seeded
+as tenant rows, so the e2e bootstrap, local sandbox and every new organization see the same
+versioned set without a provisioning step. Their UUIDv5 identifiers are stable. They appear as
+`owner=system`, `status=approved`, and need no maker-checker transition. Editing, submitting,
+approving or archiving one is refused; **Clone to editable draft** copies its year-end points into
+a normal organization-owned draft, where the existing maker-checker rules apply unchanged.
+
+Every runnable definition carries **12 quarterly points over three years** for all 13 Table 6
+drivers. The enterprise projection remains annual and consumes the Q4 point for each year; the
+full quarterly path stays visible in the scenario detail and is included in the code-defined
+calibration.
+
+| Code                                                         | Type / severity        | Calibration                                                                                                                                                                                       |
+| ------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `system_base_consensus`                                      | base                   | Published 2026 Ghana anchors with a gradual three-year normalization path. Stress equals base.                                                                                                    |
+| `system_adverse_bog_style`                                   | adverse / moderate     | AequorOS calibration: year-1 +450bp domestic rates, 20% cedi depreciation, +6pp inflation, −5pp GDP growth, then recovery. **Not a BoG-prescribed numeric path.**                                 |
+| `system_severe_stagflation`                                  | hypothetical / severe  | AequorOS calibration: year-1 +500bp rates, 35% cedi depreciation, +10pp inflation, −8pp GDP growth, with sharper equity/commodity and unemployment stress. **Not a BoG-prescribed numeric path.** |
+| `system_irr_parallel_up_200`, `system_irr_parallel_down_200` | supervisory / moderate | Preserve the existing BCBS workbench calibration: parallel ±200bp.                                                                                                                                |
+| `system_irr_short_up_250`, `system_irr_short_down_250`       | supervisory / moderate | Preserve the existing short-end ±250bp shock with the parameter register's three-year tenor decay.                                                                                                |
+| `system_irr_steepener`                                       | supervisory / moderate | Preserve the existing −65bp short / +90bp long rotation.                                                                                                                                          |
+| `system_irr_flattener`                                       | supervisory / moderate | Preserve the existing +80bp short / −60bp long rotation.                                                                                                                                          |
+| `system_bog_supervisory_placeholder`                         | supervisory / severe   | **Approved but non-runnable.** Reserved for an official regulator-issued numeric path; the exposure draft names drivers and sources but publishes no numbers.                                     |
+
+**Base anchors (calibration date 17 September 2026).** IMF WEO April 2026 supplies
+2026 real GDP growth **4.8%** and consumer-price inflation **5.8%**. The July 2026 BoG MPC
+decision supplies the **14%** policy rate. AfDB's June 2026 Ghana outlook supplies fiscal deficits
+of **2.6% of GDP in 2026** and **2.2% in 2027**. Market anchors are USD/GHS **11.45**,
+GBP/GHS **15.36**, EUR/GHS **13.20**, GSE-CI **15,076.3**, cocoa **USD 5,979/tonne** and
+gold **USD 4,491/oz**. The latest published unemployment anchor is **13.6%**. The 18% market
+rate and GoG-yield anchors are explicitly a platform convention of policy rate +400bp, not an
+official forecast. Base endpoints then converge toward the BoG 8% ±2pp inflation target; FX
+levels crawl 4% annually; other market levels normalize gradually. These interpolation choices
+are methodology assumptions, not sourced forecasts.
+
+**Adverse/severe labelling.** Appendix III of the February 2026 BoG stress-testing exposure draft
+requires GDP, inflation, rates, unemployment, USD/GBP/EUR→GHS, GSE, fiscal deficit and other
+material drivers, and names BoG/GSS/IMF/World Bank/AfDB and market-data vendors as sources. It
+does **not** publish one universal numeric supervisory path. The adverse and severe values above
+are therefore named AequorOS calibrations. The separate BoG supervisory entry remains
+non-runnable until BoG publishes a numeric path; the platform does not present internal numbers
+as regulator-issued assumptions.
+
+**IRRBB calibration.** The six runnable rate paths reproduce the existing parameter-register
+set byte-for-byte: ±200bp parallel; ±250bp short with three-year decay; steepener −65/+90; and
+flattener +80/−60. The BoG IRRBB exposure draft (February 2026, Appendix II–III Tables 5–6) is
+the GHS local-calibration source: GHS parallel **450bp**, short **500bp**, long **300bp**, with
+the published steepener/flattener formulas. AequorOS already carries the ±450bp GHS parallel
+rows as informational add-ons; this default set deliberately does not rewrite the six existing
+BCBS workbench shocks.
+
+Sources:
+
+- [BoG Guideline on Stress Testing, exposure draft, February 2026](https://www.bog.gov.gh/reg_directives/guidelines-on-stress-testing-exposure-draft/)
+- [BoG regulations and directives library (IRRBB exposure draft)](https://www.bog.gov.gh/downloads/supervision-and-regulation-downloads/regulations-directives/)
+- [IMF Ghana country page / April 2026 WEO](https://www.imf.org/en/Countries/GHA)
+- [BoG MPC press release, July 2026](https://www.bog.gov.gh/mpc_press_release/mpc-press-release-july-2026)
+- [AfDB Ghana Economic Outlook, June 2026](https://www.afdb.org/en/countries/west-africa/ghana/ghana-economic-outlook)
+- [BCBS IRRBB standard (2016)](https://www.bis.org/bcbs/publ/d368.htm) and
+  [2024 recalibration](https://www.bis.org/bcbs/publ/d578.htm)
+
 ### 3.2 Translation layer (macro → risk parameters)
 The satellite step the platform lacks: map each scenario's macro paths to the **risk parameters**
 each engine consumes (¶38(e), ¶48). Minimum viable, transparent, and documented per ¶45:

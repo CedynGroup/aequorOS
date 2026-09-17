@@ -11,20 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ActionItemInMinSeverity } from "./ActionItemInMinSeverity";
-import {
-  ActionItemInMinSeverityFromJSON,
-  ActionItemInMinSeverityFromJSONTyped,
-  ActionItemInMinSeverityToJSON,
-  ActionItemInMinSeverityToJSONTyped,
-} from "./ActionItemInMinSeverity";
-import type { MacroPathRead } from "./MacroPathRead";
-import {
-  MacroPathReadFromJSON,
-  MacroPathReadFromJSONTyped,
-  MacroPathReadToJSON,
-  MacroPathReadToJSONTyped,
-} from "./MacroPathRead";
 import type { Source2 } from "./Source2";
 import {
   Source2FromJSON,
@@ -46,20 +32,6 @@ import {
   DescriptionToJSON,
   DescriptionToJSONTyped,
 } from "./Description";
-import type { ApprovedBy1 } from "./ApprovedBy1";
-import {
-  ApprovedBy1FromJSON,
-  ApprovedBy1FromJSONTyped,
-  ApprovedBy1ToJSON,
-  ApprovedBy1ToJSONTyped,
-} from "./ApprovedBy1";
-import type { ApprovalTimestamp } from "./ApprovalTimestamp";
-import {
-  ApprovalTimestampFromJSON,
-  ApprovalTimestampFromJSONTyped,
-  ApprovalTimestampToJSON,
-  ApprovalTimestampToJSONTyped,
-} from "./ApprovalTimestamp";
 import type { InstitutionTypeApplicability } from "./InstitutionTypeApplicability";
 import {
   InstitutionTypeApplicabilityFromJSON,
@@ -74,13 +46,6 @@ import {
   Narrative1ToJSON,
   Narrative1ToJSONTyped,
 } from "./Narrative1";
-import type { BankId1 } from "./BankId1";
-import {
-  BankId1FromJSON,
-  BankId1FromJSONTyped,
-  BankId1ToJSON,
-  BankId1ToJSONTyped,
-} from "./BankId1";
 import type { AppSchemasStressScenarioType } from "./AppSchemasStressScenarioType";
 import {
   AppSchemasStressScenarioTypeFromJSON,
@@ -88,6 +53,48 @@ import {
   AppSchemasStressScenarioTypeToJSON,
   AppSchemasStressScenarioTypeToJSONTyped,
 } from "./AppSchemasStressScenarioType";
+import type { ActionItemInMinSeverity } from "./ActionItemInMinSeverity";
+import {
+  ActionItemInMinSeverityFromJSON,
+  ActionItemInMinSeverityFromJSONTyped,
+  ActionItemInMinSeverityToJSON,
+  ActionItemInMinSeverityToJSONTyped,
+} from "./ActionItemInMinSeverity";
+import type { MacroPathRead } from "./MacroPathRead";
+import {
+  MacroPathReadFromJSON,
+  MacroPathReadFromJSONTyped,
+  MacroPathReadToJSON,
+  MacroPathReadToJSONTyped,
+} from "./MacroPathRead";
+import type { ApprovedBy1 } from "./ApprovedBy1";
+import {
+  ApprovedBy1FromJSON,
+  ApprovedBy1FromJSONTyped,
+  ApprovedBy1ToJSON,
+  ApprovedBy1ToJSONTyped,
+} from "./ApprovedBy1";
+import type { ApprovalTimestamp } from "./ApprovalTimestamp";
+import {
+  ApprovalTimestampFromJSON,
+  ApprovalTimestampFromJSONTyped,
+  ApprovalTimestampToJSON,
+  ApprovalTimestampToJSONTyped,
+} from "./ApprovalTimestamp";
+import type { ScenarioOwner } from "./ScenarioOwner";
+import {
+  ScenarioOwnerFromJSON,
+  ScenarioOwnerFromJSONTyped,
+  ScenarioOwnerToJSON,
+  ScenarioOwnerToJSONTyped,
+} from "./ScenarioOwner";
+import type { BankId1 } from "./BankId1";
+import {
+  BankId1FromJSON,
+  BankId1FromJSONTyped,
+  BankId1ToJSON,
+  BankId1ToJSONTyped,
+} from "./BankId1";
 import type { ScenarioStatus } from "./ScenarioStatus";
 import {
   ScenarioStatusFromJSON,
@@ -164,6 +171,18 @@ export interface MacroScenarioRead {
   institutionTypeApplicability: InstitutionTypeApplicability;
   /**
    *
+   * @type {boolean}
+   * @memberof MacroScenarioRead
+   */
+  isImmutable?: boolean;
+  /**
+   *
+   * @type {boolean}
+   * @memberof MacroScenarioRead
+   */
+  isRunnable?: boolean;
+  /**
+   *
    * @type {string}
    * @memberof MacroScenarioRead
    */
@@ -180,6 +199,12 @@ export interface MacroScenarioRead {
    * @memberof MacroScenarioRead
    */
   organizationId: string;
+  /**
+   *
+   * @type {ScenarioOwner}
+   * @memberof MacroScenarioRead
+   */
+  owner?: ScenarioOwner;
   /**
    *
    * @type {Array<MacroPathRead>}
@@ -291,9 +316,14 @@ export function MacroScenarioReadFromJSONTyped(
     institutionTypeApplicability: InstitutionTypeApplicabilityFromJSON(
       json["institution_type_applicability"],
     ),
+    isImmutable:
+      json["is_immutable"] == null ? undefined : json["is_immutable"],
+    isRunnable: json["is_runnable"] == null ? undefined : json["is_runnable"],
     name: json["name"],
     narrative: Narrative1FromJSON(json["narrative"]),
     organizationId: json["organization_id"],
+    owner:
+      json["owner"] == null ? undefined : ScenarioOwnerFromJSON(json["owner"]),
     paths: (json["paths"] as Array<any>).map(MacroPathReadFromJSON),
     scenarioType: AppSchemasStressScenarioTypeFromJSON(json["scenario_type"]),
     severity: ActionItemInMinSeverityFromJSON(json["severity"]),
@@ -329,9 +359,12 @@ export function MacroScenarioReadToJSONTyped(
     institution_type_applicability: InstitutionTypeApplicabilityToJSON(
       value["institutionTypeApplicability"],
     ),
+    is_immutable: value["isImmutable"],
+    is_runnable: value["isRunnable"],
     name: value["name"],
     narrative: Narrative1ToJSON(value["narrative"]),
     organization_id: value["organizationId"],
+    owner: ScenarioOwnerToJSON(value["owner"]),
     paths: (value["paths"] as Array<any>).map(MacroPathReadToJSON),
     scenario_type: AppSchemasStressScenarioTypeToJSON(value["scenarioType"]),
     severity: ActionItemInMinSeverityToJSON(value["severity"]),

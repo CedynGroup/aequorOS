@@ -14,6 +14,7 @@ import * as runtime from "../runtime";
 import type {
   ErrorResponse,
   MacroScenarioApproval,
+  MacroScenarioClone,
   MacroScenarioCreate,
   MacroScenarioListRead,
   MacroScenarioRead,
@@ -28,6 +29,8 @@ import {
   ErrorResponseToJSON,
   MacroScenarioApprovalFromJSON,
   MacroScenarioApprovalToJSON,
+  MacroScenarioCloneFromJSON,
+  MacroScenarioCloneToJSON,
   MacroScenarioCreateFromJSON,
   MacroScenarioCreateToJSON,
   MacroScenarioListReadFromJSON,
@@ -54,6 +57,11 @@ export interface ApproveMacroScenarioRequest {
 export interface ArchiveMacroScenarioRequest {
   scenarioId: string;
   macroScenarioTransition: MacroScenarioTransition;
+}
+
+export interface CloneMacroScenarioRequest {
+  scenarioId: string;
+  macroScenarioClone: MacroScenarioClone;
 }
 
 export interface CreateMacroScenarioRequest {
@@ -224,6 +232,74 @@ export class MacroScenariosApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<MacroScenarioRead> {
     const response = await this.archiveMacroScenarioRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Clone Macro Scenario
+   */
+  async cloneMacroScenarioRaw(
+    requestParameters: CloneMacroScenarioRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<MacroScenarioRead>> {
+    if (requestParameters["scenarioId"] == null) {
+      throw new runtime.RequiredError(
+        "scenarioId",
+        'Required parameter "scenarioId" was null or undefined when calling cloneMacroScenario().',
+      );
+    }
+
+    if (requestParameters["macroScenarioClone"] == null) {
+      throw new runtime.RequiredError(
+        "macroScenarioClone",
+        'Required parameter "macroScenarioClone" was null or undefined when calling cloneMacroScenario().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/macro-scenarios/{scenario_id}/clone`.replace(
+          `{${"scenario_id"}}`,
+          encodeURIComponent(String(requestParameters["scenarioId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: MacroScenarioCloneToJSON(requestParameters["macroScenarioClone"]),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      MacroScenarioReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Clone Macro Scenario
+   */
+  async cloneMacroScenario(
+    requestParameters: CloneMacroScenarioRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<MacroScenarioRead> {
+    const response = await this.cloneMacroScenarioRaw(
       requestParameters,
       initOverrides,
     );

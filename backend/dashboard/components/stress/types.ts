@@ -17,6 +17,7 @@ import type { ScenarioStatus, ScenarioType, Severity } from './macro';
 export type MacroPath = {
   variable: string;
   year_index: number;
+  quarter_index: number | null;
   base_value: string;
   stress_value: string;
 };
@@ -34,6 +35,9 @@ export type MacroScenarioSummary = {
   path_count: number;
   created_by: string | null;
   approved_by: string | null;
+  owner: 'organization' | 'system';
+  is_runnable: boolean;
+  is_immutable: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -61,6 +65,9 @@ export type MacroScenario = {
   approved_by: string | null;
   approval_timestamp: string | null;
   institution_type_applicability: string[] | null;
+  owner: 'organization' | 'system';
+  is_runnable: boolean;
+  is_immutable: boolean;
   paths: MacroPath[];
   created_at: string;
   updated_at: string;
@@ -270,9 +277,10 @@ export type Table1Summary = {
   capital_gap: string | null;
   management_actions: Table1ManagementActions | null;
   post_capitalisation: CapitalSnapshot[] | null;
-  residual_capital_required_after_actions:
-    | { worst: string | null; rows: { year: number; residual_capital_required: string | null }[] }
-    | null;
+  residual_capital_required_after_actions: {
+    worst: string | null;
+    rows: { year: number; residual_capital_required: string | null }[];
+  } | null;
 };
 
 export type Table2CetBuild = {

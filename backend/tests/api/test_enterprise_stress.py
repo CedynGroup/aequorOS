@@ -28,7 +28,7 @@ from app.core.authorization import (
 )
 from app.db.session import get_sessionmaker
 from app.models import AuthorizationBinding, RegulatoryRun, User
-from app.services import authorization
+from app.services import authorization, default_macro_scenarios
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_fx_authorization import _grant
 from tests.api.test_ingestion import seed_bank
@@ -221,6 +221,41 @@ def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestC
         headers=headers(ORG_2),
     )
     assert foreign.status_code == 404
+
+
+def test_enterprise_stress_runs_a_system_default_without_approval(
+    db_client: TestClient,
+    monkeypatch,
+) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    scenario = default_macro_scenarios.DEFAULT_BY_CODE["system_irr_parallel_up_200"]
+
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": str(scenario.id),
+            "reporting_period_id": period_id,
+            "reason": "Run the platform IRRBB parallel-up default.",
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["scenario_id"] == str(scenario.id)
+    assert body["scenario_code"] == scenario.code
+    assert body["outcome"]["irr"]["delta_eve"] != "0.0000"
+
+    # Immutable runs reopen from their own scenario snapshot even after a
+    # catalogue version retires the original system identifier.
+    monkeypatch.delitem(default_macro_scenarios.DEFAULT_BY_ID, scenario.id)
+    reopened = db_client.get(
+        f"{RUNS_URL.format(bank_id=bank_id)}/{body['run_id']}",
+        headers=headers(),
+    )
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["scenario_id"] == str(scenario.id)
+    assert reopened.json()["scenario_code"] == scenario.code
 
 
 def test_enterprise_stress_requires_an_approved_scenario(db_client: TestClient) -> None:

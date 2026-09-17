@@ -19,6 +19,7 @@ non-empty reason and is audit-logged. All reads/writes are org-scoped in code
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -33,8 +34,10 @@ from app.domain.stress.translation import MacroPathPoint, translate
 from app.models import Bank, MacroScenario, MacroScenarioPath
 from app.schemas.stress import (
     MacroModule,
+    MacroPathIn,
     MacroPathRead,
     MacroScenarioApproval,
+    MacroScenarioClone,
     MacroScenarioCreate,
     MacroScenarioListRead,
     MacroScenarioRead,
@@ -43,7 +46,27 @@ from app.schemas.stress import (
     MacroScenarioUpdate,
     ScenarioTranslationRead,
 )
+from app.services import default_macro_scenarios
 from app.services.audit import record_event
+
+
+@dataclass(frozen=True)
+class ResolvedMacroScenario:
+    """The official-run shape shared by system definitions and tenant rows."""
+
+    id: UUID
+    organization_id: str
+    bank_id: str | None
+    code: str
+    scenario_type: str
+    severity: str | None
+    horizon_years: int
+    source: str | None
+    status: str
+    version: int
+    paths: tuple[MacroPathPoint, ...]
+    owner: str
+    is_runnable: bool
 
 
 def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
@@ -55,9 +78,7 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     return bank
 
 
-def _get_scenario_or_404(
-    db: Session, ctx: TenantContext, scenario_id: UUID
-) -> MacroScenario:
+def _get_scenario_or_404(db: Session, ctx: TenantContext, scenario_id: UUID) -> MacroScenario:
     scenario = db.scalar(
         select(MacroScenario).where(
             MacroScenario.id == scenario_id,
@@ -81,6 +102,137 @@ def _load_paths(db: Session, scenario_id: UUID) -> list[MacroScenarioPath]:
     )
 
 
+def _system_or_none(scenario_id: UUID) -> default_macro_scenarios.DefaultMacroScenario | None:
+    return default_macro_scenarios.get(scenario_id)
+
+
+def _system_paths(
+    scenario: default_macro_scenarios.DefaultMacroScenario,
+    *,
+    annual_only: bool = False,
+) -> list[MacroPathRead]:
+    source = default_macro_scenarios.annual_paths(scenario) if annual_only else scenario.paths
+    return [
+        MacroPathRead(
+            variable=path.variable,
+            year_index=path.year_index,
+            quarter_index=path.quarter_index,
+            base_value=path.base_value,
+            stress_value=path.stress_value,
+        )
+        for path in source
+    ]
+
+
+def _system_points(
+    scenario: default_macro_scenarios.DefaultMacroScenario,
+    *,
+    annual_only: bool = False,
+) -> tuple[MacroPathPoint, ...]:
+    source = default_macro_scenarios.annual_paths(scenario) if annual_only else scenario.paths
+    return tuple(
+        MacroPathPoint(
+            variable=path.variable,
+            year_index=path.year_index,
+            base_value=path.base_value,
+            stress_value=path.stress_value,
+        )
+        for path in source
+    )
+
+
+def _resolved_system(
+    ctx: TenantContext,
+    scenario: default_macro_scenarios.DefaultMacroScenario,
+) -> ResolvedMacroScenario:
+    return ResolvedMacroScenario(
+        id=scenario.id,
+        organization_id=ctx.organization_id,
+        bank_id=None,
+        code=scenario.code,
+        scenario_type=scenario.scenario_type,
+        severity=scenario.severity,
+        horizon_years=scenario.horizon_years,
+        source=scenario.source,
+        status="approved",
+        version=scenario.version,
+        paths=_system_points(scenario, annual_only=True),
+        owner="system",
+        is_runnable=scenario.runnable,
+    )
+
+
+def _system_read(
+    ctx: TenantContext,
+    scenario: default_macro_scenarios.DefaultMacroScenario,
+) -> MacroScenarioRead:
+    return MacroScenarioRead(
+        id=scenario.id,
+        organization_id=ctx.organization_id,
+        bank_id=None,
+        code=scenario.code,
+        name=scenario.name,
+        description=scenario.description,
+        scenario_type=scenario.scenario_type,  # pyright: ignore[reportArgumentType]
+        severity=scenario.severity,  # pyright: ignore[reportArgumentType]
+        horizon_years=scenario.horizon_years,
+        narrative=scenario.narrative,
+        source=scenario.source,
+        status="approved",
+        version=scenario.version,
+        created_by=None,
+        approved_by=None,
+        approval_timestamp=default_macro_scenarios.SYSTEM_CREATED_AT,
+        institution_type_applicability=list(scenario.institution_type_applicability),
+        owner="system",
+        is_runnable=scenario.runnable,
+        is_immutable=True,
+        paths=_system_paths(scenario),
+        created_at=default_macro_scenarios.SYSTEM_CREATED_AT,
+        updated_at=default_macro_scenarios.SYSTEM_CREATED_AT,
+    )
+
+
+def _system_summary(
+    scenario: default_macro_scenarios.DefaultMacroScenario,
+) -> MacroScenarioSummaryRead:
+    return MacroScenarioSummaryRead(
+        id=scenario.id,
+        bank_id=None,
+        code=scenario.code,
+        name=scenario.name,
+        scenario_type=scenario.scenario_type,  # pyright: ignore[reportArgumentType]
+        severity=scenario.severity,  # pyright: ignore[reportArgumentType]
+        horizon_years=scenario.horizon_years,
+        status="approved",
+        version=scenario.version,
+        path_count=len(scenario.paths),
+        created_by=None,
+        approved_by=None,
+        owner="system",
+        is_runnable=scenario.runnable,
+        is_immutable=True,
+        created_at=default_macro_scenarios.SYSTEM_CREATED_AT,
+        updated_at=default_macro_scenarios.SYSTEM_CREATED_AT,
+    )
+
+
+def _reject_system_mutation(scenario_id: UUID, action: str) -> None:
+    scenario = _system_or_none(scenario_id)
+    if scenario is None:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error_code": "system_scenario_immutable",
+            "message": (
+                f"System scenario '{scenario.code}' cannot be {action}. "
+                "Clone it into an organization draft to customize it."
+            ),
+        },
+    )
+
+
 def _read(scenario: MacroScenario, paths: list[MacroScenarioPath]) -> MacroScenarioRead:
     return MacroScenarioRead(
         id=scenario.id,
@@ -100,10 +252,14 @@ def _read(scenario: MacroScenario, paths: list[MacroScenarioPath]) -> MacroScena
         approved_by=scenario.approved_by,
         approval_timestamp=scenario.approval_timestamp,
         institution_type_applicability=scenario.institution_type_applicability,
+        owner="organization",
+        is_runnable=scenario.status == "approved",
+        is_immutable=False,
         paths=[
             MacroPathRead(
                 variable=path.variable,
                 year_index=path.year_index,
+                quarter_index=None,
                 base_value=path.base_value,
                 stress_value=path.stress_value,
             )
@@ -126,11 +282,9 @@ def _to_points(paths: list[MacroScenarioPath]) -> list[MacroPathPoint]:
     ]
 
 
-def _duplicate_code_exists(
-    db: Session, ctx: TenantContext, bank_id: str | None, code: str
-) -> bool:
-    condition = MacroScenario.bank_id.is_(None) if bank_id is None else (
-        MacroScenario.bank_id == bank_id
+def _duplicate_code_exists(db: Session, ctx: TenantContext, bank_id: str | None, code: str) -> bool:
+    condition = (
+        MacroScenario.bank_id.is_(None) if bank_id is None else (MacroScenario.bank_id == bank_id)
     )
     return (
         db.scalar(
@@ -222,6 +376,7 @@ def list_scenarios(  # noqa: PLR0913 - the filter surface of one read
     status_filter: str | None = None,
     include_archived: bool = False,
 ) -> MacroScenarioListRead:
+    bank = _get_bank_or_404(db, ctx, bank_id) if bank_id is not None else None
     conditions = [MacroScenario.organization_id == ctx.organization_id]
     if bank_id is not None:
         conditions.append(MacroScenario.bank_id == bank_id)
@@ -233,9 +388,7 @@ def list_scenarios(  # noqa: PLR0913 - the filter surface of one read
         conditions.append(MacroScenario.status != "archived")
 
     scenarios = list(
-        db.scalars(
-            select(MacroScenario).where(*conditions).order_by(MacroScenario.code)
-        )
+        db.scalars(select(MacroScenario).where(*conditions).order_by(MacroScenario.code))
     )
     counts: dict[UUID, int] = {}
     if scenarios:
@@ -245,7 +398,7 @@ def list_scenarios(  # noqa: PLR0913 - the filter surface of one read
             .group_by(MacroScenarioPath.scenario_id)
         ).all()
         counts = {row[0]: int(row[1]) for row in rows}
-    summaries = [
+    organization_summaries = [
         MacroScenarioSummaryRead(
             id=scenario.id,
             bank_id=scenario.bank_id,
@@ -259,17 +412,33 @@ def list_scenarios(  # noqa: PLR0913 - the filter surface of one read
             path_count=int(counts.get(scenario.id, 0)),
             created_by=scenario.created_by,
             approved_by=scenario.approved_by,
+            owner="organization",
+            is_runnable=scenario.status == "approved",
+            is_immutable=False,
             created_at=scenario.created_at,
             updated_at=scenario.updated_at,
         )
         for scenario in scenarios
     ]
+    include_system = status_filter in (None, "approved")
+    system_summaries = (
+        [
+            _system_summary(scenario)
+            for scenario in default_macro_scenarios.DEFAULT_MACRO_SCENARIOS
+            if (scenario_type is None or scenario.scenario_type == scenario_type)
+            and (bank is None or bank.institution_type in scenario.institution_type_applicability)
+        ]
+        if include_system
+        else []
+    )
+    summaries = sorted([*organization_summaries, *system_summaries], key=lambda item: item.code)
     return MacroScenarioListRead(scenarios=summaries, total=len(summaries))
 
 
-def get_scenario(
-    db: Session, ctx: TenantContext, scenario_id: UUID
-) -> MacroScenarioRead:
+def get_scenario(db: Session, ctx: TenantContext, scenario_id: UUID) -> MacroScenarioRead:
+    system = _system_or_none(scenario_id)
+    if system is not None:
+        return _system_read(ctx, system)
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
     return _read(scenario, _load_paths(db, scenario.id))
 
@@ -277,6 +446,7 @@ def get_scenario(
 def update_scenario(
     db: Session, ctx: TenantContext, scenario_id: UUID, payload: MacroScenarioUpdate
 ) -> MacroScenarioRead:
+    _reject_system_mutation(scenario_id, "edited")
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
     if scenario.status != "draft":
         raise HTTPException(
@@ -284,8 +454,7 @@ def update_scenario(
             detail={
                 "error_code": "not_editable",
                 "message": (
-                    f"Only draft scenarios can be edited; this scenario is "
-                    f"'{scenario.status}'."
+                    f"Only draft scenarios can be edited; this scenario is '{scenario.status}'."
                 ),
             },
         )
@@ -351,6 +520,7 @@ def update_scenario(
 def submit_scenario(
     db: Session, ctx: TenantContext, scenario_id: UUID, payload: MacroScenarioTransition
 ) -> MacroScenarioRead:
+    _reject_system_mutation(scenario_id, "submitted")
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
     if scenario.status != "draft":
         raise HTTPException(
@@ -379,6 +549,7 @@ def submit_scenario(
 def approve_scenario(
     db: Session, ctx: TenantContext, scenario_id: UUID, payload: MacroScenarioApproval
 ) -> MacroScenarioRead:
+    _reject_system_mutation(scenario_id, "approved again")
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
     if scenario.status != "pending_approval":
         raise HTTPException(
@@ -423,6 +594,7 @@ def approve_scenario(
 def archive_scenario(
     db: Session, ctx: TenantContext, scenario_id: UUID, payload: MacroScenarioTransition
 ) -> MacroScenarioRead:
+    _reject_system_mutation(scenario_id, "archived")
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
     if scenario.status == "archived":
         raise HTTPException(
@@ -445,6 +617,95 @@ def archive_scenario(
     return _read(scenario, _load_paths(db, scenario.id))
 
 
+def _next_clone_code(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str | None,
+    system_code: str,
+) -> str:
+    root = f"{system_code.removeprefix('system_')}_copy"[:60]
+    condition = (
+        MacroScenario.bank_id.is_(None) if bank_id is None else (MacroScenario.bank_id == bank_id)
+    )
+    existing_codes = set(
+        db.scalars(
+            select(MacroScenario.code).where(
+                MacroScenario.organization_id == ctx.organization_id,
+                condition,
+                MacroScenario.code.startswith(root),
+            )
+        )
+    )
+    if root not in existing_codes:
+        return root
+    suffix = 2
+    while True:
+        tail = f"_{suffix}"
+        candidate = f"{root[: 60 - len(tail)]}{tail}"
+        if candidate not in existing_codes:
+            return candidate
+        suffix += 1
+
+
+def clone_system_scenario(
+    db: Session,
+    ctx: TenantContext,
+    scenario_id: UUID,
+    payload: MacroScenarioClone,
+) -> MacroScenarioRead:
+    """Copy a system definition's year-end points into an editable tenant draft."""
+    scenario = _system_or_none(scenario_id)
+    if scenario is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error_code": "scenario_not_system_owned",
+                "message": "Only a system scenario can be cloned through this endpoint.",
+            },
+        )
+    if not scenario.paths:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "system_scenario_not_cloneable",
+                "message": (
+                    f"System scenario '{scenario.code}' has no published numeric path to clone."
+                ),
+            },
+        )
+    annual_paths = default_macro_scenarios.annual_paths(scenario)
+    created = create_scenario(
+        db,
+        ctx,
+        MacroScenarioCreate(
+            code=_next_clone_code(db, ctx, payload.bank_id, scenario.code),
+            name=f"{scenario.name} copy",
+            description=scenario.description,
+            scenario_type=scenario.scenario_type,  # pyright: ignore[reportArgumentType]
+            severity=scenario.severity,  # pyright: ignore[reportArgumentType]
+            horizon_years=scenario.horizon_years,
+            narrative=(
+                f"Cloned from system scenario {scenario.code} v{scenario.version}. "
+                f"{scenario.narrative}"
+            ),
+            source=scenario.source,
+            bank_id=payload.bank_id,
+            institution_type_applicability=list(scenario.institution_type_applicability),
+            paths=[
+                MacroPathIn(
+                    variable=path.variable,
+                    year_index=path.year_index,
+                    base_value=path.base_value,
+                    stress_value=path.stress_value,
+                )
+                for path in annual_paths
+            ],
+            reason=payload.reason,
+        ),
+    )
+    return created
+
+
 def translate_scenario(
     db: Session, ctx: TenantContext, scenario_id: UUID, module: MacroModule
 ) -> ScenarioTranslationRead:
@@ -453,6 +714,30 @@ def translate_scenario(
     A read-only preview — it does NOT gate on approval. Consumption by an
     official run goes through ``resolve_for_official_run``.
     """
+    system = _system_or_none(scenario_id)
+    if system is not None:
+        if not system.runnable:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error_code": "system_scenario_not_runnable",
+                    "message": (f"System scenario '{system.code}' has no published numeric path."),
+                },
+            )
+        try:
+            shocks = translate(_system_points(system), module)
+        except NotComputable as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"error_code": "scenario_incomplete_paths", **exc.to_dict()},
+            ) from exc
+        return ScenarioTranslationRead(
+            scenario_id=system.id,
+            code=system.code,
+            status="approved",
+            module=module,
+            shocks={key: str(value) for key, value in sorted(shocks.items())},
+        )
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
     try:
         shocks = translate(_to_points(_load_paths(db, scenario.id)), module)
@@ -476,12 +761,26 @@ def translate_scenario(
 
 def resolve_for_official_run(
     db: Session, ctx: TenantContext, scenario_id: UUID
-) -> MacroScenario:
+) -> ResolvedMacroScenario:
     """Return an APPROVED scenario, or refuse (the official-run consumption guard).
 
     The Phase 2 enterprise orchestrator calls this before driving the engines, so
     a draft / pending / archived scenario can never mint an immutable run.
     """
+    system = _system_or_none(scenario_id)
+    if system is not None:
+        if not system.runnable:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error_code": "system_scenario_not_runnable",
+                    "message": (
+                        f"System scenario '{system.code}' is a placeholder with no "
+                        "published numeric path and cannot feed an official run."
+                    ),
+                },
+            )
+        return _resolved_system(ctx, system)
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
     if scenario.status != "approved":
         raise HTTPException(
@@ -494,4 +793,29 @@ def resolve_for_official_run(
                 ),
             },
         )
-    return scenario
+    return ResolvedMacroScenario(
+        id=scenario.id,
+        organization_id=scenario.organization_id,
+        bank_id=scenario.bank_id,
+        code=scenario.code,
+        scenario_type=scenario.scenario_type,
+        severity=scenario.severity,
+        horizon_years=scenario.horizon_years,
+        source=scenario.source,
+        status=scenario.status,
+        version=scenario.version,
+        paths=tuple(_to_points(_load_paths(db, scenario.id))),
+        owner="organization",
+        is_runnable=True,
+    )
+
+
+def resolve_identity_for_read(
+    db: Session, ctx: TenantContext, scenario_id: UUID
+) -> tuple[UUID, str]:
+    """Resolve scenario identity without loading paths."""
+    system = _system_or_none(scenario_id)
+    if system is not None:
+        return system.id, system.code
+    scenario = _get_scenario_or_404(db, ctx, scenario_id)
+    return scenario.id, scenario.code

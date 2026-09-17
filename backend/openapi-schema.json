@@ -23627,6 +23627,17 @@
             "title": "Base Value",
             "type": "string"
           },
+          "quarter_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quarter Index"
+          },
           "stress_value": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Stress Value",
@@ -23664,6 +23675,35 @@
           "reason"
         ],
         "title": "MacroScenarioApproval",
+        "type": "object"
+      },
+      "MacroScenarioClone": {
+        "additionalProperties": false,
+        "description": "Clone an immutable system definition into an organization-owned draft.",
+        "properties": {
+          "bank_id": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Id"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "MacroScenarioClone",
         "type": "object"
       },
       "MacroScenarioCreate": {
@@ -23904,6 +23944,16 @@
             ],
             "title": "Institution Type Applicability"
           },
+          "is_immutable": {
+            "default": false,
+            "title": "Is Immutable",
+            "type": "boolean"
+          },
+          "is_runnable": {
+            "default": true,
+            "title": "Is Runnable",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -23922,6 +23972,10 @@
           "organization_id": {
             "title": "Organization Id",
             "type": "string"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/ScenarioOwner",
+            "default": "organization"
           },
           "paths": {
             "items": {
@@ -24048,9 +24102,23 @@
             "title": "Id",
             "type": "string"
           },
+          "is_immutable": {
+            "default": false,
+            "title": "Is Immutable",
+            "type": "boolean"
+          },
+          "is_runnable": {
+            "default": true,
+            "title": "Is Runnable",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/ScenarioOwner",
+            "default": "organization"
           },
           "path_count": {
             "title": "Path Count",
@@ -33622,6 +33690,13 @@
       "ScenarioName": {
         "maxLength": 160,
         "minLength": 1,
+        "type": "string"
+      },
+      "ScenarioOwner": {
+        "enum": [
+          "organization",
+          "system"
+        ],
         "type": "string"
       },
       "ScenarioProvenance": {
@@ -78199,6 +78274,114 @@
           }
         ],
         "summary": "Archive Macro Scenario",
+        "tags": [
+          "macro-scenarios"
+        ]
+      }
+    },
+    "/api/v1/macro-scenarios/{scenario_id}/clone": {
+      "post": {
+        "operationId": "cloneMacroScenario",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MacroScenarioClone"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MacroScenarioRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Clone Macro Scenario",
         "tags": [
           "macro-scenarios"
         ]
