@@ -50,6 +50,26 @@ to one treasury desk or one currency because those resource attributes do not
 exist in the canonical authorization locator. Do not encode desk or currency
 names in grant reasons as if they were enforced scope.
 
+### Queued and scheduled official runs
+
+User-requested jobs retain the initiating `actor_user_id`. For scheduled runs
+whose institution scope includes FX, the scheduler selects the first active
+human principal (ordered by creation time, then ID) with an independently
+complete FX/confidential/run binding covering that institution. If none exists,
+it skips the bank's official-run enqueue and emits
+`no_authorized_scheduled_principal` on the `scheduled_official_run` surface.
+For banks excluding FX, it selects the first active human without an FX check.
+
+The worker resolves the recorded actor in the job's organization, requires that
+actor to remain active and human, and loads their current authorization version.
+The FX batch service still checks current binding authority before execution;
+enqueueing does not grant permanent authority or bypass the service gate.
+Scheduled jobs use `scheduled-official:{bank_id}:{tick_date}`, while user-requested
+jobs use `official:{bank_id}:{as_of_date}`. Coalescing remains within each source so a
+scheduler tick cannot replace an interactive job's actor or attribution.
+Behavioral coverage lives in `tests/services/test_scheduler.py` and
+`tests/api/test_fx_authorization.py`.
+
 ## Dashboard access
 
 FX navigation and deep links follow the server's effective-authority projection.

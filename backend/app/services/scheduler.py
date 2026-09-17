@@ -1,7 +1,7 @@
 """Self-perpetuating scheduler for immutable official runs and market data pulls.
 
 A ``scheduled_tick`` job runs per organization: when official runs are enabled it
-enqueues an ``official_run`` for every bank whose latest period has no official
+enqueues an ``official_run`` for each eligible bank whose latest period has no official
 run since today's cutoff hour; when scheduled market data pulls are enabled it
 enqueues the due ``market_data_pull`` jobs (see ``market_data_jobs``); then it
 enqueues the next tick at the following hour boundary. It is inert (no enqueue,
@@ -10,6 +10,9 @@ no reschedule) while every scheduling flag — ``OFFICIAL_RUN_ENABLED``,
 ``DATABASE_DIRECT_HEALTH_ENABLED``, ``LIVE_REFRESH_ENABLED``, and
 ``DESK_CAPTURE_ENABLED`` — is off, so no environment auto-mints heavy
 runs or vendor pulls and tests stay deterministic.
+
+Actor eligibility and queue attribution are owned by
+``backend/docs/fx_enforcement_rollout.md`` (Queued and scheduled official runs).
 """
 
 from __future__ import annotations
@@ -158,7 +161,7 @@ def run_tick(session: Session, job: Job) -> None:
 def _enqueue_due_official_runs(
     session: Session, org_id: str, settings: Settings, now: datetime
 ) -> list[str]:
-    """Enqueue an official run for every bank without one since today's cutoff."""
+    """Enqueue an official run for each eligible bank missing today's filing run."""
     enqueued: list[str] = []
     banks = list(session.scalars(select(Bank).where(Bank.organization_id == org_id)))
     for bank in banks:
