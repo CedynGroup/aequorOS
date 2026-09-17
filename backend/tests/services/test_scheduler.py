@@ -269,7 +269,9 @@ def test_scheduled_fx_without_authorized_principal_denies_closed(
     records = []
     sink_id = logger.add(lambda message: records.append(message.record["extra"]))
     try:
-        enqueued = scheduler._enqueue_due_official_runs(db_session, ORG_1, get_settings(), utc_now())
+        enqueued = scheduler._enqueue_due_official_runs(
+            db_session, ORG_1, get_settings(), utc_now()
+        )
     finally:
         logger.remove(sink_id)
 
