@@ -109,6 +109,7 @@ export default function BatchDetailPage({
   return (
     <>
       <PageHeader
+        eyebrow="Data Engine"
         breadcrumbs={[
           { label: 'Data Engine', href: '/data-engine' },
           { label: 'Batches', href: '/data-engine' },
