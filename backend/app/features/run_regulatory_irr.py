@@ -92,7 +92,7 @@ def get_irr_dashboard(
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> IrrDashboardRead:
-    scoped_authorization.require_bank_permission(
+    bank = scoped_authorization.require_bank_permission_prefetched(
         db,
         ctx,
         bank_id,
@@ -102,4 +102,10 @@ def get_irr_dashboard(
         surface="irrbb_dashboard",
         denial_detail="IRRBB access requires an active scoped binding.",
     )
-    return regulatory_irr.get_irr_dashboard(db, ctx, bank_id, reporting_period_id)
+    return regulatory_irr.get_irr_dashboard(
+        db,
+        ctx,
+        bank.id,
+        reporting_period_id,
+        resolved_bank=bank,
+    )

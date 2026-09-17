@@ -19,7 +19,7 @@ from app.core.authorization import (
 )
 from app.db.session import get_sessionmaker
 from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric, User
-from app.services import authorization, job_queue, pipeline
+from app.services import authorization, job_queue, module_scope, pipeline
 from tests.adapters.excel_csv import fixtures
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_ingestion import FULL_MAPPING, activate_mapping, seed_bank, start_batch
@@ -228,6 +228,7 @@ def test_mint_official_run_enqueues(db_client: TestClient) -> None:
         assert bank is not None
         bank.institution_type = "savings_and_loans"
         session.commit()
+        assert module_scope.runs_module(session, bank, "irr")
         authorization.create_role_binding(
             session,
             organization_id=ORG_1,

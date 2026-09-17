@@ -313,7 +313,7 @@ def test_t7_evaluator_failure_denies_closed_with_telemetry(
     def fail_evaluation(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("evaluator unavailable")
 
-    monkeypatch.setattr(authorization, "evaluate_permission", fail_evaluation)
+    monkeypatch.setattr(authorization, "evaluate_prefetched_permission", fail_evaluation)
     records, sink_id = _capture_binding_records()
     try:
         response = _dashboard(db_client, version)
