@@ -234,8 +234,10 @@ Before deployment, attach:
 Generic regulatory-run summaries project enterprise FX results using aggregated
 FX view; generic details and enterprise latest/detail use confidential FX view.
 Without the matching permission, responses omit the FX outcome, FX plan and
-scenario inputs, and the Appendix II country/FX charge and totals that expose
-that charge. Non-FX results remain visible, including capital and liquidity
+scenario inputs, Appendix II Table 6 FX risk-driver rows, and the country/FX
+charge. Dependent totals are omitted only for rows with a non-null FX charge;
+rows with null charges retain their totals, including runs with FX excluded.
+Non-FX risk-driver rows and results remain visible, including capital and liquidity
 outcomes, projections, and other Appendix II fields. Every valid enterprise run
 contains these non-FX results, so its registry entry and count remain visible.
 Projection changes response copies only; immutable stored inputs, metrics, and

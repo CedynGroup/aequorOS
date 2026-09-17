@@ -433,10 +433,12 @@ def test_a_car_target_below_the_governed_floor_is_refused(db_client: TestClient)
     assert details["details"]["governed_car_min_pct"] == "13"
 
 
+@pytest.mark.parametrize("include_fx", [True, False])
 @pytest.mark.parametrize("fx_sensitivity", [None, "aggregated", "confidential"])
 def test_enterprise_readers_project_fx_without_hiding_non_fx(
     db_client: TestClient,
     fx_sensitivity: str | None,
+    include_fx: bool,
 ) -> None:
     from copy import deepcopy
 
@@ -457,6 +459,7 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
             "scenario_id": scenario_id,
             "reporting_period_id": period_id,
             "reason": "Verify enterprise result visibility",
+            "include_fx": include_fx,
         },
     )
     assert created.status_code == 201, created.text
@@ -466,7 +469,14 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
         assert stored is not None
         original_metrics = deepcopy(stored.metrics)
         original_inputs = deepcopy(stored.inputs)
-        assert original_metrics["outcome"]["fx"]
+        assert bool(original_metrics["outcome"].get("fx")) == include_fx
+        original_rows = original_metrics["appendix_ii"]["table5_rwa"]["rows"]
+        assert any(row["pillar2"]["country_and_fx"] is None for row in original_rows)
+        assert (
+            any(row["pillar2"]["country_and_fx"] is not None for row in original_rows) == include_fx
+        )
+        original_drivers = original_metrics["appendix_ii"]["table6_risk_drivers"]["rows"]
+        assert any(row["variable"] == "fx_usd_ghs" for row in original_drivers)
         session.execute(
             delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
         )
@@ -506,15 +516,19 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
         assert metrics["outcome"]["liquidity"] == original_metrics["outcome"]["liquidity"]
         assert metrics["projection"] == original_metrics["projection"]
         if visible:
-            assert metrics["outcome"]["fx"] == original_metrics["outcome"]["fx"]
+            assert metrics["outcome"] == original_metrics["outcome"]
             assert metrics["appendix_ii"] == original_metrics["appendix_ii"]
         else:
             assert "fx" not in metrics["outcome"]
-            for row in metrics["appendix_ii"]["table5_rwa"]["rows"]:
-                assert "country_and_fx" not in row["pillar2"]
-                assert "total" not in row["pillar2"]
-                assert "total_capital_requirement" not in row
-                assert "pillar1_requirement" in row
+            assert metrics["appendix_ii"]["table6_risk_drivers"]["rows"] == [
+                row for row in original_drivers if row["variable"] != "fx_usd_ghs"
+            ]
+            expected_rows = deepcopy(original_rows)
+            for row in expected_rows:
+                if row["pillar2"].pop("country_and_fx") is not None:
+                    del row["pillar2"]["total"]
+                    del row["total_capital_requirement"]
+            assert metrics["appendix_ii"]["table5_rwa"]["rows"] == expected_rows
     if fx_sensitivity != "confidential":
         visible_inputs = generic.json()["inputs"]
         assert "fx_depreciation_pct" not in visible_inputs["plan"]

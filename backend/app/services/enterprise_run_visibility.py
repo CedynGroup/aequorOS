@@ -41,10 +41,14 @@ def project_response(
     outcome.pop("fx", None)
     for row in metrics.get("appendix_ii", {}).get("table5_rwa", {}).get("rows", []):
         pillar2 = row.get("pillar2", {})
-        if "country_and_fx" in pillar2:
-            pillar2.pop("country_and_fx", None)
+        if pillar2.pop("country_and_fx", None) is not None:
             pillar2.pop("total", None)
             row.pop("total_capital_requirement", None)
+    risk_drivers = metrics.get("appendix_ii", {}).get("table6_risk_drivers", {})
+    if "rows" in risk_drivers:
+        risk_drivers["rows"] = [
+            row for row in risk_drivers["rows"] if row.get("variable") != "fx_usd_ghs"
+        ]
     metrics.get("plan_provenance", {}).get("fields", {}).pop("fx_depreciation_pct", None)
     defaults = metrics.get("plan_provenance", {}).get("platform_default_fields")
     if isinstance(defaults, list):
