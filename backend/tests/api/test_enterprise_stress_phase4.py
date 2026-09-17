@@ -153,28 +153,70 @@ def _seed_canonical_positions(bank_id: str) -> None:
             )
 
         # Connected corporate group (two loans sharing GRP-1).
-        position("LOAN/CORP1", "LOAN", "GHS", balance="100000000",
-                 balance_ghs="100000000", stage=1, product=corp_product, counterparty=corporate)
-        position("LOAN/CORP2", "LOAN", "GHS", balance="40000000",
-                 balance_ghs="40000000", stage=1, product=corp_product, counterparty=corporate)
+        position(
+            "LOAN/CORP1",
+            "LOAN",
+            "GHS",
+            balance="100000000",
+            balance_ghs="100000000",
+            stage=1,
+            product=corp_product,
+            counterparty=corporate,
+        )
+        position(
+            "LOAN/CORP2",
+            "LOAN",
+            "GHS",
+            balance="40000000",
+            balance_ghs="40000000",
+            stage=1,
+            product=corp_product,
+            counterparty=corporate,
+        )
         # Foreign-currency corporate loan (FX revaluation channel).
-        position("LOAN/USD", "LOAN", "USD", balance="2000000",
-                 balance_ghs="30000000", stage=1, product=corp_product, counterparty=corporate)
+        position(
+            "LOAN/USD",
+            "LOAN",
+            "USD",
+            balance="2000000",
+            balance_ghs="30000000",
+            stage=1,
+            product=corp_product,
+            counterparty=corporate,
+        )
         # Interbank placement (banks CRD class). No product register row, so the
         # risk-weight code rides on the snapshot attribute — the other of the two
         # paths ``_exposure_risk_weight`` reads. RW50 is the Capital Requirements
         # Directive weight for a claim on an UNRATED bank (¶123, and the ¶123
         # table's "Unrated" column); the peer is a Ghanaian bank with no external
         # credit assessment on the fixture.
-        position("IBP/PEER", "INTERBANK_PLACEMENT", "GHS", balance="20000000",
-                 balance_ghs="20000000", counterparty=peer_bank,
-                 extra={"risk_weight_code": "RW50"})
+        position(
+            "IBP/PEER",
+            "INTERBANK_PLACEMENT",
+            "GHS",
+            balance="20000000",
+            balance_ghs="20000000",
+            counterparty=peer_bank,
+            extra={"risk_weight_code": "RW50"},
+        )
         # A deposit funder (funding-source concentration).
-        position("DEP/BIG", "DEPOSIT", "GHS", balance="60000000",
-                 balance_ghs="60000000", counterparty=corporate)
+        position(
+            "DEP/BIG",
+            "DEPOSIT",
+            "GHS",
+            balance="60000000",
+            balance_ghs="60000000",
+            counterparty=corporate,
+        )
         # A derivative (contingent leverage).
-        position("DRV/1", "DERIVATIVE", "GHS", balance="0", notional="50000000",
-                 extra={"notional_ghs": "50000000"})
+        position(
+            "DRV/1",
+            "DERIVATIVE",
+            "GHS",
+            balance="0",
+            notional="50000000",
+            extra={"notional_ghs": "50000000"},
+        )
         session.commit()
     finally:
         session.close()

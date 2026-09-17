@@ -68,8 +68,12 @@ def _severe_paths() -> list[dict]:
     for variable, (base, stress) in levels.items():
         for year in (1, 2, 3):
             paths.append(
-                {"variable": variable, "year_index": year, "base_value": base,
-                 "stress_value": stress}
+                {
+                    "variable": variable,
+                    "year_index": year,
+                    "base_value": base,
+                    "stress_value": stress,
+                }
             )
     return paths
 

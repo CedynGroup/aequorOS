@@ -5,13 +5,23 @@ import path from "node:path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import { E2E_ORG_ID, E2E_USERS, mintBackendToken } from "../e2e/support/mint";
 
-test("queued and scheduled workers persist authorized FX runs", async ({ request }) => {
+test("queued and scheduled workers persist authorized FX runs", async ({
+  request,
+}) => {
   test.setTimeout(120_000);
   const api = `${E2E_API_ORIGIN}/api/v1/banks/BK-SAMP0001`;
-  const headers = { Authorization: `Bearer ${await mintBackendToken("admin")}` };
-  const periods = await (await request.get(`${api}/reporting-periods`, { headers })).json();
+  const headers = {
+    Authorization: `Bearer ${await mintBackendToken("admin")}`,
+  };
+  const periods = await (
+    await request.get(`${api}/reporting-periods`, { headers })
+  ).json();
   const queued = await request.post(`${api}/official-runs`, {
-    headers, data: { as_of_date: periods.periods[0].period_end, reason: "Live worker authorization" },
+    headers,
+    data: {
+      as_of_date: periods.periods[0].period_end,
+      reason: "Live worker authorization",
+    },
   });
   expect(queued.status(), await queued.text()).toBe(202);
   const queuedBody = await queued.json();
@@ -40,13 +50,32 @@ with get_worker_sessionmaker()() as session:
     assert all(j.status == "succeeded" for j in jobs)
 `;
   const output = execFileSync("uv", ["run", "python", "-c", script], {
-    cwd: path.resolve(__dirname, "../.."), encoding: "utf8", timeout: 90_000,
-    env: { ...process.env, DATABASE_URL: `sqlite+pysqlite:///${path.join(E2E_TMP, "e2e.db")}`, WORKER_DATABASE_URL: "", APP_ENV: "test", RUN_INPROCESS_WORKER: "0", OFFICIAL_RUN_ENABLED: "1", OFFICIAL_RUN_HOUR: "23" },
+    cwd: path.resolve(__dirname, "../.."),
+    encoding: "utf8",
+    timeout: 90_000,
+    env: {
+      ...process.env,
+      DATABASE_URL: `sqlite+pysqlite:///${path.join(E2E_TMP, "e2e.db")}`,
+      WORKER_DATABASE_URL: "",
+      APP_ENV: "test",
+      RUN_INPROCESS_WORKER: "0",
+      OFFICIAL_RUN_ENABLED: "1",
+      OFFICIAL_RUN_HOUR: "23",
+    },
   });
-  const response = await request.get(`${api}/regulatory-runs?module=fx&limit=100`, { headers });
+  const response = await request.get(
+    `${api}/regulatory-runs?module=fx&limit=100`,
+    { headers },
+  );
   expect(response.status()).toBe(200);
   const runs = await response.json();
   expect(runs.total).toBeGreaterThan(0);
-  expect(runs.runs.every((run: { status: string }) => run.status === "succeeded")).toBeTruthy();
-  if (process.env.E2E_EVIDENCE_DIR) writeFileSync(path.join(process.env.E2E_EVIDENCE_DIR, "fx-live-worker.json"), JSON.stringify({ queued: queuedBody, worker: output, runs }, null, 2));
+  expect(
+    runs.runs.every((run: { status: string }) => run.status === "succeeded"),
+  ).toBeTruthy();
+  if (process.env.E2E_EVIDENCE_DIR)
+    writeFileSync(
+      path.join(process.env.E2E_EVIDENCE_DIR, "fx-live-worker.json"),
+      JSON.stringify({ queued: queuedBody, worker: output, runs }, null, 2),
+    );
 });

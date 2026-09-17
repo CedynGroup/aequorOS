@@ -92,9 +92,7 @@ def test_signoff_maker_checker_lifecycle(db_client: TestClient) -> None:
     signoff_id = _create_signoff(db_client, bank_id, run_id)
 
     # Draft carries the run's headline outcome captured at prepare time.
-    got = db_client.get(
-        SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}", headers=headers()
-    )
+    got = db_client.get(SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}", headers=headers())
     assert got.status_code == 200
     assert got.json()["status"] == "draft"
     assert got.json()["stays_above_all_minima"] in (True, False)
