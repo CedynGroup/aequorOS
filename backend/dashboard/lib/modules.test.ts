@@ -27,6 +27,7 @@ const resolved = (
     "institution",
     "reports",
     "settings",
+    "irrbb",
   ]),
   modules: new Set([
     "command_center",

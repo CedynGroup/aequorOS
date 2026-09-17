@@ -357,14 +357,14 @@ def run_analysis(
 ) -> AnalysisRunRead:
     """Compute the requested scenarios side by side. Writes nothing."""
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario_workbench_authorization.require_liquidity_permission(
+    scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
         bank,
         module,
         permission=Permission.RUN,
         sensitivity=Sensitivity.CONFIDENTIAL,
-        surface="liquidity_scenario_analysis_run",
+        surface=scenario_workbench_authorization.surface(module, "scenario_analysis_run"),
     )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     resolved = [_resolve_ref(db, ctx, bank, module, period, ref) for ref in payload.scenarios]
@@ -420,14 +420,14 @@ def save_analysis(
 ) -> SavedAnalysisRead:
     """Recompute server-side and snapshot — clients never supply numbers."""
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario_workbench_authorization.require_liquidity_permission(
+    scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
         bank,
         module,
         permission=Permission.CREATE,
         sensitivity=Sensitivity.CONFIDENTIAL,
-        surface="liquidity_scenario_analysis_save",
+        surface=scenario_workbench_authorization.surface(module, "scenario_analysis_save"),
     )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     resolved = [_resolve_ref(db, ctx, bank, module, period, ref) for ref in payload.scenarios]
@@ -476,14 +476,14 @@ def list_analyses(  # noqa: PLR0913 - one read carries its full scoping
     offset: int = 0,
 ) -> SavedAnalysisListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario_workbench_authorization.require_liquidity_permission(
+    scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
         bank,
         module,
         permission=Permission.VIEW,
-        sensitivity=Sensitivity.AGGREGATED,
-        surface="liquidity_scenario_analysis_list",
+        sensitivity=scenario_workbench_authorization.saved_analysis_list_sensitivity(module),
+        surface=scenario_workbench_authorization.surface(module, "scenario_analysis_list"),
     )
     conditions = [
         SavedScenarioAnalysis.organization_id == ctx.organization_id,
@@ -509,14 +509,14 @@ def get_analysis(
     db: Session, ctx: TenantContext, bank_id: str, module: WorkbenchModule, analysis_id: UUID
 ) -> SavedAnalysisRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario_workbench_authorization.require_liquidity_permission(
+    scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
         bank,
         module,
         permission=Permission.VIEW,
         sensitivity=Sensitivity.CONFIDENTIAL,
-        surface="liquidity_scenario_analysis_detail",
+        surface=scenario_workbench_authorization.surface(module, "scenario_analysis_detail"),
         denial_status=status.HTTP_404_NOT_FOUND,
         denial_detail="Analysis not found.",
     )
@@ -537,14 +537,14 @@ def delete_analysis(
     db: Session, ctx: TenantContext, bank_id: str, module: WorkbenchModule, analysis_id: UUID
 ) -> None:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario_workbench_authorization.require_liquidity_permission(
+    scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
         bank,
         module,
         permission=Permission.EDIT,
         sensitivity=Sensitivity.CONFIDENTIAL,
-        surface="liquidity_scenario_analysis_delete",
+        surface=scenario_workbench_authorization.surface(module, "scenario_analysis_delete"),
     )
     row = db.scalar(
         select(SavedScenarioAnalysis).where(

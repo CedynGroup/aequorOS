@@ -50,7 +50,7 @@ test.describe("IRRBB reader without run permission", () => {
     await runButton.locator("..").hover();
     await expect(
       page.getByRole("tooltip", {
-        name: /Requires IRRBB run permission for confidential data/i,
+        name: /Requires IRRBB · Confidential · Run/i,
       }),
     ).toBeVisible();
 

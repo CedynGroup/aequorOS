@@ -93,14 +93,14 @@ def list_catalogue(  # noqa: PLR0913 - one read carries its full scoping
     include_archived: bool = False,
 ) -> ScenarioCatalogueRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario_workbench_authorization.require_liquidity_permission(
+    scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
         bank,
         module,
         permission=Permission.VIEW,
         sensitivity=Sensitivity.CONFIDENTIAL,
-        surface="liquidity_scenario_catalogue",
+        surface=scenario_workbench_authorization.surface(module, "scenario_catalogue"),
     )
     as_of = date.today()  # noqa: DTZ011 - date-only business resolution
     if reporting_period_id is not None:
@@ -174,14 +174,14 @@ def create_scenario(
     payload: StressScenarioCreate,
 ) -> StressScenarioRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario_workbench_authorization.require_liquidity_permission(
+    scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
         bank,
         module,
         permission=Permission.CREATE,
         sensitivity=Sensitivity.CONFIDENTIAL,
-        surface="liquidity_scenario_create",
+        surface=scenario_workbench_authorization.surface(module, "scenario_create"),
     )
     system_codes = {definition.code for definition in SYSTEM_SCENARIOS[module]}
     if payload.code in system_codes:
@@ -236,14 +236,14 @@ def update_scenario(  # noqa: PLR0913 - one write carries its full scoping
     payload: StressScenarioUpdate,
 ) -> StressScenarioRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario_workbench_authorization.require_liquidity_permission(
+    scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
         bank,
         module,
         permission=Permission.EDIT,
         sensitivity=Sensitivity.CONFIDENTIAL,
-        surface="liquidity_scenario_edit",
+        surface=scenario_workbench_authorization.surface(module, "scenario_edit"),
     )
     scenario = _get_scenario_or_404(db, ctx, bank, module, scenario_id)
     if payload.name is not None:
@@ -274,14 +274,14 @@ def set_archived(  # noqa: PLR0913 - one write carries its full scoping
     payload: StressScenarioArchive,
 ) -> StressScenarioRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario_workbench_authorization.require_liquidity_permission(
+    scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
         bank,
         module,
         permission=Permission.EDIT,
         sensitivity=Sensitivity.CONFIDENTIAL,
-        surface="liquidity_scenario_archive",
+        surface=scenario_workbench_authorization.surface(module, "scenario_archive"),
     )
     scenario = _get_scenario_or_404(db, ctx, bank, module, scenario_id)
     scenario.is_archived = payload.is_archived

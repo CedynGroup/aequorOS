@@ -325,6 +325,7 @@ const LIQUIDITY_CONFIDENTIAL_VIEW =
 const RISK_CONFIDENTIAL_VIEW = "Risk & Limits · Confidential · View";
 const IRRBB_AGGREGATED_VIEW = "IRRBB · Aggregated · View";
 const IRRBB_CONFIDENTIAL_VIEW = "IRRBB · Confidential · View";
+const IRRBB_CONFIDENTIAL_RUN = "IRRBB · Confidential · Run";
 
 function permissionReason(permissions: readonly string[]): string | undefined {
   if (permissions.length === 0) return undefined;
@@ -335,6 +336,10 @@ function permissionReason(permissions: readonly string[]): string | undefined {
   const pronoun = permissions.length === 1 ? "it" : "them";
   return `Requires ${required}. Ask your organization owner or admin to grant ${pronoun}.`;
 }
+
+export const IRRBB_CONFIDENTIAL_RUN_REASON = permissionReason([
+  IRRBB_CONFIDENTIAL_RUN,
+])!;
 
 function liquidityPermissionReason(
   path: string,

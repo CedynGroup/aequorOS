@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from loguru import logger
 from sqlalchemy import delete, func, select
 
+from app.api.deps import TenantContext
 from app.core.authorization import (
     BindingStatus,
     GrantorType,
@@ -22,14 +23,26 @@ from app.core.authorization import (
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
-from app.models import AuthorizationBinding, Bank, BankReportingPeriod, RegulatoryRun, User
-from app.services import authorization, regulatory_irr
+from app.models import (
+    AuthorizationBinding,
+    Bank,
+    BankReportingPeriod,
+    RegulatoryRun,
+    SavedScenarioAnalysis,
+    StressScenario,
+    User,
+)
+from app.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.services import analysis_workbench, authorization, regulatory_capital, regulatory_irr
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/irr"
+WORKBENCH_BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/scenario-workbench/irr"
+REGULATORY_RUNS_BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs"
 SIBLING_BANK_ID = "BK-IRR00002"
+CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 
 
 @pytest.fixture(autouse=True)
@@ -356,3 +369,242 @@ def test_confidential_analyst_binding_allows_compute_only_analysis(
     )
     assert response.status_code == 200, response.text
     assert _dashboard(db_client, version).status_code == 403
+
+
+def test_scenario_workbench_requires_exact_permission_per_operation(
+    db_client: TestClient,
+) -> None:
+    period_id = _seed_book()
+
+    denied_catalogue = db_client.get(
+        f"{WORKBENCH_BASE}/scenarios",
+        headers=_auth(),
+    )
+    denied_run = db_client.post(
+        f"{WORKBENCH_BASE}/analysis",
+        headers=_auth(),
+        json={
+            "reporting_period_id": str(period_id),
+            "scenarios": [{"kind": "system", "code": "baseline"}],
+        },
+    )
+    assert denied_catalogue.status_code == 403
+    assert denied_run.status_code == 403
+
+    _, viewer_version = _grant(
+        RoleBundle.VIEWER,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+    catalogue = db_client.get(
+        f"{WORKBENCH_BASE}/scenarios",
+        headers=_auth(viewer_version, "admin"),
+    )
+    denied_create = db_client.post(
+        f"{WORKBENCH_BASE}/scenarios",
+        headers=_auth(viewer_version, "admin"),
+        json={
+            "code": "desk_parallel_up",
+            "name": "Desk parallel up",
+            "shocks": {"parallel_bp": 100},
+        },
+    )
+    assert catalogue.status_code == 200, catalogue.text
+    assert denied_create.status_code == 403
+
+    _, analyst_version = _grant(
+        RoleBundle.ANALYST,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+    created = db_client.post(
+        f"{WORKBENCH_BASE}/scenarios",
+        headers=_auth(analyst_version, "viewer"),
+        json={
+            "code": "desk_parallel_up",
+            "name": "Desk parallel up",
+            "shocks": {"parallel_bp": 100},
+        },
+    )
+    assert created.status_code == 201, created.text
+    scenario_id = created.json()["id"]
+
+    updated = db_client.patch(
+        f"{WORKBENCH_BASE}/scenarios/{scenario_id}",
+        headers=_auth(analyst_version, "viewer"),
+        json={"name": "Desk parallel up revised"},
+    )
+    archived = db_client.post(
+        f"{WORKBENCH_BASE}/scenarios/{scenario_id}/archive",
+        headers=_auth(analyst_version, "viewer"),
+        json={"is_archived": True},
+    )
+    run = db_client.post(
+        f"{WORKBENCH_BASE}/analysis",
+        headers=_auth(analyst_version, "viewer"),
+        json={
+            "reporting_period_id": str(period_id),
+            "scenarios": [{"kind": "system", "code": "baseline"}],
+        },
+    )
+    saved = db_client.post(
+        f"{WORKBENCH_BASE}/analyses",
+        headers=_auth(analyst_version, "viewer"),
+        json={
+            "reporting_period_id": str(period_id),
+            "name": "IRRBB baseline review",
+            "scenarios": [{"kind": "system", "code": "baseline"}],
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert archived.status_code == 200, archived.text
+    assert run.status_code == 200, run.text
+    assert saved.status_code == 201, saved.text
+    analysis_id = saved.json()["id"]
+
+    listed = db_client.get(
+        f"{WORKBENCH_BASE}/analyses",
+        headers=_auth(analyst_version, "viewer"),
+    )
+    detail = db_client.get(
+        f"{WORKBENCH_BASE}/analyses/{analysis_id}",
+        headers=_auth(analyst_version, "viewer"),
+    )
+    deleted = db_client.delete(
+        f"{WORKBENCH_BASE}/analyses/{analysis_id}",
+        headers=_auth(analyst_version, "viewer"),
+    )
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["total"] == 1
+    assert detail.status_code == 200, detail.text
+    assert deleted.status_code == 204, deleted.text
+
+
+def test_workbench_denial_precedes_engine_and_persistence(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    period_id = _seed_book()
+    engine_called = False
+
+    def forbidden_compute(*_args: object, **_kwargs: object) -> None:
+        nonlocal engine_called
+        engine_called = True
+        raise AssertionError("Unauthorized IRRBB workbench computation")
+
+    monkeypatch.setattr(analysis_workbench, "_compute_one", forbidden_compute)
+    session = get_sessionmaker()()
+    try:
+        before = (
+            session.scalar(select(func.count()).select_from(StressScenario)) or 0,
+            session.scalar(select(func.count()).select_from(SavedScenarioAnalysis)) or 0,
+        )
+    finally:
+        session.close()
+
+    denied_create = db_client.post(
+        f"{WORKBENCH_BASE}/scenarios",
+        headers=_auth(),
+        json={
+            "code": "must_not_persist",
+            "name": "Must not persist",
+            "shocks": {"parallel_bp": 100},
+        },
+    )
+    denied_save = db_client.post(
+        f"{WORKBENCH_BASE}/analyses",
+        headers=_auth(),
+        json={
+            "reporting_period_id": str(period_id),
+            "name": "Must not persist",
+            "scenarios": [{"kind": "system", "code": "baseline"}],
+        },
+    )
+    assert denied_create.status_code == 403
+    assert denied_save.status_code == 403
+    assert engine_called is False
+
+    session = get_sessionmaker()()
+    try:
+        after = (
+            session.scalar(select(func.count()).select_from(StressScenario)) or 0,
+            session.scalar(select(func.count()).select_from(SavedScenarioAnalysis)) or 0,
+        )
+    finally:
+        session.close()
+    assert after == before
+
+
+def test_regulatory_registry_filters_irrbb_before_count_and_page(
+    db_client: TestClient,
+) -> None:
+    period_id = _seed_book()
+    session = get_sessionmaker()()
+    try:
+        regulatory_irr.create_irr_run(
+            session,
+            CTX,
+            SAMPLE_BANK_ID,
+            RegulatoryRunCreate.model_construct(
+                module="irr",
+                reporting_period_id=period_id,
+                scenario_code="baseline",
+            ),
+        )
+        regulatory_capital.create_capital_run(
+            session,
+            CTX,
+            SAMPLE_BANK_ID,
+            RegulatoryRunCreate(
+                module="capital",
+                reporting_period_id=period_id,
+                scenario_code="baseline",
+            ),
+        )
+    finally:
+        session.close()
+    _, version = _grant(
+        RoleBundle.VIEWER,
+        module=ModuleScope.CAPITAL,
+        sensitivity=SensitivityScope.AGGREGATED,
+    )
+
+    response = db_client.get(
+        REGULATORY_RUNS_BASE,
+        headers=_auth(version, "admin"),
+        params={"limit": 1, "offset": 0},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["total"] == 1
+    assert [run["module"] for run in response.json()["runs"]] == ["capital"]
+
+
+def test_irrbb_regulatory_run_detail_is_hidden_without_confidential_view(
+    db_client: TestClient,
+) -> None:
+    period_id = _seed_book()
+    session = get_sessionmaker()()
+    try:
+        run = regulatory_irr.create_irr_run(
+            session,
+            CTX,
+            SAMPLE_BANK_ID,
+            RegulatoryRunCreate.model_construct(
+                module="irr",
+                reporting_period_id=period_id,
+                scenario_code="baseline",
+            ),
+        )
+    finally:
+        session.close()
+    _, version = _grant(
+        RoleBundle.VIEWER,
+        sensitivity=SensitivityScope.AGGREGATED,
+    )
+
+    response = db_client.get(
+        f"{REGULATORY_RUNS_BASE}/{run.id}",
+        headers=_auth(version, "viewer"),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["message"] == "Regulatory run not found."

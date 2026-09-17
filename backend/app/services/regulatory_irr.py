@@ -113,7 +113,9 @@ from app.services.live_types import (
 )
 from app.services.market_data import CurveView
 from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
-from app.services.regulatory_liquidity import get_regulatory_run
+from app.services.regulatory_liquidity import (  # noqa: PLC2701 - engine completion read
+    _read_regulatory_run_execution_result,
+)
 
 ENGINE_VERSION = "regulatory-irr-v1.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
@@ -374,7 +376,7 @@ def _create_and_execute(
             ),
         )
     db.expire_all()
-    return get_regulatory_run(db, ctx, bank.id, run_id)
+    return _read_regulatory_run_execution_result(db, ctx, bank, run_id)
 
 
 def _run_analysis(  # noqa: PLR0913

@@ -19,7 +19,7 @@ import IrrWorkspace from "@/components/irr/IrrWorkspace";
 import TornadoChart from "@/components/irr/charts/TornadoChart";
 import { scenarioDescription, scenarioLabel } from "@/components/irr/scenarios";
 import DataTable, { type Column } from "@/components/ui/DataTable";
-import DisabledWithReason from "@/components/ui/DisabledWithReason";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import KpiStat from "@/components/ui/KpiStat";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import SectionCard from "@/components/ui/SectionCard";
@@ -27,6 +27,7 @@ import StatusPill from "@/components/ui/StatusPill";
 import ValidationList from "@/components/ui/ValidationList";
 import { num } from "@/lib/api/values";
 import { fmtCurrency, fmtCurrencySigned, fmtPct } from "@/lib/format";
+import { IRRBB_CONFIDENTIAL_RUN_REASON } from "@/lib/modules";
 
 /** Desk-selectable EaR horizons; 12 months is the regulatory figure. */
 const DESK_HORIZONS_MONTHS = [3, 6, 12, 24] as const;
@@ -214,7 +215,7 @@ function EarSection({
   periodId: string | undefined;
 }) {
   const moduleScope = useModuleScope();
-  const canRun = moduleScope.irrbbRunAccess === true;
+  const canRun = moduleScope.irrbbRun === true;
   const [horizonMonths, setHorizonMonths] = useState<number>(
     REGULATORY_HORIZON_MONTHS,
   );
@@ -229,6 +230,26 @@ function EarSection({
 
   const earUp = num(m.earUp200Ghs);
   const earDown = num(m.earDown200Ghs);
+  const horizonControl = (descriptionId?: string) => (
+    <label className="inline-flex items-center gap-2 text-caption text-slate">
+      Desk horizon
+      <select
+        value={horizonMonths}
+        onChange={(e) => setHorizonMonths(Number(e.target.value))}
+        aria-label="Desk EaR horizon in months"
+        aria-describedby={descriptionId}
+        disabled={!canRun}
+        className="px-2.5 py-1.5 text-caption font-medium text-navy border border-border rounded-md bg-surface-raised hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {DESK_HORIZONS_MONTHS.map((months) => (
+          <option key={months} value={months}>
+            {months} months
+            {months === REGULATORY_HORIZON_MONTHS ? " (regulatory)" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 
   return (
     <SectionCard
@@ -237,28 +258,13 @@ function EarSection({
       noPadding
       computedAt={computedAt}
       actions={
-        <DisabledWithReason
-          disabled={!canRun}
-          reason="Requires IRRBB run permission for confidential data. An Organization Owner can grant an Analyst IRRBB binding."
-        >
-          <label className="inline-flex items-center gap-2 text-caption text-slate">
-            Desk horizon
-            <select
-              value={horizonMonths}
-              onChange={(e) => setHorizonMonths(Number(e.target.value))}
-              aria-label="Desk EaR horizon in months"
-              disabled={!canRun}
-              className="px-2.5 py-1.5 text-caption font-medium text-navy border border-border rounded-md bg-surface-raised hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {DESK_HORIZONS_MONTHS.map((months) => (
-                <option key={months} value={months}>
-                  {months} months
-                  {months === REGULATORY_HORIZON_MONTHS ? " (regulatory)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-        </DisabledWithReason>
+        canRun ? (
+          horizonControl()
+        ) : (
+          <DisabledWithReason reason={IRRBB_CONFIDENTIAL_RUN_REASON}>
+            {(descriptionId) => horizonControl(descriptionId)}
+          </DisabledWithReason>
+        )
       }
     >
       <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">

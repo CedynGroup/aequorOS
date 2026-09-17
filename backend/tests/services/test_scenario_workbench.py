@@ -82,7 +82,11 @@ def _system_refs(*codes: str) -> list[ScenarioRefIn]:
     return [ScenarioRefIn(kind="system", code=code) for code in codes]
 
 
-def _grant_liquidity_analyst(db: Session) -> None:
+def _grant_analyst(
+    db: Session,
+    module: ModuleScope = ModuleScope.LIQUIDITY,
+    sensitivity: SensitivityScope = SensitivityScope.ALL,
+) -> None:
     authorization.create_role_binding(
         db,
         organization_id=DEMO_ORG_ID,
@@ -92,17 +96,17 @@ def _grant_liquidity_analyst(db: Session) -> None:
         scope=authorization.BindingScope(
             InstitutionScope.INSTITUTION,
             SAMPLE_BANK_ID,
-            ModuleScope.LIQUIDITY,
-            SensitivityScope.ALL,
+            module,
+            sensitivity,
         ),
         grantor=authorization.GrantorRef(GrantorType.SYSTEM, "scenario-test"),
-        reason="exercise the Liquidity scenario workbench with exact authority",
+        reason=f"exercise the {module.value} scenario workbench with exact authority",
     )
 
 
 def test_catalogue_merges_system_and_custom_with_vocabulary(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
-    _grant_liquidity_analyst(db_session)
+    _grant_analyst(db_session)
     period_id = _period_id(db_session)
 
     catalogue = stress_scenarios.list_catalogue(
@@ -138,7 +142,7 @@ def test_catalogue_merges_system_and_custom_with_vocabulary(db_session: Session)
 
 def test_custom_scenario_crud_guards(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
-    _grant_liquidity_analyst(db_session)
+    _grant_analyst(db_session)
 
     # System codes are reserved.
     with pytest.raises(HTTPException) as excinfo:
@@ -227,7 +231,7 @@ def test_custom_scenario_crud_guards(db_session: Session) -> None:
 def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session) -> None:
     """The keystone: workbench numbers == official-run numbers, no run rows."""
     materialize_canonical_test_book(db_session)
-    _grant_liquidity_analyst(db_session)
+    _grant_analyst(db_session)
     period_id = _period_id(db_session)
 
     # Official immutable runs (the governance path).
@@ -291,6 +295,11 @@ def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session)
         assert result.metrics["car_pct"] == expected["car_pct"], result.code
 
     # IRR / FX / FTP adapters run clean over the seeded book.
+    _grant_analyst(
+        db_session,
+        ModuleScope.IRRBB,
+        SensitivityScope.CONFIDENTIAL,
+    )
     adapter_cases: tuple[tuple[WorkbenchModule, tuple[str, str]], ...] = (
         ("irr", ("baseline", "parallel_up_200")),
         ("fx", ("baseline", "severe_depreciation")),
@@ -312,7 +321,7 @@ def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session)
 
 def test_overrides_failures_as_data_and_saved_analyses(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
-    _grant_liquidity_analyst(db_session)
+    _grant_analyst(db_session)
     period_id = _period_id(db_session)
     runs_before = _run_count(db_session)
 

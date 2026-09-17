@@ -123,6 +123,26 @@ ENGINE_VERSION = "regulatory-liquidity-v2.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v3"
 OUTPUT_SCHEMA_VERSION = "liquidity-metrics-v1"
 MODULE_LIQUIDITY = "liquidity"
+MODULE_IRR = "irr"
+
+
+@dataclass(frozen=True)
+class _RegulatoryRunAuthorizationPolicy:
+    module: Module
+    surface_prefix: str
+
+
+_REGULATORY_RUN_AUTHORIZATION = {
+    MODULE_LIQUIDITY: _RegulatoryRunAuthorizationPolicy(
+        Module.LIQUIDITY,
+        "liquidity",
+    ),
+    MODULE_IRR: _RegulatoryRunAuthorizationPolicy(
+        Module.IRRBB,
+        "irrbb",
+    ),
+}
+
 BASELINE_SCENARIO = "baseline"
 LIQUIDITY_SCENARIO_CODES = (
     "baseline",
@@ -240,18 +260,27 @@ def list_regulatory_runs(  # noqa: PLR0913
         RegulatoryRun.organization_id == ctx.organization_id,
         RegulatoryRun.bank_id == bank.id,
     )
-    if module is None or module == MODULE_LIQUIDITY:
-        liquidity_decision = scoped_authorization.evaluate_bank_permission(
+    protected_modules = (
+        _REGULATORY_RUN_AUTHORIZATION.items()
+        if module is None
+        else (
+            ((module, _REGULATORY_RUN_AUTHORIZATION[module]),)
+            if module in _REGULATORY_RUN_AUTHORIZATION
+            else ()
+        )
+    )
+    for protected_module, policy in protected_modules:
+        decision = scoped_authorization.evaluate_bank_permission(
             db,
             ctx,
             bank,
             permission=Permission.VIEW,
-            module=Module.LIQUIDITY,
+            module=policy.module,
             sensitivity=Sensitivity.AGGREGATED,
-            surface="regulatory_run_list_liquidity",
+            surface=f"regulatory_run_list_{policy.surface_prefix}",
         )
-        if liquidity_decision is None or not liquidity_decision.allowed:
-            conditions += (RegulatoryRun.module != MODULE_LIQUIDITY,)
+        if decision is None or not decision.allowed:
+            conditions += (RegulatoryRun.module != protected_module,)
     if module is not None:
         conditions += (RegulatoryRun.module == module,)
     if reporting_period_id is not None:
@@ -291,19 +320,31 @@ def get_regulatory_run(
 ) -> RegulatoryRunRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     run = _run_or_404(db, ctx, bank.id, run_id)
-    if run.module == MODULE_LIQUIDITY:
+    policy = _REGULATORY_RUN_AUTHORIZATION.get(run.module)
+    if policy is not None:
         scoped_authorization.require_resolved_bank_permission(
             db,
             ctx,
             bank,
             permission=Permission.VIEW,
-            module=Module.LIQUIDITY,
+            module=policy.module,
             sensitivity=Sensitivity.CONFIDENTIAL,
-            surface="regulatory_run_detail_liquidity",
+            surface=f"regulatory_run_detail_{policy.surface_prefix}",
             denial_status=status.HTTP_404_NOT_FOUND,
             denial_detail="Regulatory run not found.",
         )
     return _read_run(db, run)
+
+
+def _read_regulatory_run_execution_result(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    run_id: UUID,
+) -> RegulatoryRunRead:
+    """Read the run just executed by a module service without re-authorizing."""
+
+    return _read_run(db, _run_or_404(db, ctx, bank.id, run_id))
 
 
 def get_liquidity_dashboard(
