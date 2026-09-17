@@ -17,5 +17,5 @@
  * The whole feature is gated on the marker: when it is absent every impersonation
  * code path is a no-op, so the normal tenant login/session/API flow is unchanged.
  */
-export const IMPERSONATION_COOKIE = 'aeq-impersonation';
-export const IMPERSONATION_MARKER_COOKIE = 'aeq-impersonation-active';
+export const IMPERSONATION_COOKIE = "aeq-impersonation";
+export const IMPERSONATION_MARKER_COOKIE = "aeq-impersonation-active";

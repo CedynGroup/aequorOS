@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useId, useMemo } from 'react';
-import { listTenants } from '@/lib/api';
-import { useApi } from '@/lib/use-api';
-import { Field, Input } from '@/components/ui';
+import { useId, useMemo } from "react";
+import { listTenants } from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { Field, Input } from "@/components/ui";
 
 /**
  * Organization picker for the desk cluster. Backed by the operator tenant
@@ -16,9 +16,9 @@ import { Field, Input } from '@/components/ui';
 export function OrgSelect({
   value,
   onChange,
-  label = 'Organization',
+  label = "Organization",
   required = false,
-  className = '',
+  className = "",
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -28,12 +28,15 @@ export function OrgSelect({
 }) {
   const listId = useId();
   const { data } = useApi(() => listTenants(), []);
-  const tenants = data?.tenants ?? [];
+  const tenants = useMemo(() => data?.tenants ?? [], [data?.tenants]);
 
   const matchedName = useMemo(() => {
     const trimmed = value.trim();
     if (!trimmed) return null;
-    return tenants.find((t) => t.organization_id === trimmed)?.organization_name ?? null;
+    return (
+      tenants.find((t) => t.organization_id === trimmed)?.organization_name ??
+      null
+    );
   }, [tenants, value]);
 
   return (
@@ -41,7 +44,12 @@ export function OrgSelect({
       label={label}
       required={required}
       className={className}
-      hint={matchedName ?? (tenants.length > 0 ? 'Start typing to search onboarded institutions.' : undefined)}
+      hint={
+        matchedName ??
+        (tenants.length > 0
+          ? "Start typing to search onboarded institutions."
+          : undefined)
+      }
     >
       <Input
         list={listId}
@@ -56,7 +64,7 @@ export function OrgSelect({
         {tenants.map((t) => (
           <option key={t.organization_id} value={t.organization_id}>
             {t.organization_name}
-            {t.bank_name ? ` — ${t.bank_name}` : ''}
+            {t.bank_name ? ` — ${t.bank_name}` : ""}
           </option>
         ))}
       </datalist>

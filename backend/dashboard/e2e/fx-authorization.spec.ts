@@ -122,9 +122,14 @@ test.describe("FX Reports summary permissions", () => {
     }) => {
       // Resolve the fixture before navigation: an in-flight route.fetch can
       // outlive the document or be continued by unrouteAll during teardown.
-      const response = await page.request.get(`${E2E_API_ORIGIN}/api/v1/auth/me`, {
-        headers: { Authorization: `Bearer ${await mintBackendToken("admin")}` },
-      });
+      const response = await page.request.get(
+        `${E2E_API_ORIGIN}/api/v1/auth/me`,
+        {
+          headers: {
+            Authorization: `Bearer ${await mintBackendToken("admin")}`,
+          },
+        },
+      );
       expect(response.ok()).toBe(true);
       const profile = await response.json();
       profile.effective_authority.organization_capabilities = [];
