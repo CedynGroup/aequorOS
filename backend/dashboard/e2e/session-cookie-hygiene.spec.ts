@@ -145,9 +145,13 @@ test.describe("session cookie hygiene", () => {
 
   test("sign out and account switch stay on the current host", async ({
     page,
+    baseURL,
   }) => {
-    await page.goto("/login");
+    const foreignCallback = new URL("/", baseURL!);
+    foreignCallback.hostname = "localhost";
+    await page.goto(`/login?callbackUrl=${encodeURIComponent(foreignCallback.href)}`);
     await signIn(page, "admin");
+    expect(new URL(page.url()).origin).toBe(new URL(baseURL!).origin);
 
     await page.locator('button[aria-haspopup="menu"]').click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();

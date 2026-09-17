@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import { loginErrorMessage } from './loginErrors';
+import { sessionRedirect } from '../../lib/requestOrigin';
 
 export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean }) {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
       setError(loginErrorMessage(result));
       return;
     }
-    router.push(callbackUrl);
+    router.push(sessionRedirect(callbackUrl, window.location.origin));
     router.refresh();
   }
 

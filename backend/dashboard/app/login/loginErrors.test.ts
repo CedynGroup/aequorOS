@@ -59,3 +59,7 @@ for (const target of ["//attacker.example", "https://attacker.example", "/\\atta
 }
 assert.equal(sessionRedirect("/login?reason=session_ended", origin), `${origin}/login?reason=session_ended`);
 assert.equal(sessionRedirect(`${origin}/settings`, origin), `${origin}/settings`);
+
+assert.equal(sessionRedirect("http://localhost:3001/", origin), origin);
+assert.equal(sessionRedirect("javascript:alert(1)", origin), origin);
+assert.equal(sessionRedirect("/settings?tab=profile#name", origin), `${origin}/settings?tab=profile#name`);

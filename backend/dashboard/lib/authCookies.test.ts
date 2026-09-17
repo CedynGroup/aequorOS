@@ -5,7 +5,6 @@ import {
   cleanAuthResponseCookies,
   expiredAuthSessionCookieHeaders,
   presentAuthSessionCookieNames,
-  sessionCookieGroups,
 } from "./authCookies";
 
 const cookieHeader = [
@@ -19,14 +18,6 @@ const cookieHeader = [
   "__Secure-next-auth.session-token.1=chunked",
   "__Host-next-auth.session-token=host-legacy",
 ].join("; ");
-
-const groups = sessionCookieGroups(cookieHeader);
-assert.equal(groups.length, 6);
-assert.equal(
-  groups.find((group) => group.baseName === "__Secure-authjs.session-token")
-    ?.value,
-  "secure-authjs-chunked",
-);
 
 const names = authSessionCookieNamesToClear(cookieHeader);
 for (const expected of [
@@ -111,3 +102,18 @@ async function checkAuthResponses() {
   }
 }
 void checkAuthResponses().catch((error) => { console.error(error); process.exitCode = 1; });
+
+assert.deepEqual(presentAuthSessionCookieNames(null), []);
+assert.deepEqual(
+  presentAuthSessionCookieNames([
+    "authjs.session-token.9=tail",
+    "authjs.session-token=",
+    "authjs.session-token.0=head",
+    "authjs.session-token.9=duplicate",
+    "authjs.session-token.extra=unrelated",
+    "authjs.session-token.=unrelated",
+    "authjs.session-token-other=unrelated",
+    "authjs.session-token.1",
+  ].join("; ")),
+  ["authjs.session-token.9", "authjs.session-token", "authjs.session-token.0"],
+);
