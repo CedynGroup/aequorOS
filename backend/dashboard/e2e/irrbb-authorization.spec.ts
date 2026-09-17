@@ -7,7 +7,9 @@ import { E2E_TMP } from "../playwright.config";
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
 test.describe("unbound IRRBB user", () => {
-  test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
+  // A baseline-only member redirects to the hub. Use a user with institution
+  // access in another module to exercise the IRRBB-specific denial boundary.
+  test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
   test("hides navigation and 404s the deep link without product queries", async ({
     page,

@@ -20,6 +20,9 @@ test.describe("fresh active member baseline", () => {
     });
 
     await page.goto("/login");
+    // Let initial session requests settle before requesting a sign-in CSRF
+    // token; cold dev compilation can otherwise race their cookie responses.
+    await page.waitForLoadState("networkidle");
     await page
       .getByLabel("Email", { exact: true })
       .fill("e2e.invite_fresh@aequoros.example");
@@ -119,6 +122,12 @@ test.describe("fresh active member baseline", () => {
           "Requires IRRBB · Confidential · View. Ask your organization owner or admin to grant it.",
       }),
     ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "baseline-irrbb-workbench-tooltip.png"),
+        fullPage: true,
+      });
+    }
     await page.keyboard.press("Escape");
     await page.goto("/irr/scenarios");
     await expect(page).toHaveURL(/\/$/);
