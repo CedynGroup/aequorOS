@@ -26,6 +26,7 @@ depends_on = None
 
 _BINDINGS = "authorization_bindings"
 _SYSTEM_GRANTOR = "migration:202609160053"
+_LEGACY_SAFE_TENANT_CONTEXT = "00000000-0000-0000-0000-000000000000"
 _GRANT_REASON = (
     "Baseline membership: allow an active organization member to load the console shell "
     "and use personal self-service without granting institution or product-module authority"
@@ -286,3 +287,7 @@ def downgrade() -> None:
         _BINDINGS,
         _FOUNDATION_BUNDLE_CHECK,
     )
+    # Alembic runs the full downgrade chain in one transaction. This migration
+    # uses platform IDs as the tenant GUC, but pre-epoch RLS policies cast that
+    # GUC to UUID. Leave a valid, non-matching UUID for those older revisions.
+    _set_tenant(bind, _LEGACY_SAFE_TENANT_CONTEXT)

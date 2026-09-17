@@ -226,11 +226,19 @@ def test_backfill_covers_each_active_human_once_and_downgrades_cleanly(
             )
 
     # The shared fixture subsequently downgrades the entire schema to base.
-    # Remove the disposable tenant fixtures before crossing older migrations
-    # that cannot retain service identities or platform-ID tenant contexts.
-    # All downgrade preservation assertions above run before this cleanup.
-    with migrated_postgres_schema.app_engine.begin() as connection:
-        connection.execute(text("TRUNCATE organizations CASCADE"))
+    # Historical auth-provider constraints predate service identities, so
+    # normalize only that synthetic fixture dimension before crossing them.
+    for organization_id in ORGS:
+        with migrated_postgres_schema.app_engine.begin() as connection:
+            _set_tenant(connection, organization_id)
+            connection.execute(
+                text(
+                    "UPDATE users SET auth_provider = 'password' "
+                    "WHERE organization_id = :organization_id "
+                    "AND auth_provider = 'service'"
+                ),
+                {"organization_id": organization_id},
+            )
 
     command.upgrade(config, "head")
     clear_database_caches()
