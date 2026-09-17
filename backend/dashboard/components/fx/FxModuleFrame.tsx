@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Shared chrome for every FX workspace tab: page header with breadcrumbs,
+ * Shared chrome for every FX workspace tab: page header,
  * freshness / run badges, the run-all-scenarios action, the not-yet-stored
  * banner, and the query boundary. Sub-pages receive the loaded dashboard via
  * a render prop so the payload is fetched (and cached) once per query key.

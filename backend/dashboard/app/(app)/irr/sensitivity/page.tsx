@@ -37,9 +37,7 @@ const DESK_DELTA_BP = 200;
 
 export default function IrrSensitivityPage() {
   return (
-    <IrrWorkspace
-      subtitle="Economic value and earnings sensitivity under the Basel IRRBB shock set"
-    >
+    <IrrWorkspace subtitle="Economic value and earnings sensitivity under the Basel IRRBB shock set">
       {({ data, metrics: m, computedAt, bankId, periodId }) => {
         const eveLimit = num(m.eveLimitPct);
         const rows = data.eveScenarios ?? [];
