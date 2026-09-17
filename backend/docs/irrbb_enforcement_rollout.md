@@ -8,6 +8,8 @@ institution, and create each approved binding explicitly before deployment.
 
 | Surface | Required complete binding |
 | --- | --- |
+| IRRBB projections in live summary, snapshots, alerts, and window analytics | IRRBB / `aggregated` / `view` |
+| Activation with calculations and on-demand official runs, when `module_scope.runs_module` includes IRRBB | IRRBB / `confidential` / `run` |
 | IRRBB dashboards and page-level analyses | IRRBB / `aggregated` / `view` |
 | Full IRRBB run detail and saved scenario or analysis detail | IRRBB / `confidential` / `view` |
 | Run all regulatory scenarios, EaR compute-only analysis, and scenario analysis execution | IRRBB / `confidential` / `run` |
@@ -18,6 +20,10 @@ IRRBB run and saved-analysis lists remove unauthorized rows before total counts,
 offsets, and limits. Unauthorized detail IDs return 404. A denied request cannot
 start an engine, create a run, save an analysis, mutate a scenario, or write an
 audit event.
+
+Shared live projections filter IRRBB before serialization, counts, limits, and
+aggregation. Mixed execution retains its existing gates and checks IRRBB only
+when planned; internal scheduled execution is unchanged.
 
 No scalar role, token role, tenant membership, or binding for another module or
 sensitivity grants IRRBB authority.

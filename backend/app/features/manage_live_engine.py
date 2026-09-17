@@ -110,13 +110,13 @@ def list_live_snapshots(
 ) -> LiveSnapshotListRead:
     """Plane-2 daily ladder: past days are EOD closes, today is the live edge."""
     bank = None
-    if module == "liquidity":
+    if module in ("liquidity", "irr"):
         bank = scoped_authorization.require_bank_permission(
             db,
             ctx,
             bank_id,
             permission=Permission.VIEW,
-            module=Module.LIQUIDITY,
+            module=Module.LIQUIDITY if module == "liquidity" else Module.IRRBB,
             sensitivity=Sensitivity.AGGREGATED,
             surface="live_snapshots",
         )

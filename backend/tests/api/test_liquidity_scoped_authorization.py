@@ -406,6 +406,7 @@ def test_official_enqueue_preserves_mixed_module_gate(
     role: str,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
 
     with get_sessionmaker()() as session:
@@ -544,6 +545,10 @@ def test_activation_reaches_derivation_with_required_authority(
     run_calculations: bool,
 ) -> None:
     period_id = _seed_book()
+    if run_calculations:
+        _grant(
+            RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL
+        )
     with get_sessionmaker()() as session:
         period = session.get(BankReportingPeriod, period_id)
         assert period is not None
@@ -607,6 +612,9 @@ def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
     operation: str,
 ) -> None:
     _seed_book()
+    version = _grant(
+        RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL
+    )
     with get_sessionmaker()() as session:
         bank = session.get(Bank, SAMPLE_BANK_ID)
         assert bank is not None
@@ -620,7 +628,7 @@ def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
         payload["run_calculations"] = True
     response = db_client.post(
         f"{BASE}/{operation}",
-        headers=_auth(1, "analyst"),
+        headers=_auth(version, "analyst"),
         json=payload,
     )
     if operation == "official-runs":

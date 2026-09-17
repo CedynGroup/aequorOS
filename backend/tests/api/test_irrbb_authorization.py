@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 from uuid import UUID
 
 import pytest
@@ -24,16 +24,29 @@ from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.models import (
+    AuditEvent,
     AuthorizationBinding,
     Bank,
+    BankFinancialFact,
     BankReportingPeriod,
+    Job,
+    LiveFinding,
+    LiveMetric,
+    LiveMetricSnapshot,
     RegulatoryRun,
     SavedScenarioAnalysis,
     StressScenario,
     User,
 )
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import analysis_workbench, authorization, regulatory_capital, regulatory_irr
+from app.services import (
+    analysis_workbench,
+    authorization,
+    data_activation,
+    module_scope,
+    regulatory_capital,
+    regulatory_irr,
+)
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
@@ -608,3 +621,136 @@ def test_irrbb_regulatory_run_detail_is_hidden_without_confidential_view(
 
     assert response.status_code == 404
     assert response.json()["error"]["message"] == "Regulatory run not found."
+
+
+@pytest.mark.parametrize("operation", ["official-runs", "data-activations"])
+@pytest.mark.parametrize("irr_in_plan", [False, True])
+@pytest.mark.parametrize("irr_authority", [False, True])
+def test_mixed_execution_requires_irrbb_only_in_plan(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    irr_in_plan: bool,
+    irr_authority: bool,
+) -> None:
+    _seed_book()
+    _, version = _grant(
+        RoleBundle.ANALYST, module=ModuleScope.LIQUIDITY, sensitivity=SensitivityScope.CONFIDENTIAL
+    )
+    if irr_authority:
+        _, version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
+    original = module_scope.runs_module
+    monkeypatch.setattr(
+        module_scope,
+        "runs_module",
+        lambda db, bank, module: irr_in_plan if module == "irr" else original(db, bank, module),
+    )
+    denied = irr_in_plan and not irr_authority
+    if denied:
+
+        def forbid_derivation(*args, **kwargs):
+            pytest.fail("Unauthorized derivation")
+
+        monkeypatch.setattr(data_activation, "derive_facts", forbid_derivation)
+    models = (BankFinancialFact, RegulatoryRun, AuditEvent, Job)
+    with get_sessionmaker()() as session:
+        before = [session.scalar(select(func.count()).select_from(model)) for model in models]
+    payload: dict[str, str | bool] = {"as_of_date": "2026-03-31", "reason": "mixed filing request"}
+    if operation == "data-activations":
+        payload["run_calculations"] = True
+    response = db_client.post(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/{operation}",
+        headers=_auth(version, "analyst"),
+        json=payload,
+    )
+    if denied:
+        assert response.status_code == 403, response.text
+        with get_sessionmaker()() as session:
+            assert [
+                session.scalar(select(func.count()).select_from(model)) for model in models
+            ] == before
+    elif operation == "official-runs":
+        assert response.status_code == 202, response.text
+    else:
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["details"]["error_code"] == "no_canonical_data"
+
+
+@pytest.mark.parametrize("irr_binding", [None, "confidential", "sibling", "aggregated"])
+def test_shared_reads_filter_irrbb_before_counts_limits_and_aggregation(
+    db_client: TestClient,
+    irr_binding: str | None,
+) -> None:
+    period_id = _seed_book()
+    _add_sibling_bank()
+    with get_sessionmaker()() as session:
+        for model in (LiveMetric, LiveMetricSnapshot, LiveFinding):
+            session.execute(delete(model))
+        for module, key in (("irr", "eve_limit_pct"), ("capital", "car_pct")):
+            session.add(
+                LiveMetric(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    module=module,
+                    metrics={key: 123},
+                    status="green",
+                    computed_at=utc_now(),
+                )
+            )
+            session.add(
+                LiveMetricSnapshot(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    module=module,
+                    reporting_period_id=period_id,
+                    snapshot_date=date(2026, 3, 31),
+                    metrics={key: 123},
+                    status="green",
+                    computed_at=utc_now(),
+                )
+            )
+            session.add(
+                LiveFinding(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    module=module,
+                    rule_id=f"{module}_breach",
+                    severity="critical" if module == "irr" else "high",
+                    message=f"{module} breach",
+                )
+            )
+        session.commit()
+    _, version = _grant(module=ModuleScope.CAPITAL)
+    if irr_binding is not None:
+        _, version = _grant(
+            sensitivity=SensitivityScope.CONFIDENTIAL
+            if irr_binding == "confidential"
+            else SensitivityScope.AGGREGATED,
+            institution_id=SIBLING_BANK_ID if irr_binding == "sibling" else SAMPLE_BANK_ID,
+        )
+    allowed = irr_binding == "aggregated"
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}"
+    auth = _auth(version, "analyst")
+    summary = db_client.get(f"{base}/live-summary", headers=auth)
+    assert summary.status_code == 200, summary.text
+    assert {row["module"] for row in summary.json()["modules"]} == (
+        {"capital", "irr"} if allowed else {"capital"}
+    )
+    snapshots = db_client.get(f"{base}/live-snapshots?module=irr", headers=auth)
+    assert snapshots.status_code == (200 if allowed else 403), snapshots.text
+    if allowed:
+        assert snapshots.json()["snapshots"][0]["metrics"] == {"eve_limit_pct": 123}
+    alerts = db_client.get(f"{base}/alerts?limit=1", headers=auth)
+    assert alerts.status_code == 200, alerts.text
+    assert alerts.json()["total"] == (2 if allowed else 1)
+    assert alerts.json()["by_module"] == ({"irr": 1, "capital": 1} if allowed else {"capital": 1})
+    assert alerts.json()["items"][0]["module"] == ("irr" if allowed else "capital")
+    window = db_client.get(
+        f"{base}/analytics/window",
+        headers=auth,
+        params={"start_date": "2026-03-31", "end_date": "2026-03-31"},
+    )
+    assert window.status_code == 200, window.text
+    assert {row["module"] for row in window.json()["daily"]} == (
+        {"capital", "irr"} if allowed else {"capital"}
+    )

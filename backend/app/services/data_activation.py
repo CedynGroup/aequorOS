@@ -68,16 +68,17 @@ def activate_bank_data(
 ) -> DataActivationRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
-    if payload.run_calculations and module_scope.runs_module(db, bank, "liquidity"):
-        scoped_authorization.require_resolved_bank_permission(
-            db,
-            ctx,
-            bank,
-            permission=Permission.RUN,
-            module=Module.LIQUIDITY,
-            sensitivity=Sensitivity.CONFIDENTIAL,
-            surface="data_activation",
-        )
+    for engine, module in (("liquidity", Module.LIQUIDITY), ("irr", Module.IRRBB)):
+        if payload.run_calculations and module_scope.runs_module(db, bank, engine):
+            scoped_authorization.require_resolved_bank_permission(
+                db,
+                ctx,
+                bank,
+                permission=Permission.RUN,
+                module=module,
+                sensitivity=Sensitivity.CONFIDENTIAL,
+                surface="data_activation",
+            )
 
     try:
         derivation = derive_facts(db, ctx, bank.id, payload.as_of_date)

@@ -100,6 +100,16 @@ def compute_window(
         surface="window_analytics",
     )
     liquidity_allowed = decision is not None and decision.allowed
+    decision = scoped_authorization.evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.IRRBB,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="window_analytics",
+    )
+    irrbb_allowed = decision is not None and decision.allowed
     periods = _periods_in_window(db, ctx, bank, start_date, end_date)
     ratios = [
         *(_liquidity_series(db, ctx, bank, periods) if liquidity_allowed else []),
@@ -112,7 +122,13 @@ def compute_window(
         period_count=len(periods),
         ratios=ratios,
         daily=_daily_stats(
-            db, ctx, bank, start_date, end_date, liquidity_allowed=liquidity_allowed
+            db,
+            ctx,
+            bank,
+            start_date,
+            end_date,
+            liquidity_allowed=liquidity_allowed,
+            irrbb_allowed=irrbb_allowed,
         ),
     )
 
@@ -241,6 +257,7 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
     end_date: date,
     *,
     liquidity_allowed: bool,
+    irrbb_allowed: bool,
 ) -> list[WindowDailyStatRead]:
     query = (
         select(LiveMetricSnapshot)
@@ -254,6 +271,8 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
     )
     if not liquidity_allowed:
         query = query.where(LiveMetricSnapshot.module != "liquidity")
+    if not irrbb_allowed:
+        query = query.where(LiveMetricSnapshot.module != "irr")
     values_by_module: dict[str, list[Decimal]] = {}
     for row in db.scalars(query):
         key = _PRIMARY_METRIC_KEY.get(row.module)

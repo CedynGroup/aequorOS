@@ -47,7 +47,12 @@ test.describe("IRRBB reader without run permission", () => {
     });
     await expect(runButton).toBeVisible();
     await expect(runButton).toBeDisabled();
-    await runButton.locator("..").hover();
+    const wrapper = runButton.locator("..");
+    await wrapper.focus();
+    await expect(wrapper).toBeFocused();
+    await expect(wrapper).toHaveAccessibleDescription(
+      /Requires IRRBB · Confidential · Run/i,
+    );
     await expect(
       page.getByRole("tooltip", {
         name: /Requires IRRBB · Confidential · Run/i,
