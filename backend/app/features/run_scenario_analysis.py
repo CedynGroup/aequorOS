@@ -1,10 +1,10 @@
 """Scenario analysis endpoints — compute-only what-if + saved analyses.
 
 The analysis POST mutates nothing, so it remains on the read-only principal
-dependency. Liquidity analysis nevertheless requires exact LIQ/confidential
-``run`` authority in the service; other modules retain their current behavior
-until their matrix cutovers. Saving and deleting use the transitional scoped
-mutation principal boundary.
+dependency. Cut-over modules require their exact confidential ``run`` authority
+in the service; other modules retain their current behavior until their matrix
+cutovers. Saving and deleting use the transitional scoped mutation principal
+boundary.
 """
 
 from __future__ import annotations

@@ -113,7 +113,9 @@ from app.services.live_types import (
 )
 from app.services.market_data import CurveView
 from app.services.params import PrefetchedActiveParams, get_active_params, prefetch_active_params
-from app.services.regulatory_liquidity import get_regulatory_run
+from app.services.regulatory_liquidity import (  # noqa: PLC2701 - engine completion read
+    _read_regulatory_run_execution_result,
+)
 
 ENGINE_VERSION = "regulatory-irr-v1.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
@@ -216,9 +218,14 @@ def run_all_irr_scenarios(
 
 
 def get_irr_dashboard(
-    db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    reporting_period_id: UUID | None = None,
+    *,
+    resolved_bank: Bank | None = None,
 ) -> IrrDashboardRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
     period = (
         current_fact_period_or_409(db, ctx, bank, MODULE_IRR)
@@ -374,7 +381,7 @@ def _create_and_execute(
             ),
         )
     db.expire_all()
-    return get_regulatory_run(db, ctx, bank.id, run_id)
+    return _read_regulatory_run_execution_result(db, ctx, bank, run_id)
 
 
 def _run_analysis(  # noqa: PLR0913

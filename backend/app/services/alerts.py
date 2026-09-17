@@ -27,23 +27,24 @@ def get_bank_alerts(
 ) -> BankAlertsRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
 
-    decision = scoped_authorization.evaluate_bank_permission(
-        db,
-        ctx,
-        bank,
-        permission=Permission.VIEW,
-        module=Module.LIQUIDITY,
-        sensitivity=Sensitivity.AGGREGATED,
-        surface="bank_alerts",
-    )
     query = select(LiveFinding).where(
         LiveFinding.organization_id == ctx.organization_id,
         LiveFinding.bank_id == bank.id,
         LiveFinding.status.in_(_OPEN_STATUSES),
         LiveFinding.severity.in_(_ALERT_SEVERITIES),
     )
-    if decision is None or not decision.allowed:
-        query = query.where(LiveFinding.module != "liquidity")
+    for engine, module in (("liquidity", Module.LIQUIDITY), ("irr", Module.IRRBB)):
+        decision = scoped_authorization.evaluate_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.VIEW,
+            module=module,
+            sensitivity=Sensitivity.AGGREGATED,
+            surface="bank_alerts",
+        )
+        if decision is None or not decision.allowed:
+            query = query.where(LiveFinding.module != engine)
     findings = list(db.scalars(query))
     findings.sort(
         key=lambda finding: (

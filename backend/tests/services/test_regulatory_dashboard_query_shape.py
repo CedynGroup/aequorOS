@@ -47,6 +47,7 @@ _FULL_HTTP_QUERY_COUNTS = {
     "liquidity": 14,
     # Scoped CAP view adds bank resolution plus principal, binding, and institution checks.
     "capital": 19,
+    # Prefetched scoped IRRBB view reuses the dashboard's resolved bank.
     "irr": 16,
     "fx": 12,
     "ftp": 12,

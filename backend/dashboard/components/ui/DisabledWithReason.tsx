@@ -13,6 +13,7 @@ import Link from "next/link";
 
 type DisabledWithReasonProps = {
   reason: string;
+  focusable?: boolean;
   children: ReactNode | ((descriptionId: string) => ReactNode);
   className?: string;
   tooltipClassName?: string;
@@ -21,6 +22,7 @@ type DisabledWithReasonProps = {
 
 export function DisabledWithReason({
   reason,
+  focusable = true,
   children,
   className = "",
   tooltipClassName = "",
@@ -55,6 +57,8 @@ export function DisabledWithReason({
   return (
     <span
       ref={triggerRef}
+      tabIndex={focusable ? 0 : undefined}
+      aria-describedby={focusable ? tooltipId : undefined}
       className={`relative inline-flex ${className}`}
       onMouseEnter={showTooltip}
       onMouseLeave={() => setTooltipStyle(null)}
@@ -123,6 +127,7 @@ export function PermissionLink({
   return (
     <DisabledWithReason
       reason={reason}
+      focusable={false}
       className={wrapperClassName}
       tooltipClassName={tooltipClassName}
       placement={placement}

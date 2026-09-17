@@ -199,8 +199,9 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
 ## Query cache and refresh policy
 
 `lib/api/queryPolicy.ts` is the authority for Command Center and regulatory-
-dashboard caching. Its keys are prefix-first and include tenant, authenticated
-authority (actor plus sorted roles), bank, and then semantic dimensions. Current
+dashboard caching. Its keys are prefix-first, with the authority partition
+defined in the [authorization foundation](../docs/authorization_foundation.md#effective-authority-projection-and-institution-coverage),
+followed by semantic dimensions. Current
 and explicit-period dashboard reads have distinct stable keys. The root
 `QueryClient` is also replaced and its old cache cleared when the tenant or
 authority changes, including entry to or exit from staff inspection; ordinary

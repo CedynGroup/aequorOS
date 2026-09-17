@@ -157,6 +157,12 @@ export type ModuleScope = {
   liquidityAggregatedView?: boolean;
   liquidityConfidentialView?: boolean;
   riskConfidentialView?: boolean;
+  /** Exact IRRBB/aggregated/view authority for every `/irr` dashboard page. */
+  irrbbAggregatedView?: boolean;
+  /** Exact IRRBB/confidential/view authority for saved-analysis detail and indexes. */
+  irrbbConfidentialView?: boolean;
+  /** Exact IRRBB/confidential/run authority for regulatory and compute-only engines. */
+  irrbbRun?: boolean;
   /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than
@@ -295,6 +301,12 @@ function bindingControlledSubrouteHidden(
   ) {
     return true;
   }
+  if (path === "/irr/scenarios" || path.startsWith("/irr/scenarios/")) {
+    return scope.irrbbConfidentialView !== true;
+  }
+  if (path === "/irr" || path.startsWith("/irr/")) {
+    return scope.irrbbAggregatedView !== true;
+  }
   return false;
 }
 
@@ -307,6 +319,9 @@ const LIQUIDITY_AGGREGATED_VIEW = "Liquidity Monitoring · Aggregated · View";
 const LIQUIDITY_CONFIDENTIAL_VIEW =
   "Liquidity Monitoring · Confidential · View";
 const RISK_CONFIDENTIAL_VIEW = "Risk & Limits · Confidential · View";
+const IRRBB_AGGREGATED_VIEW = "IRRBB · Aggregated · View";
+const IRRBB_CONFIDENTIAL_VIEW = "IRRBB · Confidential · View";
+const IRRBB_CONFIDENTIAL_RUN = "IRRBB · Confidential · Run";
 
 function permissionReason(permissions: readonly string[]): string | undefined {
   if (permissions.length === 0) return undefined;
@@ -317,6 +332,10 @@ function permissionReason(permissions: readonly string[]): string | undefined {
   const pronoun = permissions.length === 1 ? "it" : "them";
   return `Requires ${required}. Ask your organization owner or admin to grant ${pronoun}.`;
 }
+
+export const IRRBB_CONFIDENTIAL_RUN_REASON = permissionReason([
+  IRRBB_CONFIDENTIAL_RUN,
+])!;
 
 function liquidityPermissionReason(
   path: string,
@@ -353,6 +372,21 @@ function liquidityPermissionReason(
     missing.push(RISK_CONFIDENTIAL_VIEW);
   }
   return permissionReason(missing);
+}
+
+function irrbbPermissionReason(
+  path: string,
+  scope: ModuleScope,
+): string | undefined {
+  if (path !== "/irr" && !path.startsWith("/irr/")) return undefined;
+  if (path === "/irr/scenarios" || path.startsWith("/irr/scenarios/")) {
+    return scope.irrbbConfidentialView === true
+      ? undefined
+      : permissionReason([IRRBB_CONFIDENTIAL_VIEW]);
+  }
+  return scope.irrbbAggregatedView === true
+    ? undefined
+    : permissionReason([IRRBB_AGGREGATED_VIEW]);
 }
 
 const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings"]);
@@ -395,11 +429,9 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
 }
 
 /**
- * Is a nav/command href visible, and should its data be fetched? Used by the
- * SIDEBAR, command palette and the per-module data hooks — so it is RESTRICTIVE
- * until the scope resolves: only the always-present `CORE_MODULES` show/fetch,
- * variable modules wait for the tenant's set. Also hides the bank-only BSD return
- * deep links for an SDI (docs/sdi.md §6.3).
+ * Whether an href is enabled for navigation and data fetching. Disabled links
+ * remain visible under the permission-only policy; renderers use `hrefAccess`
+ * to distinguish them from structural exclusions.
  */
 export function isHrefVisible(href: string, scope: ModuleScope): boolean {
   return hrefAccess(href, scope).state === "enabled";
@@ -407,7 +439,7 @@ export function isHrefVisible(href: string, scope: ModuleScope): boolean {
 
 /**
  * Navigation treatment for an href. Structural and object-scope exclusions stay
- * hidden; a resolved Liquidity permission gap stays visible but disabled with
+ * hidden; a resolved Liquidity or IRRBB permission gap stays visible but disabled with
  * the exact grant sentence the user needs.
  */
 export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
@@ -438,7 +470,9 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
     }
   }
 
-  const reason = liquidityPermissionReason(path, scope);
+  const reason =
+    liquidityPermissionReason(path, scope) ??
+    irrbbPermissionReason(path, scope);
   if (reason) {
     return { state: "disabled", reason };
   }

@@ -19,7 +19,7 @@ the tenant API).
   third-party broker), integration-key service accounts, RLS-forced tenancy
 - Scoped authorization bindings with deny-by-default, explainable evaluation
   and explicit organization-or-exact-institution targets. See the
-  [Liquidity access and rollout guide](docs/liquidity_enforcement_rollout.md)
+  [product rollout contracts](docs/authorization_foundation.md#product-rollout-boundary)
   for enforced product surfaces and required grants.
   Account administration is split out into the non-operational `account_admin`
   role, while initial Org Owner authority is an explicit organization-wide

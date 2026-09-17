@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * EVE & NII sensitivity: full scenario table across the seven engine runs
@@ -6,28 +6,28 @@
  * short methodology note mirroring the backend engine's documented approach.
  */
 
-import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import type {
   IrrEveScenarioRead,
   IrrMetricsRead,
   IrrValidationRead,
-} from '@aequoros/risk-service-api';
-import { useEarAnalysis } from '@/components/irr/hooks';
-import IrrWorkspace from '@/components/irr/IrrWorkspace';
-import TornadoChart from '@/components/irr/charts/TornadoChart';
-import {
-  scenarioDescription,
-  scenarioLabel,
-} from '@/components/irr/scenarios';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import KpiStat from '@/components/ui/KpiStat';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill from '@/components/ui/StatusPill';
-import ValidationList from '@/components/ui/ValidationList';
-import { num } from '@/lib/api/values';
-import { fmtCurrency, fmtCurrencySigned, fmtPct } from '@/lib/format';
+} from "@aequoros/risk-service-api";
+import { useEarAnalysis } from "@/components/irr/hooks";
+import { useModuleScope } from "@/components/shell/BankContext";
+import IrrWorkspace from "@/components/irr/IrrWorkspace";
+import TornadoChart from "@/components/irr/charts/TornadoChart";
+import { scenarioDescription, scenarioLabel } from "@/components/irr/scenarios";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
+import KpiStat from "@/components/ui/KpiStat";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill from "@/components/ui/StatusPill";
+import ValidationList from "@/components/ui/ValidationList";
+import { num } from "@/lib/api/values";
+import { fmtCurrency, fmtCurrencySigned, fmtPct } from "@/lib/format";
+import { IRRBB_CONFIDENTIAL_RUN_REASON } from "@/lib/modules";
 
 /** Desk-selectable EaR horizons; 12 months is the regulatory figure. */
 const DESK_HORIZONS_MONTHS = [3, 6, 12, 24] as const;
@@ -46,7 +46,7 @@ export default function IrrSensitivityPage() {
         const rows = data.eveScenarios ?? [];
 
         const eveBars = rows
-          .filter((s) => s.scenarioCode !== 'baseline')
+          .filter((s) => s.scenarioCode !== "baseline")
           .map((s) => ({
             label: scenarioLabel(s.scenarioCode),
             value: num(s.deltaEveGhs),
@@ -55,14 +55,14 @@ export default function IrrSensitivityPage() {
           }));
 
         const earValidations = data.validations.filter(
-          (v) => v.ruleCode === 'ear_within_limit'
+          (v) => v.ruleCode === "ear_within_limit",
         );
 
         const columns: Column<IrrEveScenarioRead>[] = [
           {
-            key: 'scenario',
-            header: 'Scenario',
-            width: '18%',
+            key: "scenario",
+            header: "Scenario",
+            width: "18%",
             render: (r) => (
               <span className="font-medium text-navy">
                 {scenarioLabel(r.scenarioCode)}
@@ -70,47 +70,49 @@ export default function IrrSensitivityPage() {
             ),
           },
           {
-            key: 'shock',
-            header: 'Shock shape',
-            width: '28%',
+            key: "shock",
+            header: "Shock shape",
+            width: "28%",
             render: (r) => (
               <span className="text-slate">
-                {scenarioDescription(r.scenarioCode) ?? '—'}
+                {scenarioDescription(r.scenarioCode) ?? "—"}
               </span>
             ),
           },
           {
-            key: 'eve',
-            header: 'EVE',
+            key: "eve",
+            header: "EVE",
             numeric: true,
             render: (r) => fmtCurrency(num(r.eveGhs)),
           },
           {
-            key: 'delta',
-            header: 'ΔEVE',
+            key: "delta",
+            header: "ΔEVE",
             numeric: true,
             render: (r) => fmtCurrencySigned(num(r.deltaEveGhs)),
           },
           {
-            key: 'pct',
-            header: 'ΔEVE / Tier 1',
+            key: "pct",
+            header: "ΔEVE / Tier 1",
             numeric: true,
             render: (r) => {
               const v = num(r.deltaEvePctTier1);
               return (
-                <span className={r.breach ? 'text-critical font-medium' : undefined}>
+                <span
+                  className={r.breach ? "text-critical font-medium" : undefined}
+                >
                   {fmtPct(v, 2)}
                 </span>
               );
             },
           },
           {
-            key: 'status',
-            header: 'Status',
-            align: 'right',
+            key: "status",
+            header: "Status",
+            align: "right",
             render: (r) => (
-              <StatusPill tone={r.breach ? 'breach' : 'compliant'}>
-                {r.breach ? 'Breach' : 'Within limit'}
+              <StatusPill tone={r.breach ? "breach" : "compliant"}>
+                {r.breach ? "Breach" : "Within limit"}
               </StatusPill>
             ),
           },
@@ -143,7 +145,9 @@ export default function IrrSensitivityPage() {
               {eveBars.length > 0 ? (
                 <TornadoChart data={eveBars} height={300} />
               ) : (
-                <p className="text-body text-slate">No scenario results for this period.</p>
+                <p className="text-body text-slate">
+                  No scenario results for this period.
+                </p>
               )}
             </SectionCard>
 
@@ -156,18 +160,18 @@ export default function IrrSensitivityPage() {
                   <span className="font-medium text-navy">EVE</span> — every
                   position is priced as a zero-coupon claim at its repricing
                   bucket midpoint on the base discount curve; each scenario
-                  shifts the curve bucket-wise and re-prices the full book.
-                  ΔEVE is measured against Tier 1 capital and classified
-                  against the supervisory limit ({eveLimit}% here).
+                  shifts the curve bucket-wise and re-prices the full book. ΔEVE
+                  is measured against Tier 1 capital and classified against the
+                  supervisory limit ({eveLimit}% here).
                 </li>
                 <li>
-                  <span className="font-medium text-navy">EaR</span> — ΔNII =
-                  Σ Gap<sub>i</sub> · Δr · (12 − m<sub>i</sub>)/12 over the
-                  ≤12-month buckets, evaluated under the parallel ±200bp
-                  shocks, where m<sub>i</sub> is the bucket midpoint in months.
+                  <span className="font-medium text-navy">EaR</span> — ΔNII = Σ
+                  Gap<sub>i</sub> · Δr · (12 − m<sub>i</sub>)/12 over the
+                  ≤12-month buckets, evaluated under the parallel ±200bp shocks,
+                  where m<sub>i</sub> is the bucket midpoint in months.
                 </li>
                 <li>
-                  <span className="font-medium text-navy">Swap treatment</span>{' '}
+                  <span className="font-medium text-navy">Swap treatment</span>{" "}
                   — interest-rate swap hedges are decomposed into paired legs
                   that sit in the repricing buckets like any other position, so
                   gap, duration, EVE and EaR all reprice the floating leg; the
@@ -177,10 +181,9 @@ export default function IrrSensitivityPage() {
                 <li>
                   <span className="font-medium text-navy">Provenance</span> —
                   results are computed from the canonical position snapshot;
-                  Tier 1 is read at computation time
-                  as the ΔEVE denominator but deliberately kept out of the
-                  hash, scoping reproducibility to positions, hedges and IRR
-                  parameters.
+                  Tier 1 is read at computation time as the ΔEVE denominator but
+                  deliberately kept out of the hash, scoping reproducibility to
+                  positions, hedges and IRR parameters.
                 </li>
               </ul>
             </SectionCard>
@@ -211,8 +214,10 @@ function EarSection({
   bankId: string | undefined;
   periodId: string | undefined;
 }) {
+  const moduleScope = useModuleScope();
+  const canRun = moduleScope.irrbbRun === true;
   const [horizonMonths, setHorizonMonths] = useState<number>(
-    REGULATORY_HORIZON_MONTHS
+    REGULATORY_HORIZON_MONTHS,
   );
   const isDeskHorizon = horizonMonths !== REGULATORY_HORIZON_MONTHS;
   const analysis = useEarAnalysis(
@@ -220,11 +225,31 @@ function EarSection({
     periodId,
     horizonMonths,
     DESK_DELTA_BP,
-    isDeskHorizon
+    isDeskHorizon,
   );
 
   const earUp = num(m.earUp200Ghs);
   const earDown = num(m.earDown200Ghs);
+  const horizonControl = (descriptionId?: string) => (
+    <label className="inline-flex items-center gap-2 text-caption text-slate">
+      Desk horizon
+      <select
+        value={horizonMonths}
+        onChange={(e) => setHorizonMonths(Number(e.target.value))}
+        aria-label="Desk EaR horizon in months"
+        aria-describedby={descriptionId}
+        disabled={!canRun}
+        className="px-2.5 py-1.5 text-caption font-medium text-navy border border-border rounded-md bg-surface-raised hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {DESK_HORIZONS_MONTHS.map((months) => (
+          <option key={months} value={months}>
+            {months} months
+            {months === REGULATORY_HORIZON_MONTHS ? " (regulatory)" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 
   return (
     <SectionCard
@@ -233,22 +258,13 @@ function EarSection({
       noPadding
       computedAt={computedAt}
       actions={
-        <label className="inline-flex items-center gap-2 text-caption text-slate">
-          Desk horizon
-          <select
-            value={horizonMonths}
-            onChange={(e) => setHorizonMonths(Number(e.target.value))}
-            aria-label="Desk EaR horizon in months"
-            className="px-2.5 py-1.5 text-caption font-medium text-navy border border-border rounded-md bg-surface-raised hover:bg-surface"
-          >
-            {DESK_HORIZONS_MONTHS.map((months) => (
-              <option key={months} value={months}>
-                {months} months
-                {months === REGULATORY_HORIZON_MONTHS ? ' (regulatory)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+        canRun ? (
+          horizonControl()
+        ) : (
+          <DisabledWithReason reason={IRRBB_CONFIDENTIAL_RUN_REASON}>
+            {(descriptionId) => horizonControl(descriptionId)}
+          </DisabledWithReason>
+        )
       }
     >
       <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -260,13 +276,13 @@ function EarSection({
         <KpiStat
           label={`ΔNII — rates +${DESK_DELTA_BP}bp`}
           value={fmtCurrencySigned(earUp)}
-          status={earUp < 0 ? 'warn' : 'ok'}
+          status={earUp < 0 ? "warn" : "ok"}
           hint="Upward parallel shock · regulatory 12-month horizon"
         />
         <KpiStat
           label={`ΔNII — rates −${DESK_DELTA_BP}bp`}
           value={fmtCurrencySigned(earDown)}
-          status={earDown < 0 ? 'warn' : 'ok'}
+          status={earDown < 0 ? "warn" : "ok"}
           hint="Downward parallel shock · regulatory 12-month horizon"
         />
       </div>
@@ -298,19 +314,19 @@ function EarSection({
               <KpiStat
                 label={`ΔNII — rates +${DESK_DELTA_BP}bp`}
                 value={fmtCurrencySigned(num(analysis.data.earUp))}
-                status={num(analysis.data.earUp) < 0 ? 'warn' : 'ok'}
+                status={num(analysis.data.earUp) < 0 ? "warn" : "ok"}
                 hint={`Desk analysis · ${horizonMonths}-month horizon`}
               />
               <KpiStat
                 label={`ΔNII — rates −${DESK_DELTA_BP}bp`}
                 value={fmtCurrencySigned(num(analysis.data.earDown))}
-                status={num(analysis.data.earDown) < 0 ? 'warn' : 'ok'}
+                status={num(analysis.data.earDown) < 0 ? "warn" : "ok"}
                 hint={`Desk analysis · ${horizonMonths}-month horizon`}
               />
               <KpiStat
                 label="Cumulative gap inside horizon"
                 value={fmtCurrencySigned(
-                  num(analysis.data.cumulativeGapWithinHorizon)
+                  num(analysis.data.cumulativeGapWithinHorizon),
                 )}
                 hint={`Repricing buckets with midpoint inside ${horizonMonths} months`}
               />
