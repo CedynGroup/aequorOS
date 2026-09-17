@@ -8,7 +8,7 @@ product interface is shown on-site at `/product#product-ui`.
 
 ## Stack
 
-- Next.js 14 (App Router)
+- Next.js 16 (App Router) with React 19
 - TypeScript
 - Tailwind CSS v3
 - Fraunces + Inter via `next/font/google`
@@ -26,18 +26,19 @@ collateral), so regenerate it there rather than expecting it in the repo.
 ## Get started
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm --filter @aequoros/frontend dev
 ```
 
 Open http://localhost:3000.
 
 ## Scripts
 
-- `npm run dev` — local dev server
-- `npm run build` — production build
-- `npm run start` — run the production build
-- `npm run lint` — next lint
+- `pnpm --filter @aequoros/frontend dev` — local dev server
+- `pnpm --filter @aequoros/frontend build` — production Turbopack build
+- `pnpm --filter @aequoros/frontend start` — run the production build
+- `pnpm --filter @aequoros/frontend lint` — ESLint CLI with Next.js rules
+- `pnpm --filter @aequoros/frontend typecheck` — TypeScript without emitting
 
 ## Structure
 
