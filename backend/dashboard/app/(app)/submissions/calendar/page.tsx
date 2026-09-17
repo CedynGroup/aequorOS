@@ -160,11 +160,7 @@ export default function RegulatoryCalendarPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting' },
-          { label: 'Calendar' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Regulatory Reporting"
         subtitle={`${centralBankName()} deadline board · every official return, its due date, and its package state`}
         asOf={asOf ? fmtDateUTC(asOf) : undefined}

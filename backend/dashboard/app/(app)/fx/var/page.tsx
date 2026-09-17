@@ -17,7 +17,6 @@ import { fmtCurrency, fmtCurrencySigned, fmtPct, currencyCode } from '@/lib/form
 export default function FxVarPage() {
   return (
     <FxModuleFrame
-      crumb="VaR & Stress"
       title="FX Value at Risk & Stress"
       subtitle="Historical-simulation VaR · diversification decomposition · currency-crisis stressed VaR"
     >

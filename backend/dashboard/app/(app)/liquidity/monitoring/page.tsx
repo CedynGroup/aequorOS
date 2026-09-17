@@ -131,11 +131,7 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
     <>
       {!embedded && (
         <PageHeader
-          breadcrumbs={[
-            { label: "Modules", href: "/" },
-            { label: "Liquidity Risk", href: "/liquidity" },
-            { label: "Monitoring Tools" },
-          ]}
+          eyebrow="Liquidity"
           title="Liquidity Monitoring Tools"
           subtitle={`Board threshold register (LMTD ¶11) · liquidity-value schedule (LRMD ¶60–63) · per-currency funding mismatch`}
         />

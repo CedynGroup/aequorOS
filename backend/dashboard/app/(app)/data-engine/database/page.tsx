@@ -30,10 +30,7 @@ export default function DatabaseDirectPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Database (Direct)' },
-        ]}
+        eyebrow="Data Engine"
         title={
           <span className="flex items-center gap-3">
             Database (Direct)

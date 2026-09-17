@@ -41,7 +41,6 @@ function runMetric(run: RegulatoryRunSummaryRead | undefined, key: string): numb
 export default function FtpExPostPage() {
   return (
     <FtpModuleFrame
-      crumb="Ex-ante vs Ex-post"
       title="Ex-ante vs Ex-post"
       subtitle="Scenario-priced margins for this period against the subsequently measured outcome"
     >

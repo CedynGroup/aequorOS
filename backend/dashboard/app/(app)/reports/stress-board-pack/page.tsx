@@ -110,10 +110,7 @@ export default function StressBoardPack() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Governance", href: "/reports" },
-          { label: "Stress board pack" },
-        ]}
+        eyebrow="Reports"
         title="Stress Board-Pack Composer"
         subtitle={
           isSdi

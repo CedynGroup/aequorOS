@@ -614,7 +614,7 @@ export default function MarketsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: 'Markets' }]}
+        eyebrow="Markets"
         title="Markets"
         subtitle="Live market monitor for curves, rates, FX, and credit inputs feeding Treasury and risk engines."
         action={

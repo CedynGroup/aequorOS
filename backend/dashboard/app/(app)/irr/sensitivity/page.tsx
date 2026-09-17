@@ -38,7 +38,6 @@ const DESK_DELTA_BP = 200;
 export default function IrrSensitivityPage() {
   return (
     <IrrWorkspace
-      crumb="EVE & NII"
       subtitle="Economic value and earnings sensitivity under the Basel IRRBB shock set"
     >
       {({ data, metrics: m, computedAt, bankId, periodId }) => {

@@ -115,11 +115,7 @@ export default function CapitalStructurePage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Basel Capital", href: "/basel" },
-          { label: "Capital Structure" },
-        ]}
+        eyebrow="Basel Capital"
         title="Capital Structure"
         subtitle="Tier 1 (CET1, AT1), Tier 2, and regulatory deductions"
       />

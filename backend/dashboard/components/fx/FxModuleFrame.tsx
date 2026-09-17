@@ -30,13 +30,10 @@ export type FxFrameContext = {
 };
 
 export default function FxModuleFrame({
-  crumb,
   title,
   subtitle,
   children,
 }: {
-  /** Trailing breadcrumb / active tab label. */
-  crumb: string;
   title: string;
   subtitle?: string;
   children: (ctx: FxFrameContext) => ReactNode;
@@ -57,11 +54,7 @@ export default function FxModuleFrame({
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "FX Risk" },
-          { label: crumb },
-        ]}
+        eyebrow="FX"
         title={title}
         subtitle={subtitle}
         action={

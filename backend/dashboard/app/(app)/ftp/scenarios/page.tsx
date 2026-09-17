@@ -13,11 +13,7 @@ export default function FtpScenarios() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'FTP', href: '/ftp' },
-          { label: 'Scenarios' },
-        ]}
+        eyebrow="FTP"
         title="FTP Scenario Workbench"
         subtitle="Curve and funding-spread overlays repricing the book — live analysis, side-by-side comparison"
       />

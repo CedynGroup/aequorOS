@@ -186,7 +186,7 @@ function PositionsBlotter() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: 'Markets' }, { label: 'Positions' }]}
+        eyebrow="Positions"
         title="Positions"
         subtitle="The canonical position book behind every module calculation. Click a row for details and lineage back to its source batch."
         asOf={

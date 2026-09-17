@@ -56,11 +56,7 @@ export default function NiiForecastPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Balance Sheet Forecasting', href: '/forecasting' },
-          { label: 'NII Forecast' },
-        ]}
+        eyebrow="Forecasting"
         title="Net Interest Income Forecast"
         subtitle="Projected NII per horizon year from the persisted forecast path · scenario sensitivity vs base"
       />

@@ -54,7 +54,7 @@ export default function BehavioralLiquidityPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: 'Modules', href: '/' }, { label: 'Behavioral Models', href: '/behavioral' }, { label: 'Liquidity Behavior' }]}
+        eyebrow="Behavioral Models"
         title="Behavioral Liquidity"
         subtitle="Observed deposit runoff, withdrawal, attrition, seasonality, and pricing response from canonical history"
       />

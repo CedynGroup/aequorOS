@@ -3,12 +3,14 @@ import { ChevronRight } from 'lucide-react';
 
 export default function PageHeader({
   breadcrumbs,
+  eyebrow,
   title,
   subtitle,
   action,
   asOf,
 }: {
   breadcrumbs?: { label: string; href?: string }[];
+  eyebrow?: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
   action?: ReactNode;
@@ -41,6 +43,11 @@ export default function PageHeader({
 
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div className="min-w-0">
+            {eyebrow && (
+              <p className="mb-1 text-micro font-medium uppercase tracking-wider text-slate">
+                {eyebrow}
+              </p>
+            )}
             <h1 className="text-display text-navy">{title}</h1>
             {subtitle && (
               <p className="mt-1 text-body text-slate">{subtitle}</p>

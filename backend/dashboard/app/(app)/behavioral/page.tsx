@@ -82,11 +82,7 @@ export default function BehavioralOverviewPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Behavioral Models' },
-          { label: 'Overview' },
-        ]}
+        eyebrow="Behavioral Models"
         title="Behavioral Models"
         subtitle="Tenant-scoped ML estimators feeding the ALM engines through the reviewed-assumption workflow"
       />

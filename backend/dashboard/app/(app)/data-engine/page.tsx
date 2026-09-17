@@ -22,7 +22,7 @@ export default function DataEngineOverviewPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: 'Data Engine' }, { label: 'Overview' }]}
+        eyebrow="Data Engine"
         title="Data Engine"
         subtitle="Connect data sources, ingest into the canonical model, and trace every record back to its source."
       />

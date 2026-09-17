@@ -134,11 +134,7 @@ export default function ApprovalsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Governance", href: "/submissions" },
-          { label: "Regulatory Reporting", href: "/submissions" },
-          { label: "Approvals" },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Approvals"
         subtitle="Checker queue — open a return to review it and approve and sign, or send it back with a note; no package reaches a channel without a different officer than its maker"
       />

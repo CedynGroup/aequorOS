@@ -69,11 +69,7 @@ export default function ReverseStress() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Balance Sheet Forecasting', href: '/forecasting' },
-          { label: 'Reverse Stress' },
-        ]}
+        eyebrow="Forecasting"
         title="Reverse Stress Testing"
         subtitle="The severity multipliers at which the hard floors break — searched over the stored scenario engines, never a new model"
         action={

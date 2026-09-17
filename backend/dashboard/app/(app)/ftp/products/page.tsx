@@ -27,7 +27,6 @@ const SORT_ACCESSORS: Record<SortKey, (r: FtpProductRead) => number> = {
 export default function FtpProductsPage() {
   return (
     <FtpModuleFrame
-      crumb="Product Profitability"
       title="Product Profitability"
       subtitle="Match-funded net margin by product · opex, ECL, and capital charges deducted"
     >

@@ -111,7 +111,7 @@ export default function BatchDetailPage({
       <PageHeader
         breadcrumbs={[
           { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Batches' },
+          { label: 'Batches', href: '/data-engine' },
           { label: batch.id.slice(0, 8) },
         ]}
         title={

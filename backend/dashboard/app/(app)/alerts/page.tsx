@@ -91,7 +91,7 @@ export default function AlertCenterPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: "Command" }, { label: "Alerts" }]}
+        eyebrow="Alerts"
         title="Alert Center"
         subtitle="Open limit breaches across every live module, reconciled by the pipeline on each refresh — breaches clear automatically when the data does."
         action={

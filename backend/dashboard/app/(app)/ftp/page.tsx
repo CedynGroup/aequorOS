@@ -16,7 +16,6 @@ import { fmtNum, fmtPct } from '@/lib/format';
 export default function FtpCurvePage() {
   return (
     <FtpModuleFrame
-      crumb="Curve"
       title="Transfer Curve"
       subtitle="Match-funded FTP curve · base market yield plus liquidity premium and funding spread"
     >

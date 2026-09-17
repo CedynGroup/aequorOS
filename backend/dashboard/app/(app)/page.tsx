@@ -53,6 +53,7 @@ export default function CommandCenterPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Command Center"
         title="Treasury Command Center"
         subtitle={
           bank

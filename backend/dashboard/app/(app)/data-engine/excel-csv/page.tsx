@@ -24,10 +24,7 @@ export default function ExcelCsvPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Excel & CSV' },
-        ]}
+        eyebrow="Data Engine"
         title="Excel & CSV"
         subtitle="Workbook and CSV drops with mapping-driven translation, cell-level lineage, and validation gating."
       />

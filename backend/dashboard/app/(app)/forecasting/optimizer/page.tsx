@@ -228,11 +228,7 @@ export default function StrategicOptimizer() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Balance Sheet Forecasting', href: '/forecasting' },
-          { label: 'Optimizer' },
-        ]}
+        eyebrow="Forecasting"
         title="Strategy Optimizer"
         subtitle="Constrained scenario search over the deterministic 5-year projection engine"
         action={runButton}

@@ -39,12 +39,9 @@ export type IrrTabContext = {
 };
 
 export default function IrrWorkspace({
-  crumb,
   subtitle,
   children,
 }: {
-  /** Trailing breadcrumb for the active tab, e.g. "Gap Analysis". */
-  crumb: string;
   subtitle: string;
   children: (ctx: IrrTabContext) => ReactNode;
 }) {
@@ -86,11 +83,7 @@ export default function IrrWorkspace({
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Interest Rate Risk", href: "/irr" },
-          { label: crumb },
-        ]}
+        eyebrow="IRRBB"
         title="Interest Rate Risk"
         subtitle={subtitle}
         action={

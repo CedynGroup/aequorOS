@@ -181,11 +181,7 @@ export default function HistoryPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Governance", href: "/submissions" },
-          { label: "Regulatory Reporting", href: "/submissions" },
-          { label: "History" },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="History"
         subtitle="Every package version — immutable snapshots, approvals, channel events, and artifacts"
         action={

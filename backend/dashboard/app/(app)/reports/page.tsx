@@ -23,6 +23,7 @@ export default function ReportsPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Reports"
         title="Reports Library"
         subtitle="Governance console · Immutable runs, regulatory packs, board reporting"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}

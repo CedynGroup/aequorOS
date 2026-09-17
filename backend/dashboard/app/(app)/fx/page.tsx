@@ -18,7 +18,6 @@ import { fmtCurrency, fmtCurrencySigned, fmtNum, fmtPct, regShort, currencyCode 
 export default function FxExposurePage() {
   return (
     <FxModuleFrame
-      crumb="Exposure"
       title="FX Exposure"
       subtitle={`Net open position by currency · ${regShort()} NOP framework · ${currencyCode()} equivalents at period-end spot`}
     >

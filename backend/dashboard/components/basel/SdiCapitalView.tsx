@@ -205,6 +205,7 @@ export default function SdiCapitalView({
   return (
     <div className="space-y-6 p-6">
       <PageHeader
+        eyebrow="Basel Capital"
         title="Regulatory Capital"
         subtitle="Simplified capital adequacy for a specialised deposit-taking institution under Act 930, Section 29."
       />

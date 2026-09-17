@@ -17,11 +17,7 @@ export default function SavedAnalysesPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance' },
-          { label: 'Reports Library', href: '/reports' },
-          { label: 'Saved Analyses' },
-        ]}
+        eyebrow="Reports"
         title="Saved Analyses"
         subtitle="ALCO prep · every saved scenario analysis across the five treasury workbenches"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}

@@ -195,11 +195,7 @@ export default function ContingencyFundingPlan() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Liquidity Risk", href: "/liquidity" },
-          { label: "CFP" },
-        ]}
+        eyebrow="Liquidity"
         title="Contingency Funding Plan"
         subtitle={`Server-side EWI framework (LRMD ¶28) · CFP lifecycle with ${regShort()} ¶74 notification`}
       />

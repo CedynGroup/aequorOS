@@ -112,11 +112,7 @@ export default function RWABreakdown() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Basel Capital", href: "/basel" },
-          { label: "RWA" },
-        ]}
+        eyebrow="Basel Capital"
         title="RWA Breakdown"
         subtitle={`Risk-weighted assets by risk type · ${regShort()} CRD standardized approach`}
       />

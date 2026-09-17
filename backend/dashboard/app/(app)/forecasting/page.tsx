@@ -141,11 +141,7 @@ function BalanceSheetWorkspace() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Balance Sheet Forecasting' },
-          { label: 'Balance Sheet' },
-        ]}
+        eyebrow="Forecasting"
         title="Balance Sheet Forecast"
         subtitle={`Deterministic ${horizonYears}-year projection from canonical financials and persisted scenario assumptions`}
         action={

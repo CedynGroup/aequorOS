@@ -285,11 +285,7 @@ function ReturnsWorkspace() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'Returns' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Returns workspace"
         subtitle={isSdi ? 'SDI return family · generate → validate → approve → export → submit, one immutable package version at a time' : 'Generate → validate → approve → export → submit, one immutable package version at a time'}
         action={

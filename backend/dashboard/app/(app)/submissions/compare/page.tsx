@@ -512,11 +512,7 @@ export default function ComparePage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'Compare' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Compare"
         subtitle="Line-by-line diff of two generated returns — server-computed, favorability-coloured deltas"
         action={<ModeToggle mode={mode} onChange={setMode} />}

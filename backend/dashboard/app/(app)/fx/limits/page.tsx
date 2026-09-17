@@ -16,7 +16,6 @@ import { fmtPct, regShort } from '@/lib/format';
 export default function FxLimitsPage() {
   return (
     <FxModuleFrame
-      crumb="Limits"
       title="FX Limits"
       subtitle={`${regShort()} net-open-position ceilings · aggregate and single-currency utilisation`}
     >

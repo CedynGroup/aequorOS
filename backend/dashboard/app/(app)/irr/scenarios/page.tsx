@@ -10,11 +10,7 @@ export default function IrrScenarios() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'IRRBB', href: '/irr' },
-          { label: 'Scenarios' },
-        ]}
+        eyebrow="IRRBB"
         title="Enterprise Stress Workbench"
         subtitle="Macro scenario → all engines → 3-year projection to Appendix II — the rate path drives ΔEVE inside the enterprise run"
       />

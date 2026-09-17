@@ -12,11 +12,7 @@ export default function CapitalStress() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: isSdi ? 'Regulatory Capital' : 'Basel Capital', href: '/basel' },
-          { label: 'Stress' },
-        ]}
+        eyebrow="Basel Capital"
         title={isSdi ? 'SDI Stress Workbench' : 'Enterprise Stress Workbench'}
         subtitle={isSdi ? 'Section 29 capital and material-risk stress with a controlled SDI liquidity not-assessed disclosure.' : 'Macro scenario → all engines → 3-year projection to Appendix II, base vs stress, with driver attribution and management actions'}
       />

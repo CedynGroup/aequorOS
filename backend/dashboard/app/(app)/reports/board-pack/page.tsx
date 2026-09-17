@@ -108,10 +108,7 @@ export default function BoardPackPage() {
       <>
         <div className="no-print">
           <PageHeader
-            breadcrumbs={[
-              { label: "Reports", href: "/reports" },
-              { label: "Board pack" },
-            ]}
+            eyebrow="Reports"
             title="Board Pack"
             subtitle="Print-optimized executive report"
           />
@@ -131,10 +128,7 @@ export default function BoardPackPage() {
       {/* Screen-only toolbar — the print pipeline never sees it. */}
       <div className="no-print">
         <PageHeader
-          breadcrumbs={[
-            { label: "Reports", href: "/reports" },
-            { label: "Board pack" },
-          ]}
+          eyebrow="Reports"
           title="Board Pack"
           subtitle="Cover · executive summary · module briefs — A4 print layout"
           asOf={fmtDateUTC(period.periodEnd)}

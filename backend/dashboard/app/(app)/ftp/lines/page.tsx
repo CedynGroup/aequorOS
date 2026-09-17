@@ -26,7 +26,6 @@ const VIEW_BADGE_TITLE =
 export default function FtpLinesPage() {
   return (
     <FtpModuleFrame
-      crumb="Business Lines"
       title="Business Line P&L"
       subtitle="FTP-adjusted product contribution grouped into desk-level lines for comparison — a screen view, not an engine output"
     >

@@ -216,11 +216,7 @@ export default function CapitalPlanning() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Basel Capital", href: "/basel" },
-          { label: "Planning" },
-        ]}
+        eyebrow="Basel Capital"
         title="Capital Planning"
         subtitle="Multi-year capital ratio projection from stored forecast runs · what-if planner on the current base"
       />

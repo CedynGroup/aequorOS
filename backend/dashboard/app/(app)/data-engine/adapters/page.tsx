@@ -30,10 +30,7 @@ export default function AdaptersPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Other adapters' },
-        ]}
+        eyebrow="Data Engine"
         title="Other adapters"
         subtitle="The Phase 3 adapter portfolio. Database (Direct) has shipped; the core-banking adapters remain planned — no connection UI is shown until an adapter actually ships."
       />

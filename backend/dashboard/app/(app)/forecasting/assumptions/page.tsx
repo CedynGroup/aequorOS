@@ -48,11 +48,7 @@ export default function AssumptionsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Balance Sheet Forecasting', href: '/forecasting' },
-          { label: 'Assumptions' },
-        ]}
+        eyebrow="Forecasting"
         title="Assumption Registry"
         subtitle="The audit record of what each run consumed — assumptions are edited in the Scenario Builder"
         action={

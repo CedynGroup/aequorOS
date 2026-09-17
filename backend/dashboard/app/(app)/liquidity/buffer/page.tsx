@@ -122,11 +122,7 @@ export default function LiquidityBuffer() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Liquidity Risk", href: "/liquidity" },
-          { label: "Buffer" },
-        ]}
+        eyebrow="Liquidity"
         title="Liquidity Buffer"
         subtitle="High quality liquid asset composition · Basel III LCR numerator"
       />

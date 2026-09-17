@@ -160,11 +160,7 @@ export default function BehavioralModelPage({
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Behavioral Models', href: '/behavioral' },
-          { label: config.title },
-        ]}
+        eyebrow="Behavioral Models"
         title={config.title}
         subtitle={
           <span className="inline-flex items-center gap-2 flex-wrap">

@@ -442,11 +442,7 @@ export default function WhatIfLab() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Balance Sheet Forecasting", href: "/forecasting" },
-          { label: "What-if Lab" },
-        ]}
+        eyebrow="Forecasting"
         title="What-if Lab"
         subtitle="Deterministic macro shocks re-projected against the unshocked base run on identical canonical inputs"
       />

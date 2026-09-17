@@ -15,7 +15,6 @@ import { fmtCurrency, fmtNum, fmtPct } from '@/lib/format';
 export default function FtpRulesPage() {
   return (
     <FtpModuleFrame
-      crumb="Rules"
       title="FTP Methodology & Rules"
       subtitle="The parameter set the pricing engine ran with — nothing on this page is hard-coded in the UI"
     >

@@ -33,13 +33,10 @@ export type FtpFrameContext = {
 };
 
 export default function FtpModuleFrame({
-  crumb,
   title,
   subtitle,
   children,
 }: {
-  /** Trailing breadcrumb / active tab label. */
-  crumb: string;
   title: string;
   subtitle?: string;
   children: (ctx: FtpFrameContext) => ReactNode;
@@ -56,11 +53,7 @@ export default function FtpModuleFrame({
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Funds Transfer Pricing' },
-          { label: crumb },
-        ]}
+        eyebrow="FTP"
         title={title}
         subtitle={subtitle}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}

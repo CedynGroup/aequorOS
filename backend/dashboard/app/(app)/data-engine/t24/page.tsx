@@ -38,10 +38,7 @@ export default function T24Page() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Temenos T24' },
-        ]}
+        eyebrow="Data Engine"
         title={
           <span className="flex items-center gap-3">
             Temenos T24

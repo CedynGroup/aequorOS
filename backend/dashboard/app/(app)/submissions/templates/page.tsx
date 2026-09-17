@@ -33,11 +33,7 @@ export default function TemplatesPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'Templates' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Return templates"
         subtitle="The regulator return registry — citations, deadlines, fidelity grades, and rendering layouts"
       />

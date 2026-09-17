@@ -65,7 +65,6 @@ export default function CreditVintagesPage() {
 
   return (
     <CreditWorkspace
-      crumb="Vintages"
       subtitle="Cumulative delinquency by origination cohort — how each lending season is maturing."
     >
       {() => (

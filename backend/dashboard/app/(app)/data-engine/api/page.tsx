@@ -27,10 +27,7 @@ export default function ApiPushPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'API Push' },
-        ]}
+        eyebrow="Data Engine"
         title="API Push"
         subtitle="Middleware POSTs JSON through the push endpoints — same pipeline, validation gating, and lineage as file uploads."
       />

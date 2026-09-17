@@ -23,11 +23,9 @@ export type CreditTabContext = {
 };
 
 export default function CreditWorkspace({
-  crumb,
   subtitle,
   children,
 }: {
-  crumb: string;
   subtitle: string;
   children: (ctx: CreditTabContext) => ReactNode;
 }) {
@@ -39,11 +37,7 @@ export default function CreditWorkspace({
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Credit', href: '/credit' },
-          { label: crumb },
-        ]}
+        eyebrow="Credit"
         title="Credit"
         subtitle={subtitle}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}

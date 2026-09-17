@@ -246,11 +246,7 @@ export default function BaselOverview() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Basel Capital" },
-          { label: "Overview" },
-        ]}
+        eyebrow="Basel Capital"
         title="Basel Capital"
         subtitle={`Capital Adequacy Ratio · Tier 1 / Tier 2 · ${regShort()} CRD framework`}
         action={

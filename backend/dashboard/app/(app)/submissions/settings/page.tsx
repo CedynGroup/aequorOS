@@ -142,11 +142,7 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Governance", href: "/submissions" },
-          { label: "Regulatory Reporting", href: "/submissions" },
-          { label: "Settings" },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Channel settings"
         subtitle="Per-channel submission configuration · credentials are write-only (fingerprint back, never the material)"
         action={

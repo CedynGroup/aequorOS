@@ -73,7 +73,6 @@ export default function CreditActivityPage() {
 
   return (
     <CreditWorkspace
-      crumb="Activity"
       subtitle={`Restructures, write-offs, recoveries and cures behind the monthly ${centralBankName()} asset-quality report.`}
     >
       {() => (

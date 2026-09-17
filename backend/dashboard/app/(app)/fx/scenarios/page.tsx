@@ -10,11 +10,7 @@ export default function FxScenarios() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'FX Risk', href: '/fx' },
-          { label: 'Scenarios' },
-        ]}
+        eyebrow="FX"
         title="Enterprise Stress Workbench"
         subtitle="Macro scenario → all engines → 3-year projection to Appendix II — the FX path revalues the open position inside the enterprise run"
       />

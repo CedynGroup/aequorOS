@@ -212,6 +212,7 @@ export default function SdiLiquidityMonitoringView({
   return (
     <div className="space-y-6 p-6">
       <PageHeader
+        eyebrow="Liquidity"
         title="Liquidity Monitoring Tools"
         subtitle={
           isSdi

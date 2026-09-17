@@ -67,10 +67,7 @@ export default function CanonicalPositionsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Canonical Data' },
-        ]}
+        eyebrow="Data Engine"
         title="Canonical positions"
         subtitle="The source-agnostic balance sheet produced by ingestion. Expand any row to trace it back to its source extraction."
       />

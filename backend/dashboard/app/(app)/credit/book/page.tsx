@@ -141,11 +141,7 @@ function LoanBookBody() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Credit', href: '/credit' },
-          { label: 'Loan Book' },
-        ]}
+        eyebrow="Credit"
         title="Loan Book"
         subtitle="Every loan behind the credit metrics, classified under the active grid."
         asOf={page.data?.asOf}

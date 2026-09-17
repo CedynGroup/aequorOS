@@ -101,11 +101,7 @@ export default function AwaitingSignaturePage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'Signatures' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Awaiting my signature"
         subtitle="Returns a colleague sent to you by name — open one to read the figures and sign in the same act"
       />

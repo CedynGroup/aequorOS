@@ -99,11 +99,7 @@ export default function CashFlowForecast() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Liquidity Risk', href: '/liquidity' },
-          { label: 'Cash Flow Forecast' },
-        ]}
+        eyebrow="Liquidity"
         title="Cash Flow Forecast"
         subtitle="Daily net cash flow projection · LSTM behavioral model vs static assumptions"
       />

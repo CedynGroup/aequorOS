@@ -183,11 +183,7 @@ export default function LiquidityCockpit() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Liquidity Risk" },
-          { label: "Cockpit" },
-        ]}
+        eyebrow="Liquidity"
         title="Liquidity Cockpit"
         subtitle={`Basel III LCR & NSFR · 30-day stressed horizon · ${centralBankName()} has issued no LCR or NSFR directive, so Basel parameters apply`}
         action={
