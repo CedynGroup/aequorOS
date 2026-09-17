@@ -9,19 +9,58 @@ tenant isolation — against the deterministic canonical seeded book.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.db.session import get_sessionmaker
-from app.models import User
+from app.models import AuthorizationBinding, RegulatoryRun, User
+from app.services import authorization
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.api.test_fx_authorization import _grant
 from tests.api.test_ingestion import seed_bank
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 LATEST_URL = "/api/v1/banks/{bank_id}/enterprise-stress/latest"
 SCENARIO_URL = "/api/v1/macro-scenarios"
+
+
+@pytest.fixture(autouse=True)
+def _enterprise_fx_run_authority(db_client: TestClient) -> None:
+    with get_sessionmaker()() as session:
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ANALYST,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.FX,
+                SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "enterprise-test"),
+            reason="Authorize the enterprise calculation fixture FX leg",
+            commit=False,
+        )
+        user = session.get(User, USER_1)
+        assert user is not None
+        user.authorization_version = 1
+        session.commit()
 
 
 def _period_id(client: TestClient, bank_id: str) -> str:
@@ -395,3 +434,113 @@ def test_a_car_target_below_the_governed_floor_is_refused(db_client: TestClient)
     details = response.json()["error"]["details"]
     assert details["error_code"] == "car_target_below_regulatory_minimum"
     assert details["details"]["governed_car_min_pct"] == "13"
+
+
+def _assert_enterprise_fx_projection(
+    metrics: dict[str, Any], original_metrics: dict[str, Any], *, visible: bool
+) -> None:
+    original_rows = original_metrics["appendix_ii"]["table5_rwa"]["rows"]
+    original_drivers = original_metrics["appendix_ii"]["table6_risk_drivers"]["rows"]
+    assert metrics["outcome"]["capital"] == original_metrics["outcome"]["capital"]
+    assert metrics["outcome"]["liquidity"] == original_metrics["outcome"]["liquidity"]
+    assert metrics["projection"] == original_metrics["projection"]
+    if visible:
+        assert metrics["outcome"] == original_metrics["outcome"]
+        assert metrics["appendix_ii"] == original_metrics["appendix_ii"]
+    else:
+        assert "fx" not in metrics["outcome"]
+        assert metrics["appendix_ii"]["table6_risk_drivers"]["rows"] == [
+            row for row in original_drivers if row["variable"] != "fx_usd_ghs"
+        ]
+        expected_rows = deepcopy(original_rows)
+        for row in expected_rows:
+            if row["pillar2"].pop("country_and_fx") is not None:
+                del row["pillar2"]["total"]
+                del row["total_capital_requirement"]
+        assert metrics["appendix_ii"]["table5_rwa"]["rows"] == expected_rows
+
+
+@pytest.mark.parametrize("include_fx", [True, False])
+@pytest.mark.parametrize("fx_sensitivity", [None, "aggregated", "confidential"])
+def test_enterprise_readers_project_fx_without_hiding_non_fx(
+    db_client: TestClient,
+    fx_sensitivity: str | None,
+    include_fx: bool,
+) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    checker = _seed_checker(db_client)
+    scenario_id = _create_scenario(db_client)
+    _approve_scenario(db_client, scenario_id, checker)
+    created = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": scenario_id,
+            "reporting_period_id": period_id,
+            "reason": "Verify enterprise result visibility",
+            "include_fx": include_fx,
+        },
+    )
+    assert created.status_code == 201, created.text
+    run_id = created.json()["run_id"]
+    with get_sessionmaker()() as session:
+        stored = session.get(RegulatoryRun, UUID(run_id))
+        assert stored is not None
+        original_metrics = deepcopy(stored.metrics)
+        original_inputs = deepcopy(stored.inputs)
+        assert bool(original_metrics["outcome"].get("fx")) == include_fx
+        original_rows = original_metrics["appendix_ii"]["table5_rwa"]["rows"]
+        assert any(row["pillar2"]["country_and_fx"] is None for row in original_rows)
+        assert (
+            any(row["pillar2"]["country_and_fx"] is not None for row in original_rows) == include_fx
+        )
+        original_drivers = original_metrics["appendix_ii"]["table6_risk_drivers"]["rows"]
+        assert any(row["variable"] == "fx_usd_ghs" for row in original_drivers)
+        session.execute(
+            delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
+        )
+        session.commit()
+    _, version = _grant(module_scope=ModuleScope.CAPITAL, sensitivity_scope=SensitivityScope.ALL)
+    if fx_sensitivity:
+        _, version = _grant(sensitivity_scope=SensitivityScope(fx_sensitivity))
+    reader_headers = headers(roles=("viewer",), authorization_version=version)
+    base = f"/api/v1/banks/{bank_id}"
+    registry = db_client.get(
+        f"{base}/regulatory-runs",
+        params={"module": "enterprise_stress", "limit": 1},
+        headers=reader_headers,
+    )
+    assert registry.status_code == 200, registry.text
+    assert registry.json()["total"] == 1
+    summary_metrics = registry.json()["runs"][0]["metrics"]
+    generic = db_client.get(f"{base}/regulatory-runs/{run_id}", headers=reader_headers)
+    latest = db_client.get(
+        LATEST_URL.format(bank_id=bank_id),
+        params={"reporting_period_id": period_id, "scenario_id": scenario_id},
+        headers=reader_headers,
+    )
+    detail = db_client.get(
+        f"{RUNS_URL.format(bank_id=bank_id)}/{run_id}",
+        headers=reader_headers,
+    )
+    for response in (generic, latest, detail):
+        assert response.status_code == 200, response.text
+    for metrics, visible in (
+        (summary_metrics, fx_sensitivity == "aggregated"),
+        (generic.json()["metrics"], fx_sensitivity == "confidential"),
+        (latest.json(), fx_sensitivity == "confidential"),
+        (detail.json(), fx_sensitivity == "confidential"),
+    ):
+        _assert_enterprise_fx_projection(metrics, original_metrics, visible=visible)
+    if fx_sensitivity != "confidential":
+        visible_inputs = generic.json()["inputs"]
+        assert "fx_depreciation_pct" not in visible_inputs["plan"]
+        assert all(
+            point["variable"] != "fx_usd_ghs" for point in visible_inputs["scenario"]["paths"]
+        )
+        assert visible_inputs["capital_facts"] == original_inputs["capital_facts"]
+    with get_sessionmaker()() as session:
+        stored = session.get(RegulatoryRun, UUID(run_id))
+        assert stored.metrics == original_metrics
+        assert stored.inputs == original_inputs

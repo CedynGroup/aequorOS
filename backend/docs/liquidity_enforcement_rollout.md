@@ -52,8 +52,9 @@ and integration keys do not satisfy the interactive human-binding gate.
 The EWI, Liquidity threshold, and Liquidity haircut PUT routes remain on their
 existing configuration gate until issue #184. Scheduled internal live
 computation does not impersonate a user and receives no binding; this cutover
-checks tenant-facing entry points while scheduled computation retains its
-existing behavior. Capital, Credit, and RISK-owned enterprise-stress backend
+checks tenant-facing entry points. Scheduled official-run authority is owned by
+the [FX queued-run contract](fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
+Capital, Credit, and RISK-owned enterprise-stress backend
 enforcement remain outside this cutover.
 
 ## Dashboard access

@@ -63,20 +63,28 @@ export default function RunsRegistry({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const moduleFilters = useMemo(
     () =>
-      moduleScope.capitalConfidentialView
-        ? MODULE_FILTERS
-        : MODULE_FILTERS.filter((filter) => filter.code !== "capital"),
-    [moduleScope.capitalConfidentialView],
+      MODULE_FILTERS.filter(
+        (filter) =>
+          (filter.code !== "capital" ||
+            moduleScope.capitalConfidentialView === true) &&
+          (filter.code !== "fx" || moduleScope.fxAggregatedView === true),
+      ),
+    [moduleScope.capitalConfidentialView, moduleScope.fxAggregatedView],
   );
 
   useEffect(() => {
     if (
-      moduleFilter === "capital" &&
-      moduleScope.capitalConfidentialView !== true
+      (moduleFilter === "capital" &&
+        moduleScope.capitalConfidentialView !== true) ||
+      (moduleFilter === "fx" && moduleScope.fxAggregatedView !== true)
     ) {
       setModuleFilter(null);
     }
-  }, [moduleFilter, moduleScope.capitalConfidentialView]);
+  }, [
+    moduleFilter,
+    moduleScope.capitalConfidentialView,
+    moduleScope.fxAggregatedView,
+  ]);
 
   const { query, runs, total } = useOfficialRunsRegistry(bankId, moduleFilter);
 

@@ -41,6 +41,8 @@ handlers for attestation step-up, auth, and impersonation cookies.
 
 Capital navigation, planning, and ILAAP access requirements are documented in
 [Capital dashboard access](../docs/capital_enforcement_rollout.md#dashboard-access).
+FX navigation, dashboard queries, run actions, and report projections are
+documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-access).
 
 ### What is deliberately NOT here
 

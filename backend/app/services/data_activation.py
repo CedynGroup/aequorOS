@@ -68,7 +68,11 @@ def activate_bank_data(
 ) -> DataActivationRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
-    for engine, module in (("liquidity", Module.LIQUIDITY), ("irr", Module.IRRBB)):
+    for engine, module in (
+        ("liquidity", Module.LIQUIDITY),
+        ("irr", Module.IRRBB),
+        ("fx", Module.FX),
+    ):
         if payload.run_calculations and module_scope.runs_module(db, bank, engine):
             scoped_authorization.require_resolved_bank_permission(
                 db,

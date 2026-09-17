@@ -381,7 +381,9 @@ Liquidity enforcement scope and held configuration routes are owned by the
 access requirements, and deployment inventory are owned by the
 [Capital enforcement rollout](capital_enforcement_rollout.md). IRRBB dashboard,
 engine, shared workbench, and run-registry requirements are owned by the
-[IRRBB enforcement rollout](irrbb_enforcement_rollout.md). Existing
+[IRRBB enforcement rollout](irrbb_enforcement_rollout.md). FX direct and shared
+surfaces, result projections, and required grants are owned by the
+[FX rollout contract](fx_enforcement_rollout.md). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,

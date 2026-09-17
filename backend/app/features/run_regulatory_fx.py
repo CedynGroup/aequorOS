@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, FxAggregatedView, FxRun
 from app.schemas.regulatory_fx import FxDashboardRead, FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
 from app.services import regulatory_fx
@@ -23,9 +23,9 @@ def run_all_fx_scenarios(
     bank_id: str,
     payload: FxScenarioBatchCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: FxRun,
 ) -> RegulatoryRunBatchRead:
-    return regulatory_fx.run_all_fx_scenarios(db, ctx, bank_id, payload)
+    return regulatory_fx.run_all_fx_scenarios(db, access.ctx, bank_id, payload)
 
 
 @router.get(
@@ -36,7 +36,7 @@ def run_all_fx_scenarios(
 def get_fx_dashboard(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: FxAggregatedView,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> FxDashboardRead:
-    return regulatory_fx.get_fx_dashboard(db, ctx, bank_id, reporting_period_id)
+    return regulatory_fx.get_fx_dashboard(db, access.ctx, bank_id, reporting_period_id)

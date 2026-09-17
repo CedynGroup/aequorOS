@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
@@ -23,6 +24,8 @@ from tests.api.test_enterprise_stress import (
     _seed_checker,
 )
 from tests.api.test_ingestion import seed_bank
+
+pytestmark = pytest.mark.usefixtures("fx_run_authority")
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 SIGNOFF_URL = "/api/v1/banks/{bank_id}/enterprise-stress/signoffs"
@@ -89,9 +92,7 @@ def test_signoff_maker_checker_lifecycle(db_client: TestClient) -> None:
     signoff_id = _create_signoff(db_client, bank_id, run_id)
 
     # Draft carries the run's headline outcome captured at prepare time.
-    got = db_client.get(
-        SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}", headers=headers()
-    )
+    got = db_client.get(SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}", headers=headers())
     assert got.status_code == 200
     assert got.json()["status"] == "draft"
     assert got.json()["stays_above_all_minima"] in (True, False)

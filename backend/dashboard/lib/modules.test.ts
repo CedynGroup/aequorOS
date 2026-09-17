@@ -22,12 +22,14 @@ const resolved = (
     "alerts",
     "liquidity",
     "capital",
+    "fx",
     "regulatory_reporting",
     "data_engine",
     "institution",
     "reports",
     "settings",
     "irrbb",
+    "fx",
   ]),
   modules: new Set([
     "command_center",
@@ -35,6 +37,7 @@ const resolved = (
     "alerts",
     "liquidity",
     "capital",
+    "fx",
     "regulatory_reporting",
     "data_engine",
     "institution",
@@ -55,6 +58,9 @@ const resolved = (
   irrbbAggregatedView: true,
   irrbbConfidentialView: true,
   irrbbRun: true,
+  fxAggregatedView: true,
+  fxConfidentialView: true,
+  fxRun: true,
   ...capabilities,
   isResolved: true,
 });
@@ -82,22 +88,59 @@ assert.deepEqual(
       "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
   },
 );
-const deniedIrrbb = resolved(true, true, {
-  irrbbAggregatedView: false,
-  irrbbConfidentialView: false,
-});
-assert.equal(isHrefVisible("/irr", deniedIrrbb), false);
-assert.equal(isPathVisible("/irr/sensitivity", deniedIrrbb), false);
-assert.deepEqual(hrefAccess("/irr", deniedIrrbb), {
-  state: "disabled",
-  reason:
-    "Requires IRRBB · Aggregated · View. Ask your organization owner or admin to grant it.",
-});
-assert.deepEqual(hrefAccess("/irr/scenarios", deniedIrrbb), {
-  state: "disabled",
-  reason:
-    "Requires IRRBB · Confidential · View. Ask your organization owner or admin to grant it.",
-});
+for (const moduleCase of [
+  {
+    prefix: "/irr",
+    label: "IRRBB",
+    aggregated: "irrbbAggregatedView",
+    confidential: "irrbbConfidentialView",
+    scenarioSensitivity: "Confidential",
+  },
+  {
+    prefix: "/fx",
+    label: "Foreign Exchange",
+    aggregated: "fxAggregatedView",
+    confidential: "fxConfidentialView",
+    scenarioSensitivity: "Confidential",
+  },
+] as const) {
+  const deniedModule = resolved(true, true, {
+    [moduleCase.aggregated]: false,
+    [moduleCase.confidential]: false,
+  });
+  for (const suffix of [
+    "",
+    "/?period=current",
+    "/sensitivity/detail?period=current",
+  ]) {
+    const href = `${moduleCase.prefix}${suffix}`;
+    assert.equal(isHrefVisible(href, deniedModule), false);
+    assert.equal(isPathVisible(href, deniedModule), false);
+    assert.deepEqual(hrefAccess(href, deniedModule), {
+      state: "disabled",
+      reason: `Requires ${moduleCase.label} · Aggregated · View. Ask your organization owner or admin to grant it.`,
+    });
+    assert.equal(isHrefVisible(href, resolved(true)), true);
+    assert.equal(isPathVisible(href, resolved(true)), true);
+  }
+  for (const suffix of ["/scenarios", "/scenarios/detail?analysis=saved"]) {
+    const href = `${moduleCase.prefix}${suffix}`;
+    assert.equal(isPathVisible(href, deniedModule), false);
+    assert.deepEqual(hrefAccess(href, deniedModule), {
+      state: "disabled",
+      reason: `Requires ${moduleCase.label} · ${moduleCase.scenarioSensitivity} · View. Ask your organization owner or admin to grant it.`,
+    });
+  }
+  const confidentialOnlyModule = resolved(true, true, {
+    [moduleCase.aggregated]: false,
+    [moduleCase.confidential]: true,
+  });
+  assert.equal(isPathVisible(moduleCase.prefix, confidentialOnlyModule), false);
+  assert.equal(
+    isPathVisible(`${moduleCase.prefix}/scenarios`, confidentialOnlyModule),
+    moduleCase.scenarioSensitivity === "Confidential",
+  );
+}
 
 const aggregatedOnly = resolved(true, false);
 assert.equal(isHrefVisible("/liquidity", aggregatedOnly), true);
@@ -174,6 +217,30 @@ const deniedCapital = resolved(true, true, {
 assert.equal(isHrefVisible("/basel", deniedCapital), false);
 assert.equal(isPathVisible("/basel/rwa", deniedCapital), false);
 assert.equal(isPathVisible("/basel/planning", deniedCapital), false);
+
+const aggregatedFxOnly = resolved(true, true, {
+  fxConfidentialView: false,
+  fxRun: false,
+});
+assert.equal(isHrefVisible("/fx", aggregatedFxOnly), true);
+assert.equal(isPathVisible("/fx/var", aggregatedFxOnly), true);
+assert.deepEqual(hrefAccess("/fx/scenarios", aggregatedFxOnly), {
+  state: "disabled",
+  reason:
+    "Requires Foreign Exchange · Confidential · View. Ask your organization owner or admin to grant it.",
+});
+
+const deniedFx = resolved(true, true, {
+  fxAggregatedView: false,
+  fxConfidentialView: true,
+});
+assert.equal(isHrefVisible("/fx", deniedFx), false);
+assert.deepEqual(hrefAccess("/fx", deniedFx), {
+  state: "disabled",
+  reason:
+    "Requires Foreign Exchange · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(isPathVisible("/fx/scenarios", deniedFx), true);
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),

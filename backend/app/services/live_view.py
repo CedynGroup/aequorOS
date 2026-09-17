@@ -77,7 +77,11 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         LiveMetric.organization_id == ctx.organization_id,
         LiveMetric.bank_id == bank.id,
     )
-    for engine, module in (("liquidity", Module.LIQUIDITY), ("irr", Module.IRRBB)):
+    for engine, module in (
+        ("liquidity", Module.LIQUIDITY),
+        ("irr", Module.IRRBB),
+        ("fx", Module.FX),
+    ):
         decision = scoped_authorization.evaluate_bank_permission(
             db,
             ctx,
@@ -230,7 +234,11 @@ def mint_official_run(
 ) -> JobEnqueuedRead:
     """Enqueue an immediate immutable official run (the "Mint for filing" button)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
-    for engine, module in (("liquidity", Module.LIQUIDITY), ("irr", Module.IRRBB)):
+    for engine, module in (
+        ("liquidity", Module.LIQUIDITY),
+        ("irr", Module.IRRBB),
+        ("fx", Module.FX),
+    ):
         if module_scope.runs_module(db, bank, engine):
             scoped_authorization.require_resolved_bank_permission(
                 db,
@@ -306,6 +314,16 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
     are honest, not zero-filled.
     """
     bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    if module in ("liquidity", "fx"):
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.VIEW,
+            module=Module.LIQUIDITY if module == "liquidity" else Module.FX,
+            sensitivity=Sensitivity.AGGREGATED,
+            surface="live_snapshots",
+        )
     rows = list(
         db.scalars(
             select(LiveMetricSnapshot)

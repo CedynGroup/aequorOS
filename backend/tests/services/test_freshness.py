@@ -18,6 +18,8 @@ from tests.factories.canonical import (
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
+pytestmark = pytest.mark.usefixtures("fx_run_authority")
+
 
 def _ctx() -> TenantContext:
     return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)

@@ -54,11 +54,13 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
-CHECKER_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
-CHECKER = TenantContext(
-    organization_id=DEMO_ORG_ID, actor_user_id=CHECKER_ID, roles=("approver",)
+pytestmark = pytest.mark.usefixtures("fx_run_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
 )
+CHECKER_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+CHECKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=CHECKER_ID, roles=("approver",))
 REPORTING_DATE = date(2026, 3, 31)
 RETURN_CODE = "ICAAP-STRESS-APPENDIX2"
 SDI_RETURN_CODE = "SDI-STRESS-ANNUAL"
@@ -193,9 +195,7 @@ def _approved_plan(db: Session, code: str = "recovery_2027") -> UUID:
     return created.id
 
 
-def _run_enterprise_stress(
-    db: Session, scenario_id: UUID, plan_id: UUID | None = None
-) -> UUID:
+def _run_enterprise_stress(db: Session, scenario_id: UUID, plan_id: UUID | None = None) -> UUID:
     read = enterprise_stress.run_enterprise_stress_test(
         db,
         MAKER,
@@ -327,7 +327,8 @@ def test_generates_appendix_ii_tables_from_attested_run(db_session: Session) -> 
     # The directive invariant: stressed Total Pillar-1 RWA (Table 5) equals
     # Table 1's stressed RWA — carried verbatim from the enterprise-stress run.
     t5_by_label = {
-        row["code"]: row["value"] for row in _section(snapshot, "t5_rwa")["rows"]  # type: ignore[index]
+        row["code"]: row["value"]
+        for row in _section(snapshot, "t5_rwa")["rows"]  # type: ignore[index]
     }
     for row in positions["rows"]:
         if row["code"].startswith("stress_y"):

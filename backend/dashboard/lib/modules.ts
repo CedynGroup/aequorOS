@@ -149,6 +149,12 @@ export type ModuleScope = {
   capitalRestrictedView?: boolean;
   /** Exact CAP/confidential run authority. */
   capitalRun?: boolean;
+  /** Exact FX/aggregated view authority for `/fx` dashboards; scenarios use confidential. */
+  fxAggregatedView?: boolean;
+  /** Exact FX/confidential view authority for run and analysis detail. */
+  fxConfidentialView?: boolean;
+  /** Exact FX/confidential run authority for FX engines. */
+  fxRun?: boolean;
   /**
    * Server-evaluated exact Liquidity capabilities for the selected
    * institution. Omitted/false is deny, so navigation and controls never infer
@@ -301,12 +307,7 @@ function bindingControlledSubrouteHidden(
   ) {
     return true;
   }
-  if (path === "/irr/scenarios" || path.startsWith("/irr/scenarios/")) {
-    return scope.irrbbConfidentialView !== true;
-  }
-  if (path === "/irr" || path.startsWith("/irr/")) {
-    return scope.irrbbAggregatedView !== true;
-  }
+  if (scopedModulePermissionReason(path, scope)) return true;
   return false;
 }
 
@@ -319,8 +320,6 @@ const LIQUIDITY_AGGREGATED_VIEW = "Liquidity Monitoring · Aggregated · View";
 const LIQUIDITY_CONFIDENTIAL_VIEW =
   "Liquidity Monitoring · Confidential · View";
 const RISK_CONFIDENTIAL_VIEW = "Risk & Limits · Confidential · View";
-const IRRBB_AGGREGATED_VIEW = "IRRBB · Aggregated · View";
-const IRRBB_CONFIDENTIAL_VIEW = "IRRBB · Confidential · View";
 const IRRBB_CONFIDENTIAL_RUN = "IRRBB · Confidential · Run";
 
 function permissionReason(permissions: readonly string[]): string | undefined {
@@ -374,19 +373,46 @@ function liquidityPermissionReason(
   return permissionReason(missing);
 }
 
-function irrbbPermissionReason(
+const SCOPED_MODULE_ROUTES = [
+  {
+    prefix: "/irr",
+    label: "IRRBB",
+    aggregatedView: "irrbbAggregatedView",
+    confidentialView: "irrbbConfidentialView",
+    confidentialRoutes: ["/irr/scenarios"],
+  },
+  {
+    prefix: "/fx",
+    label: "Foreign Exchange",
+    aggregatedView: "fxAggregatedView",
+    confidentialView: "fxConfidentialView",
+    confidentialRoutes: ["/fx/scenarios"],
+  },
+] as const;
+
+function scopedModulePermissionReason(
   path: string,
   scope: ModuleScope,
 ): string | undefined {
-  if (path !== "/irr" && !path.startsWith("/irr/")) return undefined;
-  if (path === "/irr/scenarios" || path.startsWith("/irr/scenarios/")) {
-    return scope.irrbbConfidentialView === true
+  for (const routePolicy of SCOPED_MODULE_ROUTES) {
+    if (
+      path !== routePolicy.prefix &&
+      !path.startsWith(`${routePolicy.prefix}/`)
+    )
+      continue;
+    const confidential = routePolicy.confidentialRoutes.some(
+      (route) => path === route || path.startsWith(`${route}/`),
+    );
+    const capability = confidential
+      ? routePolicy.confidentialView
+      : routePolicy.aggregatedView;
+    return scope[capability] === true
       ? undefined
-      : permissionReason([IRRBB_CONFIDENTIAL_VIEW]);
+      : permissionReason([
+          `${routePolicy.label} · ${confidential ? "Confidential" : "Aggregated"} · View`,
+        ]);
   }
-  return scope.irrbbAggregatedView === true
-    ? undefined
-    : permissionReason([IRRBB_AGGREGATED_VIEW]);
+  return undefined;
 }
 
 const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings"]);
@@ -439,8 +465,8 @@ export function isHrefVisible(href: string, scope: ModuleScope): boolean {
 
 /**
  * Navigation treatment for an href. Structural and object-scope exclusions stay
- * hidden; a resolved Liquidity or IRRBB permission gap stays visible but disabled with
- * the exact grant sentence the user needs.
+ * hidden; a resolved Liquidity, IRRBB, or FX permission gap stays visible but
+ * disabled with the exact grant sentence the user needs.
  */
 export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (scope.institutionClass === "sdi" && /[?&]code=BSD/i.test(href))
@@ -472,7 +498,7 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
 
   const reason =
     liquidityPermissionReason(path, scope) ??
-    irrbbPermissionReason(path, scope);
+    scopedModulePermissionReason(path, scope);
   if (reason) {
     return { state: "disabled", reason };
   }

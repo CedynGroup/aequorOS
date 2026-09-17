@@ -22,6 +22,7 @@ import KpiStat from "@/components/ui/KpiStat";
 import ChartFrame from "@/components/ui/ChartFrame";
 import StatusPill from "@/components/ui/StatusPill";
 import EmptyState from "@/components/ui/EmptyState";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import { ApiError } from "@/lib/api/client";
 import {
   assessAgainstFloor,
@@ -95,6 +96,11 @@ export default function EnterpriseStressWorkbench({
   const bankId = bank?.id;
   const periodId = period?.id;
   const isSdiTenant = moduleScope.institutionClass === "sdi";
+  const fxRunDeniedReason = !moduleScope.fxRun
+    ? "Requires FX run permission at confidential sensitivity. An organization owner can grant it."
+    : null;
+  const enterpriseRunDeniedReason =
+    moduleLens === "fx" ? fxRunDeniedReason : null;
 
   const [tab, setTab] = useState<Tab>("results");
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -139,11 +145,12 @@ export default function EnterpriseStressWorkbench({
   );
 
   useEffect(() => {
+    if (isLoading) return;
     if (isSdiTenant) {
       setCarTarget("10");
-      setIncludeFx(false);
     }
-  }, [isSdiTenant]);
+    setIncludeFx(!isSdiTenant && !fxRunDeniedReason);
+  }, [fxRunDeniedReason, isLoading, isSdiTenant]);
 
   // Default the focused run to the worst run in the registry when none picked.
   const effectiveRun = useMemo(() => {
@@ -169,6 +176,10 @@ export default function EnterpriseStressWorkbench({
 
   const runStress = async () => {
     setRunError(null);
+    if (enterpriseRunDeniedReason) {
+      setRunError(enterpriseRunDeniedReason);
+      return;
+    }
     if (!bankId || !periodId || !runScenarioId || !reason.trim()) {
       setRunError("Select an approved scenario and enter a run reason.");
       return;
@@ -246,6 +257,30 @@ export default function EnterpriseStressWorkbench({
       </div>
     );
   }
+
+  const fxToggle = (
+    <label className="flex items-center gap-2 text-caption text-slate">
+      <input
+        type="checkbox"
+        className="h-4 w-4 accent-action"
+        checked={includeFx}
+        disabled={Boolean(fxRunDeniedReason)}
+        onChange={(e) => setIncludeFx(e.target.checked)}
+      />
+      Include FX
+    </label>
+  );
+  const runButton = (
+    <button
+      type="button"
+      className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:opacity-50"
+      disabled={runMutation.isPending || Boolean(enterpriseRunDeniedReason)}
+      onClick={() => void runStress()}
+    >
+      <Play size={15} />{" "}
+      {runMutation.isPending ? "Running…" : "Run enterprise stress"}
+    </button>
+  );
 
   return (
     <div className="space-y-6">
@@ -384,17 +419,14 @@ export default function EnterpriseStressWorkbench({
                       />
                       Include IRRBB
                     </label>
-                    {!isSdiTenant && (
-                      <label className="flex items-center gap-2 text-caption text-slate">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-action"
-                          checked={includeFx}
-                          onChange={(e) => setIncludeFx(e.target.checked)}
-                        />
-                        Include FX
-                      </label>
-                    )}
+                    {!isSdiTenant &&
+                      (fxRunDeniedReason ? (
+                        <DisabledWithReason reason={fxRunDeniedReason}>
+                          {fxToggle}
+                        </DisabledWithReason>
+                      ) : (
+                        fxToggle
+                      ))}
                   </div>
                   <label className="block">
                     <span className="text-caption text-slate">
@@ -414,17 +446,16 @@ export default function EnterpriseStressWorkbench({
                   {runError && (
                     <p className="text-caption text-critical">{runError}</p>
                   )}
-                  <button
-                    type="button"
-                    className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:opacity-50"
-                    disabled={runMutation.isPending}
-                    onClick={() => void runStress()}
-                  >
-                    <Play size={15} />{" "}
-                    {runMutation.isPending
-                      ? "Running…"
-                      : "Run enterprise stress"}
-                  </button>
+                  {enterpriseRunDeniedReason ? (
+                    <DisabledWithReason
+                      reason={enterpriseRunDeniedReason}
+                      placement="right"
+                    >
+                      {runButton}
+                    </DisabledWithReason>
+                  ) : (
+                    runButton
+                  )}
                 </div>
               </SectionCard>
             )}

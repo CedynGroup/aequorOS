@@ -7,11 +7,8 @@
 > [`authorization_foundation.md`](../backend/docs/authorization_foundation.md).
 > It corrects the proposed independent `user_roles`/`user_scopes` shape to
 > indivisible scoped bindings, adds exact resource evaluation and authorization
-> version invalidation. Capital's access matrix and rollout requirements are
-> owned by the [Capital enforcement rollout](../backend/docs/capital_enforcement_rollout.md).
-> See the [Liquidity rollout contract](../backend/docs/liquidity_enforcement_rollout.md)
-> for Liquidity enforcement scope and exact required grants. IRRBB requirements
-> are owned by the [IRRBB rollout contract](../backend/docs/irrbb_enforcement_rollout.md).
+> version invalidation. The [product rollout contracts](../backend/docs/authorization_foundation.md#product-rollout-boundary)
+> own enforced surfaces, exact grants, and deployment requirements.
 > The institution-target slice (2026-08-27) makes resource target scope explicit
 > (organization or one exact institution; `NULL` never broadens) and records
 > binding decisions on Liquidity Monitoring and denies closed when no complete

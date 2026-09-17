@@ -295,6 +295,7 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
         "require_capital_plan_write",
         "require_capital_plan_approve",
         "require_ilaap_refresh",
+        "require_fx_run",
         "require_grant_administration",
         "get_scoped_mutation_tenant_context",
         "require_role_admin",
@@ -986,6 +987,40 @@ def require_capital_run(
     )
 
 
+def require_fx_aggregated_view(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.FX,
+        sensitivity=Sensitivity.AGGREGATED,
+        permission=Permission.VIEW,
+        surface="fx_aggregated_view",
+        detail="FX access requires an active scoped binding.",
+    )
+
+
+def require_fx_run(
+    request: Request,
+    db: DbSession,
+    ctx: Tenant,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        request,
+        db,
+        ctx,
+        module=Module.FX,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="fx_run",
+        detail="Running FX calculations requires an active scoped binding.",
+    )
+
+
 def require_capital_plan_write(
     request: Request,
     db: DbSession,
@@ -1157,6 +1192,8 @@ CapitalRestrictedView = Annotated[
     InstitutionPermissionAccess, Depends(require_capital_restricted_view)
 ]
 CapitalRun = Annotated[InstitutionPermissionAccess, Depends(require_capital_run)]
+FxAggregatedView = Annotated[InstitutionPermissionAccess, Depends(require_fx_aggregated_view)]
+FxRun = Annotated[InstitutionPermissionAccess, Depends(require_fx_run)]
 CapitalPlanWrite = Annotated[InstitutionPermissionAccess, Depends(require_capital_plan_write)]
 CapitalPlanApproveAccess = Annotated[
     InstitutionPermissionAccess, Depends(require_capital_plan_approve)

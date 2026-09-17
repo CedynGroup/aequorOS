@@ -36,6 +36,16 @@ async function api(
 }
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {
+  // /login readiness does not compile NextAuth's session route. The shell
+  // cannot resolve authority until that route responds, so finish its cold
+  // startup here rather than spending the first journey's assertion timeout.
+  const sessionResponse = await fetch(`${E2E_BASE_URL}/api/auth/session`);
+  if (!sessionResponse.ok || (await sessionResponse.json()) !== null) {
+    throw new Error(
+      "Expected an unauthenticated session from the ready dashboard",
+    );
+  }
+
   if (process.env.E2E_CAPABILITY_ONLY === "1") {
     for (const role of E2E_STORAGE_ROLES) {
       await writeStorageState(role, E2E_BASE_URL, E2E_TMP);

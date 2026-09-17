@@ -681,14 +681,23 @@ def _reconcile_findings(  # noqa: PLR0913 - one reconcile carries the full scope
 def _ctx_from_job(session: Session, job: Job, *, require_actor: bool = False) -> TenantContext:
     actor_raw = job.payload.get("actor_user_id")
     actor_id = UUID(str(actor_raw)) if actor_raw else None
-    if require_actor and actor_id is None:
-        actor_id = session.scalar(
-            select(User.id)
-            .where(User.organization_id == job.organization_id, User.is_active.is_(True))
-            .order_by(User.created_at)
-            .limit(1)
+    if not require_actor:
+        return TenantContext(organization_id=job.organization_id, actor_user_id=actor_id)
+    actor = session.scalar(
+        select(User).where(
+            User.id == actor_id,
+            User.organization_id == job.organization_id,
+            User.is_active.is_(True),
+            User.auth_provider != "service",
         )
-    return TenantContext(organization_id=job.organization_id, actor_user_id=actor_id)
+    )
+    if actor is None:
+        raise PipelineError("Official run requires an active actor in the job organization.")
+    return TenantContext(
+        organization_id=job.organization_id,
+        actor_user_id=actor.id,
+        authorization_version=actor.authorization_version,
+    )
 
 
 def _bank_or_error(session: Session, ctx: TenantContext, job: Job) -> Bank:

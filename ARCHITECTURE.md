@@ -249,7 +249,8 @@ on one canonical store — the live tier for intraday awareness, the official ti
   `LIVE_REFRESH_ENABLED`, the same tick is only a recovery net for a bank whose latest ingestion
   is newer than its oldest live module; age alone and structural unavailability are not triggers.
   The official-run schedule is inert unless `OFFICIAL_RUN_ENABLED`, so no environment auto-mints
-  heavy runs.
+  heavy runs. Scheduled actor selection and queue attribution follow the
+  [FX queued-run contract](backend/docs/fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
 - **Refresh authority and retries.** `GET /banks/{id}/live-summary` only reads persisted rows and
   computes its staleness signal; it never enqueues or commits. Accepted ingestion and market-data
   writes, approved methodology/regulatory-parameter changes, tenant assumption/threshold/haircut

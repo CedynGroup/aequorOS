@@ -28,6 +28,11 @@ _WORKBENCH_POLICIES: dict[WorkbenchModule, _WorkbenchAuthorizationPolicy] = {
         "liquidity",
         Sensitivity.AGGREGATED,
     ),
+    "fx": _WorkbenchAuthorizationPolicy(
+        Module.FX,
+        "fx",
+        Sensitivity.AGGREGATED,
+    ),
     "irr": _WorkbenchAuthorizationPolicy(
         Module.IRRBB,
         "irrbb",
