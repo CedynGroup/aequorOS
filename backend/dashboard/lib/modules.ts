@@ -445,7 +445,7 @@ export function isHrefVisible(href: string, scope: ModuleScope): boolean {
 
 /**
  * Navigation treatment for an href. Structural and object-scope exclusions stay
- * hidden; a resolved Liquidity permission gap stays visible but disabled with
+ * hidden; a resolved Liquidity or IRRBB permission gap stays visible but disabled with
  * the exact grant sentence the user needs.
  */
 export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {

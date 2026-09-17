@@ -6,18 +6,20 @@ institution, and create each approved binding explicitly before deployment.
 
 ## Affected surfaces
 
-| Surface | Required complete binding |
-| --- | --- |
-| IRRBB projections in live summary, snapshots, alerts, and window analytics | IRRBB / `aggregated` / `view` |
-| Activation with calculations and on-demand official runs, when `module_scope.runs_module` includes IRRBB | IRRBB / `confidential` / `run` |
-| IRRBB dashboards and page-level analyses | IRRBB / `aggregated` / `view` |
-| Full IRRBB run detail and saved scenario or analysis detail | IRRBB / `confidential` / `view` |
-| Run all regulatory scenarios, EaR compute-only analysis, and scenario analysis execution | IRRBB / `confidential` / `run` |
-| Create a custom scenario or saved analysis | IRRBB / `confidential` / `create` |
-| Edit or archive a custom scenario; delete a saved analysis | IRRBB / `confidential` / `edit` |
+| Surface                                                                                                  | Required complete binding         |
+| -------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| IRRBB projections in live summary, snapshots, alerts, and window analytics                               | IRRBB / `aggregated` / `view`     |
+| Activation with calculations and on-demand official runs, when `module_scope.runs_module` includes IRRBB | IRRBB / `confidential` / `run`    |
+| IRRBB dashboards and regulatory-run index                                                                | IRRBB / `aggregated` / `view`     |
+| Full IRRBB run detail, scenario catalogue, and saved-analysis index/detail                               | IRRBB / `confidential` / `view`   |
+| Run all regulatory scenarios, EaR compute-only analysis, and scenario analysis execution                 | IRRBB / `confidential` / `run`    |
+| Create a custom scenario or saved analysis                                                               | IRRBB / `confidential` / `create` |
+| Edit or archive a custom scenario; delete a saved analysis                                               | IRRBB / `confidential` / `edit`   |
 
-IRRBB run and saved-analysis lists remove unauthorized rows before total counts,
-offsets, and limits. Unauthorized detail IDs return 404. A denied request cannot
+The shared regulatory-run registry filters unauthorized IRRBB rows before total
+counts, offsets, and limits. The IRRBB saved-analysis index denies unauthorized
+requests before querying or counting rows. Unauthorized run and saved-analysis
+detail IDs return 404. A denied request cannot
 start an engine, create a run, save an analysis, mutate a scenario, or write an
 audit event.
 
@@ -27,6 +29,15 @@ when planned; internal scheduled execution is unchanged.
 
 No scalar role, token role, tenant membership, or binding for another module or
 sensitivity grants IRRBB authority.
+
+## Dashboard controls
+
+The `/irr` dashboards require aggregated view; `/irr/scenarios` requires
+confidential view. Run buttons and the sensitivity analysis horizon
+control consume the exact confidential run capability from effective authority.
+The shared permission-only disabled-control policy is defined in
+[the RBAC guide](../../docs/rbac.md); native disabled controls expose their
+explanation through a keyboard-focusable wrapper.
 
 ## Deny-impact inventory
 
@@ -88,11 +99,11 @@ live computation does not impersonate a tenant user.
 
 Create only rows approved from the inventory.
 
-| Duty | `principal_type` | `role_bundle` | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
-| --- | --- | --- | --- | --- | --- | --- |
-| Read IRRBB dashboards | `human` | `viewer`, `auditor`, `analyst`, or `approver` | `institution` | exact `BK-*` | `irrbb` | `aggregated` |
-| Read run and workbench detail | `human` | `viewer`, `auditor`, `analyst`, or `approver` | `institution` | exact `BK-*` | `irrbb` | `confidential` |
-| Run engines and create/edit scenario artifacts | `human` | `analyst` | `institution` | exact `BK-*` | `irrbb` | `confidential` |
+| Duty                                           | `principal_type` | `role_bundle`                                 | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
+| ---------------------------------------------- | ---------------- | --------------------------------------------- | ------------------- | ---------------- | -------------- | ------------------- |
+| Read IRRBB dashboards                          | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `irrbb`        | `aggregated`        |
+| Read run and workbench detail                  | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `irrbb`        | `confidential`      |
+| Run engines and create/edit scenario artifacts | `human`          | `analyst`                                     | `institution`       | exact `BK-*`     | `irrbb`        | `confidential`      |
 
 If the institution explicitly approves coverage across all its banks, replace
 only `institution_scope` with `organization` and `institution_id` with `NULL`.
