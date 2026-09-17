@@ -121,8 +121,21 @@ test.describe("exactly bound Liquidity user", () => {
     const link = page.getByRole("link", { name: "Monitoring Tools" });
     await expect(link).toBeVisible();
     await expect(
-      page.getByRole("link", { name: /Capital|IRR|FX|FTP/i }),
+      page.getByRole("link", { name: /Capital|FX|FTP/i }),
     ).toHaveCount(0);
+    const irrbb = page.getByRole("link", { name: "IRRBB", exact: true });
+    await expect(irrbb).toBeVisible();
+    await expect(irrbb).toHaveAttribute("aria-disabled", "true");
+    await irrbb.focus();
+    await expect(irrbb).toBeFocused();
+    await expect(
+      page.getByRole("tooltip").filter({
+        hasText:
+          "Requires IRRBB · Aggregated · View. Ask your organization owner or admin to grant it.",
+      }),
+    ).toBeVisible();
+    await irrbb.press("Enter");
+    await expect(page).toHaveURL(/\/liquidity$/);
     const stress = page.getByRole("link", { name: "Stress" });
     await expect(stress).toHaveAttribute("aria-disabled", "true");
     await stress.hover();

@@ -163,10 +163,6 @@ export type ModuleScope = {
   irrbbConfidentialView?: boolean;
   /** Exact IRRBB/confidential/run authority for regulatory and compute-only engines. */
   irrbbRun?: boolean;
-  /** Exact IRRBB/confidential/create authority for saved scenario artifacts. */
-  irrbbCreate?: boolean;
-  /** Exact IRRBB/confidential/edit authority for saved scenario artifacts. */
-  irrbbEdit?: boolean;
   /**
    * False while the bank payload is still loading. Until it flips true the scope
    * is UNKNOWN, so nav + data fetches restrict to `CORE_MODULES` rather than

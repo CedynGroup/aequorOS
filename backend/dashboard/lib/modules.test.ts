@@ -55,8 +55,6 @@ const resolved = (
   irrbbAggregatedView: true,
   irrbbConfidentialView: true,
   irrbbRun: true,
-  irrbbCreate: true,
-  irrbbEdit: true,
   ...capabilities,
   isResolved: true,
 });
@@ -187,8 +185,6 @@ const ownerOnly: ModuleScope = {
   irrbbAggregatedView: false,
   irrbbConfidentialView: false,
   irrbbRun: false,
-  irrbbCreate: false,
-  irrbbEdit: false,
   isResolved: true,
 };
 assert.equal(isHrefVisible("/settings", ownerOnly), true);
@@ -224,8 +220,6 @@ const unresolved: ModuleScope = {
   irrbbAggregatedView: false,
   irrbbConfidentialView: false,
   irrbbRun: false,
-  irrbbCreate: false,
-  irrbbEdit: false,
   isResolved: false,
 };
 assert.equal(isHrefVisible("/liquidity/monitoring", unresolved), false);
