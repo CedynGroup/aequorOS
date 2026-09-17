@@ -93,8 +93,8 @@ separate AequorOS decision.
   AequorOS Organization Owner opens **Settings → Members**, defines one complete
   grant (role, exact institution or organization-wide coverage, module,
   sensitivity, and reason), reviews the exact authority sentence, and approves
-  it. Identity activation and that one binding are committed together. Org
-  Owner is never assigned through this flow. This option cannot
+  it. Approval follows the [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
+  Org Owner is never assigned through this flow. This option cannot
   be enabled without at least one allowed domain, so it never opens requests to
   the public. Offboarding still works at your IdP: disable the Google/Entra
   account and sign-in stops.

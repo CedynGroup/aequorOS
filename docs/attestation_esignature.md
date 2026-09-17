@@ -196,8 +196,8 @@ auth_provider='oidc' AND sso_subject=sub AND is_active`, with a first-login
 fallback to exact email match on a pre-provisioned active account in that same
 organization (`app/services/authentication.py`). Opt-in JIT records a
 **deactivated** stub in that organization and returns 403 until an Org Owner
-approves one complete non-owner scoped grant; identity activation and binding
-creation use the same grant-administration transaction.
+approves one complete non-owner scoped grant through the
+[atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29).
 
 **Authentication update (2026-08-25).** Access tokens are HS256, 15-minute TTL,
 carrying `sub` (user UUID), `org`

@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import path from "path";
+import { writeFileSync } from "fs";
+import { E2E_API_ORIGIN } from "../playwright.config";
 import { E2E_PASSWORD } from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
@@ -80,6 +82,32 @@ test.describe("fresh active member baseline", () => {
       });
     }
 
+    await page.keyboard.press("Control+k");
+    await page
+      .getByPlaceholder("Search modules, screens, reports…")
+      .fill("Liquidity Stress");
+    const stress = page.getByRole("link", {
+      name: "Liquidity — Stress Scenarios",
+      exact: true,
+    });
+    await expect(stress).toHaveAttribute("aria-disabled", "true");
+    await stress.hover();
+    await expect(
+      page.getByRole("tooltip").filter({
+        hasText:
+          "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
+      }),
+    ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "baseline-stress-tooltip.png"),
+        fullPage: true,
+      });
+    }
+    await page.keyboard.press("Escape");
+    await page.goto("/basel/planning");
+    await expect(page).toHaveURL(/\/$/);
+
     await navigation
       .getByRole("link", { name: "Settings", exact: true })
       .click();
@@ -107,5 +135,59 @@ test.describe("fresh active member baseline", () => {
         page.getByText("No authorized institutions yet", { exact: true }),
       ).toHaveCount(0);
     }
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "baseline-object-404.png"),
+        fullPage: true,
+      });
+    }
+  });
+
+  test("password sign-in grants self-service but no institution or directory authority", async ({
+    request,
+  }) => {
+    const api = `${E2E_API_ORIGIN}/api/v1`;
+    const login = await request.post(`${api}/auth/login`, {
+      data: {
+        email: "e2e.invite_fresh@aequoros.example",
+        password: E2E_PASSWORD,
+      },
+    });
+    expect(login.status()).toBe(200);
+    const headers = {
+      Authorization: `Bearer ${(await login.json()).access_token}`,
+    };
+    const me = await request.get(`${api}/auth/me`, { headers });
+    expect(me.status()).toBe(200);
+    const profile = await me.json();
+    expect(profile.organization_id).toBe("OR-DEM00001");
+    expect(profile.effective_authority.organization_capabilities).toEqual([]);
+    expect(profile.effective_authority.institution_capabilities).toEqual([]);
+    const evidence: unknown[] = [
+      { path: "/auth/me", status: me.status(), body: profile },
+    ];
+    const update = await request.patch(`${api}/auth/me`, {
+      headers,
+      data: { theme: "system" },
+    });
+    expect(update.status()).toBe(200);
+    expect((await update.json()).theme).toBe("system");
+    for (const [route, status] of [
+      ["/banks", 200],
+      ["/banks/BK-SAMP0001", 404],
+      ["/banks/BK-NONE0001", 404],
+      ["/organization/users", 403],
+    ] as const) {
+      const response = await request.get(`${api}${route}`, { headers });
+      expect(response.status()).toBe(status);
+      const body = await response.json();
+      if (route === "/banks") expect(body.banks).toEqual([]);
+      evidence.push({ path: route, status: response.status(), body });
+    }
+    if (evidenceDir)
+      writeFileSync(
+        path.join(evidenceDir, "baseline-api.json"),
+        JSON.stringify(evidence, null, 2),
+      );
   });
 });
