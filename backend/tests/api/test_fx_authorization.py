@@ -23,6 +23,7 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.config import get_settings
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
@@ -30,6 +31,7 @@ from app.models import (
     AuthorizationBinding,
     Bank,
     BankReportingPeriod,
+    Job,
     LiveFinding,
     LiveMetric,
     LiveMetricSnapshot,
@@ -47,7 +49,9 @@ from app.services import (
     authorization,
     data_activation,
     enterprise_stress,
+    pipeline,
     regulatory_fx,
+    scheduler,
 )
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
@@ -279,6 +283,7 @@ def test_no_binding_denies_fx_without_legacy_role_fallback(
     calls: list[str] = []
     monkeypatch.setattr(
         regulatory_fx,
+    scheduler,
         "get_fx_dashboard",
         lambda *_args, **_kwargs: calls.append("called"),
     )
@@ -928,3 +933,77 @@ def test_enterprise_fx_permission_precedes_input_reads(
         )
         assert response.status_code == 409, response.text
         assert calls == ["period"]
+
+
+@pytest.mark.parametrize("scheduled", [False, True])
+def test_queued_official_run_mints_authorized_fx_results(
+    db_client: TestClient, scheduled: bool
+) -> None:
+    period_id = _seed_book()
+    _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.LIQUIDITY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _, version = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    with get_sessionmaker()() as session:
+        period = session.get(BankReportingPeriod, period_id)
+        assert period is not None
+        as_of = period.period_end.isoformat()
+        if scheduled:
+            scheduler._enqueue_due_official_runs(session, ORG_1, get_settings(), utc_now())
+            session.commit()
+        else:
+            response = db_client.post(
+                f"{BASE}/official-runs",
+                headers=headers(authorization_version=version),
+                json={"as_of_date": as_of, "reason": "Authorized queued FX filing"},
+            )
+            assert response.status_code == 202, response.text
+        job = session.scalar(
+            select(Job).where(Job.job_type == "official_run", Job.bank_id == SAMPLE_BANK_ID)
+        )
+        assert job is not None
+        pipeline.run_official(session, job)
+        runs = list(
+            session.scalars(
+                select(RegulatoryRun).where(
+                    RegulatoryRun.bank_id == SAMPLE_BANK_ID,
+                    RegulatoryRun.module == "fx",
+                )
+            )
+        )
+        assert {run.scenario_code for run in runs} == set(regulatory_fx.FX_RUN_SCENARIO_CODES)
+        assert all(run.status == "succeeded" for run in runs)
+
+
+@pytest.mark.parametrize("fx_scope", ["absent", "aggregated", "sibling"])
+def test_official_enqueue_requires_exact_confidential_fx_run(
+    db_client: TestClient, fx_scope: str
+) -> None:
+    _, version = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.LIQUIDITY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    if fx_scope == "aggregated":
+        _, version = _grant(role_bundle=RoleBundle.ANALYST)
+    elif fx_scope == "sibling":
+        _add_sibling_bank()
+        _, version = _grant(
+            role_bundle=RoleBundle.ANALYST,
+            institution_id=SIBLING_BANK_ID,
+            sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+        )
+    response = db_client.post(
+        f"{BASE}/official-runs",
+        headers=headers(authorization_version=version),
+        json={"as_of_date": "2026-08-31", "reason": "Denied queued FX filing"},
+    )
+    assert response.status_code == 403, response.text
+    with get_sessionmaker()() as session:
+        assert session.scalar(select(func.count()).select_from(Job)) == 0
+        assert session.scalar(select(func.count()).select_from(RegulatoryRun)) == 0
