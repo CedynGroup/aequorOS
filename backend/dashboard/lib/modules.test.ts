@@ -236,7 +236,10 @@ assert.equal(hubRedirectFor("/", ownerOnly), "/settings");
 assert.equal(hubRedirectFor("/", resolved(true)), null);
 assert.equal(hubRedirectFor("/", unresolved), null);
 assert.equal(hubRedirectFor("/settings", operationalOnly), "/settings/profile");
-assert.equal(hubRedirectFor("/settings/", operationalOnly), "/settings/profile");
+assert.equal(
+  hubRedirectFor("/settings/", operationalOnly),
+  "/settings/profile",
+);
 assert.equal(hubRedirectFor("/settings/members", operationalOnly), null);
 assert.equal(hubRedirectFor("/settings/authentication", operationalOnly), null);
 assert.equal(hubRedirectFor("/liquidity/monitoring", denied), null);
