@@ -280,6 +280,14 @@ assert.deepEqual(hrefAccess("/basel", memberOnly), {
     "Requires Basel Capital · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(hrefAccess("/settings", memberOnly).state, "enabled");
+assert.deepEqual(hrefAccess("/irr/scenarios", memberOnly), {
+  state: "disabled",
+  reason:
+    "Requires IRRBB · Confidential · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(isHrefVisible("/irr/scenarios", memberOnly), false);
+assert.equal(isPathVisible("/irr/scenarios", memberOnly), false);
+assert.equal(hubRedirectFor("/irr/scenarios", memberOnly), "/");
 
 // Hubs redirect when hidden; a member without institution authority also
 // returns from public product-module paths to the root empty workspace.

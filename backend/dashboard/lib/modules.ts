@@ -488,6 +488,7 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
       if (moduleKey === "settings") return { state: "enabled" };
       const reason =
         liquidityPermissionReason(path, scope) ??
+        irrbbPermissionReason(path, scope) ??
         (path === "/" || ROUTE_MODULES.some(([route]) => route === path)
           ? permissionReason([MODULE_ENTRY_REQUIREMENTS[moduleKey]])
           : undefined);

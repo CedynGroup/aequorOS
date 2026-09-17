@@ -104,7 +104,24 @@ test.describe("fresh active member baseline", () => {
         fullPage: true,
       });
     }
+    await page
+      .getByPlaceholder("Search modules, screens, reports…")
+      .fill("IRRBB Rate Scenario Workbench");
+    const workbench = page.getByRole("link", {
+      name: "IRRBB — Rate Scenario Workbench",
+      exact: true,
+    });
+    await expect(workbench).toHaveAttribute("aria-disabled", "true");
+    await workbench.hover();
+    await expect(
+      page.getByRole("tooltip").filter({
+        hasText:
+          "Requires IRRBB · Confidential · View. Ask your organization owner or admin to grant it.",
+      }),
+    ).toBeVisible();
     await page.keyboard.press("Escape");
+    await page.goto("/irr/scenarios");
+    await expect(page).toHaveURL(/\/$/);
     await page.goto("/basel/planning");
     await expect(page).toHaveURL(/\/$/);
 
