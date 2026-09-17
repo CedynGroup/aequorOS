@@ -23,7 +23,7 @@ const FOCUSABLE =
 function useOverlayBehavior(
   open: boolean,
   onClose: () => void,
-  ref: RefObject<HTMLElement>,
+  ref: RefObject<HTMLElement | null>,
 ) {
   // Hold onClose in a ref so an inline `onClose={() => ...}` from the caller (a
   // new function each render) doesn't re-run this effect on every keystroke —
