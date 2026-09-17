@@ -53,6 +53,8 @@ from tests.factories.canonical import (
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
+pytestmark = pytest.mark.usefixtures("fx_run_authority")
+
 # The worker retry test opens separate sessions that must observe committed job state.
 requires_committing_db = pytest.mark.committing_db
 
@@ -227,7 +229,7 @@ def test_unavailable_live_module_does_not_make_summary_reads_write(
     monkeypatch.setattr(db_session, "commit", counted_commit)
 
     poll_count = 5
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     for _ in range(poll_count):
         live_view.get_live_summary(db_session, ctx, SAMPLE_BANK_ID)
 
@@ -262,7 +264,7 @@ def test_completed_refresh_does_not_reopen_on_unchanged_summary_read(
 
     live_view.get_live_summary(
         db_session,
-        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+        TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1),
         SAMPLE_BANK_ID,
     )
 
@@ -381,7 +383,7 @@ def test_governed_parameter_change_enqueues_and_advances_generation(
     assert after.computed_from_input_hash != before_hash
     summary = live_view.get_live_summary(
         db_session,
-        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+        TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1),
         SAMPLE_BANK_ID,
     )
     capital_signal = next(module for module in summary.modules if module.module == "capital")
@@ -407,7 +409,7 @@ def test_failed_live_refresh_does_not_reference_a_vanished_ladder_period(
 
     pipeline._upsert_live_failure(  # pyright: ignore[reportPrivateUsage]
         db_session,
-        TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+        TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1),
         bank,
         vanished_period,
         "liquidity",
@@ -482,7 +484,7 @@ def test_live_dashboards_prefer_current_state_over_existing_official_runs(
 ) -> None:
     """The primary Treasury readers must not silently replay filing evidence."""
     _seed(db_session)
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     pipeline.run_refresh(db_session, _refresh_job(db_session))
     pipeline.run_official(db_session, _official_job(db_session))
 
@@ -529,7 +531,7 @@ def test_live_dashboards_prefer_current_state_over_existing_official_runs(
 def test_live_refresh_cannot_mutate_sealed_regulatory_package(db_session: Session) -> None:
     """A package binds the official snapshot even as the live book moves on."""
     _seed(db_session)
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     pipeline.run_refresh(db_session, _refresh_job(db_session))
     pipeline.run_official(db_session, _official_job(db_session))
     package_read = generation.generate_package(
@@ -633,7 +635,7 @@ def test_live_snapshot_ladder_reads_back_through_the_service(db_session: Session
     """The read endpoint's service returns the daily series oldest-first."""
     _seed(db_session)
     pipeline.run_refresh(db_session, _refresh_job(db_session))
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     out = live_view.list_live_snapshots(
         db_session, ctx, SAMPLE_BANK_ID, module="liquidity", days=30
     )
@@ -659,7 +661,7 @@ def test_a_failing_module_does_not_erase_the_reporting_period(db_session: Sessio
     the broken code and prove nothing.
     """
     _seed(db_session)
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     bank = db_session.scalar(select(Bank).where(Bank.id == SAMPLE_BANK_ID))
     assert bank is not None
     as_of = FIXTURE_AS_OF

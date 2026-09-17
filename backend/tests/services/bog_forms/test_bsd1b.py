@@ -24,6 +24,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -40,6 +41,8 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+
+pytestmark = pytest.mark.usefixtures("fx_run_authority")
 
 FXP = "FORM FXP"
 AFOP = "AFOP"

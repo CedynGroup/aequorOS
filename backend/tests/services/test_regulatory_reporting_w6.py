@@ -40,7 +40,11 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+pytestmark = pytest.mark.usefixtures("fx_run_authority")
+
+MAKER = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 MARCH = date(2026, 3, 31)
 FEBRUARY = date(2026, 2, 28)
 

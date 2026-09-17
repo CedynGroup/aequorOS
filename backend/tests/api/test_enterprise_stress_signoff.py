@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
@@ -23,6 +24,8 @@ from tests.api.test_enterprise_stress import (
     _seed_checker,
 )
 from tests.api.test_ingestion import seed_bank
+
+pytestmark = pytest.mark.usefixtures("fx_run_authority")
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 SIGNOFF_URL = "/api/v1/banks/{bank_id}/enterprise-stress/signoffs"

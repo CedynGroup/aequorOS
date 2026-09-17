@@ -13,6 +13,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db.session import get_sessionmaker
@@ -33,6 +34,8 @@ from tests.api.test_enterprise_stress import (
     _seed_checker,
 )
 from tests.api.test_ingestion import seed_bank
+
+pytestmark = pytest.mark.usefixtures("fx_run_authority")
 
 _AS_OF = date(2026, 3, 31)
 

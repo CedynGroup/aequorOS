@@ -408,6 +408,11 @@ def test_official_enqueue_preserves_mixed_module_gate(
     _seed_book()
     _grant(RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
+    version = _grant(
+        RoleBundle.ANALYST,
+        module=ModuleScope.FX,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
 
     with get_sessionmaker()() as session:
         before = [
@@ -558,6 +563,12 @@ def test_activation_reaches_derivation_with_required_authority(
         if run_calculations
         else 1
     )
+    if run_calculations:
+        version = _grant(
+            RoleBundle.ANALYST,
+            module=ModuleScope.FX,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+        )
     response = db_client.post(
         f"{BASE}/data-activations",
         headers=_auth(version, "analyst"),
