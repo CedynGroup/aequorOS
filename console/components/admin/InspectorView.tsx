@@ -292,7 +292,7 @@ export default function InspectorView() {
           <span className="inline-flex items-center gap-1.5">
             Inspection sessions
             <InfoTip label="About inspection sessions" width="w-80">
-              All inspection is read-only. Consent sessions view tenant data with the tenant's
+              All inspection is read-only. Consent sessions view tenant data with the tenant&apos;s
               knowledge; break-glass is emergency access without consent and requires the
               operator_admin role — the API returns 403 otherwise, surfaced here. Sessions self-expire
               at their TTL; state is derived from the expiry (the log is append-only).
