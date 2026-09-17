@@ -17,8 +17,8 @@ export default function PageHeader({
   asOf?: string;
 }) {
   return (
-    <div className="border-b border-border-light bg-surface-raised">
-      <div className="px-8 py-5">
+    <div className="px-8 pt-6 max-w-6xl">
+      <div className="pb-1">
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav
             aria-label="Breadcrumb"

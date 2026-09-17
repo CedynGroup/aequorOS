@@ -19,9 +19,19 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
 }) => {
   await page.goto("/data-engine");
 
-  await expect(
-    page.getByRole("heading", { name: "Data Engine" }),
-  ).toBeVisible();
+  const heading = page.getByRole("heading", { name: "Data Engine" });
+  await expect(heading).toBeVisible();
+  const pageHeader = page
+    .locator("div.max-w-6xl")
+    .filter({ has: heading })
+    .first();
+  await expect(pageHeader).toHaveClass(/px-8/);
+  await expect(pageHeader).not.toHaveClass(/bg-surface-raised|border-b/);
+  const titleBox = await heading.boundingBox();
+  const bodyHeadingBox = await page
+    .getByRole("heading", { name: "Integrations" })
+    .boundingBox();
+  expect(titleBox?.x).toBe(bodyHeadingBox?.x);
   await expect(
     page.getByRole("navigation", { name: "Module sections" }),
   ).toBeVisible();
