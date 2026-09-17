@@ -8,7 +8,7 @@
  * page reads it, POSTs it to /api/impersonation/accept so it is stored in an
  * HttpOnly cookie, clears the fragment from history, and lands on the dashboard.
  *
- * This route is outside the session gate (see middleware): the operator has no
+ * This route is outside the session gate (see proxy.ts): the operator has no
  * tenant session yet, only the hand-off in the fragment.
  */
 

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   useEffect,
@@ -7,9 +7,9 @@ import {
   useState,
   type ReactNode,
   type RefObject,
-} from 'react';
-import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+} from "react";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 
 const FOCUSABLE =
   'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
@@ -35,7 +35,7 @@ function useOverlayBehavior(
     if (!open) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
 
     const node = ref.current;
     const focusables = () =>
@@ -48,12 +48,12 @@ function useOverlayBehavior(
     });
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.stopPropagation();
         onCloseRef.current();
         return;
       }
-      if (e.key !== 'Tab') return;
+      if (e.key !== "Tab") return;
       const items = focusables();
       if (items.length === 0) {
         e.preventDefault();
@@ -70,9 +70,9 @@ function useOverlayBehavior(
       }
     };
 
-    document.addEventListener('keydown', onKey, true);
+    document.addEventListener("keydown", onKey, true);
     return () => {
-      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener("keydown", onKey, true);
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus?.();
     };
@@ -86,12 +86,12 @@ function usePortal(open: boolean): boolean {
   return mounted && open;
 }
 
-type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
+type ModalSize = "sm" | "md" | "lg" | "xl";
 const MODAL_WIDTH: Record<ModalSize, string> = {
-  sm: 'max-w-md',
-  md: 'max-w-xl',
-  lg: 'max-w-3xl',
-  xl: 'max-w-5xl',
+  sm: "max-w-md",
+  md: "max-w-xl",
+  lg: "max-w-3xl",
+  xl: "max-w-5xl",
 };
 
 /**
@@ -104,7 +104,7 @@ export function Modal({
   title,
   description,
   footer,
-  size = 'md',
+  size = "md",
   dismissOnBackdrop = true,
   children,
 }: {
@@ -164,7 +164,9 @@ export function Modal({
             </button>
           </div>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {children}
+        </div>
         {footer && (
           <div className="flex items-center justify-end gap-2 border-t border-border-light bg-surface/60 px-5 py-3">
             {footer}
@@ -179,7 +181,7 @@ export function Modal({
 /** Alias — `Dialog` reads better at some call sites. */
 export const Dialog = Modal;
 
-type DrawerSide = 'right' | 'left';
+type DrawerSide = "right" | "left";
 
 /**
  * Accessible side sheet: same focus-trap / ESC / scroll-lock behavior as Modal,
@@ -191,8 +193,8 @@ export function Drawer({
   title,
   description,
   footer,
-  side = 'right',
-  width = 'w-[440px]',
+  side = "right",
+  width = "w-[440px]",
   dismissOnBackdrop = true,
   children,
 }: {
@@ -228,8 +230,8 @@ export function Drawer({
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className={`absolute inset-y-0 ${side === 'right' ? 'right-0' : 'left-0'} flex ${width} max-w-[92vw] flex-col overflow-hidden border-border-light bg-surface-raised shadow-pop ${
-          side === 'right' ? 'border-l' : 'border-r'
+        className={`absolute inset-y-0 ${side === "right" ? "right-0" : "left-0"} flex ${width} max-w-[92vw] flex-col overflow-hidden border-border-light bg-surface-raised shadow-pop ${
+          side === "right" ? "border-l" : "border-r"
         }`}
       >
         {(title || description) && (
@@ -256,7 +258,9 @@ export function Drawer({
             </button>
           </div>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {children}
+        </div>
         {footer && (
           <div className="flex items-center justify-end gap-2 border-t border-border-light bg-surface/60 px-5 py-3">
             {footer}
