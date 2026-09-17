@@ -33,7 +33,11 @@ def get_bank_alerts(
         LiveFinding.status.in_(_OPEN_STATUSES),
         LiveFinding.severity.in_(_ALERT_SEVERITIES),
     )
-    for engine, module in (("liquidity", Module.LIQUIDITY), ("irr", Module.IRRBB)):
+    for engine, module in (
+        ("liquidity", Module.LIQUIDITY),
+        ("irr", Module.IRRBB),
+        ("fx", Module.FX),
+    ):
         decision = scoped_authorization.evaluate_bank_permission(
             db,
             ctx,

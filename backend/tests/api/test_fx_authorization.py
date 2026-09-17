@@ -736,3 +736,139 @@ def test_fx_regulatory_registry_filters_before_count_and_hides_details(
         ),
     )
     assert visible_detail.status_code == 200, visible_detail.text
+
+
+def test_fx_shared_feeds_filter_rows_and_counts(db_client: TestClient) -> None:
+    from app.models import LiveFinding, LiveMetric, LiveMetricSnapshot
+
+    now = utc_now()
+    with get_sessionmaker()() as session:
+        for module in ("capital", "fx"):
+            session.add(
+                LiveMetric(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    module=module,
+                    metrics={"nop_pct_tier1": "12"},
+                    status="red",
+                    computed_at=now,
+                )
+            )
+            session.add(
+                LiveFinding(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    module=module,
+                    rule_id=f"{module}_breach",
+                    severity="critical",
+                    message="Protected finding",
+                )
+            )
+            session.add(
+                LiveMetricSnapshot(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    module=module,
+                    reporting_period_id=uuid4(),
+                    snapshot_date=now.date(),
+                    metrics={"nop_pct_tier1": "12", "car_pct": "15"},
+                    status="red",
+                    computed_at=now,
+                )
+            )
+        session.commit()
+
+    _, version = _grant(module_scope=ModuleScope.CAPITAL)
+    denied_headers = headers(authorization_version=version)
+    summary = db_client.get(f"{BASE}/live-summary", headers=denied_headers)
+    assert summary.status_code == 200, summary.text
+    assert [row["module"] for row in summary.json()["modules"]] == ["capital"]
+    alerts = db_client.get(f"{BASE}/alerts", headers=denied_headers)
+    assert alerts.status_code == 200, alerts.text
+    assert alerts.json()["total"] == 1
+    assert alerts.json()["by_module"] == {"capital": 1}
+    snapshots = db_client.get(
+        f"{BASE}/live-snapshots",
+        params={"module": "fx"},
+        headers=denied_headers,
+    )
+    assert snapshots.status_code == 403
+    window_params = {"start_date": str(now.date()), "end_date": str(now.date())}
+    window = db_client.get(
+        f"{BASE}/analytics/window",
+        params=window_params,
+        headers=denied_headers,
+    )
+    assert window.status_code == 200, window.text
+    assert all(row["module"] != "fx" for row in window.json()["daily"])
+
+    _, version = _grant()
+    allowed_headers = headers(authorization_version=version)
+    summary = db_client.get(f"{BASE}/live-summary", headers=allowed_headers)
+    assert {row["module"] for row in summary.json()["modules"]} == {"capital", "fx"}
+    alerts = db_client.get(f"{BASE}/alerts", headers=allowed_headers)
+    assert alerts.json()["total"] == 2
+    assert alerts.json()["by_module"] == {"capital": 1, "fx": 1}
+    snapshots = db_client.get(
+        f"{BASE}/live-snapshots",
+        params={"module": "fx"},
+        headers=allowed_headers,
+    )
+    assert snapshots.status_code == 200, snapshots.text
+    assert len(snapshots.json()["snapshots"]) == 1
+    window = db_client.get(
+        f"{BASE}/analytics/window",
+        params=window_params,
+        headers=allowed_headers,
+    )
+    assert any(row["module"] == "fx" for row in window.json()["daily"])
+
+
+def test_fx_batch_and_activation_deny_before_work(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.api.deps import TenantContext
+    from app.schemas.data_activation import DataActivationCreate
+    from app.services import data_activation
+
+    _, version = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.LIQUIDITY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    ctx = TenantContext(
+        organization_id=ORG_1,
+        actor_user_id=USER_1,
+        authorization_version=version,
+    )
+    calls = []
+
+    def unexpected_work(*args: object, **kwargs: object) -> None:
+        calls.append("work")
+        raise AssertionError("Unauthorized calculation reached work")
+
+    monkeypatch.setattr(data_activation, "derive_facts", unexpected_work)
+    monkeypatch.setattr(regulatory_fx, "_get_period_or_404", unexpected_work)
+    with get_sessionmaker()() as session:
+        with pytest.raises(HTTPException) as batch_denial:
+            regulatory_fx.run_all_fx_scenarios(
+                session,
+                ctx,
+                SAMPLE_BANK_ID,
+                FxScenarioBatchCreate(reporting_period_id=uuid4()),
+            )
+        assert batch_denial.value.status_code == 403
+        with pytest.raises(HTTPException) as activation_denial:
+            data_activation.activate_bank_data(
+                session,
+                ctx,
+                SAMPLE_BANK_ID,
+                DataActivationCreate(
+                    as_of_date=utc_now().date(),
+                    reason="Verify FX preflight",
+                    run_calculations=True,
+                ),
+            )
+        assert activation_denial.value.status_code == 403
+    assert calls == []

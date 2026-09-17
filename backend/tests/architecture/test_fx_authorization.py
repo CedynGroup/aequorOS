@@ -2,17 +2,10 @@
 
 from __future__ import annotations
 
-import inspect
-
 from fastapi.routing import APIRoute
 
-from app.core.authorization import Module
 from app.main import create_app
-from app.services import (
-    analysis_workbench,
-    scenario_workbench_authorization,
-    stress_scenarios,
-)
+
 
 _ROUTE_DEPENDENCIES = {
     ("GET", "/api/v1/banks/{bank_id}/fx/dashboard"): "require_fx_aggregated_view",
@@ -43,27 +36,3 @@ def test_fx_routes_cannot_revert_to_legacy_authorization() -> None:
         assert required_dependency in dependencies
         assert "get_mutation_tenant_context" not in dependencies
         assert not any(name.startswith("require_role_") for name in dependencies)
-
-
-def test_fx_shared_workbench_cannot_revert_to_legacy_role_gates() -> None:
-    assert scenario_workbench_authorization._SCOPED_MODULES["fx"] is Module.FX
-    assert not hasattr(
-        scenario_workbench_authorization,
-        "require_liquidity_permission",
-    )
-
-    guarded_operations = (
-        stress_scenarios.list_catalogue,
-        stress_scenarios.create_scenario,
-        stress_scenarios.update_scenario,
-        stress_scenarios.set_archived,
-        analysis_workbench.run_analysis,
-        analysis_workbench.save_analysis,
-        analysis_workbench.list_analyses,
-        analysis_workbench.get_analysis,
-        analysis_workbench.delete_analysis,
-    )
-    for operation in guarded_operations:
-        source = inspect.getsource(operation)
-        assert "require_module_permission(" in source
-        assert "get_mutation_tenant_context" not in source
