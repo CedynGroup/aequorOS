@@ -361,8 +361,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   and issue #151 owns removal. Before these gates, `frontend/` and `console/` were in no
   workflow and the dashboard's fail-open guard, SSRF egress guard, and browser journeys
   were unenforced. Each workflow's header comment is its gate inventory — keep it accurate.
-  `console` is deliberately NOT lint-gated (no ESLint dependency or config in that
-  workspace); see ARCHITECTURE.md §8.
+  See ARCHITECTURE.md §8 for local validation commands and CI coverage.
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,

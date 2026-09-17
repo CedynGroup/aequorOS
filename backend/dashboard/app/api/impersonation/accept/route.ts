@@ -7,7 +7,7 @@
  * lands in an HttpOnly cookie that page scripts cannot read, out of the URL and
  * out of history.
  *
- * This route is deliberately outside the session gate (see middleware): the
+ * This route is deliberately outside the session gate (see proxy.ts): the
  * operator has no tenant NextAuth session, only this hand-off.
  */
 
