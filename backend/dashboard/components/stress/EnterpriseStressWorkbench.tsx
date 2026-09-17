@@ -33,7 +33,10 @@ import {
   num,
   numOrNull,
 } from "@/lib/api/values";
-import { FTP_CONFIDENTIAL_RUN_REASON } from "@/lib/modules";
+import {
+  FTP_CONFIDENTIAL_RUN_REASON,
+  IRRBB_CONFIDENTIAL_RUN_REASON,
+} from "@/lib/modules";
 import { currencyCode, fmtInt } from "@/lib/format";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
@@ -68,9 +71,6 @@ const LENS_LABEL: Record<StressModuleLens, string> = {
   fx: "FX lens",
   ftp: "FTP lens",
 };
-
-const IRRBB_RUN_PERMISSION_REASON =
-  "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.";
 
 type Tab =
   | "run"
@@ -109,7 +109,7 @@ export default function EnterpriseStressWorkbench({
       : moduleLens === "fx" && fxRunDeniedReason
         ? fxRunDeniedReason
         : moduleScope.irrbbRun !== true
-          ? IRRBB_RUN_PERMISSION_REASON
+          ? IRRBB_CONFIDENTIAL_RUN_REASON
           : null;
 
   const [tab, setTab] = useState<Tab>("run");
