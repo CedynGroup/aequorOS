@@ -127,7 +127,7 @@ class ShockMapping:
     floor: Decimal | None = None
     cap: Decimal | None = None
     # Optional enrichments do not expand the module's fail-closed minimum input
-    # contract. When their variable is absent they contribute an explicit zero.
+    # contract. Activation prerequisites can omit an optional mapping entirely.
     required: bool = True
     activate_when_present: tuple[str, ...] = ()
     # Extra metadata, ignored by the maths — provenance for readers/audits.
