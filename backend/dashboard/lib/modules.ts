@@ -64,6 +64,11 @@ function normalize(pathOrHref: string): string {
   return path === "" ? "/" : path;
 }
 
+/** True for the root path (query string and trailing slashes ignored). */
+export function isRootPath(pathname: string): boolean {
+  return normalize(pathname) === "/";
+}
+
 /** The module a route path belongs to, or null for a route outside the map. */
 export function moduleForPath(pathname: string): ModuleKey | null {
   const path = normalize(pathname);
@@ -337,4 +342,72 @@ export function isHrefVisible(href: string, scope: ModuleScope): boolean {
     if (scope.modules && !scope.modules.has(moduleKey)) return false;
   }
   return true;
+}
+
+/**
+ * Sidebar order of every module home. The root landing resolves against this
+ * list so a user is sent to the first surface they would actually see in the
+ * nav — never to a route the sidebar hides.
+ */
+const LANDING_CANDIDATES: readonly string[] = [
+  "/",
+  "/risk",
+  "/alerts",
+  "/markets",
+  "/positions",
+  "/irr",
+  "/liquidity",
+  "/credit",
+  "/fx",
+  "/basel",
+  "/basel/planning",
+  "/ftp",
+  "/forecasting",
+  "/behavioral",
+  "/data-engine",
+  "/reports",
+  "/institution",
+  "/submissions",
+  "/settings",
+];
+
+/**
+ * Where a signed-in user lands when they arrive at the root. `/` is the
+ * post-sign-in destination for everyone, but the Command Center needs RISK view
+ * authority — an Org Owner holding Account administration alone, or a Liquidity
+ * Manager, would otherwise be dumped on a 404 by the route guard the moment
+ * they signed in (docs/rbac.md §8.3). Returns the first visible surface in
+ * sidebar order, falling back to personal settings, which every active session
+ * can open; null while the scope is still unresolved.
+ */
+export function landingPathFor(scope: ModuleScope): string | null {
+  if (!scope.isResolved) return null;
+  return (
+    LANDING_CANDIDATES.find((href) => isHrefVisible(href, scope)) ??
+    "/settings/profile"
+  );
+}
+
+/**
+ * Where a hub URL should send a user it is hidden from, or null to 404.
+ *
+ * Two URLs are destinations people type or are sent to rather than deep links
+ * into someone else's data, so a hidden one redirects instead of 404ing:
+ *   - `/`         → the first visible surface (`landingPathFor`);
+ *   - `/settings` → personal settings, which every active session can open,
+ *                   when organization settings need authority the user lacks.
+ * Every other hidden path stays not-found (docs/rbac.md §8.2).
+ */
+export function hubRedirectFor(
+  pathname: string,
+  scope: ModuleScope,
+): string | null {
+  const path = normalize(pathname);
+  if (!scope.isResolved) return null;
+  if (path === "/") {
+    const landing = landingPathFor(scope);
+    return landing && landing !== "/" ? landing : null;
+  }
+  if (path === "/settings") return "/settings/profile";
+  return null;
 }

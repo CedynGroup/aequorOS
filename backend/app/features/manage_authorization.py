@@ -28,6 +28,8 @@ from app.schemas.authorization import (
     BindingPreviewRequest,
     BindingRead,
     BindingRevokeRequest,
+    InstitutionDirectoryEntryRead,
+    InstitutionDirectoryRead,
     MemberListRead,
     MemberRead,
     ScopedGrantInput,
@@ -358,6 +360,36 @@ def _authentication_method(user: User) -> Literal["password", "sso", "service"]:
     if user.auth_provider == "service":
         return "service"
     return "password"
+
+
+@router.get(
+    "/organization/institutions",
+    response_model=InstitutionDirectoryRead,
+    operation_id="listOrganizationInstitutions",
+)
+def list_organization_institutions(
+    db: DbSession, ctx: GrantAdminTenant
+) -> InstitutionDirectoryRead:
+    """Every institution in the organization, for scoping a grant.
+
+    Grant administration is account-plane authority and must not borrow its
+    institution catalogue from the operational plane: ``/banks`` filters to the
+    institutions the CALLER can view, which is empty for an Owner holding
+    Account alone, so the Members composer could only write organization-wide
+    grants. This directory is gated on the persisted Org Owner binding like the
+    rest of grant administration and lists the whole organization regardless of
+    what the owner personally reads.
+    """
+
+    banks = db.scalars(
+        select(Bank).where(Bank.organization_id == ctx.organization_id).order_by(Bank.name, Bank.id)
+    )
+    return InstitutionDirectoryRead(
+        institutions=[
+            InstitutionDirectoryEntryRead(id=bank.id, name=bank.name, short_name=bank.short_name)
+            for bank in banks
+        ]
+    )
 
 
 @router.get(

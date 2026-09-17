@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import security
@@ -123,7 +123,9 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert admin.role == "account_admin"
     assert admin.auth_provider == "password"
     assert admin.is_active is True
-    assert admin.authorization_version == 2
+    # Two explicit ownership sentences (owner + organization-wide read), each
+    # advancing the version once.
+    assert admin.authorization_version == 3
     assert admin.password_hash is not None
     assert security.verify_password(one_time_password, admin.password_hash)
     owner_binding = operator_db.scalar(
@@ -137,6 +139,32 @@ def test_saga_success_end_to_end(  # noqa: PLR0915 - the one happy path, asserte
     assert owner_binding.granted_by_type == "system"
     assert owner_binding.granted_by_id == "tenant_provisioning:dev@aequoros.com"
     assert "exactly one eligible active human administrator" in owner_binding.grant_reason
+    # The second ownership sentence: read every module, organization-wide, so
+    # the owner sees the product they administer (docs/rbac.md §7) — and nothing
+    # operational (no create/run/approve/submit: SoD C9).
+    read_binding = operator_db.scalar(
+        select(AuthorizationBinding).where(
+            AuthorizationBinding.organization_id == organization_id,
+            AuthorizationBinding.role_bundle == "viewer",
+        )
+    )
+    assert read_binding is not None
+    assert read_binding.principal_user_id == admin.id
+    assert read_binding.institution_scope == "organization"
+    assert read_binding.institution_id is None
+    assert read_binding.module_scope == "all"
+    assert read_binding.sensitivity_scope == "all"
+    assert read_binding.granted_by_type == "system"
+    assert read_binding.granted_by_id == "tenant_provisioning:dev@aequoros.com"
+    assert "Org Owner read access" in read_binding.grant_reason
+    assert (
+        operator_db.scalar(
+            select(func.count())
+            .select_from(AuthorizationBinding)
+            .where(AuthorizationBinding.organization_id == organization_id)
+        )
+        == 2
+    )
     owner_state = operator_db.get(OrganizationOwnerAssignment, organization_id)
     assert owner_state is not None
     assert owner_state.status == "assigned"

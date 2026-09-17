@@ -5,7 +5,7 @@ import { SessionProvider, signOut, useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 
 import { setAccessToken } from "@/lib/api/token";
-import { LOGIN_URL } from "@/lib/loginUrl";
+import { LOGIN_URL, loginUrlWithReason } from "@/lib/loginUrl";
 import ProfileProvider from "@/components/profile/ProfileProvider";
 import ImpersonationBanner from "@/components/impersonation/ImpersonationBanner";
 import QueryAuthorityBoundary from "@/lib/api/QueryAuthorityBoundary";
@@ -22,7 +22,10 @@ function TokenSync() {
     // the user back to sign in rather than looping on 401s with a dead token.
     if (session?.error === "RefreshTokenError") {
       setAccessToken(null);
-      void signOut({ redirectTo: LOGIN_URL });
+      // A revoked refresh family is, in practice, an administrator changing
+      // this person's access (every grant/revoke ends the grantee's sessions).
+      // Say so on the sign-in page instead of bouncing them without a word.
+      void signOut({ redirectTo: loginUrlWithReason("session_ended") });
       return;
     }
     setAccessToken(session?.accessToken ?? null);

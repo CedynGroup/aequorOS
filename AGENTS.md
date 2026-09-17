@@ -130,7 +130,14 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   converts every scalar `admin` to non-operational `account_admin`, bumps `authv`, and revokes
   refresh families; account admins never enter the analyst/approver ladder. Staff
   provisioning creates its sole first admin, owner binding, and
-  assignment state atomically. Explicit designation mutation/UI remains later staff-plane work:
+  assignment state atomically. **Ownership is TWO sentences (2026-09-16):** the
+  `org_owner`/Account row administers, and a separate organization-wide `viewer`/all/all
+  row reads the product — the Owner bundle has no `view`, so without it an Owner sees no
+  bank and no module (the founder's prod lockout). `ensure_owner_read_access` writes it,
+  migration `202609160052` backfills it. The Members composer scopes grants from
+  `GET /organization/institutions` (account plane), never `/banks`. Gate every enforcement
+  cutover with `scripts/authorization_access_impact.py`.
+  Explicit designation mutation/UI remains later staff-plane work:
   a zero-owner tenant has no tenant authority that could authorize its own designation.
   **Scoped grant administration (built 2026-08-29; migration `202608290047`).**
   Org Owners administer exactly one indivisible binding per create/revoke through

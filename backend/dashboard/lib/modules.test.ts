@@ -4,6 +4,9 @@ import {
   isHrefVisible,
   isPersonalSettingsPath,
   isPathVisible,
+  hubRedirectFor,
+  isRootPath,
+  landingPathFor,
   type ModuleScope,
 } from "./modules";
 
@@ -131,6 +134,54 @@ const unresolved: ModuleScope = {
 };
 assert.equal(isHrefVisible("/liquidity/monitoring", unresolved), false);
 assert.equal(isPathVisible("/liquidity/monitoring", unresolved), true);
+
+// Root landing: `/` is where every sign-in lands, so it resolves to the first
+// visible surface rather than 404ing users without Command Center authority.
+assert.equal(isRootPath("/"), true);
+assert.equal(isRootPath("/?tour=1"), true);
+assert.equal(isRootPath("//"), true);
+assert.equal(isRootPath("/settings"), false);
+assert.equal(landingPathFor(resolved(true)), "/");
+assert.equal(landingPathFor(ownerOnly), "/settings");
+assert.equal(landingPathFor(unresolved), null);
+
+const liquidityOnly: ModuleScope = {
+  ...resolved(true),
+  modules: new Set(["liquidity"]),
+};
+assert.equal(isPathVisible("/", liquidityOnly), false);
+assert.equal(landingPathFor(liquidityOnly), "/liquidity");
+
+const capitalPlanningOnly: ModuleScope = {
+  ...resolved(true, { capitalAggregatedView: false }),
+  modules: new Set(["capital"]),
+};
+assert.equal(landingPathFor(capitalPlanningOnly), "/basel/planning");
+
+const regulatoryOnly: ModuleScope = {
+  ...resolved(true),
+  modules: new Set(["regulatory_reporting", "reports"]),
+  organizationModules: new Set(),
+};
+assert.equal(landingPathFor(regulatoryOnly), "/reports");
+
+const nothingVisible: ModuleScope = {
+  ...resolved(true),
+  modules: new Set(),
+  organizationModules: new Set(),
+};
+assert.equal(landingPathFor(nothingVisible), "/settings/profile");
+
+// Hub redirects: only `/` and `/settings` redirect when hidden; deep links 404.
+assert.equal(hubRedirectFor("/", ownerOnly), "/settings");
+assert.equal(hubRedirectFor("/", resolved(true)), null);
+assert.equal(hubRedirectFor("/", unresolved), null);
+assert.equal(hubRedirectFor("/settings", operationalOnly), "/settings/profile");
+assert.equal(hubRedirectFor("/settings/", operationalOnly), "/settings/profile");
+assert.equal(hubRedirectFor("/settings/members", operationalOnly), null);
+assert.equal(hubRedirectFor("/settings/authentication", operationalOnly), null);
+assert.equal(hubRedirectFor("/liquidity/monitoring", denied), null);
+assert.equal(hubRedirectFor("/fx", ownerOnly), null);
 
 console.log(
   "modules.test.ts: binding-controlled navigation and deep links passed.",

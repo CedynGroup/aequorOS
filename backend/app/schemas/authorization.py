@@ -168,3 +168,19 @@ class MemberRead(ClosedModel):
 
 class MemberListRead(ClosedModel):
     members: list[MemberRead]
+
+
+class InstitutionDirectoryEntryRead(ClosedModel):
+    id: str
+    name: str
+    short_name: str | None
+
+
+class InstitutionDirectoryRead(ClosedModel):
+    """Every institution in the organization, for scoping grants.
+
+    Account-plane data: it does not depend on the caller's own operational
+    coverage, unlike ``/banks``.
+    """
+
+    institutions: list[InstitutionDirectoryEntryRead]
