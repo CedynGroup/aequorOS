@@ -31,6 +31,7 @@ import {
   WARNING_COUNTS_LEGEND,
   warningRuleHint,
 } from '@/components/data-engine/content';
+import { use } from 'react';
 
 type ReportFailure = {
   rule: string;
@@ -48,11 +49,10 @@ const SEVERITY_TONE: Record<string, string> = {
   INFO: 'text-slate',
 };
 
-export default function BatchDetailPage({
-  params,
-}: {
-  params: { batchId: string };
+export default function BatchDetailPage(props: {
+  params: Promise<{ batchId: string }>;
 }) {
+  const params = use(props.params);
   const { bank } = useBankContext();
   const batchQuery = useIngestionBatch(bank?.id, params.batchId);
   const failuresQuery = useTranslationFailures(bank?.id, params.batchId);
