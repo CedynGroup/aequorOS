@@ -291,9 +291,7 @@ def test_latest_run_distinguishes_system_and_tenant_scenarios_with_same_code(
 
     for scenario_id, run_id in run_ids.items():
         params = {"reporting_period_id": period_id, "scenario_id": scenario_id}
-        latest = db_client.get(
-            LATEST_URL.format(bank_id=bank_id), params=params, headers=headers()
-        )
+        latest = db_client.get(LATEST_URL.format(bank_id=bank_id), params=params, headers=headers())
         assert latest.status_code == 200, latest.text
         assert latest.json()["run_id"] == run_id
         assert latest.json()["scenario_id"] == scenario_id
@@ -304,9 +302,7 @@ def test_latest_run_distinguishes_system_and_tenant_scenarios_with_same_code(
 
 
 @pytest.mark.parametrize("rotation", ["steepener", "flattener"])
-def test_cloned_rotation_with_flat_policy_rate_runs(
-    db_client: TestClient, rotation: str
-) -> None:
+def test_cloned_rotation_with_flat_policy_rate_runs(db_client: TestClient, rotation: str) -> None:
     bank_id = seed_bank(db_client)
     period_id = _period_id(db_client, bank_id)
     system = default_macro_scenarios.DEFAULT_BY_CODE[f"system_irr_{rotation}"]
@@ -323,9 +319,7 @@ def test_cloned_rotation_with_flat_policy_rate_runs(
             "year_index": point["year_index"],
             "base_value": point["base_value"],
             "stress_value": (
-                point["base_value"]
-                if point["variable"] == "policy_rate"
-                else point["stress_value"]
+                point["base_value"] if point["variable"] == "policy_rate" else point["stress_value"]
             ),
         }
         for point in clone.json()["paths"]

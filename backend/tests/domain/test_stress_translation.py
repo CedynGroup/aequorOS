@@ -110,8 +110,7 @@ def test_liquidity_full_shock_set() -> None:
 def test_base_scenario_translates_to_nothing() -> None:
     # stress == base everywhere ⇒ no shocks in any module.
     base_paths = tuple(
-        MacroPathPoint(p.variable, p.year_index, p.base_value, p.base_value)
-        for p in SEVERE_PATHS
+        MacroPathPoint(p.variable, p.year_index, p.base_value, p.base_value) for p in SEVERE_PATHS
     )
     for module in TRANSLATION_MODULES:
         assert translate(base_paths, module) == {}
@@ -193,8 +192,7 @@ def test_long_end_rotation_retains_zero_short_end(long_bp: Decimal) -> None:
     curve = {Decimal("1"): Decimal("20"), Decimal("10"): Decimal("20")}
     shifts = scenario_shifts("custom_rotation", shocks, curve)
     assert shifts == {
-        tenor: long_bp / 10000 * (1 - (-tenor / Decimal("4")).exp())
-        for tenor in curve
+        tenor: long_bp / 10000 * (1 - (-tenor / Decimal("4")).exp()) for tenor in curve
     }
 
 
