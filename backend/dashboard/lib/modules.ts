@@ -429,11 +429,9 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
 }
 
 /**
- * Is a nav/command href visible, and should its data be fetched? Used by the
- * SIDEBAR, command palette and the per-module data hooks — so it is RESTRICTIVE
- * until the scope resolves: only the always-present `CORE_MODULES` show/fetch,
- * variable modules wait for the tenant's set. Also hides the bank-only BSD return
- * deep links for an SDI (docs/sdi.md §6.3).
+ * Whether an href is enabled for navigation and data fetching. Disabled links
+ * remain visible under the permission-only policy; renderers use `hrefAccess`
+ * to distinguish them from structural exclusions.
  */
 export function isHrefVisible(href: string, scope: ModuleScope): boolean {
   return hrefAccess(href, scope).state === "enabled";
