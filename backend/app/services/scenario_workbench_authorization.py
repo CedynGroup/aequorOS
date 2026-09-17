@@ -31,7 +31,7 @@ _WORKBENCH_POLICIES: dict[WorkbenchModule, _WorkbenchAuthorizationPolicy] = {
     "fx": _WorkbenchAuthorizationPolicy(
         Module.FX,
         "fx",
-        Sensitivity.CONFIDENTIAL,
+        Sensitivity.AGGREGATED,
     ),
     "irr": _WorkbenchAuthorizationPolicy(
         Module.IRRBB,

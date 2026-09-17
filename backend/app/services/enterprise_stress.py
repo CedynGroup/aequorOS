@@ -29,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeState
 from app.domain.capital.ecl import EclAssumption, EclExposure
 from app.domain.capital.engine import (
@@ -126,6 +127,7 @@ from app.services import (
     macro_scenarios,
     management_action_plans,
     regulatory_parameters,
+    scoped_authorization,
     sdi_capital,
 )
 from app.services.audit import record_event
@@ -1641,6 +1643,16 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
 ) -> EnterpriseStressRead:
     """Run one enterprise stress test and persist it as an immutable run."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    if payload.include_fx:
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.RUN,
+            module=Module.FX,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+            surface="enterprise_stress_fx",
+        )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     scenario = macro_scenarios.resolve_for_official_run(db, ctx, payload.scenario_id)
     if scenario.bank_id is not None and scenario.bank_id != bank.id:

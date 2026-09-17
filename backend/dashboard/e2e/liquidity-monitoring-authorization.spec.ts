@@ -121,7 +121,7 @@ test.describe("exactly bound Liquidity user", () => {
     const link = page.getByRole("link", { name: "Monitoring Tools" });
     await expect(link).toBeVisible();
     await expect(
-      page.getByRole("link", { name: /Capital|FX|FTP/i }),
+      page.getByRole("link", { name: /Capital|FTP/i }),
     ).toHaveCount(0);
     const irrbb = page.getByRole("link", { name: "IRRBB", exact: true });
     await expect(irrbb).toBeVisible();
@@ -135,6 +135,11 @@ test.describe("exactly bound Liquidity user", () => {
       }),
     ).toBeVisible();
     await irrbb.press("Enter");
+    const fx = page.getByRole("navigation").getByRole("link", { name: "FX", exact: true });
+    await expect(fx).toBeVisible();
+    await expect(fx).toHaveAttribute("aria-disabled", "true");
+    await expect(fx).not.toHaveAttribute("href", /.+/);
+    await fx.click({ force: true });
     await expect(page).toHaveURL(/\/liquidity$/);
     const stress = page.getByRole("link", { name: "Stress" });
     await expect(stress).toHaveAttribute("aria-disabled", "true");

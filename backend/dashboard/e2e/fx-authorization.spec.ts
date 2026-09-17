@@ -104,3 +104,49 @@ test.describe("bound FX user", () => {
     }
   });
 });
+
+test.describe("FX Reports summary permissions", () => {
+  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+
+  for (const sensitivity of ["aggregated", "confidential"]) {
+    test(`${sensitivity} view controls summary requests and filters`, async ({ page }) => {
+      await page.route("**/auth/me", async (route) => {
+        const response = await route.fetch();
+        const profile = await response.json();
+        profile.effective_authority.organization_capabilities = [];
+        for (const institution of profile.effective_authority.institution_capabilities) {
+          institution.capabilities = institution.capabilities.filter(
+            (capability: { module: string; sensitivity: string; permission: string }) =>
+              capability.module === "fx" &&
+              capability.permission === "view" &&
+              capability.sensitivity === sensitivity,
+          );
+        }
+        await route.fulfill({ response, json: profile });
+      });
+
+      const summaries: string[] = [];
+      page.on("request", (request) => {
+        if (/\/scenario-workbench\/fx\/analyses(?:\?|$)/.test(request.url())) {
+          summaries.push(request.url());
+        }
+      });
+      await page.goto("/reports/analyses");
+      await expect(page.getByRole("heading", { name: "Saved analyses", exact: true })).toBeVisible();
+      if (sensitivity === "aggregated") {
+        await expect.poll(() => summaries.length).toBeGreaterThan(0);
+      } else {
+        expect(summaries).toEqual([]);
+      }
+
+      await page.goto("/reports");
+      const fxFilter = page.getByRole("button", { name: "FX", exact: true });
+      if (sensitivity === "aggregated") {
+        await expect(fxFilter).toBeVisible();
+      } else {
+        await expect(page.getByRole("button", { name: "All modules", exact: true })).toBeVisible();
+        await expect(fxFilter).toHaveCount(0);
+      }
+    });
+  }
+});

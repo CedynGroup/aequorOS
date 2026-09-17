@@ -872,3 +872,56 @@ def test_fx_batch_and_activation_deny_before_work(
             )
         assert activation_denial.value.status_code == 403
     assert calls == []
+
+
+@pytest.mark.parametrize("include_fx", [True, False])
+def test_enterprise_fx_permission_precedes_input_reads(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    include_fx: bool,
+) -> None:
+    from app.services import enterprise_stress
+
+    calls: list[str] = []
+
+    def input_probe(*_args: object, **_kwargs: object) -> None:
+        calls.append("period")
+        raise HTTPException(status_code=409, detail="Authorized input probe")
+
+    monkeypatch.setattr(enterprise_stress, "_get_period_or_404", input_probe)
+    _, version = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.LIQUIDITY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    payload = {
+        "scenario_id": str(uuid4()),
+        "reporting_period_id": str(uuid4()),
+        "include_fx": include_fx,
+        "reason": "Verify enterprise FX boundary",
+    }
+    url = f"{BASE}/enterprise-stress/runs"
+    with get_sessionmaker()() as session:
+        before = session.scalar(select(func.count()).select_from(RegulatoryRun))
+    response = db_client.post(
+        url,
+        headers=headers(roles=("analyst",), authorization_version=version),
+        json=payload,
+    )
+    assert response.status_code == (403 if include_fx else 409), response.text
+    assert calls == ([] if include_fx else ["period"])
+    with get_sessionmaker()() as session:
+        assert session.scalar(select(func.count()).select_from(RegulatoryRun)) == before
+
+    if include_fx:
+        _, version = _grant(
+            role_bundle=RoleBundle.ANALYST,
+            sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+        )
+        response = db_client.post(
+            url,
+            headers=headers(roles=("analyst",), authorization_version=version),
+            json=payload,
+        )
+        assert response.status_code == 409, response.text
+        assert calls == ["period"]

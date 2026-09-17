@@ -24,7 +24,10 @@ pagination are calculated. Unauthorized FX run, scenario, and analysis IDs retur
 404.
 
 Running the FX scenario batch and compute-only FX analysis requires FX `run`
-with sensitivity `confidential`. Creating a custom FX scenario or saved analysis
+with sensitivity `confidential`. Enterprise stress runs with `include_fx=true`
+(default) require that same FX permission in the service before input reads or
+persistence, in addition to the existing enterprise mutation gate. Runs explicitly
+excluding FX retain the existing enterprise gate. Creating a custom FX scenario or saved analysis
 requires FX `create`; changing, archiving, or deleting one requires FX `edit`,
 all at that same sensitivity. No route infers authority from `users.role`, token
 `roles[]`, a different module, a different sensitivity, or separate partial
@@ -43,7 +46,8 @@ dashboard query. Command Center, Risk, Alerts, and Board Pack request FX data
 only when the same FX/aggregated view capability is present.
 
 Reports requests FX saved analyses and exposes the FX official-run filter only
-when FX/confidential view is present. The enterprise stress workbench keeps an
+when FX/aggregated view is present. Saved-analysis workbench links still require
+FX/confidential view. The enterprise stress workbench keeps an
 unavailable FX action visible but disabled. Its tooltip names the exact
 FX/confidential `run` permission and says that an organization owner can grant
 it. After a grant change, sign in again to obtain the new authorization version.

@@ -12,16 +12,52 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
+
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 
 from app.db.session import get_sessionmaker
 from app.models import User
+from app.services import authorization
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_ingestion import seed_bank
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 LATEST_URL = "/api/v1/banks/{bank_id}/enterprise-stress/latest"
 SCENARIO_URL = "/api/v1/macro-scenarios"
+
+
+@pytest.fixture(autouse=True)
+def _enterprise_fx_run_authority(db_client: TestClient) -> None:
+    with get_sessionmaker()() as session:
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ANALYST,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.FX,
+                SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "enterprise-test"),
+            reason="Authorize the enterprise calculation fixture FX leg",
+            commit=False,
+        )
+        user = session.get(User, USER_1)
+        assert user is not None
+        user.authorization_version = 1
+        session.commit()
 
 
 def _period_id(client: TestClient, bank_id: str) -> str:
