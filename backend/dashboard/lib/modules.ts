@@ -149,7 +149,7 @@ export type ModuleScope = {
   capitalRestrictedView?: boolean;
   /** Exact CAP/confidential run authority. */
   capitalRun?: boolean;
-  /** Exact FX/aggregated view authority for every `/fx` dashboard tab. */
+  /** Exact FX/aggregated view authority for `/fx` dashboards; scenarios use confidential. */
   fxAggregatedView?: boolean;
   /** Exact FX/confidential view authority for run and analysis detail. */
   fxConfidentialView?: boolean;
@@ -394,18 +394,22 @@ function scopedModulePermissionReason(
   path: string,
   scope: ModuleScope,
 ): string | undefined {
-  for (const module of SCOPED_MODULE_ROUTES) {
-    if (path !== module.prefix && !path.startsWith(`${module.prefix}/`)) continue;
-    const confidential = module.confidentialRoutes.some(
+  for (const routePolicy of SCOPED_MODULE_ROUTES) {
+    if (
+      path !== routePolicy.prefix &&
+      !path.startsWith(`${routePolicy.prefix}/`)
+    )
+      continue;
+    const confidential = routePolicy.confidentialRoutes.some(
       (route) => path === route || path.startsWith(`${route}/`),
     );
     const capability = confidential
-      ? module.confidentialView
-      : module.aggregatedView;
+      ? routePolicy.confidentialView
+      : routePolicy.aggregatedView;
     return scope[capability] === true
       ? undefined
       : permissionReason([
-          `${module.label} · ${confidential ? "Confidential" : "Aggregated"} · View`,
+          `${routePolicy.label} · ${confidential ? "Confidential" : "Aggregated"} · View`,
         ]);
   }
   return undefined;

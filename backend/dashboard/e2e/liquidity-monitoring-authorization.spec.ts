@@ -120,9 +120,9 @@ test.describe("exactly bound Liquidity user", () => {
     ).toBeVisible();
     const link = page.getByRole("link", { name: "Monitoring Tools" });
     await expect(link).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: /Capital|FTP/i }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Capital|FTP/i })).toHaveCount(
+      0,
+    );
     const irrbb = page.getByRole("link", { name: "IRRBB", exact: true });
     await expect(irrbb).toBeVisible();
     await expect(irrbb).toHaveAttribute("aria-disabled", "true");

@@ -25,7 +25,8 @@ audit event.
 
 Shared live projections filter IRRBB before serialization, counts, limits, and
 aggregation. Mixed execution retains its existing gates and checks IRRBB only
-when planned; internal scheduled execution is unchanged.
+when planned. Scheduled official-run actor selection and queue attribution follow
+the [FX queued-run contract](fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
 
 No scalar role, token role, tenant membership, or binding for another module or
 sensitivity grants IRRBB authority.

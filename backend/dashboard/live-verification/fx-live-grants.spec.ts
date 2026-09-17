@@ -53,7 +53,7 @@ test("real FX grants enforce sensitivity across API, Reports and workbench", asy
       `${api}/authorization/bindings/preview`,
       { headers: owner, data },
     );
-    expect(preview.status()).toBe(200);
+    expect(preview.status(), await preview.text()).toBe(200);
     const created = await page.request.post(`${api}/authorization/bindings`, {
       headers: owner,
       data: {
@@ -87,6 +87,26 @@ test("real FX grants enforce sensitivity across API, Reports and workbench", asy
   }
   await request("GET", `${bank}/fx/dashboard`, 403);
   await grant("reg", "all");
+  const periods = await (
+    await page.request.get(`${api}${bank}/reporting-periods`, { headers: owner })
+  ).json();
+  const fxRun = await page.request.post(`${api}${bank}/fx/run-all-scenarios`, {
+    headers: owner,
+    data: {
+      reporting_period_id: periods.periods[0].id,
+    },
+  });
+  expect(fxRun.status(), await fxRun.text()).toBe(201);
+  const fxRunId = (await fxRun.json()).runs[0].id;
+  const hiddenRuns = await request(
+    "GET",
+    `${bank}/regulatory-runs?module=fx&limit=1&offset=0`,
+    200,
+  );
+  expect(hiddenRuns.total).toBe(0);
+  expect(hiddenRuns.runs).toEqual([]);
+  await request("GET", `${bank}/regulatory-runs/${fxRunId}`, 404);
+  await grant("cap", "aggregated");
   await grant("fx", "confidential");
   await request("GET", `${bank}/fx/dashboard`, 403);
   await request("GET", `${bank}/scenario-workbench/fx/scenarios`, 200);
@@ -126,6 +146,14 @@ test("real FX grants enforce sensitivity across API, Reports and workbench", asy
   );
   await screenshot("fx-live-run-disabled.png");
   await grant("fx", "aggregated");
+  const visibleRuns = await request(
+    "GET",
+    `${bank}/regulatory-runs?module=fx&limit=1&offset=0`,
+    200,
+  );
+  expect(visibleRuns.total).toBeGreaterThan(0);
+  expect(visibleRuns.runs).toHaveLength(1);
+  await request("GET", `${bank}/regulatory-runs/${fxRunId}`, 200);
   await request("GET", `${bank}/fx/dashboard`, 200);
   await request("GET", `${bank}/scenario-workbench/fx/analyses`, 200);
   const after = await request("GET", `${bank}/live-summary`, 200);
