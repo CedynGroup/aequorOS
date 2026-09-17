@@ -68,6 +68,9 @@ const LENS_LABEL: Record<StressModuleLens, string> = {
   ftp: "FTP lens",
 };
 
+const IRRBB_RUN_PERMISSION_REASON =
+  "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.";
+
 type Tab =
   | "run"
   | "results"
@@ -100,9 +103,13 @@ export default function EnterpriseStressWorkbench({
     ? "Requires FX run permission at confidential sensitivity. An organization owner can grant it."
     : null;
   const enterpriseRunDeniedReason =
-    moduleLens === "fx" ? fxRunDeniedReason : null;
+    moduleScope.irrbbRun !== true
+      ? IRRBB_RUN_PERMISSION_REASON
+      : moduleLens === "fx"
+        ? fxRunDeniedReason
+        : null;
 
-  const [tab, setTab] = useState<Tab>("results");
+  const [tab, setTab] = useState<Tab>("run");
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editScenarioId, setEditScenarioId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -122,7 +129,10 @@ export default function EnterpriseStressWorkbench({
 
   const approved = useMacroScenarios({ status: "approved" });
   const approvedScenarios = useMemo<MacroScenarioSummary[]>(
-    () => approved.data?.scenarios ?? [],
+    () =>
+      (approved.data?.scenarios ?? []).filter(
+        (scenario) => scenario.is_runnable,
+      ),
     [approved.data],
   );
   const plans = useManagementActionPlans(bankId);
@@ -151,6 +161,19 @@ export default function EnterpriseStressWorkbench({
     }
     setIncludeFx(!isSdiTenant && !fxRunDeniedReason);
   }, [fxRunDeniedReason, isLoading, isSdiTenant]);
+
+  useEffect(() => {
+    if (runScenarioId || approvedScenarios.length === 0) return;
+    const preferredCode =
+      moduleLens === "irr"
+        ? "system_irr_parallel_up_200"
+        : "system_adverse_bog_style";
+    const preferred =
+      approvedScenarios.find((scenario) => scenario.code === preferredCode) ??
+      approvedScenarios[0];
+    setRunScenarioId(preferred.id);
+    setReason(`Run ${preferred.name}`);
+  }, [approvedScenarios, moduleLens, runScenarioId]);
 
   // Default the focused run to the worst run in the registry when none picked.
   const effectiveRun = useMemo(() => {
@@ -270,11 +293,12 @@ export default function EnterpriseStressWorkbench({
       Include FX
     </label>
   );
-  const runButton = (
+  const runButton = (descriptionId?: string) => (
     <button
       type="button"
       className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:opacity-50"
       disabled={runMutation.isPending || Boolean(enterpriseRunDeniedReason)}
+      aria-describedby={descriptionId}
       onClick={() => void runStress()}
     >
       <Play size={15} />{" "}
@@ -454,7 +478,7 @@ export default function EnterpriseStressWorkbench({
                       {runButton}
                     </DisabledWithReason>
                   ) : (
-                    runButton
+                    runButton()
                   )}
                 </div>
               </SectionCard>

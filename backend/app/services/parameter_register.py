@@ -89,7 +89,7 @@ _IRRBB_LIMITS: dict[str, str] = {
 #: calibration from the IRRBB Guideline (exposure draft, Feb 2026) Appendix
 #: II–III Tables 5–6 (GHS ±450 bp parallel). Short-rate scenarios decay with
 #: tenor; steepener/flattener use the engine's standard short weight.
-_IRRBB_SHOCKS: dict[str, dict[str, str]] = {
+IRRBB_SHOCKS: dict[str, dict[str, str]] = {
     "parallel_up_200": {"parallel_bp": "200"},
     "parallel_down_200": {"parallel_bp": "-200"},
     "parallel_up_450": {"parallel_bp": "450"},
@@ -328,7 +328,7 @@ def seed_tenant_register(  # noqa: PLR0913 - tenant keys, regime, approver and
 
     shock_rows: list[Any] = []
     if (count := existing(ParamStressShock)) == 0:
-        for scenario, shocks in _IRRBB_SHOCKS.items():
+        for scenario, shocks in IRRBB_SHOCKS.items():
             shock_rows += [
                 ParamStressShock(
                     module="irr",

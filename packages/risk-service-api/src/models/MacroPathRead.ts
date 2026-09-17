@@ -11,6 +11,14 @@
  */
 
 import { mapValues } from "../runtime";
+import type { QuarterIndex } from "./QuarterIndex";
+import {
+  QuarterIndexFromJSON,
+  QuarterIndexFromJSONTyped,
+  QuarterIndexToJSON,
+  QuarterIndexToJSONTyped,
+} from "./QuarterIndex";
+
 /**
  *
  * @export
@@ -23,6 +31,12 @@ export interface MacroPathRead {
    * @memberof MacroPathRead
    */
   baseValue: string;
+  /**
+   *
+   * @type {QuarterIndex}
+   * @memberof MacroPathRead
+   */
+  quarterIndex?: QuarterIndex;
   /**
    *
    * @type {string}
@@ -69,6 +83,10 @@ export function MacroPathReadFromJSONTyped(
   return {
     ...json,
     baseValue: json["base_value"],
+    quarterIndex:
+      json["quarter_index"] == null
+        ? undefined
+        : QuarterIndexFromJSON(json["quarter_index"]),
     stressValue: json["stress_value"],
     variable: json["variable"],
     yearIndex: json["year_index"],
@@ -89,6 +107,7 @@ export function MacroPathReadToJSONTyped(
 
   return {
     base_value: value["baseValue"],
+    quarter_index: QuarterIndexToJSON(value["quarterIndex"]),
     stress_value: value["stressValue"],
     variable: value["variable"],
     year_index: value["yearIndex"],

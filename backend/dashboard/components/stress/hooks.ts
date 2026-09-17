@@ -89,7 +89,10 @@ async function authFetch<T>(path: string, init: FetchInit = {}): Promise<T> {
         if (typeof envelope.code === 'string') code = envelope.code;
         if (typeof envelope.message === 'string') message = envelope.message;
         details = envelope.details ?? envelope.detail ?? null;
-        const detailObj = details as { error_code?: string; message?: string } | null;
+        const detailObj = details as {
+          error_code?: string;
+          message?: string;
+        } | null;
         if (detailObj && typeof detailObj === 'object') {
           if (typeof detailObj.error_code === 'string') errorCode = detailObj.error_code;
           if (typeof detailObj.message === 'string') message = detailObj.message;
@@ -98,7 +101,13 @@ async function authFetch<T>(path: string, init: FetchInit = {}): Promise<T> {
     } catch {
       // Non-JSON body — keep the generic message.
     }
-    throw new ApiError({ message, status: response.status, code, errorCode, details });
+    throw new ApiError({
+      message,
+      status: response.status,
+      code,
+      errorCode,
+      details,
+    });
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -142,7 +151,10 @@ export function useCreateMacroScenario() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: MacroScenarioCreate) =>
-      authFetch<MacroScenario>('/macro-scenarios', { method: 'POST', body: payload }),
+      authFetch<MacroScenario>('/macro-scenarios', {
+        method: 'POST',
+        body: payload,
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SCENARIO_KEY] }),
   });
 }
@@ -150,8 +162,29 @@ export function useCreateMacroScenario() {
 export function useUpdateMacroScenario() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ scenarioId, payload }: { scenarioId: string; payload: Partial<MacroScenarioCreate> & { reason: string } }) =>
-      authFetch<MacroScenario>(`/macro-scenarios/${scenarioId}`, { method: 'PATCH', body: payload }),
+    mutationFn: ({
+      scenarioId,
+      payload,
+    }: {
+      scenarioId: string;
+      payload: Partial<MacroScenarioCreate> & { reason: string };
+    }) =>
+      authFetch<MacroScenario>(`/macro-scenarios/${scenarioId}`, {
+        method: 'PATCH',
+        body: payload,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [SCENARIO_KEY] }),
+  });
+}
+
+export function useCloneMacroScenario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ scenarioId, bankId, reason }: { scenarioId: string; bankId?: string | null; reason: string }) =>
+      authFetch<MacroScenario>(`/macro-scenarios/${scenarioId}/clone`, {
+        method: 'POST',
+        body: { bank_id: bankId ?? null, reason },
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SCENARIO_KEY] }),
   });
 }
@@ -216,16 +249,15 @@ export function useRunEnterpriseStress(bankId: string | undefined) {
 export function useLatestEnterpriseStress(
   bankId: string | undefined,
   periodId: string | undefined,
-  scenarioId: string | undefined
+  scenarioId: string | undefined,
 ) {
   return useQuery({
     queryKey: [RUN_KEY, bankId, periodId, scenarioId],
     queryFn: async () => {
       try {
-        return await authFetch<EnterpriseStressRead>(
-          `/banks/${bankId}/enterprise-stress/latest`,
-          { query: { reporting_period_id: periodId, scenario_id: scenarioId } }
-        );
+        return await authFetch<EnterpriseStressRead>(`/banks/${bankId}/enterprise-stress/latest`, {
+          query: { reporting_period_id: periodId, scenario_id: scenarioId },
+        });
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
         throw error;
@@ -245,7 +277,7 @@ export function useLatestEnterpriseStress(
 export function useEnterpriseStressRegistry(
   bankId: string | undefined,
   periodId: string | undefined,
-  scenarioIds: string[]
+  scenarioIds: string[],
 ) {
   const sorted = [...scenarioIds].sort();
   return useQuery({
@@ -254,15 +286,17 @@ export function useEnterpriseStressRegistry(
       const results = await Promise.all(
         sorted.map(async (scenarioId) => {
           try {
-            return await authFetch<EnterpriseStressRead>(
-              `/banks/${bankId}/enterprise-stress/latest`,
-              { query: { reporting_period_id: periodId, scenario_id: scenarioId } }
-            );
+            return await authFetch<EnterpriseStressRead>(`/banks/${bankId}/enterprise-stress/latest`, {
+              query: {
+                reporting_period_id: periodId,
+                scenario_id: scenarioId,
+              },
+            });
           } catch (error) {
             if (error instanceof ApiError && error.status === 404) return null;
             throw error;
           }
-        })
+        }),
       );
       return results.filter((run): run is EnterpriseStressRead => run !== null);
     },
@@ -277,10 +311,7 @@ export function useEnterpriseStressRegistry(
  * optionally scoped to one reporting period. Re-open a row with
  * {@link useReopenEnterpriseStressRun}.
  */
-export function useEnterpriseStressRunHistory(
-  bankId: string | undefined,
-  periodId?: string
-) {
+export function useEnterpriseStressRunHistory(bankId: string | undefined, periodId?: string) {
   return useQuery({
     queryKey: [RUN_KEY, 'history', bankId, periodId ?? null],
     queryFn: () =>
@@ -294,8 +325,7 @@ export function useEnterpriseStressRunHistory(
 /** Re-open one immutable run by id → its full projection + Appendix II. */
 export function useReopenEnterpriseStressRun(bankId: string | undefined) {
   return useMutation({
-    mutationFn: (runId: string) =>
-      authFetch<EnterpriseStressRead>(`/banks/${bankId}/enterprise-stress/runs/${runId}`),
+    mutationFn: (runId: string) => authFetch<EnterpriseStressRead>(`/banks/${bankId}/enterprise-stress/runs/${runId}`),
   });
 }
 
@@ -307,8 +337,7 @@ const SIGNOFF_KEY = 'stress-signoffs';
 export function useBankStressSignoffs(bankId: string | undefined) {
   return useQuery({
     queryKey: [SIGNOFF_KEY, bankId],
-    queryFn: () =>
-      authFetch<StressSignoffListRead>(`/banks/${bankId}/enterprise-stress/signoffs`),
+    queryFn: () => authFetch<StressSignoffListRead>(`/banks/${bankId}/enterprise-stress/signoffs`),
     select: (data): StressSignoffSummary[] => data.signoffs,
     enabled: Boolean(bankId),
   });
@@ -318,8 +347,7 @@ export function useBankStressSignoffs(bankId: string | undefined) {
 export function useStressSignoff(bankId: string | undefined, signoffId: string | undefined) {
   return useQuery({
     queryKey: [SIGNOFF_KEY, bankId, signoffId],
-    queryFn: () =>
-      authFetch<StressSignoffRead>(`/banks/${bankId}/enterprise-stress/signoffs/${signoffId}`),
+    queryFn: () => authFetch<StressSignoffRead>(`/banks/${bankId}/enterprise-stress/signoffs/${signoffId}`),
     enabled: Boolean(bankId && signoffId),
   });
 }
@@ -328,7 +356,10 @@ function useSignoffMutation<TBody>(bankId: string | undefined, path: (id: string
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ signoffId, body }: { signoffId: string; body: TBody }) =>
-      authFetch<StressSignoffRead>(`/banks/${bankId}${path(signoffId)}`, { method, body }),
+      authFetch<StressSignoffRead>(`/banks/${bankId}${path(signoffId)}`, {
+        method,
+        body,
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SIGNOFF_KEY] }),
   });
 }

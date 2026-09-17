@@ -23,6 +23,7 @@ type ScenarioType = Literal[
 ]
 type Severity = Literal["mild", "moderate", "severe"]
 type ScenarioStatus = Literal["draft", "pending_approval", "approved", "archived"]
+type ScenarioOwner = Literal["organization", "system"]
 
 _CODE_PATTERN = re.compile(r"^[a-z0-9_]{1,60}$")
 _MACRO_VARIABLE_SET = frozenset(MACRO_VARIABLES)
@@ -46,6 +47,7 @@ class MacroPathIn(ClosedModel):
 class MacroPathRead(ClosedModel):
     variable: str
     year_index: int
+    quarter_index: int | None = None
     base_value: Decimal
     stress_value: Decimal
 
@@ -129,6 +131,13 @@ class MacroScenarioApproval(ClosedModel):
     reason: str = Field(min_length=1, max_length=1000)
 
 
+class MacroScenarioClone(ClosedModel):
+    """Clone an immutable system definition into an organization-owned draft."""
+
+    bank_id: str | None = Field(default=None, max_length=16)
+    reason: str = Field(min_length=1, max_length=1000)
+
+
 class MacroScenarioRead(ClosedModel):
     id: UUID
     organization_id: str
@@ -147,6 +156,9 @@ class MacroScenarioRead(ClosedModel):
     approved_by: UUID | None
     approval_timestamp: datetime | None
     institution_type_applicability: list[str] | None
+    owner: ScenarioOwner = "organization"
+    is_runnable: bool = True
+    is_immutable: bool = False
     paths: list[MacroPathRead]
     created_at: datetime
     updated_at: datetime
@@ -165,6 +177,9 @@ class MacroScenarioSummaryRead(ClosedModel):
     path_count: int
     created_by: UUID | None
     approved_by: UUID | None
+    owner: ScenarioOwner = "organization"
+    is_runnable: bool = True
+    is_immutable: bool = False
     created_at: datetime
     updated_at: datetime
 
