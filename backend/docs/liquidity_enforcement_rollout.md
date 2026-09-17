@@ -27,7 +27,9 @@ and limits. Live summaries omit unauthorized Liquidity metrics; alerts omit
 Liquidity findings before counts and limits. `GET /banks/{bank_id}/analytics/window`
 omits Liquidity ratio series and daily statistics without aggregated view: the
 service skips Liquidity series reads/computation and excludes Liquidity daily
-snapshots in SQL, preserving non-Liquidity results. Liquidity live-history requests
+snapshots in SQL, preserving authorized non-Liquidity results (see the
+[IRRBB rollout contract](irrbb_enforcement_rollout.md) for its shared-surface filtering).
+Liquidity live-history requests
 require aggregated view. Full LIQ run and saved-analysis IDs return 404 without
 confidential authority.
 Denied run and CFP lifecycle requests create no run, event, audit mutation, job,
