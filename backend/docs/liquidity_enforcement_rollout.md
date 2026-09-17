@@ -14,7 +14,7 @@ sensitivity, and permission is denied immediately (403 unless the object-hiding
 
 | Surface                                                                                                                                                    | Required authority                                                                    |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Liquidity dashboard, live summaries/history, alerts, saved-analysis summaries, and regulatory-run list rows                                                | LIQ / `aggregated` / `view`                                                           |
+| Liquidity dashboard, live summaries/history, analytics windows, alerts, saved-analysis summaries, and regulatory-run list rows                             | LIQ / `aggregated` / `view`                                                           |
 | Full regulatory-run and saved-analysis detail, and BSD-3 preview                                                                                           | LIQ / `confidential` / `view`                                                         |
 | Monitoring Tools, EWI dashboard, CFP reads/events, forecasts/history, cash-flow window, thresholds, haircuts, SDI liquidity position, and scenario details | LIQ / `confidential` / `view`                                                         |
 | Create one or all Liquidity regulatory runs; execute scenario analysis                                                                                     | LIQ / `confidential` / `run`                                                          |
@@ -24,7 +24,10 @@ sensitivity, and permission is denied immediately (403 unless the object-hiding
 
 Regulatory-run lists remove unauthorized LIQ rows before total counts, offsets,
 and limits. Live summaries omit unauthorized Liquidity metrics; alerts omit
-Liquidity findings before counts and limits. Liquidity live-history requests
+Liquidity findings before counts and limits. `GET /banks/{bank_id}/analytics/window`
+omits Liquidity ratio series and daily statistics without aggregated view: the
+service skips Liquidity series reads/computation and excludes Liquidity daily
+snapshots in SQL, preserving non-Liquidity results. Liquidity live-history requests
 require aggregated view. Full LIQ run and saved-analysis IDs return 404 without
 confidential authority.
 Denied run and CFP lifecycle requests create no run, event, audit mutation, job,
@@ -61,8 +64,10 @@ invalidate sessions; users must sign in again before using the new authority.
 
 An aggregated-only viewer can read summaries, but the cockpit labels EWI and
 CFP sections restricted and omits threshold-dependent headroom assessments
-when confidential inputs are unavailable. Saved-analysis workbench links use
-the same visibility decision as navigation. The shared `/liquidity/stress`
+when confidential inputs are unavailable. Monitoring Tools omits KPI status
+styling when the corresponding authorized metric is unavailable. Saved-analysis
+workbench links use the same access decision as navigation; permission-only
+gaps follow the [disabled-control convention](../../docs/rbac.md). The shared `/liquidity/stress`
 workbench requires both LIQ/confidential/view and RISK/confidential/view for
 navigation; this does not change RISK backend enforcement. The SDI Liquidity
 landing requires confidential view because it reads the SDI position.

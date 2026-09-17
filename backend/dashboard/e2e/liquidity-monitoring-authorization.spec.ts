@@ -95,6 +95,12 @@ test.describe("exactly bound Liquidity user", () => {
     ).toBeVisible();
     await liquidity.press("Enter");
     await expect(page).toHaveURL(/\/liquidity\/monitoring$/);
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "liquidity-confidential-monitoring.png"),
+        fullPage: true,
+      });
+    }
   });
 
   test("shows only authorized Liquidity reads", async ({ page }) => {

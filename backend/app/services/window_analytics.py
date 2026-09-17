@@ -233,7 +233,7 @@ def _ratio_stat(
     ]
 
 
-def _daily_stats(
+def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authorization decision
     db: Session,
     ctx: TenantContext,
     bank: Bank,
