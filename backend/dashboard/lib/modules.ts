@@ -383,10 +383,10 @@ const SCOPED_MODULE_ROUTES = [
   },
   {
     prefix: "/fx",
-    label: "FX",
+    label: "Foreign Exchange",
     aggregatedView: "fxAggregatedView",
     confidentialView: "fxConfidentialView",
-    confidentialRoutes: [],
+    confidentialRoutes: ["/fx/scenarios"],
   },
 ] as const;
 

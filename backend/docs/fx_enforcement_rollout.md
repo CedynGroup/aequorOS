@@ -7,21 +7,21 @@ Do not copy production identities into this repository.
 
 ## Affected surfaces
 
-The FX dashboard and every `/fx` tab require FX `view` with sensitivity
+The FX dashboard and aggregated `/fx` tabs require FX `view` with sensitivity
 `aggregated`:
 
 - `GET /api/v1/banks/{bank_id}/fx/dashboard`
 - `/fx`
 - `/fx/var`
-- `/fx/scenarios`
 - `/fx/hedges`
 - `/fx/limits`
 - `/fx/forwards`
 
-FX regulatory-run and saved-analysis list/detail reads require FX `view` with
+FX regulatory-run and saved-analysis lists use FX `view` with sensitivity
+`aggregated`. Their details and the `/fx/scenarios` catalogue use FX `view` with
 sensitivity `confidential`. Lists remove unauthorized FX rows before counts and
-pagination are calculated. Unauthorized FX run, scenario, and analysis IDs
-return 404.
+pagination are calculated. Unauthorized FX run, scenario, and analysis IDs return
+404.
 
 Running the FX scenario batch and compute-only FX analysis requires FX `run`
 with sensitivity `confidential`. Creating a custom FX scenario or saved analysis
@@ -174,8 +174,8 @@ families are revoked in the same transaction.
 
 | Need                                                           | `principal_type` | `role_bundle`                                 | `institution_scope`                      | `institution_id`                             | `module_scope` | `sensitivity_scope` |
 | -------------------------------------------------------------- | ---------------- | --------------------------------------------- | ---------------------------------------- | -------------------------------------------- | -------------- | ------------------- |
-| FX dashboards, navigation, and aggregated report blocks        | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | `fx`           | `aggregated`        |
-| FX run and saved-analysis detail                               | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `fx`           | `confidential`      |
+| FX dashboards, navigation, run/analysis lists, and aggregated report blocks | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL` for organization-wide | `fx`           | `aggregated`        |
+| FX scenario catalogue and run/saved-analysis detail            | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `fx`           | `confidential`      |
 | Run FX, compute analyses, and create/edit FX workbench entries | `human`          | `analyst`                                     | `institution` or explicit `organization` | exact `BK-*` or `NULL`                       | `fx`           | `confidential`      |
 
 An Analyst FX/confidential row grants `view`, `create`, `edit`, and `run`, but

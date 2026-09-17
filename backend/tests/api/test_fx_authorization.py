@@ -10,7 +10,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from loguru import logger
-from sqlalchemy import delete
+from sqlalchemy import delete, func, select
 
 from app.core.authorization import (
     BindingStatus,
@@ -25,15 +25,28 @@ from app.core.authorization import (
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
-from app.models import AuthorizationBinding, Bank, User
+from app.models import (
+    AuthorizationBinding,
+    Bank,
+    BankReportingPeriod,
+    RegulatoryRun,
+    SavedScenarioAnalysis,
+    StressScenario,
+    User,
+)
 from app.schemas.regulatory_fx import FxScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
-from app.services import authorization, regulatory_fx
+from app.schemas.scenario_workbench import ScenarioResultRead
+from app.services import analysis_workbench, authorization, regulatory_fx
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.fixtures.canonical_bank_fixture import (
+    SAMPLE_BANK_ID,
+    materialize_canonical_test_book,
+)
 
 SIBLING_BANK_ID = "BK-FX000002"
+BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 
 
 @pytest.fixture(autouse=True)
@@ -134,6 +147,52 @@ def _capture_binding_records() -> tuple[list[dict[str, Any]], int]:
     records: list[dict[str, Any]] = []
     sink_id = logger.add(lambda message: records.append(dict(message.record)), level="DEBUG")
     return records, sink_id
+
+
+def _seed_book() -> UUID:
+    session = get_sessionmaker()()
+    try:
+        materialize_canonical_test_book(session)
+        period_id = session.scalar(
+            select(BankReportingPeriod.id)
+            .where(
+                BankReportingPeriod.organization_id == ORG_1,
+                BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+            )
+            .order_by(BankReportingPeriod.period_end.desc())
+        )
+        assert period_id is not None
+        session.commit()
+        return period_id
+    finally:
+        session.close()
+
+
+def _add_regulatory_run(period_id: UUID, module: str, scenario_code: str) -> UUID:
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        run = RegulatoryRun(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            reporting_period_id=period_id,
+            module=module,
+            scenario_code=scenario_code,
+            status="succeeded",
+            engine_version=f"test-{module}-v1",
+            input_schema_version="test-input-v1",
+            output_schema_version="test-output-v1",
+            input_hash=uuid4().hex * 2,
+            inputs={},
+            metrics={},
+            parameter_provenance=[],
+            created_by=USER_1,
+        )
+        session.add(run)
+        session.commit()
+        return run.id
+    finally:
+        session.close()
 
 
 def _binding_extras(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -399,3 +458,281 @@ def test_fx_v1_authority_is_institution_and_module_scoped_only(
 
     assert response.status_code == 409
     assert calls == [SAMPLE_BANK_ID]
+
+
+def test_fx_scenario_catalogue_and_analysis_list_require_exact_view_sensitivity(
+    db_client: TestClient,
+) -> None:
+    _seed_book()
+    catalogue = f"{BASE}/scenario-workbench/fx/scenarios"
+    analyses = f"{BASE}/scenario-workbench/fx/analyses"
+
+    assert db_client.get(catalogue, headers=headers(roles=("admin",))).status_code == 403
+    assert db_client.get(analyses, headers=headers(roles=("admin",))).status_code == 403
+
+    _, aggregated_version = _grant(sensitivity_scope=SensitivityScope.AGGREGATED)
+    aggregated_headers = headers(
+        roles=("admin",),
+        authorization_version=aggregated_version,
+    )
+    allowed_list = db_client.get(analyses, headers=aggregated_headers)
+    denied_catalogue = db_client.get(catalogue, headers=aggregated_headers)
+
+    assert allowed_list.status_code == 200, allowed_list.text
+    assert denied_catalogue.status_code == 403
+
+    _, confidential_version = _grant(sensitivity_scope=SensitivityScope.CONFIDENTIAL)
+    allowed_catalogue = db_client.get(
+        catalogue,
+        headers=headers(
+            roles=("viewer",),
+            authorization_version=confidential_version,
+        ),
+    )
+    assert allowed_catalogue.status_code == 200, allowed_catalogue.text
+
+
+def test_fx_scenario_mutations_use_binding_permissions_and_deny_before_writes(
+    db_client: TestClient,
+) -> None:
+    _seed_book()
+    url = f"{BASE}/scenario-workbench/fx/scenarios"
+    payload = {
+        "code": "fx_authorization_case",
+        "name": "FX authorization case",
+        "shocks": {"ghs_usd_shock_pct": "12.5"},
+    }
+    with get_sessionmaker()() as session:
+        before = (
+            session.scalar(
+                select(func.count())
+                .select_from(StressScenario)
+                .where(StressScenario.module == "fx")
+            )
+            or 0
+        )
+
+    _, viewer_version = _grant(sensitivity_scope=SensitivityScope.CONFIDENTIAL)
+    denied = db_client.post(
+        url,
+        headers=headers(
+            roles=("admin",),
+            authorization_version=viewer_version,
+        ),
+        json=payload,
+    )
+    assert denied.status_code == 403
+    with get_sessionmaker()() as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(StressScenario)
+                .where(StressScenario.module == "fx")
+            )
+            or 0
+        ) == before
+
+    _, analyst_version = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    allowed = db_client.post(
+        url,
+        headers=headers(
+            roles=("viewer",),
+            authorization_version=analyst_version,
+        ),
+        json=payload,
+    )
+    assert allowed.status_code == 201, allowed.text
+    scenario_id = allowed.json()["id"]
+
+    edited = db_client.patch(
+        f"{url}/{scenario_id}",
+        headers=headers(
+            roles=("viewer",),
+            authorization_version=analyst_version,
+        ),
+        json={"name": "Edited FX authorization case"},
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["name"] == "Edited FX authorization case"
+
+
+def test_fx_compute_and_save_require_analyst_before_engine_or_persistence(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    period_id = _seed_book()
+    compute_calls: list[str] = []
+
+    def compute_probe(*_args: object, **_kwargs: object) -> ScenarioResultRead:
+        compute_calls.append("computed")
+        return ScenarioResultRead(
+            kind="system",
+            code="baseline",
+            label="Baseline",
+            shocks_applied={},
+            status="succeeded",
+        )
+
+    monkeypatch.setattr(analysis_workbench, "_compute_one", compute_probe)
+    analysis_url = f"{BASE}/scenario-workbench/fx/analysis"
+    save_url = f"{BASE}/scenario-workbench/fx/analyses"
+    run_payload = {
+        "reporting_period_id": str(period_id),
+        "scenarios": [{"kind": "system", "code": "baseline"}],
+    }
+    save_payload = {**run_payload, "name": "FX authorization snapshot"}
+    with get_sessionmaker()() as session:
+        before = (
+            session.scalar(
+                select(func.count())
+                .select_from(SavedScenarioAnalysis)
+                .where(SavedScenarioAnalysis.module == "fx")
+            )
+            or 0
+        )
+
+    _, viewer_version = _grant(sensitivity_scope=SensitivityScope.CONFIDENTIAL)
+    viewer_headers = headers(
+        roles=("admin",),
+        authorization_version=viewer_version,
+    )
+    denied_run = db_client.post(analysis_url, headers=viewer_headers, json=run_payload)
+    denied_save = db_client.post(save_url, headers=viewer_headers, json=save_payload)
+
+    assert denied_run.status_code == 403
+    assert denied_save.status_code == 403
+    assert compute_calls == []
+    with get_sessionmaker()() as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(SavedScenarioAnalysis)
+                .where(SavedScenarioAnalysis.module == "fx")
+            )
+            or 0
+        ) == before
+
+    _, analyst_version = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    analyst_headers = headers(
+        roles=("viewer",),
+        authorization_version=analyst_version,
+    )
+    allowed_run = db_client.post(analysis_url, headers=analyst_headers, json=run_payload)
+    allowed_save = db_client.post(save_url, headers=analyst_headers, json=save_payload)
+
+    assert allowed_run.status_code == 200, allowed_run.text
+    assert allowed_save.status_code == 201, allowed_save.text
+    assert compute_calls == ["computed", "computed"]
+
+
+def test_fx_saved_analysis_detail_is_hidden_without_confidential_view(
+    db_client: TestClient,
+) -> None:
+    period_id = _seed_book()
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        analysis = SavedScenarioAnalysis(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            module="fx",
+            reporting_period_id=period_id,
+            name="Protected FX analysis",
+            engine_version="test-fx-v1",
+            scenarios=[],
+            results=[],
+            created_by=USER_1,
+        )
+        session.add(analysis)
+        session.commit()
+        analysis_id = analysis.id
+    finally:
+        session.close()
+
+    _, aggregated_version = _grant(sensitivity_scope=SensitivityScope.AGGREGATED)
+    denied = db_client.get(
+        f"{BASE}/scenario-workbench/fx/analyses/{analysis_id}",
+        headers=headers(
+            roles=("admin",),
+            authorization_version=aggregated_version,
+        ),
+    )
+
+    assert denied.status_code == 404
+    assert denied.json()["error"]["message"] == "Analysis not found."
+
+
+def test_fx_regulatory_registry_filters_before_count_and_hides_details(
+    db_client: TestClient,
+) -> None:
+    period_id = _seed_book()
+    fx_run_ids = [
+        _add_regulatory_run(period_id, "fx", scenario) for scenario in ("baseline", "combined")
+    ]
+    _add_regulatory_run(period_id, "capital", "baseline")
+    _, capital_version = _grant(
+        module_scope=ModuleScope.CAPITAL,
+        sensitivity_scope=SensitivityScope.AGGREGATED,
+    )
+
+    filtered = db_client.get(
+        f"{BASE}/regulatory-runs",
+        headers=headers(
+            roles=("admin",),
+            authorization_version=capital_version,
+        ),
+        params={"limit": 1, "offset": 0},
+    )
+    hidden_detail = db_client.get(
+        f"{BASE}/regulatory-runs/{fx_run_ids[0]}",
+        headers=headers(
+            roles=("admin",),
+            authorization_version=capital_version,
+        ),
+    )
+
+    assert filtered.status_code == 200, filtered.text
+    assert filtered.json()["total"] == 1
+    assert [run["module"] for run in filtered.json()["runs"]] == ["capital"]
+    assert hidden_detail.status_code == 404
+
+    _, fx_aggregated_version = _grant(sensitivity_scope=SensitivityScope.AGGREGATED)
+    visible_fx = db_client.get(
+        f"{BASE}/regulatory-runs",
+        headers=headers(
+            roles=("viewer",),
+            authorization_version=fx_aggregated_version,
+        ),
+        params={"module": "fx", "limit": 1, "offset": 0},
+    )
+    still_hidden_detail = db_client.get(
+        f"{BASE}/regulatory-runs/{fx_run_ids[0]}",
+        headers=headers(
+            roles=("viewer",),
+            authorization_version=fx_aggregated_version,
+        ),
+    )
+
+    assert visible_fx.status_code == 200, visible_fx.text
+    assert visible_fx.json()["total"] == 2
+    assert len(visible_fx.json()["runs"]) == 1
+    assert visible_fx.json()["runs"][0]["module"] == "fx"
+    assert still_hidden_detail.status_code == 404
+
+    _, fx_confidential_version = _grant(
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    visible_detail = db_client.get(
+        f"{BASE}/regulatory-runs/{fx_run_ids[0]}",
+        headers=headers(
+            roles=("viewer",),
+            authorization_version=fx_confidential_version,
+        ),
+    )
+    assert visible_detail.status_code == 200, visible_detail.text

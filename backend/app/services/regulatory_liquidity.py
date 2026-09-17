@@ -124,6 +124,7 @@ INPUT_SCHEMA_VERSION = "bank-facts-v3"
 OUTPUT_SCHEMA_VERSION = "liquidity-metrics-v1"
 MODULE_LIQUIDITY = "liquidity"
 MODULE_IRR = "irr"
+MODULE_FX = "fx"
 
 
 @dataclass(frozen=True)
@@ -137,6 +138,7 @@ _REGULATORY_RUN_AUTHORIZATION = {
         Module.LIQUIDITY,
         "liquidity",
     ),
+    MODULE_FX: _RegulatoryRunAuthorizationPolicy(Module.FX, "fx"),
     MODULE_IRR: _RegulatoryRunAuthorizationPolicy(
         Module.IRRBB,
         "irrbb",

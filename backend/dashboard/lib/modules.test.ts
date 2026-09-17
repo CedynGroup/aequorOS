@@ -22,6 +22,7 @@ const resolved = (
     "alerts",
     "liquidity",
     "capital",
+    "fx",
     "regulatory_reporting",
     "data_engine",
     "institution",
@@ -97,10 +98,10 @@ for (const module of [
   },
   {
     prefix: "/fx",
-    label: "FX",
+    label: "Foreign Exchange",
     aggregated: "fxAggregatedView",
     confidential: "fxConfidentialView",
-    scenarioSensitivity: "Aggregated",
+    scenarioSensitivity: "Confidential",
   },
 ] as const) {
   const deniedModule = resolved(true, true, {
@@ -223,13 +224,23 @@ const aggregatedFxOnly = resolved(true, true, {
 });
 assert.equal(isHrefVisible("/fx", aggregatedFxOnly), true);
 assert.equal(isPathVisible("/fx/var", aggregatedFxOnly), true);
+assert.deepEqual(hrefAccess("/fx/scenarios", aggregatedFxOnly), {
+  state: "disabled",
+  reason:
+    "Requires Foreign Exchange · Confidential · View. Ask your organization owner or admin to grant it.",
+});
 
 const deniedFx = resolved(true, true, {
   fxAggregatedView: false,
   fxConfidentialView: true,
 });
 assert.equal(isHrefVisible("/fx", deniedFx), false);
-assert.equal(isPathVisible("/fx/scenarios", deniedFx), false);
+assert.deepEqual(hrefAccess("/fx", deniedFx), {
+  state: "disabled",
+  reason:
+    "Requires Foreign Exchange · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(isPathVisible("/fx/scenarios", deniedFx), true);
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),

@@ -66,12 +66,14 @@ test.describe("bound FX user", () => {
     });
 
     await page.goto("/fx/scenarios");
-    await page.getByRole("button", { name: "Scenarios & run" }).click();
+    await page
+      .getByRole("button", { name: "Scenarios & run", exact: true })
+      .click();
     const run = page.getByRole("button", { name: "Run enterprise stress" });
     await expect(run).toBeVisible();
     await expect(run).toBeDisabled();
-    await expect(run.locator("..")).toHaveAttribute(
-      "title",
+    await run.locator("..").hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
       "Requires FX run permission at confidential sensitivity. An organization owner can grant it.",
     );
 

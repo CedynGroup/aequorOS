@@ -258,6 +258,30 @@ export default function EnterpriseStressWorkbench({
     );
   }
 
+  const fxToggle = (
+    <label className="flex items-center gap-2 text-caption text-slate">
+      <input
+        type="checkbox"
+        className="h-4 w-4 accent-action"
+        checked={includeFx}
+        disabled={Boolean(fxRunDeniedReason)}
+        onChange={(e) => setIncludeFx(e.target.checked)}
+      />
+      Include FX
+    </label>
+  );
+  const runButton = (
+    <button
+      type="button"
+      className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:opacity-50"
+      disabled={runMutation.isPending || Boolean(enterpriseRunDeniedReason)}
+      onClick={() => void runStress()}
+    >
+      <Play size={15} />{" "}
+      {runMutation.isPending ? "Running…" : "Run enterprise stress"}
+    </button>
+  );
+
   return (
     <div className="space-y-6">
       {/* Header strip */}
@@ -395,20 +419,14 @@ export default function EnterpriseStressWorkbench({
                       />
                       Include IRRBB
                     </label>
-                    {!isSdiTenant && (
-                      <DisabledWithReason reason={fxRunDeniedReason}>
-                        <label className="flex items-center gap-2 text-caption text-slate">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-action"
-                            checked={includeFx}
-                            disabled={Boolean(fxRunDeniedReason)}
-                            onChange={(e) => setIncludeFx(e.target.checked)}
-                          />
-                          Include FX
-                        </label>
-                      </DisabledWithReason>
-                    )}
+                    {!isSdiTenant &&
+                      (fxRunDeniedReason ? (
+                        <DisabledWithReason reason={fxRunDeniedReason}>
+                          {fxToggle}
+                        </DisabledWithReason>
+                      ) : (
+                        fxToggle
+                      ))}
                   </div>
                   <label className="block">
                     <span className="text-caption text-slate">
@@ -428,22 +446,16 @@ export default function EnterpriseStressWorkbench({
                   {runError && (
                     <p className="text-caption text-critical">{runError}</p>
                   )}
-                  <DisabledWithReason reason={enterpriseRunDeniedReason}>
-                    <button
-                      type="button"
-                      className="btn-primary inline-flex items-center gap-1.5 px-4 py-2 text-body font-medium disabled:opacity-50"
-                      disabled={
-                        runMutation.isPending ||
-                        Boolean(enterpriseRunDeniedReason)
-                      }
-                      onClick={() => void runStress()}
+                  {enterpriseRunDeniedReason ? (
+                    <DisabledWithReason
+                      reason={enterpriseRunDeniedReason}
+                      placement="right"
                     >
-                      <Play size={15} />{" "}
-                      {runMutation.isPending
-                        ? "Running…"
-                        : "Run enterprise stress"}
-                    </button>
-                  </DisabledWithReason>
+                      {runButton}
+                    </DisabledWithReason>
+                  ) : (
+                    runButton
+                  )}
                 </div>
               </SectionCard>
             )}
