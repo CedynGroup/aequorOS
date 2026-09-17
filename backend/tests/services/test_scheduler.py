@@ -10,6 +10,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -21,7 +22,8 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.models import BankReportingPeriod, Job, LiveMetric, RegulatoryRun, User
-from app.services import authorization, job_queue, pipeline, regulatory_fx, scheduler
+from app.schemas.live import OfficialRunRequest
+from app.services import authorization, job_queue, live_view, pipeline, regulatory_fx, scheduler
 from tests.api.helpers import ORG_1, USER_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
@@ -295,3 +297,72 @@ def test_official_worker_requires_explicit_actor(db_session: Session) -> None:
     with pytest.raises(pipeline.PipelineError, match="active actor"):
         pipeline.run_official(db_session, job)
     assert db_session.scalar(select(func.count()).select_from(RegulatoryRun)) == 0
+
+
+def test_scheduled_and_requested_official_runs_coalesce_independently(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    _grant_fx_run(db_session, USER_1)
+    requester = User(
+        id=uuid4(),
+        organization_id=ORG_1,
+        email="filing.requester@example.test",
+        display_name="Filing requester",
+        created_at=utc_now() + timedelta(seconds=1),
+    )
+    db_session.add(requester)
+    db_session.flush()
+    authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=requester.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.ANALYST,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION,
+            SAMPLE_BANK_ID,
+            ModuleScope.ALL,
+            SensitivityScope.CONFIDENTIAL,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "scheduler-test"),
+        reason="Authorize requested official execution",
+    )
+    period_end = db_session.scalar(
+        select(func.max(BankReportingPeriod.period_end)).where(
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID
+        )
+    )
+    assert period_end is not None
+    ctx = TenantContext(
+        organization_id=ORG_1,
+        actor_user_id=requester.id,
+        authorization_version=requester.authorization_version,
+    )
+    request = OfficialRunRequest(as_of_date=period_end, reason="Interactive filing")
+    requested = live_view.mint_official_run(db_session, ctx, SAMPLE_BANK_ID, request)
+    repeated = live_view.mint_official_run(db_session, ctx, SAMPLE_BANK_ID, request)
+    assert repeated.job_id == requested.job_id
+    now = utc_now().replace(year=period_end.year, month=period_end.month, day=period_end.day)
+    for _ in range(2):
+        scheduler._enqueue_due_official_runs(db_session, ORG_1, get_settings(), now)
+    jobs = list(db_session.scalars(select(Job).where(Job.job_type == "official_run")))
+    assert len(jobs) == 2
+    interactive = next(job for job in jobs if job.id == requested.job_id)
+    scheduled = next(job for job in jobs if job.id != requested.job_id)
+    assert interactive.payload == {
+        "as_of_date": period_end.isoformat(),
+        "reason": request.reason,
+        "actor_user_id": str(requester.id),
+    }
+    assert scheduled.payload["actor_user_id"] == str(USER_1)
+    for job in jobs:
+        pipeline.run_official(db_session, job)
+    for actor_id in (requester.id, USER_1):
+        runs = list(
+            db_session.scalars(
+                select(RegulatoryRun).where(
+                    RegulatoryRun.module == "fx", RegulatoryRun.created_by == actor_id
+                )
+            )
+        )
+        assert {run.scenario_code for run in runs} == set(regulatory_fx.FX_RUN_SCENARIO_CODES)
+        assert all(run.status == "succeeded" for run in runs)

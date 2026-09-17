@@ -182,7 +182,7 @@ def _enqueue_due_official_runs(
             OFFICIAL_RUN,
             bank_id=bank.id,
             payload=payload,
-            coalesce_key=f"official:{bank.id}:{now.date().isoformat()}",
+            coalesce_key=f"scheduled-official:{bank.id}:{now.date().isoformat()}",
         )
         enqueued.append(str(bank.id))
     return enqueued
