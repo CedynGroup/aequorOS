@@ -192,11 +192,26 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
 
 ## Stack
 
-- Next.js 14 (App Router) · TypeScript · Tailwind CSS
+- Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS
 - TanStack Query over the generated OpenAPI client
 - Recharts for visualization
 - NextAuth for password and OIDC SSO sign-in
 - Inter (UI) + IBM Plex Mono (numerical data) via `next/font/google`
+
+### Next.js 16 runtime conventions
+
+- The authenticated route gate lives in `proxy.ts`, which is the Next.js 16
+  replacement for `middleware.ts`. It retains the same NextAuth session and
+  impersonation-cookie decisions in the Node.js runtime.
+- Request-bound APIs are asynchronous. Await `cookies()`, `headers()`, route
+  `params`, and `searchParams`; client pages may unwrap promised route props
+  with React `use`.
+- Framework caching is not an authority layer. The login SSO probe remains
+  request-rendered with `cache: "no-store"`, while product data keeps using the
+  explicit TanStack Query policy documented below.
+- Production builds use Turbopack's per-route client manifests. The Command
+  Center bundle guard reads those manifests and continues to require Recharts
+  to stay out of the initial route graph.
 
 ## Query cache and refresh policy
 
@@ -293,7 +308,7 @@ other authentication errors show a generic sign-in failure.
 
 ```bash
 pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
-pnpm --filter @aequoros/dashboard lint        # next lint
+pnpm --filter @aequoros/dashboard lint        # ESLint CLI
 pnpm --filter @aequoros/dashboard test        # unit and query-cache policy suites
 pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
 pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys need S3/MinIO
