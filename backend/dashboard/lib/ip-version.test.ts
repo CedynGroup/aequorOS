@@ -1,18 +1,11 @@
 /**
  * Differential test: `ipVersion()` must agree with Node's own `net.isIP`.
  *
- * `lib/outbound.ts` cannot statically import `node:net` — `auth.ts` imports the
- * guard and `middleware.ts` imports `auth`, so the module is compiled for the
- * Edge runtime, where `node:net` does not exist (a static import made
- * `next build` fail outright with UnhandledSchemeError).
- *
  * The replacement is hand-written, and it decides whether a host is judged as a
  * literal address or resolved as a NAME — so a divergence from Node is a
  * security divergence, not a cosmetic one. This test is the safety net: rather
  * than trusting a reading of RFC 4291, it compares against the real
  * implementation over an adversarial corpus plus randomised fuzz.
- *
- * This test file is the ONLY place `node:net` may be imported.
  */
 import { isIP } from 'node:net';
 import { ipVersion } from './outbound';

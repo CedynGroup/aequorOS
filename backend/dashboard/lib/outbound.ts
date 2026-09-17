@@ -49,18 +49,13 @@
  */
 
 /*
- * NO STATIC `node:` IMPORTS IN THIS MODULE.
+ * Keep literal-address classification aligned with Node's net.isIP; a mismatch
+ * changes whether the SSRF guard resolves a host as a name. The differential
+ * corpus in ip-version.test.ts pins this security boundary.
  *
- * `auth.ts` imports this guard, and `middleware.ts` imports `auth` — Next.js
- * middleware compiles for the EDGE runtime, which has no `node:net` and no
- * `node:dns`. A static import of either breaks `next build` outright
- * (`UnhandledSchemeError`), which is how this guard shipped un-buildable.
- *
- * So: `isIP` is replaced by `ipVersion()` below (pure TS, differentially tested
- * against Node's own `net.isIP` over the adversarial corpus), and `dns.lookup`
- * is imported lazily inside `defaultResolveHost`. Nothing is weakened — the
- * resolving check still runs, on the Node runtime, where the OIDC fetches
- * actually happen. Middleware never reaches that path; it only gates sessions.
+ * The session proxy uses the Node runtime (see README.md runtime conventions).
+ * DNS resolution stays lazy and is reached only by outbound OIDC checks, not
+ * by the proxy's session-only gate.
  */
 
 /**
@@ -402,8 +397,7 @@ function loopbackDevTargetAllowed(url: URL): boolean {
 }
 
 const defaultResolveHost: HostResolver = async (host) => {
-  // Lazy so the `node:dns` specifier never enters the Edge bundle's static
-  // graph. This path only ever runs on the Node runtime.
+  // Load DNS resolution only when an outbound target must be checked.
   const { lookup } = await import(/* webpackIgnore: true */ 'node:dns/promises');
   const records = await lookup(host, { all: true });
   return records.map((record) => record.address);
