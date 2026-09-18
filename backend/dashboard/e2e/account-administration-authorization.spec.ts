@@ -62,9 +62,7 @@ test.describe("explicit Account administrator", () => {
       "Your access was updated",
     );
     await page.goto("/login?reason=session_ended");
-    await expect(page.getByRole("status")).toContainText(
-      "Your session ended",
-    );
+    await expect(page.getByRole("status")).toContainText("Your session ended");
   });
 });
 
