@@ -6,6 +6,7 @@
  * the analyses themselves are created and deleted in the owning workbench.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import PageHeader from '@/components/ui/PageHeader';
 import SavedAnalysesIndex from '@/components/reports/SavedAnalysesIndex';
 import { useBankContext } from '@/components/shell/BankContext';
@@ -23,9 +24,9 @@ export default function SavedAnalysesPage() {
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <SavedAnalysesIndex />
-      </div>
+      </PageContainer>
     </>
   );
 }

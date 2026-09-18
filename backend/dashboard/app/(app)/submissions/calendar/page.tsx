@@ -7,6 +7,7 @@
  * Act 930 penalty-exposure note; rows deep-link into the Returns workspace.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -185,7 +186,7 @@ export default function RegulatoryCalendarPage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
           isLoading={query.isLoading}
           error={query.error}
@@ -326,7 +327,7 @@ export default function RegulatoryCalendarPage() {
             </SectionCard>
           )}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

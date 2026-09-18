@@ -10,6 +10,7 @@
  * speaks scopes, freshness, and quota only.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import { LineChart, Plus, UploadCloud, FileSpreadsheet, Loader2 } from 'lucide-react';
 import type { MarketDataUploadRead } from '@aequoros/risk-service-api';
@@ -44,7 +45,7 @@ export default function MarketDataPage() {
         title="Market Data"
         subtitle="Manual uploads are available now for yield curves, FX rates, ratings, and macro forecasts. Bloomberg and LSEG (formerly Refinitiv) configuration can be saved for onboarding, but live vendor transport is unavailable in this deployment."
       />
-      <div className="px-8 py-6 max-w-6xl space-y-8">
+      <PageContainer className="py-6 space-y-8">
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-h3 text-navy">Configured sources</h2>
@@ -102,7 +103,7 @@ export default function MarketDataPage() {
         </section>
 
         <ManualUploadSection bankId={bank?.id} />
-      </div>
+      </PageContainer>
     </>
   );
 }

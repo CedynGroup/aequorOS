@@ -9,6 +9,7 @@
  * dead acknowledge buttons.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BellRing, Info } from "lucide-react";
@@ -124,7 +125,7 @@ export default function AlertCenterPage() {
         onRetry={() => alerts.refetch()}
       >
         {data && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <KpiStat
                 label="Open alerts"
@@ -223,7 +224,7 @@ export default function AlertCenterPage() {
                 acknowledge action.
               </p>
             </div>
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

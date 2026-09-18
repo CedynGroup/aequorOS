@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import PageHeader from '@/components/ui/PageHeader';
 import ScenarioWorkbench from '@/components/workbench/ScenarioWorkbench';
 
@@ -14,9 +15,9 @@ export default function FxScenarios() {
         title="Enterprise Stress Workbench"
         subtitle="Macro scenario → all engines → 3-year projection to Appendix II — the FX path revalues the open position inside the enterprise run"
       />
-      <div className="px-8 py-6">
+      <PageContainer className="py-6">
         <ScenarioWorkbench module="fx" />
-      </div>
+      </PageContainer>
     </>
   );
 }

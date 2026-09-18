@@ -9,6 +9,7 @@
  *     overlay, per-year deltas, and resolved-assumption diff.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, GitCompareArrows, Loader2, PlayCircle, RotateCcw } from 'lucide-react';
@@ -144,7 +145,7 @@ export default function ScenariosPage() {
           void runsQuery.refetch();
         }}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {scenariosQuery.data && (
             <ScenarioDesigner
               scenarios={scenariosQuery.data}
@@ -180,7 +181,7 @@ export default function ScenariosPage() {
               description="Select a run in column A and another in column B of the registry to overlay their projection paths, per-year deltas, and resolved assumptions."
             />
           )}
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

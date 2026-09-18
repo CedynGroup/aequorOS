@@ -7,6 +7,7 @@
  * sensitivity built from the latest succeeded run per preset scenario.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from 'next/link';
 import { ArrowRight, TrendingUp } from 'lucide-react';
 import type { ForecastRunRead } from '@aequoros/risk-service-api';
@@ -66,7 +67,7 @@ export default function NiiForecastPage() {
         error={scenarioSet.error}
         onRetry={scenarioSet.refetch}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {!primary ? (
             <EmptyState
               Icon={TrendingUp}
@@ -85,7 +86,7 @@ export default function NiiForecastPage() {
           ) : (
             <NiiDashboard primary={primary} runsByScenario={runsByScenario} />
           )}
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

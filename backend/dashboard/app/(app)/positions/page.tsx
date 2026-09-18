@@ -10,6 +10,7 @@
  * invented).
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -202,7 +203,7 @@ function PositionsBlotter() {
           void page.refetch();
         }}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {facets.data && bookTotal === 0 ? (
             <EmptyState
               Icon={Layers}
@@ -406,7 +407,7 @@ function PositionsBlotter() {
               )}
             </>
           )}
-        </div>
+        </PageContainer>
       </QueryBoundary>
 
       {selected && (

@@ -17,6 +17,7 @@
  * amber tile and a caption that names the reason.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useMemo, useState } from "react";
 import { Printer } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -134,7 +135,7 @@ export default function StressBoardPack() {
         error={registry.error ?? approved.error}
         onRetry={() => registry.refetch()}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {/* Composer controls (hidden on print) */}
           <div className="print:hidden">
             <SectionCard
@@ -399,7 +400,7 @@ export default function StressBoardPack() {
               )}
             </div>
           )}
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

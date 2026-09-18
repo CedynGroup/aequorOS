@@ -10,6 +10,7 @@
  * (return, reporting date).
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useMemo, useState, type ReactNode } from "react";
 import {
   Archive,
@@ -231,7 +232,7 @@ export default function HistoryPage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
           isLoading={query.isLoading}
           error={query.error}
@@ -303,7 +304,7 @@ export default function HistoryPage() {
 
           {selected && <PackageRecord bankId={bankId!} summary={selected} />}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

@@ -8,6 +8,7 @@
  * deployment, so pull jobs are safely blocked.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Database, Loader2, Plus } from 'lucide-react';
@@ -78,7 +79,7 @@ export default function T24Page() {
         </nav>
       </div>
 
-      <div className="px-8 py-6 max-w-6xl space-y-8">
+      <PageContainer className="py-6 space-y-8">
         {section === 'connections' && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
@@ -196,7 +197,7 @@ export default function T24Page() {
             <TransportModes />
           </section>
         )}
-      </div>
+      </PageContainer>
     </>
   );
 }

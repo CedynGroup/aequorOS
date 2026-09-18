@@ -1,5 +1,6 @@
 "use client";
 
+import PageContainer from '@/components/ui/PageContainer';
 import { ShieldCheck } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat from "@/components/ui/KpiStat";
@@ -133,7 +134,7 @@ export default function LiquidityBuffer() {
         onRetry={() => dashboard.refetch()}
       >
         {data && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             {/* Buffer KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <KpiStat
@@ -260,7 +261,7 @@ export default function LiquidityBuffer() {
                 totalsRowMatcher={(r) => Boolean(r.isTotal)}
               />
             </SectionCard>
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

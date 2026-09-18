@@ -69,6 +69,8 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
   linked module and parent-list breadcrumbs in the same header; ingestion batch
   details use the Data Engine eyebrow, with both Data Engine and Batches linking
   back to `/data-engine`.
+- **PageContainer** — shared `px-8` horizontal gutters and `max-w-6xl` width
+  for PageHeader and module/detail bodies; vertical spacing belongs to the caller.
 - **DeltaBadge, StatusPill, RatioGauge, Sparkline, RunBadge, SubTabs,
   EmptyState, Skeleton, QueryBoundary** — token-native
 - **CommandPalette** (⌘K) — zero-dep, full route registry with keywords

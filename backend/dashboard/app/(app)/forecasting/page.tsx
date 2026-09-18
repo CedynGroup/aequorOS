@@ -8,6 +8,7 @@
  * figures come off the saved projection payload.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -93,9 +94,9 @@ export default function BalanceSheetForecastPage() {
   return (
     <Suspense
       fallback={
-        <div className="px-8 py-6">
+        <PageContainer className="py-6">
           <SkeletonChart height={320} />
-        </div>
+        </PageContainer>
       }
     >
       <BalanceSheetWorkspace />
@@ -202,7 +203,7 @@ function BalanceSheetWorkspace() {
       />
 
       {!periodId && (
-        <div className="px-8 pt-6">
+        <PageContainer className="pt-6">
           <div className="border-l-4 border-l-warning bg-warning-light/40 px-5 py-4 text-body text-navy">
             <p className="font-medium">A reporting period is required to run a forecast</p>
             <p className="mt-1 text-slate">
@@ -213,7 +214,7 @@ function BalanceSheetWorkspace() {
               to create the immutable period snapshot used by forecast runs.
             </p>
           </div>
-        </div>
+        </PageContainer>
       )}
 
       <SdiModuleContext title="SDI ALM context">
@@ -225,7 +226,7 @@ function BalanceSheetWorkspace() {
         error={runsQuery.error}
         onRetry={() => runsQuery.refetch()}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {createRun.error && (
             <ErrorPanel error={createRun.error} title="Forecast run failed" />
           )}
@@ -257,7 +258,7 @@ function BalanceSheetWorkspace() {
           ) : run ? (
             <RunDashboard run={run} adverse={adverse} />
           ) : null}
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

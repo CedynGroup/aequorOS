@@ -2,13 +2,50 @@
 // object-store operation. Without local storage configuration, run with:
 // STORAGE_ENV=dev STORAGE_BACKEND=s3 S3_ENDPOINT=http://127.0.0.1:9
 // S3_ACCESS_KEY=e2e-unused S3_SECRET_KEY=e2e-unused pnpm e2e page-header-navigation
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "fs";
 import path from "path";
 import { mintBackendToken } from "./support/mint";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+
+async function expectAlignedHeaderAndCards(page: Page) {
+  const heading = page.getByRole("heading", { level: 1 });
+  const header = heading.locator("../../../..");
+  const firstCard = page.locator("main .card").first();
+  await expect(firstCard).toBeVisible();
+  for (const width of [1280, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect
+      .poll(async () => {
+        const titleBox = await heading.boundingBox();
+        const headerContent = await header
+          .locator(":scope > div")
+          .boundingBox();
+        const grid = await firstCard.evaluate((card) => {
+          const parent = card.parentElement;
+          const body =
+            parent && getComputedStyle(parent).display === "grid"
+              ? parent
+              : card;
+          const box = body.getBoundingClientRect();
+          return { left: box.left, right: box.right };
+        });
+        return {
+          left: Math.round((titleBox?.x ?? -1) - grid.left),
+          right: Math.round(
+            (headerContent ? headerContent.x + headerContent.width : -1) -
+              grid.right,
+          ),
+        };
+      })
+      .toEqual({ left: 0, right: 0 });
+    await expect(header).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(header).toHaveCSS("border-bottom-width", "0px");
+    await expect(header).toHaveCSS("box-shadow", "none");
+  }
+}
 
 test.use({
   storageState: path.join(E2E_TMP, "admin.json"),
@@ -91,6 +128,7 @@ test("object detail headers retain linked breadcrumbs", async ({
     .getByRole("heading", { name: /Ingestion batch/ })
     .locator("..");
   await expect(header.locator("p").first()).toHaveText("Data Engine");
+  await expectAlignedHeaderAndCards(page);
   const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(breadcrumb).toBeVisible();
   await expect(
@@ -176,3 +214,42 @@ for (const [route, eyebrow] of [
     ).toHaveCount(0);
   });
 }
+
+for (const route of ["/irr", "/fx"]) {
+  test(`${route} header and card grid share both edges at wide viewports`, async ({
+    page,
+  }) => {
+    await page.goto(route);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expectAlignedHeaderAndCards(page);
+  });
+}
+
+test("SDI liquidity header and card grid share both edges at wide viewports", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/banks", async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    for (const bank of payload.banks) {
+      bank.institution_type_detail.institution_class = "sdi";
+    }
+    await route.fulfill({ response, json: payload });
+  });
+  await page.route("**/banks/*/sdi/liquidity-position", async (route) => {
+    await route.fulfill({
+      json: {
+        as_of: "2026-08-31",
+        ratios: [],
+        reserves: [],
+        maturity_ladder: [],
+        readiness: [],
+      },
+    });
+  });
+  await page.goto("/liquidity");
+  await expect(
+    page.getByRole("heading", { name: "LMTD Table 1 prudential ratios" }),
+  ).toBeVisible();
+  await expectAlignedHeaderAndCards(page);
+});

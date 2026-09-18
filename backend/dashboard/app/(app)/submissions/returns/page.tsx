@@ -26,6 +26,7 @@
  * on a freshly generated package, and prior versions are compared mid-chain.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { Fragment, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -332,7 +333,7 @@ function ReturnsWorkspace() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         {isSdi && (
           <SectionCard
             title="SDI regulatory returns"
@@ -459,7 +460,7 @@ function ReturnsWorkspace() {
             />
           )}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

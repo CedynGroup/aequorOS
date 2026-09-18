@@ -1,5 +1,6 @@
 "use client";
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from "next/link";
 import {
   Bar,
@@ -206,7 +207,7 @@ export default function ContingencyFundingPlan() {
         onRetry={() => ewis.refetch()}
       >
         {dashboard && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
               <KpiStat
                 label="Escalation state"
@@ -588,7 +589,7 @@ export default function ContingencyFundingPlan() {
                 dedicated immutable exercise record.
               </p>
             </SectionCard>
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

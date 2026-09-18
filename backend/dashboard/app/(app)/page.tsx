@@ -15,6 +15,7 @@
  * can never show populated KPIs beside an "empty" live state again.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from "next/link";
 import { Database, Info } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -66,7 +67,7 @@ export default function CommandCenterPage() {
       {effective.isResolving ? (
         <CommandCenterSkeleton />
       ) : effective.isEmpty ? (
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           <UnreconciledBookBanner bankId={bankId} />
           <BreachBanner bankId={bankId} hasData={false} />
           <PulseWall
@@ -97,9 +98,9 @@ export default function CommandCenterPage() {
               }
             />
           </div>
-        </div>
+        </PageContainer>
       ) : effective.period ? (
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {effective.isFallback && effective.selectedPeriod && (
             <div className="card border-l-4 border-l-action bg-action-light/30 px-5 py-3 flex items-start gap-3">
               <Info
@@ -167,7 +168,7 @@ export default function CommandCenterPage() {
                 return null;
             }
           })}
-        </div>
+        </PageContainer>
       ) : null}
     </>
   );
@@ -176,7 +177,7 @@ export default function CommandCenterPage() {
 /** Loading layout that mirrors the Command Center grid. */
 function CommandCenterSkeleton() {
   return (
-    <div className="px-8 py-6 space-y-6" aria-busy="true" aria-label="Loading">
+    <PageContainer className="py-6 space-y-6" aria-busy="true" aria-label="Loading">
       <div className="card px-5 py-3">
         <SkeletonLine width="40%" height={12} />
       </div>
@@ -198,6 +199,6 @@ function CommandCenterSkeleton() {
           <SkeletonChart height={280} />
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

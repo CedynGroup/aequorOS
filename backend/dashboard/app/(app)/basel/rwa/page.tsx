@@ -1,5 +1,6 @@
 "use client";
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from "next/link";
 import { ArrowRight, Layers } from "lucide-react";
 import type { CapitalLineRead } from "@aequoros/risk-service-api";
@@ -118,7 +119,7 @@ export default function RWABreakdown() {
       />
 
       {needsBaseline ? (
-        <div className="px-8 py-6">
+        <PageContainer className="py-6">
           <EmptyState
             Icon={Layers}
             title="Awaiting period results"
@@ -133,7 +134,7 @@ export default function RWABreakdown() {
               </Link>
             }
           />
-        </div>
+        </PageContainer>
       ) : (
         <QueryBoundary
           isLoading={breakdown.isLoading}
@@ -141,7 +142,7 @@ export default function RWABreakdown() {
           onRetry={() => breakdown.refetch()}
         >
           {data && (
-            <div className="px-8 py-6 space-y-6">
+            <PageContainer className="py-6 space-y-6">
               {/* Totals */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <KpiStat
@@ -339,7 +340,7 @@ export default function RWABreakdown() {
                   "Current live capital computation."
                 )}
               </p>
-            </div>
+            </PageContainer>
           )}
         </QueryBoundary>
       )}

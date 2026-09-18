@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import PageHeader from '@/components/ui/PageHeader';
 import ScenarioWorkbench from '@/components/workbench/ScenarioWorkbench';
 import { useModuleScope } from '@/components/shell/BankContext';
@@ -16,9 +17,9 @@ export default function CapitalStress() {
         title={isSdi ? 'SDI Stress Workbench' : 'Enterprise Stress Workbench'}
         subtitle={isSdi ? 'Section 29 capital and material-risk stress with a controlled SDI liquidity not-assessed disclosure.' : 'Macro scenario → all engines → 3-year projection to Appendix II, base vs stress, with driver attribution and management actions'}
       />
-      <div className="px-8 py-6">
+      <PageContainer className="py-6">
         <ScenarioWorkbench module="capital" />
-      </div>
+      </PageContainer>
     </>
   );
 }

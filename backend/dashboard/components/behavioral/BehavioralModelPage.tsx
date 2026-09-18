@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -188,7 +189,7 @@ export default function BehavioralModelPage({
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         {offline ? (
           <div className="card border-l-4 border-l-critical bg-critical-light/40 p-5 flex items-start gap-3">
             <CloudOff size={18} className="text-critical shrink-0 mt-0.5" aria-hidden />
@@ -383,7 +384,7 @@ export default function BehavioralModelPage({
             )}
           </>
         ) : null}
-      </div>
+      </PageContainer>
     </>
   );
 }

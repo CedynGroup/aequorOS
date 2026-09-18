@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import PageHeader from '@/components/ui/PageHeader';
 import ScenarioWorkbench from '@/components/workbench/ScenarioWorkbench';
 import { useBankContext } from '@/components/shell/BankContext';
@@ -17,7 +18,7 @@ export default function FtpScenarios() {
         title="FTP Scenario Workbench"
         subtitle="Curve and funding-spread overlays repricing the book — live analysis, side-by-side comparison"
       />
-      <div className="px-8 py-6">
+      <PageContainer className="py-6">
         <ScenarioWorkbench
           module="ftp"
           primaryMetric="portfolio_nim_pct"
@@ -29,7 +30,7 @@ export default function FtpScenarios() {
             { key: 'nmd_core_pct', label: 'NMD core', kind: 'pct' },
           ]}
         />
-      </div>
+      </PageContainer>
     </>
   );
 }

@@ -7,6 +7,7 @@
  * a render prop so the payload is fetched (and cached) once per query key.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import type { ReactNode } from "react";
 import type {
   FxDashboardRead,
@@ -70,7 +71,7 @@ export default function FxModuleFrame({
         onRetry={() => dashboard.refetch()}
       >
         {data && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             {children({
               data,
               metrics: data.metrics,
@@ -78,7 +79,7 @@ export default function FxModuleFrame({
               bankId,
               periodId: data.period.id,
             })}
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

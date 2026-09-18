@@ -16,6 +16,7 @@
  * needed. Currency is jurisdiction-neutral via lib/format — never hardcoded.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, GitCompareArrows, Scale } from 'lucide-react';
 import type {
@@ -518,7 +519,7 @@ export default function ComparePage() {
         action={<ModeToggle mode={mode} onChange={setMode} />}
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
           isLoading={selectorsLoading}
           error={selectorsError}
@@ -680,7 +681,7 @@ export default function ComparePage() {
             />
           )}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

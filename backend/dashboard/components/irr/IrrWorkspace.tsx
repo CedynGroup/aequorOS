@@ -7,6 +7,7 @@
  * data wiring identical so each page is purely presentational.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState, type ReactNode } from "react";
 import { Play } from "lucide-react";
 import type {
@@ -114,7 +115,7 @@ export default function IrrWorkspace({
         onRetry={() => dashboard.refetch()}
       >
         {data && m && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             {children({
               data,
               metrics: m,
@@ -123,7 +124,7 @@ export default function IrrWorkspace({
               bankId,
               periodId: data.period.id,
             })}
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

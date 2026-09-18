@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import PageHeader from '@/components/ui/PageHeader';
 import KpiStat, { type KpiStatus } from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
@@ -103,94 +104,95 @@ export default function SdiLiquidityView({ bankId }: { bankId: string | undefine
   const readiness = position.data?.readiness ?? [];
 
   return (
-    <div className="space-y-6 p-6">
+    <>
       <PageHeader
         eyebrow="Liquidity"
         title="Liquidity"
         subtitle="Liquidity monitoring for a specialised deposit-taking institution, against the Liquidity Monitoring Tools Directive (exposure draft, Feb 2026 — stated effective 1 Jan 2027)."
       />
-
-      <QueryBoundary
-        isLoading={position.isLoading}
-        error={position.error}
-        onRetry={() => position.refetch()}
-      >
-        {position.data ? (
-          <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <KpiStat
-                label="Ratio breaches"
-                value={String(breached)}
-                status={breached > 0 ? 'crit' : 'ok'}
-                hint="LMTD Table 1 and liquidity-reserve checks"
-              />
-              <KpiStat
-                label="Table 1 ratios"
-                value={String(ratios.length)}
-                status="ok"
-                hint="Current period against active SDI floors"
-              />
-              <KpiStat
-                label="Data-ready controls"
-                value={`${ready} / ${readiness.length}`}
-                status={ready === readiness.length ? 'ok' : 'warn'}
-                hint="Position data completeness for liquidity controls"
-              />
-              <KpiStat
-                label="Source as of"
-                value={position.data.as_of}
-                status="ok"
-                hint="Latest accepted canonical position snapshot"
-              />
-            </div>
-
-            <SectionCard
-              title="LMTD Table 1 prudential ratios"
-              subtitle="Draft-directive liquidity ratios for this SDI, measured against the active threshold for each ratio. The directive is not yet in force; Board-adopted levels govern until it is."
-              noPadding
-            >
-              <DataTable columns={ratioColumns} rows={ratios} density="compact" />
-            </SectionCard>
-
-            <SectionCard
-              title="Liquidity reserves"
-              subtitle="Primary reserve and cumulative primary-plus-secondary reserve as a share of deposit liabilities."
-              noPadding
-            >
-              <DataTable columns={reserveColumns} rows={reserves} density="compact" />
-            </SectionCard>
-
-            <SectionCard
-              title="Contractual maturity mismatch"
-              subtitle="Net and cumulative contractual cash-flow mismatch by maturity bucket."
-              noPadding
-            >
-              <DataTable columns={maturityColumns} rows={position.data.maturity_ladder} density="compact" />
-            </SectionCard>
-
-            <SectionCard
-              title="Liquidity data readiness"
-              subtitle="Data gaps are shown explicitly so unavailable controls are never mistaken for compliant ones."
-            >
-              <div className="space-y-3">
-                {readiness.map((row) => (
-                  <div key={row.module} className="flex items-start justify-between gap-4 border-b border-border-light pb-3 last:border-0 last:pb-0">
-                    <div>
-                      <p className="text-body font-medium text-navy">{row.module.replaceAll('_', ' ')}</p>
-                      {row.reasons.map((reason) => (
-                        <p key={reason} className="mt-1 text-caption text-slate">{reason}</p>
-                      ))}
-                    </div>
-                    <StatusPill tone={row.status === 'ready' ? 'success' : row.status === 'partial' ? 'amber' : 'critical'}>
-                      {row.status}
-                    </StatusPill>
-                  </div>
-                ))}
+      <PageContainer className="py-6 space-y-6">
+        <QueryBoundary
+          isLoading={position.isLoading}
+          error={position.error}
+          onRetry={() => position.refetch()}
+        >
+          {position.data ? (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <KpiStat
+                  label="Ratio breaches"
+                  value={String(breached)}
+                  status={breached > 0 ? 'crit' : 'ok'}
+                  hint="LMTD Table 1 and liquidity-reserve checks"
+                />
+                <KpiStat
+                  label="Table 1 ratios"
+                  value={String(ratios.length)}
+                  status="ok"
+                  hint="Current period against active SDI floors"
+                />
+                <KpiStat
+                  label="Data-ready controls"
+                  value={`${ready} / ${readiness.length}`}
+                  status={ready === readiness.length ? 'ok' : 'warn'}
+                  hint="Position data completeness for liquidity controls"
+                />
+                <KpiStat
+                  label="Source as of"
+                  value={position.data.as_of}
+                  status="ok"
+                  hint="Latest accepted canonical position snapshot"
+                />
               </div>
-            </SectionCard>
-          </>
-        ) : null}
-      </QueryBoundary>
-    </div>
+
+              <SectionCard
+                title="LMTD Table 1 prudential ratios"
+                subtitle="Draft-directive liquidity ratios for this SDI, measured against the active threshold for each ratio. The directive is not yet in force; Board-adopted levels govern until it is."
+                noPadding
+              >
+                <DataTable columns={ratioColumns} rows={ratios} density="compact" />
+              </SectionCard>
+
+              <SectionCard
+                title="Liquidity reserves"
+                subtitle="Primary reserve and cumulative primary-plus-secondary reserve as a share of deposit liabilities."
+                noPadding
+              >
+                <DataTable columns={reserveColumns} rows={reserves} density="compact" />
+              </SectionCard>
+
+              <SectionCard
+                title="Contractual maturity mismatch"
+                subtitle="Net and cumulative contractual cash-flow mismatch by maturity bucket."
+                noPadding
+              >
+                <DataTable columns={maturityColumns} rows={position.data.maturity_ladder} density="compact" />
+              </SectionCard>
+
+              <SectionCard
+                title="Liquidity data readiness"
+                subtitle="Data gaps are shown explicitly so unavailable controls are never mistaken for compliant ones."
+              >
+                <div className="space-y-3">
+                  {readiness.map((row) => (
+                    <div key={row.module} className="flex items-start justify-between gap-4 border-b border-border-light pb-3 last:border-0 last:pb-0">
+                      <div>
+                        <p className="text-body font-medium text-navy">{row.module.replaceAll('_', ' ')}</p>
+                        {row.reasons.map((reason) => (
+                          <p key={reason} className="mt-1 text-caption text-slate">{reason}</p>
+                        ))}
+                      </div>
+                      <StatusPill tone={row.status === 'ready' ? 'success' : row.status === 'partial' ? 'amber' : 'critical'}>
+                        {row.status}
+                      </StatusPill>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+            </>
+          ) : null}
+        </QueryBoundary>
+      </PageContainer>
+    </>
   );
 }

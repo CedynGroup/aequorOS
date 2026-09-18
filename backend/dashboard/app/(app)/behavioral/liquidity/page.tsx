@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import { Droplets, ShieldCheck } from 'lucide-react';
 import type { BehavioralLiquiditySegmentRead } from '@aequoros/risk-service-api';
@@ -63,7 +64,7 @@ export default function BehavioralLiquidityPage() {
       </SdiModuleContext>
       <QueryBoundary isLoading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>
         {report && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <KpiStat label="Source as of" value={report.asOfDate === 'unavailable' ? '-' : report.asOfDate} hint="Latest canonical deposit snapshot" />
               <KpiStat label="Worst observed runoff" value={pct(worstRunoff)} status={worstRunoff !== null && worstRunoff > 10 ? 'warn' : 'ok'} hint="Largest observed month-on-month balance decline" />
@@ -112,7 +113,7 @@ export default function BehavioralLiquidityPage() {
                 ]} rows={report.scenarios} density="compact" />
               ) : <EmptyState Icon={ShieldCheck} title="No approved CFP behavioral overlays" description="Add a behavioral scenario to the audited CFP draft and link it to one of the plan's documented actions." />}
             </SectionCard>
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

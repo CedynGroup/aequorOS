@@ -8,6 +8,7 @@
  * table. Wiring (useRunOptimizer + stored-run hydration) is unchanged.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { Loader2, Search, Trophy } from 'lucide-react';
 import type {
   OptimizerResultRead,
@@ -239,7 +240,7 @@ export default function StrategicOptimizer() {
         error={runsQuery.error}
         onRetry={() => runsQuery.refetch()}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {runOptimizer.error && (
             <ErrorPanel error={runOptimizer.error} title="Optimizer run failed" />
           )}
@@ -391,7 +392,7 @@ export default function StrategicOptimizer() {
               <MethodNote />
             </>
           )}
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

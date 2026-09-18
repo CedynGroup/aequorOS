@@ -1,3 +1,4 @@
+import PageContainer from '@/components/ui/PageContainer';
 import type { ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 
@@ -17,7 +18,7 @@ export default function PageHeader({
   asOf?: string;
 }) {
   return (
-    <div className="px-8 pt-6 max-w-6xl">
+    <PageContainer className="pt-6">
       <div className="pb-1">
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav
@@ -63,6 +64,6 @@ export default function PageHeader({
           </div>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }
