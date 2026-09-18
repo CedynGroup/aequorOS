@@ -102,8 +102,6 @@ from app.models import (
     CanonicalPositionSnapshot,
     CanonicalProduct,
     FinancialFactRow,
-    MacroScenario,
-    MacroScenarioPath,
     ManagementActionPlan,
     ParamCapitalThreshold,
     ParamCrmHaircut,
@@ -1216,21 +1214,10 @@ def _credit_exposure_snapshot(exposures: list[CreditExposure]) -> list[dict[str,
 # --- Scenario paths + plan ---------------------------------------------------
 
 
-def _scenario_paths(db: Session, scenario: MacroScenario) -> list[MacroPathPoint]:
-    rows = db.scalars(
-        select(MacroScenarioPath)
-        .where(MacroScenarioPath.scenario_id == scenario.id)
-        .order_by(MacroScenarioPath.variable, MacroScenarioPath.year_index)
-    )
-    return [
-        MacroPathPoint(
-            variable=row.variable,
-            year_index=row.year_index,
-            base_value=_dec(row.base_value),
-            stress_value=_dec(row.stress_value),
-        )
-        for row in rows
-    ]
+def _scenario_paths(
+    scenario: macro_scenarios.ResolvedMacroScenario,
+) -> list[MacroPathPoint]:
+    return list(scenario.paths)
 
 
 def _base_value_at_year1(paths: list[MacroPathPoint], variable: str) -> Decimal | None:
@@ -1654,7 +1641,7 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         )
     plan_model = _resolve_action_plan(db, ctx, bank, payload)
     as_of = period.period_end
-    paths = _scenario_paths(db, scenario)
+    paths = _scenario_paths(scenario)
     if not paths:
         raise EnterpriseStressError(
             "scenario_without_paths", "The scenario carries no macro-variable paths."
@@ -1955,7 +1942,7 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         db,
         ctx,
         bank,
-        _read(run, scenario),
+        _read(run, scenario.id, scenario.code),
         sensitivity=Sensitivity.CONFIDENTIAL,
     )
 
@@ -1964,16 +1951,6 @@ def get_latest_enterprise_stress(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID, scenario_id: UUID
 ) -> EnterpriseStressRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
-    scenario = db.scalar(
-        select(MacroScenario).where(
-            MacroScenario.id == scenario_id,
-            MacroScenario.organization_id == ctx.organization_id,
-        )
-    )
-    if scenario is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Macro scenario not found."
-        )
     run = db.scalar(
         select(RegulatoryRun)
         .where(
@@ -1981,7 +1958,7 @@ def get_latest_enterprise_stress(
             RegulatoryRun.bank_id == bank.id,
             RegulatoryRun.reporting_period_id == reporting_period_id,
             RegulatoryRun.module == MODULE_ENTERPRISE_STRESS,
-            RegulatoryRun.scenario_code == scenario.code,
+            RegulatoryRun.inputs["scenario"]["id"].as_string() == str(scenario_id),
             RegulatoryRun.status == "succeeded",
         )
         .order_by(RegulatoryRun.created_at.desc())
@@ -1996,7 +1973,7 @@ def get_latest_enterprise_stress(
         db,
         ctx,
         bank,
-        _read(run, scenario),
+        _read(run, scenario_id, str(run.inputs["scenario"]["code"])),
         sensitivity=Sensitivity.CONFIDENTIAL,
     )
 
@@ -2082,23 +2059,16 @@ def get_enterprise_stress_run(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enterprise stress run not found."
         )
-    scenario_id = UUID(str(run.inputs["scenario"]["id"]))
-    scenario = db.scalar(
-        select(MacroScenario).where(
-            MacroScenario.id == scenario_id,
-            MacroScenario.organization_id == ctx.organization_id,
-        )
-    )
-    if scenario is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="The macro scenario for this run no longer exists.",
-        )
+    scenario_snapshot = run.inputs["scenario"]
     return enterprise_run_visibility.project_response(
         db,
         ctx,
         bank,
-        _read(run, scenario),
+        _read(
+            run,
+            UUID(str(scenario_snapshot["id"])),
+            str(scenario_snapshot["code"]),
+        ),
         sensitivity=Sensitivity.CONFIDENTIAL,
     )
 
@@ -2178,7 +2148,7 @@ def _baseline_pnl(projection: EnterpriseProjection) -> tuple[Decimal, Decimal]:
     return preprovision, base_year1.pnl.credit_losses
 
 
-def _read(run: RegulatoryRun, scenario: MacroScenario) -> EnterpriseStressRead:
+def _read(run: RegulatoryRun, scenario_id: UUID, scenario_code: str) -> EnterpriseStressRead:
     metrics = run.metrics
     outcome = metrics["outcome"]
     projection = metrics["projection"]
@@ -2194,7 +2164,7 @@ def _read(run: RegulatoryRun, scenario: MacroScenario) -> EnterpriseStressRead:
     # their assumption origins were never recorded.
     plan_provenance = metrics.get("plan_provenance") or {}
     summary = EnterpriseStressSummary(
-        scenario_code=scenario.code,
+        scenario_code=scenario_code,
         stressed_car_end_pct=_dec(capital["stressed_car_end_pct"]),
         baseline_car_end_pct=_dec(capital["baseline_car_end_pct"]),
         car_erosion_pp=_dec(capital["car_erosion_pp"]),
@@ -2223,8 +2193,8 @@ def _read(run: RegulatoryRun, scenario: MacroScenario) -> EnterpriseStressRead:
         run_id=run.id,
         bank_id=run.bank_id,
         reporting_period_id=run.reporting_period_id,
-        scenario_id=scenario.id,
-        scenario_code=scenario.code,
+        scenario_id=scenario_id,
+        scenario_code=scenario_code,
         input_hash=run.input_hash,
         engine_version=run.engine_version,
         summary=summary,

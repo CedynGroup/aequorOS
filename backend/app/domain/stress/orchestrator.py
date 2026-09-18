@@ -65,6 +65,7 @@ from app.domain.fx.engine import (
     run_fx_scenarios,
 )
 from app.domain.irr.engine import (
+    SHOCK_PARALLEL_BP,
     GapResult,
     IrrPosition,
     compute_ear,
@@ -339,9 +340,7 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
     rate_up = max(rate_delta, _ZERO)
     gdp_down = max(-gdp_delta, _ZERO)
     income_stress_factor = max(
-        _ONE
-        - INCOME_COMPRESSION_PER_RATE * rate_up
-        - INCOME_COMPRESSION_PER_GDP * gdp_down,
+        _ONE - INCOME_COMPRESSION_PER_RATE * rate_up - INCOME_COMPRESSION_PER_GDP * gdp_down,
         _ZERO,
     )
     tax_factor = (_HUNDRED - tax_rate_pct) / _HUNDRED
@@ -384,8 +383,9 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
         ecl_source = "allowance_proxy"
     annual_incremental_loss = max(money(ecl_stress - ecl_base), _ZERO)
 
-    def _keys(after_tax_income: Decimal, credit_loss: Decimal, rwa_growth: Decimal,
-              fx_mult: Decimal) -> dict[str, Decimal]:
+    def _keys(
+        after_tax_income: Decimal, credit_loss: Decimal, rwa_growth: Decimal, fx_mult: Decimal
+    ) -> dict[str, Decimal]:
         return {
             SHOCK_QUARTERLY_RWA_GROWTH_PCT: rwa_growth,
             SHOCK_QUARTERLY_INCOME_M: money(after_tax_income / _QUARTERS_PER_YEAR / MILLION),
@@ -393,9 +393,7 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
             SHOCK_FX_RWA_MULTIPLIER: fx_mult,
         }
 
-    baseline_keys = _keys(
-        baseline_after_tax, money(baseline_annual_credit_loss), _ZERO, _ONE
-    )
+    baseline_keys = _keys(baseline_after_tax, money(baseline_annual_credit_loss), _ZERO, _ONE)
     stressed_keys = _keys(
         stressed_after_tax,
         money(baseline_annual_credit_loss + annual_incremental_loss),
@@ -422,8 +420,7 @@ def compose_capital_shocks(  # noqa: PLR0913 - the composition names its full in
             ),
             "fx_rwa_multiplier": f"1 + {FX_RWA_MULT_PER_FX_FRAC}×fx_frac({fx_uplift})",
             "quarterly_income_m": (
-                f"pre-provision income × factor({income_stress_factor}) × "
-                f"after-tax({tax_factor})"
+                f"pre-provision income × factor({income_stress_factor}) × after-tax({tax_factor})"
             ),
             "quarterly_credit_loss_m": (
                 f"baseline {money(baseline_annual_credit_loss)} + incremental "
@@ -592,9 +589,7 @@ def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOut
         overrides=inputs.overrides,
     )
     ecl_base_override = composition.ecl_base if composition.ecl_source == "ecl_engine" else None
-    ecl_stress_override = (
-        composition.ecl_stress if composition.ecl_source == "ecl_engine" else None
-    )
+    ecl_stress_override = composition.ecl_stress if composition.ecl_source == "ecl_engine" else None
     baseline_capital = run_capital_stress(
         f"{inputs.scenario_code}:baseline",
         inputs.capital_facts,
@@ -615,9 +610,7 @@ def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOut
         stressed=stressed_capital,
         baseline_car_end_pct=baseline_capital.path[-1].car,
         stressed_car_end_pct=stressed_capital.path[-1].car,
-        car_erosion_pp=ratio_pct(
-            stressed_capital.path[-1].car - baseline_capital.path[-1].car
-        ),
+        car_erosion_pp=ratio_pct(stressed_capital.path[-1].car - baseline_capital.path[-1].car),
         baseline_cet1_end_pct=baseline_capital.path[-1].cet1_ratio,
         stressed_cet1_end_pct=stressed_capital.path[-1].cet1_ratio,
         any_trigger_fired=any(trigger.fired for trigger in stressed_capital.triggers),
@@ -651,9 +644,7 @@ def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOut
         else None
     )
     concentration = (
-        compute_concentration(inputs.concentration)
-        if inputs.concentration is not None
-        else None
+        compute_concentration(inputs.concentration) if inputs.concentration is not None else None
     )
     operational = _run_operational(inputs, capital, liquidity)
     contingent_leverage = (
@@ -740,14 +731,10 @@ def _run_irr(inputs: EnterpriseStressInputs) -> IrrOutcome:
     assert inputs.irr is not None
     irr = inputs.irr
     shocks = translate(inputs.scenario_paths, "irr", inputs.overrides)
-    parallel_bp = shocks.get("parallel_bp", _ZERO)
+    parallel_bp = shocks.get(SHOCK_PARALLEL_BP, _ZERO)
     gap: GapResult = compute_gap(irr.positions)
     base_eve = compute_eve(irr.positions, irr.curve, {})
-    shifts = (
-        scenario_shifts(inputs.scenario_code, {"parallel_bp": parallel_bp}, irr.curve)
-        if parallel_bp != _ZERO
-        else {}
-    )
+    shifts = scenario_shifts(inputs.scenario_code, shocks, irr.curve) if shocks else {}
     stressed_eve = compute_eve(irr.positions, irr.curve, shifts)
     delta_eve = money(stressed_eve - base_eve)
     # ΔEVE as a share of Tier 1 has no denominator without Tier 1. Reporting 0%

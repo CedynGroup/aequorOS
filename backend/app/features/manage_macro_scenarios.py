@@ -16,6 +16,7 @@ from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
 from app.schemas.stress import (
     MacroModule,
     MacroScenarioApproval,
+    MacroScenarioClone,
     MacroScenarioCreate,
     MacroScenarioListRead,
     MacroScenarioRead,
@@ -129,6 +130,21 @@ def archive_macro_scenario(
     ctx: MutationTenant,
 ) -> MacroScenarioRead:
     return macro_scenarios.archive_scenario(db, ctx, scenario_id, payload)
+
+
+@router.post(
+    "/macro-scenarios/{scenario_id}/clone",
+    response_model=MacroScenarioRead,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="cloneMacroScenario",
+)
+def clone_macro_scenario(
+    scenario_id: UUID,
+    payload: MacroScenarioClone,
+    db: DbSession,
+    ctx: MutationTenant,
+) -> MacroScenarioRead:
+    return macro_scenarios.clone_system_scenario(db, ctx, scenario_id, payload)
 
 
 @router.get(

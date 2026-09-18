@@ -27,6 +27,7 @@ from app.domain.stress.orchestrator import (
     compose_capital_shocks,
     run_enterprise_stress,
 )
+from app.domain.stress.translation import MacroPathPoint
 from tests.domain.stress_fixtures import base_paths as base_macro_paths
 from tests.domain.stress_fixtures import (
     bog_capital_params,
@@ -217,6 +218,53 @@ def test_irr_and_fx_move_under_the_severe_scenario() -> None:
     # 20% cedi depreciation inflates the open FX position vs Tier 1.
     assert outcome.fx.shock_pct == Decimal("20.00")
     assert outcome.fx.stressed_nop_pct_tier1 > outcome.fx.base_nop_pct_tier1
+
+
+def test_non_parallel_irr_shocks_move_economic_value() -> None:
+    def paths(policy_delta: str, sovereign_delta: str) -> list[MacroPathPoint]:
+        sovereign = Decimal(sovereign_delta)
+        points = [
+            MacroPathPoint(
+                variable=point.variable,
+                year_index=point.year_index,
+                base_value=point.base_value,
+                stress_value=(
+                    point.stress_value + sovereign
+                    if point.variable == "gog_yield"
+                    else point.stress_value
+                ),
+            )
+            for point in base_macro_paths()
+        ]
+        points.extend(
+            MacroPathPoint(
+                variable="policy_rate",
+                year_index=year,
+                base_value=Decimal("0.14"),
+                stress_value=Decimal("0.14") + Decimal(policy_delta),
+            )
+            for year in (1, 2, 3)
+        )
+        return points
+
+    irr = IrrStressInputs(
+        positions=_irr_positions(),
+        curve=_curve(),
+        tier1=Decimal("300000000"),
+    )
+    short = run_enterprise_stress(
+        _inputs(paths("0.025", "0"), scenario_code="short_up_250", irr=irr)
+    )
+    rotation = run_enterprise_stress(
+        _inputs(paths("-0.0065", "0.009"), scenario_code="steepener", irr=irr)
+    )
+
+    assert short.irr is not None
+    assert short.irr.parallel_bp == Decimal("0")
+    assert short.irr.delta_eve != Decimal("0")
+    assert rotation.irr is not None
+    assert rotation.irr.parallel_bp == Decimal("0")
+    assert rotation.irr.delta_eve != Decimal("0")
 
 
 def test_run_is_reproducible() -> None:

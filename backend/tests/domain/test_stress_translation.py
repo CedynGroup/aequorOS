@@ -13,6 +13,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.domain.irr.engine import scenario_shifts
 from app.domain.stress.translation import (
     DEFAULT_ELASTICITIES,
     TRANSLATION_MODULES,
@@ -23,6 +24,7 @@ from app.domain.stress.translation import (
     signed_peak_delta,
     translate,
 )
+from app.services import default_macro_scenarios
 from app.services.scenario_catalog import SHOCK_VOCABULARY, validate_shocks
 
 
@@ -108,8 +110,7 @@ def test_liquidity_full_shock_set() -> None:
 def test_base_scenario_translates_to_nothing() -> None:
     # stress == base everywhere ⇒ no shocks in any module.
     base_paths = tuple(
-        MacroPathPoint(p.variable, p.year_index, p.base_value, p.base_value)
-        for p in SEVERE_PATHS
+        MacroPathPoint(p.variable, p.year_index, p.base_value, p.base_value) for p in SEVERE_PATHS
     )
     for module in TRANSLATION_MODULES:
         assert translate(base_paths, module) == {}
@@ -177,3 +178,42 @@ def test_translated_output_passes_engine_validation() -> None:
     # four-key completeness rule.
     for module in TRANSLATION_MODULES:
         validate_shocks(module, _num(translate(SEVERE_PATHS, module)))
+
+
+@pytest.mark.parametrize("long_bp", [Decimal("90"), Decimal("-60")])
+def test_long_end_rotation_retains_zero_short_end(long_bp: Decimal) -> None:
+    paths = (
+        _p("interest_rate", 1, "0.20", "0.20"),
+        _p("policy_rate", 1, "0.20", "0.20"),
+        _p("gog_yield", 1, "0.20", str(Decimal("0.20") + long_bp / 10000)),
+    )
+    shocks = translate(paths, "irr")
+    assert shocks == {"short_bp": Decimal(0), "long_bp": long_bp}
+    curve = {Decimal("1"): Decimal("20"), Decimal("10"): Decimal("20")}
+    shifts = scenario_shifts("custom_rotation", shocks, curve)
+    assert shifts == {
+        tenor: long_bp / 10000 * (1 - (-tenor / Decimal("4")).exp()) for tenor in curve
+    }
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        ("parallel_up_200", {"parallel_bp": Decimal("200")}),
+        ("parallel_down_200", {"parallel_bp": Decimal("-200")}),
+        ("short_up_250", {"short_bp": Decimal("250"), "decay_years": Decimal("3")}),
+        ("short_down_250", {"short_bp": Decimal("-250"), "decay_years": Decimal("3")}),
+        ("steepener", {"short_bp": Decimal("-65"), "long_bp": Decimal("90")}),
+        ("flattener", {"short_bp": Decimal("80"), "long_bp": Decimal("-60")}),
+    ],
+)
+def test_system_irr_calibrations_are_preserved(code: str, expected: dict[str, Decimal]) -> None:
+    scenario = default_macro_scenarios.DEFAULT_BY_CODE[f"system_irr_{code}"]
+    paths = tuple(
+        MacroPathPoint(p.variable, p.year_index, p.base_value, p.stress_value)
+        for p in default_macro_scenarios.annual_paths(scenario)
+    )
+    curve = {Decimal("1"): Decimal("20"), Decimal("10"): Decimal("20")}
+    assert scenario_shifts(code, translate(paths, "irr"), curve) == scenario_shifts(
+        code, expected, curve
+    )

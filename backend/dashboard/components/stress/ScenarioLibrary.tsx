@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Governed macro-scenario library (docs/stress.md §4 item 2). Lists the versioned
@@ -7,33 +7,38 @@
  * the lifecycle transitions (submit → approve → archive) plus edit of drafts.
  */
 
-import { type ReactNode, useMemo, useState } from 'react';
-import { CheckCircle2, Pencil, Plus, Send, Archive } from 'lucide-react';
-import SectionCard from '@/components/ui/SectionCard';
-import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import { ApiError } from '@/lib/api/client';
-import { fmtDateUTC } from '@/lib/api/values';
+import { type ReactNode, useMemo, useState } from "react";
+import { Archive, CheckCircle2, Copy, Pencil, Plus, Send } from "lucide-react";
+import SectionCard from "@/components/ui/SectionCard";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { ApiError } from "@/lib/api/client";
+import { fmtDateUTC } from "@/lib/api/values";
 import {
   useApproveMacroScenario,
   useArchiveMacroScenario,
+  useCloneMacroScenario,
   useMacroScenarios,
   useSubmitMacroScenario,
-} from './hooks';
-import { SCENARIO_STATUSES, SCENARIO_TYPES, type ScenarioStatus } from './macro';
-import type { MacroScenarioSummary } from './types';
+} from "./hooks";
+import {
+  SCENARIO_STATUSES,
+  SCENARIO_TYPES,
+  type ScenarioStatus,
+} from "./macro";
+import type { MacroScenarioSummary } from "./types";
 
 const STATUS_TONE: Record<string, StatusTone> = {
-  draft: 'slate',
-  pending_approval: 'amber',
-  approved: 'success',
-  archived: 'pending',
+  draft: "slate",
+  pending_approval: "amber",
+  approved: "success",
+  archived: "pending",
 };
 
 const SEVERITY_TONE: Record<string, StatusTone> = {
-  mild: 'slate',
-  moderate: 'amber',
-  severe: 'critical',
+  mild: "slate",
+  moderate: "amber",
+  severe: "critical",
 };
 
 export default function ScenarioLibrary({
@@ -47,19 +52,20 @@ export default function ScenarioLibrary({
   onEdit: (scenarioId: string) => void;
   onNew: () => void;
 }) {
-  const [statusFilter, setStatusFilter] = useState<ScenarioStatus | ''>('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ScenarioStatus | "">("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
 
   const scenarios = useMacroScenarios({
     status: statusFilter || undefined,
     scenarioType: (typeFilter || undefined) as never,
-    includeArchived: statusFilter === 'archived',
+    includeArchived: statusFilter === "archived",
   });
 
   const submit = useSubmitMacroScenario();
   const approve = useApproveMacroScenario();
   const archive = useArchiveMacroScenario();
+  const clone = useCloneMacroScenario();
 
   const rows = useMemo(() => scenarios.data?.scenarios ?? [], [scenarios.data]);
 
@@ -68,7 +74,11 @@ export default function ScenarioLibrary({
     try {
       await fn();
     } catch (e) {
-      setActionError(e instanceof ApiError ? `${e.errorCode ?? e.code ?? 'error'}: ${e.message}` : 'Action failed.');
+      setActionError(
+        e instanceof ApiError
+          ? `${e.errorCode ?? e.code ?? "error"}: ${e.message}`
+          : "Action failed.",
+      );
     }
   };
 
@@ -88,17 +98,23 @@ export default function ScenarioLibrary({
       }
       footer={
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-caption text-slate">{selectedIds.length} selected</span>
+          <span className="text-caption text-slate">
+            {selectedIds.length} selected
+          </span>
           <div className="flex items-center gap-2 ml-auto">
             <select
               className="rounded-md border border-border-light bg-transparent px-2 py-1 text-caption text-navy"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as ScenarioStatus | '')}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as ScenarioStatus | "")
+              }
               aria-label="Filter by status"
             >
               <option value="">All statuses</option>
               {SCENARIO_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
             <select
@@ -109,24 +125,33 @@ export default function ScenarioLibrary({
             >
               <option value="">All types</option>
               {SCENARIO_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
           </div>
         </div>
       }
     >
-      <QueryBoundary isLoading={scenarios.isLoading} error={scenarios.error} onRetry={() => scenarios.refetch()}>
-        {actionError && <p className="px-5 pt-3 text-caption text-critical">{actionError}</p>}
+      <QueryBoundary
+        isLoading={scenarios.isLoading}
+        error={scenarios.error}
+        onRetry={() => scenarios.refetch()}
+      >
+        {actionError && (
+          <p className="px-5 pt-3 text-caption text-critical">{actionError}</p>
+        )}
         {rows.length === 0 ? (
           <p className="px-5 py-8 text-center text-caption text-slate">
-            No scenarios yet. Author one with the builder — a scenario is a set of macro-variable paths over ≥3 years.
+            No scenarios yet. Author one with the builder — a scenario is a set
+            of macro-variable paths over ≥3 years.
           </p>
         ) : (
           <ul className="divide-y divide-border-light">
             {rows.map((s) => {
               const selected = selectedIds.includes(s.id);
-              const isApproved = s.status === 'approved';
+              const isApproved = s.status === "approved" && s.is_runnable;
               return (
                 <li key={s.id} className="px-5 py-3 flex items-center gap-3">
                   <input
@@ -136,45 +161,113 @@ export default function ScenarioLibrary({
                     disabled={!isApproved}
                     onChange={() => onToggleSelect(s)}
                     aria-label={`Select ${s.name}`}
-                    title={isApproved ? 'Select for run / comparison' : 'Only approved scenarios can be run'}
+                    title={
+                      isApproved
+                        ? "Select for run / comparison"
+                        : s.owner === "system"
+                          ? "This system placeholder has no published numeric path"
+                          : "Only approved scenarios can be run"
+                    }
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-body font-medium text-navy truncate">{s.name}</span>
-                      <StatusPill tone={STATUS_TONE[s.status] ?? 'slate'}>{s.status.replace('_', ' ')}</StatusPill>
+                      <span className="text-body font-medium text-navy truncate">
+                        {s.name}
+                      </span>
+                      <StatusPill tone={STATUS_TONE[s.status] ?? "slate"}>
+                        {s.status.replace("_", " ")}
+                      </StatusPill>
                       <StatusPill tone="action">{s.scenario_type}</StatusPill>
-                      {s.severity && <StatusPill tone={SEVERITY_TONE[s.severity] ?? 'slate'}>{s.severity}</StatusPill>}
-                      {s.bank_id === null && <span className="text-micro text-slate-light">org-wide</span>}
+                      {s.severity && (
+                        <StatusPill tone={SEVERITY_TONE[s.severity] ?? "slate"}>
+                          {s.severity}
+                        </StatusPill>
+                      )}
+                      {s.owner === "system" && (
+                        <StatusPill tone="slate">system</StatusPill>
+                      )}
+                      {!s.is_runnable && (
+                        <StatusPill tone="pending">not runnable</StatusPill>
+                      )}
+                      {s.bank_id === null && (
+                        <span className="text-micro text-slate-light">
+                          org-wide
+                        </span>
+                      )}
                     </div>
                     <p className="text-micro text-slate">
-                      {s.code} · v{s.version} · {s.path_count} paths · {s.horizon_years}y · updated {fmtDateUTC(new Date(s.updated_at))}
+                      {s.code} · v{s.version} · {s.path_count} paths ·{" "}
+                      {s.horizon_years}y · updated{" "}
+                      {fmtDateUTC(new Date(s.updated_at))}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {s.status === 'draft' && (
+                    {s.owner === "system" && s.path_count > 0 && (
+                      <IconBtn
+                        title="Clone to editable draft"
+                        onClick={() =>
+                          void runTransition(async () => {
+                            const draft = await clone.mutateAsync({
+                              scenarioId: s.id,
+                              reason: `Clone system scenario ${s.code} for customization`,
+                            });
+                            onEdit(draft.id);
+                          })
+                        }
+                      >
+                        <Copy size={14} />
+                      </IconBtn>
+                    )}
+                    {s.status === "draft" && (
                       <>
-                        <IconBtn title="Edit draft" onClick={() => onEdit(s.id)}><Pencil size={14} /></IconBtn>
+                        <IconBtn
+                          title="Edit draft"
+                          onClick={() => onEdit(s.id)}
+                        >
+                          <Pencil size={14} />
+                        </IconBtn>
                         <IconBtn
                           title="Submit for approval"
-                          onClick={() => void runTransition(() => submit.mutateAsync({ scenarioId: s.id, reason: 'Submitted for approval' }))}
+                          onClick={() =>
+                            void runTransition(() =>
+                              submit.mutateAsync({
+                                scenarioId: s.id,
+                                reason: "Submitted for approval",
+                              }),
+                            )
+                          }
                         >
                           <Send size={14} />
                         </IconBtn>
                       </>
                     )}
-                    {s.status === 'pending_approval' && (
+                    {s.status === "pending_approval" && (
                       <IconBtn
                         title="Approve"
                         tone="success"
-                        onClick={() => void runTransition(() => approve.mutateAsync({ scenarioId: s.id, reason: 'Approved' }))}
+                        onClick={() =>
+                          void runTransition(() =>
+                            approve.mutateAsync({
+                              scenarioId: s.id,
+                              reason: "Approved",
+                            }),
+                          )
+                        }
                       >
                         <CheckCircle2 size={14} />
                       </IconBtn>
                     )}
-                    {s.status !== 'archived' && (
+                    {s.owner === "organization" && s.status !== "archived" && (
                       <IconBtn
                         title="Archive"
-                        onClick={() => void runTransition(() => archive.mutateAsync({ scenarioId: s.id, reason: 'Archived' }))}
+                        onClick={() =>
+                          void runTransition(() =>
+                            archive.mutateAsync({
+                              scenarioId: s.id,
+                              reason: "Archived",
+                            }),
+                          )
+                        }
                       >
                         <Archive size={14} />
                       </IconBtn>
@@ -199,7 +292,7 @@ function IconBtn({
   children: ReactNode;
   title: string;
   onClick: () => void;
-  tone?: 'success';
+  tone?: "success";
 }) {
   return (
     <button
@@ -208,7 +301,7 @@ function IconBtn({
       aria-label={title}
       onClick={onClick}
       className={`inline-flex items-center justify-center h-7 w-7 rounded-md border border-border-light hover:bg-surface ${
-        tone === 'success' ? 'text-success' : 'text-slate'
+        tone === "success" ? "text-success" : "text-slate"
       }`}
     >
       {children}

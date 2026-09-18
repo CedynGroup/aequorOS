@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Typed TanStack Query hooks for the Phase-1..5 stress surface (docs/stress.md):
@@ -13,10 +13,10 @@
  * app.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getSession } from 'next-auth/react';
-import { ApiError, apiBaseUrl } from '@/lib/api/client';
-import { getAccessToken, setAccessToken } from '@/lib/api/token';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getSession } from "next-auth/react";
+import { ApiError, apiBaseUrl } from "@/lib/api/client";
+import { getAccessToken, setAccessToken } from "@/lib/api/token";
 import type {
   AppendixIITables,
   EnterpriseProjection,
@@ -33,14 +33,14 @@ import type {
   StressSignoffListRead,
   StressSignoffRead,
   StressSignoffSummary,
-} from './types';
-import type { ScenarioStatus, ScenarioType } from './macro';
+} from "./types";
+import type { ScenarioStatus, ScenarioType } from "./macro";
 
 async function bearer(): Promise<string> {
   const cached = getAccessToken();
   if (cached) return cached;
   const session = await getSession();
-  const token = session?.accessToken ?? '';
+  const token = session?.accessToken ?? "";
   if (token) setAccessToken(token);
   return token;
 }
@@ -61,18 +61,19 @@ async function authFetch<T>(path: string, init: FetchInit = {}): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url.toString(), {
-      method: init.method ?? 'GET',
+      method: init.method ?? "GET",
       headers: {
-        'content-type': 'application/json',
+        "content-type": "application/json",
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
   } catch (error) {
     throw new ApiError({
-      message: 'Could not reach the risk service. Check that the backend is running.',
+      message:
+        "Could not reach the risk service. Check that the backend is running.",
       status: null,
-      code: 'network_error',
+      code: "network_error",
       errorCode: null,
       details: error instanceof Error ? error.message : String(error),
     });
@@ -85,20 +86,31 @@ async function authFetch<T>(path: string, init: FetchInit = {}): Promise<T> {
     try {
       const body = await response.json();
       const envelope = body?.error ?? body;
-      if (envelope && typeof envelope === 'object') {
-        if (typeof envelope.code === 'string') code = envelope.code;
-        if (typeof envelope.message === 'string') message = envelope.message;
+      if (envelope && typeof envelope === "object") {
+        if (typeof envelope.code === "string") code = envelope.code;
+        if (typeof envelope.message === "string") message = envelope.message;
         details = envelope.details ?? envelope.detail ?? null;
-        const detailObj = details as { error_code?: string; message?: string } | null;
-        if (detailObj && typeof detailObj === 'object') {
-          if (typeof detailObj.error_code === 'string') errorCode = detailObj.error_code;
-          if (typeof detailObj.message === 'string') message = detailObj.message;
+        const detailObj = details as {
+          error_code?: string;
+          message?: string;
+        } | null;
+        if (detailObj && typeof detailObj === "object") {
+          if (typeof detailObj.error_code === "string")
+            errorCode = detailObj.error_code;
+          if (typeof detailObj.message === "string")
+            message = detailObj.message;
         }
       }
     } catch {
       // Non-JSON body — keep the generic message.
     }
-    throw new ApiError({ message, status: response.status, code, errorCode, details });
+    throw new ApiError({
+      message,
+      status: response.status,
+      code,
+      errorCode,
+      details,
+    });
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -106,7 +118,7 @@ async function authFetch<T>(path: string, init: FetchInit = {}): Promise<T> {
 
 // --- Macro scenario library --------------------------------------------------
 
-const SCENARIO_KEY = 'stress-macro-scenarios';
+const SCENARIO_KEY = "stress-macro-scenarios";
 
 export type MacroScenarioFilters = {
   bankId?: string;
@@ -119,7 +131,7 @@ export function useMacroScenarios(filters: MacroScenarioFilters = {}) {
   return useQuery({
     queryKey: [SCENARIO_KEY, filters],
     queryFn: () =>
-      authFetch<MacroScenarioList>('/macro-scenarios', {
+      authFetch<MacroScenarioList>("/macro-scenarios", {
         query: {
           bank_id: filters.bankId,
           scenario_type: filters.scenarioType,
@@ -132,7 +144,7 @@ export function useMacroScenarios(filters: MacroScenarioFilters = {}) {
 
 export function useMacroScenario(scenarioId: string | undefined) {
   return useQuery({
-    queryKey: [SCENARIO_KEY, 'detail', scenarioId],
+    queryKey: [SCENARIO_KEY, "detail", scenarioId],
     queryFn: () => authFetch<MacroScenario>(`/macro-scenarios/${scenarioId}`),
     enabled: Boolean(scenarioId),
   });
@@ -142,7 +154,10 @@ export function useCreateMacroScenario() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: MacroScenarioCreate) =>
-      authFetch<MacroScenario>('/macro-scenarios', { method: 'POST', body: payload }),
+      authFetch<MacroScenario>("/macro-scenarios", {
+        method: "POST",
+        body: payload,
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SCENARIO_KEY] }),
   });
 }
@@ -150,19 +165,54 @@ export function useCreateMacroScenario() {
 export function useUpdateMacroScenario() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ scenarioId, payload }: { scenarioId: string; payload: Partial<MacroScenarioCreate> & { reason: string } }) =>
-      authFetch<MacroScenario>(`/macro-scenarios/${scenarioId}`, { method: 'PATCH', body: payload }),
+    mutationFn: ({
+      scenarioId,
+      payload,
+    }: {
+      scenarioId: string;
+      payload: Partial<MacroScenarioCreate> & { reason: string };
+    }) =>
+      authFetch<MacroScenario>(`/macro-scenarios/${scenarioId}`, {
+        method: "PATCH",
+        body: payload,
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SCENARIO_KEY] }),
   });
 }
 
-function scenarioTransition(action: 'submit' | 'approve' | 'archive') {
+export function useCloneMacroScenario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      scenarioId,
+      bankId,
+      reason,
+    }: {
+      scenarioId: string;
+      bankId?: string | null;
+      reason: string;
+    }) =>
+      authFetch<MacroScenario>(`/macro-scenarios/${scenarioId}/clone`, {
+        method: "POST",
+        body: { bank_id: bankId ?? null, reason },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [SCENARIO_KEY] }),
+  });
+}
+
+function scenarioTransition(action: "submit" | "approve" | "archive") {
   return function useScenarioTransition() {
     const qc = useQueryClient();
     return useMutation({
-      mutationFn: ({ scenarioId, reason }: { scenarioId: string; reason: string }) =>
+      mutationFn: ({
+        scenarioId,
+        reason,
+      }: {
+        scenarioId: string;
+        reason: string;
+      }) =>
         authFetch<MacroScenario>(`/macro-scenarios/${scenarioId}/${action}`, {
-          method: 'POST',
+          method: "POST",
           body: { reason },
         }),
       onSuccess: () => void qc.invalidateQueries({ queryKey: [SCENARIO_KEY] }),
@@ -170,19 +220,19 @@ function scenarioTransition(action: 'submit' | 'approve' | 'archive') {
   };
 }
 
-export const useSubmitMacroScenario = scenarioTransition('submit');
-export const useApproveMacroScenario = scenarioTransition('approve');
-export const useArchiveMacroScenario = scenarioTransition('archive');
+export const useSubmitMacroScenario = scenarioTransition("submit");
+export const useApproveMacroScenario = scenarioTransition("approve");
+export const useArchiveMacroScenario = scenarioTransition("archive");
 
 // --- Management-action plan library -----------------------------------------
 
-const PLAN_KEY = 'stress-management-plans';
+const PLAN_KEY = "stress-management-plans";
 
 export function useManagementActionPlans(bankId?: string) {
   return useQuery({
     queryKey: [PLAN_KEY, bankId],
     queryFn: () =>
-      authFetch<ManagementActionPlanList>('/management-action-plans', {
+      authFetch<ManagementActionPlanList>("/management-action-plans", {
         query: { bank_id: bankId },
       }),
   });
@@ -190,24 +240,28 @@ export function useManagementActionPlans(bankId?: string) {
 
 export function useManagementActionPlan(planId: string | undefined) {
   return useQuery({
-    queryKey: [PLAN_KEY, 'detail', planId],
-    queryFn: () => authFetch<ManagementActionPlan>(`/management-action-plans/${planId}`),
+    queryKey: [PLAN_KEY, "detail", planId],
+    queryFn: () =>
+      authFetch<ManagementActionPlan>(`/management-action-plans/${planId}`),
     enabled: Boolean(planId),
   });
 }
 
 // --- Enterprise-wide stress runs --------------------------------------------
 
-const RUN_KEY = 'stress-enterprise-runs';
+const RUN_KEY = "stress-enterprise-runs";
 
 export function useRunEnterpriseStress(bankId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: EnterpriseStressRunCreate) =>
-      authFetch<EnterpriseStressRead>(`/banks/${bankId}/enterprise-stress/runs`, {
-        method: 'POST',
-        body: payload,
-      }),
+      authFetch<EnterpriseStressRead>(
+        `/banks/${bankId}/enterprise-stress/runs`,
+        {
+          method: "POST",
+          body: payload,
+        },
+      ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [RUN_KEY] }),
   });
 }
@@ -216,7 +270,7 @@ export function useRunEnterpriseStress(bankId: string | undefined) {
 export function useLatestEnterpriseStress(
   bankId: string | undefined,
   periodId: string | undefined,
-  scenarioId: string | undefined
+  scenarioId: string | undefined,
 ) {
   return useQuery({
     queryKey: [RUN_KEY, bankId, periodId, scenarioId],
@@ -224,7 +278,9 @@ export function useLatestEnterpriseStress(
       try {
         return await authFetch<EnterpriseStressRead>(
           `/banks/${bankId}/enterprise-stress/latest`,
-          { query: { reporting_period_id: periodId, scenario_id: scenarioId } }
+          {
+            query: { reporting_period_id: periodId, scenario_id: scenarioId },
+          },
         );
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
@@ -245,24 +301,29 @@ export function useLatestEnterpriseStress(
 export function useEnterpriseStressRegistry(
   bankId: string | undefined,
   periodId: string | undefined,
-  scenarioIds: string[]
+  scenarioIds: string[],
 ) {
   const sorted = [...scenarioIds].sort();
   return useQuery({
-    queryKey: [RUN_KEY, 'registry', bankId, periodId, sorted],
+    queryKey: [RUN_KEY, "registry", bankId, periodId, sorted],
     queryFn: async () => {
       const results = await Promise.all(
         sorted.map(async (scenarioId) => {
           try {
             return await authFetch<EnterpriseStressRead>(
               `/banks/${bankId}/enterprise-stress/latest`,
-              { query: { reporting_period_id: periodId, scenario_id: scenarioId } }
+              {
+                query: {
+                  reporting_period_id: periodId,
+                  scenario_id: scenarioId,
+                },
+              },
             );
           } catch (error) {
             if (error instanceof ApiError && error.status === 404) return null;
             throw error;
           }
-        })
+        }),
       );
       return results.filter((run): run is EnterpriseStressRead => run !== null);
     },
@@ -279,14 +340,17 @@ export function useEnterpriseStressRegistry(
  */
 export function useEnterpriseStressRunHistory(
   bankId: string | undefined,
-  periodId?: string
+  periodId?: string,
 ) {
   return useQuery({
-    queryKey: [RUN_KEY, 'history', bankId, periodId ?? null],
+    queryKey: [RUN_KEY, "history", bankId, periodId ?? null],
     queryFn: () =>
-      authFetch<EnterpriseStressRunSummary[]>(`/banks/${bankId}/enterprise-stress/runs`, {
-        query: periodId ? { reporting_period_id: periodId } : undefined,
-      }),
+      authFetch<EnterpriseStressRunSummary[]>(
+        `/banks/${bankId}/enterprise-stress/runs`,
+        {
+          query: periodId ? { reporting_period_id: periodId } : undefined,
+        },
+      ),
     enabled: Boolean(bankId),
   });
 }
@@ -295,40 +359,56 @@ export function useEnterpriseStressRunHistory(
 export function useReopenEnterpriseStressRun(bankId: string | undefined) {
   return useMutation({
     mutationFn: (runId: string) =>
-      authFetch<EnterpriseStressRead>(`/banks/${bankId}/enterprise-stress/runs/${runId}`),
+      authFetch<EnterpriseStressRead>(
+        `/banks/${bankId}/enterprise-stress/runs/${runId}`,
+      ),
   });
 }
 
 // --- Enterprise-stress sign-off / Board attestation (docs/stress.md §3.8) -----
 
-const SIGNOFF_KEY = 'stress-signoffs';
+const SIGNOFF_KEY = "stress-signoffs";
 
 /** All sign-offs for a bank (newest first); filter by run_id in the panel. */
 export function useBankStressSignoffs(bankId: string | undefined) {
   return useQuery({
     queryKey: [SIGNOFF_KEY, bankId],
     queryFn: () =>
-      authFetch<StressSignoffListRead>(`/banks/${bankId}/enterprise-stress/signoffs`),
+      authFetch<StressSignoffListRead>(
+        `/banks/${bankId}/enterprise-stress/signoffs`,
+      ),
     select: (data): StressSignoffSummary[] => data.signoffs,
     enabled: Boolean(bankId),
   });
 }
 
 /** The full governance record for one sign-off. */
-export function useStressSignoff(bankId: string | undefined, signoffId: string | undefined) {
+export function useStressSignoff(
+  bankId: string | undefined,
+  signoffId: string | undefined,
+) {
   return useQuery({
     queryKey: [SIGNOFF_KEY, bankId, signoffId],
     queryFn: () =>
-      authFetch<StressSignoffRead>(`/banks/${bankId}/enterprise-stress/signoffs/${signoffId}`),
+      authFetch<StressSignoffRead>(
+        `/banks/${bankId}/enterprise-stress/signoffs/${signoffId}`,
+      ),
     enabled: Boolean(bankId && signoffId),
   });
 }
 
-function useSignoffMutation<TBody>(bankId: string | undefined, path: (id: string) => string, method: string) {
+function useSignoffMutation<TBody>(
+  bankId: string | undefined,
+  path: (id: string) => string,
+  method: string,
+) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ signoffId, body }: { signoffId: string; body: TBody }) =>
-      authFetch<StressSignoffRead>(`/banks/${bankId}${path(signoffId)}`, { method, body }),
+      authFetch<StressSignoffRead>(`/banks/${bankId}${path(signoffId)}`, {
+        method,
+        body,
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SIGNOFF_KEY] }),
   });
 }
@@ -337,21 +417,40 @@ export function useCreateStressSignoff(bankId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: StressSignoffCreate) =>
-      authFetch<StressSignoffRead>(`/banks/${bankId}/enterprise-stress/signoffs`, {
-        method: 'POST',
-        body,
-      }),
+      authFetch<StressSignoffRead>(
+        `/banks/${bankId}/enterprise-stress/signoffs`,
+        {
+          method: "POST",
+          body,
+        },
+      ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SIGNOFF_KEY] }),
   });
 }
 
 export const useUpdateStressSignoff = (bankId: string | undefined) =>
-  useSignoffMutation<Partial<StressSignoffCreate>>(bankId, (id) => `/enterprise-stress/signoffs/${id}`, 'PATCH');
+  useSignoffMutation<Partial<StressSignoffCreate>>(
+    bankId,
+    (id) => `/enterprise-stress/signoffs/${id}`,
+    "PATCH",
+  );
 export const useSubmitStressSignoff = (bankId: string | undefined) =>
-  useSignoffMutation<{ reason: string }>(bankId, (id) => `/enterprise-stress/signoffs/${id}/submit`, 'POST');
+  useSignoffMutation<{ reason: string }>(
+    bankId,
+    (id) => `/enterprise-stress/signoffs/${id}/submit`,
+    "POST",
+  );
 export const useAttestStressSignoff = (bankId: string | undefined) =>
-  useSignoffMutation<StressSignoffAttestation>(bankId, (id) => `/enterprise-stress/signoffs/${id}/attest`, 'POST');
+  useSignoffMutation<StressSignoffAttestation>(
+    bankId,
+    (id) => `/enterprise-stress/signoffs/${id}/attest`,
+    "POST",
+  );
 export const useWithdrawStressSignoff = (bankId: string | undefined) =>
-  useSignoffMutation<{ reason: string }>(bankId, (id) => `/enterprise-stress/signoffs/${id}/withdraw`, 'POST');
+  useSignoffMutation<{ reason: string }>(
+    bankId,
+    (id) => `/enterprise-stress/signoffs/${id}/withdraw`,
+    "POST",
+  );
 
 export type { AppendixIITables, EnterpriseProjection, EnterpriseStressRead };

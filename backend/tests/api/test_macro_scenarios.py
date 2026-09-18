@@ -100,9 +100,11 @@ def test_create_lists_and_gets_a_draft(db_client: TestClient) -> None:
     assert len(created["paths"]) == 4
 
     listing = db_client.get(URL, headers=headers()).json()
-    assert listing["total"] == 1
-    assert listing["scenarios"][0]["path_count"] == 4
-    assert listing["scenarios"][0]["status"] == "draft"
+    authored = next(s for s in listing["scenarios"] if s["id"] == created["id"])
+    assert authored["path_count"] == 4
+    assert authored["status"] == "draft"
+    assert authored["owner"] == "organization"
+    assert any(s["owner"] == "system" for s in listing["scenarios"])
 
     fetched = db_client.get(f"{URL}/{created['id']}", headers=headers()).json()
     assert fetched["code"] == "adverse_2027"
@@ -217,16 +219,16 @@ def test_archive_hides_from_default_listing(db_client: TestClient) -> None:
     )
     assert archive.status_code == 200
     assert archive.json()["status"] == "archived"
-    assert db_client.get(URL, headers=headers()).json()["total"] == 0
+    default_listing = db_client.get(URL, headers=headers()).json()
+    assert all(s["id"] != created["id"] for s in default_listing["scenarios"])
+    assert all(s["owner"] == "system" for s in default_listing["scenarios"])
     with_archived = db_client.get(f"{URL}?include_archived=true", headers=headers()).json()
-    assert with_archived["total"] == 1
+    assert any(s["id"] == created["id"] for s in with_archived["scenarios"])
 
 
 def test_translation_preview_endpoint(db_client: TestClient) -> None:
     created = _create(db_client)
-    irr = db_client.get(
-        f"{URL}/{created['id']}/translation/irr", headers=headers()
-    ).json()
+    irr = db_client.get(f"{URL}/{created['id']}/translation/irr", headers=headers()).json()
     assert irr["module"] == "irr"
     # interest_rate Δ +0.05 → 500bp parallel shift.
     assert Decimal(irr["shocks"]["parallel_bp"]) == Decimal("500")
@@ -285,6 +287,7 @@ def test_rbac_and_tenant_isolation(db_client: TestClient) -> None:
     created = _create(db_client)
     # A different org cannot see or fetch this scenario (org-scoped queries).
     foreign_list = db_client.get(URL, headers=headers(ORG_2)).json()
-    assert foreign_list["total"] == 0
+    assert all(s["id"] != created["id"] for s in foreign_list["scenarios"])
+    assert all(s["owner"] == "system" for s in foreign_list["scenarios"])
     foreign_get = db_client.get(f"{URL}/{created['id']}", headers=headers(ORG_2))
     assert foreign_get.status_code == 404
