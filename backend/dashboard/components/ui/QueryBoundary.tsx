@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { AlertCircle, Database, RotateCw } from 'lucide-react';
 import { isApiError, isModuleUnavailable } from '@/lib/api/client';
 import { SkeletonCard, SkeletonChart, SkeletonTable } from './Skeleton';
+import PageContainer from './PageContainer';
 
 export function ErrorPanel({
   error,
@@ -61,7 +62,7 @@ export function ErrorPanel({
 
 export function PageSkeleton() {
   return (
-    <div className="px-8 py-6 space-y-6" aria-busy="true" aria-label="Loading">
+    <PageContainer className="py-6 space-y-6" aria-busy="true" aria-label="Loading">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <SkeletonCard />
         <SkeletonCard />
@@ -72,7 +73,7 @@ export function PageSkeleton() {
       <div className="card">
         <SkeletonTable rows={6} />
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -92,9 +93,9 @@ export default function QueryBoundary({
   if (isLoading) return <>{skeleton ?? <PageSkeleton />}</>;
   if (error) {
     return (
-      <div className="px-8 py-6">
+      <PageContainer className="py-6">
         <ErrorPanel error={error} onRetry={onRetry} />
-      </div>
+      </PageContainer>
     );
   }
   return <>{children}</>;

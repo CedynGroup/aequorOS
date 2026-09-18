@@ -215,6 +215,14 @@ for (const [route, eyebrow] of [
   });
 }
 
+test("Credit waiting-for-data card shares the header edges at wide viewports", async ({
+  page,
+}) => {
+  await page.goto("/credit");
+  await expect(page.getByText("Waiting for data", { exact: true })).toBeVisible();
+  await expectAlignedHeaderAndCards(page);
+});
+
 for (const route of ["/irr", "/fx"]) {
   test(`${route} header and card grid share both edges at wide viewports`, async ({
     page,
