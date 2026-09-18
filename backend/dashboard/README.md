@@ -280,7 +280,7 @@ The backend API must be running (`cd backend && fastapi dev app/main.py --port 8
 Configure authentication using [.env.example](.env.example), including its
 production-only `AUTH_URL` guidance. Use one browser host consistently:
 `localhost` and `127.0.0.1` have separate cookie jars. In development,
-middleware warns once when `AUTH_URL` (or legacy `NEXTAUTH_URL`) names a
+the route proxy warns once when `AUTH_URL` (or legacy `NEXTAUTH_URL`) names a
 different host from the request.
 
 ### Sign-in and session recovery
