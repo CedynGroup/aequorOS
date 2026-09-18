@@ -14,6 +14,13 @@ test.describe("unbound IRRBB user", () => {
   test("hides navigation and 404s the deep link without product queries", async ({
     page,
   }) => {
+    // Bank discovery can finish before effective authority resolves. Exercise
+    // that ordering with a real, delayed profile response.
+    await page.route("**/auth/me", async (route) => {
+      const response = await route.fetch();
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await route.fulfill({ response });
+    });
     const irrRequests: string[] = [];
     page.on("request", (request) => {
       if (/\/banks\/[^/]+\/irr\//.test(request.url())) {

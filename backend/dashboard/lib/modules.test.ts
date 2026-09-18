@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import {
+  effectiveInstitutionModules,
+  effectiveOrganizationModules,
   hasEffectiveCapability,
   hrefAccess,
   isHrefVisible,
@@ -441,6 +443,34 @@ const structurallyExcluded = {
 assert.deepEqual(hrefAccess("/liquidity", structurallyExcluded), {
   state: "hidden",
 });
+
+// Account view is projected at organization scope, never institution scope.
+const accountView = {
+  module: "account",
+  sensitivity: "restricted",
+  permission: "view",
+  requiresContextualAuthorization: false,
+} as const;
+for (const [capabilities, visible] of [
+  [[accountView], true],
+  [[], false],
+  [[{ ...accountView, permission: "administer" }], false],
+  [[{ ...accountView, sensitivity: "aggregated" }], false],
+  [[{ ...accountView, requiresContextualAuthorization: true }], false],
+] as const) {
+  const scope = resolved(true, true, {
+    modules: effectiveInstitutionModules(null, [accountView]),
+    organizationModules: effectiveOrganizationModules(capabilities),
+  });
+  for (const route of [
+    "/institution",
+    "/institution/parties",
+    "/institution/registers",
+  ]) {
+    assert.equal(isPathVisible(route, scope), visible);
+    assert.equal(isHrefVisible(route, scope), visible);
+  }
+}
 
 console.log(
   "modules.test.ts: binding-controlled navigation and deep links passed.",

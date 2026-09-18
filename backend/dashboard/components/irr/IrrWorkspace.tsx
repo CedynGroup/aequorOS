@@ -51,7 +51,9 @@ export default function IrrWorkspace({
   const runAll = useRunAllIrrScenarios(bankId);
   const [runError, setRunError] = useState<string | null>(null);
 
-  const dashboard = useIrrDashboard(bankId);
+  const dashboard = useIrrDashboard(
+    moduleScope.irrbbAggregatedView === true ? bankId : undefined,
+  );
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
 
   const data = dashboard.data;

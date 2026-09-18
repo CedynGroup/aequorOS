@@ -4,11 +4,23 @@
 // S3_ACCESS_KEY=e2e-unused S3_SECRET_KEY=e2e-unused pnpm e2e page-header-navigation
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "fs";
+import { execFileSync } from "node:child_process";
 import path from "path";
 import { mintBackendToken } from "./support/mint";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+
+test.afterEach(async ({ page }, testInfo) => {
+  if (evidenceDir && testInfo.status !== testInfo.expectedStatus) {
+    mkdirSync(evidenceDir, { recursive: true });
+    await page.screenshot({
+      path: path.join(evidenceDir, `failed-${testInfo.title.replace(/[^a-z0-9]+/gi, "-")}.png`),
+      fullPage: true,
+    });
+  }
+});
+
 
 async function expectAlignedHeaderAndCards(page: Page) {
   const heading = page.getByRole("heading", { level: 1 });
@@ -294,3 +306,83 @@ for (const [route, title] of [
     await expectAlignedHeaderAndCards(page);
   });
 }
+
+for (const [source, links] of [
+  ["/behavioral/nmd-duration", [["Feeds IRRBB assumptions", "/irr"], ["Feeds FTP", "/ftp"]]],
+  ["/behavioral/prepayment", [["Feeds LCR", "/liquidity"], ["Feeds cash-flow forecast", "/liquidity/forecast"]]],
+  ["/behavioral/deposit-stability", [["Feeds LCR outflows", "/liquidity"]]],
+] as const) {
+  test(`Behavioral body feed links navigate from ${source}`, async ({ page }) => {
+    for (const [label, destination] of links) {
+      await page.goto(source);
+      const heading = page.getByRole("heading", { level: 1 });
+      await expect(heading).toBeVisible();
+      await expect(heading.locator("..").locator("p")).toHaveText(["Behavioral Models"]);
+      const link = page.getByRole("link", { name: label, exact: true });
+      await expect(link).toBeVisible();
+      const titleBox = await heading.boundingBox();
+      const linkBox = await link.boundingBox();
+      expect(linkBox!.y).toBeGreaterThan(titleBox!.y + titleBox!.height);
+      if (evidenceDir) {
+        await page.screenshot({ path: path.join(evidenceDir, `${source.split("/").pop()}-body-feeds.png`), fullPage: true });
+      }
+      await link.click();
+      await expect(page).toHaveURL(new RegExp(`${destination}$`));
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    }
+  });
+}
+
+test("Markets network failure keeps the error card aligned and retry recovers", async ({ page }) => {
+  await page.route("**/banks/*/market-data/views*", route => route.abort("failed"));
+  await page.goto("/markets");
+  await expect(page.getByText("Could not load data", { exact: true })).toBeVisible();
+  await expectAlignedHeaderAndCards(page);
+  if (evidenceDir) {
+    await page.screenshot({ path: path.join(evidenceDir, "markets-error-alignment.png"), fullPage: true });
+  }
+  await page.unroute("**/banks/*/market-data/views*");
+  const recovered = page.waitForResponse(response => response.url().includes("/market-data/views"));
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  expect((await recovered).status()).toBe(200);
+  await expect(page.getByText("Could not load data", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Credit monitor", exact: true })).toBeVisible();
+});
+
+test("module tabs render on page ground with a hairline and active underline", async ({ page }) => {
+  await page.goto("/irr/gaps");
+  const tabs = page.getByRole("navigation", { name: "Module sections" });
+  await expect(tabs).toBeVisible();
+  await expect(tabs.locator("..")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(tabs.locator("..")).toHaveCSS("border-bottom-width", "1px");
+  const active = tabs.locator('a[href="/irr/gaps"]');
+  await expect(active).toHaveCSS("border-bottom-width", "2px");
+  await expect(active).not.toHaveCSS("border-bottom-color", "rgba(0, 0, 0, 0)");
+  await expectAlignedHeaderAndCards(page);
+  if (evidenceDir) {
+    await page.screenshot({ path: path.join(evidenceDir, "irr-tabs-wide-alignment.png"), fullPage: true });
+  }
+});
+
+
+test("SDI live liquidity cards align with real backend responses", async ({ page }) => {
+  // Change only the disposable fixture's licence class; restore it even on failure.
+  const setType = (type: string) => execFileSync(path.join(__dirname, "../../.venv/bin/python"), ["-c", `
+import sqlite3, sys
+with sqlite3.connect(sys.argv[1]) as db:
+    db.execute("UPDATE banks SET institution_type=? WHERE id='BK-SAMP0001'", (sys.argv[2],))
+`, path.join(E2E_TMP, "e2e.db"), type]);
+  setType("savings_and_loans");
+  try {
+    const response = page.waitForResponse(r => r.url().includes("/sdi/liquidity-position"));
+    await page.goto("/liquidity");
+    expect((await response).status()).toBe(200);
+    await expect(page.getByRole("heading", { name: "LMTD Table 1 prudential ratios" })).toBeVisible();
+    await expectAlignedHeaderAndCards(page);
+    if (evidenceDir) {
+      await page.screenshot({ path: path.join(evidenceDir, "sdi-live-liquidity-alignment.png"), fullPage: true });
+    }
+  } finally {
+    setType("universal_bank");
+  }
+});
