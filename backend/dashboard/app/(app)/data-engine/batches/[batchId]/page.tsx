@@ -60,7 +60,7 @@ export default function BatchDetailPage({
   if (batchQuery.isPending) {
     return (
       <PageContainer className="py-6">
-        <PageSkeleton />
+        <PageSkeleton contained />
       </PageContainer>
     );
   }

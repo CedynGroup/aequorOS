@@ -72,7 +72,7 @@ export default function CanonicalPositionsPage() {
         title="Canonical positions"
       />
       <PageContainer className="py-6">
-        {positionsQuery.isPending && <PageSkeleton />}
+        {positionsQuery.isPending && <PageSkeleton contained />}
         {positionsQuery.isError && (
           <ErrorPanel
             error={positionsQuery.error}

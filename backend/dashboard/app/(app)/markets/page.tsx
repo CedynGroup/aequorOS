@@ -650,6 +650,7 @@ export default function MarketsPage() {
           ) : null
         ) : (
           <QueryBoundary
+            contained
             isLoading={views.isLoading}
             error={views.error}
             onRetry={() => views.refetch()}
