@@ -62,9 +62,7 @@ test.describe("explicit Account administrator", () => {
       "Your access was updated",
     );
     await page.goto("/login?reason=session_ended");
-    await expect(page.getByRole("status")).toContainText(
-      "Your session ended",
-    );
+    await expect(page.getByRole("status")).toContainText("Your session ended");
   });
 });
 
@@ -88,7 +86,13 @@ test.describe("legacy scalar Account administrator", () => {
     });
 
     await page.goto("/settings");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(
+      page.getByRole("heading", { name: "Profile & preferences", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Authentication (SSO)" }),
+    ).toHaveCount(0);
     expect(accountRequests).toEqual([]);
 
     if (evidenceDir) {

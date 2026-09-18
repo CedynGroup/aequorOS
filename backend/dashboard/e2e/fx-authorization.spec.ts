@@ -1,18 +1,120 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
-import { expect, test } from "@playwright/test";
+import { expect, test as base } from "@playwright/test";
 import path from "path";
-import { E2E_TMP } from "../playwright.config";
+import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
+import { E2E_PASSWORD, E2E_USERS, mintBackendToken } from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
-test.afterEach(async ({ page }) => {
-  await page.unrouteAll({ behavior: "wait" });
+// Exercise the real authority projection: intercepted profiles cannot prove
+// that scoped grants survive the backend, session and shell boundary.
+const test = base.extend<{
+  signInWithFxGrants: (sensitivities: string[], role?: string) => Promise<void>;
+}>({
+  signInWithFxGrants: async ({ page, context }, provideFixture) => {
+    const api = `${E2E_API_ORIGIN}/api/v1`;
+    const headers = {
+      Authorization: `Bearer ${await mintBackendToken("admin")}`,
+    };
+    const bindings: string[] = [];
+    try {
+      await provideFixture(async (sensitivities, role = "viewer") => {
+        for (const [module, sensitivity] of [
+          ["reg", "published"],
+          ...sensitivities.map((sensitivity) => ["fx", sensitivity]),
+        ]) {
+          const data = {
+            principal_user_id: E2E_USERS.fx_member.id,
+            role_bundle: module === "fx" ? role : "viewer",
+            institution_scope: "institution",
+            institution_id: "BK-SAMP0001",
+            module_scope: module,
+            sensitivity_scope: sensitivity,
+            reason: "Verify FX controls against real scoped authority",
+          };
+          const preview = await page.request.post(
+            `${api}/authorization/bindings/preview`,
+            { headers, data },
+          );
+          expect(preview.status(), await preview.text()).toBe(200);
+          const created = await page.request.post(
+            `${api}/authorization/bindings`,
+            {
+              headers,
+              data: {
+                ...data,
+                expected_authority_sentence: (await preview.json())
+                  .authority_sentence,
+              },
+            },
+          );
+          expect(created.status(), await created.text()).toBe(201);
+          bindings.push((await created.json()).binding.id);
+        }
+        await context.clearCookies();
+        await page.addInitScript(() =>
+          localStorage.setItem("aeq-tour-done", "1"),
+        );
+        await page.goto("/login");
+        await page
+          .getByLabel("Email", { exact: true })
+          .fill("e2e.fx_member@aequoros.example");
+        await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD);
+        const profileResponse = page.waitForResponse(
+          (response) =>
+            response.url().endsWith("/auth/me") && response.status() === 200,
+        );
+        await page
+          .getByRole("button", { name: "Sign in", exact: true })
+          .click();
+        const profile = await (await profileResponse).json();
+        const capabilities =
+          profile.effective_authority.institution_capabilities
+            .find(
+              (institution: { institution_id: string }) =>
+                institution.institution_id === "BK-SAMP0001",
+            )
+            .capabilities.filter(
+              (capability: { module: string }) => capability.module === "fx",
+            );
+        expect(
+          capabilities
+            .filter(
+              (capability: { permission: string }) =>
+                capability.permission === "view",
+            )
+            .map(
+              (capability: { sensitivity: string }) => capability.sensitivity,
+            )
+            .sort(),
+        ).toEqual([...sensitivities].sort());
+        if (role === "approver") {
+          expect(capabilities).toContainEqual(
+            expect.objectContaining({
+              permission: "approve",
+              sensitivity: "confidential",
+              requires_contextual_authorization: true,
+            }),
+          );
+        }
+        await expect(page).toHaveURL(/\/$/);
+      });
+    } finally {
+      for (const id of bindings.reverse()) {
+        const revoked = await page.request.post(
+          `${api}/authorization/bindings/${id}/revoke`,
+          { headers, data: { reason: "Remove FX verification grant" } },
+        );
+        expect(revoked.status(), await revoked.text()).toBe(200);
+      }
+    }
+  },
 });
 
 test.describe("unbound FX user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
 
-  test("hides navigation, 404s deep links, and sends no FX requests", async ({
+  test("disables navigation, redirects deep links, and sends no FX requests", async ({
     page,
   }) => {
     const fxRequests: string[] = [];
@@ -24,14 +126,18 @@ test.describe("unbound FX user", () => {
 
     await page.goto("/");
     await expect(
-      page.getByText("No authorized institutions", { exact: true }),
+      page.getByText("No authorized institutions yet", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("navigation")).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("navigation")
+        .getByRole("link", { name: "FX", exact: true }),
+    ).toHaveAttribute("aria-disabled", "true");
 
     await page.goto("/fx");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
     await page.goto("/fx/scenarios");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
     expect(fxRequests).toEqual([]);
 
     if (evidenceDir) {
@@ -48,26 +154,9 @@ test.describe("bound FX user", () => {
 
   test("keeps the FX run action visible with an exact grant reason", async ({
     page,
+    signInWithFxGrants,
   }) => {
-    await page.route("**/auth/me", async (route) => {
-      const response = await route.fetch();
-      const profile = await response.json();
-      profile.effective_authority.organization_capabilities = [];
-      for (const institution of profile.effective_authority
-        .institution_capabilities) {
-        institution.capabilities = institution.capabilities.filter(
-          (capability: {
-            module: string;
-            sensitivity: string;
-            permission: string;
-          }) =>
-            capability.module === "fx" &&
-            capability.permission === "view" &&
-            ["aggregated", "confidential"].includes(capability.sensitivity),
-        );
-      }
-      await route.fulfill({ response, json: profile });
-    });
+    await signInWithFxGrants(["aggregated", "confidential"], "approver");
 
     await page.goto("/fx/scenarios");
     await page
@@ -118,27 +207,9 @@ test.describe("FX Reports summary permissions", () => {
   for (const sensitivity of ["aggregated", "confidential"]) {
     test(`${sensitivity} view controls summary requests and filters`, async ({
       page,
+      signInWithFxGrants,
     }) => {
-      await page.route("**/auth/me", async (route) => {
-        const response = await route.fetch();
-        const profile = await response.json();
-        profile.effective_authority.organization_capabilities = [];
-        for (const institution of profile.effective_authority
-          .institution_capabilities) {
-          institution.capabilities = institution.capabilities.filter(
-            (capability: {
-              module: string;
-              sensitivity: string;
-              permission: string;
-            }) =>
-              capability.permission === "view" &&
-              (capability.module === "reg" ||
-                (capability.module === "fx" &&
-                  capability.sensitivity === sensitivity)),
-          );
-        }
-        await route.fulfill({ response, json: profile });
-      });
+      await signInWithFxGrants([sensitivity]);
 
       const summaries: string[] = [];
       page.on("request", (request) => {
@@ -150,6 +221,11 @@ test.describe("FX Reports summary permissions", () => {
       await expect(
         page.getByRole("heading", { name: "Saved analyses", exact: true }),
       ).toBeVisible();
+      // The heading renders before authority resolves; navigation proves the
+      // scoped profile has reached the shell before asserting absent requests.
+      await expect(
+        page.getByRole("link", { name: "FX", exact: true }),
+      ).toBeVisible();
       if (sensitivity === "aggregated") {
         await expect.poll(() => summaries.length).toBeGreaterThan(0);
       } else {
@@ -157,6 +233,9 @@ test.describe("FX Reports summary permissions", () => {
       }
 
       await page.goto("/reports");
+      await expect(
+        page.getByRole("link", { name: "FX", exact: true }),
+      ).toBeVisible();
       const fxFilter = page.getByRole("button", { name: "FX", exact: true });
       if (sensitivity === "aggregated") {
         await expect(fxFilter).toBeVisible();

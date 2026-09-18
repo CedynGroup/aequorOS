@@ -61,7 +61,7 @@ test.describe("scoped grant administration", () => {
       .locator("li")
       .filter({ hasText: "E2E Grant Member" })
       .first();
-    await expect(memberRow).toContainText("1 grant");
+    await expect(memberRow).toContainText("2 grants");
     await expect(memberRow).toContainText(
       "Viewer · Regulatory Reporting · Sample Bank Ltd",
     );
@@ -74,7 +74,10 @@ test.describe("scoped grant administration", () => {
     await expect.poll(() => catalogueRequests.length).toBeGreaterThan(0);
     await expect(
       composer.getByLabel("Institution coverage").locator("option"),
-    ).toContainText(["Every institution in the organization", "Sample Bank Ltd"]);
+    ).toContainText([
+      "Every institution in the organization",
+      "Sample Bank Ltd",
+    ]);
     await composer
       .getByLabel("Institution coverage")
       .selectOption("BK-SAMP0001");
@@ -112,7 +115,7 @@ test.describe("scoped grant administration", () => {
       sensitivity_scope: string;
       status: string;
     }>;
-    expect(createdRows).toHaveLength(2);
+    expect(createdRows).toHaveLength(3);
     expect(createdRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -134,9 +137,12 @@ test.describe("scoped grant administration", () => {
       ]),
     );
 
-    // Both grants have now advanced the member from authv 1 to authv 3. This
+    // Both grants have advanced the baseline member from authv 2 to authv 4. This
     // represents their current signed-in session immediately before revoke.
-    const currentMemberToken = await mintBackendToken("grant_member", 3);
+    const currentMemberToken = await mintBackendToken(
+      "grant_member",
+      member.authv + 2,
+    );
     const beforeRevoke = await page.request.get(`${API}/auth/me`, {
       headers: { Authorization: `Bearer ${currentMemberToken}` },
     });
@@ -203,7 +209,7 @@ test.describe("scoped grant administration", () => {
         }),
       ]),
     );
-    await expect(memberRow).toContainText("1 grant");
+    await expect(memberRow).toContainText("2 grants");
     await expect(memberRow).toContainText(
       "Viewer · Regulatory Reporting · Sample Bank Ltd",
     );
