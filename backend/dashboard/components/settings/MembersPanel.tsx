@@ -846,7 +846,10 @@ function GrantComposer({
                 type="button"
                 onClick={() =>
                   void signOut({
-                    redirectTo: loginUrlWithReason("access_changed"),
+                    redirectTo: loginUrlWithReason(
+                      "access_changed",
+                      window.location.origin,
+                    ),
                   })
                 }
                 className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-body font-medium"

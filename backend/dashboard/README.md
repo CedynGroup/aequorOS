@@ -262,6 +262,33 @@ pnpm --filter @aequoros/dashboard dev
 
 The backend API must be running (`cd backend && fastapi dev app/main.py --port 8003`).
 
+Configure authentication using [.env.example](.env.example), including its
+production-only `AUTH_URL` guidance. Use one browser host consistently:
+`localhost` and `127.0.0.1` have separate cookie jars. In development,
+middleware warns once when `AUTH_URL` (or legacy `NEXTAUTH_URL`) names a
+different host from the request.
+
+### Sign-in and session recovery
+
+An unreadable session, including one encrypted with another secret, is treated
+as signed out. Login and protected-page redirects expire known Auth.js and
+NextAuth session-cookie variants, including secure/host-prefixed names and
+received numeric chunks. The auth response boundary also clears these variants
+for an empty session or successful sign-out, and removes stale siblings when
+issuing a session. Sign-out still invokes backend refresh-token revocation.
+See `lib/authCookies.ts` and `e2e/session-cookie-hygiene.spec.ts`.
+
+Login, sign-out, and session redirects retain the request's origin; a callback
+on another origin returns to the current origin instead. In the dashboard,
+`NEXT_PUBLIC_LOGIN_URL` selects only the path, query, and fragment (default
+`/login`), even if configured as an absolute URL. Production origin detection
+uses the trusted proxy's forwarded host and protocol; local development prefers
+the browser's Host header.
+
+The backend-unreachable sign-in message means a backend network or HTTP 5xx
+failure. Rejected credentials retain the invalid-email-or-password message;
+other authentication errors show a generic sign-in failure.
+
 ## Validate
 
 ```bash
@@ -355,6 +382,12 @@ Separate Vercel/Coolify project from the marketing site.
 3. Bind `bank.aequoros.com`.
 4. `NEXT_PUBLIC_LOGIN_URL` is a **build arg** inlined at compile time — changing
    it needs a rebuild, not a restart.
+
+When changing the public host, update the dashboard's `AUTH_URL`, backend
+`CORS_ORIGINS`, and marketing app's `NEXT_PUBLIC_LOGIN_URL` destination, and
+re-register OIDC redirect URIs with each bank's IdP. The marketing login URL is
+also a build argument and requires a rebuild. Dashboard login-path semantics
+are described under [Sign-in and session recovery](#sign-in-and-session-recovery).
 
 ## Design system
 

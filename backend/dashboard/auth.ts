@@ -12,13 +12,18 @@
  * API client attaches the access token as `Authorization: Bearer` on every call.
  * The browser never sets the tenant identity — it comes from the verified token.
  */
-import NextAuth, { customFetch, type NextAuthConfig } from "next-auth";
+import NextAuth, {
+  CredentialsSignin,
+  customFetch,
+  type NextAuthConfig,
+} from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import {
   OutboundTargetBlocked,
   checkOutboundUrl,
   guardedFetchFor,
 } from "./lib/outbound";
+import { requestOrigin, sessionRedirect } from "./lib/requestOrigin";
 
 const apiOrigin = (
   process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? "http://localhost:8000"
@@ -43,7 +48,9 @@ function decodeJwt(token: string): Record<string, unknown> {
  * wrong while the backend was not running at all. A 502 from the proxy, a
  * refused connection and a genuine 401 all collapsed into one `null` here.
  */
-export class AuthServiceUnavailable extends Error {
+export class AuthServiceUnavailable extends CredentialsSignin {
+  code = "service_unavailable";
+
   constructor(detail: string) {
     super(`service_unavailable: ${detail}`);
     this.name = "AuthServiceUnavailable";
@@ -225,12 +232,12 @@ const baseConfig = {
     },
   },
   callbacks: {
-    // Middleware gate (see middleware.ts matcher, which already excludes /login
-    // and /api/auth): every other route requires an authenticated session, so an
-    // unauthenticated visitor is redirected to /login instead of landing on an
-    // app page that then 401s against the backend.
-    authorized({ auth }) {
-      return !!auth?.user;
+    // middleware.ts owns routing so it can preserve the caller's real host and
+    // clear every stale cookie variant on the redirect response. Auth.js only
+    // reads the session here; its built-in redirect uses Next dev's synthetic
+    // x-forwarded-host and can move 127.0.0.1 visitors onto localhost.
+    authorized() {
+      return true;
     },
     async jwt({ token, user, account }) {
       // Credentials: the authorize() result already carries backend tokens.
@@ -323,10 +330,19 @@ const credentialsProvider = Credentials({
   },
 });
 
+function redirectForRequest(
+  req: Request | undefined,
+): NonNullable<NextAuthConfig["callbacks"]>["redirect"] {
+  return async ({ url, baseUrl }) => {
+    const currentOrigin = req ? requestOrigin(req) : baseUrl;
+    return sessionRedirect(url, currentOrigin);
+  };
+}
+
 // Lazy config: the SSO provider is materialized per request, ONLY on auth routes
 // (sign-in, callback, providers). Middleware's session gate and server-side
 // auth() calls never pay for the backend config fetch.
-export const { handlers, signIn, signOut, auth } = NextAuth(async (req) => {
+const nextAuth = NextAuth(async (req) => {
   const providers: NextAuthConfig["providers"] = [credentialsProvider];
   if (req?.nextUrl.pathname.startsWith("/api/auth")) {
     // fetchSsoConfig() has already put the issuer through the egress guard, so
@@ -354,5 +370,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth(async (req) => {
       });
     }
   }
-  return { ...baseConfig, providers };
+  return {
+    ...baseConfig,
+    callbacks: {
+      ...baseConfig.callbacks,
+      redirect: redirectForRequest(req),
+    },
+    providers,
+  };
 });
+
+export const { handlers, signIn, signOut, auth } = nextAuth;

@@ -1,22 +1,28 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight } from 'lucide-react';
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight } from "lucide-react";
+import { loginErrorMessage } from "./loginErrors";
+import { sessionRedirect } from "../../lib/requestOrigin";
 
-export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean }) {
+export default function LoginForm({
+  ssoEnabled = false,
+}: {
+  ssoEnabled?: boolean;
+}) {
   const router = useRouter();
   const params = useSearchParams();
-  const callbackUrl = params.get('callbackUrl') ?? '/';
+  const callbackUrl = params.get("callbackUrl") ?? "/";
   // NextAuth lands failed SSO attempts back here with ?error=. The most common
   // legitimate case is a recorded access request awaiting account-admin approval.
-  const ssoFailed = Boolean(params.get('error'));
+  const ssoFailed = Boolean(params.get("error"));
   // Set by the app when it signs someone out on purpose (see lib/loginUrl.ts):
   // a grant they saved for themselves, or a session an administrator ended.
-  const reason = params.get('reason');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const reason = params.get("reason");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -24,45 +30,31 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
     event.preventDefault();
     setPending(true);
     setError(null);
-    const result = await signIn('credentials', { email, password, redirect: false });
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
     setPending(false);
     if (result?.error) {
-      // `CredentialsSignin` is the ONLY code that means the backend looked at
-      // these credentials and refused them (authorize returned null). Anything
-      // else — a thrown AuthServiceUnavailable, a 5xx, a refused connection —
-      // is the service failing, and must not be reported as a bad password.
-      //
-      // On 2026-07-26 the production API was crash-looping and this screen told
-      // the operator their password was wrong. Telling someone their credentials
-      // are invalid when the service is down sends them to reset a password that
-      // was never checked. Verified against a dev server pointed at a closed
-      // port: an unreachable backend yields `Configuration`, a rejected password
-      // yields `CredentialsSignin` — so the two are genuinely distinguishable
-      // here, and this must not be collapsed back into one message.
-      setError(
-        result.error === 'CredentialsSignin'
-          ? 'Invalid email or password.'
-          : 'Could not reach the AequorOS service, so your sign-in could not be checked. ' +
-            'This is not a problem with your credentials — try again shortly, or contact ' +
-            'your administrator if it persists.'
-      );
+      setError(loginErrorMessage(result));
       return;
     }
-    router.push(callbackUrl);
+    router.push(sessionRedirect(callbackUrl, window.location.origin));
     router.refresh();
   }
 
   return (
     <form onSubmit={onSubmit} className="mt-8 space-y-4">
-      {reason === 'access_changed' ? (
+      {reason === "access_changed" ? (
         <p
           role="status"
           className="px-3 py-2.5 border border-border rounded-md bg-surface text-caption text-slate leading-relaxed"
         >
-          Your access was updated, so your previous session ended. Sign in
-          again to continue with your new permissions.
+          Your access was updated, so your previous session ended. Sign in again
+          to continue with your new permissions.
         </p>
-      ) : reason === 'session_ended' ? (
+      ) : reason === "session_ended" ? (
         <p
           role="status"
           className="px-3 py-2.5 border border-border rounded-md bg-surface text-caption text-slate leading-relaxed"
@@ -82,7 +74,9 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
         </p>
       ) : null}
       <label className="block">
-        <span className="block text-caption font-medium text-navy mb-1.5">Email</span>
+        <span className="block text-caption font-medium text-navy mb-1.5">
+          Email
+        </span>
         <input
           type="email"
           required
@@ -94,7 +88,9 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
       </label>
 
       <label className="block">
-        <span className="block text-caption font-medium text-navy mb-1.5">Password</span>
+        <span className="block text-caption font-medium text-navy mb-1.5">
+          Password
+        </span>
         <input
           type="password"
           required
@@ -116,7 +112,7 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
         disabled={pending}
         className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 btn-primary font-medium transition-colors disabled:opacity-60"
       >
-        {pending ? 'Signing in…' : 'Sign in'}
+        {pending ? "Signing in…" : "Sign in"}
         <ArrowRight size={16} aria-hidden />
       </button>
 
@@ -134,7 +130,7 @@ export default function LoginForm({ ssoEnabled = false }: { ssoEnabled?: boolean
 
           <button
             type="button"
-            onClick={() => signIn('sso', { callbackUrl })}
+            onClick={() => signIn("sso", { callbackUrl })}
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 border border-border rounded-md bg-surface text-body font-medium text-navy transition-colors hover:bg-surface-muted"
           >
             Sign in with SSO

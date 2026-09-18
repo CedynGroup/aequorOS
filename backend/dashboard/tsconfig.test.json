@@ -13,6 +13,13 @@
   },
   "include": [
     "types/next-auth.d.ts",
+    "app/login/loginErrors.ts",
+    "app/login/loginErrors.test.ts",
+    "lib/authCookies.ts",
+    "lib/authCookies.test.ts",
+    "lib/loginUrl.ts",
+    "lib/loginUrl.test.ts",
+    "lib/requestOrigin.ts",
     "lib/api/values.ts",
     "lib/api/values.test.ts",
     "lib/api/accountAdministration.ts",

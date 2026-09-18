@@ -347,6 +347,15 @@ assert.deepEqual(hrefAccess("/basel", memberOnly), {
     "Requires Basel Capital · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(hrefAccess("/settings", memberOnly).state, "enabled");
+for (const path of ["/irr", "/irr/sensitivity/detail"]) {
+  assert.deepEqual(hrefAccess(path, memberOnly), {
+    state: "disabled",
+    reason:
+      "Requires IRRBB · Aggregated · View. Ask your organization owner or admin to grant it.",
+  });
+  assert.equal(isHrefVisible(path, memberOnly), false);
+  assert.equal(isPathVisible(path, memberOnly), false);
+}
 assert.deepEqual(hrefAccess("/irr/scenarios", memberOnly), {
   state: "disabled",
   reason:
