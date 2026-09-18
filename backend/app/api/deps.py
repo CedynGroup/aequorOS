@@ -491,6 +491,43 @@ def validate_tenant_context(session: Session, ctx: TenantContext) -> None:
 DbSession = Annotated[Session, Depends(get_tenant_db_session)]
 
 
+def resolve_tenant_bank(
+    request: Request,
+    db: DbSession,
+    ctx: Annotated[TenantContext, Depends(get_tenant_context)],
+) -> Bank | None:
+    """Resolve a path or query ``bank_id`` inside the authenticated tenant.
+
+    Bank existence is tenant-confidential. An unknown identifier and an
+    identifier owned by another organization therefore produce the same 404
+    before any module entitlement or scoped permission dependency runs.
+    """
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    raw_bank_id = request.path_params.get("bank_id")
+    if raw_bank_id is None:
+        raw_bank_id = request.query_params.get("bank_id")
+    if raw_bank_id is None:
+        return None
+
+    bank_id = normalize_public_id(str(raw_bank_id))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    if bank is None:
+        cross_tenant_attempt(
+            reason="bank_not_visible_to_tenant",
+            organization_id=ctx.organization_id,
+            bank_id=bank_id,
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    request.state.tenant_bank = bank
+    return bank
+
+
+TenantBank = Annotated[Bank | None, Depends(resolve_tenant_bank)]
+
+
 def _require_organization_account_permission(
     db: Session,
     ctx: TenantContext,
@@ -718,6 +755,7 @@ def require_integration_push_ingest(
     request: Request,
     db: DbSession,
     ctx: Tenant,
+    bank: TenantBank,
 ) -> IntegrationPushAccess:
     """Require one exact active machine DATA/restricted ingest binding."""
 
@@ -759,18 +797,7 @@ def require_integration_push_ingest(
     # held through the route-boundary commit, so a key cannot be revoked after
     # authorization but before its storage/database mutation completes.
     integration_keys.lock_authenticated_key(db, ctx)
-    bank = db.scalar(
-        select(Bank).where(
-            Bank.id == requested_bank_id,
-            Bank.organization_id == ctx.organization_id,
-        )
-    )
-    if bank is None:
-        cross_tenant_attempt(
-            reason="bank_not_visible_to_integration_key",
-            organization_id=ctx.organization_id,
-            bank_id=requested_bank_id,
-        )
+    if bank is None:  # pragma: no cover - integration push routes always carry bank_id
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
 
     principal = PrincipalLocator(
@@ -840,19 +867,11 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     """Require one complete active binding for an exact tenant institution."""
 
     from app.services import authorization as authorization_service  # noqa: PLC0415
-    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
-    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
-    resolved_bank = bank or db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
+    resolved_bank = getattr(request.state, "tenant_bank", None) or bank
     if resolved_bank is None:
-        cross_tenant_attempt(
-            reason="bank_not_visible_to_tenant",
-            organization_id=ctx.organization_id,
-            bank_id=bank_id,
-            module=module.value,
-        )
+        resolved_bank = resolve_tenant_bank(request, db, ctx)
+    if resolved_bank is None:  # pragma: no cover - institution permissions are bank-scoped
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
     if ctx.actor_user_id is None:
         authorization_denied(
@@ -1025,14 +1044,10 @@ def require_capital_plan_write(
     request: Request,
     db: DbSession,
     ctx: Tenant,
+    bank: TenantBank,
 ) -> InstitutionPermissionAccess:
     from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
-    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
-    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
     if bank is None:
         return _require_institution_permission(
             request,
@@ -1062,11 +1077,12 @@ def require_capital_plan_approve(
     request: Request,
     db: DbSession,
     ctx: Tenant,
+    bank: TenantBank,
 ) -> InstitutionPermissionAccess:
     from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
-    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
 
-    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    if bank is None:  # pragma: no cover - capital plan routes always carry bank_id
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
     access = _require_institution_permission(
         request,
         db,
@@ -1079,8 +1095,9 @@ def require_capital_plan_approve(
         conditions=capital_plan.maker_checker_conditions(
             db,
             ctx,
-            bank_id,
+            bank.id,
         ),
+        bank=bank,
     )
     return access
 
@@ -1220,30 +1237,20 @@ def require_module_access(module_key: str):  # noqa: ANN201 - returns a FastAPI 
     """
     from app.services import institution_types  # noqa: PLC0415 - avoid import cycle
 
-    def _dependency(request: Request, db: DbSession, ctx: Tenant) -> None:
-        bank_id = request.path_params.get("bank_id")
-        if not bank_id:
-            return
-        bank = db.scalar(
-            select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-        )
+    def _dependency(
+        request: Request,
+        db: DbSession,
+        ctx: Tenant,
+        bank: TenantBank,
+    ) -> None:
         if bank is None:
-            # RLS makes a genuine miss and a cross-tenant probe identical here:
-            # both return no row. Reported with a reason code that says exactly
-            # what was observed rather than asserting intent.
-            cross_tenant_attempt(
-                reason="bank_not_visible_to_tenant",
-                organization_id=ctx.organization_id,
-                bank_id=str(bank_id),
-                module=module_key,
-            )
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+            return
         if module_key not in institution_types.get_type(db, bank).default_modules:
             authorization_denied(
                 reason="module_not_entitled",
                 module=module_key,
                 organization_id=ctx.organization_id,
-                bank_id=str(bank_id),
+                bank_id=bank.id,
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
