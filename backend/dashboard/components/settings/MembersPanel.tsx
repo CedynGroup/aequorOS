@@ -426,7 +426,7 @@ function MemberDetail({
                   )}
                 </dl>
                 {grant.effective &&
-                  !["org_owner", "integration_writer"].includes(
+                  !["member", "org_owner", "integration_writer"].includes(
                     grant.roleBundle,
                   ) && (
                     <button
@@ -845,7 +845,9 @@ function GrantComposer({
               <button
                 type="button"
                 onClick={() =>
-                  void signOut({ redirectTo: loginUrlWithReason("access_changed") })
+                  void signOut({
+                    redirectTo: loginUrlWithReason("access_changed"),
+                  })
                 }
                 className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-body font-medium"
               >

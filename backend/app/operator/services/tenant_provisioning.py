@@ -56,7 +56,12 @@ from app.schemas.operator import (
     ProvisioningStepRead,
     TenantProvisionCreate,
 )
-from app.services import institution_types, organization_ownership, parameter_register
+from app.services import (
+    institution_types,
+    membership,
+    organization_ownership,
+    parameter_register,
+)
 from app.services.market_desk import publication as desk_publication
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings
@@ -310,6 +315,12 @@ def _step_first_admin(
     )
     db.add(administrator)
     db.flush()
+    membership.ensure_baseline_membership(
+        db,
+        user=administrator,
+        granted_by_id="tenant_provisioning",
+        commit=False,
+    )
     state.one_time_password = one_time_password
     state.record(
         "first_admin",

@@ -325,7 +325,39 @@ const nothingVisible: ModuleScope = {
 };
 assert.equal(landingPathFor(nothingVisible), "/settings/profile");
 
-// Hub redirects: only `/` and `/settings` redirect when hidden; deep links 404.
+const memberOnly: ModuleScope = {
+  modules: new Set(),
+  organizationModules: new Set(),
+  hasInstitutionAuthority: false,
+  institutionClass: null,
+  liquidityAggregatedView: false,
+  liquidityConfidentialView: false,
+  isResolved: true,
+};
+assert.equal(landingPathFor(memberOnly), "/");
+assert.equal(isPathVisible("/", memberOnly), true);
+assert.deepEqual(hrefAccess("/liquidity", memberOnly), {
+  state: "disabled",
+  reason:
+    "Requires Liquidity Monitoring · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.deepEqual(hrefAccess("/basel", memberOnly), {
+  state: "disabled",
+  reason:
+    "Requires Basel Capital · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(hrefAccess("/settings", memberOnly).state, "enabled");
+assert.deepEqual(hrefAccess("/irr/scenarios", memberOnly), {
+  state: "disabled",
+  reason:
+    "Requires IRRBB · Confidential · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(isHrefVisible("/irr/scenarios", memberOnly), false);
+assert.equal(isPathVisible("/irr/scenarios", memberOnly), false);
+assert.equal(hubRedirectFor("/irr/scenarios", memberOnly), "/");
+
+// Hubs redirect when hidden; a member without institution authority also
+// returns from public product-module paths to the root empty workspace.
 assert.equal(hubRedirectFor("/", ownerOnly), "/settings");
 assert.equal(hubRedirectFor("/", resolved(true)), null);
 assert.equal(hubRedirectFor("/", unresolved), null);
@@ -338,6 +370,61 @@ assert.equal(hubRedirectFor("/settings/members", operationalOnly), null);
 assert.equal(hubRedirectFor("/settings/authentication", operationalOnly), null);
 assert.equal(hubRedirectFor("/liquidity/monitoring", denied), null);
 assert.equal(hubRedirectFor("/fx", ownerOnly), null);
+assert.equal(hubRedirectFor("/liquidity/monitoring", memberOnly), "/");
+for (const route of [
+  "/data-engine",
+  "/data-engine/excel-csv",
+  "/liquidity/stress/",
+]) {
+  assert.equal(hubRedirectFor(route, memberOnly), "/");
+}
+for (const route of [
+  "/data-engine/batches/00000000-0000-0000-0000-000000000000",
+  "/data-engine/batches/foreign-batch",
+  "/data-engine/batches",
+  "/data-engine/unknown",
+  "/liquidity/monitoring/detail",
+  "/liquidity/stress/unknown",
+  "/does-not-exist",
+]) {
+  assert.equal(hubRedirectFor(route, memberOnly), null);
+}
+assert.equal(
+  hubRedirectFor("/liquidity/buffer", {
+    ...memberOnly,
+    institutionClass: "sdi",
+  }),
+  null,
+);
+assert.equal(
+  hubRedirectFor("/fx", {
+    ...memberOnly,
+    entitledModules: new Set(["liquidity"]),
+  }),
+  null,
+);
+for (const route of [
+  "/liquidity/forecast",
+  "/liquidity/monitoring",
+  "/liquidity/cfp",
+]) {
+  assert.deepEqual(hrefAccess(route, memberOnly), {
+    state: "disabled",
+    reason:
+      "Requires Liquidity Monitoring · Confidential · View. Ask your organization owner or admin to grant it.",
+  });
+}
+assert.deepEqual(hrefAccess("/liquidity/stress", memberOnly), {
+  state: "disabled",
+  reason:
+    "Requires Liquidity Monitoring · Confidential · View and Risk & Limits · Confidential · View. Ask your organization owner or admin to grant them.",
+});
+assert.deepEqual(hrefAccess("/basel/planning", memberOnly), {
+  state: "hidden",
+});
+assert.deepEqual(hrefAccess("/data-engine/batches/foreign-batch", memberOnly), {
+  state: "hidden",
+});
 const structurallyExcluded = {
   ...denied,
   entitledModules: new Set(["capital"] as const),

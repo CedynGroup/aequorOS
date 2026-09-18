@@ -17,7 +17,7 @@ import {
   type ReactNode,
 } from "react";
 import { Landmark } from "lucide-react";
-import { notFound, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type {
   BankRead,
   BankReadInstitutionTypeDetail,
@@ -332,26 +332,27 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   }
 
   if (isEmpty) {
-    if ((authority?.organizationCapabilities.length ?? 0) === 0) {
-      if (pathname !== "/" && !isPersonalSelfService) notFound();
-      if (isPersonalSelfService) {
-        return (
-          <BankContext.Provider value={value}>{children}</BankContext.Provider>
-        );
-      }
-      return <NoAuthorizedInstitutionsPanel />;
-    }
+    return (
+      <BankContext.Provider value={value}>{children}</BankContext.Provider>
+    );
   }
 
   return <BankContext.Provider value={value}>{children}</BankContext.Provider>;
 }
 
-function NoAuthorizedInstitutionsPanel() {
+export function NoAuthorizedInstitutionsPanel() {
   return (
-    <FullScreenPanel
-      title="No authorized institutions"
-      description="Your account is active, but it has no effective institution capabilities. Ask an organization owner to assign one complete scoped grant."
-    />
+    <div className="px-8 py-8">
+      <div className="card mx-auto max-w-2xl p-8 text-center">
+        <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-surface text-slate">
+          <Landmark size={20} aria-hidden />
+        </div>
+        <p className="mt-4 text-h2 text-navy">No authorized institutions yet</p>
+        <p className="mt-2 text-body leading-relaxed text-slate">
+          Ask your organization owner to grant access to an institution.
+        </p>
+      </div>
+    </div>
   );
 }
 

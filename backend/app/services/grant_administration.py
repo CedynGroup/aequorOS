@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -20,8 +20,8 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.base import utc_now
-from app.models import AuditEvent, AuthorizationBinding, Bank, Organization, User
-from app.services import authentication, authorization
+from app.models import AuthorizationBinding, Bank, Organization, User
+from app.services import authentication, authorization, membership
 
 
 class GrantAdministrationError(ValueError):
@@ -72,6 +72,7 @@ class GrantResult:
 
 
 _ROLE_LABELS = {
+    RoleBundle.MEMBER: "Member",
     RoleBundle.VIEWER: "Viewer",
     RoleBundle.AUDITOR: "Auditor",
     RoleBundle.ANALYST: "Analyst",
@@ -110,18 +111,8 @@ _OPERATIONAL_WRITE_BUNDLES = frozenset({RoleBundle.ANALYST, RoleBundle.APPROVER}
 _ACCOUNT_ADMIN_BUNDLES = frozenset({RoleBundle.ACCOUNT_ADMIN, RoleBundle.ORG_OWNER})
 
 
-def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-
-
 def binding_is_effective(binding: AuthorizationBinding, *, now: datetime | None = None) -> bool:
-    moment = _aware(now or utc_now())
-    return (
-        binding.status == BindingStatus.ACTIVE.value
-        and binding.revoked_at is None
-        and _aware(binding.valid_from) <= moment
-        and (binding.valid_until is None or _aware(binding.valid_until) > moment)
-    )
+    return authorization.binding_is_effective(binding, now=now)
 
 
 def _scope_overlaps(left: AuthorizationBinding, right: authorization.BindingScope) -> bool:
@@ -221,15 +212,6 @@ def check_sod_policy(
     if findings:
         return SodDecision(SodOutcome.WARN, tuple(findings))
     return SodDecision(SodOutcome.ALLOW)
-
-
-def _scope_dict(binding: AuthorizationBinding) -> dict[str, str | None]:
-    return {
-        "institution_scope": binding.institution_scope,
-        "institution_id": binding.institution_id,
-        "module_scope": binding.module_scope,
-        "sensitivity_scope": binding.sensitivity_scope,
-    }
 
 
 def compose_authority_sentence(
@@ -338,41 +320,12 @@ def scoped_authority_sentence(  # noqa: PLR0913
     )
 
 
-def _tenant_actor_id(actor: authorization.GrantorRef) -> UUID | None:
-    if actor.kind is not GrantorType.TENANT_USER:
-        return None
-    return UUID(actor.identifier)
-
-
-def _record_grant_audit(
-    db: Session,
-    binding: AuthorizationBinding,
-    actor: authorization.GrantorRef,
-    sentence: str,
-) -> None:
-    db.add(
-        AuditEvent(
-            organization_id=binding.organization_id,
-            actor_user_id=_tenant_actor_id(actor),
-            event_type="authorization.binding_granted",
-            entity_type="authorization_binding",
-            entity_id=str(binding.id),
-            details={
-                "grantor_type": actor.kind.value,
-                "grantor_id": actor.identifier,
-                "grantee_user_id": str(binding.principal_user_id),
-                "role_bundle": binding.role_bundle,
-                "scope": _scope_dict(binding),
-                "occurred_at": binding.granted_at.isoformat(),
-                "reason": binding.grant_reason,
-                "authority_sentence": sentence,
-            },
-        )
-    )
-
-
 def validate_public_grant(role_bundle: RoleBundle, scope: authorization.BindingScope) -> None:
-    if role_bundle in {RoleBundle.ORG_OWNER, RoleBundle.INTEGRATION_WRITER}:
+    if role_bundle in {
+        RoleBundle.MEMBER,
+        RoleBundle.ORG_OWNER,
+        RoleBundle.INTEGRATION_WRITER,
+    }:
         raise GrantAdministrationError("this role bundle is not grantable from Members")
     if role_bundle is RoleBundle.ACCOUNT_ADMIN and (
         scope.institution_scope is not InstitutionScope.ORGANIZATION
@@ -471,7 +424,12 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
         )
     except authorization.AuthorizationInvariantError as exc:
         raise GrantAdministrationError(str(exc)) from exc
-    _record_grant_audit(db, binding, actor, sentence)
+    authorization.record_binding_grant_audit(
+        db,
+        binding=binding,
+        grantor=actor,
+        authority_sentence=sentence,
+    )
     db.flush()
     if commit:
         db.commit()
@@ -504,6 +462,10 @@ def revoke_scoped_grant(  # noqa: PLR0913 - complete actor and target context is
     if binding.role_bundle == RoleBundle.ORG_OWNER.value:
         raise GrantAdministrationError(
             "organization ownership cannot be revoked from the Members grant flow"
+        )
+    if binding.role_bundle == RoleBundle.MEMBER.value:
+        raise GrantAdministrationError(
+            "baseline membership ends only when the member is deactivated"
         )
     if binding.role_bundle == RoleBundle.INTEGRATION_WRITER.value:
         raise GrantAdministrationError(
@@ -539,24 +501,11 @@ def revoke_scoped_grant(  # noqa: PLR0913 - complete actor and target context is
     binding.revoked_by_id = str(actor_user_id)
     binding.revoked_reason = revoke_reason
     sentence = authority_sentence(db, binding)
-    db.add(
-        AuditEvent(
-            organization_id=organization_id,
-            actor_user_id=actor_user_id,
-            event_type="authorization.binding_revoked",
-            entity_type="authorization_binding",
-            entity_id=str(binding.id),
-            details={
-                "revoker_type": GrantorType.TENANT_USER.value,
-                "revoker_id": str(actor_user_id),
-                "grantee_user_id": str(binding.principal_user_id),
-                "role_bundle": binding.role_bundle,
-                "scope": _scope_dict(binding),
-                "occurred_at": moment.isoformat(),
-                "reason": revoke_reason,
-                "authority_sentence": sentence,
-            },
-        )
+    authorization.record_binding_revoke_audit(
+        db,
+        binding=binding,
+        actor_user_id=actor_user_id,
+        authority_sentence=sentence,
     )
     authorization.invalidate_user_authorization(
         db,
@@ -593,6 +542,12 @@ def approve_sso_access_request_with_grant(  # noqa: PLR0913
     # Binding authority is the only new authority.  The scalar remains a
     # compatibility-only read role until endpoint rollout (#144 and later).
     user.role = "viewer"
+    membership.ensure_baseline_membership(
+        db,
+        user=user,
+        granted_by_id=f"sso_access_approval:{actor_user_id}",
+        commit=False,
+    )
     result = create_scoped_grant(
         db,
         organization_id=organization_id,

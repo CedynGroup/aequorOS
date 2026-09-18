@@ -28,7 +28,7 @@ import Logo from "./Logo";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import { centralBankName } from "@/lib/format";
 import { hrefAccess } from "@/lib/modules";
-import { useModuleScope } from "./BankContext";
+import { useBankContext } from "./BankContext";
 
 const COLLAPSE_STORAGE_KEY = "aeq-sidebar-collapsed";
 
@@ -93,7 +93,7 @@ const groups: { label: string; items: NavItem[] }[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const moduleScope = useModuleScope();
+  const { bank, moduleScope } = useBankContext();
   const [collapsed, setCollapsed] = useState(false);
 
   // Scope the nav to the active institution type (docs/sdi.md §3.1/§6.3): drop
@@ -218,7 +218,7 @@ export default function Sidebar() {
             </p>
             <p className="mt-1 text-body text-white">Tenant-scoped data</p>
             <p className="mt-1 text-caption text-white/50">
-              {centralBankName()}
+              {bank ? centralBankName() : "No institution selected"}
             </p>
           </div>
         )}

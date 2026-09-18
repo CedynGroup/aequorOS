@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -42,7 +42,7 @@ from app.core.authorization import (
 from app.core.config import get_settings
 from app.core.observability import authorization_binding_decision
 from app.db.base import utc_now
-from app.models import AuthorizationBinding, Bank, OperatorUser, User
+from app.models import AuditEvent, AuthorizationBinding, Bank, OperatorUser, User
 from app.schemas.authorization import (
     EffectiveAuthorityRead,
     EffectiveCapabilityRead,
@@ -67,6 +67,92 @@ class BindingScope:
     institution_id: str | None
     module_scope: ModuleScope
     sensitivity_scope: SensitivityScope
+
+
+def binding_scope_details(binding: AuthorizationBinding) -> dict[str, str | None]:
+    return {
+        "institution_scope": binding.institution_scope,
+        "institution_id": binding.institution_id,
+        "module_scope": binding.module_scope,
+        "sensitivity_scope": binding.sensitivity_scope,
+    }
+
+
+def binding_is_effective(
+    binding: AuthorizationBinding,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    moment = now or utc_now()
+
+    def aware(value: datetime) -> datetime:
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+    return (
+        binding.status == BindingStatus.ACTIVE.value
+        and binding.revoked_at is None
+        and aware(binding.valid_from) <= aware(moment)
+        and (binding.valid_until is None or aware(binding.valid_until) > aware(moment))
+    )
+
+
+def record_binding_grant_audit(
+    db: Session,
+    *,
+    binding: AuthorizationBinding,
+    grantor: GrantorRef,
+    authority_sentence: str,
+) -> None:
+    actor_user_id = UUID(grantor.identifier) if grantor.kind is GrantorType.TENANT_USER else None
+    db.add(
+        AuditEvent(
+            organization_id=binding.organization_id,
+            actor_user_id=actor_user_id,
+            event_type="authorization.binding_granted",
+            entity_type="authorization_binding",
+            entity_id=str(binding.id),
+            details={
+                "grantor_type": grantor.kind.value,
+                "grantor_id": grantor.identifier,
+                "grantee_user_id": str(binding.principal_user_id),
+                "role_bundle": binding.role_bundle,
+                "scope": binding_scope_details(binding),
+                "occurred_at": binding.granted_at.isoformat(),
+                "reason": binding.grant_reason,
+                "authority_sentence": authority_sentence,
+            },
+        )
+    )
+
+
+def record_binding_revoke_audit(
+    db: Session,
+    *,
+    binding: AuthorizationBinding,
+    actor_user_id: UUID | None,
+    authority_sentence: str,
+) -> None:
+    db.add(
+        AuditEvent(
+            organization_id=binding.organization_id,
+            actor_user_id=actor_user_id,
+            event_type="authorization.binding_revoked",
+            entity_type="authorization_binding",
+            entity_id=str(binding.id),
+            details={
+                "revoker_type": binding.revoked_by_type,
+                "revoker_id": binding.revoked_by_id,
+                "grantee_user_id": str(binding.principal_user_id),
+                "role_bundle": binding.role_bundle,
+                "scope": binding_scope_details(binding),
+                "occurred_at": (
+                    binding.revoked_at.isoformat() if binding.revoked_at is not None else None
+                ),
+                "reason": binding.revoked_reason,
+                "authority_sentence": authority_sentence,
+            },
+        )
+    )
 
 
 _ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT)
@@ -365,6 +451,7 @@ def invalidate_user_authorization(  # noqa: PLR0913 - lock optimization is expli
     organization_id: str,
     user_id: UUID,
     reason: str,
+    refresh_reason: str = "authorization_changed",
     commit: bool = True,
     locked_user: User | None = None,
 ) -> int:
@@ -394,7 +481,7 @@ def invalidate_user_authorization(  # noqa: PLR0913 - lock optimization is expli
     authentication.revoke_user_refresh_tokens(
         db,
         user.id,
-        reason="authorization_changed",
+        reason=refresh_reason,
         commit=False,
     )
     db.flush()
@@ -446,6 +533,19 @@ def create_role_binding(  # noqa: PLR0913 - every binding dimension is explicit
                 "machine principals require a machine permission bundle"
             )
         raise AuthorizationInvariantError("human principals cannot receive a machine bundle")
+    if role_bundle is RoleBundle.MEMBER and (
+        principal_type is not PrincipalType.HUMAN
+        or grantor.kind is not GrantorType.SYSTEM
+        or scope.institution_scope is not InstitutionScope.ORGANIZATION
+        or scope.institution_id is not None
+        or scope.module_scope is not ModuleScope.ACCOUNT
+        or scope.sensitivity_scope is not SensitivityScope.RESTRICTED
+        or valid_until is not None
+    ):
+        raise AuthorizationInvariantError(
+            "baseline membership requires a permanent system-granted "
+            "organization-wide Account/restricted human binding"
+        )
     _validate_scope(db, organization_id, scope)
     _validate_grantor(db, organization_id, grantor)
 

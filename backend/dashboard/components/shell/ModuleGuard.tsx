@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Route guard for institution-type module scoping (docs/sdi.md §3.1/§6.3).
@@ -9,20 +9,20 @@
  * gets not-found, not a bank-only screen. Unscoped tenants (banks) and the
  * pre-load window (module set not yet resolved) pass through unchanged.
  *
- * Two hubs are the exception: `/` is where every sign-in lands and `/settings`
- * is what people type for "my settings", so a user whose grants do not reach
- * them is sent to the first surface they are authorized to see instead of a
- * 404 (docs/rbac.md §8.3). On 2026-09-16 an Org Owner holding Account
- * administration alone signed in to production and met "This page could not
- * be found" — Settings was theirs, but nothing routed them there — and an
- * analyst could no longer open the page that shows their own signer ID.
+ * Hub redirects and the baseline-only public-route allow-list are owned by
+ * docs/rbac.md §8.2 and lib/modules.ts. Unknown, structurally excluded, and
+ * hidden object-specific paths still resolve as not-found.
  */
 
-import { usePathname, notFound, redirect } from 'next/navigation';
-import { useModuleScope } from './BankContext';
-import { hubRedirectFor, isPathVisible } from '@/lib/modules';
+import { usePathname, notFound, redirect } from "next/navigation";
+import { useModuleScope } from "./BankContext";
+import { hubRedirectFor, isPathVisible } from "@/lib/modules";
 
-export default function ModuleGuard({ children }: { children: React.ReactNode }) {
+export default function ModuleGuard({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const moduleScope = useModuleScope();
   if (!isPathVisible(pathname, moduleScope)) {

@@ -177,6 +177,14 @@ export type ModuleScope = {
   isResolved: boolean;
 };
 
+export function isBaselineOnlyScope(scope: ModuleScope): boolean {
+  return (
+    scope.isResolved &&
+    !scope.hasInstitutionAuthority &&
+    scope.organizationModules.size === 0
+  );
+}
+
 /** Build a scope from the API `default_modules` list. Empty/absent → null. */
 export function moduleSetFrom(
   defaultModules: readonly string[] | null | undefined,
@@ -322,6 +330,27 @@ const LIQUIDITY_CONFIDENTIAL_VIEW =
 const RISK_CONFIDENTIAL_VIEW = "Risk & Limits · Confidential · View";
 const IRRBB_CONFIDENTIAL_RUN = "IRRBB · Confidential · Run";
 
+const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
+  command_center: "Risk & Limits · Aggregated · View",
+  risk: "Risk & Limits · Confidential · View",
+  alerts: "Risk & Limits · Confidential · View",
+  markets: "Markets · Published · View",
+  positions: "Risk & Limits · Confidential · View",
+  irrbb: "IRRBB · Aggregated · View",
+  liquidity: LIQUIDITY_AGGREGATED_VIEW,
+  credit: "Risk & Limits · Confidential · View",
+  fx: "Foreign Exchange · Aggregated · View",
+  capital: "Basel Capital · Aggregated · View",
+  ftp: "Funds Transfer Pricing · Aggregated · View",
+  forecasting: "Forecasting · Aggregated · View",
+  behavioral: "Behavioral Models · Aggregated · View",
+  data_engine: "Data Engine · Restricted · View",
+  reports: "Regulatory Reporting · Published · View",
+  institution: "Account Administration · Restricted · View",
+  regulatory_reporting: "Regulatory Reporting · Published · View",
+  settings: "Account Administration · Restricted · Administer",
+};
+
 function permissionReason(permissions: readonly string[]): string | undefined {
   if (permissions.length === 0) return undefined;
   const required =
@@ -433,6 +462,9 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   if (!scope.isResolved) return true;
   if (isPersonalSettingsPath(path)) return true;
   const moduleKey = moduleForPath(path);
+  if (path === "/" && isBaselineOnlyScope(scope)) {
+    return true;
+  }
   if (
     moduleKey &&
     ORGANIZATION_ROUTES.has(moduleKey) &&
@@ -478,6 +510,16 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (isPersonalSettingsPath(path)) return { state: "enabled" };
   const moduleKey = moduleForPath(path);
   if (moduleKey) {
+    if (isBaselineOnlyScope(scope)) {
+      if (moduleKey === "settings") return { state: "enabled" };
+      const reason =
+        liquidityPermissionReason(path, scope) ??
+        irrbbPermissionReason(path, scope) ??
+        (path === "/" || ROUTE_MODULES.some(([route]) => route === path)
+          ? permissionReason([MODULE_ENTRY_REQUIREMENTS[moduleKey]])
+          : undefined);
+      return reason ? { state: "disabled", reason } : { state: "hidden" };
+    }
     if (ORGANIZATION_ROUTES.has(moduleKey)) {
       return scope.organizationModules.has(moduleKey)
         ? { state: "enabled" }
@@ -549,21 +591,109 @@ const LANDING_CANDIDATES: readonly string[] = [
  */
 export function landingPathFor(scope: ModuleScope): string | null {
   if (!scope.isResolved) return null;
+  if (isBaselineOnlyScope(scope)) {
+    return "/";
+  }
   return (
     LANDING_CANDIDATES.find((href) => isHrefVisible(href, scope)) ??
     "/settings/profile"
   );
 }
 
+const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
+  "/alerts",
+  "/basel",
+  "/basel/exposures",
+  "/basel/loan-book",
+  "/basel/planning",
+  "/basel/rwa",
+  "/basel/stress",
+  "/basel/structure",
+  "/behavioral",
+  "/behavioral/deposit-stability",
+  "/behavioral/liquidity",
+  "/behavioral/nmd-duration",
+  "/behavioral/prepayment",
+  "/credit",
+  "/credit/activity",
+  "/credit/book",
+  "/credit/concentration",
+  "/credit/delinquency",
+  "/credit/vintages",
+  "/data-engine",
+  "/data-engine/adapters",
+  "/data-engine/api",
+  "/data-engine/database",
+  "/data-engine/excel-csv",
+  "/data-engine/market-data",
+  "/data-engine/positions",
+  "/data-engine/t24",
+  "/forecasting",
+  "/forecasting/assumptions",
+  "/forecasting/nii",
+  "/forecasting/optimizer",
+  "/forecasting/reverse-stress",
+  "/forecasting/scenario",
+  "/forecasting/whatif",
+  "/ftp",
+  "/ftp/expost",
+  "/ftp/lines",
+  "/ftp/products",
+  "/ftp/rules",
+  "/ftp/scenarios",
+  "/fx",
+  "/fx/forwards",
+  "/fx/hedges",
+  "/fx/limits",
+  "/fx/scenarios",
+  "/fx/var",
+  "/institution",
+  "/institution/history",
+  "/institution/outlets",
+  "/institution/parties",
+  "/institution/products",
+  "/institution/registers",
+  "/irr",
+  "/irr/gaps",
+  "/irr/limits",
+  "/irr/scenarios",
+  "/irr/sensitivity",
+  "/liquidity",
+  "/liquidity/buffer",
+  "/liquidity/cfp",
+  "/liquidity/forecast",
+  "/liquidity/monitoring",
+  "/liquidity/nsfr",
+  "/liquidity/stress",
+  "/markets",
+  "/positions",
+  "/reports",
+  "/reports/analyses",
+  "/reports/board-pack",
+  "/reports/stress-board-pack",
+  "/risk",
+  "/submissions",
+  "/submissions/approvals",
+  "/submissions/calendar",
+  "/submissions/compare",
+  "/submissions/history",
+  "/submissions/returns",
+  "/submissions/settings",
+  "/submissions/signatures",
+  "/submissions/templates",
+]);
+
 /**
  * Where a hub URL should send a user it is hidden from, or null to 404.
  *
- * Two URLs are destinations people type or are sent to rather than deep links
+ * Hub URLs are destinations people type or are sent to rather than deep links
  * into someone else's data, so a hidden one redirects instead of 404ing:
  *   - `/`         → the first visible surface (`landingPathFor`);
  *   - `/settings` → personal settings, which every active session can open,
  *                   when organization settings need authority the user lacks.
- * Every other hidden path stays not-found (docs/rbac.md §8.2).
+ * Baseline-only members return from the explicit public-route allow-list to
+ * `/`; structural exclusions and hidden object-specific paths stay not-found
+ * (docs/rbac.md §8.2).
  */
 export function hubRedirectFor(
   pathname: string,
@@ -576,5 +706,15 @@ export function hubRedirectFor(
     return landing && landing !== "/" ? landing : null;
   }
   if (path === "/settings") return "/settings/profile";
+  const moduleKey = moduleForPath(path);
+  if (
+    moduleKey &&
+    PUBLIC_MODULE_ROUTES.has(path) &&
+    !subrouteHidden(path, scope) &&
+    (!scope.entitledModules || scope.entitledModules.has(moduleKey)) &&
+    isBaselineOnlyScope(scope)
+  ) {
+    return "/";
+  }
   return null;
 }

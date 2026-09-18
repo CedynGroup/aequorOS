@@ -241,8 +241,19 @@ def deactivate_user(db: Session, user: User, *, commit: bool = True) -> None:
     rows live means the kill is only ever discovered at the next refresh attempt;
     revoking makes the state on disk say what happened.
     """
+    from app.services import authorization, membership  # noqa: PLC0415 - lifecycle cycle
+
+    membership.end_baseline_membership(db, user=user, commit=False)
     user.is_active = False
-    revoke_user_refresh_tokens(db, user.id, reason="user_deactivated", commit=False)
+    authorization.invalidate_user_authorization(
+        db,
+        organization_id=user.organization_id,
+        user_id=user.id,
+        reason="user deactivated",
+        refresh_reason="user_deactivated",
+        commit=False,
+        locked_user=user,
+    )
     if commit:
         db.commit()
 
