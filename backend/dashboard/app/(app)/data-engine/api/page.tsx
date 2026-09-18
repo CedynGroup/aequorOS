@@ -6,6 +6,7 @@
  * behind a secondary nav — the same content, presented like product docs.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import PageHeader from '@/components/ui/PageHeader';
 import SubTabs from '@/components/ui/SubTabs';
@@ -27,14 +28,10 @@ export default function ApiPushPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'API Push' },
-        ]}
+        eyebrow="Data Engine"
         title="API Push"
-        subtitle="Middleware POSTs JSON through the push endpoints — same pipeline, validation gating, and lineage as file uploads."
       />
-      <div className="px-8 py-6 max-w-6xl space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <SubTabs items={VIEWS} active={view} onChange={setView} />
         {view === 'console' ? (
           <div className="space-y-8">
@@ -52,7 +49,7 @@ export default function ApiPushPage() {
             <EntitySchemas />
           </div>
         )}
-      </div>
+      </PageContainer>
     </>
   );
 }

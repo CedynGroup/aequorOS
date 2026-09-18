@@ -65,11 +65,10 @@ export default function CreditVintagesPage() {
 
   return (
     <CreditWorkspace
-      crumb="Vintages"
-      subtitle="Cumulative delinquency by origination cohort — how each lending season is maturing."
     >
       {() => (
         <QueryBoundary
+          contained
           isLoading={vintages.isLoading}
           error={vintages.error}
           onRetry={() => vintages.refetch()}

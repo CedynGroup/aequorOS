@@ -8,6 +8,7 @@
  * deployment, so pull jobs are safely blocked.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Database, Loader2, Plus } from 'lucide-react';
@@ -38,10 +39,7 @@ export default function T24Page() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Temenos T24' },
-        ]}
+        eyebrow="Data Engine"
         title={
           <span className="flex items-center gap-3">
             Temenos T24
@@ -50,7 +48,6 @@ export default function T24Page() {
             </span>
           </span>
         }
-        subtitle="Save T24 endpoint, credentials, and domain mappings for onboarding. Live OFS, IRIS, and Transact Open API requests are unavailable in this deployment; use file upload or the Push API for ingestion."
       />
 
       {/* Secondary sub-navigation */}
@@ -81,7 +78,7 @@ export default function T24Page() {
         </nav>
       </div>
 
-      <div className="px-8 py-6 max-w-6xl space-y-8">
+      <PageContainer className="py-6 space-y-8">
         {section === 'connections' && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
@@ -199,7 +196,7 @@ export default function T24Page() {
             <TransportModes />
           </section>
         )}
-      </div>
+      </PageContainer>
     </>
   );
 }

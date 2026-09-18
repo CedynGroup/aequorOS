@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import { CloudOff, Loader2, RotateCw, Sparkles, TrendingDown } from 'lucide-react';
 import type {
@@ -99,16 +100,11 @@ export default function CashFlowForecast() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Liquidity Risk', href: '/liquidity' },
-          { label: 'Cash Flow Forecast' },
-        ]}
+        eyebrow="Liquidity"
         title="Cash Flow Forecast"
-        subtitle="Daily net cash flow projection · LSTM behavioral model vs static assumptions"
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         {/* Filter row */}
         <div className="card px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -414,7 +410,7 @@ export default function CashFlowForecast() {
             </SectionCard>
           </>
         ) : null}
-      </div>
+      </PageContainer>
     </>
   );
 }

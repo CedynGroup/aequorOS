@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import type { LiquidityDashboardLineRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import RatioGauge from '@/components/ui/RatioGauge';
@@ -84,13 +85,8 @@ export default function NSFRDashboard() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Liquidity Risk', href: '/liquidity' },
-          { label: 'NSFR' },
-        ]}
+        eyebrow="Liquidity"
         title="Net Stable Funding Ratio"
-        subtitle={`Basel III NSFR · 1-year stable funding horizon · ${centralBankName()} has issued no NSFR requirement, so the Basel standard applies`}
       />
 
       <QueryBoundary
@@ -101,7 +97,7 @@ export default function NSFRDashboard() {
         }}
       >
         {data && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               <div className="lg:col-span-2">
                 <RatioGauge
@@ -226,7 +222,7 @@ export default function NSFRDashboard() {
                 </p>
               </>
             )}
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

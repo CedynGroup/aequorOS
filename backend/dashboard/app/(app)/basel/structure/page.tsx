@@ -1,5 +1,6 @@
 "use client";
 
+import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import { ArrowRight, Layers } from "lucide-react";
 import type { CapitalLineRead } from "@aequoros/risk-service-api";
@@ -114,18 +115,10 @@ export default function CapitalStructurePage() {
 
   return (
     <>
-      <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Basel Capital", href: "/basel" },
-          { label: "Capital Structure" },
-        ]}
-        title="Capital Structure"
-        subtitle="Tier 1 (CET1, AT1), Tier 2, and regulatory deductions"
-      />
+      <PageHeader eyebrow="Basel Capital" title="Capital Structure" />
 
       {needsBaseline ? (
-        <div className="px-8 py-6">
+        <PageContainer className="py-6">
           <EmptyState
             Icon={Layers}
             title="Awaiting period results"
@@ -140,7 +133,7 @@ export default function CapitalStructurePage() {
               </Link>
             }
           />
-        </div>
+        </PageContainer>
       ) : (
         <QueryBoundary
           isLoading={structure.isLoading}
@@ -148,7 +141,7 @@ export default function CapitalStructurePage() {
           onRetry={() => structure.refetch()}
         >
           {data && (
-            <div className="px-8 py-6 space-y-6">
+            <PageContainer className="py-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <KpiStat
                   label="CET1"
@@ -261,7 +254,7 @@ export default function CapitalStructurePage() {
                   footnote={gpCapNote?.message}
                 />
               </div>
-            </div>
+            </PageContainer>
           )}
         </QueryBoundary>
       )}

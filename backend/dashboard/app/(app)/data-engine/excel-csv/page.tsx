@@ -6,6 +6,7 @@
  * grab a correctly-shaped file, fill it, and upload.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import PageHeader from '@/components/ui/PageHeader';
 import SubTabs from '@/components/ui/SubTabs';
@@ -24,14 +25,10 @@ export default function ExcelCsvPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Excel & CSV' },
-        ]}
+        eyebrow="Data Engine"
         title="Excel & CSV"
-        subtitle="Workbook and CSV drops with mapping-driven translation, cell-level lineage, and validation gating."
       />
-      <div className="px-8 py-6 max-w-6xl space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <SubTabs items={VIEWS} active={view} onChange={setView} />
         {view === 'upload' ? (
           <div className="space-y-8">
@@ -46,7 +43,7 @@ export default function ExcelCsvPage() {
         ) : (
           <TemplatesPanel />
         )}
-      </div>
+      </PageContainer>
     </>
   );
 }

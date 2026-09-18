@@ -16,6 +16,7 @@
  * needed. Currency is jurisdiction-neutral via lib/format — never hardcoded.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, GitCompareArrows, Scale } from 'lucide-react';
 import type {
@@ -512,18 +513,14 @@ export default function ComparePage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'Compare' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Compare"
-        subtitle="Line-by-line diff of two generated returns — server-computed, favorability-coloured deltas"
         action={<ModeToggle mode={mode} onChange={setMode} />}
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={selectorsLoading}
           error={selectorsError}
           onRetry={() => {
@@ -684,7 +681,7 @@ export default function ComparePage() {
             />
           )}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

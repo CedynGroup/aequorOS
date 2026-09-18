@@ -17,6 +17,7 @@
  * amber tile and a caption that names the reason.
  */
 
+import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
 import { Printer } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -110,16 +111,8 @@ export default function StressBoardPack() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Governance", href: "/reports" },
-          { label: "Stress board pack" },
-        ]}
+        eyebrow="Reports"
         title="Stress Board-Pack Composer"
-        subtitle={
-          isSdi
-            ? "Compose a proportionate SDI stress pack from an immutable run — simplified capital, baseline LMTD evidence, commentary, and management actions"
-            : "Compose a board-ready ICAAP stress pack from an immutable run — Appendix II tables, charts, commentary, management actions"
-        }
         action={
           <button
             type="button"
@@ -137,7 +130,7 @@ export default function StressBoardPack() {
         error={registry.error ?? approved.error}
         onRetry={() => registry.refetch()}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {/* Composer controls (hidden on print) */}
           <div className="print:hidden">
             <SectionCard
@@ -402,7 +395,7 @@ export default function StressBoardPack() {
               )}
             </div>
           )}
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

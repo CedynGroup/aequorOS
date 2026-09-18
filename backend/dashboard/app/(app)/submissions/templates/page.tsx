@@ -8,6 +8,7 @@
  * invented is passed off as official.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { BookOpenCheck, CalendarDays, Send } from 'lucide-react';
 import type { ReturnTemplateRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
@@ -33,16 +34,11 @@ export default function TemplatesPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'Templates' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Return templates"
-        subtitle="The regulator return registry — citations, deadlines, fidelity grades, and rendering layouts"
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <div className="card px-5 py-4 flex items-start gap-3">
           <BookOpenCheck size={16} className="text-action shrink-0 mt-0.5" aria-hidden />
           <p className="text-caption text-navy/80 leading-relaxed">
@@ -59,6 +55,7 @@ export default function TemplatesPage() {
         </div>
 
         <QueryBoundary
+          contained
           isLoading={query.isLoading}
           error={query.error}
           onRetry={() => query.refetch()}
@@ -84,7 +81,7 @@ export default function TemplatesPage() {
             </div>
           )}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import PageContainer from "@/components/ui/PageContainer";
 import { ArrowUpRight } from "lucide-react";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import type { LiquidityDashboardLineRead } from "@aequoros/risk-service-api";
@@ -183,13 +184,8 @@ export default function LiquidityCockpit() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Liquidity Risk" },
-          { label: "Cockpit" },
-        ]}
+        eyebrow="Liquidity"
         title="Liquidity Cockpit"
-        subtitle={`Basel III LCR & NSFR · 30-day stressed horizon · ${centralBankName()} has issued no LCR or NSFR directive, so Basel parameters apply`}
         action={
           data ? (
             <LiveEngineNote live={data.live} stored={data.stored} />
@@ -203,7 +199,7 @@ export default function LiquidityCockpit() {
         onRetry={() => dashboard.refetch()}
       >
         {data && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             <SectionCard
               title="Liquidity posture"
               subtitle="Current compliance headroom, buffer concentration, early-warning state, and contingency readiness."
@@ -682,7 +678,7 @@ export default function LiquidityCockpit() {
               </span>
               .
             </p>
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

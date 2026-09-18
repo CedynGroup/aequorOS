@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from 'next/link';
 import { Target } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -69,13 +70,8 @@ export default function ReverseStress() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Balance Sheet Forecasting', href: '/forecasting' },
-          { label: 'Reverse Stress' },
-        ]}
+        eyebrow="Forecasting"
         title="Reverse Stress Testing"
-        subtitle="The severity multipliers at which the hard floors break — searched over the stored scenario engines, never a new model"
         action={
           <button
             type="button"
@@ -93,7 +89,7 @@ export default function ReverseStress() {
         error={latest.error ?? run.error}
         onRetry={() => latest.refetch()}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {frontier ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -188,7 +184,7 @@ export default function ReverseStress() {
               }
             />
           )}
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

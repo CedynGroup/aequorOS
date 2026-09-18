@@ -63,7 +63,29 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
 - **ChartFrame / SectionCard** — standard card shells with title/actions, loading skeleton,
   footer meta (`computedAt` + RunBadge provenance)
 - **DataTable** — sticky header, compact density, right-aligned numeric columns, row drill
-- **DeltaBadge, StatusPill, RatioGauge, Sparkline, RunBadge, SubTabs, PageHeader,
+- **PageHeader** — shared module and object-detail header with a small module
+  eyebrow, title, and optional actions / as-of date. Module pages show the eyebrow
+  and title only; they use the sidebar and tab strip for navigation and omit
+  breadcrumbs and descriptive subtitles. Object-detail pages retain linked module
+  and parent-list breadcrumbs, and may use a subtitle only for identifying data
+  such as a source file or reporting date. Ingestion batch details use the Data
+  Engine eyebrow, with both Data Engine and Batches linking back to
+  `/data-engine`. The sticky top bar, module tab strip, page header, and body all
+  sit on the page ground; the sidebar rail is the only always-dark chrome. The
+  top bar uses `bg-surface-alt/90` and `backdrop-blur-sm` on a separate background
+  layer. Keep the header itself free of backdrop filters so its command-palette
+  and notification-inbox overlays remain fixed to the viewport. Page headers use
+  spacing rather than a filled band or divider, while the tab strip keeps its
+  hairline baseline and active underline.
+  Raised surfaces are reserved for cards, panels, popovers, and inset controls.
+  Behavioral model feed links live in the page body.
+- **PageContainer** — shared `px-8` horizontal gutters and `max-w-6xl` width
+  for PageHeader and module/detail bodies; vertical spacing belongs to the caller.
+  Each loading, error, and loaded state must receive exactly one container.
+  `QueryBoundary` and `PageSkeleton` supply it for their default loading/error
+  states; pass `contained` when an ancestor already supplies the gutters.
+  Custom skeletons and loaded children own their layout.
+- **DeltaBadge, StatusPill, RatioGauge, Sparkline, RunBadge, SubTabs,
   EmptyState, Skeleton, QueryBoundary** — token-native
 - **CommandPalette** (⌘K) — zero-dep, full route registry with keywords
 - **GuidedTour** (`components/tour/`) — zero-dep spotlight tour, 8 steps, `?tour=1` or

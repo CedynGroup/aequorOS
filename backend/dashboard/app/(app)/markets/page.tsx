@@ -15,6 +15,7 @@
  * the complete surface as published then.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, CalendarClock, CandlestickChart } from 'lucide-react';
@@ -614,9 +615,8 @@ export default function MarketsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: 'Markets' }]}
+        eyebrow="Markets"
         title="Markets"
-        subtitle="Live market monitor for curves, rates, FX, and credit inputs feeding Treasury and risk engines."
         action={
           <div className="flex items-center gap-4">
             <AsOfControl asOf={asOf} todayIso={todayIso} onChange={setAsOf} />
@@ -629,7 +629,7 @@ export default function MarketsPage() {
         Market curves and government-security reference data support valuation and proportionate balance-sheet management. FX views are relevant only where the institution has a material foreign-currency book.
       </SdiModuleContext>
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <SubTabs items={TABS} active={tab} onChange={(key) => setTab(key as TabKey)} />
 
         {tab === 'market-data' && (
@@ -650,6 +650,7 @@ export default function MarketsPage() {
           ) : null
         ) : (
           <QueryBoundary
+            contained
             isLoading={views.isLoading}
             error={views.error}
             onRetry={() => views.refetch()}
@@ -657,7 +658,7 @@ export default function MarketsPage() {
             {renderViewTab()}
           </QueryBoundary>
         )}
-      </div>
+      </PageContainer>
 
       {bank && overlayCurve && (
         <OverlayDrawer

@@ -7,6 +7,7 @@
  * data wiring identical so each page is purely presentational.
  */
 
+import PageContainer from "@/components/ui/PageContainer";
 import { useState, type ReactNode } from "react";
 import { Play } from "lucide-react";
 import type {
@@ -39,13 +40,8 @@ export type IrrTabContext = {
 };
 
 export default function IrrWorkspace({
-  crumb,
-  subtitle,
   children,
 }: {
-  /** Trailing breadcrumb for the active tab, e.g. "Gap Analysis". */
-  crumb: string;
-  subtitle: string;
   children: (ctx: IrrTabContext) => ReactNode;
 }) {
   const { bank, period, moduleScope } = useBankContext();
@@ -55,7 +51,9 @@ export default function IrrWorkspace({
   const runAll = useRunAllIrrScenarios(bankId);
   const [runError, setRunError] = useState<string | null>(null);
 
-  const dashboard = useIrrDashboard(bankId);
+  const dashboard = useIrrDashboard(
+    moduleScope.irrbbAggregatedView === true ? bankId : undefined,
+  );
   const latestRun = useRegulatoryRun(bankId, dashboard.data?.latestRunId);
 
   const data = dashboard.data;
@@ -86,13 +84,8 @@ export default function IrrWorkspace({
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Interest Rate Risk", href: "/irr" },
-          { label: crumb },
-        ]}
+        eyebrow="IRRBB"
         title="Interest Rate Risk"
-        subtitle={subtitle}
         action={
           data ? (
             <div className="flex items-center gap-2">
@@ -121,7 +114,7 @@ export default function IrrWorkspace({
         onRetry={() => dashboard.refetch()}
       >
         {data && m && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             {children({
               data,
               metrics: m,
@@ -130,7 +123,7 @@ export default function IrrWorkspace({
               bankId,
               periodId: data.period.id,
             })}
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

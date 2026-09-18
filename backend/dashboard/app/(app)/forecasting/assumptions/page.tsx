@@ -11,6 +11,7 @@
  *     presets omit.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight, BookOpen, Brain } from 'lucide-react';
 import type {
@@ -48,13 +49,8 @@ export default function AssumptionsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Balance Sheet Forecasting', href: '/forecasting' },
-          { label: 'Assumptions' },
-        ]}
+        eyebrow="Forecasting"
         title="Assumption Registry"
-        subtitle="The audit record of what each run consumed — assumptions are edited in the Scenario Builder"
         action={
           <Link
             href="/behavioral"
@@ -75,7 +71,7 @@ export default function AssumptionsPage() {
           void runsQuery.refetch();
         }}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {/* Resolved on the latest run */}
           {!latestId ? (
             <EmptyState
@@ -113,7 +109,7 @@ export default function AssumptionsPage() {
             </Link>
             .
           </p>
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

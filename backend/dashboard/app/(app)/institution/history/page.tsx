@@ -13,6 +13,7 @@ import type {
   BankNameHistoryRead,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import PageContainer from '@/components/ui/PageContainer';
 import SectionCard from '@/components/ui/SectionCard';
 import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
 import EmptyState from '@/components/ui/EmptyState';
@@ -52,13 +53,8 @@ export default function NameHistoryPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/institution' },
-          { label: 'Institution Profile', href: '/institution' },
-          { label: 'Name history' },
-        ]}
+        eyebrow="Institution Profile"
         title="Name history"
-        subtitle="Prior legal names, when they changed, and why"
         action={
           <button
             type="button"
@@ -74,8 +70,9 @@ export default function NameHistoryPage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={query.isLoading}
           error={query.error}
           onRetry={() => query.refetch()}
@@ -155,7 +152,7 @@ export default function NameHistoryPage() {
             )}
           </SectionCard>
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

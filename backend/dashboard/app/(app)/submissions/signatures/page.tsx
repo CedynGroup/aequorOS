@@ -16,6 +16,7 @@
  * different things.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from 'next/link';
 import { PenLine, Signature } from 'lucide-react';
 import type { AwaitingSignatureRead } from '@aequoros/risk-service-api';
@@ -101,22 +102,18 @@ export default function AwaitingSignaturePage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'Signatures' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Awaiting my signature"
-        subtitle="Returns a colleague sent to you by name — open one to read the figures and sign in the same act"
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <SectionCard
           title="My signature queue"
           subtitle={`${items.length} outstanding · only the named recipient can fill a routed slot`}
           noPadding
         >
           <QueryBoundary
+            contained
             isLoading={queue.isLoading}
             error={queue.error}
             onRetry={() => queue.refetch()}
@@ -143,7 +140,7 @@ export default function AwaitingSignaturePage() {
             workspace reads the active one.
           </p>
         )}
-      </div>
+      </PageContainer>
     </>
   );
 }

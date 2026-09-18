@@ -1,5 +1,6 @@
 'use client';
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -36,7 +37,6 @@ import { fmtDateUTC } from '@/lib/api/values';
 
 export type BehavioralPageConfig = {
   title: string;
-  subtitle: string;
   valueLabel: string;
   /** Format a product value for display (e.g. "36 mo", "8.2%"). */
   format: (value: number) => string;
@@ -160,20 +160,8 @@ export default function BehavioralModelPage({
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Behavioral Models', href: '/behavioral' },
-          { label: config.title },
-        ]}
+        eyebrow="Behavioral Models"
         title={config.title}
-        subtitle={
-          <span className="inline-flex items-center gap-2 flex-wrap">
-            {config.subtitle}
-            {config.feeds?.map((feed) => (
-              <FeedsChip key={feed.href + feed.label} feed={feed} />
-            ))}
-          </span>
-        }
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <button
@@ -192,7 +180,14 @@ export default function BehavioralModelPage({
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
+        {config.feeds && config.feeds.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {config.feeds.map((feed) => (
+              <FeedsChip key={feed.href + feed.label} feed={feed} />
+            ))}
+          </div>
+        )}
         {offline ? (
           <div className="card border-l-4 border-l-critical bg-critical-light/40 p-5 flex items-start gap-3">
             <CloudOff size={18} className="text-critical shrink-0 mt-0.5" aria-hidden />
@@ -387,7 +382,7 @@ export default function BehavioralModelPage({
             )}
           </>
         ) : null}
-      </div>
+      </PageContainer>
     </>
   );
 }

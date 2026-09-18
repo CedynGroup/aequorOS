@@ -7,6 +7,7 @@
  * payload. Links into each model's detail workspace.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from 'next/link';
 import { ArrowUpRight, Brain, Droplets, Loader2 } from 'lucide-react';
 import type { BehavioralModelRead } from '@aequoros/risk-service-api';
@@ -82,20 +83,15 @@ export default function BehavioralOverviewPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Behavioral Models' },
-          { label: 'Overview' },
-        ]}
+        eyebrow="Behavioral Models"
         title="Behavioral Models"
-        subtitle="Tenant-scoped ML estimators feeding the ALM engines through the reviewed-assumption workflow"
       />
 
       <SdiModuleContext title="SDI ALM context">
         Deposit stability and non-maturity-deposit assumptions support proportionate liquidity and balance-sheet management. Forecast quality improves as more history is ingested.
       </SdiModuleContext>
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
           {REGISTRY.map((entry) => (
             <ModelRegistryCard key={entry.slug} entry={entry} bankId={bankId} />
@@ -118,7 +114,7 @@ export default function BehavioralOverviewPage() {
             batch on their next recompute.
           </p>
         </SectionCard>
-      </div>
+      </PageContainer>
     </>
   );
 }

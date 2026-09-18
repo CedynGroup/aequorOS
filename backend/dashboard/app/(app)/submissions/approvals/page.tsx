@@ -17,6 +17,7 @@
  * for any return that does require signatures (`approval_requires_signature`).
  */
 
+import PageContainer from "@/components/ui/PageContainer";
 import { useState } from "react";
 import Link from "next/link";
 import {
@@ -133,18 +134,11 @@ export default function ApprovalsPage() {
 
   return (
     <>
-      <PageHeader
-        breadcrumbs={[
-          { label: "Governance", href: "/submissions" },
-          { label: "Regulatory Reporting", href: "/submissions" },
-          { label: "Approvals" },
-        ]}
-        title="Approvals"
-        subtitle="Checker queue — open a return to review it and approve and sign, or send it back with a note; no package reaches a channel without a different officer than its maker"
-      />
+      <PageHeader eyebrow="Regulatory Reporting" title="Approvals" />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={queueQuery.isLoading}
           error={queueQuery.error}
           onRetry={() => queueQuery.refetch()}
@@ -182,7 +176,7 @@ export default function ApprovalsPage() {
 
           {selected && <DecidePanel bankId={bankId!} pkg={selected} />}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

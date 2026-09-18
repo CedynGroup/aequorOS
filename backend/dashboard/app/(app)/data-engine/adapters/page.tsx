@@ -3,6 +3,7 @@
  * DB-direct), stated honestly as planned work — no fake connection UI.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from 'next/link';
 import { ArrowRight, Database, Server } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -30,14 +31,10 @@ export default function AdaptersPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Other adapters' },
-        ]}
+        eyebrow="Data Engine"
         title="Other adapters"
-        subtitle="The Phase 3 adapter portfolio. Database (Direct) has shipped; the core-banking adapters remain planned — no connection UI is shown until an adapter actually ships."
       />
-      <div className="px-8 py-6 space-y-6 max-w-6xl">
+      <PageContainer className="py-6 space-y-6">
         <Link
           href="/data-engine/database"
           className="card p-5 block hover:border-action/50 transition-colors"
@@ -110,7 +107,7 @@ export default function AdaptersPage() {
             Back to the overview <ArrowRight size={13} aria-hidden />
           </Link>
         </div>
-      </div>
+      </PageContainer>
     </>
   );
 }

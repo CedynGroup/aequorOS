@@ -7,6 +7,7 @@
  * Act 930 penalty-exposure note; rows deep-link into the Returns workspace.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -160,13 +161,8 @@ export default function RegulatoryCalendarPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting' },
-          { label: 'Calendar' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Regulatory Reporting"
-        subtitle={`${centralBankName()} deadline board · every official return, its due date, and its package state`}
         asOf={asOf ? fmtDateUTC(asOf) : undefined}
         action={
           <label className="flex items-center gap-2 text-caption text-slate">
@@ -189,8 +185,9 @@ export default function RegulatoryCalendarPage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={query.isLoading}
           error={query.error}
           onRetry={() => query.refetch()}
@@ -330,7 +327,7 @@ export default function RegulatoryCalendarPage() {
             </SectionCard>
           )}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

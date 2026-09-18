@@ -7,6 +7,7 @@
  * with breach/amber filters, plus every module's rule evaluations.
  */
 
+import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { BellRing, Gauge } from "lucide-react";
@@ -241,16 +242,12 @@ export default function RiskLimitMonitorPage() {
 
   return (
     <>
-      <PageHeader
-        breadcrumbs={[{ label: "Command" }, { label: "Risk & Limits" }]}
-        title="Risk & Limit Monitor"
-        subtitle="Bank-wide limit utilization and breach status — every threshold shown comes from the module payloads, never hardcoded in this page."
-      />
+      <PageHeader eyebrow="Risk & Limits" title="Risk & Limit Monitor" />
 
       {isLoading ? (
         <PageSkeleton />
       ) : (
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {/* Summary KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <KpiStat
@@ -415,7 +412,7 @@ export default function RiskLimitMonitorPage() {
               })}
             </div>
           )}
-        </div>
+        </PageContainer>
       )}
     </>
   );

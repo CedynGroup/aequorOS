@@ -8,6 +8,7 @@
  * deployed service.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Database, Loader2, Plus } from 'lucide-react';
@@ -30,10 +31,7 @@ export default function DatabaseDirectPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Database (Direct)' },
-        ]}
+        eyebrow="Data Engine"
         title={
           <span className="flex items-center gap-3">
             Database (Direct)
@@ -42,10 +40,9 @@ export default function DatabaseDirectPage() {
             </span>
           </span>
         }
-        subtitle="Configure read-only extraction against a bank-hosted reporting replica. A live connection requires the matching driver, bank credentials, and network path installed on this service; use file upload or the Push API until onboarding is complete."
       />
 
-      <div className="px-8 py-6 max-w-6xl space-y-8">
+      <PageContainer className="py-6 space-y-8">
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -143,7 +140,7 @@ export default function DatabaseDirectPage() {
             </Link>
           </div>
         </section>
-      </div>
+      </PageContainer>
     </>
   );
 }

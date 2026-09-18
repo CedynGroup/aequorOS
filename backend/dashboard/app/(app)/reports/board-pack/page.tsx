@@ -9,6 +9,7 @@
  * per-section breaks, forced light palette. Tables and KPIs, not charts.
  */
 
+import PageContainer from "@/components/ui/PageContainer";
 import "@/app/print.css";
 
 import { useEffect, useState } from "react";
@@ -107,21 +108,14 @@ export default function BoardPackPage() {
     return (
       <>
         <div className="no-print">
-          <PageHeader
-            breadcrumbs={[
-              { label: "Reports", href: "/reports" },
-              { label: "Board pack" },
-            ]}
-            title="Board Pack"
-            subtitle="Print-optimized executive report"
-          />
+          <PageHeader eyebrow="Reports" title="Board Pack" />
         </div>
-        <div className="px-8 py-6">
+        <PageContainer className="py-6">
           <EmptyState
             title="No reporting period"
             description="Upload and activate data in the Data Engine to compose a board pack for an as-of period."
           />
-        </div>
+        </PageContainer>
       </>
     );
   }
@@ -131,12 +125,8 @@ export default function BoardPackPage() {
       {/* Screen-only toolbar — the print pipeline never sees it. */}
       <div className="no-print">
         <PageHeader
-          breadcrumbs={[
-            { label: "Reports", href: "/reports" },
-            { label: "Board pack" },
-          ]}
+          eyebrow="Reports"
           title="Board Pack"
-          subtitle="Cover · executive summary · module briefs — A4 print layout"
           asOf={fmtDateUTC(period.periodEnd)}
           action={
             <div className="flex items-center gap-2">
@@ -160,7 +150,7 @@ export default function BoardPackPage() {
         />
       </div>
 
-      <div className="board-pack px-8 py-6 space-y-6 max-w-4xl mx-auto">
+      <PageContainer className="board-pack py-6 space-y-6">
         {/* ------------------------------------------------------------ */}
         {/* Cover page                                                    */}
         {/* ------------------------------------------------------------ */}
@@ -660,7 +650,7 @@ export default function BoardPackPage() {
             )}
           </QueryBoundary>
         </BoardPage>
-      </div>
+      </PageContainer>
     </>
   );
 }

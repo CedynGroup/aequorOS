@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { AlertCircle, Database, RotateCw } from 'lucide-react';
 import { isApiError, isModuleUnavailable } from '@/lib/api/client';
 import { SkeletonCard, SkeletonChart, SkeletonTable } from './Skeleton';
+import PageContainer from './PageContainer';
 
 export function ErrorPanel({
   error,
@@ -59,9 +60,14 @@ export function ErrorPanel({
   );
 }
 
-export function PageSkeleton() {
+export function PageSkeleton({ contained = false }: { contained?: boolean }) {
+  const Container = contained ? 'div' : PageContainer;
   return (
-    <div className="px-8 py-6 space-y-6" aria-busy="true" aria-label="Loading">
+    <Container
+      className={contained ? 'space-y-6' : 'py-6 space-y-6'}
+      aria-busy="true"
+      aria-label="Loading"
+    >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <SkeletonCard />
         <SkeletonCard />
@@ -72,7 +78,7 @@ export function PageSkeleton() {
       <div className="card">
         <SkeletonTable rows={6} />
       </div>
-    </div>
+    </Container>
   );
 }
 
@@ -81,20 +87,26 @@ export default function QueryBoundary({
   error,
   onRetry,
   skeleton,
+  contained = false,
   children,
 }: {
   isLoading: boolean;
   error: unknown;
   onRetry?: () => void;
   skeleton?: ReactNode;
+  contained?: boolean;
   children: ReactNode;
 }) {
-  if (isLoading) return <>{skeleton ?? <PageSkeleton />}</>;
+  if (isLoading) {
+    return <>{skeleton ?? <PageSkeleton contained={contained} />}</>;
+  }
   if (error) {
+    const panel = <ErrorPanel error={error} onRetry={onRetry} />;
+    if (contained) return panel;
     return (
-      <div className="px-8 py-6">
-        <ErrorPanel error={error} onRetry={onRetry} />
-      </div>
+      <PageContainer className="py-6">
+        {panel}
+      </PageContainer>
     );
   }
   return <>{children}</>;

@@ -1,5 +1,6 @@
 "use client";
 
+import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import { Percent } from "lucide-react";
@@ -130,15 +131,7 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
   return (
     <>
       {!embedded && (
-        <PageHeader
-          breadcrumbs={[
-            { label: "Modules", href: "/" },
-            { label: "Liquidity Risk", href: "/liquidity" },
-            { label: "Monitoring Tools" },
-          ]}
-          title="Liquidity Monitoring Tools"
-          subtitle={`Board threshold register (LMTD ¶11) · liquidity-value schedule (LRMD ¶60–63) · per-currency funding mismatch`}
-        />
+        <PageHeader eyebrow="Liquidity" title="Liquidity Monitoring Tools" />
       )}
 
       <QueryBoundary
@@ -147,7 +140,7 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
         onRetry={() => thresholds.refetch()}
       >
         {thresholds.data && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <KpiStat
                 label="Board-adopted thresholds"
@@ -276,7 +269,7 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
                 </p>
               </div>
             </SectionCard>
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

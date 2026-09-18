@@ -8,8 +8,6 @@ export default function PrepaymentPage() {
       slug="prepayment"
       config={{
         title: 'Loan Prepayment',
-        subtitle:
-          'Annual conditional prepayment rate (CPR) per loan product, learned from realized unscheduled principal',
         valueLabel: 'Annual CPR',
         format: (v) => `${(v * 100).toFixed(1)}%`,
         avgValue: (v) => v * 100,

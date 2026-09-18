@@ -27,9 +27,7 @@ const DEFAULT_OFFSET_HIGH = 125;
 export default function FxHedgesPage() {
   return (
     <FxModuleFrame
-      crumb="Hedge Book"
       title="FX Hedge Book"
-      subtitle="Hedge inventory · IFRS 9 prospective effectiveness · mark-to-market"
     >
       {(ctx) => <HedgesBody ctx={ctx} />}
     </FxModuleFrame>

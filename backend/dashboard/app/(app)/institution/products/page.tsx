@@ -18,6 +18,7 @@ import type {
   ProductStatus,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import PageContainer from '@/components/ui/PageContainer';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import SectionCard from '@/components/ui/SectionCard';
 import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
@@ -55,17 +56,13 @@ export default function ProductsLicencesPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/institution' },
-          { label: 'Institution Profile', href: '/institution' },
-          { label: 'Products & licences' },
-        ]}
+        eyebrow="Institution Profile"
         title="Products & licences"
-        subtitle="The product approval register and the institution's operating licences"
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={query.isLoading}
           error={query.error}
           onRetry={() => query.refetch()}
@@ -83,7 +80,7 @@ export default function ProductsLicencesPage() {
           <ProductsCard bankId={bankId!} products={products} />
           <LicencesCard bankId={bankId!} licenses={licenses} />
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

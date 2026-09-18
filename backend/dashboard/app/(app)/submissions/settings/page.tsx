@@ -14,6 +14,7 @@
  * docs/attestation_esignature.md §4.5), which renders nothing for non-owners.
  */
 
+import PageContainer from "@/components/ui/PageContainer";
 import { useEffect, useState } from "react";
 import { FlaskConical, KeyRound, Loader2, Save } from "lucide-react";
 import type {
@@ -142,13 +143,8 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Governance", href: "/submissions" },
-          { label: "Regulatory Reporting", href: "/submissions" },
-          { label: "Settings" },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Channel settings"
-        subtitle="Per-channel submission configuration · credentials are write-only (fingerprint back, never the material)"
         action={
           <label className="flex items-center gap-2 text-caption text-slate">
             Channel
@@ -167,7 +163,7 @@ export default function SettingsPage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         {bankId && (
           <ChannelForm key={channel} bankId={bankId} channel={channel} />
         )}
@@ -175,7 +171,7 @@ export default function SettingsPage() {
             separate control from how a return is transmitted, but both belong to
             the same "how this institution files" settings surface. */}
         <SigningPolicyPanel />
-      </div>
+      </PageContainer>
     </>
   );
 }

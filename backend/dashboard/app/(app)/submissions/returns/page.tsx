@@ -26,6 +26,7 @@
  * on a freshly generated package, and prior versions are compared mid-chain.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { Fragment, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -285,13 +286,8 @@ function ReturnsWorkspace() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/submissions' },
-          { label: 'Regulatory Reporting', href: '/submissions' },
-          { label: 'Returns' },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="Returns workspace"
-        subtitle={isSdi ? 'SDI return family · generate → validate → approve → export → submit, one immutable package version at a time' : 'Generate → validate → approve → export → submit, one immutable package version at a time'}
         action={
           <div className="flex items-center gap-2 flex-wrap">
             <label className="flex items-center gap-2 text-caption text-slate">
@@ -336,7 +332,7 @@ function ReturnsWorkspace() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         {isSdi && (
           <SectionCard
             title="SDI regulatory returns"
@@ -352,6 +348,7 @@ function ReturnsWorkspace() {
         )}
 
         <QueryBoundary
+          contained
           isLoading={
             templatesQuery.isLoading ||
             anchorsQuery.isLoading ||
@@ -463,7 +460,7 @@ function ReturnsWorkspace() {
             />
           )}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }
@@ -866,6 +863,7 @@ function PackageWorkspace({
       }
     >
       <QueryBoundary
+        contained
         isLoading={eventsQuery.isLoading}
         error={eventsQuery.error}
         onRetry={() => eventsQuery.refetch()}

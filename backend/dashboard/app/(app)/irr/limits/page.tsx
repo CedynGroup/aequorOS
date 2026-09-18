@@ -22,8 +22,6 @@ import { fmtCurrencySigned, fmtPct, regShort } from '@/lib/format';
 export default function IrrLimitsPage() {
   return (
     <IrrWorkspace
-      crumb="Limits"
-      subtitle="Supervisory limit utilisation, headroom and breach history"
     >
       {({ data, metrics: m, latestRun, computedAt }) => {
         const eveLimit = num(m.eveLimitPct);

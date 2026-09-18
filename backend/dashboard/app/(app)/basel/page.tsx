@@ -1,5 +1,6 @@
 "use client";
 
+import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
 import LimitBar from "@/components/ui/LimitBar";
@@ -246,13 +247,8 @@ export default function BaselOverview() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Basel Capital" },
-          { label: "Overview" },
-        ]}
+        eyebrow="Basel Capital"
         title="Basel Capital"
-        subtitle={`Capital Adequacy Ratio · Tier 1 / Tier 2 · ${regShort()} CRD framework`}
         action={
           data ? (
             <LiveEngineNote live={data.live} stored={data.stored} />
@@ -266,7 +262,7 @@ export default function BaselOverview() {
         onRetry={() => dashboard.refetch()}
       >
         {data && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             {/* Headline ratios */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiStat
@@ -609,7 +605,7 @@ export default function BaselOverview() {
             >
               <ValidationList validations={validations} />
             </SectionCard>
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>
@@ -618,14 +614,14 @@ export default function BaselOverview() {
 
 function CapitalScopeLoading() {
   return (
-    <div
-      className="px-8 py-6"
+    <PageContainer
+      className="py-6"
       aria-busy="true"
       aria-label="Loading regulatory capital scope"
     >
       <div className="h-7 w-56 animate-pulse rounded bg-surface-hover" />
       <div className="mt-3 h-4 w-96 max-w-full animate-pulse rounded bg-surface-hover" />
-    </div>
+    </PageContainer>
   );
 }
 

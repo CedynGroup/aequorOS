@@ -6,6 +6,7 @@
  * adapter extraction that produced it.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, GitCommitHorizontal } from 'lucide-react';
 import type { CanonicalPositionRead } from '@aequoros/risk-service-api';
@@ -67,15 +68,11 @@ export default function CanonicalPositionsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Canonical Data' },
-        ]}
+        eyebrow="Data Engine"
         title="Canonical positions"
-        subtitle="The source-agnostic balance sheet produced by ingestion. Expand any row to trace it back to its source extraction."
       />
-      <div className="px-8 py-6 max-w-6xl">
-        {positionsQuery.isPending && <PageSkeleton />}
+      <PageContainer className="py-6">
+        {positionsQuery.isPending && <PageSkeleton contained />}
         {positionsQuery.isError && (
           <ErrorPanel
             error={positionsQuery.error}
@@ -156,7 +153,7 @@ export default function CanonicalPositionsPage() {
               </div>
             </>
           ))}
-      </div>
+      </PageContainer>
     </>
   );
 }

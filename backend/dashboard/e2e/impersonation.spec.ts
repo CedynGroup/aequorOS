@@ -24,6 +24,10 @@ test("examiner inspection loads read-only navigation without tenant profile", as
   await expect(
     page.getByText("AequorOS staff is inspecting this account — read-only."),
   ).toBeVisible();
+  const topBar = page.locator("header.sticky").first();
+  await expect(topBar).toHaveCSS("top", "40px");
+  await expect(topBar).toHaveCSS("height", "64px");
+  expect((await topBar.boundingBox())?.y).toBe(40);
   await expect(page.getByText("Risk service unreachable")).toHaveCount(0);
   await expect(
     page.getByText("Liquidity", { exact: true }).first(),

@@ -53,11 +53,10 @@ export default function CreditConcentrationPage() {
 
   return (
     <CreditWorkspace
-      crumb="Concentration"
-      subtitle="Portfolio concentration by counterparty, sector, geography, product, collateral and employer, against Board limits."
     >
       {() => (
         <QueryBoundary
+          contained
           isLoading={concentration.isLoading}
           error={concentration.error}
           onRetry={() => concentration.refetch()}

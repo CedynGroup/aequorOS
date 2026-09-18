@@ -1,12 +1,13 @@
 'use client';
 
 /**
- * Shared chrome for every FTP workspace tab: page header with breadcrumbs,
+ * Shared chrome for every FTP workspace tab: page header,
  * freshness / run badges, the run-all-scenarios action, the not-yet-stored
  * banner, and the query boundary. Sub-pages receive the loaded dashboard via
  * a render prop so the payload is fetched (and cached) once per query key.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import type { ReactNode } from 'react';
 import type {
   FtpDashboardRead,
@@ -33,15 +34,10 @@ export type FtpFrameContext = {
 };
 
 export default function FtpModuleFrame({
-  crumb,
   title,
-  subtitle,
   children,
 }: {
-  /** Trailing breadcrumb / active tab label. */
-  crumb: string;
   title: string;
-  subtitle?: string;
   children: (ctx: FtpFrameContext) => ReactNode;
 }) {
   const { bank } = useBankContext();
@@ -56,13 +52,8 @@ export default function FtpModuleFrame({
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Funds Transfer Pricing' },
-          { label: crumb },
-        ]}
+        eyebrow="FTP"
         title={title}
-        subtitle={subtitle}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 
@@ -72,7 +63,7 @@ export default function FtpModuleFrame({
         onRetry={() => dashboard.refetch()}
       >
         {data && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             {children({
               data,
               metrics: data.metrics,
@@ -80,7 +71,7 @@ export default function FtpModuleFrame({
               bankId,
               periodId: data.period.id,
             })}
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

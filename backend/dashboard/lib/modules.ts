@@ -205,7 +205,7 @@ const CAPABILITY_MODULES = {
   reg: ["regulatory_reporting", "reports"],
   risk: ["command_center", "risk", "alerts", "credit", "positions"],
   markets: ["markets"],
-  account: ["institution"],
+  account: [],
   audit: [],
 } as const satisfies Record<
   EffectiveCapabilityRead["module"],
@@ -232,12 +232,20 @@ export function effectiveInstitutionModules(
 export function effectiveOrganizationModules(
   capabilities: readonly EffectiveCapabilityRead[],
 ): ReadonlySet<ModuleKey> {
-  return capabilities.some(
-    (capability) =>
-      capability.module === "account" && capability.permission === "administer",
-  )
-    ? new Set<ModuleKey>(["settings"])
-    : new Set<ModuleKey>();
+  const modules = new Set<ModuleKey>();
+  if (
+    capabilities.some(
+      (capability) =>
+        capability.module === "account" &&
+        capability.permission === "administer",
+    )
+  ) {
+    modules.add("settings");
+  }
+  if (hasEffectiveCapability(capabilities, "account", "restricted", "view")) {
+    modules.add("institution");
+  }
+  return modules;
 }
 
 export function hasEffectiveCapability(
@@ -444,7 +452,7 @@ function scopedModulePermissionReason(
   return undefined;
 }
 
-const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings"]);
+const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings", "institution"]);
 
 export function isPersonalSettingsPath(path: string): boolean {
   return path === "/settings/profile" || path.startsWith("/settings/profile/");

@@ -7,6 +7,7 @@
  * one integration lives in its tab.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import PageHeader from '@/components/ui/PageHeader';
 import {
   CanonicalSummaryStrip,
@@ -22,11 +23,10 @@ export default function DataEngineOverviewPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: 'Data Engine' }, { label: 'Overview' }]}
+        eyebrow="Data Engine"
         title="Data Engine"
-        subtitle="Connect data sources, ingest into the canonical model, and trace every record back to its source."
       />
-      <div className="px-8 py-6 space-y-8 max-w-6xl">
+      <PageContainer className="py-6 space-y-8">
         <UnreconciledBookBanner />
         <IntegrationCards />
         <ConnectionHealthPanel />
@@ -38,7 +38,7 @@ export default function DataEngineOverviewPage() {
           emptyDescription="No batches yet. Open the Excel & CSV tab to upload files, or push data through the API."
         />
         <ActivatePanel />
-      </div>
+      </PageContainer>
     </>
   );
 }

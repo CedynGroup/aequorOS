@@ -10,6 +10,7 @@
  * (return, reporting date).
  */
 
+import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   Archive,
@@ -181,13 +182,8 @@ export default function HistoryPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Governance", href: "/submissions" },
-          { label: "Regulatory Reporting", href: "/submissions" },
-          { label: "History" },
-        ]}
+        eyebrow="Regulatory Reporting"
         title="History"
-        subtitle="Every package version — immutable snapshots, approvals, channel events, and artifacts"
         action={
           <div className="flex items-center gap-2 flex-wrap">
             <select
@@ -235,8 +231,9 @@ export default function HistoryPage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={query.isLoading}
           error={query.error}
           onRetry={() => query.refetch()}
@@ -307,7 +304,7 @@ export default function HistoryPage() {
 
           {selected && <PackageRecord bankId={bankId!} summary={selected} />}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * Shared chrome for every FX workspace tab: page header with breadcrumbs,
+ * Shared chrome for every FX workspace tab: page header,
  * freshness / run badges, the run-all-scenarios action, the not-yet-stored
  * banner, and the query boundary. Sub-pages receive the loaded dashboard via
  * a render prop so the payload is fetched (and cached) once per query key.
  */
 
+import PageContainer from "@/components/ui/PageContainer";
 import type { ReactNode } from "react";
 import type {
   FxDashboardRead,
@@ -30,15 +31,10 @@ export type FxFrameContext = {
 };
 
 export default function FxModuleFrame({
-  crumb,
   title,
-  subtitle,
   children,
 }: {
-  /** Trailing breadcrumb / active tab label. */
-  crumb: string;
   title: string;
-  subtitle?: string;
   children: (ctx: FxFrameContext) => ReactNode;
 }) {
   const { bank, moduleScope } = useBankContext();
@@ -57,13 +53,8 @@ export default function FxModuleFrame({
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "FX Risk" },
-          { label: crumb },
-        ]}
+        eyebrow="FX"
         title={title}
-        subtitle={subtitle}
         action={
           data ? (
             <LiveEngineNote live={data.live} stored={data.stored} />
@@ -77,7 +68,7 @@ export default function FxModuleFrame({
         onRetry={() => dashboard.refetch()}
       >
         {data && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             {children({
               data,
               metrics: data.metrics,
@@ -85,7 +76,7 @@ export default function FxModuleFrame({
               bankId,
               periodId: data.period.id,
             })}
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

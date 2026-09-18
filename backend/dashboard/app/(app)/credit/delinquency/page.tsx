@@ -44,8 +44,6 @@ export default function CreditDelinquencyPage() {
 
   return (
     <CreditWorkspace
-      crumb="Delinquency & Migration"
-      subtitle="Days-past-due distribution, portfolio at risk, and month-over-month grade migration."
     >
       {({ data }) => {
         const par = Object.fromEntries(data.portfolioAtRisk.map((m) => [m.code, m]));

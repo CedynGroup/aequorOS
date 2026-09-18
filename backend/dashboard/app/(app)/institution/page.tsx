@@ -16,6 +16,7 @@ import type {
   InstitutionProfilePut,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import PageContainer from '@/components/ui/PageContainer';
 import SectionCard from '@/components/ui/SectionCard';
 import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
 import EmptyState from '@/components/ui/EmptyState';
@@ -53,12 +54,8 @@ export default function InstitutionProfilePage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/institution' },
-          { label: 'Institution Profile' },
-        ]}
+        eyebrow="Institution Profile"
         title="Institution Profile"
-        subtitle="Corporate register — the master data behind the LRT return family"
         action={
           <Link
             href="/submissions/returns?code=LRT-PROFILE"
@@ -70,8 +67,9 @@ export default function InstitutionProfilePage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={query.isLoading}
           error={notFound ? null : query.error}
           onRetry={() => query.refetch()}
@@ -103,7 +101,7 @@ export default function InstitutionProfilePage() {
             <ProfileView profile={profile} onEdit={() => setEditing(true)} />
           ) : null}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

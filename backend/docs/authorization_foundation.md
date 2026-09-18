@@ -167,6 +167,9 @@ consume this server projection. Capability and product caches are partitioned by
 tenant, actor, `authv`, and institution. Baseline-only shell navigation and
 personal settings follow [docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboard);
 organization settings require organization-wide Account administration.
+Institution Profile navigation (`/institution` and its tabs) requires a final,
+non-contextual organization-scoped ACCOUNT/restricted `view` capability;
+institution-scoped capabilities and Account administration alone do not expose it.
 Context-dependent capabilities may support structural navigation, but actions and deep links never treat them as final authorization.
 This dashboard slice gates action controls only where the projected capability is
 already final and non-contextual. Module-specific mutations such as run,

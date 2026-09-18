@@ -8,6 +8,7 @@
  *      day, with provenance (input hash, engine version) and module links.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import Link from 'next/link';
 import { ChevronRight, FlaskConical, Printer } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -23,8 +24,8 @@ export default function ReportsPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Reports"
         title="Reports Library"
-        subtitle="Governance console · Immutable runs, regulatory packs, board reporting"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <Link
@@ -37,7 +38,7 @@ export default function ReportsPage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         {bank && period && <FreshnessStrip bankId={bank.id} period={period} />}
         <PackCards bankId={bank?.id} periodId={period?.id} />
 
@@ -66,7 +67,7 @@ export default function ReportsPage() {
         </Link>
 
         <RunsRegistry bankId={bank?.id} />
-      </div>
+      </PageContainer>
     </>
   );
 }

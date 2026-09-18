@@ -1,5 +1,6 @@
 "use client";
 
+import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, TrendingUp } from "lucide-react";
@@ -215,15 +216,7 @@ export default function CapitalPlanning() {
 
   return (
     <>
-      <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Basel Capital", href: "/basel" },
-          { label: "Planning" },
-        ]}
-        title="Capital Planning"
-        subtitle="Multi-year capital ratio projection from stored forecast runs · what-if planner on the current base"
-      />
+      <PageHeader eyebrow="Basel Capital" title="Capital Planning" />
 
       <QueryBoundary
         isLoading={
@@ -236,7 +229,7 @@ export default function CapitalPlanning() {
           if (forecastBankId) void forecastRuns.refetch();
         }}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           <SectionCard
             title="ICAAP and ILAAP governance"
             subtitle="Capital plans and quarterly liquidity evidence use the institution's scoped authority."
@@ -591,7 +584,7 @@ export default function CapitalPlanning() {
               </p>
             </SectionCard>
           )}
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

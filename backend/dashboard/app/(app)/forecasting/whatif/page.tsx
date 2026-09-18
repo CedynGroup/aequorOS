@@ -19,6 +19,7 @@
  * breach, and it never asserts a pass.
  */
 
+import PageContainer from "@/components/ui/PageContainer";
 import { useState } from "react";
 import Link from "next/link";
 import { FlaskConical, Loader2, PlayCircle } from "lucide-react";
@@ -441,22 +442,14 @@ export default function WhatIfLab() {
 
   return (
     <>
-      <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Balance Sheet Forecasting", href: "/forecasting" },
-          { label: "What-if Lab" },
-        ]}
-        title="What-if Lab"
-        subtitle="Deterministic macro shocks re-projected against the unshocked base run on identical canonical inputs"
-      />
+      <PageHeader eyebrow="Forecasting" title="What-if Lab" />
 
       <QueryBoundary
         isLoading={runsQuery.isLoading}
         error={runsQuery.error}
         onRetry={() => runsQuery.refetch()}
       >
-        <div className="px-8 py-6 space-y-6">
+        <PageContainer className="py-6 space-y-6">
           {runWhatIf.error && (
             <ErrorPanel error={runWhatIf.error} title="What-if run failed" />
           )}
@@ -618,7 +611,7 @@ export default function WhatIfLab() {
               )}
             </div>
           </div>
-        </div>
+        </PageContainer>
       </QueryBoundary>
     </>
   );

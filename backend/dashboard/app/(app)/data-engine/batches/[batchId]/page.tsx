@@ -6,6 +6,7 @@
  * preserved), and where the raw file and report landed in tiered storage.
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import { ErrorPanel, PageSkeleton } from '@/components/ui/QueryBoundary';
@@ -58,20 +59,20 @@ export default function BatchDetailPage({
 
   if (batchQuery.isPending) {
     return (
-      <div className="px-8 py-6">
-        <PageSkeleton />
-      </div>
+      <PageContainer className="py-6">
+        <PageSkeleton contained />
+      </PageContainer>
     );
   }
   if (batchQuery.isError) {
     return (
-      <div className="px-8 py-6">
+      <PageContainer className="py-6">
         <ErrorPanel
           error={batchQuery.error}
           onRetry={() => void batchQuery.refetch()}
           title="Could not load the batch"
         />
-      </div>
+      </PageContainer>
     );
   }
 
@@ -109,9 +110,10 @@ export default function BatchDetailPage({
   return (
     <>
       <PageHeader
+        eyebrow="Data Engine"
         breadcrumbs={[
           { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Batches' },
+          { label: 'Batches', href: '/data-engine' },
           { label: batch.id.slice(0, 8) },
         ]}
         title={
@@ -123,7 +125,7 @@ export default function BatchDetailPage({
         }
         subtitle={`${batch.sourceSystem} · as of ${formatDate(batch.asOfDate)} · started ${formatDateTime(batch.startedAt ?? batch.createdAt)}`}
       />
-      <div className="px-8 py-6 space-y-6 max-w-6xl">
+      <PageContainer className="py-6 space-y-6">
         <div className="space-y-2">
           <CountStrip batch={batch} />
           <p className="text-caption text-slate">{WARNING_COUNTS_LEGEND}</p>
@@ -285,7 +287,7 @@ export default function BatchDetailPage({
             </div>
           )}
         </section>
-      </div>
+      </PageContainer>
     </>
   );
 }

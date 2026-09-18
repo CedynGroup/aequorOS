@@ -11,6 +11,7 @@
  */
 
 import PageHeader from "@/components/ui/PageHeader";
+import PageContainer from "@/components/ui/PageContainer";
 import { useBankContext } from "@/components/shell/BankContext";
 import { fmtDateUTC } from "@/lib/api/values";
 import ThresholdRegisterCard from "@/components/institution/registers/ThresholdRegisterCard";
@@ -27,16 +28,12 @@ export default function BoardRegistersPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: "Governance", href: "/institution" },
-          { label: "Board Registers" },
-        ]}
+        eyebrow="Institution Profile"
         title="Board Registers"
-        subtitle="The Board's adopted risk configuration — liquidity thresholds, EWI trigger levels, CRM haircuts and ECL assumptions, each generation recorded with approval evidence"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         {!bankId ? (
           <p className="text-body text-slate">
             No institution yet — a bank is created by its first ingestion
@@ -55,7 +52,7 @@ export default function BoardRegistersPage() {
             <EclAssumptionCard bankId={bankId} />
           </>
         )}
-      </div>
+      </PageContainer>
     </>
   );
 }

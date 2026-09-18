@@ -60,8 +60,12 @@ export default function Header({
     // (2.5rem) so the two never overlap. No offset on a normal session.
     <header
       style={impersonating ? { top: "2.5rem" } : undefined}
-      className="h-16 bg-surface-raised border-b border-border-light flex items-center justify-between px-4 md:px-6 sticky top-0 z-30"
+      className="h-16 border-b border-border-light flex items-center justify-between px-4 md:px-6 sticky top-0 z-30"
     >
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-10 pointer-events-none bg-surface-alt/90 backdrop-blur-sm"
+      />
       <div className="flex items-center gap-3 min-w-0">
         {onMobileMenu && (
           <button

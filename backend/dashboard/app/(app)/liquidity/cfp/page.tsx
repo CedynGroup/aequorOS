@@ -1,5 +1,6 @@
 "use client";
 
+import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import {
   Bar,
@@ -194,15 +195,7 @@ export default function ContingencyFundingPlan() {
 
   return (
     <>
-      <PageHeader
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Liquidity Risk", href: "/liquidity" },
-          { label: "CFP" },
-        ]}
-        title="Contingency Funding Plan"
-        subtitle={`Server-side EWI framework (LRMD ¶28) · CFP lifecycle with ${regShort()} ¶74 notification`}
-      />
+      <PageHeader eyebrow="Liquidity" title="Contingency Funding Plan" />
 
       <QueryBoundary
         isLoading={ewis.isLoading}
@@ -210,7 +203,7 @@ export default function ContingencyFundingPlan() {
         onRetry={() => ewis.refetch()}
       >
         {dashboard && (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
               <KpiStat
                 label="Escalation state"
@@ -592,7 +585,7 @@ export default function ContingencyFundingPlan() {
                 dedicated immutable exercise record.
               </p>
             </SectionCard>
-          </div>
+          </PageContainer>
         )}
       </QueryBoundary>
     </>

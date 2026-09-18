@@ -15,9 +15,7 @@ import { currencyCode } from '@/lib/format';
 export default function FxForwardsPage() {
   return (
     <FxModuleFrame
-      crumb="Forwards"
       title="FX Forwards"
-      subtitle="Forward curve monitor · outright points by tenor against the period-end spot"
     >
       {(ctx) => <ForwardsBody ctx={ctx} />}
     </FxModuleFrame>

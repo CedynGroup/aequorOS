@@ -8,8 +8,6 @@ export default function DepositStabilityPage() {
       slug="deposit-stability"
       config={{
         title: 'Deposit Stability',
-        subtitle:
-          'Stable (sticky) fraction of each deposit product under stress, learned from balance retention',
         valueLabel: 'Stable fraction',
         format: (v) => `${(v * 100).toFixed(0)}%`,
         avgValue: (v) => v * 100,

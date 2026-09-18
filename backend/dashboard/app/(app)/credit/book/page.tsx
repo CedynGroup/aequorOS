@@ -6,6 +6,7 @@
  * URL is the source of truth for filters (the /positions pattern).
  */
 
+import PageContainer from '@/components/ui/PageContainer';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { BookOpenCheck, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -141,18 +142,13 @@ function LoanBookBody() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Modules', href: '/' },
-          { label: 'Credit', href: '/credit' },
-          { label: 'Loan Book' },
-        ]}
+        eyebrow="Credit"
         title="Loan Book"
-        subtitle="Every loan behind the credit metrics, classified under the active grid."
         asOf={page.data?.asOf}
       />
       <QueryBoundary isLoading={page.isLoading} error={page.error} onRetry={() => page.refetch()}>
         {page.data && total === 0 ? (
-          <div className="px-8 py-6">
+          <PageContainer className="py-6">
             <EmptyState
               Icon={BookOpenCheck}
               title="No loans in the canonical book yet"
@@ -163,9 +159,9 @@ function LoanBookBody() {
                 </a>
               }
             />
-          </div>
+          </PageContainer>
         ) : page.data ? (
-          <div className="px-8 py-6 space-y-6">
+          <PageContainer className="py-6 space-y-6">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiStat label="Loans on book" value={fmtInt(total)} hint="Current generation" />
               <KpiStat
@@ -276,7 +272,7 @@ function LoanBookBody() {
                 </button>
               </div>
             </div>
-          </div>
+          </PageContainer>
         ) : null}
       </QueryBoundary>
     </>
