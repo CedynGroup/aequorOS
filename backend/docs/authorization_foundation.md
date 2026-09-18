@@ -411,10 +411,13 @@ Execution results are recorded in
 [the mutation evidence](../tests/authorization_mutation_evidence.md).
 
 Known coverage limits remain: ownership transfer and owner deactivation have no
-product API to exercise. The route property checks identifier leakage in successful
-responses but accepts 200, 403, or 404 for bank reads; universal sibling-bank 404
-behavior is separately tracked by the strict
-`aeq-rbac-cross-tenant-route-404` expected failure.
+product API to exercise. The generated route property checks identifier leakage in
+successful responses; the separate sibling-bank read regression now enforces the
+[bank-route existence rule](../../docs/rbac.md#4-tenancy--the-two-planes) without an
+expected failure. `tests/api/test_cross_tenant_bank_routes.py` also enumerates
+OpenAPI bank-path and bank-query operations, generates request inputs for reads and
+mutations, and checks the shared dependency and standard error envelope for an
+authenticated sibling-organization member with no bindings on Postgres.
 
 ## Product rollout boundary
 

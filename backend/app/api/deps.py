@@ -498,7 +498,7 @@ def resolve_tenant_bank(
 ) -> Bank | None:
     """Resolve a path or query ``bank_id`` inside the authenticated tenant.
 
-    Bank existence is tenant-confidential. A missing identifier and an
+    Bank existence is tenant-confidential. An unknown identifier and an
     identifier owned by another organization therefore produce the same 404
     before any module entitlement or scoped permission dependency runs.
     """
