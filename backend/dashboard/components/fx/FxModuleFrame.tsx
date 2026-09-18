@@ -7,7 +7,7 @@
  * a render prop so the payload is fetched (and cached) once per query key.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import type { ReactNode } from "react";
 import type {
   FxDashboardRead,

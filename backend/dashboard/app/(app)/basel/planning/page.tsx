@@ -1,6 +1,6 @@
 "use client";
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, TrendingUp } from "lucide-react";

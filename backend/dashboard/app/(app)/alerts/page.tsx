@@ -9,7 +9,7 @@
  * dead acknowledge buttons.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BellRing, Info } from "lucide-react";

@@ -14,7 +14,7 @@
  * docs/attestation_esignature.md §4.5), which renders nothing for non-owners.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import { useEffect, useState } from "react";
 import { FlaskConical, KeyRound, Loader2, Save } from "lucide-react";
 import type {

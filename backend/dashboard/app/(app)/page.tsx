@@ -15,7 +15,7 @@
  * can never show populated KPIs beside an "empty" live state again.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import { Database, Info } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -177,7 +177,11 @@ export default function CommandCenterPage() {
 /** Loading layout that mirrors the Command Center grid. */
 function CommandCenterSkeleton() {
   return (
-    <PageContainer className="py-6 space-y-6" aria-busy="true" aria-label="Loading">
+    <PageContainer
+      className="py-6 space-y-6"
+      aria-busy="true"
+      aria-label="Loading"
+    >
       <div className="card px-5 py-3">
         <SkeletonLine width="40%" height={12} />
       </div>

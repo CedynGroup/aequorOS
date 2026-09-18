@@ -1,6 +1,6 @@
 "use client";
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import {
   Bar,
   BarChart,
@@ -270,7 +270,9 @@ export default function SdiLiquidityMonitoringView({
                     <KpiStat
                       label="Liquidity Coverage Ratio"
                       value={
-                        baselData ? fmtPct(num(baselData.metrics.lcrPct), 1) : "—"
+                        baselData
+                          ? fmtPct(num(baselData.metrics.lcrPct), 1)
+                          : "—"
                       }
                       status={
                         baselData?.metrics.lcrStatus === "red"
@@ -534,8 +536,8 @@ export default function SdiLiquidityMonitoringView({
                   {providersWithoutShare > 0 ? (
                     <p className="mt-3 text-caption text-warning">
                       {providersWithoutShare} provider
-                      {providersWithoutShare === 1 ? "" : "s"} carry no computable
-                      share of deposits and{" "}
+                      {providersWithoutShare === 1 ? "" : "s"} carry no
+                      computable share of deposits and{" "}
                       {providersWithoutShare === 1 ? "is" : "are"} excluded from
                       this chart — the concentration shown is therefore
                       incomplete.
@@ -576,9 +578,10 @@ export default function SdiLiquidityMonitoringView({
                   </dl>
                   {capacity.uncalibrated_asset_count > 0 ? (
                     <p className="mt-5 text-caption text-warning">
-                      Assets without an adopted haircut retain gross value in the
-                      display and require Senior Management calibration before
-                      they support a decision-grade monetisation estimate.
+                      Assets without an adopted haircut retain gross value in
+                      the display and require Senior Management calibration
+                      before they support a decision-grade monetisation
+                      estimate.
                     </p>
                   ) : null}
                 </SectionCard>
@@ -610,8 +613,8 @@ export default function SdiLiquidityMonitoringView({
                                 {reserve.label}
                               </p>
                               <p className="mt-1 text-caption text-slate">
-                                Minimum {fmtPct(num(reserve.threshold_pct), 1)} ·{" "}
-                                {reserve.confirmation_status}
+                                Minimum {fmtPct(num(reserve.threshold_pct), 1)}{" "}
+                                · {reserve.confirmation_status}
                               </p>
                             </div>
                             <div className="text-right">
@@ -674,7 +677,9 @@ export default function SdiLiquidityMonitoringView({
                           className="border-b border-border-light pb-4 last:border-0 last:pb-0"
                         >
                           <StatusPill
-                            tone={item.status === "blocked" ? "breach" : "amber"}
+                            tone={
+                              item.status === "blocked" ? "breach" : "amber"
+                            }
                           >
                             {item.status}
                           </StatusPill>
@@ -694,8 +699,8 @@ export default function SdiLiquidityMonitoringView({
                     </div>
                   ) : (
                     <p className="text-body text-success">
-                      All monitored liquidity input sets are ready for the current
-                      canonical-book date.
+                      All monitored liquidity input sets are ready for the
+                      current canonical-book date.
                     </p>
                   )}
                 </SectionCard>
@@ -728,9 +733,10 @@ export default function SdiLiquidityMonitoringView({
               {num(concentration.unattributed_deposits_ghs) > 0 ? (
                 <SectionCard title="Attribution exception">
                   <p className="text-caption text-slate">
-                    {fmtCurrency(num(concentration.unattributed_deposits_ghs))} of
-                    deposit funding has no linked counterparty and is included in
-                    total deposits but excluded from provider concentration.
+                    {fmtCurrency(num(concentration.unattributed_deposits_ghs))}{" "}
+                    of deposit funding has no linked counterparty and is
+                    included in total deposits but excluded from provider
+                    concentration.
                   </p>
                 </SectionCard>
               ) : null}

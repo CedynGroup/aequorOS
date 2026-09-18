@@ -9,7 +9,7 @@
  * per-section breaks, forced light palette. Tables and KPIs, not charts.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import "@/app/print.css";
 
 import { useEffect, useState } from "react";

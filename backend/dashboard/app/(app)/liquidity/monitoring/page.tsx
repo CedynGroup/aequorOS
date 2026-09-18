@@ -1,6 +1,6 @@
 "use client";
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import { Percent } from "lucide-react";

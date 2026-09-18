@@ -7,7 +7,7 @@
  * with breach/amber filters, plus every module's rule evaluations.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { BellRing, Gauge } from "lucide-react";

@@ -219,7 +219,9 @@ test("Credit waiting-for-data card shares the header edges at wide viewports", a
   page,
 }) => {
   await page.goto("/credit");
-  await expect(page.getByText("Waiting for data", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Waiting for data", { exact: true }),
+  ).toBeVisible();
   await expectAlignedHeaderAndCards(page);
 });
 

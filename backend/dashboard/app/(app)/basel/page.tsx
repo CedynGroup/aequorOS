@@ -1,6 +1,6 @@
 "use client";
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
 import LimitBar from "@/components/ui/LimitBar";

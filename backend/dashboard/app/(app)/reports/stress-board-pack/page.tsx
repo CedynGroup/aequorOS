@@ -17,7 +17,7 @@
  * amber tile and a caption that names the reason.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
 import { Printer } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";

@@ -19,7 +19,7 @@
  * breach, and it never asserts a pass.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import { useState } from "react";
 import Link from "next/link";
 import { FlaskConical, Loader2, PlayCircle } from "lucide-react";

@@ -1,6 +1,6 @@
 "use client";
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import {
   Bar,

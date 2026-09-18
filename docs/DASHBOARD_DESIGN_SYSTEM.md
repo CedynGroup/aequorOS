@@ -68,7 +68,8 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
   and tab strip for navigation and omit breadcrumbs. Object-detail pages retain
   linked module and parent-list breadcrumbs in the same header; ingestion batch
   details use the Data Engine eyebrow, with both Data Engine and Batches linking
-  back to `/data-engine`.
+  back to `/data-engine`. Headers sit on the page surface, separated by spacing
+  rather than a filled band or divider; the module tab strip stays unchanged.
 - **PageContainer** — shared `px-8` horizontal gutters and `max-w-6xl` width
   for PageHeader and module/detail bodies; vertical spacing belongs to the caller.
 - **DeltaBadge, StatusPill, RatioGauge, Sparkline, RunBadge, SubTabs,

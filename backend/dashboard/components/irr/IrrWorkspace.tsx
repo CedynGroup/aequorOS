@@ -7,7 +7,7 @@
  * data wiring identical so each page is purely presentational.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import { useState, type ReactNode } from "react";
 import { Play } from "lucide-react";
 import type {

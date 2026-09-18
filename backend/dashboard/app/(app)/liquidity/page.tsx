@@ -1,6 +1,6 @@
 "use client";
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import { ArrowUpRight } from "lucide-react";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import type { LiquidityDashboardLineRead } from "@aequoros/risk-service-api";

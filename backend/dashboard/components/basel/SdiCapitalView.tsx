@@ -8,7 +8,7 @@
  * CET1/AT1/Tier2, leverage, RWA composition or capital waterfall.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
+import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
 import KpiStat, { type KpiStatus } from "@/components/ui/KpiStat";
 import SectionCard from "@/components/ui/SectionCard";
@@ -291,8 +291,8 @@ export default function SdiCapitalView({
                   fail-closed state it is. Say what is missing instead. */}
               {cap.car_pct === null ? (
                 <p className="py-8 text-center text-body text-slate">
-                  No capital adequacy ratio has been computed for this period, so
-                  there is nothing to plot against the statutory minimum.
+                  No capital adequacy ratio has been computed for this period,
+                  so there is nothing to plot against the statutory minimum.
                 </p>
               ) : (
                 <SdiCarThresholdChart
@@ -308,8 +308,8 @@ export default function SdiCapitalView({
                 cap.composition_source === "code_default" ? (
                   <span className="text-caption text-warning">
                     This scope is the platform&rsquo;s documented default, not a
-                    scope approved for this institution — the ratio is provisional
-                    until it is approved.
+                    scope approved for this institution — the ratio is
+                    provisional until it is approved.
                   </span>
                 ) : undefined
               }
@@ -325,7 +325,10 @@ export default function SdiCapitalView({
                   </p>
                   <ul className="mt-3 space-y-3">
                     {riskClasses.map((rc) => (
-                      <li key={rc.risk_class} className="flex items-start gap-3">
+                      <li
+                        key={rc.risk_class}
+                        className="flex items-start gap-3"
+                      >
                         <StatusPill tone={rc.in_scope ? "success" : "amber"}>
                           {rc.in_scope ? "Charged" : "Not charged"}
                         </StatusPill>
