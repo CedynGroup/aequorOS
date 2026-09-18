@@ -11,14 +11,14 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const test = base.extend<{
   signInWithFxGrants: (sensitivities: string[], role?: string) => Promise<void>;
 }>({
-  signInWithFxGrants: async ({ page, context }, use) => {
+  signInWithFxGrants: async ({ page, context }, provideFixture) => {
     const api = `${E2E_API_ORIGIN}/api/v1`;
     const headers = {
       Authorization: `Bearer ${await mintBackendToken("admin")}`,
     };
     const bindings: string[] = [];
     try {
-      await use(async (sensitivities, role = "viewer") => {
+      await provideFixture(async (sensitivities, role = "viewer") => {
         for (const [module, sensitivity] of [
           ["reg", "published"],
           ...sensitivities.map((sensitivity) => ["fx", sensitivity]),
