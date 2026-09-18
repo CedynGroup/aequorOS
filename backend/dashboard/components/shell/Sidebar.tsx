@@ -24,6 +24,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   BookOpenCheck,
+  UserRoundCog,
 } from "lucide-react";
 import Logo from "./Logo";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
@@ -88,6 +89,7 @@ const groups: { label: string; items: NavItem[] }[] = [
       { href: "/institution", label: "Institution Profile", icon: Landmark },
       { href: "/icaap", label: "ICAAP", icon: ClipboardCheck },
       { href: "/submissions", label: "Regulatory Reporting", icon: FileCheck2 },
+      { href: "/access", label: "Access", icon: UserRoundCog },
       { href: "/settings", label: "Settings", icon: Settings },
     ],
   },

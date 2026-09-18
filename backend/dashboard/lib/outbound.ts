@@ -6,7 +6,7 @@
  * this process: the dashboard runs `openid-client`/`oauth4webapi` inside its own
  * container, and that library performs its OWN discovery request and its OWN
  * token-endpoint exchange against the same account-admin-settable `issuer`
- * (`sso_connections.issuer`, Settings → Authentication). A Python-side guard is
+ * (`sso_connections.issuer`, Access → Authentication). A Python-side guard is
  * structurally unable to see those sockets. Without this module an account admin
  * could point the dashboard server at `http://169.254.169.254/…`, at an
  * RFC1918 neighbour, or at a container's own loopback services — and the token

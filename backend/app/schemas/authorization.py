@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.core.authorization import (
     BindingStatus,
     GrantorType,
+    GrantReasonCategory,
     InstitutionScope,
     Module,
     ModuleScope,
@@ -71,7 +72,10 @@ class ScopedGrantInput(ClosedModel):
     )
     module_scope: ModuleScope
     sensitivity_scope: SensitivityScope
-    reason: str = Field(min_length=1, max_length=2000)
+    reason_category: GrantReasonCategory
+    reason_detail: str = Field(default="", max_length=2000)
+    reference: str | None = Field(default=None, max_length=255)
+    valid_until: datetime | None = None
 
     @model_validator(mode="after")
     def validate_institution_target(self) -> ScopedGrantInput:
@@ -80,9 +84,19 @@ class ScopedGrantInput(ClosedModel):
                 raise ValueError("organization-wide coverage must not include an institution id")
         elif not self.institution_id or not self.institution_id.strip():
             raise ValueError("institution coverage requires an exact institution id")
-        self.reason = self.reason.strip()
-        if not self.reason:
-            raise ValueError("a grant reason is required")
+        self.reason_detail = self.reason_detail.strip()
+        self.reference = self.reference.strip() if self.reference else None
+        if self.reason_category is GrantReasonCategory.OTHER and not self.reason_detail:
+            raise ValueError("reason detail is required when the category is other")
+        if (
+            self.reason_category
+            in {
+                GrantReasonCategory.TEMPORARY_COVER,
+                GrantReasonCategory.INCIDENT_BREAK_GLASS,
+            }
+            and self.valid_until is None
+        ):
+            raise ValueError("temporary cover and break-glass grants require an expiry")
         return self
 
 
@@ -137,7 +151,9 @@ class BindingRead(ClosedModel):
     granted_by_type: GrantorType
     granted_by_id: str
     granted_by_name: str
+    grant_reason_category: GrantReasonCategory
     grant_reason: str
+    grant_reference: str | None
     granted_at: datetime
     valid_from: datetime
     valid_until: datetime | None
@@ -188,3 +204,50 @@ class InstitutionDirectoryRead(ClosedModel):
     """
 
     institutions: list[InstitutionDirectoryEntryRead]
+
+
+class AccessRequestCreate(ClosedModel):
+    route: str = Field(min_length=1, max_length=255, pattern=r"^/")
+    institution_id: str = Field(min_length=1, max_length=16)
+    module_scope: ModuleScope
+    sensitivity_scope: Sensitivity
+    permission: Permission
+    reason_category: GrantReasonCategory
+    reason_detail: str = Field(default="", max_length=2000)
+    reference: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def validate_reason(self) -> AccessRequestCreate:
+        self.reason_detail = self.reason_detail.strip()
+        self.reference = self.reference.strip() if self.reference else None
+        if self.reason_category is GrantReasonCategory.OTHER and not self.reason_detail:
+            raise ValueError("reason detail is required when the category is other")
+        return self
+
+
+class AccessRequestRead(ClosedModel):
+    id: UUID
+    requester_user_id: UUID
+    requester_name: str
+    requester_email: str
+    route: str
+    page_title: str
+    institution_id: str
+    institution_name: str
+    module_scope: ModuleScope
+    sensitivity_scope: Sensitivity
+    permission: Permission
+    reason_category: GrantReasonCategory
+    reason_detail: str
+    reference: str | None
+    status: Literal["pending", "approved", "rejected"]
+    requested_at: datetime
+
+
+class AccessRequestListRead(ClosedModel):
+    requests: list[AccessRequestRead]
+
+
+class AccessRequestApprove(ScopedGrantInput):
+    role_bundle: GrantableRoleBundle
+    expected_authority_sentence: str = Field(min_length=1, max_length=2000)

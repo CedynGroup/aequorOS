@@ -18,6 +18,13 @@ import {
   SensitivityScopeToJSON,
   SensitivityScopeToJSONTyped,
 } from "./SensitivityScope";
+import type { Reference } from "./Reference";
+import {
+  ReferenceFromJSON,
+  ReferenceFromJSONTyped,
+  ReferenceToJSON,
+  ReferenceToJSONTyped,
+} from "./Reference";
 import type { InstitutionScope } from "./InstitutionScope";
 import {
   InstitutionScopeFromJSON,
@@ -32,6 +39,13 @@ import {
   ModuleScopeToJSON,
   ModuleScopeToJSONTyped,
 } from "./ModuleScope";
+import type { GrantReasonCategory } from "./GrantReasonCategory";
+import {
+  GrantReasonCategoryFromJSON,
+  GrantReasonCategoryFromJSONTyped,
+  GrantReasonCategoryToJSON,
+  GrantReasonCategoryToJSONTyped,
+} from "./GrantReasonCategory";
 import type { GrantTargetInstitutionID } from "./GrantTargetInstitutionID";
 import {
   GrantTargetInstitutionIDFromJSON,
@@ -39,6 +53,13 @@ import {
   GrantTargetInstitutionIDToJSON,
   GrantTargetInstitutionIDToJSONTyped,
 } from "./GrantTargetInstitutionID";
+import type { ValidUntil } from "./ValidUntil";
+import {
+  ValidUntilFromJSON,
+  ValidUntilFromJSONTyped,
+  ValidUntilToJSON,
+  ValidUntilToJSONTyped,
+} from "./ValidUntil";
 
 /**
  *
@@ -78,10 +99,22 @@ export interface BindingCreateRequest {
   principalUserId: string;
   /**
    *
+   * @type {GrantReasonCategory}
+   * @memberof BindingCreateRequest
+   */
+  reasonCategory: GrantReasonCategory;
+  /**
+   *
    * @type {string}
    * @memberof BindingCreateRequest
    */
-  reason: string;
+  reasonDetail?: string;
+  /**
+   *
+   * @type {Reference}
+   * @memberof BindingCreateRequest
+   */
+  reference?: Reference;
   /**
    *
    * @type {string}
@@ -94,6 +127,12 @@ export interface BindingCreateRequest {
    * @memberof BindingCreateRequest
    */
   sensitivityScope: SensitivityScope;
+  /**
+   *
+   * @type {ValidUntil}
+   * @memberof BindingCreateRequest
+   */
+  validUntil?: ValidUntil;
 }
 
 /**
@@ -127,7 +166,8 @@ export function instanceOfBindingCreateRequest(
     return false;
   if (!("principalUserId" in value) || value["principalUserId"] === undefined)
     return false;
-  if (!("reason" in value) || value["reason"] === undefined) return false;
+  if (!("reasonCategory" in value) || value["reasonCategory"] === undefined)
+    return false;
   if (!("roleBundle" in value) || value["roleBundle"] === undefined)
     return false;
   if (!("sensitivityScope" in value) || value["sensitivityScope"] === undefined)
@@ -156,9 +196,19 @@ export function BindingCreateRequestFromJSONTyped(
     institutionScope: InstitutionScopeFromJSON(json["institution_scope"]),
     moduleScope: ModuleScopeFromJSON(json["module_scope"]),
     principalUserId: json["principal_user_id"],
-    reason: json["reason"],
+    reasonCategory: GrantReasonCategoryFromJSON(json["reason_category"]),
+    reasonDetail:
+      json["reason_detail"] == null ? undefined : json["reason_detail"],
+    reference:
+      json["reference"] == null
+        ? undefined
+        : ReferenceFromJSON(json["reference"]),
     roleBundle: json["role_bundle"],
     sensitivityScope: SensitivityScopeFromJSON(json["sensitivity_scope"]),
+    validUntil:
+      json["valid_until"] == null
+        ? undefined
+        : ValidUntilFromJSON(json["valid_until"]),
   };
 }
 
@@ -180,8 +230,11 @@ export function BindingCreateRequestToJSONTyped(
     institution_scope: InstitutionScopeToJSON(value["institutionScope"]),
     module_scope: ModuleScopeToJSON(value["moduleScope"]),
     principal_user_id: value["principalUserId"],
-    reason: value["reason"],
+    reason_category: GrantReasonCategoryToJSON(value["reasonCategory"]),
+    reason_detail: value["reasonDetail"],
+    reference: ReferenceToJSON(value["reference"]),
     role_bundle: value["roleBundle"],
     sensitivity_scope: SensitivityScopeToJSON(value["sensitivityScope"]),
+    valid_until: ValidUntilToJSON(value["validUntil"]),
   };
 }

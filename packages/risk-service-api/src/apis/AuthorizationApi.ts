@@ -12,6 +12,10 @@
 
 import * as runtime from "../runtime";
 import type {
+  AccessRequestApprove,
+  AccessRequestCreate,
+  AccessRequestListRead,
+  AccessRequestRead,
   BindingCreateRequest,
   BindingCreateResponse,
   BindingListRead,
@@ -24,6 +28,14 @@ import type {
   MemberListRead,
 } from "../models/index";
 import {
+  AccessRequestApproveFromJSON,
+  AccessRequestApproveToJSON,
+  AccessRequestCreateFromJSON,
+  AccessRequestCreateToJSON,
+  AccessRequestListReadFromJSON,
+  AccessRequestListReadToJSON,
+  AccessRequestReadFromJSON,
+  AccessRequestReadToJSON,
   BindingCreateRequestFromJSON,
   BindingCreateRequestToJSON,
   BindingCreateResponseFromJSON,
@@ -46,6 +58,15 @@ import {
   MemberListReadToJSON,
 } from "../models/index";
 
+export interface ApproveAuthorizationAccessRequestRequest {
+  requestId: string;
+  accessRequestApprove: AccessRequestApprove;
+}
+
+export interface CreateAuthorizationAccessRequestRequest {
+  accessRequestCreate: AccessRequestCreate;
+}
+
 export interface CreateAuthorizationBindingRequest {
   bindingCreateRequest: BindingCreateRequest;
 }
@@ -67,6 +88,136 @@ export interface RevokeAuthorizationBindingRequest {
  *
  */
 export class AuthorizationApi extends runtime.BaseAPI {
+  /**
+   * Approve Authorization Access Request
+   */
+  async approveAuthorizationAccessRequestRaw(
+    requestParameters: ApproveAuthorizationAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BindingCreateResponse>> {
+    if (requestParameters["requestId"] == null) {
+      throw new runtime.RequiredError(
+        "requestId",
+        'Required parameter "requestId" was null or undefined when calling approveAuthorizationAccessRequest().',
+      );
+    }
+
+    if (requestParameters["accessRequestApprove"] == null) {
+      throw new runtime.RequiredError(
+        "accessRequestApprove",
+        'Required parameter "accessRequestApprove" was null or undefined when calling approveAuthorizationAccessRequest().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/authorization/access-requests/{request_id}/approve`.replace(
+          `{${"request_id"}}`,
+          encodeURIComponent(String(requestParameters["requestId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: AccessRequestApproveToJSON(
+          requestParameters["accessRequestApprove"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BindingCreateResponseFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Approve Authorization Access Request
+   */
+  async approveAuthorizationAccessRequest(
+    requestParameters: ApproveAuthorizationAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BindingCreateResponse> {
+    const response = await this.approveAuthorizationAccessRequestRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Create Authorization Access Request
+   */
+  async createAuthorizationAccessRequestRaw(
+    requestParameters: CreateAuthorizationAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<AccessRequestRead>> {
+    if (requestParameters["accessRequestCreate"] == null) {
+      throw new runtime.RequiredError(
+        "accessRequestCreate",
+        'Required parameter "accessRequestCreate" was null or undefined when calling createAuthorizationAccessRequest().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/authorization/access-requests`,
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: AccessRequestCreateToJSON(
+          requestParameters["accessRequestCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      AccessRequestReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Create Authorization Access Request
+   */
+  async createAuthorizationAccessRequest(
+    requestParameters: CreateAuthorizationAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<AccessRequestRead> {
+    const response = await this.createAuthorizationAccessRequestRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * Create Authorization Binding
    */
@@ -128,6 +279,95 @@ export class AuthorizationApi extends runtime.BaseAPI {
   }
 
   /**
+   * Public organization structure needed to target an access request.
+   * List Access Request Institutions
+   */
+  async listAccessRequestInstitutionsRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<InstitutionDirectoryRead>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/organization/institutions/access-request`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      InstitutionDirectoryReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Public organization structure needed to target an access request.
+   * List Access Request Institutions
+   */
+  async listAccessRequestInstitutions(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<InstitutionDirectoryRead> {
+    const response = await this.listAccessRequestInstitutionsRaw(initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * List Authorization Access Requests
+   */
+  async listAuthorizationAccessRequestsRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<AccessRequestListRead>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/authorization/access-requests`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      AccessRequestListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * List Authorization Access Requests
+   */
+  async listAuthorizationAccessRequests(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<AccessRequestListRead> {
+    const response =
+      await this.listAuthorizationAccessRequestsRaw(initOverrides);
+    return await response.value();
+  }
+
+  /**
    * List Authorization Bindings
    */
   async listAuthorizationBindingsRaw(
@@ -177,6 +417,50 @@ export class AuthorizationApi extends runtime.BaseAPI {
       requestParameters,
       initOverrides,
     );
+    return await response.value();
+  }
+
+  /**
+   * List My Authorization Access Requests
+   */
+  async listMyAuthorizationAccessRequestsRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<AccessRequestListRead>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/authorization/access-requests/mine`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      AccessRequestListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * List My Authorization Access Requests
+   */
+  async listMyAuthorizationAccessRequests(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<AccessRequestListRead> {
+    const response =
+      await this.listMyAuthorizationAccessRequestsRaw(initOverrides);
     return await response.value();
   }
 

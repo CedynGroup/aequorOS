@@ -46,6 +46,20 @@ import {
   ModuleScopeToJSON,
   ModuleScopeToJSONTyped,
 } from "./ModuleScope";
+import type { GrantReference } from "./GrantReference";
+import {
+  GrantReferenceFromJSON,
+  GrantReferenceFromJSONTyped,
+  GrantReferenceToJSON,
+  GrantReferenceToJSONTyped,
+} from "./GrantReference";
+import type { GrantReasonCategory } from "./GrantReasonCategory";
+import {
+  GrantReasonCategoryFromJSON,
+  GrantReasonCategoryFromJSONTyped,
+  GrantReasonCategoryToJSON,
+  GrantReasonCategoryToJSONTyped,
+} from "./GrantReasonCategory";
 import type { RevokedById } from "./RevokedById";
 import {
   RevokedByIdFromJSON,
@@ -133,6 +147,18 @@ export interface BindingRead {
    * @memberof BindingRead
    */
   grantReason: string;
+  /**
+   *
+   * @type {GrantReasonCategory}
+   * @memberof BindingRead
+   */
+  grantReasonCategory: GrantReasonCategory;
+  /**
+   *
+   * @type {GrantReference}
+   * @memberof BindingRead
+   */
+  grantReference: GrantReference;
   /**
    *
    * @type {Date}
@@ -278,6 +304,13 @@ export function instanceOfBindingRead(value: object): value is BindingRead {
     return false;
   if (!("grantReason" in value) || value["grantReason"] === undefined)
     return false;
+  if (
+    !("grantReasonCategory" in value) ||
+    value["grantReasonCategory"] === undefined
+  )
+    return false;
+  if (!("grantReference" in value) || value["grantReference"] === undefined)
+    return false;
   if (!("grantedAt" in value) || value["grantedAt"] === undefined) return false;
   if (!("grantedById" in value) || value["grantedById"] === undefined)
     return false;
@@ -335,6 +368,10 @@ export function BindingReadFromJSONTyped(
     effective: json["effective"],
     effectivePermissions: json["effective_permissions"],
     grantReason: json["grant_reason"],
+    grantReasonCategory: GrantReasonCategoryFromJSON(
+      json["grant_reason_category"],
+    ),
+    grantReference: GrantReferenceFromJSON(json["grant_reference"]),
     grantedAt: new Date(json["granted_at"]),
     grantedById: json["granted_by_id"],
     grantedByName: json["granted_by_name"],
@@ -376,6 +413,10 @@ export function BindingReadToJSONTyped(
     effective: value["effective"],
     effective_permissions: value["effectivePermissions"],
     grant_reason: value["grantReason"],
+    grant_reason_category: GrantReasonCategoryToJSON(
+      value["grantReasonCategory"],
+    ),
+    grant_reference: GrantReferenceToJSON(value["grantReference"]),
     granted_at: value["grantedAt"].toISOString(),
     granted_by_id: value["grantedById"],
     granted_by_name: value["grantedByName"],

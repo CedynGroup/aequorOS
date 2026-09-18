@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Settings → Authentication (SSO) — account-admin-only card for the org's own-OIDC
+ * Access → Authentication (SSO) — account-admin-only card for the org's own-OIDC
  * connection. The bank's IT registers an app in THEIR IdP (Google Workspace,
  * Entra, Okta, …) with our redirect URI, then enters the issuer / client ID /
  * client secret here. The secret is write-only: it is sealed server-side and
@@ -21,8 +21,8 @@ import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
 import { hasAccountAdministrationAuthority } from "@/lib/api/accountAdministration";
 import { ORGANIZATION_MEMBERS_QUERY_KEY } from "@/lib/api/grantAdministration";
 
-const QUERY_KEY = ["settings", "sso-connection"];
-const REQUESTS_KEY = ["settings", "sso-access-requests"];
+const QUERY_KEY = ["access", "sso-connection"];
+const REQUESTS_KEY = ["access", "sso-access-requests"];
 const MEMBERS_KEY = ORGANIZATION_MEMBERS_QUERY_KEY;
 
 interface FormState {
@@ -292,8 +292,53 @@ function AuthenticationPanelInner() {
         )}
 
         {!connectionQuery.isLoading && <AccessRequests />}
+        {!connectionQuery.isLoading && <RouteAccessRequests />}
       </CardBody>
     </Card>
+  );
+}
+
+function RouteAccessRequests() {
+  const requests = useQuery({
+    queryKey: ["access", "route-access-requests"],
+    queryFn: () => authorizationApi.listAuthorizationAccessRequests(),
+    refetchInterval: 60_000,
+  });
+  const rows = requests.data?.requests ?? [];
+  if (requests.isLoading || rows.length === 0) return null;
+  return (
+    <div className="border-t border-border-light pt-4">
+      <div className="flex items-center gap-2">
+        <p className="text-body font-medium text-navy">
+          Product access requests
+        </p>
+        <StatusPill tone="amber">{rows.length} pending</StatusPill>
+      </div>
+      <ul className="mt-2 divide-y divide-border-light">
+        {rows.map((request) => (
+          <li
+            key={request.id}
+            className="flex items-center gap-3 py-2.5"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-body text-navy">
+                {request.requesterName} · {request.pageTitle}
+              </p>
+              <p className="truncate text-caption text-slate">
+                {request.institutionName} · {request.moduleScope} ·{" "}
+                {request.sensitivityScope} · {request.permission}
+              </p>
+            </div>
+            <a
+              href="/access/members"
+              className="btn-primary px-3 py-1.5 text-caption font-medium"
+            >
+              Review in Members
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -345,7 +390,7 @@ function AccessRequests() {
             </div>
             {grantingAuthority.isSuccess ? (
               <a
-                href="#members"
+                href="/access/members"
                 className="px-3 py-1.5 btn-primary text-caption font-medium"
               >
                 Review in Members

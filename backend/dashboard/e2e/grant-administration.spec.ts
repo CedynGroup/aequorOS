@@ -27,7 +27,8 @@ test.describe("scoped grant administration", () => {
       institution_id: "BK-SAMP0001",
       module_scope: "reg",
       sensitivity_scope: "restricted",
-      reason: "Keep independent regulatory review access",
+      reason_category: "other",
+      reason_detail: "Keep independent regulatory review access",
     };
     const unrelatedPreview = await page.request.post(
       `${API}/authorization/bindings/preview`,
@@ -56,12 +57,12 @@ test.describe("scoped grant administration", () => {
       }
     });
 
-    await page.goto("/settings");
+    await page.goto("/access/members");
     const memberRow = page
       .locator("li")
       .filter({ hasText: "E2E Grant Member" })
       .first();
-    await expect(memberRow).toContainText("1 grant");
+    await expect(memberRow).toContainText("2 grants");
     await expect(memberRow).toContainText(
       "Viewer · Regulatory Reporting · Sample Bank Ltd",
     );
@@ -80,8 +81,9 @@ test.describe("scoped grant administration", () => {
       .selectOption("BK-SAMP0001");
     await composer.getByLabel("Module").selectOption("liq");
     await composer.getByLabel("Sensitivity").selectOption("confidential");
+    await composer.getByLabel("Reason category").selectOption("other");
     await composer
-      .getByLabel("Reason")
+      .getByLabel("Detail")
       .fill("Treasury monitoring responsibilities approved for this officer");
     await expect(
       composer.getByText(targetSentence, { exact: true }),
@@ -112,7 +114,7 @@ test.describe("scoped grant administration", () => {
       sensitivity_scope: string;
       status: string;
     }>;
-    expect(createdRows).toHaveLength(2);
+    expect(createdRows).toHaveLength(3);
     expect(createdRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -134,9 +136,9 @@ test.describe("scoped grant administration", () => {
       ]),
     );
 
-    // Both grants have now advanced the member from authv 1 to authv 3. This
+    // The baseline binding plus both grants have advanced the member to authv 4. This
     // represents their current signed-in session immediately before revoke.
-    const currentMemberToken = await mintBackendToken("grant_member", 3);
+    const currentMemberToken = await mintBackendToken("grant_member", 4);
     const beforeRevoke = await page.request.get(`${API}/auth/me`, {
       headers: { Authorization: `Bearer ${currentMemberToken}` },
     });
@@ -203,7 +205,7 @@ test.describe("scoped grant administration", () => {
         }),
       ]),
     );
-    await expect(memberRow).toContainText("1 grant");
+    await expect(memberRow).toContainText("2 grants");
     await expect(memberRow).toContainText(
       "Viewer · Regulatory Reporting · Sample Bank Ltd",
     );
