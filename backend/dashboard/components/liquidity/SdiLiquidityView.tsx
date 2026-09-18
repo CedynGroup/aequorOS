@@ -109,12 +109,12 @@ export default function SdiLiquidityView({ bankId }: { bankId: string | undefine
         eyebrow="Liquidity"
         title="Liquidity"
       />
-      <PageContainer className="py-6 space-y-6">
-        <QueryBoundary
-          isLoading={position.isLoading}
-          error={position.error}
-          onRetry={() => position.refetch()}
-        >
+      <QueryBoundary
+        isLoading={position.isLoading}
+        error={position.error}
+        onRetry={() => position.refetch()}
+      >
+        <PageContainer className="py-6 space-y-6">
           {position.data ? (
             <>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -190,8 +190,8 @@ export default function SdiLiquidityView({ bankId }: { bankId: string | undefine
               </SectionCard>
             </>
           ) : null}
-        </QueryBoundary>
-      </PageContainer>
+        </PageContainer>
+      </QueryBoundary>
     </>
   );
 }

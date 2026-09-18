@@ -216,20 +216,20 @@ export default function SdiLiquidityMonitoringView({
         eyebrow="Liquidity"
         title="Liquidity Monitoring Tools"
       />
-      <PageContainer className="py-6 space-y-6">
-        <QueryBoundary
-          isLoading={
-            monitoring.isLoading ||
-            sdiLiquidity.isLoading ||
-            baselLiquidity.isLoading
-          }
-          error={monitoring.error ?? sdiLiquidity.error ?? baselLiquidity.error}
-          onRetry={() => {
-            void monitoring.refetch();
-            void sdiLiquidity.refetch();
-            void baselLiquidity.refetch();
-          }}
-        >
+      <QueryBoundary
+        isLoading={
+          monitoring.isLoading ||
+          sdiLiquidity.isLoading ||
+          baselLiquidity.isLoading
+        }
+        error={monitoring.error ?? sdiLiquidity.error ?? baselLiquidity.error}
+        onRetry={() => {
+          void monitoring.refetch();
+          void sdiLiquidity.refetch();
+          void baselLiquidity.refetch();
+        }}
+      >
+        <PageContainer className="py-6 space-y-6">
           {data && concentration && capacity ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
@@ -737,8 +737,8 @@ export default function SdiLiquidityMonitoringView({
               ) : null}
             </>
           ) : null}
-        </QueryBoundary>
-      </PageContainer>
+        </PageContainer>
+      </QueryBoundary>
     </>
   );
 }
