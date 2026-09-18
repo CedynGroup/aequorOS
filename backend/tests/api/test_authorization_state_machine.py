@@ -645,6 +645,40 @@ def _ownership_scope(
     }
 
 
+def _assert_ownership_model(session: Session, *, owner_assigned: bool) -> None:
+    owner_rows = [
+        row
+        for row in session.scalars(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.organization_id == _OWNERSHIP_ORG,
+                AuthorizationBinding.role_bundle == RoleBundle.ORG_OWNER.value,
+                AuthorizationBinding.status == "active",
+            )
+        )
+        if grant_administration.binding_is_effective(row)
+    ]
+    assignment = session.get(OrganizationOwnerAssignment, _OWNERSHIP_ORG)
+    if not owner_assigned:
+        assert owner_rows == [], "ownership invariant: no owner without system assignment"
+        assert assignment is None
+    else:
+        assert len(owner_rows) == 1, "ownership invariant: exactly one effective owner"
+        owner_binding = owner_rows[0]
+        owner = session.get(User, owner_binding.principal_user_id)
+        assert owner is not None and owner.is_active
+        assert owner.id == _OWNERSHIP_OWNER
+        assert assignment is not None
+        assert assignment.status == "assigned"
+        assert assignment.basis == ("exactly_one_eligible_active_human_administrator")
+        assert assignment.owner_user_id == owner.id
+        assert assignment.owner_binding_id == owner_binding.id
+        assert organization_ownership.owner_read_access_exists(
+            session,
+            organization_id=_OWNERSHIP_ORG,
+            user_id=owner.id,
+        )
+
+
 def test_ownership_surface_state_machine_preserves_single_owner(
     db_client: TestClient,
 ) -> None:
@@ -976,37 +1010,7 @@ def test_ownership_surface_state_machine_preserves_single_owner(
         @invariant()
         def ownership_and_audit_evidence_match_the_model(self) -> None:
             with _session(_OWNERSHIP_ORG) as session:
-                owner_rows = [
-                    row
-                    for row in session.scalars(
-                        select(AuthorizationBinding).where(
-                            AuthorizationBinding.organization_id == _OWNERSHIP_ORG,
-                            AuthorizationBinding.role_bundle == RoleBundle.ORG_OWNER.value,
-                            AuthorizationBinding.status == "active",
-                        )
-                    )
-                    if grant_administration.binding_is_effective(row)
-                ]
-                assignment = session.get(OrganizationOwnerAssignment, _OWNERSHIP_ORG)
-                if not self.owner_assigned:
-                    assert owner_rows == []
-                    assert assignment is None
-                else:
-                    assert len(owner_rows) == 1
-                    owner_binding = owner_rows[0]
-                    owner = session.get(User, owner_binding.principal_user_id)
-                    assert owner is not None and owner.is_active
-                    assert owner.id == _OWNERSHIP_OWNER
-                    assert assignment is not None
-                    assert assignment.status == "assigned"
-                    assert assignment.basis == ("exactly_one_eligible_active_human_administrator")
-                    assert assignment.owner_user_id == owner.id
-                    assert assignment.owner_binding_id == owner_binding.id
-                    assert organization_ownership.owner_read_access_exists(
-                        session,
-                        organization_id=_OWNERSHIP_ORG,
-                        user_id=owner.id,
-                    )
+                _assert_ownership_model(session, owner_assigned=self.owner_assigned)
 
                 for event_type, entity_id in self.accepted_audits:
                     assert (
@@ -1024,3 +1028,53 @@ def test_ownership_surface_state_machine_preserves_single_owner(
         OwnershipSurfaceMachine,
         settings=settings(max_examples=15, stateful_step_count=10, deadline=None),
     )
+
+
+def test_ownership_invariant_detects_public_owner_grant_mutation(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control: admitting public owner grants must break the machine's invariant."""
+    _seed_ownership_surface()
+    scope = authorization.BindingScope(
+        InstitutionScope.ORGANIZATION,
+        None,
+        ModuleScope.ACCOUNT,
+        SensitivityScope.ALL,
+    )
+    with _session(_OWNERSHIP_ORG) as session:
+        _assert_ownership_model(session, owner_assigned=False)
+        sentence = grant_administration.scoped_authority_sentence(
+            session,
+            organization_id=_OWNERSHIP_ORG,
+            principal_user_id=_OWNERSHIP_MEMBERS[0],
+            role_bundle=RoleBundle.ORG_OWNER,
+            scope=scope,
+        )
+        grant_args = dict(
+            organization_id=_OWNERSHIP_ORG,
+            principal_user_id=_OWNERSHIP_MEMBERS[0],
+            role_bundle=RoleBundle.ORG_OWNER,
+            scope=scope,
+            actor_user_id=_OWNERSHIP_OWNER,
+            reason="ownership mutation negative control",
+            expected_authority_sentence=sentence,
+            commit=False,
+        )
+        with pytest.raises(grant_administration.GrantAdministrationError, match="not grantable"):
+            grant_administration.create_scoped_grant(session, **grant_args)
+        validate = grant_administration.validate_public_grant
+
+        def admit_owner(role_bundle: RoleBundle, scope: authorization.BindingScope) -> None:
+            if role_bundle is not RoleBundle.ORG_OWNER:
+                validate(role_bundle, scope)
+
+        with monkeypatch.context() as mutation:
+            mutation.setattr(grant_administration, "validate_public_grant", admit_owner)
+            grant_administration.create_scoped_grant(session, **grant_args)
+            with pytest.raises(AssertionError, match="ownership invariant"):
+                _assert_ownership_model(session, owner_assigned=False)
+            session.rollback()
+        _assert_ownership_model(session, owner_assigned=False)
+        with pytest.raises(grant_administration.GrantAdministrationError, match="not grantable"):
+            grant_administration.create_scoped_grant(session, **grant_args)

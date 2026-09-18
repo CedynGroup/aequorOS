@@ -64,6 +64,8 @@ _USERS_A = tuple(uuid5(_USER_NAMESPACE, f"{_ORG_A}:{index}") for index in range(
 _USERS_B = tuple(uuid5(_USER_NAMESPACE, f"{_ORG_B}:{index}") for index in range(3))
 _FACT_A = UUID("30000000-0000-4000-8000-000000000001")
 _FACT_B = UUID("30000000-0000-4000-8000-000000000002")
+_PERIOD_B = UUID("40000000-0000-4000-8000-000000000001")
+_PERIOD_FACT_B = UUID("40000000-0000-4000-8000-000000000002")
 _UNKNOWN_UUID = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
 _B_ROW_MARKER = "RLS-TENANT-B-ROW-MARKER"
 
@@ -178,6 +180,38 @@ def _seed_tenant(
                 "category": f"rls_property_{organization_id.lower()}",
             },
         )
+
+        if organization_id == _ORG_B:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO bank_reporting_periods
+                      (id, organization_id, bank_id, period_start, period_end,
+                       label, status, created_at, updated_at)
+                    VALUES (:id, :org, :bank, DATE '2026-09-01', DATE '2026-09-18',
+                            :label, 'open', now(), now())
+                    """
+                ),
+                {"id": _PERIOD_B, "org": _ORG_B, "bank": _BANK_B, "label": _B_ROW_MARKER},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO bank_financial_facts
+                      (id, organization_id, bank_id, reporting_period_id, fact_group,
+                       category, amount, currency, created_at, updated_at)
+                    VALUES (:id, :org, :bank, :period, 'balance_sheet', :category,
+                            12345, 'GHS', now(), now())
+                    """
+                ),
+                {
+                    "id": _PERIOD_FACT_B,
+                    "org": _ORG_B,
+                    "bank": _BANK_B,
+                    "period": _PERIOD_B,
+                    "category": _B_ROW_MARKER,
+                },
+            )
 
 
 def _binding_id(organization_id: str, index: int, suffix: str) -> UUID:
@@ -322,7 +356,7 @@ def _value_for_annotation(annotation: Any, name: str) -> str:
     if origin is Literal:
         return str(get_args(annotation)[0])
     if annotation is UUID:
-        return str(_UNKNOWN_UUID)
+        return str(_PERIOD_B if name in {"period_id", "reporting_period_id"} else _UNKNOWN_UUID)
     if annotation is date:
         return "2026-09-18"
     if isinstance(annotation, type) and issubclass(annotation, Enum):
@@ -464,13 +498,36 @@ def test_generated_bindings_never_cross_postgres_rls(
         b_row_identifiers = {
             _ORG_B,
             str(_FACT_B),
+            str(_PERIOD_B),
+            str(_PERIOD_FACT_B),
             _B_ROW_MARKER,
             *(str(user_id) for user_id in _USERS_B),
             *bindings_b,
         }
         all_b_identifiers = {_BANK_B, *b_row_identifiers}
 
+        with migrated_postgres_schema.app_engine.begin() as connection:
+            _assert_current_fact_isolation(connection)
+
         with TestClient(app, raise_server_exceptions=False) as client:
+            facts_route = next(route for route in bank_routes if route.name == "get_bank_period_facts")
+            path, query = _route_request(facts_route)
+            response = client.get(
+                path,
+                params=query,
+                headers=headers(
+                    org_id=_ORG_B,
+                    user_id=_USERS_B[0],
+                    roles=("viewer",),
+                    authorization_version=1,
+                ),
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["period"]["id"] == str(_PERIOD_B)
+            assert [fact["id"] for fact in response.json()["balance_sheet"]] == [
+                str(_PERIOD_FACT_B)
+            ]
+            assert response.json()["balance_sheet"][0]["category"] == _B_ROW_MARKER
             for principal_id in _USERS_A:
                 auth_headers = headers(
                     org_id=_ORG_A,
@@ -568,3 +625,38 @@ def test_every_sibling_bank_read_route_returns_not_found(
                     response.status_code,
                     response.text,
                 )
+
+
+def _assert_current_fact_isolation(connection) -> None:
+    for organization_id, fact_id in ((_ORG_A, _FACT_A), (_ORG_B, _FACT_B)):
+        _set_tenant(connection, organization_id)
+        visible = set(connection.scalars(text("SELECT id FROM current_financial_facts")))
+        assert visible == {fact_id}, "RLS isolation invariant: only the tenant's fact is visible"
+
+
+def test_current_fact_isolation_detects_no_force_rls_mutation(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    """Negative control: table-owner reads leak under NO FORCE, restored by rollback."""
+    for org, bank, users, fact in (
+        (_ORG_A, _BANK_A, _USERS_A, _FACT_A),
+        (_ORG_B, _BANK_B, _USERS_B, _FACT_B),
+    ):
+        _seed_tenant(
+            migrated_postgres_schema,
+            organization_id=org,
+            bank_id=bank,
+            user_ids=users,
+            fact_id=fact,
+        )
+    with migrated_postgres_schema.app_engine.connect() as connection:
+        _assert_current_fact_isolation(connection)
+        connection.rollback()
+        transaction = connection.begin()
+        try:
+            connection.execute(text("ALTER TABLE current_financial_facts NO FORCE ROW LEVEL SECURITY"))
+            with pytest.raises(AssertionError, match="RLS isolation invariant"):
+                _assert_current_fact_isolation(connection)
+        finally:
+            transaction.rollback()
+        _assert_current_fact_isolation(connection)
