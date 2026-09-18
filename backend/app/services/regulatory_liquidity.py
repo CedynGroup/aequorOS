@@ -126,6 +126,7 @@ OUTPUT_SCHEMA_VERSION = "liquidity-metrics-v1"
 MODULE_LIQUIDITY = "liquidity"
 MODULE_IRR = "irr"
 MODULE_FX = "fx"
+MODULE_FTP = "ftp"
 
 
 @dataclass(frozen=True)
@@ -144,6 +145,7 @@ _REGULATORY_RUN_AUTHORIZATION = {
         Module.IRRBB,
         "irrbb",
     ),
+    MODULE_FTP: _RegulatoryRunAuthorizationPolicy(Module.FTP, "ftp"),
 }
 
 BASELINE_SCENARIO = "baseline"

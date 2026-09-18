@@ -51,6 +51,7 @@ _FULL_HTTP_QUERY_COUNTS = {
     "irr": 16,
     # Scoped FX view adds bank resolution plus principal, binding, and institution checks.
     "fx": 16,
+    # Prefetched scoped FTP view reuses the dashboard's resolved bank.
     "ftp": 12,
 }
 

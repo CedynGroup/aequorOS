@@ -301,6 +301,11 @@ def test_analysis_parity_with_official_runs_and_zero_writes(db_session: Session)
         ModuleScope.IRRBB,
         SensitivityScope.CONFIDENTIAL,
     )
+    _grant_analyst(
+        db_session,
+        ModuleScope.FTP,
+        SensitivityScope.CONFIDENTIAL,
+    )
     adapter_cases: tuple[tuple[WorkbenchModule, tuple[str, str]], ...] = (
         ("irr", ("baseline", "parallel_up_200")),
         ("fx", ("baseline", "severe_depreciation")),

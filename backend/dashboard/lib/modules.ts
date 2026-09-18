@@ -155,6 +155,12 @@ export type ModuleScope = {
   fxConfidentialView?: boolean;
   /** Exact FX/confidential run authority for FX engines. */
   fxRun?: boolean;
+  /** Exact FTP/aggregated view authority for dashboards and summary lists. */
+  ftpAggregatedView?: boolean;
+  /** Exact FTP/confidential view authority for run and analysis detail. */
+  ftpConfidentialView?: boolean;
+  /** Exact FTP/confidential run authority for FTP engines. */
+  ftpRun?: boolean;
   /**
    * Server-evaluated exact Liquidity capabilities for the selected
    * institution. Omitted/false is deny, so navigation and controls never infer
@@ -337,6 +343,7 @@ const LIQUIDITY_CONFIDENTIAL_VIEW =
   "Liquidity Monitoring · Confidential · View";
 const RISK_CONFIDENTIAL_VIEW = "Risk & Limits · Confidential · View";
 const IRRBB_CONFIDENTIAL_RUN = "IRRBB · Confidential · Run";
+const FTP_CONFIDENTIAL_RUN = "Funds Transfer Pricing · Confidential · Run";
 
 const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
   command_center: "Risk & Limits · Aggregated · View",
@@ -371,6 +378,9 @@ function permissionReason(permissions: readonly string[]): string | undefined {
 
 export const IRRBB_CONFIDENTIAL_RUN_REASON = permissionReason([
   IRRBB_CONFIDENTIAL_RUN,
+])!;
+export const FTP_CONFIDENTIAL_RUN_REASON = permissionReason([
+  FTP_CONFIDENTIAL_RUN,
 ])!;
 
 function liquidityPermissionReason(
@@ -424,6 +434,13 @@ const SCOPED_MODULE_ROUTES = [
     aggregatedView: "fxAggregatedView",
     confidentialView: "fxConfidentialView",
     confidentialRoutes: ["/fx/scenarios"],
+  },
+  {
+    prefix: "/ftp",
+    label: "Funds Transfer Pricing",
+    aggregatedView: "ftpAggregatedView",
+    confidentialView: "ftpConfidentialView",
+    confidentialRoutes: ["/ftp/scenarios"],
   },
 ] as const;
 

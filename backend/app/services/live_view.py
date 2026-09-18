@@ -81,6 +81,7 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         ("liquidity", Module.LIQUIDITY),
         ("irr", Module.IRRBB),
         ("fx", Module.FX),
+        ("ftp", Module.FTP),
     ):
         decision = scoped_authorization.evaluate_bank_permission(
             db,
@@ -238,6 +239,7 @@ def mint_official_run(
         ("liquidity", Module.LIQUIDITY),
         ("irr", Module.IRRBB),
         ("fx", Module.FX),
+        ("ftp", Module.FTP),
     ):
         if module_scope.runs_module(db, bank, engine):
             scoped_authorization.require_resolved_bank_permission(
@@ -314,13 +316,18 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
     are honest, not zero-filled.
     """
     bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
-    if module in ("liquidity", "fx"):
+    protected_module = {
+        "liquidity": Module.LIQUIDITY,
+        "fx": Module.FX,
+        "ftp": Module.FTP,
+    }.get(module)
+    if protected_module is not None:
         scoped_authorization.require_resolved_bank_permission(
             db,
             ctx,
             bank,
             permission=Permission.VIEW,
-            module=Module.LIQUIDITY if module == "liquidity" else Module.FX,
+            module=protected_module,
             sensitivity=Sensitivity.AGGREGATED,
             surface="live_snapshots",
         )

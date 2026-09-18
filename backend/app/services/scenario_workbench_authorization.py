@@ -38,6 +38,11 @@ _WORKBENCH_POLICIES: dict[WorkbenchModule, _WorkbenchAuthorizationPolicy] = {
         "irrbb",
         Sensitivity.CONFIDENTIAL,
     ),
+    "ftp": _WorkbenchAuthorizationPolicy(
+        Module.FTP,
+        "ftp",
+        Sensitivity.AGGREGATED,
+    ),
 }
 
 
