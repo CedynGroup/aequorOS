@@ -78,14 +78,28 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
   await expect(topBar).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(topBar).toHaveCSS("backdrop-filter", "none");
   await expect(topBarGround).toHaveCSS("backdrop-filter", "blur(4px)");
+  await expect(topBar).toHaveCSS("height", "64px");
+  await expect(topBar).toHaveCSS("position", "sticky");
+  await expect(topBar).toHaveCSS("top", "0px");
+  await expect(topBar).toHaveCSS("z-index", "30");
+  await expect(topBar).toHaveCSS("border-bottom-width", "1px");
   for (const [theme, background] of [
     ["light", "rgba(250, 251, 252, 0.9)"],
     ["dark", "rgba(10, 15, 26, 0.9)"],
   ] as const) {
-    await page.locator("html").evaluate((html, value) => {
-      html.dataset.theme = value;
-    }, theme);
+    const themeSwitch = page.getByRole("button", {
+      name: `Switch to ${theme} theme`,
+    });
+    if (await themeSwitch.count()) await themeSwitch.click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await expect(topBarGround).toHaveCSS("background-color", background);
+    if (evidenceDir) {
+      mkdirSync(evidenceDir, { recursive: true });
+      await page.screenshot({
+        path: path.join(evidenceDir, `top-bar-${theme}.png`),
+        fullPage: true,
+      });
+    }
   }
   await topBar
     .getByRole("button", { name: /Search/ })
@@ -95,6 +109,11 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
   await expect(palette).toBeVisible();
   await expect(palette).toHaveCSS("height", `${page.viewportSize()!.height}px`);
   expect((await palette.boundingBox())?.y).toBe(0);
+  if (evidenceDir) {
+    await page.screenshot({
+      path: path.join(evidenceDir, "command-palette-viewport.png"),
+    });
+  }
   await page.keyboard.press("Escape");
   await topBar.getByRole("button", { name: /^Notifications/ }).click();
   await page.getByRole("button", { name: /^Inbox/ }).click();
@@ -103,6 +122,11 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
   await expect(inbox).toBeVisible();
   await expect(inbox).toHaveCSS("height", `${page.viewportSize()!.height}px`);
   expect((await inbox.boundingBox())?.y).toBe(0);
+  if (evidenceDir) {
+    await page.screenshot({
+      path: path.join(evidenceDir, "notification-inbox-viewport.png"),
+    });
+  }
   await page.keyboard.press("Escape");
   const pageHeader = page
     .locator("div.max-w-6xl")
