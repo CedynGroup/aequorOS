@@ -192,7 +192,11 @@ def _enqueue_due_official_runs(
 
 
 def _scheduled_official_actor(session: Session, bank: Bank) -> User | None:
-    requires_fx = module_scope.runs_module(session, bank, "fx")
+    required_modules = [
+        module
+        for engine, module in (("fx", Module.FX), ("ftp", Module.FTP))
+        if module_scope.runs_module(session, bank, engine)
+    ]
     actors = session.scalars(
         select(User)
         .where(
@@ -203,28 +207,30 @@ def _scheduled_official_actor(session: Session, bank: Bank) -> User | None:
         .order_by(User.created_at, User.id)
     )
     for actor in actors:
-        if not requires_fx:
-            return actor
-        decision = scoped_authorization.evaluate_bank_permission(
-            session,
-            TenantContext(
-                organization_id=bank.organization_id,
-                actor_user_id=actor.id,
-                authorization_version=actor.authorization_version,
-            ),
-            bank,
-            permission=Permission.RUN,
-            module=Module.FX,
-            sensitivity=Sensitivity.CONFIDENTIAL,
-            surface="scheduled_official_run",
+        ctx = TenantContext(
+            organization_id=bank.organization_id,
+            actor_user_id=actor.id,
+            authorization_version=actor.authorization_version,
         )
-        if decision is not None and decision.allowed:
+        for module in required_modules:
+            decision = scoped_authorization.evaluate_bank_permission(
+                session,
+                ctx,
+                bank,
+                permission=Permission.RUN,
+                module=module,
+                sensitivity=Sensitivity.CONFIDENTIAL,
+                surface="scheduled_official_run",
+            )
+            if decision is None or not decision.allowed:
+                break
+        else:
             return actor
     authorization_denied(
         reason="no_authorized_scheduled_principal",
         organization_id=bank.organization_id,
         bank_id=bank.id,
-        module=Module.FX.value if requires_fx else "official_run",
+        module="official_run",
         sensitivity=Sensitivity.CONFIDENTIAL.value,
         permission=Permission.RUN.value,
         surface="scheduled_official_run",

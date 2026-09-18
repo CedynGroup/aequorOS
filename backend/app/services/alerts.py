@@ -37,6 +37,7 @@ def get_bank_alerts(
         ("liquidity", Module.LIQUIDITY),
         ("irr", Module.IRRBB),
         ("fx", Module.FX),
+        ("ftp", Module.FTP),
     ):
         decision = scoped_authorization.evaluate_bank_permission(
             db,

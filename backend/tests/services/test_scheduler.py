@@ -6,6 +6,7 @@ from datetime import timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -28,26 +29,27 @@ from tests.api.helpers import ORG_1, USER_1
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 
-def _grant_fx_run(
+def _grant_official_run(
     session: Session,
     user_id: UUID,
     sensitivity: SensitivityScope = SensitivityScope.CONFIDENTIAL,
 ) -> None:
-    authorization.create_role_binding(
-        session,
-        organization_id=ORG_1,
-        principal_user_id=user_id,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.INSTITUTION,
-            SAMPLE_BANK_ID,
-            ModuleScope.FX,
-            sensitivity,
-        ),
-        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "scheduler-test"),
-        reason="Authorize scheduled FX execution",
-    )
+    for module in (ModuleScope.FX, ModuleScope.FTP):
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=user_id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ANALYST,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                module,
+                sensitivity,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "scheduler-test"),
+            reason="Authorize scheduled module execution",
+        )
 
 
 def _tick_job(db_session: Session) -> Job:
@@ -82,7 +84,7 @@ def test_run_tick_enqueues_official_and_reschedules_when_enabled(
     monkeypatch.setenv("OFFICIAL_RUN_ENABLED", "true")
     get_settings.cache_clear()
     materialize_canonical_test_book(db_session)
-    _grant_fx_run(db_session, USER_1)
+    _grant_official_run(db_session, USER_1)
     db_session.commit()
     _tick_job(db_session)
     # Claim it the way the worker would, so it is running (not re-selected).
@@ -225,7 +227,7 @@ def test_scheduled_fx_uses_later_authorized_analyst(db_session: Session) -> None
     )
     db_session.add(analyst)
     db_session.flush()
-    _grant_fx_run(db_session, analyst.id)
+    _grant_official_run(db_session, analyst.id)
 
     enqueued = scheduler._enqueue_due_official_runs(db_session, ORG_1, get_settings(), utc_now())
 
@@ -245,7 +247,9 @@ def test_scheduled_fx_uses_later_authorized_analyst(db_session: Session) -> None
         bank_id=SAMPLE_BANK_ID,
         payload={**job.payload, "actor_user_id": str(owner.id)},
     )
-    pipeline.run_official(db_session, requested)
+    with pytest.raises(HTTPException) as denied:
+        pipeline.run_official(db_session, requested)
+    assert denied.value.status_code == 403
     fx_count = db_session.scalar(
         select(func.count()).select_from(RegulatoryRun).where(RegulatoryRun.module == "fx")
     )
@@ -259,9 +263,9 @@ def test_scheduled_fx_without_authorized_principal_denies_closed(
 ) -> None:
     materialize_canonical_test_book(db_session)
     if authority == "split":
-        _grant_fx_run(db_session, USER_1, SensitivityScope.AGGREGATED)
+        _grant_official_run(db_session, USER_1, SensitivityScope.AGGREGATED)
     elif authority == "inactive":
-        _grant_fx_run(db_session, USER_1)
+        _grant_official_run(db_session, USER_1)
         user = db_session.get(User, USER_1)
         assert user is not None
         user.is_active = False
@@ -288,7 +292,7 @@ def test_scheduled_fx_without_authorized_principal_denies_closed(
 
 def test_official_worker_requires_explicit_actor(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
-    _grant_fx_run(db_session, USER_1)
+    _grant_official_run(db_session, USER_1)
     job = job_queue.enqueue(
         db_session,
         ORG_1,
@@ -303,7 +307,7 @@ def test_official_worker_requires_explicit_actor(db_session: Session) -> None:
 
 def test_scheduled_and_requested_official_runs_coalesce_independently(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
-    _grant_fx_run(db_session, USER_1)
+    _grant_official_run(db_session, USER_1)
     requester = User(
         id=uuid4(),
         organization_id=ORG_1,

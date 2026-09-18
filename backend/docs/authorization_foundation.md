@@ -403,7 +403,9 @@ access requirements, and deployment inventory are owned by the
 engine, shared workbench, and run-registry requirements are owned by the
 [IRRBB enforcement rollout](irrbb_enforcement_rollout.md). FX direct and shared
 surfaces, result projections, and required grants are owned by the
-[FX rollout contract](fx_enforcement_rollout.md). Existing
+[FX rollout contract](fx_enforcement_rollout.md). FTP dashboards, runs, shared
+workbench entries, and deployment grants are owned by the
+[FTP rollout contract](ftp_enforcement_rollout.md). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,

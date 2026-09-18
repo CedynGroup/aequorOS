@@ -33,6 +33,7 @@ import {
   num,
   numOrNull,
 } from "@/lib/api/values";
+import { FTP_CONFIDENTIAL_RUN_REASON } from "@/lib/modules";
 import { currencyCode, fmtInt } from "@/lib/format";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
@@ -100,7 +101,11 @@ export default function EnterpriseStressWorkbench({
     ? "Requires FX run permission at confidential sensitivity. An organization owner can grant it."
     : null;
   const enterpriseRunDeniedReason =
-    moduleLens === "fx" ? fxRunDeniedReason : null;
+    moduleLens === "ftp" && !moduleScope.ftpRun
+      ? FTP_CONFIDENTIAL_RUN_REASON
+      : moduleLens === "fx"
+        ? fxRunDeniedReason
+        : null;
 
   const [tab, setTab] = useState<Tab>("results");
   const [builderOpen, setBuilderOpen] = useState(false);

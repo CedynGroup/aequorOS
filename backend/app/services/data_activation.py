@@ -72,6 +72,7 @@ def activate_bank_data(
         ("liquidity", Module.LIQUIDITY),
         ("irr", Module.IRRBB),
         ("fx", Module.FX),
+        ("ftp", Module.FTP),
     ):
         if payload.run_calculations and module_scope.runs_module(db, bank, engine):
             scoped_authorization.require_resolved_bank_permission(
