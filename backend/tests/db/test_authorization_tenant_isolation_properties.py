@@ -562,17 +562,13 @@ def test_generated_bindings_never_cross_postgres_rls(
     property_check()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="aeq-rbac-cross-tenant-route-404",
-)
 def test_every_sibling_bank_read_route_returns_not_found(
     migrated_postgres_schema: MigratedPostgresSchema,
     monkeypatch: pytest.MonkeyPatch,
     fake_storage: Any,
     storage_engine: Any,
 ) -> None:
-    """The filed follow-up turns every sibling-bank read into a non-leaking 404."""
+    """Every sibling-bank read route returns a non-leaking 404."""
 
     _seed_tenant(
         migrated_postgres_schema,
