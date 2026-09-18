@@ -70,10 +70,13 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
   and parent-list breadcrumbs, and may use a subtitle only for identifying data
   such as a source file or reporting date. Ingestion batch details use the Data
   Engine eyebrow, with both Data Engine and Batches linking back to
-  `/data-engine`. Headers sit on the page surface, separated by spacing rather
-  than a filled band or divider. The module tab strip also sits on the page ground
-  with a hairline baseline and active underline; raised surfaces are reserved
-  for cards and panels. Behavioral model feed links live in the page body.
+  `/data-engine`. The sticky top bar, module tab strip, page header, and body all
+  sit on the page ground; the sidebar rail is the only always-dark chrome. The
+  top bar keeps a translucent ground fill and slight backdrop blur so scrolled
+  content remains legible. Headers use spacing rather than a filled band or
+  divider, while the tab strip keeps its hairline baseline and active underline.
+  Raised surfaces are reserved for cards, panels, popovers, and inset controls.
+  Behavioral model feed links live in the page body.
 - **PageContainer** — shared `px-8` horizontal gutters and `max-w-6xl` width
   for PageHeader and module/detail bodies; vertical spacing belongs to the caller.
   Each loading, error, and loaded state must receive exactly one container.

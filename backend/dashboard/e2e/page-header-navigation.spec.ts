@@ -72,6 +72,18 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
 
   const heading = page.getByRole("heading", { name: "Data Engine" });
   await expect(heading).toBeVisible();
+  const topBar = page.locator("header.sticky").first();
+  await expect(topBar).not.toHaveClass(/bg-surface-raised/);
+  await expect(topBar).toHaveClass(/bg-surface-alt\/90/);
+  for (const [theme, background] of [
+    ["light", "rgba(250, 251, 252, 0.9)"],
+    ["dark", "rgba(10, 15, 26, 0.9)"],
+  ] as const) {
+    await page.locator("html").evaluate((html, value) => {
+      html.dataset.theme = value;
+    }, theme);
+    await expect(topBar).toHaveCSS("background-color", background);
+  }
   const pageHeader = page
     .locator("div.max-w-6xl")
     .filter({ has: heading })
