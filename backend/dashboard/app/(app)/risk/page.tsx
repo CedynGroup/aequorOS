@@ -242,10 +242,7 @@ export default function RiskLimitMonitorPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Risk & Limits"
-        title="Risk & Limit Monitor"
-      />
+      <PageHeader eyebrow="Risk & Limits" title="Risk & Limit Monitor" />
 
       {isLoading ? (
         <PageSkeleton />

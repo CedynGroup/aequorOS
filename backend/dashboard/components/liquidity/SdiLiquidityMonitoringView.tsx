@@ -212,10 +212,7 @@ export default function SdiLiquidityMonitoringView({
 
   return (
     <>
-      <PageHeader
-        eyebrow="Liquidity"
-        title="Liquidity Monitoring Tools"
-      />
+      <PageHeader eyebrow="Liquidity" title="Liquidity Monitoring Tools" />
       <QueryBoundary
         isLoading={
           monitoring.isLoading ||

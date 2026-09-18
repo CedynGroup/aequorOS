@@ -134,10 +134,7 @@ export default function ApprovalsPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Regulatory Reporting"
-        title="Approvals"
-      />
+      <PageHeader eyebrow="Regulatory Reporting" title="Approvals" />
 
       <PageContainer className="py-6 space-y-6">
         <QueryBoundary

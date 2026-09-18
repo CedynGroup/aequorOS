@@ -122,10 +122,7 @@ export default function LiquidityBuffer() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Liquidity"
-        title="Liquidity Buffer"
-      />
+      <PageHeader eyebrow="Liquidity" title="Liquidity Buffer" />
 
       <QueryBoundary
         isLoading={dashboard.isLoading}

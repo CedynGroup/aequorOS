@@ -205,10 +205,7 @@ export default function SdiCapitalView({
 
   return (
     <>
-      <PageHeader
-        eyebrow="Basel Capital"
-        title="Regulatory Capital"
-      />
+      <PageHeader eyebrow="Basel Capital" title="Regulatory Capital" />
       <div className="space-y-6 pb-6">
         <QueryBoundary
           isLoading={summary.isLoading}
@@ -220,7 +217,9 @@ export default function SdiCapitalView({
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <KpiStat
                   label="Capital Adequacy Ratio"
-                  value={cap.car_pct !== null ? num(cap.car_pct).toFixed(2) : "—"}
+                  value={
+                    cap.car_pct !== null ? num(cap.car_pct).toFixed(2) : "—"
+                  }
                   unit={cap.car_pct !== null ? "%" : undefined}
                   status={kpiStatus(cap.status)}
                   hint={
@@ -309,8 +308,8 @@ export default function SdiCapitalView({
                 footer={
                   cap.composition_source === "code_default" ? (
                     <span className="text-caption text-warning">
-                      This scope is the platform&rsquo;s documented default, not a
-                      scope approved for this institution — the ratio is
+                      This scope is the platform&rsquo;s documented default, not
+                      a scope approved for this institution — the ratio is
                       provisional until it is approved.
                     </span>
                   ) : undefined
@@ -336,7 +335,8 @@ export default function SdiCapitalView({
                           </StatusPill>
                           <div className="min-w-0">
                             <p className="text-body text-navy">
-                              {RISK_CLASS_LABELS[rc.risk_class] ?? rc.risk_class}
+                              {RISK_CLASS_LABELS[rc.risk_class] ??
+                                rc.risk_class}
                               {rc.in_scope
                                 ? ` — ${fmtCurrency(num(rc.rwa_ghs))}`
                                 : ""}

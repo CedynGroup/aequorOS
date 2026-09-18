@@ -195,10 +195,7 @@ export default function ContingencyFundingPlan() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Liquidity"
-        title="Contingency Funding Plan"
-      />
+      <PageHeader eyebrow="Liquidity" title="Contingency Funding Plan" />
 
       <QueryBoundary
         isLoading={ewis.isLoading}

@@ -131,10 +131,7 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
   return (
     <>
       {!embedded && (
-        <PageHeader
-          eyebrow="Liquidity"
-          title="Liquidity Monitoring Tools"
-        />
+        <PageHeader eyebrow="Liquidity" title="Liquidity Monitoring Tools" />
       )}
 
       <QueryBoundary

@@ -108,10 +108,7 @@ export default function BoardPackPage() {
     return (
       <>
         <div className="no-print">
-          <PageHeader
-            eyebrow="Reports"
-            title="Board Pack"
-          />
+          <PageHeader eyebrow="Reports" title="Board Pack" />
         </div>
         <PageContainer className="py-6">
           <EmptyState

@@ -72,10 +72,14 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
   Engine eyebrow, with both Data Engine and Batches linking back to
   `/data-engine`. Headers sit on the page surface, separated by spacing rather
   than a filled band or divider. The module tab strip also sits on the page ground
-  with only a hairline baseline; raised surfaces are reserved for cards and
-  panels.
+  with a hairline baseline and active underline; raised surfaces are reserved
+  for cards and panels. Behavioral model feed links live in the page body.
 - **PageContainer** — shared `px-8` horizontal gutters and `max-w-6xl` width
   for PageHeader and module/detail bodies; vertical spacing belongs to the caller.
+  Each loading, error, and loaded state must receive exactly one container.
+  `QueryBoundary` and `PageSkeleton` supply it for their default loading/error
+  states; pass `contained` when an ancestor already supplies the gutters.
+  Custom skeletons and loaded children own their layout.
 - **DeltaBadge, StatusPill, RatioGauge, Sparkline, RunBadge, SubTabs,
   EmptyState, Skeleton, QueryBoundary** — token-native
 - **CommandPalette** (⌘K) — zero-dep, full route registry with keywords

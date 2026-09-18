@@ -236,7 +236,8 @@ export function effectiveOrganizationModules(
   if (
     capabilities.some(
       (capability) =>
-        capability.module === "account" && capability.permission === "administer",
+        capability.module === "account" &&
+        capability.permission === "administer",
     )
   ) {
     modules.add("settings");

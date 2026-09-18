@@ -216,10 +216,7 @@ export default function CapitalPlanning() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Basel Capital"
-        title="Capital Planning"
-      />
+      <PageHeader eyebrow="Basel Capital" title="Capital Planning" />
 
       <QueryBoundary
         isLoading={

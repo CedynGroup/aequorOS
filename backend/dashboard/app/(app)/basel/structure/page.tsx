@@ -115,10 +115,7 @@ export default function CapitalStructurePage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Basel Capital"
-        title="Capital Structure"
-      />
+      <PageHeader eyebrow="Basel Capital" title="Capital Structure" />
 
       {needsBaseline ? (
         <PageContainer className="py-6">

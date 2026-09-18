@@ -442,10 +442,7 @@ export default function WhatIfLab() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Forecasting"
-        title="What-if Lab"
-      />
+      <PageHeader eyebrow="Forecasting" title="What-if Lab" />
 
       <QueryBoundary
         isLoading={runsQuery.isLoading}

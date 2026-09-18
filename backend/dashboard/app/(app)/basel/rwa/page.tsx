@@ -112,10 +112,7 @@ export default function RWABreakdown() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Basel Capital"
-        title="RWA Breakdown"
-      />
+      <PageHeader eyebrow="Basel Capital" title="RWA Breakdown" />
 
       {needsBaseline ? (
         <PageContainer className="py-6">
