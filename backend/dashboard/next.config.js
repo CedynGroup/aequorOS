@@ -3,7 +3,7 @@ const path = require("path");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Preserve middleware redirect origins exactly. Without this, Next dev
+  // Preserve route-proxy redirect origins exactly. Without this, Next dev
   // normalizes an explicit 127.0.0.1 Location through its configured
   // "localhost" hostname, crossing into a different browser cookie jar.
   skipMiddlewareUrlNormalize: true,

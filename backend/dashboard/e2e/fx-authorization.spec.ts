@@ -37,18 +37,24 @@ const test = base.extend<{
             { headers, data },
           );
           expect(preview.status(), await preview.text()).toBe(200);
-          const created = await page.request.post(`${api}/authorization/bindings`, {
-            headers,
-            data: {
-              ...data,
-              expected_authority_sentence: (await preview.json()).authority_sentence,
+          const created = await page.request.post(
+            `${api}/authorization/bindings`,
+            {
+              headers,
+              data: {
+                ...data,
+                expected_authority_sentence: (await preview.json())
+                  .authority_sentence,
+              },
             },
-          });
+          );
           expect(created.status(), await created.text()).toBe(201);
           bindings.push((await created.json()).binding.id);
         }
         await context.clearCookies();
-        await page.addInitScript(() => localStorage.setItem("aeq-tour-done", "1"));
+        await page.addInitScript(() =>
+          localStorage.setItem("aeq-tour-done", "1"),
+        );
         await page.goto("/login");
         await page
           .getByLabel("Email", { exact: true })
@@ -58,22 +64,28 @@ const test = base.extend<{
           (response) =>
             response.url().endsWith("/auth/me") && response.status() === 200,
         );
-        await page.getByRole("button", { name: "Sign in", exact: true }).click();
+        await page
+          .getByRole("button", { name: "Sign in", exact: true })
+          .click();
         const profile = await (await profileResponse).json();
-        const capabilities = profile.effective_authority.institution_capabilities
-          .find(
-            (institution: { institution_id: string }) =>
-              institution.institution_id === "BK-SAMP0001",
-          )
-          .capabilities.filter(
-            (capability: { module: string }) => capability.module === "fx",
-          );
+        const capabilities =
+          profile.effective_authority.institution_capabilities
+            .find(
+              (institution: { institution_id: string }) =>
+                institution.institution_id === "BK-SAMP0001",
+            )
+            .capabilities.filter(
+              (capability: { module: string }) => capability.module === "fx",
+            );
         expect(
           capabilities
             .filter(
-              (capability: { permission: string }) => capability.permission === "view",
+              (capability: { permission: string }) =>
+                capability.permission === "view",
             )
-            .map((capability: { sensitivity: string }) => capability.sensitivity)
+            .map(
+              (capability: { sensitivity: string }) => capability.sensitivity,
+            )
             .sort(),
         ).toEqual([...sensitivities].sort());
         if (role === "approver") {
