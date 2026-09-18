@@ -471,6 +471,7 @@ export default function SdiCapitalView({
             noPadding
           >
             <QueryBoundary
+              contained
               isLoading={summary.isLoading}
               error={summary.error}
               onRetry={() => summary.refetch()}
@@ -531,6 +532,7 @@ export default function SdiCapitalView({
             subtitle="Minimum paid-up capital and statutory reserve fund."
           >
             <QueryBoundary
+              contained
               isLoading={checks.isLoading}
               error={checks.error}
               onRetry={() => checks.refetch()}
@@ -568,6 +570,7 @@ export default function SdiCapitalView({
             noPadding
           >
             <QueryBoundary
+              contained
               isLoading={classification.isLoading}
               error={classification.error}
               onRetry={() => classification.refetch()}

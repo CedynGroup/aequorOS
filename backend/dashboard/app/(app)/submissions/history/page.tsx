@@ -233,6 +233,7 @@ export default function HistoryPage() {
 
       <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={query.isLoading}
           error={query.error}
           onRetry={() => query.refetch()}

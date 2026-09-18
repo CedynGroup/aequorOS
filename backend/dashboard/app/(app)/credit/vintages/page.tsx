@@ -68,6 +68,7 @@ export default function CreditVintagesPage() {
     >
       {() => (
         <QueryBoundary
+          contained
           isLoading={vintages.isLoading}
           error={vintages.error}
           onRetry={() => vintages.refetch()}

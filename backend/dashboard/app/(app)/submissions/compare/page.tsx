@@ -520,6 +520,7 @@ export default function ComparePage() {
 
       <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={selectorsLoading}
           error={selectorsError}
           onRetry={() => {

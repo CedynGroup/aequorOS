@@ -56,6 +56,7 @@ export default function CreditConcentrationPage() {
     >
       {() => (
         <QueryBoundary
+          contained
           isLoading={concentration.isLoading}
           error={concentration.error}
           onRetry={() => concentration.refetch()}

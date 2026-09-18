@@ -113,6 +113,7 @@ export default function AwaitingSignaturePage() {
           noPadding
         >
           <QueryBoundary
+            contained
             isLoading={queue.isLoading}
             error={queue.error}
             onRetry={() => queue.refetch()}

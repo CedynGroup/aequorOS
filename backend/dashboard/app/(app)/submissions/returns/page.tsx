@@ -348,6 +348,7 @@ function ReturnsWorkspace() {
         )}
 
         <QueryBoundary
+          contained
           isLoading={
             templatesQuery.isLoading ||
             anchorsQuery.isLoading ||
@@ -862,6 +863,7 @@ function PackageWorkspace({
       }
     >
       <QueryBoundary
+        contained
         isLoading={eventsQuery.isLoading}
         error={eventsQuery.error}
         onRetry={() => eventsQuery.refetch()}

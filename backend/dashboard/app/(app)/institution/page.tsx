@@ -69,6 +69,7 @@ export default function InstitutionProfilePage() {
 
       <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={query.isLoading}
           error={notFound ? null : query.error}
           onRetry={() => query.refetch()}

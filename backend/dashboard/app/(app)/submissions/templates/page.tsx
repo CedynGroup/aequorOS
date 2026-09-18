@@ -55,6 +55,7 @@ export default function TemplatesPage() {
         </div>
 
         <QueryBoundary
+          contained
           isLoading={query.isLoading}
           error={query.error}
           onRetry={() => query.refetch()}

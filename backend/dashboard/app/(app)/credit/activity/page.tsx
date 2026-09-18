@@ -76,6 +76,7 @@ export default function CreditActivityPage() {
     >
       {() => (
         <QueryBoundary
+          contained
           isLoading={activity.isLoading}
           error={activity.error}
           onRetry={() => activity.refetch()}

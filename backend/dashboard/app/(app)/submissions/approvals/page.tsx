@@ -141,6 +141,7 @@ export default function ApprovalsPage() {
 
       <PageContainer className="py-6 space-y-6">
         <QueryBoundary
+          contained
           isLoading={queueQuery.isLoading}
           error={queueQuery.error}
           onRetry={() => queueQuery.refetch()}
