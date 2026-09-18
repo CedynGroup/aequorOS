@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import TypedDict
 from uuid import UUID
 
 import jwt
@@ -1030,6 +1031,17 @@ def test_ownership_surface_state_machine_preserves_single_owner(
     )
 
 
+class _OwnerGrantArgs(TypedDict):
+    organization_id: str
+    principal_user_id: UUID
+    role_bundle: RoleBundle
+    scope: authorization.BindingScope
+    actor_user_id: UUID
+    reason: str
+    expected_authority_sentence: str
+    commit: bool
+
+
 def test_ownership_invariant_detects_public_owner_grant_mutation(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1051,7 +1063,7 @@ def test_ownership_invariant_detects_public_owner_grant_mutation(
             role_bundle=RoleBundle.ORG_OWNER,
             scope=scope,
         )
-        grant_args = dict(
+        grant_args = _OwnerGrantArgs(
             organization_id=_OWNERSHIP_ORG,
             principal_user_id=_OWNERSHIP_MEMBERS[0],
             role_bundle=RoleBundle.ORG_OWNER,

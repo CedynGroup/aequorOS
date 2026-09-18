@@ -510,7 +510,9 @@ def test_generated_bindings_never_cross_postgres_rls(
             _assert_current_fact_isolation(connection)
 
         with TestClient(app, raise_server_exceptions=False) as client:
-            facts_route = next(route for route in bank_routes if route.name == "get_bank_period_facts")
+            facts_route = next(
+                route for route in bank_routes if route.name == "get_bank_period_facts"
+            )
             path, query = _route_request(facts_route)
             response = client.get(
                 path,
@@ -654,7 +656,9 @@ def test_current_fact_isolation_detects_no_force_rls_mutation(
         connection.rollback()
         transaction = connection.begin()
         try:
-            connection.execute(text("ALTER TABLE current_financial_facts NO FORCE ROW LEVEL SECURITY"))
+            connection.execute(
+                text("ALTER TABLE current_financial_facts NO FORCE ROW LEVEL SECURITY")
+            )
             with pytest.raises(AssertionError, match="RLS isolation invariant"):
                 _assert_current_fact_isolation(connection)
         finally:

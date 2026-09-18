@@ -1,23 +1,8 @@
 # Authorization property negative controls
 
-The ownership negative control admits only `RoleBundle.ORG_OWNER` through a
-test-scoped patch of `validate_public_grant`. It executes `create_scoped_grant`
-with the real authority sentence, then requires the state machine's shared
-ownership invariant to reject an owner in an unassigned organization. Rolling back the grant
-and restoring validation must restore the invariant and the normal refusal.
-
-The Postgres negative control first checks that each tenant sees exactly its own
-current fact. It executes `ALTER TABLE current_financial_facts NO FORCE ROW LEVEL
-SECURITY` in a transaction and requires that same isolation assertion to fail.
-The transaction always rolls back; the assertion must then pass again. Neither
-negative control changes product code.
-
-The generated route proof now addresses a persisted tenant-B reporting period
-and financial fact, with a tenant-B HTTP 200 positive control asserting the exact
-returned IDs and category before tenant-A requests. Other UUID resource kinds
-still use unknown IDs and do not prove isolation of existing child resources.
-The strict `aeq-rbac-cross-tenant-route-404` expected failure remains intact.
-Ownership transfer and owner deactivation still lack a product API to exercise.
+Coverage, negative-control contracts, and known gaps are owned by
+[Authorization foundation: Executable verification](../docs/authorization_foundation.md#executable-verification).
+This document records the executed mutation-proof evidence.
 
 ## Focused execution
 
