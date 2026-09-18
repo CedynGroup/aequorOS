@@ -188,8 +188,8 @@ Every access check answers: **who (role) → may do what (permission) → on wha
 
 - **Tenant plane** — everything a bank's own users touch, hard-scoped to their
   `organization_id` by RLS. No tenant role can ever reach cross-tenant data.
-- **Bank-route existence rule** — every tenant API route that accepts a
-  `bank_id` runs the shared `resolve_tenant_bank` dependency before module or
+- **Bank-route existence rule** — every tenant API route that accepts a path or
+  query `bank_id` runs the shared `resolve_tenant_bank` dependency before module or
   permission checks. Unknown banks and banks owned by another organization
   return the same 404 envelope and never mention permissions; RLS remains
   defense in depth rather than the route's existence-hiding mechanism. This
