@@ -88,7 +88,13 @@ test.describe("legacy scalar Account administrator", () => {
     });
 
     await page.goto("/settings");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await expect(
+      page.getByRole("heading", { name: "Profile & preferences", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Authentication (SSO)" }),
+    ).toHaveCount(0);
     expect(accountRequests).toEqual([]);
 
     if (evidenceDir) {
