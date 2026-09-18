@@ -13,7 +13,7 @@ test.afterEach(async ({ page }) => {
 test.describe("unbound FX user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
 
-  test("hides navigation, 404s deep links, and sends no FX requests", async ({
+  test("disables navigation, redirects deep links, and sends no FX requests", async ({
     page,
   }) => {
     const fxRequests: string[] = [];
@@ -25,14 +25,16 @@ test.describe("unbound FX user", () => {
 
     await page.goto("/");
     await expect(
-      page.getByText("No authorized institutions", { exact: true }),
+      page.getByText("No authorized institutions yet", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("navigation")).toHaveCount(0);
+    await expect(
+      page.getByRole("navigation").getByRole("link", { name: "FX", exact: true }),
+    ).toHaveAttribute("aria-disabled", "true");
 
     await page.goto("/fx");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
     await page.goto("/fx/scenarios");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
     expect(fxRequests).toEqual([]);
 
     if (evidenceDir) {
