@@ -65,10 +65,7 @@ const sessionReader = (state: AuthGateState) =>
     (req: NextRequest, event: NextFetchEvent) => Promise<Response | undefined>
   >;
 
-export default async function proxy(
-  req: NextRequest,
-  event: NextFetchEvent,
-) {
+export default async function proxy(req: NextRequest, event: NextFetchEvent) {
   warnOnDevelopmentHostMismatch(req);
   const origin = requestOrigin(req);
   const state: AuthGateState = {};
