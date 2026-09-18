@@ -77,6 +77,7 @@ E2E_USERS = {
     "liquidity_viewer": UUID("eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9"),
     "liquidity_aggregated_viewer": UUID("eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea"),
     "macro_viewer": UUID("eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec"),
+    "fx_member": UUID("eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed"),
     "invite_fresh": UUID("eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb"),
 }
 
@@ -119,6 +120,7 @@ def main() -> None:
                         if role
                         in {
                             "grant_member",
+                            "fx_member",
                             "account_admin",
                             "legacy_account_admin",
                             "integration_admin",

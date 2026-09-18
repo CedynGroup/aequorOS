@@ -34,14 +34,16 @@ async function signIn(
     submitted = (await callback) !== null;
   }
   expect(submitted).toBe(true);
-  await expect(page.locator('button[aria-haspopup="menu"]')).toBeVisible();
+  await expect(
+    page.locator('header button[aria-haspopup="menu"]'),
+  ).toBeVisible();
 }
 
 async function expectIdentity(
   page: import("@playwright/test").Page,
   role: "admin" | "analyst" | "approver",
 ): Promise<void> {
-  await page.locator('button[aria-haspopup="menu"]').click();
+  await page.locator('header button[aria-haspopup="menu"]').click();
   await expect(
     page.getByText(`e2e.${role}@aequoros.example`, { exact: false }),
   ).toBeVisible();
@@ -179,7 +181,7 @@ test.describe("session cookie hygiene", () => {
         r.url().endsWith("/api/auth/signout") &&
         r.request().method() === "POST",
     );
-    await page.locator('button[aria-haspopup="menu"]').click();
+    await page.locator('header button[aria-haspopup="menu"]').click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     const signoutResponse = await signedOut;
     expect(await signoutResponse.headerValue("set-cookie")).toContain(
