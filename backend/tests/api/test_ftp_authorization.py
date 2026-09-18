@@ -47,9 +47,9 @@ from app.services import (
     data_activation,
     module_scope,
     pipeline,
-    scheduler,
     regulatory_capital,
     regulatory_ftp,
+    scheduler,
 )
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers

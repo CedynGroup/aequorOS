@@ -86,8 +86,12 @@ test.describe("FTP reader without run permission", () => {
     ).toBeVisible();
 
     await page.goto("/ftp/scenarios");
-    await page.getByRole("button", { name: "Scenarios & run", exact: true }).click();
-    const enterpriseRun = page.getByRole("button", { name: "Run enterprise stress" });
+    await page
+      .getByRole("button", { name: "Scenarios & run", exact: true })
+      .click();
+    const enterpriseRun = page.getByRole("button", {
+      name: "Run enterprise stress",
+    });
     await expect(enterpriseRun).toBeVisible();
     await expect(enterpriseRun).toBeDisabled();
     await enterpriseRun.locator("..").focus();
