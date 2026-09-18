@@ -21,6 +21,7 @@ import {
   OutletType as OutletTypeValues,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import PageContainer from '@/components/ui/PageContainer';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import SectionCard from '@/components/ui/SectionCard';
 import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
@@ -184,11 +185,7 @@ export default function OutletsPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/institution' },
-          { label: 'Institution Profile', href: '/institution' },
-          { label: 'Outlets' },
-        ]}
+        eyebrow="Institution Profile"
         title="Outlets"
         action={
           <button
@@ -205,7 +202,7 @@ export default function OutletsPage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <CsvImport<OutletCsvPayload>
           entityLabel="outlets"
           template={OUTLETS_TEMPLATE}
@@ -261,7 +258,7 @@ export default function OutletsPage() {
             )}
           </SectionCard>
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

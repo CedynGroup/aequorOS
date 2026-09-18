@@ -27,6 +27,7 @@ import {
   RelatedPartyRoleCode as RoleCodeValues,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import PageContainer from '@/components/ui/PageContainer';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import SectionCard from '@/components/ui/SectionCard';
 import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
@@ -210,11 +211,7 @@ export default function RelatedPartiesPage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Governance', href: '/institution' },
-          { label: 'Institution Profile', href: '/institution' },
-          { label: 'Related parties' },
-        ]}
+        eyebrow="Institution Profile"
         title="Related parties"
         action={
           <button
@@ -231,7 +228,7 @@ export default function RelatedPartiesPage() {
         }
       />
 
-      <div className="px-8 py-6 space-y-6">
+      <PageContainer className="py-6 space-y-6">
         <CsvImport<PartyCsvPayload>
           entityLabel="related parties"
           template={RELATED_PARTIES_TEMPLATE}
@@ -305,7 +302,7 @@ export default function RelatedPartiesPage() {
             />
           )}
         </QueryBoundary>
-      </div>
+      </PageContainer>
     </>
   );
 }

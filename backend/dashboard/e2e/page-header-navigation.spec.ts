@@ -267,3 +267,30 @@ test("SDI liquidity header and card grid share both edges at wide viewports", as
   ).toBeVisible();
   await expectAlignedHeaderAndCards(page);
 });
+
+for (const [route, title] of [
+  ["/institution", "Institution Profile"],
+  ["/institution/parties", "Related parties"],
+  ["/institution/outlets", "Outlets"],
+  ["/institution/products", "Products & licences"],
+  ["/institution/history", "Name history"],
+  ["/institution/registers", "Board Registers"],
+]) {
+  test(`Institution tab at ${route} keeps the header hierarchy and alignment`, async ({
+    page,
+  }) => {
+    await page.goto(route);
+    const heading = page.getByRole("heading", { level: 1, name: title, exact: true });
+    await expect(heading).toBeVisible();
+    await expect(heading.locator("..").locator("p")).toHaveText([
+      "Institution Profile",
+    ]);
+    await expect(
+      page.getByRole("navigation", { name: "Breadcrumb" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("navigation", { name: "Module sections" }),
+    ).toBeVisible();
+    await expectAlignedHeaderAndCards(page);
+  });
+}
