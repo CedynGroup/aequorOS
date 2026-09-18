@@ -7,13 +7,9 @@
  * a render prop so the payload is fetched (and cached) once per query key.
  */
 
-<<<<<<< HEAD
-import PageContainer from '@/components/ui/PageContainer';
-import type { ReactNode } from 'react';
-=======
+import PageContainer from "@/components/ui/PageContainer";
 import { useState, type ReactNode } from "react";
 import { Play } from "lucide-react";
->>>>>>> a9fb0b01 (feat(risk-service): enforce scoped FTP authorization)
 import type {
   FtpDashboardRead,
   FtpMetricsRead,
@@ -90,18 +86,8 @@ export default function FtpModuleFrame({
   return (
     <>
       <PageHeader
-<<<<<<< HEAD
         eyebrow="FTP"
         title={title}
-        action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
-=======
-        breadcrumbs={[
-          { label: "Modules", href: "/" },
-          { label: "Funds Transfer Pricing" },
-          { label: crumb },
-        ]}
-        title={title}
-        subtitle={subtitle}
         action={
           data ? (
             <div className="flex items-center gap-2">
@@ -116,7 +102,6 @@ export default function FtpModuleFrame({
             </div>
           ) : undefined
         }
->>>>>>> a9fb0b01 (feat(risk-service): enforce scoped FTP authorization)
       />
 
       {runError ? (

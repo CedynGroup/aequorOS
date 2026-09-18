@@ -34,6 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.domain.ftp.engine import (
     BranchResult,
@@ -90,6 +91,7 @@ from app.services import (
     filing_reconciliation,
     regulatory_dashboard_batching,
     regulatory_parameters,
+    scoped_authorization,
 )
 from app.services.audit import record_event
 from app.services.live_block import live_block
@@ -200,6 +202,15 @@ def run_all_ftp_scenarios(
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
     bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.FTP,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="ftp_scenario_batch",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     # Every immutable ``RegulatoryRun`` is filing evidence, so the balance-sheet
     # control gates this mint exactly as it gates capital and liquidity

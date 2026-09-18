@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from loguru import logger
 from sqlalchemy import delete, func, select
@@ -45,6 +46,8 @@ from app.services import (
     authorization,
     data_activation,
     module_scope,
+    pipeline,
+    scheduler,
     regulatory_capital,
     regulatory_ftp,
 )
@@ -752,3 +755,47 @@ def test_shared_reads_filter_ftp_before_counts_limits_and_aggregation(
     assert {row["module"] for row in window.json()["daily"]} == (
         {"capital", "ftp"} if allowed else {"capital"}
     )
+
+
+def test_queued_ftp_requires_run_before_any_execution(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    period_id = _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.FX, sensitivity=SensitivityScope.CONFIDENTIAL)
+    _, version = _grant(sensitivity=SensitivityScope.CONFIDENTIAL)
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("Unauthorized FTP execution reached a side effect")
+
+    monkeypatch.setattr(pipeline, "derive_facts", forbidden)
+    monkeypatch.setattr(data_activation, "run_official_modules", forbidden)
+    monkeypatch.setattr(regulatory_ftp, "_create_and_execute", forbidden)
+    with get_sessionmaker()() as session:
+        ctx = TenantContext(
+            organization_id=ORG_1, actor_user_id=USER_1, authorization_version=version
+        )
+        bank = session.get(Bank, SAMPLE_BANK_ID)
+        assert bank is not None
+        assert scheduler._scheduled_official_actor(session, bank) is None
+        with pytest.raises(HTTPException) as denied:
+            regulatory_ftp.run_all_ftp_scenarios(
+                session, ctx, bank.id, FtpScenarioBatchCreate(reporting_period_id=period_id)
+            )
+        assert denied.value.status_code == 403
+        job = Job(
+            organization_id=ORG_1,
+            bank_id=bank.id,
+            job_type="official_run",
+            payload={"actor_user_id": str(USER_1), "as_of_date": "2030-01-01"},
+        )
+        with pytest.raises(HTTPException) as denied:
+            pipeline.run_official(session, job)
+        assert denied.value.status_code == 403
+        assert session.scalar(select(func.count()).select_from(RegulatoryRun)) == 0
+    _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
+    with get_sessionmaker()() as session:
+        bank = session.get(Bank, SAMPLE_BANK_ID)
+        assert bank is not None
+        actor = scheduler._scheduled_official_actor(session, bank)
+        assert actor is not None
+        assert actor.id == USER_1
