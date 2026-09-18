@@ -28,7 +28,9 @@ test.describe("unbound FX user", () => {
       page.getByText("No authorized institutions yet", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("navigation").getByRole("link", { name: "FX", exact: true }),
+      page
+        .getByRole("navigation")
+        .getByRole("link", { name: "FX", exact: true }),
     ).toHaveAttribute("aria-disabled", "true");
 
     await page.goto("/fx");
