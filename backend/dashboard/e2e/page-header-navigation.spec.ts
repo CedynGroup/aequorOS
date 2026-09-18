@@ -73,8 +73,11 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
   const heading = page.getByRole("heading", { name: "Data Engine" });
   await expect(heading).toBeVisible();
   const topBar = page.locator("header.sticky").first();
+  const topBarGround = topBar.locator(':scope > [aria-hidden="true"]');
   await expect(topBar).not.toHaveClass(/bg-surface-raised/);
-  await expect(topBar).toHaveClass(/bg-surface-alt\/90/);
+  await expect(topBar).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(topBar).toHaveCSS("backdrop-filter", "none");
+  await expect(topBarGround).toHaveCSS("backdrop-filter", "blur(4px)");
   for (const [theme, background] of [
     ["light", "rgba(250, 251, 252, 0.9)"],
     ["dark", "rgba(10, 15, 26, 0.9)"],
@@ -82,8 +85,25 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
     await page.locator("html").evaluate((html, value) => {
       html.dataset.theme = value;
     }, theme);
-    await expect(topBar).toHaveCSS("background-color", background);
+    await expect(topBarGround).toHaveCSS("background-color", background);
   }
+  await topBar
+    .getByRole("button", { name: /Search/ })
+    .filter({ visible: true })
+    .click();
+  const palette = page.getByRole("dialog");
+  await expect(palette).toBeVisible();
+  await expect(palette).toHaveCSS("height", `${page.viewportSize()!.height}px`);
+  expect((await palette.boundingBox())?.y).toBe(0);
+  await page.keyboard.press("Escape");
+  await topBar.getByRole("button", { name: /^Notifications/ }).click();
+  await page.getByRole("button", { name: /^Inbox/ }).click();
+  await page.getByRole("button", { name: /Open full inbox/ }).click();
+  const inbox = page.getByRole("dialog", { name: "Notifications" });
+  await expect(inbox).toBeVisible();
+  await expect(inbox).toHaveCSS("height", `${page.viewportSize()!.height}px`);
+  expect((await inbox.boundingBox())?.y).toBe(0);
+  await page.keyboard.press("Escape");
   const pageHeader = page
     .locator("div.max-w-6xl")
     .filter({ has: heading })
