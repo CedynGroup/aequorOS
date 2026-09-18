@@ -72,7 +72,6 @@ export default function ReverseStress() {
       <PageHeader
         eyebrow="Forecasting"
         title="Reverse Stress Testing"
-        subtitle="The severity multipliers at which the hard floors break — searched over the stored scenario engines, never a new model"
         action={
           <button
             type="button"

@@ -32,7 +32,6 @@ export default function BoardRegistersPage() {
           { label: "Board Registers" },
         ]}
         title="Board Registers"
-        subtitle="The Board's adopted risk configuration — liquidity thresholds, EWI trigger levels, CRM haircuts and ECL assumptions, each generation recorded with approval evidence"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 

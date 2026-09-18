@@ -219,7 +219,6 @@ export default function CapitalPlanning() {
       <PageHeader
         eyebrow="Basel Capital"
         title="Capital Planning"
-        subtitle="Multi-year capital ratio projection from stored forecast runs · what-if planner on the current base"
       />
 
       <QueryBoundary

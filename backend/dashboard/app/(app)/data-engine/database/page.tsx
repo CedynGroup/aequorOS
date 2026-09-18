@@ -40,7 +40,6 @@ export default function DatabaseDirectPage() {
             </span>
           </span>
         }
-        subtitle="Configure read-only extraction against a bank-hosted reporting replica. A live connection requires the matching driver, bank credentials, and network path installed on this service; use file upload or the Push API until onboarding is complete."
       />
 
       <PageContainer className="py-6 space-y-8">

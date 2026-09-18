@@ -69,9 +69,13 @@ test("module headers rely on the tab strip instead of breadcrumbs", async ({
     .getByRole("heading", { name: "Integrations" })
     .boundingBox();
   expect(titleBox?.x).toBe(bodyHeadingBox?.x);
-  await expect(
-    page.getByRole("navigation", { name: "Module sections" }),
-  ).toBeVisible();
+  const moduleSections = page.getByRole("navigation", {
+    name: "Module sections",
+  });
+  await expect(moduleSections).toBeVisible();
+  const tabStrip = moduleSections.locator("..");
+  await expect(tabStrip).toHaveClass(/border-b/);
+  await expect(tabStrip).not.toHaveClass(/bg-surface-raised/);
   await expect(
     page.getByRole("navigation", { name: "Breadcrumb" }),
   ).toHaveCount(0);
@@ -200,7 +204,7 @@ for (const [route, eyebrow] of [
   ["/risk", "Risk & Limits"],
   ["/alerts", "Alerts"],
 ]) {
-  test(`module header at ${route} exposes ${eyebrow} without breadcrumbs`, async ({
+  test(`module header at ${route} exposes only ${eyebrow} and its title`, async ({
     page,
   }) => {
     await page.goto(route);
@@ -208,7 +212,7 @@ for (const [route, eyebrow] of [
     await expect(heading).toBeVisible();
     const header = heading.locator("..");
     await expect(header.locator("p").first()).toHaveText(eyebrow);
-    await expect(header.locator("p").nth(1)).toBeVisible();
+    await expect(header.locator("p")).toHaveCount(1);
     await expect(
       page.getByRole("navigation", { name: "Breadcrumb" }),
     ).toHaveCount(0);

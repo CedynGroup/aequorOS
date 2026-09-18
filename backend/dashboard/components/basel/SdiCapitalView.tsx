@@ -208,7 +208,6 @@ export default function SdiCapitalView({
       <PageHeader
         eyebrow="Basel Capital"
         title="Regulatory Capital"
-        subtitle="Simplified capital adequacy for a specialised deposit-taking institution under Act 930, Section 29."
       />
       <PageContainer className="py-6 space-y-6">
         <QueryBoundary

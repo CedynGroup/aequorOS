@@ -13,7 +13,6 @@ export default function FxScenarios() {
       <PageHeader
         eyebrow="FX"
         title="Enterprise Stress Workbench"
-        subtitle="Macro scenario → all engines → 3-year projection to Appendix II — the FX path revalues the open position inside the enterprise run"
       />
       <PageContainer className="py-6">
         <ScenarioWorkbench module="fx" />

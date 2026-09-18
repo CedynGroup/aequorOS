@@ -17,7 +17,6 @@ export default function FtpCurvePage() {
   return (
     <FtpModuleFrame
       title="Transfer Curve"
-      subtitle="Match-funded FTP curve · base market yield plus liquidity premium and funding spread"
     >
       {(ctx) => <CurveBody ctx={ctx} />}
     </FtpModuleFrame>

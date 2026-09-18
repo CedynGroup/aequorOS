@@ -43,7 +43,6 @@ export default function MarketDataPage() {
       <PageHeader
         eyebrow="Data Engine"
         title="Market Data"
-        subtitle="Manual uploads are available now for yield curves, FX rates, ratings, and macro forecasts. Bloomberg and LSEG (formerly Refinitiv) configuration can be saved for onboarding, but live vendor transport is unavailable in this deployment."
       />
       <PageContainer className="py-6 space-y-8">
         <section className="space-y-4">

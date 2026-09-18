@@ -215,11 +215,6 @@ export default function SdiLiquidityMonitoringView({
       <PageHeader
         eyebrow="Liquidity"
         title="Liquidity Monitoring Tools"
-        subtitle={
-          isSdi
-            ? "LMTD compliance, contractual maturity gaps, funding concentration, and counterbalancing capacity."
-            : "Basel liquidity compliance, contractual maturity gaps, funding concentration, and counterbalancing capacity."
-        }
       />
       <PageContainer className="py-6 space-y-6">
         <QueryBoundary

@@ -163,7 +163,6 @@ export default function RegulatoryCalendarPage() {
       <PageHeader
         eyebrow="Regulatory Reporting"
         title="Regulatory Reporting"
-        subtitle={`${centralBankName()} deadline board · every official return, its due date, and its package state`}
         asOf={asOf ? fmtDateUTC(asOf) : undefined}
         action={
           <label className="flex items-center gap-2 text-caption text-slate">

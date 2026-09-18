@@ -57,7 +57,6 @@ export default function BehavioralLiquidityPage() {
       <PageHeader
         eyebrow="Behavioral Models"
         title="Behavioral Liquidity"
-        subtitle="Observed deposit runoff, withdrawal, attrition, seasonality, and pricing response from canonical history"
       />
       <SdiModuleContext title="SDI liquidity behavior">
         These are observed deposit behaviors, not a supervisory liquidity-stress result. CFP overlays require an approved scenario linked to a documented action.

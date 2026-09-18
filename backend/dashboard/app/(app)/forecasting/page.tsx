@@ -144,7 +144,6 @@ function BalanceSheetWorkspace() {
       <PageHeader
         eyebrow="Forecasting"
         title="Balance Sheet Forecast"
-        subtitle={`Deterministic ${horizonYears}-year projection from canonical financials and persisted scenario assumptions`}
         action={
           <div className="flex items-center gap-2">
             <select

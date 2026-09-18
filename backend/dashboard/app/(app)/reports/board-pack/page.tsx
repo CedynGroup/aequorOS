@@ -111,7 +111,6 @@ export default function BoardPackPage() {
           <PageHeader
             eyebrow="Reports"
             title="Board Pack"
-            subtitle="Print-optimized executive report"
           />
         </div>
         <PageContainer className="py-6">
@@ -131,7 +130,6 @@ export default function BoardPackPage() {
         <PageHeader
           eyebrow="Reports"
           title="Board Pack"
-          subtitle="Cover · executive summary · module briefs — A4 print layout"
           asOf={fmtDateUTC(period.periodEnd)}
           action={
             <div className="flex items-center gap-2">

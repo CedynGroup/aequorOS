@@ -48,7 +48,6 @@ export default function T24Page() {
             </span>
           </span>
         }
-        subtitle="Save T24 endpoint, credentials, and domain mappings for onboarding. Live OFS, IRIS, and Transact Open API requests are unavailable in this deployment; use file upload or the Push API for ingestion."
       />
 
       {/* Secondary sub-navigation */}

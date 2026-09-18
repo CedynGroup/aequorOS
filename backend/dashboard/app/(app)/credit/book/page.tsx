@@ -144,7 +144,6 @@ function LoanBookBody() {
       <PageHeader
         eyebrow="Credit"
         title="Loan Book"
-        subtitle="Every loan behind the credit metrics, classified under the active grid."
         asOf={page.data?.asOf}
       />
       <QueryBoundary isLoading={page.isLoading} error={page.error} onRetry={() => page.refetch()}>

@@ -249,7 +249,6 @@ export default function BaselOverview() {
       <PageHeader
         eyebrow="Basel Capital"
         title="Basel Capital"
-        subtitle={`Capital Adequacy Ratio · Tier 1 / Tier 2 · ${regShort()} CRD framework`}
         action={
           data ? (
             <LiveEngineNote live={data.live} stored={data.stored} />

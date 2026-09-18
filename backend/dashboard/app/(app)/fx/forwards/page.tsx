@@ -16,7 +16,6 @@ export default function FxForwardsPage() {
   return (
     <FxModuleFrame
       title="FX Forwards"
-      subtitle="Forward curve monitor · outright points by tenor against the period-end spot"
     >
       {(ctx) => <ForwardsBody ctx={ctx} />}
     </FxModuleFrame>

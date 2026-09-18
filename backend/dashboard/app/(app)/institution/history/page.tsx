@@ -58,7 +58,6 @@ export default function NameHistoryPage() {
           { label: 'Name history' },
         ]}
         title="Name history"
-        subtitle="Prior legal names, when they changed, and why"
         action={
           <button
             type="button"

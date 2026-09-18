@@ -184,7 +184,6 @@ export default function HistoryPage() {
       <PageHeader
         eyebrow="Regulatory Reporting"
         title="History"
-        subtitle="Every package version — immutable snapshots, approvals, channel events, and artifacts"
         action={
           <div className="flex items-center gap-2 flex-wrap">
             <select

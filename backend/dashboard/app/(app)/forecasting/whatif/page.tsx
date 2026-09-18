@@ -445,7 +445,6 @@ export default function WhatIfLab() {
       <PageHeader
         eyebrow="Forecasting"
         title="What-if Lab"
-        subtitle="Deterministic macro shocks re-projected against the unshocked base run on identical canonical inputs"
       />
 
       <QueryBoundary

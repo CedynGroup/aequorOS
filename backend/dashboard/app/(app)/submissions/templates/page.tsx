@@ -36,7 +36,6 @@ export default function TemplatesPage() {
       <PageHeader
         eyebrow="Regulatory Reporting"
         title="Return templates"
-        subtitle="The regulator return registry — citations, deadlines, fidelity grades, and rendering layouts"
       />
 
       <PageContainer className="py-6 space-y-6">

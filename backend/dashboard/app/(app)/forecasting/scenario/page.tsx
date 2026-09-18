@@ -134,7 +134,6 @@ export default function ScenariosPage() {
       <PageHeader
         eyebrow="Forecasting"
         title="Scenario Manager"
-        subtitle="Design scenario assumptions, run projections, and compare saved runs side-by-side"
       />
 
       <QueryBoundary

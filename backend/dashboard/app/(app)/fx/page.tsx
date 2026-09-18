@@ -19,7 +19,6 @@ export default function FxExposurePage() {
   return (
     <FxModuleFrame
       title="FX Exposure"
-      subtitle={`Net open position by currency · ${regShort()} NOP framework · ${currencyCode()} equivalents at period-end spot`}
     >
       {(ctx) => <ExposureBody ctx={ctx} />}
     </FxModuleFrame>

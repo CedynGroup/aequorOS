@@ -87,7 +87,6 @@ export default function NSFRDashboard() {
       <PageHeader
         eyebrow="Liquidity"
         title="Net Stable Funding Ratio"
-        subtitle={`Basel III NSFR · 1-year stable funding horizon · ${centralBankName()} has issued no NSFR requirement, so the Basel standard applies`}
       />
 
       <QueryBoundary

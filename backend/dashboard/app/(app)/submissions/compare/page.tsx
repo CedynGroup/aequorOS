@@ -515,7 +515,6 @@ export default function ComparePage() {
       <PageHeader
         eyebrow="Regulatory Reporting"
         title="Compare"
-        subtitle="Line-by-line diff of two generated returns — server-computed, favorability-coloured deltas"
         action={<ModeToggle mode={mode} onChange={setMode} />}
       />
 

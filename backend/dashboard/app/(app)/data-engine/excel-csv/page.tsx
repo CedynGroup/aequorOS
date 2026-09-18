@@ -27,7 +27,6 @@ export default function ExcelCsvPage() {
       <PageHeader
         eyebrow="Data Engine"
         title="Excel & CSV"
-        subtitle="Workbook and CSV drops with mapping-driven translation, cell-level lineage, and validation gating."
       />
       <PageContainer className="py-6 space-y-6">
         <SubTabs items={VIEWS} active={view} onChange={setView} />

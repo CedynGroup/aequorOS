@@ -32,11 +32,9 @@ export type FxFrameContext = {
 
 export default function FxModuleFrame({
   title,
-  subtitle,
   children,
 }: {
   title: string;
-  subtitle?: string;
   children: (ctx: FxFrameContext) => ReactNode;
 }) {
   const { bank, moduleScope } = useBankContext();
@@ -57,7 +55,6 @@ export default function FxModuleFrame({
       <PageHeader
         eyebrow="FX"
         title={title}
-        subtitle={subtitle}
         action={
           data ? (
             <LiveEngineNote live={data.live} stored={data.stored} />

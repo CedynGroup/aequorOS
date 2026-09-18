@@ -42,7 +42,6 @@ export default function FtpExPostPage() {
   return (
     <FtpModuleFrame
       title="Ex-ante vs Ex-post"
-      subtitle="Scenario-priced margins for this period against the subsequently measured outcome"
     >
       {(ctx) => <ExPostBody ctx={ctx} />}
     </FtpModuleFrame>

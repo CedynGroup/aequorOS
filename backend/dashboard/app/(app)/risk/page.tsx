@@ -245,7 +245,6 @@ export default function RiskLimitMonitorPage() {
       <PageHeader
         eyebrow="Risk & Limits"
         title="Risk & Limit Monitor"
-        subtitle="Bank-wide limit utilization and breach status — every threshold shown comes from the module payloads, never hardcoded in this page."
       />
 
       {isLoading ? (

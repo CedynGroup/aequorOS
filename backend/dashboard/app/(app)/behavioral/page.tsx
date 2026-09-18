@@ -85,7 +85,6 @@ export default function BehavioralOverviewPage() {
       <PageHeader
         eyebrow="Behavioral Models"
         title="Behavioral Models"
-        subtitle="Tenant-scoped ML estimators feeding the ALM engines through the reviewed-assumption workflow"
       />
 
       <SdiModuleContext title="SDI ALM context">

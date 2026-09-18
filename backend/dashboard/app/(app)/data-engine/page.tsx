@@ -25,7 +25,6 @@ export default function DataEngineOverviewPage() {
       <PageHeader
         eyebrow="Data Engine"
         title="Data Engine"
-        subtitle="Connect data sources, ingest into the canonical model, and trace every record back to its source."
       />
       <PageContainer className="py-6 space-y-8">
         <UnreconciledBookBanner />

@@ -198,7 +198,6 @@ export default function ContingencyFundingPlan() {
       <PageHeader
         eyebrow="Liquidity"
         title="Contingency Funding Plan"
-        subtitle={`Server-side EWI framework (LRMD ¶28) · CFP lifecycle with ${regShort()} ¶74 notification`}
       />
 
       <QueryBoundary

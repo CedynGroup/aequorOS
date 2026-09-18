@@ -16,7 +16,6 @@ export default function FtpScenarios() {
       <PageHeader
         eyebrow="FTP"
         title="FTP Scenario Workbench"
-        subtitle="Curve and funding-spread overlays repricing the book — live analysis, side-by-side comparison"
       />
       <PageContainer className="py-6">
         <ScenarioWorkbench

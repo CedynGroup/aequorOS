@@ -18,7 +18,6 @@ export default function FxVarPage() {
   return (
     <FxModuleFrame
       title="FX Value at Risk & Stress"
-      subtitle="Historical-simulation VaR · diversification decomposition · currency-crisis stressed VaR"
     >
       {(ctx) => <VarBody ctx={ctx} />}
     </FxModuleFrame>

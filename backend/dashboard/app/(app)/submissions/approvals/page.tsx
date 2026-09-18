@@ -137,7 +137,6 @@ export default function ApprovalsPage() {
       <PageHeader
         eyebrow="Regulatory Reporting"
         title="Approvals"
-        subtitle="Checker queue — open a return to review it and approve and sign, or send it back with a note; no package reaches a channel without a different officer than its maker"
       />
 
       <PageContainer className="py-6 space-y-6">

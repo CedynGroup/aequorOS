@@ -113,11 +113,6 @@ export default function StressBoardPack() {
       <PageHeader
         eyebrow="Reports"
         title="Stress Board-Pack Composer"
-        subtitle={
-          isSdi
-            ? "Compose a proportionate SDI stress pack from an immutable run — simplified capital, baseline LMTD evidence, commentary, and management actions"
-            : "Compose a board-ready ICAAP stress pack from an immutable run — Appendix II tables, charts, commentary, management actions"
-        }
         action={
           <button
             type="button"

@@ -145,7 +145,6 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Regulatory Reporting"
         title="Channel settings"
-        subtitle="Per-channel submission configuration · credentials are write-only (fingerprint back, never the material)"
         action={
           <label className="flex items-center gap-2 text-caption text-slate">
             Channel

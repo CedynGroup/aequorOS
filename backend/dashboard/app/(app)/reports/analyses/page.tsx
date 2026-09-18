@@ -20,7 +20,6 @@ export default function SavedAnalysesPage() {
       <PageHeader
         eyebrow="Reports"
         title="Saved Analyses"
-        subtitle="ALCO prep · every saved scenario analysis across the five treasury workbenches"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
       />
 

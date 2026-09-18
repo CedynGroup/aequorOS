@@ -15,7 +15,6 @@ export default function LiquidityStress() {
       <PageHeader
         eyebrow="Liquidity"
         title={isSdi ? 'SDI Stress Workbench' : 'Enterprise Stress Workbench'}
-        subtitle={isSdi ? 'Simplified capital and material-risk stress. SDI liquidity stress remains not assessed until the BoG method is configured.' : 'Macro scenario → all engines → 3-year projection to Appendix II, with the LCR/NSFR path coupled to the solvency outcome'}
       />
       <PageContainer className="py-6">
         <ScenarioWorkbench module="liquidity" />

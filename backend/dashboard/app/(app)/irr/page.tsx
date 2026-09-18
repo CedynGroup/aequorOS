@@ -42,7 +42,6 @@ const SPARK_COLOR: Record<KpiStatus, string> = {
 export default function IrrOverviewPage() {
   return (
     <IrrWorkspace
-      subtitle={`Banking book IRRBB · Repricing gap · EVE & EaR sensitivity · Basel IRRBB standard (BCBS d368/d578); the ${regShort()} IRRBB guideline is an exposure draft`}
     >
       {({ data, metrics: m, latestRun, computedAt }) => {
         const eveLimit = num(m.eveLimitPct);

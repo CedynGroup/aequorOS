@@ -23,7 +23,6 @@ export default function IrrGapsPage() {
 
   return (
     <IrrWorkspace
-      subtitle="Repricing gap by tenor bucket — rate-sensitive assets vs liabilities"
     >
       {({ data, metrics: m, latestRun, computedAt }) => {
         const rows = data.gapTable ?? [];

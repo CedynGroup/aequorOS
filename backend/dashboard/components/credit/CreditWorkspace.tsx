@@ -24,10 +24,8 @@ export type CreditTabContext = {
 };
 
 export default function CreditWorkspace({
-  subtitle,
   children,
 }: {
-  subtitle: string;
   children: (ctx: CreditTabContext) => ReactNode;
 }) {
   const { bank } = useBankContext();
@@ -40,7 +38,6 @@ export default function CreditWorkspace({
       <PageHeader
         eyebrow="Credit"
         title="Credit"
-        subtitle={subtitle}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
       <QueryBoundary

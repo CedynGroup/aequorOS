@@ -56,11 +56,6 @@ export default function CommandCenterPage() {
       <PageHeader
         eyebrow="Command Center"
         title="Treasury Command Center"
-        subtitle={
-          bank
-            ? `${bank.name} · ${centralBankName()} licensee · ${labelize(bank.licenseType)}`
-            : "Loading bank profile…"
-        }
         action={<RoleLensTabs role={role} onChange={setRole} />}
       />
 

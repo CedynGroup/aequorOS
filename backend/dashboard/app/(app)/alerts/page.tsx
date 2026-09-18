@@ -94,7 +94,6 @@ export default function AlertCenterPage() {
       <PageHeader
         eyebrow="Alerts"
         title="Alert Center"
-        subtitle="Open limit breaches across every live module, reconciled by the pipeline on each refresh — breaches clear automatically when the data does."
         action={
           <div
             className="inline-flex rounded-md border border-border overflow-hidden"

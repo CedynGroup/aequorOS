@@ -70,7 +70,6 @@ export default function CanonicalPositionsPage() {
       <PageHeader
         eyebrow="Data Engine"
         title="Canonical positions"
-        subtitle="The source-agnostic balance sheet produced by ingestion. Expand any row to trace it back to its source extraction."
       />
       <PageContainer className="py-6">
         {positionsQuery.isPending && <PageSkeleton />}

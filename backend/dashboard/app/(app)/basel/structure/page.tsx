@@ -118,7 +118,6 @@ export default function CapitalStructurePage() {
       <PageHeader
         eyebrow="Basel Capital"
         title="Capital Structure"
-        subtitle="Tier 1 (CET1, AT1), Tier 2, and regulatory deductions"
       />
 
       {needsBaseline ? (

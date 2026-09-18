@@ -115,7 +115,6 @@ export default function RWABreakdown() {
       <PageHeader
         eyebrow="Basel Capital"
         title="RWA Breakdown"
-        subtitle={`Risk-weighted assets by risk type · ${regShort()} CRD standardized approach`}
       />
 
       {needsBaseline ? (

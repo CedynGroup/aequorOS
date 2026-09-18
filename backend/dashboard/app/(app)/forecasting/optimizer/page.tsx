@@ -231,7 +231,6 @@ export default function StrategicOptimizer() {
       <PageHeader
         eyebrow="Forecasting"
         title="Strategy Optimizer"
-        subtitle="Constrained scenario search over the deterministic 5-year projection engine"
         action={runButton}
       />
 

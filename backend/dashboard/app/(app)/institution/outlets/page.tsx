@@ -190,7 +190,6 @@ export default function OutletsPage() {
           { label: 'Outlets' },
         ]}
         title="Outlets"
-        subtitle="Head office, branches, and agencies — openings, closures, relocations"
         action={
           <button
             type="button"

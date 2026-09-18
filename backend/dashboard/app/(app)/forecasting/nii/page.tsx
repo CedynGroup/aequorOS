@@ -59,7 +59,6 @@ export default function NiiForecastPage() {
       <PageHeader
         eyebrow="Forecasting"
         title="Net Interest Income Forecast"
-        subtitle="Projected NII per horizon year from the persisted forecast path · scenario sensitivity vs base"
       />
 
       <QueryBoundary

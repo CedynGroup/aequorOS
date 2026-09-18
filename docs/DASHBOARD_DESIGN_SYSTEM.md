@@ -63,13 +63,17 @@ themed scrollbars, focus-visible ring, print base (light forced, chrome hidden).
 - **ChartFrame / SectionCard** — standard card shells with title/actions, loading skeleton,
   footer meta (`computedAt` + RunBadge provenance)
 - **DataTable** — sticky header, compact density, right-aligned numeric columns, row drill
-- **PageHeader** — shared module and object-detail header: small module eyebrow,
-  title, subtitle, and optional actions / as-of date. Module pages use the sidebar
-  and tab strip for navigation and omit breadcrumbs. Object-detail pages retain
-  linked module and parent-list breadcrumbs in the same header; ingestion batch
-  details use the Data Engine eyebrow, with both Data Engine and Batches linking
-  back to `/data-engine`. Headers sit on the page surface, separated by spacing
-  rather than a filled band or divider; the module tab strip stays unchanged.
+- **PageHeader** — shared module and object-detail header with a small module
+  eyebrow, title, and optional actions / as-of date. Module pages show the eyebrow
+  and title only; they use the sidebar and tab strip for navigation and omit
+  breadcrumbs and descriptive subtitles. Object-detail pages retain linked module
+  and parent-list breadcrumbs, and may use a subtitle only for identifying data
+  such as a source file or reporting date. Ingestion batch details use the Data
+  Engine eyebrow, with both Data Engine and Batches linking back to
+  `/data-engine`. Headers sit on the page surface, separated by spacing rather
+  than a filled band or divider. The module tab strip also sits on the page ground
+  with only a hairline baseline; raised surfaces are reserved for cards and
+  panels.
 - **PageContainer** — shared `px-8` horizontal gutters and `max-w-6xl` width
   for PageHeader and module/detail bodies; vertical spacing belongs to the caller.
 - **DeltaBadge, StatusPill, RatioGauge, Sparkline, RunBadge, SubTabs,

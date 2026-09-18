@@ -35,11 +35,9 @@ export type FtpFrameContext = {
 
 export default function FtpModuleFrame({
   title,
-  subtitle,
   children,
 }: {
   title: string;
-  subtitle?: string;
   children: (ctx: FtpFrameContext) => ReactNode;
 }) {
   const { bank } = useBankContext();
@@ -56,7 +54,6 @@ export default function FtpModuleFrame({
       <PageHeader
         eyebrow="FTP"
         title={title}
-        subtitle={subtitle}
         action={data ? <LiveEngineNote live={data.live} stored={data.stored} /> : undefined}
       />
 

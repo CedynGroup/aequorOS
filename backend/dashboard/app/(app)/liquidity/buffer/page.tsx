@@ -125,7 +125,6 @@ export default function LiquidityBuffer() {
       <PageHeader
         eyebrow="Liquidity"
         title="Liquidity Buffer"
-        subtitle="High quality liquid asset composition · Basel III LCR numerator"
       />
 
       <QueryBoundary

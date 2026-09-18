@@ -102,7 +102,6 @@ export default function CashFlowForecast() {
       <PageHeader
         eyebrow="Liquidity"
         title="Cash Flow Forecast"
-        subtitle="Daily net cash flow projection · LSTM behavioral model vs static assumptions"
       />
 
       <PageContainer className="py-6 space-y-6">

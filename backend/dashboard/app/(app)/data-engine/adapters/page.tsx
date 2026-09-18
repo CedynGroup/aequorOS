@@ -33,7 +33,6 @@ export default function AdaptersPage() {
       <PageHeader
         eyebrow="Data Engine"
         title="Other adapters"
-        subtitle="The Phase 3 adapter portfolio. Database (Direct) has shipped; the core-banking adapters remain planned — no connection UI is shown until an adapter actually ships."
       />
       <PageContainer className="py-6 space-y-6">
         <Link

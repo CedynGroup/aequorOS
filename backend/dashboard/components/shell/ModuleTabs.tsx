@@ -17,7 +17,7 @@ export default function ModuleTabs({ tabs }: { tabs: Tab[] }) {
     .map((tab) => ({ ...tab, access: hrefAccess(tab.href, moduleScope) }))
     .filter((tab) => tab.access.state !== "hidden");
   return (
-    <div className="bg-surface-raised border-b border-border-light px-8">
+    <div className="border-b border-border-light px-8">
       <nav
         className="-mb-px flex gap-1 overflow-x-auto"
         aria-label="Module sections"

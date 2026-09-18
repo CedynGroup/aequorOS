@@ -28,7 +28,6 @@ export default function FtpProductsPage() {
   return (
     <FtpModuleFrame
       title="Product Profitability"
-      subtitle="Match-funded net margin by product · opex, ECL, and capital charges deducted"
     >
       {(ctx) => <ProductsBody ctx={ctx} />}
     </FtpModuleFrame>

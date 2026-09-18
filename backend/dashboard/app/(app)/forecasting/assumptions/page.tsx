@@ -51,7 +51,6 @@ export default function AssumptionsPage() {
       <PageHeader
         eyebrow="Forecasting"
         title="Assumption Registry"
-        subtitle="The audit record of what each run consumed — assumptions are edited in the Scenario Builder"
         action={
           <Link
             href="/behavioral"

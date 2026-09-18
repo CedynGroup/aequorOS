@@ -288,7 +288,6 @@ function ReturnsWorkspace() {
       <PageHeader
         eyebrow="Regulatory Reporting"
         title="Returns workspace"
-        subtitle={isSdi ? 'SDI return family · generate → validate → approve → export → submit, one immutable package version at a time' : 'Generate → validate → approve → export → submit, one immutable package version at a time'}
         action={
           <div className="flex items-center gap-2 flex-wrap">
             <label className="flex items-center gap-2 text-caption text-slate">

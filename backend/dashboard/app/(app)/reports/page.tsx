@@ -26,7 +26,6 @@ export default function ReportsPage() {
       <PageHeader
         eyebrow="Reports"
         title="Reports Library"
-        subtitle="Governance console · Immutable runs, regulatory packs, board reporting"
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
           <Link

@@ -75,7 +75,6 @@ function kpiStatus(status: string): 'ok' | 'warn' | 'crit' | undefined {
 export default function CreditOverviewPage() {
   return (
     <CreditWorkspace
-      subtitle="Asset quality, provisioning and early-warning position across the loan book."
     >
       {({ data, metrics }) => {
         const par = Object.fromEntries(data.portfolioAtRisk.map((m) => [m.code, m]));

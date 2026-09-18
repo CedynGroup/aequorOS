@@ -16,7 +16,6 @@ export default function FtpRulesPage() {
   return (
     <FtpModuleFrame
       title="FTP Methodology & Rules"
-      subtitle="The parameter set the pricing engine ran with — nothing on this page is hard-coded in the UI"
     >
       {(ctx) => <RulesBody ctx={ctx} />}
     </FtpModuleFrame>

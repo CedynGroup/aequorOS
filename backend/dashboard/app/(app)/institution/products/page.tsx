@@ -61,7 +61,6 @@ export default function ProductsLicencesPage() {
           { label: 'Products & licences' },
         ]}
         title="Products & licences"
-        subtitle="The product approval register and the institution's operating licences"
       />
 
       <div className="px-8 py-6 space-y-6">

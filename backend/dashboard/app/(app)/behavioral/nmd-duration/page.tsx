@@ -8,8 +8,6 @@ export default function NmdDurationPage() {
       slug="nmd-duration"
       config={{
         title: 'NMD Duration',
-        subtitle:
-          "Effective behavioral duration of non-maturity deposits, learned from the bank's balance history",
         valueLabel: 'Effective duration',
         format: (v) => `${v.toFixed(0)} mo`,
         avgValue: (v) => v,

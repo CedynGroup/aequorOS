@@ -186,7 +186,6 @@ export default function LiquidityCockpit() {
       <PageHeader
         eyebrow="Liquidity"
         title="Liquidity Cockpit"
-        subtitle={`Basel III LCR & NSFR · 30-day stressed horizon · ${centralBankName()} has issued no LCR or NSFR directive, so Basel parameters apply`}
         action={
           data ? (
             <LiveEngineNote live={data.live} stored={data.stored} />

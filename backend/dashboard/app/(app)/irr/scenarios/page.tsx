@@ -13,7 +13,6 @@ export default function IrrScenarios() {
       <PageHeader
         eyebrow="IRRBB"
         title="Enterprise Stress Workbench"
-        subtitle="Macro scenario → all engines → 3-year projection to Appendix II — the rate path drives ΔEVE inside the enterprise run"
       />
       <PageContainer className="py-6">
         <ScenarioWorkbench module="irr" />

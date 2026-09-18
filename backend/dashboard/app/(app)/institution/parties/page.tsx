@@ -216,7 +216,6 @@ export default function RelatedPartiesPage() {
           { label: 'Related parties' },
         ]}
         title="Related parties"
-        subtitle="Directors, key management, auditors, shareholders, UBOs, and outsourced providers"
         action={
           <button
             type="button"

@@ -28,7 +28,6 @@ export default function FxHedgesPage() {
   return (
     <FxModuleFrame
       title="FX Hedge Book"
-      subtitle="Hedge inventory · IFRS 9 prospective effectiveness · mark-to-market"
     >
       {(ctx) => <HedgesBody ctx={ctx} />}
     </FxModuleFrame>

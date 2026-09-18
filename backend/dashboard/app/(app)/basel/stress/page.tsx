@@ -15,7 +15,6 @@ export default function CapitalStress() {
       <PageHeader
         eyebrow="Basel Capital"
         title={isSdi ? 'SDI Stress Workbench' : 'Enterprise Stress Workbench'}
-        subtitle={isSdi ? 'Section 29 capital and material-risk stress with a controlled SDI liquidity not-assessed disclosure.' : 'Macro scenario → all engines → 3-year projection to Appendix II, base vs stress, with driver attribution and management actions'}
       />
       <PageContainer className="py-6">
         <ScenarioWorkbench module="capital" />

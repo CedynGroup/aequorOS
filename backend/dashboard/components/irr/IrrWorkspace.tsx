@@ -40,10 +40,8 @@ export type IrrTabContext = {
 };
 
 export default function IrrWorkspace({
-  subtitle,
   children,
 }: {
-  subtitle: string;
   children: (ctx: IrrTabContext) => ReactNode;
 }) {
   const { bank, period, moduleScope } = useBankContext();
@@ -86,7 +84,6 @@ export default function IrrWorkspace({
       <PageHeader
         eyebrow="IRRBB"
         title="Interest Rate Risk"
-        subtitle={subtitle}
         action={
           data ? (
             <div className="flex items-center gap-2">

@@ -58,7 +58,6 @@ export default function InstitutionProfilePage() {
           { label: 'Institution Profile' },
         ]}
         title="Institution Profile"
-        subtitle="Corporate register — the master data behind the LRT return family"
         action={
           <Link
             href="/submissions/returns?code=LRT-PROFILE"

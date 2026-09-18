@@ -53,7 +53,6 @@ export default function CreditConcentrationPage() {
 
   return (
     <CreditWorkspace
-      subtitle="Portfolio concentration by counterparty, sector, geography, product, collateral and employer, against Board limits."
     >
       {() => (
         <QueryBoundary

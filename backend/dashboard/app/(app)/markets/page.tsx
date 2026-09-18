@@ -617,7 +617,6 @@ export default function MarketsPage() {
       <PageHeader
         eyebrow="Markets"
         title="Markets"
-        subtitle="Live market monitor for curves, rates, FX, and credit inputs feeding Treasury and risk engines."
         action={
           <div className="flex items-center gap-4">
             <AsOfControl asOf={asOf} todayIso={todayIso} onChange={setAsOf} />

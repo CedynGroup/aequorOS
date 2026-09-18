@@ -108,7 +108,6 @@ export default function SdiLiquidityView({ bankId }: { bankId: string | undefine
       <PageHeader
         eyebrow="Liquidity"
         title="Liquidity"
-        subtitle="Liquidity monitoring for a specialised deposit-taking institution, against the Liquidity Monitoring Tools Directive (exposure draft, Feb 2026 — stated effective 1 Jan 2027)."
       />
       <PageContainer className="py-6 space-y-6">
         <QueryBoundary
