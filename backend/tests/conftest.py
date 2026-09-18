@@ -512,6 +512,32 @@ def fx_run_authority(db_session: Session) -> None:
 
 
 @pytest.fixture
+def ftp_run_authority(db_session: Session) -> None:
+    """Opt-in FTP calculation authority for integration fixtures using USER_1."""
+    authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=USER_1,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.ANALYST,
+        scope=authorization.BindingScope(
+            InstitutionScope.ORGANIZATION,
+            None,
+            ModuleScope.FTP,
+            SensitivityScope.CONFIDENTIAL,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "ftp-calculation-fixture"),
+        reason="Authorize the integration fixture FTP calculations",
+        commit=False,
+    )
+    # No sessions exist at bootstrap; fixture tokens and service contexts use authv=1.
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    user.authorization_version = 1
+    db_session.commit()
+
+
+@pytest.fixture
 def tenant_ctx() -> TenantContext:
     return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 
