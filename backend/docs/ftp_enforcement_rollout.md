@@ -37,8 +37,11 @@ remains outside this cutover unless a mutation surface is introduced.
 ## Dashboard controls
 
 The `/ftp` dashboards require aggregated view; `/ftp/scenarios` requires
-confidential view. The run-all action consumes the exact confidential run
-capability from effective authority. The shared permission-only
+confidential view. Both the dashboard's run-all action and the enterprise stress
+run control mounted at `/ftp/scenarios` consume the exact confidential run
+capability from effective authority. Without it, they remain visible and disabled
+with “Requires Funds Transfer Pricing · Confidential · Run. Ask your organization
+owner or admin to grant it.” The shared permission-only
 disabled-control policy is defined in [the RBAC guide](../../docs/rbac.md);
 native disabled controls expose their explanation through a
 keyboard-focusable wrapper.
@@ -106,7 +109,9 @@ user.
 
 ## Exact binding rows
 
-Create only rows approved from the inventory.
+Create only rows approved from the inventory through the authorization service.
+Follow the foundation's
+[authorization-version and session transition contract](authorization_foundation.md#authorization-version-and-deployment-transition).
 
 | Duty                                           | `principal_type` | `role_bundle`                                 | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
 | ---------------------------------------------- | ---------------- | --------------------------------------------- | ------------------- | ---------------- | -------------- | ------------------- |

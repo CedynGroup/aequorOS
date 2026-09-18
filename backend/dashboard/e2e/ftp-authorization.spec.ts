@@ -90,6 +90,7 @@ test.describe("FTP reader without run permission", () => {
     const enterpriseRun = page.getByRole("button", { name: "Run enterprise stress" });
     await expect(enterpriseRun).toBeVisible();
     await expect(enterpriseRun).toBeDisabled();
+    await enterpriseRun.locator("..").focus();
     await expect(enterpriseRun.locator("..")).toHaveAccessibleDescription(
       /Requires Funds Transfer Pricing · Confidential · Run/i,
     );
