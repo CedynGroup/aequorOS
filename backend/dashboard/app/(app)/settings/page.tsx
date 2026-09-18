@@ -1,28 +1,19 @@
 "use client";
 
 /**
- * Settings — token'd governance cards:
- *   · Institution profile — identity from the corporate register (single
- *     source of truth, managed under Governance → Institution Profile) plus
- *     platform reporting facts from the bank record
+ * Settings — personal preferences and operational information:
  *   · Appearance — real theme toggle (ThemeProvider)
- *   · Members — tenant-scoped identity, lifecycle, and indivisible scoped grants
  *   · Your account — the signed-in account and its permanent signer identity
  *   · Data & compute — real service health, market-data connections, and the
  *     official-run schedule note (read-only)
  *   · About — engine versions and provenance from persisted regulatory runs
  */
 
-import Link from "next/link";
-import type { InstitutionProfileRead } from "@aequoros/risk-service-api";
 import { useQuery } from "@tanstack/react-query";
 import { Monitor, Moon, Sun } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
-import AuthenticationPanel from "@/components/settings/AuthenticationPanel";
-import MembersPanel from "@/components/settings/MembersPanel";
-import CurrentAccountPanel, {
-  IdField,
-} from "@/components/settings/CurrentAccountPanel";
+import CurrentAccountPanel from "@/components/settings/CurrentAccountPanel";
+import LegacyAccessAnchorRedirect from "@/components/settings/LegacyAccessAnchorRedirect";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import RunBadge from "@/components/ui/RunBadge";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
@@ -38,12 +29,7 @@ import {
   useLatestRunsByModule,
 } from "@/components/reports/hooks";
 import { apiBaseUrl, apiOrigin } from "@/lib/api/client";
-import {
-  useBank,
-  useCashflowHistory,
-  useInstitutionProfile,
-  useMarketDataConnections,
-} from "@/lib/api/hooks";
+import { useCashflowHistory, useMarketDataConnections } from "@/lib/api/hooks";
 import { fmtRelative, labelize } from "@/lib/api/values";
 
 /** Ping the risk-service liveness endpoint directly (outside the generated client). */
@@ -65,172 +51,22 @@ function useRiskServiceHealth() {
 }
 
 export default function SettingsPage() {
-  const { bank, periods } = useBankContext();
-  const bankQuery = useBank(bank?.id);
-  const profile = bankQuery.data ?? bank;
-  const registerQuery = useInstitutionProfile(bank?.id);
-  const register = registerQuery.data?.profile ?? null;
+  const { bank } = useBankContext();
 
   return (
     <>
+      <LegacyAccessAnchorRedirect />
       <PageHeader title="Settings" />
 
       <div className="px-8 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <MembersPanel />
-        <InstitutionProfile
-          profile={profile}
-          register={register}
-          registerLoading={registerQuery.isLoading}
-          periodCount={periods.length}
-          latestPeriodLabel={periods[0]?.label}
-        />
         <div className="space-y-6">
           <AppearancePanel />
           <CurrentAccountPanel />
         </div>
-        <AuthenticationPanel />
         <DataComputePanel bankId={bank?.id} />
         <AboutPanel bankId={bank?.id} />
       </div>
     </>
-  );
-}
-
-/** A plain label/value pair for the identity grid. */
-function Field({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string | null | undefined;
-  mono?: boolean;
-}) {
-  return (
-    <div>
-      <dt className="text-micro font-medium uppercase tracking-wider text-slate">
-        {label}
-      </dt>
-      <dd className={`mt-1 text-navy ${mono ? "font-mono" : ""}`}>
-        {value || "—"}
-      </dd>
-    </div>
-  );
-}
-
-function InstitutionProfile({
-  profile,
-  register,
-  registerLoading,
-  periodCount,
-  latestPeriodLabel,
-}: {
-  profile: ReturnType<typeof useBank>["data"] | null;
-  register: InstitutionProfileRead | null;
-  registerLoading: boolean;
-  periodCount: number;
-  latestPeriodLabel: string | undefined;
-}) {
-  return (
-    <Card>
-      <CardHeader
-        title="Institution profile"
-        subtitle="Identity from the corporate register · reporting facts from the risk service"
-        action={
-          <Link
-            href="/institution"
-            className="text-caption font-medium text-action hover:text-action-hover"
-          >
-            Manage register →
-          </Link>
-        }
-      />
-      <CardBody>
-        {registerLoading ? (
-          <div className="space-y-3">
-            <SkeletonLine className="w-2/3" />
-            <SkeletonLine className="w-1/2" />
-            <SkeletonLine className="w-3/5" />
-          </div>
-        ) : (
-          <>
-            {!register && (
-              <p className="mb-4 rounded border border-warning/25 bg-warning-light/50 px-3.5 py-2.5 text-caption text-navy/85">
-                No corporate profile configured yet — the fields below fall back
-                to the platform bank record.{" "}
-                <Link
-                  href="/institution"
-                  className="font-medium text-action hover:text-action-hover"
-                >
-                  Set up the register →
-                </Link>
-              </p>
-            )}
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-body">
-              <Field label="Legal name" value={profile?.name} />
-              <Field
-                label="Institution type"
-                value={register?.institutionType}
-              />
-              <Field
-                label="Registration number"
-                value={register?.registrationNumber}
-                mono
-              />
-              <Field
-                label="ORASS institution code"
-                value={register?.orassInstitutionCode}
-                mono
-              />
-              <Field label="TIN" value={register?.tin} mono />
-              <Field
-                label="Legal entity structure"
-                value={register?.legalEntityStructure}
-              />
-              <Field
-                label="Jurisdiction"
-                value={
-                  profile
-                    ? (profile.jurisdiction?.countryName ??
-                      profile.jurisdictionCode)
-                    : null
-                }
-              />
-              <Field
-                label="Regulator"
-                value={profile?.jurisdiction?.centralBankName}
-              />
-              <Field
-                label="License class"
-                value={profile ? labelize(profile.licenseType) : null}
-              />
-              <Field
-                label="Reporting currency"
-                value={profile?.currency}
-                mono
-              />
-              <Field
-                label="Reporting periods"
-                value={
-                  `${periodCount} loaded` +
-                  (latestPeriodLabel ? ` · latest ${latestPeriodLabel}` : "")
-                }
-              />
-              <IdField
-                label="Institution ID"
-                value={profile?.id}
-                wide={false}
-              />
-              <IdField
-                label="Organization ID"
-                value={profile?.organizationId}
-                wide={false}
-              />
-            </dl>
-          </>
-        )}
-      </CardBody>
-    </Card>
   );
 }
 

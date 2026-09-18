@@ -1,6 +1,267 @@
 {
   "components": {
     "schemas": {
+      "AccessRequestApprove": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_authority_sentence": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expected Authority Sentence",
+            "type": "string"
+          },
+          "institution_id": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant target institution ID"
+          },
+          "institution_scope": {
+            "$ref": "#/components/schemas/InstitutionScope"
+          },
+          "module_scope": {
+            "$ref": "#/components/schemas/ModuleScope"
+          },
+          "reason_category": {
+            "$ref": "#/components/schemas/GrantReasonCategory"
+          },
+          "reason_detail": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Reason Detail",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "role_bundle": {
+            "enum": [
+              "viewer",
+              "auditor",
+              "analyst",
+              "approver",
+              "account_admin"
+            ],
+            "title": "Role Bundle",
+            "type": "string"
+          },
+          "sensitivity_scope": {
+            "$ref": "#/components/schemas/SensitivityScope"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          }
+        },
+        "required": [
+          "role_bundle",
+          "institution_scope",
+          "module_scope",
+          "sensitivity_scope",
+          "reason_category",
+          "expected_authority_sentence"
+        ],
+        "title": "AccessRequestApprove",
+        "type": "object"
+      },
+      "AccessRequestCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "institution_id": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Institution Id",
+            "type": "string"
+          },
+          "module_scope": {
+            "$ref": "#/components/schemas/ModuleScope"
+          },
+          "permission": {
+            "$ref": "#/components/schemas/Permission"
+          },
+          "reason_category": {
+            "$ref": "#/components/schemas/GrantReasonCategory"
+          },
+          "reason_detail": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Reason Detail",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "route": {
+            "maxLength": 255,
+            "minLength": 1,
+            "pattern": "^/",
+            "title": "Route",
+            "type": "string"
+          },
+          "sensitivity_scope": {
+            "$ref": "#/components/schemas/Sensitivity"
+          }
+        },
+        "required": [
+          "route",
+          "institution_id",
+          "module_scope",
+          "sensitivity_scope",
+          "permission",
+          "reason_category"
+        ],
+        "title": "AccessRequestCreate",
+        "type": "object"
+      },
+      "AccessRequestListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/AccessRequestRead"
+            },
+            "title": "Requests",
+            "type": "array"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "title": "AccessRequestListRead",
+        "type": "object"
+      },
+      "AccessRequestRead": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "institution_id": {
+            "title": "Institution Id",
+            "type": "string"
+          },
+          "institution_name": {
+            "title": "Institution Name",
+            "type": "string"
+          },
+          "module_scope": {
+            "$ref": "#/components/schemas/ModuleScope"
+          },
+          "page_title": {
+            "title": "Page Title",
+            "type": "string"
+          },
+          "permission": {
+            "$ref": "#/components/schemas/Permission"
+          },
+          "reason_category": {
+            "$ref": "#/components/schemas/GrantReasonCategory"
+          },
+          "reason_detail": {
+            "title": "Reason Detail",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "requester_email": {
+            "title": "Requester Email",
+            "type": "string"
+          },
+          "requester_name": {
+            "title": "Requester Name",
+            "type": "string"
+          },
+          "requester_user_id": {
+            "format": "uuid",
+            "title": "Requester User Id",
+            "type": "string"
+          },
+          "route": {
+            "title": "Route",
+            "type": "string"
+          },
+          "sensitivity_scope": {
+            "$ref": "#/components/schemas/Sensitivity"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "requester_user_id",
+          "requester_name",
+          "requester_email",
+          "route",
+          "page_title",
+          "institution_id",
+          "institution_name",
+          "module_scope",
+          "sensitivity_scope",
+          "permission",
+          "reason_category",
+          "reason_detail",
+          "reference",
+          "status",
+          "requested_at"
+        ],
+        "title": "AccessRequestRead",
+        "type": "object"
+      },
       "ActionItemIn": {
         "additionalProperties": false,
         "description": "One credible action; mirrors the domain ``ManagementAction`` contract.",
@@ -3131,11 +3392,26 @@
             "title": "Principal User Id",
             "type": "string"
           },
-          "reason": {
+          "reason_category": {
+            "$ref": "#/components/schemas/GrantReasonCategory"
+          },
+          "reason_detail": {
+            "default": "",
             "maxLength": 2000,
-            "minLength": 1,
-            "title": "Reason",
+            "title": "Reason Detail",
             "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
           },
           "role_bundle": {
             "enum": [
@@ -3151,6 +3427,18 @@
           },
           "sensitivity_scope": {
             "$ref": "#/components/schemas/SensitivityScope"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
           }
         },
         "required": [
@@ -3158,7 +3446,7 @@
           "institution_scope",
           "module_scope",
           "sensitivity_scope",
-          "reason",
+          "reason_category",
           "principal_user_id",
           "expected_authority_sentence"
         ],
@@ -3239,11 +3527,26 @@
             "title": "Principal User Id",
             "type": "string"
           },
-          "reason": {
+          "reason_category": {
+            "$ref": "#/components/schemas/GrantReasonCategory"
+          },
+          "reason_detail": {
+            "default": "",
             "maxLength": 2000,
-            "minLength": 1,
-            "title": "Reason",
+            "title": "Reason Detail",
             "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
           },
           "role_bundle": {
             "enum": [
@@ -3259,6 +3562,18 @@
           },
           "sensitivity_scope": {
             "$ref": "#/components/schemas/SensitivityScope"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
           }
         },
         "required": [
@@ -3266,7 +3581,7 @@
           "institution_scope",
           "module_scope",
           "sensitivity_scope",
-          "reason",
+          "reason_category",
           "principal_user_id"
         ],
         "title": "BindingPreviewRequest",
@@ -3293,6 +3608,20 @@
           "grant_reason": {
             "title": "Grant Reason",
             "type": "string"
+          },
+          "grant_reason_category": {
+            "$ref": "#/components/schemas/GrantReasonCategory"
+          },
+          "grant_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Reference"
           },
           "granted_at": {
             "format": "date-time",
@@ -3452,7 +3781,9 @@
           "granted_by_type",
           "granted_by_id",
           "granted_by_name",
+          "grant_reason_category",
           "grant_reason",
+          "grant_reference",
           "granted_at",
           "valid_from",
           "valid_until",
@@ -20665,6 +20996,19 @@
         ],
         "title": "FxValidationRead",
         "type": "object"
+      },
+      "GrantReasonCategory": {
+        "enum": [
+          "new_joiner",
+          "role_change",
+          "project_engagement",
+          "temporary_cover",
+          "regulator_audit_request",
+          "incident_break_glass",
+          "other"
+        ],
+        "title": "GrantReasonCategory",
+        "type": "string"
       },
       "GrantorType": {
         "enum": [
@@ -50793,11 +51137,26 @@
           "module_scope": {
             "$ref": "#/components/schemas/ModuleScope"
           },
-          "reason": {
+          "reason_category": {
+            "$ref": "#/components/schemas/GrantReasonCategory"
+          },
+          "reason_detail": {
+            "default": "",
             "maxLength": 2000,
-            "minLength": 1,
-            "title": "Reason",
+            "title": "Reason Detail",
             "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
           },
           "role_bundle": {
             "enum": [
@@ -50813,6 +51172,18 @@
           },
           "sensitivity_scope": {
             "$ref": "#/components/schemas/SensitivityScope"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
           }
         },
         "required": [
@@ -50820,7 +51191,7 @@
           "institution_scope",
           "module_scope",
           "sensitivity_scope",
-          "reason",
+          "reason_category",
           "expected_authority_sentence"
         ],
         "title": "SsoAccessRequestApprove",
@@ -56879,6 +57250,380 @@
         "summary": "Sso Status",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/authorization/access-requests": {
+      "get": {
+        "operationId": "listAuthorizationAccessRequests",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Authorization Access Requests",
+        "tags": [
+          "authorization"
+        ]
+      },
+      "post": {
+        "operationId": "createAuthorizationAccessRequest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequestCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Authorization Access Request",
+        "tags": [
+          "authorization"
+        ]
+      }
+    },
+    "/api/v1/authorization/access-requests/mine": {
+      "get": {
+        "operationId": "listMyAuthorizationAccessRequests",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List My Authorization Access Requests",
+        "tags": [
+          "authorization"
+        ]
+      }
+    },
+    "/api/v1/authorization/access-requests/{request_id}/approve": {
+      "post": {
+        "operationId": "approveAuthorizationAccessRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequestApprove"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BindingCreateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Authorization Access Request",
+        "tags": [
+          "authorization"
         ]
       }
     },
@@ -109036,6 +109781,93 @@
           }
         ],
         "summary": "List Organization Institutions",
+        "tags": [
+          "authorization"
+        ]
+      }
+    },
+    "/api/v1/organization/institutions/access-request": {
+      "get": {
+        "description": "Public organization structure needed to target an access request.",
+        "operationId": "listAccessRequestInstitutions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstitutionDirectoryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Access Request Institutions",
         "tags": [
           "authorization"
         ]

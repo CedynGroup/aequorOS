@@ -98,12 +98,11 @@ export function ConnectionCard() {
           </p>
         </div>
       </div>
-      <IntegrationKeysPanel />
     </section>
   );
 }
 
-function IntegrationKeysPanel() {
+export function IntegrationKeysPanel() {
   const { bank } = useBankContext();
   const { effectiveAuthority } = useUserProfile();
   const isAdmin = hasAccountAdministrationAuthority(effectiveAuthority);

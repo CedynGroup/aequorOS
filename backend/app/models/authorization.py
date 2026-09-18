@@ -23,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.authorization import (
     BindingStatus,
     GrantorType,
+    GrantReasonCategory,
     InstitutionScope,
     ModuleScope,
     OwnerAssignmentBasis,
@@ -108,6 +109,10 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_authorization_bindings_grant_reason",
         ),
         CheckConstraint(
+            f"grant_reason_category IN ({_values(tuple(GrantReasonCategory))})",
+            name="ck_authorization_bindings_grant_reason_category",
+        ),
+        CheckConstraint(
             "valid_until IS NULL OR valid_until > valid_from",
             name="ck_authorization_bindings_validity_window",
         ),
@@ -168,7 +173,11 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
     granted_by_type: Mapped[str] = mapped_column(String(16), nullable=False)
     granted_by_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    grant_reason_category: Mapped[str] = mapped_column(
+        String(32), default=GrantReasonCategory.OTHER.value, nullable=False
+    )
     grant_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    grant_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     granted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
@@ -182,6 +191,94 @@ class AuthorizationBinding(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     revoked_by_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     revoked_by_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     revoked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class AuthorizationAccessRequest(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
+    """A member's request for one exact route permission."""
+
+    __tablename__ = "authorization_access_requests"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["requester_user_id", "organization_id"],
+            ["users.id", "users.organization_id"],
+            ondelete="CASCADE",
+            name="fk_authorization_access_requests_requester_tenant",
+        ),
+        ForeignKeyConstraint(
+            ["institution_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            ondelete="RESTRICT",
+            name="fk_authorization_access_requests_institution_tenant",
+        ),
+        CheckConstraint(
+            f"module_scope IN ({_values(tuple(ModuleScope))})",
+            name="ck_authorization_access_requests_module_scope",
+        ),
+        CheckConstraint(
+            "sensitivity_scope IN ('published', 'aggregated', 'confidential', 'restricted')",
+            name="ck_authorization_access_requests_sensitivity_scope",
+        ),
+        CheckConstraint(
+            "permission IN ('view', 'create', 'edit', 'run', 'review', 'approve', "
+            "'configure', 'export', 'validate', 'sign_off', 'submit', 'administer', 'ingest')",
+            name="ck_authorization_access_requests_permission",
+        ),
+        CheckConstraint(
+            f"reason_category IN ({_values(tuple(GrantReasonCategory))})",
+            name="ck_authorization_access_requests_reason_category",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected')",
+            name="ck_authorization_access_requests_status",
+        ),
+        CheckConstraint(
+            "reason_category <> 'other' OR length(trim(reason_detail)) > 0",
+            name="ck_authorization_access_requests_other_detail",
+        ),
+        Index(
+            "ix_authorization_access_requests_org_status",
+            "organization_id",
+            "status",
+            "created_at",
+        ),
+        Index(
+            "uq_authorization_access_requests_pending_scope",
+            "organization_id",
+            "requester_user_id",
+            "route",
+            "institution_id",
+            "module_scope",
+            "sensitivity_scope",
+            "permission",
+            unique=True,
+            postgresql_where=sql_text("status = 'pending'"),
+            sqlite_where=sql_text("status = 'pending'"),
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    requester_user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    institution_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    route: Mapped[str] = mapped_column(String(255), nullable=False)
+    page_title: Mapped[str] = mapped_column(String(255), nullable=False)
+    module_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    sensitivity_scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    permission: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason_category: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason_detail: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    binding_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("authorization_bindings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
 
 class OrganizationOwnerAssignment(TimestampMixin, Base):

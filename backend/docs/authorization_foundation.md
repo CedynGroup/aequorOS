@@ -93,7 +93,7 @@ behavior is owned by [docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboa
 `app/services/membership.py::ensure_baseline_membership` creates the binding and
 its grant audit atomically with activation in SSO request approval and operator
 tenant provisioning. The partial unique index enforces one active row per user
-and organization. Settings → Members displays the row but cannot grant or revoke
+and organization. Access → Members displays the row but cannot grant or revoke
 it. `authentication.deactivate_user` revokes and audits the baseline, deactivates
 the user, advances `authv`, and revokes refresh families with `user_deactivated`
 in one transaction. Future activation paths, including invite acceptance and

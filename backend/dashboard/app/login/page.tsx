@@ -8,7 +8,7 @@ import LoginForm from './LoginForm';
 const fraunces = Fraunces({ subsets: ['latin'], weight: ['500'], display: 'swap' });
 
 // Rendered per request: the SSO button reflects the org's live connection state
-// (Settings → Authentication), not a build-time snapshot.
+// (Access → Authentication), not a build-time snapshot.
 export const dynamic = 'force-dynamic';
 
 const apiOrigin = (process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? 'http://localhost:8000')

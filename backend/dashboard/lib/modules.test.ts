@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  accessDeniedForPath,
   effectiveInstitutionModules,
   effectiveOrganizationModules,
   hasEffectiveCapability,
@@ -308,16 +309,14 @@ const operationalOnly: ModuleScope = {
 };
 assert.equal(isHrefVisible("/settings/profile", operationalOnly), true);
 assert.equal(isPathVisible("/settings/profile", operationalOnly), true);
-assert.equal(isHrefVisible("/settings", operationalOnly), false);
-assert.equal(isPathVisible("/settings", operationalOnly), false);
-assert.equal(isHrefVisible("/settings/members", operationalOnly), false);
-assert.equal(isPathVisible("/settings/members", operationalOnly), false);
-assert.equal(isHrefVisible("/settings/authentication", operationalOnly), false);
-assert.equal(isPathVisible("/settings/authentication", operationalOnly), false);
+assert.equal(isHrefVisible("/settings", operationalOnly), true);
+assert.equal(isPathVisible("/settings", operationalOnly), true);
+assert.equal(isHrefVisible("/access", operationalOnly), true);
+assert.equal(isPathVisible("/access/my-access", operationalOnly), true);
 assert.equal(isPersonalSettingsPath("/settings/profile"), true);
 assert.equal(isPersonalSettingsPath("/settings/profile/preferences"), true);
-assert.equal(isPersonalSettingsPath("/settings"), false);
-assert.equal(isPersonalSettingsPath("/settings/members"), false);
+assert.equal(isPersonalSettingsPath("/settings"), true);
+assert.equal(isPersonalSettingsPath("/settings/members"), true);
 
 const unresolved: ModuleScope = {
   modules: null,
@@ -341,7 +340,7 @@ assert.equal(isRootPath("/?tour=1"), true);
 assert.equal(isRootPath("//"), true);
 assert.equal(isRootPath("/settings"), false);
 assert.equal(landingPathFor(resolved(true)), "/");
-assert.equal(landingPathFor(ownerOnly), "/settings");
+assert.equal(landingPathFor(ownerOnly), "/access");
 assert.equal(landingPathFor(unresolved), null);
 
 assert.equal(isPathVisible("/", liquidityOnly), false);
@@ -365,7 +364,7 @@ const nothingVisible: ModuleScope = {
   modules: new Set(),
   organizationModules: new Set(),
 };
-assert.equal(landingPathFor(nothingVisible), "/settings/profile");
+assert.equal(landingPathFor(nothingVisible), "/access");
 
 const memberOnly: ModuleScope = {
   modules: new Set(),
@@ -405,7 +404,7 @@ assert.deepEqual(hrefAccess("/irr/scenarios", memberOnly), {
 });
 assert.equal(isHrefVisible("/irr/scenarios", memberOnly), false);
 assert.equal(isPathVisible("/irr/scenarios", memberOnly), false);
-assert.equal(hubRedirectFor("/irr/scenarios", memberOnly), "/");
+assert.equal(hubRedirectFor("/irr/scenarios", memberOnly), null);
 
 // ---------------------------------------------------------------------------
 // The IRRBB standardised framework (P5)
@@ -469,26 +468,45 @@ assert.equal(
 
 // Hubs redirect when hidden; a member without institution authority also
 // returns from public product-module paths to the root empty workspace.
-assert.equal(hubRedirectFor("/", ownerOnly), "/settings");
+assert.equal(hubRedirectFor("/", ownerOnly), "/access");
 assert.equal(hubRedirectFor("/", resolved(true)), null);
 assert.equal(hubRedirectFor("/", unresolved), null);
-assert.equal(hubRedirectFor("/settings", operationalOnly), "/settings/profile");
-assert.equal(
-  hubRedirectFor("/settings/", operationalOnly),
-  "/settings/profile",
-);
+assert.equal(hubRedirectFor("/settings", operationalOnly), null);
+assert.equal(hubRedirectFor("/settings/", operationalOnly), null);
 assert.equal(hubRedirectFor("/settings/members", operationalOnly), null);
 assert.equal(hubRedirectFor("/settings/authentication", operationalOnly), null);
 assert.equal(hubRedirectFor("/liquidity/monitoring", denied), null);
 assert.equal(hubRedirectFor("/fx", ownerOnly), null);
-assert.equal(hubRedirectFor("/liquidity/monitoring", memberOnly), "/");
+assert.equal(hubRedirectFor("/liquidity/monitoring", memberOnly), null);
 for (const route of [
   "/data-engine",
   "/data-engine/excel-csv",
   "/liquidity/stress/",
 ]) {
-  assert.equal(hubRedirectFor(route, memberOnly), "/");
+  assert.equal(hubRedirectFor(route, memberOnly), null);
 }
+assert.deepEqual(accessDeniedForPath("/fx", memberOnly), {
+  title: "Foreign Exchange",
+  reason:
+    "Requires Foreign Exchange · Aggregated · View. Ask your organization owner or admin to grant it.",
+  requirements: [
+    {
+      moduleScope: "fx",
+      moduleLabel: "Foreign Exchange",
+      sensitivityScope: "aggregated",
+      sensitivityLabel: "Aggregated",
+      permission: "view",
+      permissionLabel: "View",
+    },
+  ],
+});
+assert.equal(
+  accessDeniedForPath(
+    "/data-engine/batches/00000000-0000-0000-0000-000000000000",
+    memberOnly,
+  ),
+  null,
+);
 for (const route of [
   "/data-engine/batches/00000000-0000-0000-0000-000000000000",
   "/data-engine/batches/foreign-batch",

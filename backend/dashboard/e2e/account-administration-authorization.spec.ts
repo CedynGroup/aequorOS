@@ -14,15 +14,16 @@ test.describe("explicit Account administrator", () => {
     page,
   }) => {
     // Sign-in lands on the root. Account administration alone does not reach
-    // the Command Center, so the guard must route to Settings — not 404.
+    // the Command Center, so the guard routes to Access — not 404.
     await page.goto("/");
-    await expect(page).toHaveURL(/\/settings(?:[?#]|$)/);
+    await expect(page).toHaveURL(/\/access(?:[/?#]|$)/);
     await expect(page.getByText(/404|not found/i)).toHaveCount(0);
+    await page.goto("/access/authentication");
     await expect(
       page.getByRole("heading", { name: "Authentication (SSO)" }),
     ).toBeVisible();
 
-    await page.goto("/settings");
+    await page.goto("/access/authentication");
     await expect(
       page.getByRole("heading", { name: "Authentication (SSO)" }),
     ).toBeVisible();
@@ -40,7 +41,12 @@ test.describe("explicit Account administrator", () => {
     }
 
     await page.goto("/data-engine/api");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Data Engine · Restricted · View", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Integration keys" }),
     ).toHaveCount(0);
@@ -85,14 +91,12 @@ test.describe("legacy scalar Account administrator", () => {
       }
     });
 
-    await page.goto("/settings");
-    await expect(page).toHaveURL(/\/settings\/profile$/);
+    await page.goto("/access/authentication");
     await expect(
-      page.getByRole("heading", { name: "Profile & preferences", exact: true }),
+      page.getByText(
+        "This section is available to organization owners and administrators.",
+      ),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Authentication (SSO)" }),
-    ).toHaveCount(0);
     expect(accountRequests).toEqual([]);
 
     if (evidenceDir) {
@@ -120,9 +124,6 @@ test.describe("operational Analyst", () => {
     await page.goto("/data-engine/api");
     await expect(page.getByRole("heading", { name: "API Push" })).toBeVisible();
     await expect(
-      page.getByText("Integration keys are managed by an administrator."),
-    ).toBeVisible();
-    await expect(
       page.getByRole("button", { name: "Generate key" }),
     ).toHaveCount(0);
     expect(keyRequests).toEqual([]);
@@ -139,10 +140,10 @@ test.describe("operational Analyst", () => {
 test.describe("Organization Owner", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
-  test("can administer integration keys from an authorized product page", async ({
+  test("can administer integration keys from Access", async ({
     page,
   }) => {
-    await page.goto("/data-engine/api");
+    await page.goto("/access/integration-keys");
     await expect(
       page.getByRole("heading", { name: "Integration keys" }),
     ).toBeVisible();

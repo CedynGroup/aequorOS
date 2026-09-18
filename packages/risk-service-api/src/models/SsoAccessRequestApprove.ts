@@ -18,6 +18,13 @@ import {
   SensitivityScopeToJSON,
   SensitivityScopeToJSONTyped,
 } from "./SensitivityScope";
+import type { Reference } from "./Reference";
+import {
+  ReferenceFromJSON,
+  ReferenceFromJSONTyped,
+  ReferenceToJSON,
+  ReferenceToJSONTyped,
+} from "./Reference";
 import type { InstitutionScope } from "./InstitutionScope";
 import {
   InstitutionScopeFromJSON,
@@ -32,6 +39,13 @@ import {
   ModuleScopeToJSON,
   ModuleScopeToJSONTyped,
 } from "./ModuleScope";
+import type { GrantReasonCategory } from "./GrantReasonCategory";
+import {
+  GrantReasonCategoryFromJSON,
+  GrantReasonCategoryFromJSONTyped,
+  GrantReasonCategoryToJSON,
+  GrantReasonCategoryToJSONTyped,
+} from "./GrantReasonCategory";
 import type { GrantTargetInstitutionID } from "./GrantTargetInstitutionID";
 import {
   GrantTargetInstitutionIDFromJSON,
@@ -39,6 +53,13 @@ import {
   GrantTargetInstitutionIDToJSON,
   GrantTargetInstitutionIDToJSONTyped,
 } from "./GrantTargetInstitutionID";
+import type { ValidUntil } from "./ValidUntil";
+import {
+  ValidUntilFromJSON,
+  ValidUntilFromJSONTyped,
+  ValidUntilToJSON,
+  ValidUntilToJSONTyped,
+} from "./ValidUntil";
 
 /**
  * Approval activates identity and creates exactly one complete scoped grant.
@@ -72,10 +93,22 @@ export interface SsoAccessRequestApprove {
   moduleScope: ModuleScope;
   /**
    *
+   * @type {GrantReasonCategory}
+   * @memberof SsoAccessRequestApprove
+   */
+  reasonCategory: GrantReasonCategory;
+  /**
+   *
    * @type {string}
    * @memberof SsoAccessRequestApprove
    */
-  reason: string;
+  reasonDetail?: string;
+  /**
+   *
+   * @type {Reference}
+   * @memberof SsoAccessRequestApprove
+   */
+  reference?: Reference;
   /**
    *
    * @type {string}
@@ -88,6 +121,12 @@ export interface SsoAccessRequestApprove {
    * @memberof SsoAccessRequestApprove
    */
   sensitivityScope: SensitivityScope;
+  /**
+   *
+   * @type {ValidUntil}
+   * @memberof SsoAccessRequestApprove
+   */
+  validUntil?: ValidUntil;
 }
 
 /**
@@ -119,7 +158,8 @@ export function instanceOfSsoAccessRequestApprove(
     return false;
   if (!("moduleScope" in value) || value["moduleScope"] === undefined)
     return false;
-  if (!("reason" in value) || value["reason"] === undefined) return false;
+  if (!("reasonCategory" in value) || value["reasonCategory"] === undefined)
+    return false;
   if (!("roleBundle" in value) || value["roleBundle"] === undefined)
     return false;
   if (!("sensitivityScope" in value) || value["sensitivityScope"] === undefined)
@@ -149,9 +189,19 @@ export function SsoAccessRequestApproveFromJSONTyped(
         : GrantTargetInstitutionIDFromJSON(json["institution_id"]),
     institutionScope: InstitutionScopeFromJSON(json["institution_scope"]),
     moduleScope: ModuleScopeFromJSON(json["module_scope"]),
-    reason: json["reason"],
+    reasonCategory: GrantReasonCategoryFromJSON(json["reason_category"]),
+    reasonDetail:
+      json["reason_detail"] == null ? undefined : json["reason_detail"],
+    reference:
+      json["reference"] == null
+        ? undefined
+        : ReferenceFromJSON(json["reference"]),
     roleBundle: json["role_bundle"],
     sensitivityScope: SensitivityScopeFromJSON(json["sensitivity_scope"]),
+    validUntil:
+      json["valid_until"] == null
+        ? undefined
+        : ValidUntilFromJSON(json["valid_until"]),
   };
 }
 
@@ -174,8 +224,11 @@ export function SsoAccessRequestApproveToJSONTyped(
     institution_id: GrantTargetInstitutionIDToJSON(value["institutionId"]),
     institution_scope: InstitutionScopeToJSON(value["institutionScope"]),
     module_scope: ModuleScopeToJSON(value["moduleScope"]),
-    reason: value["reason"],
+    reason_category: GrantReasonCategoryToJSON(value["reasonCategory"]),
+    reason_detail: value["reasonDetail"],
+    reference: ReferenceToJSON(value["reference"]),
     role_bundle: value["roleBundle"],
     sensitivity_scope: SensitivityScopeToJSON(value["sensitivityScope"]),
+    valid_until: ValidUntilToJSON(value["validUntil"]),
   };
 }

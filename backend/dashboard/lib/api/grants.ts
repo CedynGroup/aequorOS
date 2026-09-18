@@ -5,6 +5,7 @@ import type {
   MemberRead,
   ModuleScope,
   SensitivityScope,
+  GrantReasonCategory,
 } from "@aequoros/risk-service-api";
 
 export type GrantDraft = Readonly<{
@@ -13,7 +14,10 @@ export type GrantDraft = Readonly<{
   institutionId?: string;
   moduleScope: ModuleScope;
   sensitivityScope: SensitivityScope;
-  reason: string;
+  reasonCategory: GrantReasonCategory;
+  reasonDetail: string;
+  reference: string;
+  validUntil: string;
 }>;
 
 export const ROLE_OPTIONS = [

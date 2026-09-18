@@ -17,7 +17,7 @@
 > persisted account administrators out of the operational role hierarchy.
 > The scoped grant administration slice is also built: Org Owners can preview,
 > create, list, and revoke one indivisible binding at a time; every mutation is
-> audited and invalidates the grantee's sessions, and Settings → Members renders the
+> audited and invalidates the grantee's sessions, and Access → Members renders the
 > same authority sentence used by review, detail, revoke, and audit evidence.
 > Every other product route retains its existing authorization behavior until
 > its separate rollout. For the `credit` and `institution` vocabulary added on
@@ -74,7 +74,7 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 | Area                                 | Current state                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Where                                                                                                                                                                                                                                                     |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth                                 | Zero-trust JWT (HS256), Argon2id passwords, **own-OIDC SSO** (no third-party broker; built 2026-07-20), refresh rotation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `app/core/security.py`, `dashboard/auth.ts`                                                                                                                                                                                                               |
-| SSO self-service (single connection) | **BUILT.** Per-org `sso_connections` row: issuer + client id + AES-256-GCM-sealed secret (write-only), allowed email domains, enable toggle — managed in **Settings → Authentication** with organization-wide ACCOUNT/restricted `administer` authority. Backend verifies id_tokens against the connection issuer's JWKS (discovery-based, RS256/ES256, `email_verified` + domain enforcement); the uniquely selected verified connection is the sole organization authority for subject/email lookup, JIT records, and issued tokens. Ambiguous issuer/audience routing fails closed. Dashboard NextAuth loads the client config through an `SSO_INTERNAL_KEY`-gated internal endpoint. Pre-provisioned users by default; **request-access JIT is BUILT as a per-connection opt-in** (`jit_enabled`): first sign-in from an allowed domain records a **deactivated** stub and returns 403 "awaiting administrator approval" — zero access until an Org Owner approves it through the same complete scalar scoped-grant flow in Settings → Members. Approval follows the [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29). Refused at config AND login time without a non-empty domain list. One connection per org / one enabled per deployment — Phase 2 lifts this. | `app/models/sso_connection.py`, `app/services/sso_config.py`, `app/services/authentication.py`, `app/api/v1/auth.py`, `dashboard/components/settings/AuthenticationPanel.tsx`, `dashboard/components/settings/MembersPanel.tsx`, `docs/sso-onboarding.md` |
+| SSO self-service (single connection) | **BUILT.** Per-org `sso_connections` row: issuer + client id + AES-256-GCM-sealed secret (write-only), allowed email domains, enable toggle — managed in **Access → Authentication** with organization-wide ACCOUNT/restricted `administer` authority. Backend verifies id_tokens against the connection issuer's JWKS (discovery-based, RS256/ES256, `email_verified` + domain enforcement); the uniquely selected verified connection is the sole organization authority for subject/email lookup, JIT records, and issued tokens. Ambiguous issuer/audience routing fails closed. Dashboard NextAuth loads the client config through an `SSO_INTERNAL_KEY`-gated internal endpoint. Pre-provisioned users by default; **request-access JIT is BUILT as a per-connection opt-in** (`jit_enabled`): first sign-in from an allowed domain records a **deactivated** stub and returns 403 "awaiting administrator approval" — zero access until an Org Owner approves it through the same complete scalar scoped-grant flow in Access → Members. Approval follows the [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29). Refused at config AND login time without a non-empty domain list. One connection per org / one enabled per deployment — Phase 2 lifts this. | `app/models/sso_connection.py`, `app/services/sso_config.py`, `app/services/authentication.py`, `app/api/v1/auth.py`, `dashboard/components/settings/AuthenticationPanel.tsx`, `dashboard/components/settings/MembersPanel.tsx`, `docs/sso-onboarding.md` |
 | Connection health (bank-IT surface)  | **BUILT** (read-only): Data Engine → Overview aggregates every configured source connection (DB-direct, T24, market-data) with live status, last sync, credential expiry, and plain-language remediation hints                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `dashboard/components/data-engine/ConnectionHealthPanel.tsx`                                                                                                                                                                                              |
 | Legacy roles                         | The operational rank remains `admin > approver > analyst > examiner > viewer` for compatibility, but migration `202608280046` leaves no persisted `admin`: former admins become `account_admin`, which is outside the ladder.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `app/core/security.py:ROLES`, `app/models/user.py:USER_ROLES`                                                                                                                                                                                             |
 | Endpoint enforcement                 | Enforced surfaces and exact required grants are owned by the [product rollout contracts](../backend/docs/authorization_foundation.md#product-rollout-boundary). Routes outside those cutovers retain their existing checks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `app/api/deps.py`, module feature and service boundaries                                                                                                                                                                                                  |
@@ -543,18 +543,25 @@ The generalized authority projection is built. `/auth/me` supplies exact
 organization and per-institution capabilities from the binding evaluator; `/banks`
 filters out uncovered institutions before presentation. The shell, command palette,
 module tabs, and route guard consume that projection without consulting token or
-scalar roles. Unauthorized direct routes resolve as 404 and do not mount product
-queries, except for the hubs and baseline-only public routes described below.
+scalar roles. Unauthorized object routes resolve as 404 and do not mount product
+queries. Own-organization public module/workspace routes on the explicit
+allow-list render an access-denied page inside the shell instead. It names the
+exact permission sentence, identifies organization owners/admins as grantors,
+and lets an active member create one deduplicated request per route/permission.
+Unknown IDs, object-detail routes, cross-tenant objects, structural exclusions,
+and non-existent paths remain 404 and never disclose permissions.
 The root `/` is the post-sign-in landing, not a deep link: for users with separate
 institution or organization capabilities, when the Command Center lies outside
 their authority the route guard sends them to the first surface they can see
 in sidebar order (`lib/modules.ts::landingPathFor`,
 the §8.3 order), falling back to personal settings — never a 404 on arrival.
-`/settings` is the other hub: a user without organization-wide Account
-administration is sent to `/settings/profile` rather than 404ed, and "Your
-account" (identity + permanent signer ID) renders there for every session, not
-only on the organization hub — an analyst must be able to read the signer ID
-stamped on the documents they certify.
+`/settings` is personal and operational configuration for every active member:
+Appearance, Current account, Data & compute, and About. Access administration
+is a separate top-level `/access` area. Its entry and My access placeholder are
+visible to every member; Members, Authentication, and Integration keys stay
+visible but disabled with the exact Account/restricted/administer tooltip when
+authority is absent. Legacy `/settings#members`, `#authentication`, and
+integration-key anchors client-redirect to the new routes.
 Ownership is two explicit sentences, never one implied one: the `org_owner`
 Account binding (administer members, grants, SSO, keys) and an organization-wide
 `viewer` / all modules / all sensitivities binding, the §7 "read dashboards for
@@ -576,7 +583,7 @@ module catalogue remains visible but disabled, with exact permission tooltips;
 personal settings stay available. Tooltips use route-specific requirements before
 falling back to module-entry requirements for catalogue entries. Public module
 landing/workspace deep links on the explicit `PUBLIC_MODULE_ROUTES` allow-list in
-`backend/dashboard/lib/modules.ts` return to `/`. Object-detail paths (including
+`backend/dashboard/lib/modules.ts` render the denied page. Object-detail paths (including
 cross-tenant and unknown objects), structurally excluded paths, and non-existent
 routes remain 404. `backend/dashboard/lib/modules.test.ts` and
 `backend/dashboard/e2e/baseline-membership.spec.ts` pin this boundary.
@@ -613,7 +620,7 @@ Send each user to where their job starts, not always Command Center:
 | Finance / Reg Reporting Officer     | `/submissions` (Regulatory Reporting) |
 | Data/Ops                            | `/data-engine`                        |
 | Auditor / Compliance                | `/reports` + Audit log                |
-| Org Admin / Owner                   | `/settings` (Org console)             |
+| Org Admin / Owner                   | `/access` (Access control)            |
 
 ---
 
@@ -651,7 +658,7 @@ rather than being a free toggle for everyone.
 
 ---
 
-## 10. Settings architecture (three tiers)
+## 10. Settings and access architecture
 
 Three distinct surfaces. **Do not conflate them.**
 
@@ -673,37 +680,36 @@ Already partly built (`Header.tsx`). Target:
   Sign out                      ← already wired
 ```
 
-### 10.2 Organization admin console (`/settings`, admin-only)
+### 10.2 Access control (`/access`, visible to every active member)
 
-Self-service administration scoped to one `organization_id`. Left-nav IA:
+Self-service access administration scoped to one `organization_id`:
 
 ```
-Settings
-├─ Organization
-│   ├─ General            name, logo, locale, jurisdiction, org defaults
-│   ├─ Members            users list + invites            ← default landing (§12.2)
-│   ├─ Roles & permissions  view presets; who-has-what matrix; (later) custom roles
-│   └─ Billing & seats    plan, seat usage/limit, invoices   (Owner)
-├─ Authentication
-│   ├─ Single sign-on     self-service OIDC per org — SEED BUILT (Settings →
-│   │                     Authentication card: issuer/client id/write-only
-│   │                     secret/domains/enable); grow in place, add SAML later
-│   ├─ Verified domains   DNS-TXT domain verification + capture
-│   └─ Provisioning       SCIM token, attribute/group→role mapping, sync status
-├─ Security
-│   ├─ MFA & step-up policy
-│   ├─ Session policy     idle + absolute lifetime, sign-in frequency
-│   └─ IP allowlist
-└─ Audit log              tenant-scoped, read-only, filterable
+Access control
+├─ Members             tenant identities, grants, reasons, requests
+├─ Authentication      OIDC connection, JIT identity requests
+├─ Integration keys    bank-scoped machine principals
+└─ My access           reserved for the effective-access view
 ```
 
-Today's Settings page includes the built **Members** table and sentence-composer
-grant flow beside Institution profile, Appearance, Authentication, Data &
-compute, About, and the signed-in user's account. Members keeps lifecycle
-separate from access and displays at most two compact grant fragments plus a
-count; invitations and lifecycle actions remain later work.
+The three administration tabs require organization-wide
+ACCOUNT/restricted/administer authority. They are never hidden from a member:
+without authority they are disabled with the shared permission tooltip and
+direct links render the same explanation instead of 404. My access is open to
+every member.
 
-### 10.3 Platform / vendor super-admin console (`console.aequoros.com`, staff-only)
+Grant preview/create and access requests share structured reasons:
+`new_joiner`, `role_change`, `project_engagement`, `temporary_cover`,
+`regulator_audit_request`, `incident_break_glass`, and `other`, plus optional
+detail/reference. Other requires detail; temporary cover and break-glass grants
+require an editable expiry. Historical free-text reasons migrate to Other.
+
+### 10.3 App settings (`/settings`, every active member)
+
+Settings contains Appearance, Current account/profile, Data & compute, and
+About. Access-control panels do not render there.
+
+### 10.4 Platform / vendor super-admin console (`console.aequoros.com`, staff-only)
 
 Separate app/subdomain, **never** mixed into the tenant nav. Runs outside RLS.
 
@@ -767,7 +773,7 @@ acceptance and reactivation must use that same atomic lifecycle.
 Each bank brings its own IdP (Google Workspace, Entra, Okta, Ping). **AequorOS
 is its own OIDC relying party — there is no third-party auth broker (Auth0 was
 removed 2026-07-20), and none should be reintroduced.** The single-connection
-version is BUILT (see §2): `sso_connections` + Settings → Authentication +
+version is BUILT (see §2): `sso_connections` + Access → Authentication +
 zero-trust backend verification + the bank-IT runbook `docs/sso-onboarding.md`.
 Phase 2 **continues from that code**: many connections per org, email-first
 home-realm discovery on /login (type work email → route to that bank's IdP —
@@ -1058,7 +1064,7 @@ our API (commercial trigger, not pilot infrastructure).
 
 Foundation that already exists (Phase 1, shipped): `sso_connections` (encrypted
 secret, RLS), zero-trust OIDC verification with discovery/`email_verified`/
-domain allow-list, Settings → Authentication self-service card, the
+domain allow-list, Access → Authentication self-service card, the
 `SSO_INTERNAL_KEY` internal config fetch, NextAuth per-request lazy config, the
 Data Engine connection-health panel, and `docs/sso-onboarding.md` (Google
 Workspace + Entra runbooks — extend per IdP as banks onboard).

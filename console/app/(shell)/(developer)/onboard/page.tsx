@@ -529,7 +529,7 @@ export default function OnboardPage() {
                     Hand the admin their credentials. On first sign-in they set a real password.
                   </li>
                   <li>
-                    The bank&apos;s IT completes SSO in the product under Settings → Authentication
+                    The bank&apos;s IT completes SSO in the product under Access → Authentication
                     (issuer, client id/secret, allowed domains — and the redirect URIs above
                     registered at their IdP; sign-in AND signing step-up).
                   </li>

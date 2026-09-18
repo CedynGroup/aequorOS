@@ -37,7 +37,8 @@ test.describe("scoped grant administration", () => {
       institution_id: "BK-SAMP0001",
       module_scope: "reg",
       sensitivity_scope: "restricted",
-      reason: "Keep independent regulatory review access",
+      reason_category: "other",
+      reason_detail: "Keep independent regulatory review access",
     };
     const unrelatedPreview = await page.request.post(
       `${API}/authorization/bindings/preview`,
@@ -66,7 +67,7 @@ test.describe("scoped grant administration", () => {
       }
     });
 
-    await page.goto("/settings");
+    await page.goto("/access/members");
     const memberRow = page
       .locator("li")
       .filter({ hasText: "E2E Grant Member" })
@@ -93,8 +94,9 @@ test.describe("scoped grant administration", () => {
       .selectOption("BK-SAMP0001");
     await composer.getByLabel("Module").selectOption("liq");
     await composer.getByLabel("Sensitivity").selectOption("confidential");
+    await composer.getByLabel("Reason category").selectOption("other");
     await composer
-      .getByLabel("Reason")
+      .getByLabel("Detail")
       .fill("Treasury monitoring responsibilities approved for this officer");
     await expect(
       composer.getByText(targetSentence, { exact: true }),

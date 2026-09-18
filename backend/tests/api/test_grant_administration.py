@@ -125,7 +125,8 @@ def _payload(  # noqa: PLR0913 - each scalar is one indivisible scope dimension
         "institution_id": institution_id,
         "module_scope": module,
         "sensitivity_scope": sensitivity,
-        "reason": reason,
+        "reason_category": "other",
+        "reason_detail": reason,
     }
 
 
@@ -259,7 +260,8 @@ def test_create_and_list_keep_every_scalar_dimension_exact(
             "module_scope": "liq",
             "sensitivity_scope": "confidential",
         }
-        assert audit.details["reason"] == _payload()["reason"]
+        assert audit.details["reason"] == _payload()["reason_detail"]
+        assert audit.details["reason_category"] == "other"
 
 
 @pytest.mark.parametrize(
@@ -1083,3 +1085,101 @@ def test_sso_approval_activates_identity_only_with_a_complete_grant(
         grant = next(binding for binding in bindings if binding.role_bundle == "analyst")
         assert grant.module_scope == "liq"
         assert grant.sensitivity_scope == "confidential"
+
+
+def test_active_member_route_access_request_is_deduplicated_audited_and_approved(
+    grant_client: TestClient,
+) -> None:
+    member_headers = headers(
+        user_id=GRANTEE,
+        roles=("viewer",),
+        authorization_version=1,
+    )
+    payload = {
+        "route": "/fx",
+        "institution_id": BANK_A,
+        "module_scope": "fx",
+        "sensitivity_scope": "aggregated",
+        "permission": "view",
+        "reason_category": "project_engagement",
+        "reason_detail": "Supporting the treasury hedging review",
+        "reference": "CHG-2026-0918",
+    }
+
+    object_route = grant_client.post(
+        "/api/v1/authorization/access-requests",
+        headers=member_headers,
+        json=payload | {"route": "/fx/trades/secret-trade"},
+    )
+    assert object_route.status_code == 404
+    forged_requirement = grant_client.post(
+        "/api/v1/authorization/access-requests",
+        headers=member_headers,
+        json=payload | {"module_scope": "risk"},
+    )
+    assert forged_requirement.status_code == 404
+
+    created = grant_client.post(
+        "/api/v1/authorization/access-requests",
+        headers=member_headers,
+        json=payload,
+    )
+    assert created.status_code == 201, created.text
+    duplicate = grant_client.post(
+        "/api/v1/authorization/access-requests",
+        headers=member_headers,
+        json=payload,
+    )
+    assert duplicate.status_code == 201, duplicate.text
+    assert duplicate.json()["id"] == created.json()["id"]
+
+    mine = grant_client.get(
+        "/api/v1/authorization/access-requests/mine",
+        headers=member_headers,
+    )
+    assert mine.status_code == 200
+    assert len(mine.json()["requests"]) == 1
+
+    pending = grant_client.get(
+        "/api/v1/authorization/access-requests",
+        headers=_owner_headers(),
+    )
+    assert pending.status_code == 200
+    assert pending.json()["requests"][0]["reference"] == "CHG-2026-0918"
+
+    preview_payload = {
+        "principal_user_id": str(GRANTEE),
+        "role_bundle": "viewer",
+        "institution_scope": "institution",
+        "institution_id": BANK_A,
+        "module_scope": "fx",
+        "sensitivity_scope": "aggregated",
+        "reason_category": "project_engagement",
+        "reason_detail": "Supporting the treasury hedging review",
+        "reference": "CHG-2026-0918",
+    }
+    preview = grant_client.post(
+        "/api/v1/authorization/bindings/preview",
+        headers=_owner_headers(),
+        json=preview_payload,
+    )
+    assert preview.status_code == 200, preview.text
+    approved = grant_client.post(
+        f"/api/v1/authorization/access-requests/{created.json()['id']}/approve",
+        headers=_owner_headers(),
+        json={key: value for key, value in preview_payload.items() if key != "principal_user_id"}
+        | {"expected_authority_sentence": preview.json()["authority_sentence"]},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["binding"]["grant_reason_category"] == "project_engagement"
+    assert approved.json()["binding"]["grant_reference"] == "CHG-2026-0918"
+
+    with _session() as db:
+        audit = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "authorization.access_requested",
+                AuditEvent.entity_id == created.json()["id"],
+            )
+        )
+        assert audit is not None
+        assert audit.actor_user_id == GRANTEE

@@ -24,6 +24,7 @@ export type ModuleKey =
   | "data_engine"
   | "institution"
   | "reports"
+  | "access"
   | "settings"
   | "irrbb"
   | "behavioral"
@@ -60,6 +61,7 @@ const ROUTE_MODULES: ReadonlyArray<readonly [string, ModuleKey]> = [
   ["/reports", "reports"],
   ["/institution", "institution"],
   ["/submissions", "regulatory_reporting"],
+  ["/access", "access"],
   ["/settings", "settings"],
 ];
 
@@ -138,6 +140,7 @@ export const CORE_MODULES: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
   "data_engine",
   "institution",
   "reports",
+  "access",
   "settings",
 ]);
 
@@ -445,6 +448,7 @@ const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
   reports: "Regulatory Reporting · Published · View",
   institution: "Account Administration · Restricted · View",
   regulatory_reporting: "Regulatory Reporting · Published · View",
+  access: "Account Administration · Restricted · Administer",
   settings: "Account Administration · Restricted · Administer",
 };
 
@@ -551,10 +555,18 @@ function scopedModulePermissionReason(
   return undefined;
 }
 
-const ORGANIZATION_ROUTES = new Set<ModuleKey>(["settings", "institution"]);
+const ORGANIZATION_ROUTES = new Set<ModuleKey>(["institution"]);
+
+export function isAccessPath(path: string): boolean {
+  return path === "/access" || path.startsWith("/access/");
+}
 
 export function isPersonalSettingsPath(path: string): boolean {
-  return path === "/settings/profile" || path.startsWith("/settings/profile/");
+  return path === "/settings" || path.startsWith("/settings/");
+}
+
+function isSettingsPath(path: string): boolean {
+  return path === "/settings" || path.startsWith("/settings/");
 }
 
 /**
@@ -567,7 +579,8 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   const path = normalize(pathname);
   // A deep-link refresh must wait for scope resolution, never briefly 404.
   if (!scope.isResolved) return true;
-  if (isPersonalSettingsPath(path)) return true;
+  if (isAccessPath(path)) return true;
+  if (isSettingsPath(path)) return true;
   const moduleKey = moduleForPath(path);
   if (path === "/" && isBaselineOnlyScope(scope)) {
     return true;
@@ -614,6 +627,7 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   // Hide class-specific subroutes until the class is known. In particular,
   // Capital is a core module but its Basel and SDI tabs are not interchangeable.
   if (subrouteHidden(path, scope)) return { state: "hidden" };
+  if (isAccessPath(path)) return { state: "enabled" };
   if (isPersonalSettingsPath(path)) return { state: "enabled" };
   // ICAAP is decided BEFORE the baseline-only permission sentences. It is
   // gated by a deployment flag as well as by CAP/confidential view, so there
@@ -622,215 +636,3 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (isIcaapPath(path) && bindingControlledSubrouteHidden(path, scope)) {
     return { state: "hidden" };
   }
-  const moduleKey = moduleForPath(path);
-  if (moduleKey) {
-    if (isBaselineOnlyScope(scope)) {
-      if (moduleKey === "settings") return { state: "enabled" };
-      const reason =
-        liquidityPermissionReason(path, scope) ??
-        scopedModulePermissionReason(path, scope) ??
-        (path === "/" || ROUTE_MODULES.some(([route]) => route === path)
-          ? permissionReason([MODULE_ENTRY_REQUIREMENTS[moduleKey]])
-          : undefined);
-      return reason ? { state: "disabled", reason } : { state: "hidden" };
-    }
-    if (ORGANIZATION_ROUTES.has(moduleKey)) {
-      return scope.organizationModules.has(moduleKey)
-        ? { state: "enabled" }
-        : { state: "hidden" };
-    }
-    if (!scope.isResolved) {
-      return moduleKey === "liquidity"
-        ? { state: "hidden" }
-        : CORE_MODULES.has(moduleKey)
-          ? { state: "enabled" }
-          : { state: "hidden" };
-    }
-    if (!scope.hasInstitutionAuthority) return { state: "hidden" };
-    if (scope.entitledModules && !scope.entitledModules.has(moduleKey)) {
-      return { state: "hidden" };
-    }
-  }
-
-  const reason =
-    liquidityPermissionReason(path, scope) ??
-    scopedModulePermissionReason(path, scope);
-  if (reason) {
-    return { state: "disabled", reason };
-  }
-  if (bindingControlledSubrouteHidden(path, scope)) {
-    return { state: "hidden" };
-  }
-  if (moduleKey && scope.modules && !scope.modules.has(moduleKey)) {
-    return { state: "hidden" };
-  }
-  return { state: "enabled" };
-}
-
-/**
- * Sidebar order of every module home. The root landing resolves against this
- * list so a user is sent to the first surface they would actually see in the
- * nav — never to a route the sidebar hides.
- */
-const LANDING_CANDIDATES: readonly string[] = [
-  "/",
-  "/risk",
-  "/alerts",
-  "/markets",
-  "/positions",
-  "/irr",
-  "/liquidity",
-  "/credit",
-  "/fx",
-  "/basel",
-  "/basel/planning",
-  "/ftp",
-  "/forecasting",
-  "/behavioral",
-  "/data-engine",
-  "/reports",
-  "/institution",
-  "/submissions",
-  "/settings",
-];
-
-/**
- * Where a signed-in user lands when they arrive at the root. `/` is the
- * post-sign-in destination for everyone, but the Command Center needs RISK view
- * authority — an Org Owner holding Account administration alone, or a Liquidity
- * Manager, would otherwise be dumped on a 404 by the route guard the moment
- * they signed in (docs/rbac.md §8.3). Returns the first visible surface in
- * sidebar order, falling back to personal settings, which every active session
- * can open; null while the scope is still unresolved.
- */
-export function landingPathFor(scope: ModuleScope): string | null {
-  if (!scope.isResolved) return null;
-  if (isBaselineOnlyScope(scope)) {
-    return "/";
-  }
-  return (
-    LANDING_CANDIDATES.find((href) => isHrefVisible(href, scope)) ??
-    "/settings/profile"
-  );
-}
-
-const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
-  "/alerts",
-  "/basel",
-  "/basel/exposures",
-  "/basel/loan-book",
-  "/basel/planning",
-  "/basel/rwa",
-  "/basel/stress",
-  "/basel/structure",
-  "/behavioral",
-  "/behavioral/deposit-stability",
-  "/behavioral/liquidity",
-  "/behavioral/nmd-duration",
-  "/behavioral/prepayment",
-  "/credit",
-  "/credit/activity",
-  "/credit/book",
-  "/credit/concentration",
-  "/credit/delinquency",
-  "/credit/vintages",
-  "/data-engine",
-  "/data-engine/adapters",
-  "/data-engine/api",
-  "/data-engine/database",
-  "/data-engine/excel-csv",
-  "/data-engine/market-data",
-  "/data-engine/positions",
-  "/data-engine/t24",
-  "/forecasting",
-  "/forecasting/assumptions",
-  "/forecasting/nii",
-  "/forecasting/optimizer",
-  "/forecasting/reverse-stress",
-  "/forecasting/scenario",
-  "/forecasting/whatif",
-  "/ftp",
-  "/ftp/expost",
-  "/ftp/lines",
-  "/ftp/products",
-  "/ftp/rules",
-  "/ftp/scenarios",
-  "/fx",
-  "/fx/forwards",
-  "/fx/hedges",
-  "/fx/limits",
-  "/fx/scenarios",
-  "/fx/var",
-  "/icaap",
-  "/institution",
-  "/institution/history",
-  "/institution/outlets",
-  "/institution/parties",
-  "/institution/products",
-  "/institution/registers",
-  "/irr",
-  "/irr/gaps",
-  "/irr/limits",
-  "/irr/scenarios",
-  "/irr/sensitivity",
-  "/irr/standardised",
-  "/liquidity",
-  "/liquidity/buffer",
-  "/liquidity/cfp",
-  "/liquidity/forecast",
-  "/liquidity/monitoring",
-  "/liquidity/nsfr",
-  "/liquidity/stress",
-  "/markets",
-  "/positions",
-  "/reports",
-  "/reports/analyses",
-  "/reports/board-pack",
-  "/reports/stress-board-pack",
-  "/risk",
-  "/submissions",
-  "/submissions/approvals",
-  "/submissions/calendar",
-  "/submissions/compare",
-  "/submissions/history",
-  "/submissions/returns",
-  "/submissions/settings",
-  "/submissions/signatures",
-  "/submissions/templates",
-]);
-
-/**
- * Where a hub URL should send a user it is hidden from, or null to 404.
- *
- * Hub URLs are destinations people type or are sent to rather than deep links
- * into someone else's data, so a hidden one redirects instead of 404ing:
- *   - `/`         → the first visible surface (`landingPathFor`);
- *   - `/settings` → personal settings, which every active session can open,
- *                   when organization settings need authority the user lacks.
- * Baseline-only members return from the explicit public-route allow-list to
- * `/`; structural exclusions and hidden object-specific paths stay not-found
- * (docs/rbac.md §8.2).
- */
-export function hubRedirectFor(
-  pathname: string,
-  scope: ModuleScope,
-): string | null {
-  const path = normalize(pathname);
-  if (!scope.isResolved) return null;
-  if (path === "/") {
-    const landing = landingPathFor(scope);
-    return landing && landing !== "/" ? landing : null;
-  }
-  if (path === "/settings") return "/settings/profile";
-  const moduleKey = moduleForPath(path);
-  if (
-    moduleKey &&
-    PUBLIC_MODULE_ROUTES.has(path) &&
-    !subrouteHidden(path, scope) &&
-    (!scope.entitledModules || scope.entitledModules.has(moduleKey)) &&
-    isBaselineOnlyScope(scope)
-  ) {
-    return "/";
-  }
-  return null;
-}

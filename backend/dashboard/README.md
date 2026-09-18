@@ -34,7 +34,8 @@ and dynamic detail routes. The route groups under `app/(app)/`:
 | Institution        | `/institution/*`   | profile, board registers, governance                                                                  |
 | Risk / Alerts      | `/risk`, `/alerts` | limit wall, findings, pipeline alerts                                                                 |
 | Reports            | `/reports/*`       | ALCO, board pack, ICAAP stress pack, comparisons                                                      |
-| Settings           | `/settings/*`      | profile; Org Owner Members, scoped grants, and signing policy; account-admin SSO and integration keys |
+| Access control     | `/access/*`        | Members and scoped grants; SSO and access requests; integration keys; My access placeholder |
+| Settings           | `/settings/*`      | appearance, profile/account, data and compute status, and About |
 
 `app/inspect` is the tenant inspector; `app/api/*` holds the server-only route
 handlers for attestation step-up, auth, and impersonation cookies.

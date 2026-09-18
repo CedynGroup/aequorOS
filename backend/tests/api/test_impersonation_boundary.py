@@ -64,12 +64,16 @@ _SUBMISSION_BANK_ID = "BK-IMPBND01"
 # Note the audit's own count of 14 was taken WITHOUT crediting the explicit
 # explicit admin dependencies on the attestation, integration-key and
 # SSO-administration routes; those were never viewer-writable. With those gates
-# credited (see ``_is_role_guarded``), these three are the whole residue.
+# credited (see ``_is_role_guarded``), these entries are the whole residue.
 _UNFIXED_READ_GUARDED_UNSAFE_ROUTES: frozenset[tuple[str, str]] = frozenset(
     {
         # Legitimately viewer-writable: a user editing their OWN profile. Raising
         # it to the analyst floor would stop a viewer changing their own name.
         ("PATCH", "/api/v1/auth/me"),
+        # Legitimately member-writable: this records a pending request for the
+        # caller and grants no authority. The handler requires an active human
+        # identity and derives the requested permission from a public route.
+        ("POST", "/api/v1/authorization/access-requests"),
         # Genuinely read-only compute; see IMPERSONATION_READ_ONLY_ROUTES.
         ("POST", "/api/v1/banks/{bank_id}/scenario-workbench/{module}/analysis"),
     }

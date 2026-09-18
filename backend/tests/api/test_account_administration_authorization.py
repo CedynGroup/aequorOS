@@ -182,7 +182,8 @@ def test_account_admin_cannot_approve_sso_request_but_owner_can_reach_workflow(
         "institution_id": None,
         "module_scope": "account",
         "sensitivity_scope": "restricted",
-        "reason": "approve verified employee identity",
+        "reason_category": "other",
+        "reason_detail": "approve verified employee identity",
         "expected_authority_sentence": "server preview placeholder",
     }
     _, account_admin_version = _grant()
