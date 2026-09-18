@@ -13,7 +13,7 @@ test.afterEach(async ({ page }) => {
 test.describe("unbound FX user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
 
-  test("hides navigation, 404s deep links, and sends no FX requests", async ({
+  test("disables navigation, redirects deep links, and sends no FX requests", async ({
     page,
   }) => {
     const fxRequests: string[] = [];
