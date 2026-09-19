@@ -150,6 +150,13 @@ test.describe("operational Analyst", () => {
     await expect(
       settingsTabs.getByRole("link", { name: "Organization" }),
     ).toHaveCount(0);
+    // The personal page keeps the shell: institution in the header, modules
+    // in the sidebar. (#188 skipped the institution load here and blanked
+    // both for everyone.)
+    await expect(page.getByText("Sample Bank Ltd").first()).toBeVisible();
+    await expect(
+      page.getByRole("navigation").getByRole("link", { name: "Liquidity" }),
+    ).toBeVisible();
 
     await page.goto("/data-engine/api");
     await expect(page.getByRole("heading", { name: "API Push" })).toBeVisible();
