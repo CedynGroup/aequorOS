@@ -91,8 +91,25 @@ class BindingPreviewRequest(ScopedGrantInput):
     principal_user_id: UUID
 
 
+class SodPolicyFindingRead(ClosedModel):
+    code: str
+    message: str
+
+
+class SodDecisionRead(ClosedModel):
+    outcome: Literal["allow", "warn", "block"]
+    findings: list[SodPolicyFindingRead]
+
+
 class BindingPreviewRead(ClosedModel):
+    """The exact sentence AND the decision the create call would reach.
+
+    The composer shows both at Define time, so nobody is walked through
+    Review only to be refused by separation-of-duties policy on submit.
+    """
+
     authority_sentence: str
+    sod_decision: SodDecisionRead
 
 
 class BindingRevokeRequest(ClosedModel):
@@ -104,16 +121,6 @@ class BindingRevokeRequest(ClosedModel):
         if not self.reason:
             raise ValueError("a revocation reason is required")
         return self
-
-
-class SodPolicyFindingRead(ClosedModel):
-    code: str
-    message: str
-
-
-class SodDecisionRead(ClosedModel):
-    outcome: Literal["allow", "warn", "block"]
-    findings: list[SodPolicyFindingRead]
 
 
 class BindingRead(ClosedModel):

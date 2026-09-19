@@ -537,7 +537,14 @@ the §8.3 order), falling back to personal settings — never a 404 on arrival.
 administration is sent to `/settings/profile` rather than 404ed, and "Your
 account" (identity + permanent signer ID) renders there for every session, not
 only on the organization hub — an analyst must be able to read the signer ID
-stamped on the documents they certify.
+stamped on the documents they certify. Both entries share one tab strip
+(`app/(app)/settings/layout.tsx`: Organization · Profile & preferences), tabs
+following the same access rules as every module; Appearance lives on the
+personal tab only. The signer-identity probe is asked only for signer-eligible
+scalar roles (`canHoldSignerIdentity`, mirroring the route's analyst gate).
+`POST /authorization/bindings/preview` returns the assignment-time SoD decision
+alongside the sentence, so the Members composer refuses a blocked combination at
+Define with the policy finding and never walks an owner to a 409.
 Ownership is two explicit sentences, never one implied one: the `org_owner`
 Account binding (administer members, grants, SSO, keys) and an organization-wide
 `viewer` / all modules / all sensitivities binding, the §7 "read dashboards for

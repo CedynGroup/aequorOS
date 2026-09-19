@@ -18,11 +18,17 @@ import type {
   BindingCreateResponse,
   BindingRead,
   MemberRead,
+  SodDecisionRead,
 } from "@aequoros/risk-service-api";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
-import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
+import {
+  authApi,
+  authorizationApi,
+  normalizeApiError,
+  type ApiError,
+} from "@/lib/api/client";
 import { loginUrlWithReason } from "@/lib/loginUrl";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { avatarColor, initialsFrom } from "@/lib/api/identity";
@@ -492,6 +498,7 @@ function GrantComposer({
   const [previewResult, setPreviewResult] = useState<{
     key: string;
     sentence: string;
+    sodDecision: SodDecisionRead;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const previewKeyRef = useRef("");
@@ -520,6 +527,11 @@ function GrantComposer({
   previewKeyRef.current = previewKey;
   const previewSentence =
     previewResult?.key === previewKey ? previewResult.sentence : null;
+  const previewDecision =
+    previewResult?.key === previewKey ? previewResult.sodDecision : null;
+  // A block is final: the create call would refuse it, so say so here and keep
+  // the person out of Review instead of walking them to a 409.
+  const previewBlocked = previewDecision?.outcome === "block";
 
   const { mutate: previewAuthority } = useMutation({
     mutationFn: () =>
@@ -543,6 +555,7 @@ function GrantComposer({
             setPreviewResult({
               key: requestedKey,
               sentence: result.authoritySentence,
+              sodDecision: result.sodDecision,
             });
           }
         },
@@ -581,7 +594,7 @@ function GrantComposer({
       onSaved();
     },
     onError: async (failure) =>
-      setError((await normalizeApiError(failure)).message),
+      setError(refusalMessage(await normalizeApiError(failure))),
   });
 
   const updateRole = (roleBundle: GrantDraft["roleBundle"]) => {
@@ -652,7 +665,7 @@ function GrantComposer({
           className="space-y-5 p-5"
           onSubmit={(event) => {
             event.preventDefault();
-            if (draft.reason.trim() && previewSentence) {
+            if (draft.reason.trim() && previewSentence && !previewBlocked) {
               setError(null);
               setStep("review");
             }
@@ -748,6 +761,7 @@ function GrantComposer({
             </p>
           )}
           {previewSentence && <SentencePreview sentence={previewSentence} />}
+          <SodDecisionNotice decision={previewDecision} />
           <div className="flex justify-end gap-3">
             <button
               type="button"
@@ -758,10 +772,16 @@ function GrantComposer({
             </button>
             <button
               type="submit"
-              disabled={!draft.reason.trim() || !previewSentence}
+              disabled={
+                !draft.reason.trim() || !previewSentence || previewBlocked
+              }
               className="px-4 py-2.5 btn-primary text-body font-medium disabled:opacity-50"
             >
-              {previewSentence ? "Review grant" : "Preparing review…"}
+              {previewBlocked
+                ? "Cannot be granted"
+                : previewSentence
+                  ? "Review grant"
+                  : "Preparing review…"}
             </button>
           </div>
         </form>
@@ -773,6 +793,7 @@ function GrantComposer({
             Review the exact authority before granting it.
           </p>
           <SentencePreview sentence={previewSentence} />
+          <SodDecisionNotice decision={previewDecision} />
           <div className="rounded-md border border-border-light p-4">
             <p className="text-micro font-medium uppercase tracking-wider text-slate">
               Reason
@@ -800,7 +821,7 @@ function GrantComposer({
             <button
               type="button"
               onClick={() => submit.mutate()}
-              disabled={submit.isPending}
+              disabled={submit.isPending || previewBlocked}
               className="inline-flex items-center gap-2 px-4 py-2.5 btn-primary text-body font-medium disabled:opacity-50"
             >
               <ShieldCheck size={15} aria-hidden />{" "}
@@ -915,6 +936,61 @@ function GrantSelect({
       </select>
     </label>
   );
+}
+
+/**
+ * The server's assignment-time separation-of-duties decision, in its own
+ * words. `allow` says nothing; `warn` explains what the person will hold;
+ * `block` is the refusal the create call would return, shown before anyone
+ * gets there.
+ */
+function SodDecisionNotice({
+  decision,
+}: {
+  decision: SodDecisionRead | null;
+}) {
+  if (!decision || decision.outcome === "allow") return null;
+  const findings = decision.findings.map((finding) => finding.message);
+  if (decision.outcome === "block") {
+    return (
+      <div
+        role="alert"
+        className="rounded-md bg-critical-light px-4 py-3 text-caption leading-relaxed text-critical"
+      >
+        <p className="font-medium">
+          This grant is refused by separation-of-duties policy.
+        </p>
+        {findings.map((message) => (
+          <p key={message} className="mt-1">
+            {message}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div
+      role="status"
+      className="rounded-md border border-warning/25 bg-warning-light/50 px-4 py-3 text-caption leading-relaxed text-navy"
+    >
+      {findings.join(" ")}
+    </div>
+  );
+}
+
+/**
+ * A refusal's headline plus the policy findings the API attached to it, so a
+ * 409 never reads as the bare "conflicts with separation-of-duties policy".
+ */
+function refusalMessage(error: ApiError): string {
+  const details = error.details as {
+    sod_decision?: { findings?: { message?: string }[] };
+  } | null;
+  const findings =
+    details?.sod_decision?.findings
+      ?.map((finding) => finding.message)
+      .filter((message): message is string => Boolean(message)) ?? [];
+  return findings.length ? `${error.message} ${findings.join(" ")}` : error.message;
 }
 
 function SentencePreview({ sentence }: { sentence: string }) {

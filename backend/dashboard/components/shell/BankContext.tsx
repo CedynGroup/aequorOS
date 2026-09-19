@@ -98,7 +98,13 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isPersonalSelfService = isPersonalSettingsPath(pathname);
   const profileQuery = useUserProfile();
-  const banksQuery = useBanks(!isPersonalSelfService);
+  // Always load the institution, on the personal page too. #188 skipped the
+  // load there so a zero-authority user could still reach Profile &
+  // preferences — but that also blanked the header, the sidebar and the
+  // workspace for everyone else the moment they opened the page. The
+  // zero-authority case is handled below (empty list + personal path renders
+  // the page), so the skip bought nothing and cost the whole shell.
+  const banksQuery = useBanks();
   const bank = banksQuery.data?.banks[0] ?? null;
   const authority = profileQuery.effectiveAuthority;
   const institutionCapabilities = useMemo(
