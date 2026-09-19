@@ -5,7 +5,6 @@
  *   · Institution profile — identity from the corporate register (single
  *     source of truth, managed under Governance → Institution Profile) plus
  *     platform reporting facts from the bank record
- *   · Appearance — real theme toggle (ThemeProvider)
  *   · Members — tenant-scoped identity, lifecycle, and indivisible scoped grants
  *   · Your account — the signed-in account and its permanent signer identity
  *   · Data & compute — real service health, market-data connections, and the
@@ -16,7 +15,6 @@
 import Link from "next/link";
 import type { InstitutionProfileRead } from "@aequoros/risk-service-api";
 import { useQuery } from "@tanstack/react-query";
-import { Monitor, Moon, Sun } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import AuthenticationPanel from "@/components/settings/AuthenticationPanel";
 import MembersPanel from "@/components/settings/MembersPanel";
@@ -28,10 +26,6 @@ import RunBadge from "@/components/ui/RunBadge";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
-import {
-  useTheme,
-  type ThemePreference,
-} from "@/components/shell/ThemeProvider";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import {
   MODULE_LABELS,
@@ -84,10 +78,7 @@ export default function SettingsPage() {
           periodCount={periods.length}
           latestPeriodLabel={periods[0]?.label}
         />
-        <div className="space-y-6">
-          <AppearancePanel />
-          <CurrentAccountPanel />
-        </div>
+        <CurrentAccountPanel />
         <AuthenticationPanel />
         <DataComputePanel bankId={bank?.id} />
         <AboutPanel bankId={bank?.id} />
@@ -229,59 +220,6 @@ function InstitutionProfile({
             </dl>
           </>
         )}
-      </CardBody>
-    </Card>
-  );
-}
-
-function AppearancePanel() {
-  const { theme, setTheme } = useTheme();
-  const options: {
-    value: ThemePreference;
-    label: string;
-    Icon: typeof Sun;
-  }[] = [
-    { value: "dark", label: "Dark", Icon: Moon },
-    { value: "light", label: "Light", Icon: Sun },
-    { value: "system", label: "System", Icon: Monitor },
-  ];
-  return (
-    <Card>
-      <CardHeader
-        title="Appearance"
-        subtitle="Theme preference — synced to your profile"
-      />
-      <CardBody>
-        <div
-          role="radiogroup"
-          aria-label="Theme"
-          className="inline-flex items-center gap-1 p-1 rounded-md bg-surface border border-border-light"
-        >
-          {options.map(({ value, label, Icon }) => {
-            const selected = theme === value;
-            return (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => setTheme(value)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded text-caption font-medium transition-colors ${
-                  selected
-                    ? "bg-surface-raised text-navy shadow-subtle border border-border-light"
-                    : "text-slate hover:text-navy"
-                }`}
-              >
-                <Icon size={14} aria-hidden />
-                {label}
-              </button>
-            );
-          })}
-        </div>
-        <p className="mt-3 text-caption text-slate leading-relaxed">
-          Both themes run on the same semantic tokens; printed reports always
-          render in the light palette.
-        </p>
       </CardBody>
     </Card>
   );

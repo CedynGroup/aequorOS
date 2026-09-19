@@ -19,7 +19,12 @@ import { SkeletonLine } from "@/components/ui/Skeleton";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { useMySignerIdentity } from "@/lib/api/hooks";
 import { fmtRelative } from "@/lib/api/values";
-import { avatarColor, initialsFrom, roleLabel } from "@/lib/api/identity";
+import {
+  avatarColor,
+  canHoldSignerIdentity,
+  initialsFrom,
+  roleLabel,
+} from "@/lib/api/identity";
 
 /** A copyable identifier row for the identity grid. */
 export function IdField({
@@ -106,7 +111,11 @@ export default function CurrentAccountPanel() {
  * requires all three to agree.
  */
 function SignerIdentityRow() {
-  const identity = useMySignerIdentity();
+  const { profile } = useUserProfile();
+  // The API answers this probe with a refusal for anyone outside the analyst
+  // ladder — correct, but it lands in the console as an error for a card that
+  // has nothing to show. Ask only when the answer can be an identity.
+  const identity = useMySignerIdentity(canHoldSignerIdentity(profile?.role));
 
   if (identity.isLoading) {
     return (

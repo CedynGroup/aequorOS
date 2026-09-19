@@ -3002,14 +3002,19 @@
       },
       "BindingPreviewRead": {
         "additionalProperties": false,
+        "description": "The exact sentence AND the decision the create call would reach.\n\nThe composer shows both at Define time, so nobody is walked through\nReview only to be refused by separation-of-duties policy on submit.",
         "properties": {
           "authority_sentence": {
             "title": "Authority Sentence",
             "type": "string"
+          },
+          "sod_decision": {
+            "$ref": "#/components/schemas/SodDecisionRead"
           }
         },
         "required": [
-          "authority_sentence"
+          "authority_sentence",
+          "sod_decision"
         ],
         "title": "BindingPreviewRead",
         "type": "object"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -802,6 +803,66 @@ def test_server_returns_warn_and_block_sod_decisions(grant_client: TestClient) -
     decision = blocked.json()["error"]["details"]["sod_decision"]
     assert decision["outcome"] == "block"
     assert decision["findings"][0]["code"] == ("c9_account_administration_operational_conflict")
+
+
+def test_preview_returns_the_decision_the_create_call_would_reach(
+    grant_client: TestClient,
+) -> None:
+    """The composer must refuse a blocked combination at Define, not on submit.
+
+    Preview therefore carries the same server-authoritative assignment-time
+    decision as create — allow, warn with its findings, or block with C9 —
+    without writing anything.
+    """
+
+    def preview(**overrides: Any) -> dict[str, Any]:
+        response = grant_client.post(
+            "/api/v1/authorization/bindings/preview",
+            headers=_owner_headers(),
+            json=_payload(**overrides),
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    clean = preview()
+    assert clean["sod_decision"] == {"outcome": "allow", "findings": []}
+
+    # Maker and checker on the same object is allowed but warned — and the
+    # preview says so before the row exists.
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(grant_client),
+    )
+    assert created.status_code == 201, created.text
+    warned = preview(role="approver", reason="Independent checker duties")
+    assert warned["sod_decision"]["outcome"] == "warn"
+    assert [finding["code"] for finding in warned["sod_decision"]["findings"]] == [
+        "maker_checker_runtime_condition_required"
+    ]
+
+    # Operational maker authority on the account administrator's own identity
+    # is C9's hard block; the sentence is still composed so the screen can
+    # show exactly what was refused.
+    blocked = preview(principal_user_id=USER_1, reason="Owner requests operational authority")
+    assert blocked["authority_sentence"]
+    assert blocked["sod_decision"]["outcome"] == "block"
+    assert [finding["code"] for finding in blocked["sod_decision"]["findings"]] == [
+        "c9_account_administration_operational_conflict"
+    ]
+    assert "must remain separated" in blocked["sod_decision"]["findings"][0]["message"]
+
+    # Preview writes nothing: no binding for the owner beyond ownership.
+    with _session() as db:
+        owner_rows = list(
+            db.scalars(
+                select(AuthorizationBinding.role_bundle).where(
+                    AuthorizationBinding.organization_id == ORG_1,
+                    AuthorizationBinding.principal_user_id == USER_1,
+                )
+            )
+        )
+    assert "analyst" not in owner_rows
 
 
 def test_sso_approval_activates_identity_only_with_a_complete_grant(

@@ -21,6 +21,7 @@
     "lib/loginUrl.test.ts",
     "lib/requestOrigin.ts",
     "lib/api/values.ts",
+    "lib/api/identity.test.ts",
     "lib/api/values.test.ts",
     "lib/api/accountAdministration.ts",
     "lib/api/accountAdministration.test.ts",

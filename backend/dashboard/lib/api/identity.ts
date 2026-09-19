@@ -50,3 +50,21 @@ export function avatarColor(identity: string): string {
   }
   return palette[Math.abs(hash) % palette.length];
 }
+
+/**
+ * Scalar roles the API's mutation gate admits — the analyst ladder. This
+ * mirrors the backend rule (`security.has_role(roles, "analyst")`) that fronts
+ * `GET /attestation/signer-identity`: only these principals can hold a signer
+ * identity, so only they should ask for one. Asking on behalf of an account
+ * administrator or a viewer is answered with a refusal that lands in the
+ * browser console as an error for a card that simply has nothing to show.
+ */
+export const SIGNER_ELIGIBLE_ROLES: ReadonlySet<string> = new Set([
+  'admin',
+  'approver',
+  'analyst',
+]);
+
+export function canHoldSignerIdentity(role: string | null | undefined): boolean {
+  return Boolean(role) && SIGNER_ELIGIBLE_ROLES.has(role as string);
+}

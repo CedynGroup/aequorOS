@@ -29,6 +29,16 @@ test.describe("explicit Account administrator", () => {
     await expect(
       page.getByRole("button", { name: "Save connection" }),
     ).toBeVisible();
+    // Both ways into Settings share one tab strip.
+    const settingsTabs = page.getByRole("navigation", {
+      name: "Module sections",
+    });
+    await expect(settingsTabs.getByRole("link", { name: "Organization" })).toBeVisible();
+    await expect(
+      settingsTabs.getByRole("link", { name: "Profile & preferences" }),
+    ).toBeVisible();
+    // Appearance moved to the personal page; the hub no longer duplicates it.
+    await expect(page.getByRole("heading", { name: "Appearance" })).toHaveCount(0);
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(
@@ -87,8 +97,22 @@ test.describe("legacy scalar Account administrator", () => {
       }
     });
 
+    // Since #201 every active human holds the baseline `member` sentence, so a
+    // legacy scalar administrator is kept in the organization console shell
+    // with personal settings — and still cannot open, or even request, any
+    // account-administration surface.
     await page.goto("/settings");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/settings(?:[?#]|$)/);
+    await expect(
+      page.getByRole("heading", { name: "Your account" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Authentication (SSO)" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Members" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Save connection" }),
+    ).toHaveCount(0);
     expect(accountRequests).toEqual([]);
 
     if (evidenceDir) {
@@ -112,6 +136,20 @@ test.describe("operational Analyst", () => {
         keyRequests.push(request.url());
       }
     });
+
+    // An operational analyst reaches Settings through the personal tab only,
+    // and the strip does not offer an Organization tab they cannot open.
+    await page.goto("/settings");
+    await expect(page).toHaveURL(/\/settings\/profile(?:[?#]|$)/);
+    const settingsTabs = page.getByRole("navigation", {
+      name: "Module sections",
+    });
+    await expect(
+      settingsTabs.getByRole("link", { name: "Profile & preferences" }),
+    ).toBeVisible();
+    await expect(
+      settingsTabs.getByRole("link", { name: "Organization" }),
+    ).toHaveCount(0);
 
     await page.goto("/data-engine/api");
     await expect(page.getByRole("heading", { name: "API Push" })).toBeVisible();

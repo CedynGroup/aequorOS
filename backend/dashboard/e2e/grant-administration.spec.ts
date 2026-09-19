@@ -61,7 +61,9 @@ test.describe("scoped grant administration", () => {
       .locator("li")
       .filter({ hasText: "E2E Grant Member" })
       .first();
-    await expect(memberRow).toContainText("1 grant");
+    // Every active human carries the system-managed baseline `member` sentence
+    // (#201) beside whatever is granted, so the unrelated Viewer row makes two.
+    await expect(memberRow).toContainText("2 grants");
     await expect(memberRow).toContainText(
       "Viewer · Regulatory Reporting · Sample Bank Ltd",
     );
@@ -112,7 +114,8 @@ test.describe("scoped grant administration", () => {
       sensitivity_scope: string;
       status: string;
     }>;
-    expect(createdRows).toHaveLength(2);
+    // Baseline member + the unrelated Viewer + the grant just composed.
+    expect(createdRows).toHaveLength(3);
     expect(createdRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -134,9 +137,10 @@ test.describe("scoped grant administration", () => {
       ]),
     );
 
-    // Both grants have now advanced the member from authv 1 to authv 3. This
-    // represents their current signed-in session immediately before revoke.
-    const currentMemberToken = await mintBackendToken("grant_member", 3);
+    // Baseline membership (#201) took the member from authv 1 to 2 at
+    // bootstrap, and the two grants above advanced it to 4. This represents
+    // their current signed-in session immediately before revoke.
+    const currentMemberToken = await mintBackendToken("grant_member", 4);
     const beforeRevoke = await page.request.get(`${API}/auth/me`, {
       headers: { Authorization: `Bearer ${currentMemberToken}` },
     });
@@ -203,9 +207,54 @@ test.describe("scoped grant administration", () => {
         }),
       ]),
     );
-    await expect(memberRow).toContainText("1 grant");
+    // Only the one grant was revoked: the baseline sentence and the unrelated
+    // Viewer row remain.
+    await expect(memberRow).toContainText("2 grants");
     await expect(memberRow).toContainText(
       "Viewer · Regulatory Reporting · Sample Bank Ltd",
     );
+  });
+});
+
+test.describe("separation-of-duties at composition time", () => {
+  test.use({ storageState: ownerState });
+
+  test("a blocked combination is refused at Define with the policy reason", async ({
+    page,
+  }) => {
+    // E2E Account_admin already administers the account; an operational maker
+    // bundle on the same identity is rule C9's hard block. The composer must
+    // say so before Review — never walk the owner to a 409 on Grant access.
+    await page.goto("/settings");
+    const memberRow = page
+      .locator("li")
+      .filter({ hasText: "E2E Account_admin" })
+      .first();
+    await memberRow.getByRole("button", { name: "Add grant" }).click();
+    const composer = page.getByRole("dialog", {
+      name: "Add grant for E2E Account_admin",
+    });
+    await composer.getByLabel("Role bundle").selectOption("analyst");
+    await composer.getByLabel("Reason").fill("Attempted maker authority");
+    await expect(composer.getByRole("alert")).toContainText(
+      "refused by separation-of-duties policy",
+    );
+    await expect(composer.getByRole("alert")).toContainText(
+      "Account administration and operational maker/checker authority must remain separated",
+    );
+    await expect(
+      composer.getByRole("button", { name: "Cannot be granted" }),
+    ).toBeDisabled();
+    await expect(
+      composer.getByRole("button", { name: "Review grant" }),
+    ).toHaveCount(0);
+
+    // Switching to a read-only bundle clears the block on the same identity.
+    await composer.getByLabel("Role bundle").selectOption("viewer");
+    await expect(composer.getByRole("alert")).toHaveCount(0);
+    await expect(
+      composer.getByRole("button", { name: "Review grant" }),
+    ).toBeEnabled();
+    await composer.getByRole("button", { name: "Cancel" }).click();
   });
 });

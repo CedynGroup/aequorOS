@@ -284,7 +284,9 @@ tenant-side owner designation or transfer action.
 ## Scoped grant administration and Members (built 2026-08-29)
 
 `GET/POST /api/v1/authorization/bindings`,
-`POST /api/v1/authorization/bindings/preview`, the single-binding revoke route,
+`POST /api/v1/authorization/bindings/preview` (which returns the same
+assignment-time `sod_decision` the create call applies, read-only, so the
+composer can refuse a block before Review), the single-binding revoke route,
 and `GET /api/v1/organization/members` require a persisted Org Owner binding
 through the evaluator; scalar account-admin or token claims are insufficient.
 Create has one scalar role bundle, one institution coverage, one module, one
