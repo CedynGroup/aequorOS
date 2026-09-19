@@ -1183,3 +1183,118 @@ def test_active_member_route_access_request_is_deduplicated_audited_and_approved
         )
         assert audit is not None
         assert audit.actor_user_id == GRANTEE
+
+
+def test_organization_scoped_access_request_carries_expiry_into_the_grant(
+    grant_client: TestClient,
+) -> None:
+    """Account Administration routes are evaluated organization-wide, so the
+    request names no institution and approval must preserve that scope; a
+    temporary cover request carries its own expiry through to the binding."""
+
+    member_headers = headers(user_id=GRANTEE, roles=("viewer",), authorization_version=1)
+    payload = {
+        "route": "/institution",
+        "module_scope": "account",
+        "sensitivity_scope": "restricted",
+        "permission": "view",
+        "reason_category": "temporary_cover",
+        "reason_detail": "Covering the registers desk during leave",
+        "valid_until": "2026-10-19T09:00:00+00:00",
+    }
+
+    institution_named = grant_client.post(
+        "/api/v1/authorization/access-requests",
+        headers=member_headers,
+        json=payload | {"institution_id": BANK_A},
+    )
+    assert institution_named.status_code == 422
+    missing_expiry = grant_client.post(
+        "/api/v1/authorization/access-requests",
+        headers=member_headers,
+        json={key: value for key, value in payload.items() if key != "valid_until"},
+    )
+    assert missing_expiry.status_code == 422
+    institution_route_without_target = grant_client.post(
+        "/api/v1/authorization/access-requests",
+        headers=member_headers,
+        json=payload | {"route": "/fx", "module_scope": "fx", "sensitivity_scope": "aggregated"},
+    )
+    assert institution_route_without_target.status_code == 422
+
+    created = grant_client.post(
+        "/api/v1/authorization/access-requests",
+        headers=member_headers,
+        json=payload,
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["institution_scope"] == "organization"
+    assert body["institution_id"] is None
+    assert body["institution_name"] is None
+    assert body["valid_until"].startswith("2026-10-19T09:00:00")
+    duplicate = grant_client.post(
+        "/api/v1/authorization/access-requests",
+        headers=member_headers,
+        json=payload,
+    )
+    assert duplicate.status_code == 201
+    assert duplicate.json()["id"] == body["id"]
+
+    grant_payload = {
+        "role_bundle": "viewer",
+        "institution_scope": "organization",
+        "module_scope": "account",
+        "sensitivity_scope": "restricted",
+        "reason_category": "temporary_cover",
+        "reason_detail": body["reason_detail"],
+        "valid_until": body["valid_until"],
+    }
+    preview = grant_client.post(
+        "/api/v1/authorization/bindings/preview",
+        headers=_owner_headers(),
+        json=grant_payload | {"principal_user_id": str(GRANTEE)},
+    )
+    assert preview.status_code == 200, preview.text
+    sentence = preview.json()["authority_sentence"]
+    narrowed = grant_client.post(
+        f"/api/v1/authorization/access-requests/{body['id']}/approve",
+        headers=_owner_headers(),
+        json=grant_payload
+        | {
+            "institution_scope": "institution",
+            "institution_id": BANK_A,
+            "expected_authority_sentence": sentence,
+        },
+    )
+    assert narrowed.status_code == 409
+    approved = grant_client.post(
+        f"/api/v1/authorization/access-requests/{body['id']}/approve",
+        headers=_owner_headers(),
+        json=grant_payload | {"expected_authority_sentence": sentence},
+    )
+    assert approved.status_code == 200, approved.text
+    binding = approved.json()["binding"]
+    assert binding["institution_scope"] == "organization"
+    assert binding["institution_id"] is None
+    assert binding["module_scope"] == "account"
+    assert binding["sensitivity_scope"] == "restricted"
+    assert binding["valid_until"].startswith("2026-10-19T09:00:00")
+
+    with _session() as db:
+        user = db.get(User, GRANTEE)
+        assert user is not None
+        issued = authentication.issue_tokens(db, user)
+    me = grant_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {issued.access_token}"},
+    )
+    assert me.status_code == 200, me.text
+    assert {
+        "module": "account",
+        "sensitivity": "restricted",
+        "permission": "view",
+    } in [
+        {key: capability[key] for key in ("module", "sensitivity", "permission")}
+        for capability in me.json()["effective_authority"]["organization_capabilities"]
+    ]

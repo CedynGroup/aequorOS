@@ -548,6 +548,14 @@ queries. Own-organization public module/workspace routes on the explicit
 allow-list render an access-denied page inside the shell instead. It names the
 exact permission sentence, identifies organization owners/admins as grantors,
 and lets an active member create one deduplicated request per route/permission.
+The named requirements come from the same `lib/modules.ts` rules the route guard
+applies (institution class included), so whatever hides a public route also
+names what is missing. Requests target one institution, except Account
+Administration routes (`/institution*`), which the evaluator resolves
+organization-wide: those requests carry no institution and approval preserves
+organization scope. A request carries its own reason category, detail,
+reference and — for temporary cover and break-glass — the expiry the approver's
+form is pre-filled from; owners review requests under Access → Members only.
 Unknown IDs, object-detail routes, cross-tenant objects, structural exclusions,
 and non-existent paths remain 404 and never disclose permissions.
 The root `/` is the post-sign-in landing, not a deep link: for users with separate

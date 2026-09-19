@@ -362,60 +362,7 @@ function bindingControlledSubrouteHidden(
   path: string,
   scope: ModuleScope,
 ): boolean {
-  if (path === "/liquidity" || path.startsWith("/liquidity/")) {
-    const confidentialRoutes = [
-      "/liquidity/forecast",
-      "/liquidity/monitoring",
-      "/liquidity/cfp",
-    ];
-    if (
-      confidentialRoutes.some(
-        (route) => path === route || path.startsWith(`${route}/`),
-      )
-    ) {
-      return scope.liquidityConfidentialView !== true;
-    }
-    if (path === "/liquidity/stress" || path.startsWith("/liquidity/stress/")) {
-      return (
-        scope.liquidityConfidentialView !== true ||
-        scope.riskConfidentialView !== true
-      );
-    }
-    if (scope.institutionClass === "sdi" && path === "/liquidity") {
-      return scope.liquidityConfidentialView !== true;
-    }
-    return scope.liquidityAggregatedView !== true;
-  }
-  if (
-    (path === "/basel/planning" || path.startsWith("/basel/planning/")) &&
-    scope.capitalConfidentialView !== true
-  ) {
-    return true;
-  }
-  // ICAAP is confidential capital work, and that authority is the whole gate
-  // (D-046: the workspace has no deployment flag). "Not yet resolved" is
-  // `undefined`, which hides it, so the nav never offers a link before the
-  // projection says the caller can follow it.
-  if (
-    (path === "/icaap" || path.startsWith("/icaap/")) &&
-    scope.capitalConfidentialView !== true
-  ) {
-    return true;
-  }
-  if (
-    (path === "/basel" ||
-      path === "/basel/rwa" ||
-      path.startsWith("/basel/rwa/") ||
-      path === "/basel/structure" ||
-      path.startsWith("/basel/structure/") ||
-      path === "/basel/stress" ||
-      path.startsWith("/basel/stress/")) &&
-    scope.capitalAggregatedView !== true
-  ) {
-    return true;
-  }
-  if (scopedModulePermissionReason(path, scope)) return true;
-  return false;
+  return bindingRequirements(path, scope).length > 0;
 }
 
 export type HrefAccess =
@@ -423,33 +370,145 @@ export type HrefAccess =
   | { state: "disabled"; reason: string }
   | { state: "hidden" };
 
-const LIQUIDITY_AGGREGATED_VIEW = "Liquidity Monitoring · Aggregated · View";
-const LIQUIDITY_CONFIDENTIAL_VIEW =
-  "Liquidity Monitoring · Confidential · View";
-const RISK_CONFIDENTIAL_VIEW = "Risk & Limits · Confidential · View";
-const IRRBB_CONFIDENTIAL_RUN = "IRRBB · Confidential · Run";
-const FTP_CONFIDENTIAL_RUN = "Funds Transfer Pricing · Confidential · Run";
+export type AccessRequirement = {
+  moduleScope: EffectiveCapabilityRead["module"];
+  moduleLabel: string;
+  sensitivityScope: EffectiveCapabilityRead["sensitivity"];
+  sensitivityLabel: string;
+  permission: EffectiveCapabilityRead["permission"];
+  permissionLabel: string;
+};
 
-const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
-  command_center: "Risk & Limits · Aggregated · View",
-  risk: "Risk & Limits · Confidential · View",
-  alerts: "Risk & Limits · Confidential · View",
-  markets: "Markets · Published · View",
-  positions: "Risk & Limits · Confidential · View",
-  irrbb: "IRRBB · Aggregated · View",
+function requirement(
+  moduleScope: AccessRequirement["moduleScope"],
+  moduleLabel: string,
+  sensitivityScope: AccessRequirement["sensitivityScope"],
+  sensitivityLabel: string,
+  permission: AccessRequirement["permission"] = "view",
+  permissionLabel = "View",
+): AccessRequirement {
+  return {
+    moduleScope,
+    moduleLabel,
+    sensitivityScope,
+    sensitivityLabel,
+    permission,
+    permissionLabel,
+  };
+}
+
+function requirementLabel(item: AccessRequirement): string {
+  return `${item.moduleLabel} · ${item.sensitivityLabel} · ${item.permissionLabel}`;
+}
+
+const LIQUIDITY_AGGREGATED_VIEW = requirement(
+  "liq",
+  "Liquidity Monitoring",
+  "aggregated",
+  "Aggregated",
+);
+const LIQUIDITY_CONFIDENTIAL_VIEW = requirement(
+  "liq",
+  "Liquidity Monitoring",
+  "confidential",
+  "Confidential",
+);
+const RISK_AGGREGATED_VIEW = requirement(
+  "risk",
+  "Risk & Limits",
+  "aggregated",
+  "Aggregated",
+);
+const RISK_CONFIDENTIAL_VIEW = requirement(
+  "risk",
+  "Risk & Limits",
+  "confidential",
+  "Confidential",
+);
+const CAPITAL_AGGREGATED_VIEW = requirement(
+  "cap",
+  "Basel Capital",
+  "aggregated",
+  "Aggregated",
+);
+const CAPITAL_CONFIDENTIAL_VIEW = requirement(
+  "cap",
+  "Basel Capital",
+  "confidential",
+  "Confidential",
+);
+const IRRBB_AGGREGATED_VIEW = requirement(
+  "irrbb",
+  "IRRBB",
+  "aggregated",
+  "Aggregated",
+);
+const IRRBB_CONFIDENTIAL_VIEW = requirement(
+  "irrbb",
+  "IRRBB",
+  "confidential",
+  "Confidential",
+);
+const FX_AGGREGATED_VIEW = requirement(
+  "fx",
+  "Foreign Exchange",
+  "aggregated",
+  "Aggregated",
+);
+const FX_CONFIDENTIAL_VIEW = requirement(
+  "fx",
+  "Foreign Exchange",
+  "confidential",
+  "Confidential",
+);
+const REGULATORY_PUBLISHED_VIEW = requirement(
+  "reg",
+  "Regulatory Reporting",
+  "published",
+  "Published",
+);
+const ACCOUNT_RESTRICTED_ADMINISTER = requirement(
+  "account",
+  "Account Administration",
+  "restricted",
+  "Restricted",
+  "administer",
+  "Administer",
+);
+
+/** The exact capability that opens each module's home surface. */
+const MODULE_ENTRY_REQUIREMENTS: Readonly<
+  Record<ModuleKey, AccessRequirement>
+> = {
+  command_center: RISK_AGGREGATED_VIEW,
+  risk: RISK_CONFIDENTIAL_VIEW,
+  alerts: RISK_CONFIDENTIAL_VIEW,
+  markets: requirement("markets", "Markets", "published", "Published"),
+  positions: RISK_CONFIDENTIAL_VIEW,
+  irrbb: IRRBB_AGGREGATED_VIEW,
   liquidity: LIQUIDITY_AGGREGATED_VIEW,
-  credit: "Risk & Limits · Confidential · View",
-  fx: "Foreign Exchange · Aggregated · View",
-  capital: "Basel Capital · Aggregated · View",
-  ftp: "Funds Transfer Pricing · Aggregated · View",
-  forecasting: "Forecasting · Aggregated · View",
-  behavioral: "Behavioral Models · Aggregated · View",
-  data_engine: "Data Engine · Restricted · View",
-  reports: "Regulatory Reporting · Published · View",
-  institution: "Account Administration · Restricted · View",
-  regulatory_reporting: "Regulatory Reporting · Published · View",
-  access: "Account Administration · Restricted · Administer",
-  settings: "Account Administration · Restricted · Administer",
+  credit: RISK_CONFIDENTIAL_VIEW,
+  fx: FX_AGGREGATED_VIEW,
+  capital: CAPITAL_AGGREGATED_VIEW,
+  ftp: requirement("ftp", "Funds Transfer Pricing", "aggregated", "Aggregated"),
+  forecasting: requirement("fcst", "Forecasting", "aggregated", "Aggregated"),
+  behavioral: requirement(
+    "beh",
+    "Behavioral Models",
+    "aggregated",
+    "Aggregated",
+  ),
+  data_engine: requirement("data", "Data Engine", "restricted", "Restricted"),
+  reports: REGULATORY_PUBLISHED_VIEW,
+  institution: requirement(
+    "account",
+    "Account Administration",
+    "restricted",
+    "Restricted",
+  ),
+  regulatory_reporting: REGULATORY_PUBLISHED_VIEW,
+  access: ACCOUNT_RESTRICTED_ADMINISTER,
+  settings: ACCOUNT_RESTRICTED_ADMINISTER,
 };
 
 function permissionReason(permissions: readonly string[]): string | undefined {
@@ -462,34 +521,43 @@ function permissionReason(permissions: readonly string[]): string | undefined {
   return `Requires ${required}. Ask your organization owner or admin to grant ${pronoun}.`;
 }
 
+function requirementsReason(
+  requirements: readonly AccessRequirement[],
+): string | undefined {
+  return permissionReason(requirements.map(requirementLabel));
+}
+
 export const IRRBB_CONFIDENTIAL_RUN_REASON = permissionReason([
-  IRRBB_CONFIDENTIAL_RUN,
+  "IRRBB · Confidential · Run",
 ])!;
 export const FTP_CONFIDENTIAL_RUN_REASON = permissionReason([
-  FTP_CONFIDENTIAL_RUN,
+  "Funds Transfer Pricing · Confidential · Run",
 ])!;
 
-function liquidityPermissionReason(
+function underRoute(path: string, routes: readonly string[]): boolean {
+  return routes.some((route) => path === route || path.startsWith(`${route}/`));
+}
+
+/**
+ * Exact capabilities a Liquidity route needs that this scope lacks. The
+ * institution class matters: an SDI's `/liquidity` home is the confidential
+ * view (docs/sdi.md §3.2), a bank's is the aggregated one.
+ */
+function liquidityRequirements(
   path: string,
   scope: ModuleScope,
-): string | undefined {
-  if (path !== "/liquidity" && !path.startsWith("/liquidity/")) {
-    return undefined;
-  }
-
-  const missing: string[] = [];
-  const confidentialRoutes = [
-    "/liquidity/forecast",
-    "/liquidity/monitoring",
-    "/liquidity/cfp",
-    "/liquidity/stress",
-  ];
+): AccessRequirement[] {
+  if (!underRoute(path, ["/liquidity"])) return [];
+  const missing: AccessRequirement[] = [];
+  const stress = underRoute(path, ["/liquidity/stress"]);
   const requiresConfidential =
-    confidentialRoutes.some(
-      (route) => path === route || path.startsWith(`${route}/`),
-    ) ||
+    stress ||
+    underRoute(path, [
+      "/liquidity/forecast",
+      "/liquidity/monitoring",
+      "/liquidity/cfp",
+    ]) ||
     (scope.institutionClass === "sdi" && path === "/liquidity");
-
   if (requiresConfidential) {
     if (scope.liquidityConfidentialView !== true) {
       missing.push(LIQUIDITY_CONFIDENTIAL_VIEW);
@@ -497,62 +565,107 @@ function liquidityPermissionReason(
   } else if (scope.liquidityAggregatedView !== true) {
     missing.push(LIQUIDITY_AGGREGATED_VIEW);
   }
-  if (
-    (path === "/liquidity/stress" || path.startsWith("/liquidity/stress/")) &&
-    scope.riskConfidentialView !== true
-  ) {
+  if (stress && scope.riskConfidentialView !== true) {
     missing.push(RISK_CONFIDENTIAL_VIEW);
   }
-  return permissionReason(missing);
+  return missing;
+}
+
+function liquidityPermissionReason(
+  path: string,
+  scope: ModuleScope,
+): string | undefined {
+  return requirementsReason(liquidityRequirements(path, scope));
+}
+
+/** Basel routes split by exact CAP sensitivity: planning is confidential, the
+ * overview and the RWA / structure / stress stack are aggregated. */
+function capitalRequirements(
+  path: string,
+  scope: ModuleScope,
+): AccessRequirement[] {
+  if (
+    underRoute(path, ["/basel/planning", "/icaap"]) &&
+    scope.capitalConfidentialView !== true
+  ) {
+    return [CAPITAL_CONFIDENTIAL_VIEW];
+  }
+  if (
+    (path === "/basel" ||
+      underRoute(path, ["/basel/rwa", "/basel/structure", "/basel/stress"])) &&
+    scope.capitalAggregatedView !== true
+  ) {
+    return [CAPITAL_AGGREGATED_VIEW];
+  }
+  return [];
 }
 
 const SCOPED_MODULE_ROUTES = [
   {
     prefix: "/irr",
-    label: "IRRBB",
     aggregatedView: "irrbbAggregatedView",
     confidentialView: "irrbbConfidentialView",
+    aggregated: IRRBB_AGGREGATED_VIEW,
+    confidential: IRRBB_CONFIDENTIAL_VIEW,
     confidentialRoutes: ["/irr/scenarios"],
   },
   {
     prefix: "/fx",
-    label: "Foreign Exchange",
     aggregatedView: "fxAggregatedView",
     confidentialView: "fxConfidentialView",
+    aggregated: FX_AGGREGATED_VIEW,
+    confidential: FX_CONFIDENTIAL_VIEW,
     confidentialRoutes: ["/fx/scenarios"],
   },
   {
     prefix: "/ftp",
-    label: "Funds Transfer Pricing",
+    aggregated: requirement("ftp", "Funds Transfer Pricing", "aggregated", "Aggregated"),
+    confidential: requirement("ftp", "Funds Transfer Pricing", "confidential", "Confidential"),
     aggregatedView: "ftpAggregatedView",
     confidentialView: "ftpConfidentialView",
     confidentialRoutes: ["/ftp/scenarios"],
   },
 ] as const;
 
-function scopedModulePermissionReason(
+function scopedModuleRequirements(
   path: string,
   scope: ModuleScope,
-): string | undefined {
+): AccessRequirement[] {
   for (const routePolicy of SCOPED_MODULE_ROUTES) {
-    if (
-      path !== routePolicy.prefix &&
-      !path.startsWith(`${routePolicy.prefix}/`)
-    )
-      continue;
-    const confidential = routePolicy.confidentialRoutes.some(
-      (route) => path === route || path.startsWith(`${route}/`),
-    );
+    if (!underRoute(path, [routePolicy.prefix])) continue;
+    const confidential = underRoute(path, routePolicy.confidentialRoutes);
     const capability = confidential
       ? routePolicy.confidentialView
       : routePolicy.aggregatedView;
     return scope[capability] === true
-      ? undefined
-      : permissionReason([
-          `${routePolicy.label} · ${confidential ? "Confidential" : "Aggregated"} · View`,
-        ]);
+      ? []
+      : [confidential ? routePolicy.confidential : routePolicy.aggregated];
   }
-  return undefined;
+  return [];
+}
+
+function scopedModulePermissionReason(
+  path: string,
+  scope: ModuleScope,
+): string | undefined {
+  return requirementsReason(scopedModuleRequirements(path, scope));
+}
+
+/**
+ * Every exact capability a binding-controlled route needs that this scope
+ * lacks — the ONE rule set the route guard, the disabled-link tooltips and the
+ * access-denied page all read, so they can never disagree about what hides a
+ * route or what is missing.
+ */
+function bindingRequirements(
+  path: string,
+  scope: ModuleScope,
+): AccessRequirement[] {
+  return [
+    ...liquidityRequirements(path, scope),
+    ...capitalRequirements(path, scope),
+    ...scopedModuleRequirements(path, scope),
+  ];
 }
 
 const ORGANIZATION_ROUTES = new Set<ModuleKey>(["institution"]);
@@ -562,10 +675,6 @@ export function isAccessPath(path: string): boolean {
 }
 
 export function isPersonalSettingsPath(path: string): boolean {
-  return path === "/settings" || path.startsWith("/settings/");
-}
-
-function isSettingsPath(path: string): boolean {
   return path === "/settings" || path.startsWith("/settings/");
 }
 
@@ -580,7 +689,7 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   // A deep-link refresh must wait for scope resolution, never briefly 404.
   if (!scope.isResolved) return true;
   if (isAccessPath(path)) return true;
-  if (isSettingsPath(path)) return true;
+  if (isPersonalSettingsPath(path)) return true;
   const moduleKey = moduleForPath(path);
   if (path === "/" && isBaselineOnlyScope(scope)) {
     return true;
@@ -629,10 +738,280 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   if (subrouteHidden(path, scope)) return { state: "hidden" };
   if (isAccessPath(path)) return { state: "enabled" };
   if (isPersonalSettingsPath(path)) return { state: "enabled" };
-  // ICAAP is decided BEFORE the baseline-only permission sentences. It is
-  // gated by a deployment flag as well as by CAP/confidential view, so there
-  // is no grant a user could be told to ask for — and on an unflagged
-  // deployment the surface must not be named in the nav at all.
+  // Keep ICAAP navigation hidden without CAP/confidential view. Its public
+  // hub can still explain the requirement through the shared denied-page rules.
   if (isIcaapPath(path) && bindingControlledSubrouteHidden(path, scope)) {
     return { state: "hidden" };
   }
+  const moduleKey = moduleForPath(path);
+  if (moduleKey) {
+    if (isBaselineOnlyScope(scope)) {
+      if (moduleKey === "settings") return { state: "enabled" };
+      const reason =
+        liquidityPermissionReason(path, scope) ??
+        scopedModulePermissionReason(path, scope) ??
+        (path === "/" || ROUTE_MODULES.some(([route]) => route === path)
+          ? requirementsReason([MODULE_ENTRY_REQUIREMENTS[moduleKey]])
+          : undefined);
+      return reason ? { state: "disabled", reason } : { state: "hidden" };
+    }
+    if (ORGANIZATION_ROUTES.has(moduleKey)) {
+      return scope.organizationModules.has(moduleKey)
+        ? { state: "enabled" }
+        : { state: "hidden" };
+    }
+    if (!scope.isResolved) {
+      return moduleKey === "liquidity"
+        ? { state: "hidden" }
+        : CORE_MODULES.has(moduleKey)
+          ? { state: "enabled" }
+          : { state: "hidden" };
+    }
+    if (!scope.hasInstitutionAuthority) return { state: "hidden" };
+    if (scope.entitledModules && !scope.entitledModules.has(moduleKey)) {
+      return { state: "hidden" };
+    }
+  }
+
+  const reason =
+    liquidityPermissionReason(path, scope) ??
+    scopedModulePermissionReason(path, scope);
+  if (reason) {
+    return { state: "disabled", reason };
+  }
+  if (bindingControlledSubrouteHidden(path, scope)) {
+    return { state: "hidden" };
+  }
+  if (moduleKey && scope.modules && !scope.modules.has(moduleKey)) {
+    return { state: "hidden" };
+  }
+  return { state: "enabled" };
+}
+
+/**
+ * Sidebar order of every module home. The root landing resolves against this
+ * list so a user is sent to the first surface they would actually see in the
+ * nav — never to a route the sidebar hides.
+ */
+const LANDING_CANDIDATES: readonly string[] = [
+  "/",
+  "/risk",
+  "/alerts",
+  "/markets",
+  "/positions",
+  "/irr",
+  "/liquidity",
+  "/credit",
+  "/fx",
+  "/basel",
+  "/basel/planning",
+  "/ftp",
+  "/forecasting",
+  "/behavioral",
+  "/data-engine",
+  "/reports",
+  "/institution",
+  "/submissions",
+  "/access",
+  "/settings",
+];
+
+/**
+ * Where a signed-in user lands when they arrive at the root. `/` is the
+ * post-sign-in destination for everyone, but the Command Center needs RISK view
+ * authority — an Org Owner holding Account administration alone, or a Liquidity
+ * Manager, would otherwise be dumped on a 404 by the route guard the moment
+ * they signed in (docs/rbac.md §8.3). Returns the first visible surface in
+ * sidebar order, falling back to personal settings, which every active session
+ * can open; null while the scope is still unresolved.
+ */
+export function landingPathFor(scope: ModuleScope): string | null {
+  if (!scope.isResolved) return null;
+  if (isBaselineOnlyScope(scope)) {
+    return "/";
+  }
+  return (
+    LANDING_CANDIDATES.find((href) => isHrefVisible(href, scope)) ??
+    "/settings/profile"
+  );
+}
+
+const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
+  "/alerts",
+  "/basel",
+  "/basel/exposures",
+  "/basel/loan-book",
+  "/basel/planning",
+  "/basel/rwa",
+  "/basel/stress",
+  "/basel/structure",
+  "/behavioral",
+  "/behavioral/deposit-stability",
+  "/behavioral/liquidity",
+  "/behavioral/nmd-duration",
+  "/behavioral/prepayment",
+  "/credit",
+  "/credit/activity",
+  "/credit/book",
+  "/credit/concentration",
+  "/credit/delinquency",
+  "/credit/vintages",
+  "/data-engine",
+  "/data-engine/adapters",
+  "/data-engine/api",
+  "/data-engine/database",
+  "/data-engine/excel-csv",
+  "/data-engine/market-data",
+  "/data-engine/positions",
+  "/data-engine/t24",
+  "/forecasting",
+  "/forecasting/assumptions",
+  "/forecasting/nii",
+  "/forecasting/optimizer",
+  "/forecasting/reverse-stress",
+  "/forecasting/scenario",
+  "/forecasting/whatif",
+  "/ftp",
+  "/ftp/expost",
+  "/ftp/lines",
+  "/ftp/products",
+  "/ftp/rules",
+  "/ftp/scenarios",
+  "/fx",
+  "/fx/forwards",
+  "/fx/hedges",
+  "/fx/limits",
+  "/fx/scenarios",
+  "/fx/var",
+  "/icaap",
+  "/institution",
+  "/institution/history",
+  "/institution/outlets",
+  "/institution/parties",
+  "/institution/products",
+  "/institution/registers",
+  "/irr",
+  "/irr/gaps",
+  "/irr/limits",
+  "/irr/scenarios",
+  "/irr/sensitivity",
+  "/irr/standardised",
+  "/liquidity",
+  "/liquidity/buffer",
+  "/liquidity/cfp",
+  "/liquidity/forecast",
+  "/liquidity/monitoring",
+  "/liquidity/nsfr",
+  "/liquidity/stress",
+  "/markets",
+  "/positions",
+  "/reports",
+  "/reports/analyses",
+  "/reports/board-pack",
+  "/reports/stress-board-pack",
+  "/risk",
+  "/submissions",
+  "/submissions/approvals",
+  "/submissions/calendar",
+  "/submissions/compare",
+  "/submissions/history",
+  "/submissions/returns",
+  "/submissions/settings",
+  "/submissions/signatures",
+  "/submissions/templates",
+]);
+
+/**
+ * Where a hub URL should send a user it is hidden from, or null to 404.
+ *
+ * Hub URLs are destinations people type or are sent to rather than deep links
+ * into someone else's data, so a hidden one redirects instead of 404ing:
+ *   - `/`         → the first visible surface (`landingPathFor`);
+ *   - `/settings` → personal settings, which every active session can open,
+ *                   when organization settings need authority the user lacks.
+ * Baseline-only members get the shell-based denial page on the explicit
+ * public-route allow-list; structural exclusions and hidden object-specific
+ * paths stay not-found (docs/rbac.md §8.2).
+ */
+export function hubRedirectFor(
+  pathname: string,
+  scope: ModuleScope,
+): string | null {
+  const path = normalize(pathname);
+  if (!scope.isResolved) return null;
+  if (path === "/") {
+    const landing = landingPathFor(scope);
+    return landing && landing !== "/" ? landing : null;
+  }
+  return null;
+}
+
+export type AccessDeniedRoute = {
+  title: string;
+  reason: string;
+  requirements: readonly AccessRequirement[];
+};
+
+function routeTitle(path: string, moduleKey: ModuleKey): string {
+  const exact: Record<string, string> = {
+    "/": "Command Center",
+    "/fx": "Foreign Exchange",
+    "/irr": "IRRBB",
+    "/liquidity": "Liquidity",
+    "/liquidity/stress": "Liquidity stress scenarios",
+    "/reports": "Reports",
+  };
+  if (exact[path]) return exact[path];
+  const leaf = path.split("/").filter(Boolean).at(-1);
+  if (leaf) {
+    return leaf
+      .split("-")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+  return moduleKey;
+}
+
+/**
+ * Public module structure may name the missing authority. Object routes and
+ * structural exclusions deliberately return null and remain not-found. The
+ * requirements come from the same rules `isPathVisible` applies — the
+ * binding-controlled subroute rules first (institution class included), then
+ * the module's entry capability — so whatever hides a public route also names
+ * what is missing.
+ */
+export function accessDeniedForPath(
+  pathname: string,
+  scope: ModuleScope,
+): AccessDeniedRoute | null {
+  const path = normalize(pathname);
+  if (!scope.isResolved || !PUBLIC_MODULE_ROUTES.has(path)) return null;
+  const moduleKey = moduleForPath(path);
+  if (!moduleKey || moduleKey === "access" || moduleKey === "settings")
+    return null;
+  if (subrouteHidden(path, scope)) return null;
+  if (scope.entitledModules && !scope.entitledModules.has(moduleKey))
+    return null;
+
+  let requirements: AccessRequirement[];
+  if (ORGANIZATION_ROUTES.has(moduleKey)) {
+    requirements = scope.organizationModules.has(moduleKey)
+      ? []
+      : [MODULE_ENTRY_REQUIREMENTS[moduleKey]];
+  } else {
+    requirements = bindingRequirements(path, scope);
+    if (
+      requirements.length === 0 &&
+      scope.modules &&
+      !scope.modules.has(moduleKey)
+    ) {
+      requirements = [MODULE_ENTRY_REQUIREMENTS[moduleKey]];
+    }
+  }
+  if (requirements.length === 0) return null;
+  return {
+    title: routeTitle(path, moduleKey),
+    reason: requirementsReason(requirements)!,
+    requirements,
+  };
+}

@@ -44,7 +44,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("organization_id", sa.String(length=16), nullable=False),
         sa.Column("requester_user_id", sa.Uuid(), nullable=False),
-        sa.Column("institution_id", sa.String(length=16), nullable=False),
+        sa.Column("institution_id", sa.String(length=16), nullable=True),
         sa.Column("route", sa.String(length=255), nullable=False),
         sa.Column("page_title", sa.String(length=255), nullable=False),
         sa.Column("module_scope", sa.String(length=32), nullable=False),
@@ -53,6 +53,7 @@ def upgrade() -> None:
         sa.Column("reason_category", sa.String(length=32), nullable=False),
         sa.Column("reason_detail", sa.Text(), nullable=False),
         sa.Column("reference", sa.String(length=255), nullable=True),
+        sa.Column("valid_until", sa.DateTime(timezone=True), nullable=True),
         sa.Column("status", sa.String(length=16), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("resolved_by_user_id", sa.Uuid(), nullable=True),
@@ -85,6 +86,16 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "reason_category <> 'other' OR length(trim(reason_detail)) > 0",
             name="ck_authorization_access_requests_other_detail",
+        ),
+        sa.CheckConstraint(
+            "(module_scope = 'account' AND institution_id IS NULL) "
+            "OR (module_scope <> 'account' AND institution_id IS NOT NULL)",
+            name="ck_authorization_access_requests_institution_target",
+        ),
+        sa.CheckConstraint(
+            "reason_category NOT IN ('temporary_cover', 'incident_break_glass') "
+            "OR valid_until IS NOT NULL",
+            name="ck_authorization_access_requests_temporary_expiry",
         ),
         sa.ForeignKeyConstraint(
             ["organization_id"],
@@ -125,8 +136,23 @@ def upgrade() -> None:
             "permission",
         ],
         unique=True,
-        postgresql_where=sa.text("status = 'pending'"),
-        sqlite_where=sa.text("status = 'pending'"),
+        postgresql_where=sa.text("status = 'pending' AND institution_id IS NOT NULL"),
+        sqlite_where=sa.text("status = 'pending' AND institution_id IS NOT NULL"),
+    )
+    op.create_index(
+        "uq_authorization_access_requests_pending_organization_scope",
+        "authorization_access_requests",
+        [
+            "organization_id",
+            "requester_user_id",
+            "route",
+            "module_scope",
+            "sensitivity_scope",
+            "permission",
+        ],
+        unique=True,
+        postgresql_where=sa.text("status = 'pending' AND institution_id IS NULL"),
+        sqlite_where=sa.text("status = 'pending' AND institution_id IS NULL"),
     )
     op.execute("ALTER TABLE authorization_access_requests ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE authorization_access_requests FORCE ROW LEVEL SECURITY")
@@ -148,6 +174,10 @@ def downgrade() -> None:
     )
     op.execute("ALTER TABLE authorization_access_requests NO FORCE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE authorization_access_requests DISABLE ROW LEVEL SECURITY")
+    op.drop_index(
+        "uq_authorization_access_requests_pending_organization_scope",
+        table_name="authorization_access_requests",
+    )
     op.drop_index(
         "uq_authorization_access_requests_pending_scope",
         table_name="authorization_access_requests",

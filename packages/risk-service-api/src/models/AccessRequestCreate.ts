@@ -18,6 +18,13 @@ import {
   SensitivityToJSON,
   SensitivityToJSONTyped,
 } from "./Sensitivity";
+import type { InstitutionId } from "./InstitutionId";
+import {
+  InstitutionIdFromJSON,
+  InstitutionIdFromJSONTyped,
+  InstitutionIdToJSON,
+  InstitutionIdToJSONTyped,
+} from "./InstitutionId";
 import type { Reference } from "./Reference";
 import {
   ReferenceFromJSON,
@@ -46,19 +53,28 @@ import {
   GrantReasonCategoryToJSON,
   GrantReasonCategoryToJSONTyped,
 } from "./GrantReasonCategory";
+import type { ValidUntil } from "./ValidUntil";
+import {
+  ValidUntilFromJSON,
+  ValidUntilFromJSONTyped,
+  ValidUntilToJSON,
+  ValidUntilToJSONTyped,
+} from "./ValidUntil";
 
 /**
- *
+ * One exact route permission, targeted at an institution or — for Account
+ * Administration routes, which the evaluator resolves organization-wide — at
+ * the organization itself (no institution id).
  * @export
  * @interface AccessRequestCreate
  */
 export interface AccessRequestCreate {
   /**
    *
-   * @type {string}
+   * @type {InstitutionId}
    * @memberof AccessRequestCreate
    */
-  institutionId: string;
+  institutionId?: InstitutionId;
   /**
    *
    * @type {ModuleScope}
@@ -101,6 +117,12 @@ export interface AccessRequestCreate {
    * @memberof AccessRequestCreate
    */
   sensitivityScope: Sensitivity;
+  /**
+   *
+   * @type {ValidUntil}
+   * @memberof AccessRequestCreate
+   */
+  validUntil?: ValidUntil;
 }
 
 /**
@@ -109,8 +131,6 @@ export interface AccessRequestCreate {
 export function instanceOfAccessRequestCreate(
   value: object,
 ): value is AccessRequestCreate {
-  if (!("institutionId" in value) || value["institutionId"] === undefined)
-    return false;
   if (!("moduleScope" in value) || value["moduleScope"] === undefined)
     return false;
   if (!("permission" in value) || value["permission"] === undefined)
@@ -136,7 +156,10 @@ export function AccessRequestCreateFromJSONTyped(
   }
   return {
     ...json,
-    institutionId: json["institution_id"],
+    institutionId:
+      json["institution_id"] == null
+        ? undefined
+        : InstitutionIdFromJSON(json["institution_id"]),
     moduleScope: ModuleScopeFromJSON(json["module_scope"]),
     permission: PermissionFromJSON(json["permission"]),
     reasonCategory: GrantReasonCategoryFromJSON(json["reason_category"]),
@@ -148,6 +171,10 @@ export function AccessRequestCreateFromJSONTyped(
         : ReferenceFromJSON(json["reference"]),
     route: json["route"],
     sensitivityScope: SensitivityFromJSON(json["sensitivity_scope"]),
+    validUntil:
+      json["valid_until"] == null
+        ? undefined
+        : ValidUntilFromJSON(json["valid_until"]),
   };
 }
 
@@ -164,7 +191,7 @@ export function AccessRequestCreateToJSONTyped(
   }
 
   return {
-    institution_id: value["institutionId"],
+    institution_id: InstitutionIdToJSON(value["institutionId"]),
     module_scope: ModuleScopeToJSON(value["moduleScope"]),
     permission: PermissionToJSON(value["permission"]),
     reason_category: GrantReasonCategoryToJSON(value["reasonCategory"]),
@@ -172,5 +199,6 @@ export function AccessRequestCreateToJSONTyped(
     reference: ReferenceToJSON(value["reference"]),
     route: value["route"],
     sensitivity_scope: SensitivityToJSON(value["sensitivityScope"]),
+    valid_until: ValidUntilToJSON(value["validUntil"]),
   };
 }

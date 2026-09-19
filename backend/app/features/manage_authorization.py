@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DbSession, GrantAdminTenant, Tenant, TenantContext
 from app.core.authorization import (
@@ -158,6 +159,11 @@ def _route_requirement(
         "/liquidity/cfp",
     }:
         requirements = ((ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
+    elif normalized == "/liquidity":
+        requirements = (
+            (ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),
+            (ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+        )
     elif normalized.startswith("/liquidity"):
         requirements = ((ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),)
     elif normalized == "/irr/scenarios":
@@ -480,7 +486,7 @@ def _access_request_read(
     request: AuthorizationAccessRequest,
     *,
     user: User,
-    bank: Bank,
+    bank: Bank | None,
 ) -> AccessRequestRead:
     return AccessRequestRead(
         id=request.id,
@@ -489,16 +495,44 @@ def _access_request_read(
         requester_email=user.email,
         route=request.route,
         page_title=request.page_title,
-        institution_id=bank.id,
-        institution_name=bank.name,
+        institution_scope=(
+            InstitutionScope.INSTITUTION if bank is not None else InstitutionScope.ORGANIZATION
+        ),
+        institution_id=bank.id if bank is not None else None,
+        institution_name=bank.name if bank is not None else None,
         module_scope=ModuleScope(request.module_scope),
         sensitivity_scope=Sensitivity(request.sensitivity_scope),
         permission=Permission(request.permission),
         reason_category=GrantReasonCategory(request.reason_category),
         reason_detail=request.reason_detail,
         reference=request.reference,
+        valid_until=request.valid_until,
         status=cast(Literal["pending", "approved", "rejected"], request.status),
         requested_at=request.created_at,
+    )
+
+
+def _pending_access_request(
+    db: DbSession,
+    *,
+    requester: User,
+    route: str,
+    institution_id: str | None,
+    payload: AccessRequestCreate,
+) -> AuthorizationAccessRequest | None:
+    return db.scalar(
+        select(AuthorizationAccessRequest).where(
+            AuthorizationAccessRequest.organization_id == requester.organization_id,
+            AuthorizationAccessRequest.requester_user_id == requester.id,
+            AuthorizationAccessRequest.route == route,
+            AuthorizationAccessRequest.institution_id.is_(None)
+            if institution_id is None
+            else AuthorizationAccessRequest.institution_id == institution_id,
+            AuthorizationAccessRequest.module_scope == payload.module_scope.value,
+            AuthorizationAccessRequest.sensitivity_scope == payload.sensitivity_scope.value,
+            AuthorizationAccessRequest.permission == payload.permission.value,
+            AuthorizationAccessRequest.status == "pending",
+        )
     )
 
 
@@ -533,32 +567,32 @@ def create_authorization_access_request(
             User.is_active.is_(True),
         )
     )
-    bank = db.scalar(
-        select(Bank).where(
-            Bank.id == payload.institution_id,
-            Bank.organization_id == ctx.organization_id,
-        )
-    )
-    if user is None or bank is None:
+    if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
-    existing = db.scalar(
-        select(AuthorizationAccessRequest).where(
-            AuthorizationAccessRequest.organization_id == ctx.organization_id,
-            AuthorizationAccessRequest.requester_user_id == user.id,
-            AuthorizationAccessRequest.route == route,
-            AuthorizationAccessRequest.institution_id == bank.id,
-            AuthorizationAccessRequest.module_scope == payload.module_scope.value,
-            AuthorizationAccessRequest.sensitivity_scope == payload.sensitivity_scope.value,
-            AuthorizationAccessRequest.permission == payload.permission.value,
-            AuthorizationAccessRequest.status == "pending",
+    bank: Bank | None = None
+    if payload.institution_id is not None:
+        bank = db.scalar(
+            select(Bank).where(
+                Bank.id == payload.institution_id,
+                Bank.organization_id == ctx.organization_id,
+            )
         )
+        if bank is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
+    institution_id = bank.id if bank is not None else None
+    existing = _pending_access_request(
+        db,
+        requester=user,
+        route=route,
+        institution_id=institution_id,
+        payload=payload,
     )
     if existing is not None:
         return _access_request_read(existing, user=user, bank=bank)
     request = AuthorizationAccessRequest(
         organization_id=ctx.organization_id,
         requester_user_id=user.id,
-        institution_id=bank.id,
+        institution_id=institution_id,
         route=route,
         page_title=_route_title(route),
         module_scope=payload.module_scope.value,
@@ -567,10 +601,24 @@ def create_authorization_access_request(
         reason_category=payload.reason_category.value,
         reason_detail=payload.reason_detail,
         reference=payload.reference,
+        valid_until=payload.valid_until,
         status="pending",
     )
     db.add(request)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        winner = _pending_access_request(
+            db,
+            requester=user,
+            route=route,
+            institution_id=institution_id,
+            payload=payload,
+        )
+        if winner is None:
+            raise
+        return _access_request_read(winner, user=user, bank=bank)
     db.add(
         AuditEvent(
             organization_id=ctx.organization_id,
@@ -587,6 +635,7 @@ def create_authorization_access_request(
                 "reason_category": request.reason_category,
                 "reason_detail": request.reason_detail,
                 "reference": request.reference,
+                "valid_until": (request.valid_until.isoformat() if request.valid_until else None),
             },
         )
     )
@@ -623,7 +672,12 @@ def list_my_authorization_access_requests(
     }
     return AccessRequestListRead(
         requests=[
-            _access_request_read(row, user=user, bank=banks[row.institution_id]) for row in rows
+            _access_request_read(
+                row,
+                user=user,
+                bank=banks[row.institution_id] if row.institution_id else None,
+            )
+            for row in rows
         ]
     )
 
@@ -653,7 +707,7 @@ def list_authorization_access_requests(
             _access_request_read(
                 row,
                 user=users[row.requester_user_id],
-                bank=banks[row.institution_id],
+                bank=banks[row.institution_id] if row.institution_id else None,
             )
             for row in rows
         ]
@@ -686,8 +740,13 @@ def approve_authorization_access_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Access request not found.",
         )
+    requested_scope = (
+        InstitutionScope.INSTITUTION
+        if request.institution_id is not None
+        else InstitutionScope.ORGANIZATION
+    )
     if (
-        payload.institution_scope.value != "institution"
+        payload.institution_scope is not requested_scope
         or payload.institution_id != request.institution_id
         or payload.module_scope.value != request.module_scope
         or payload.sensitivity_scope.value != request.sensitivity_scope
