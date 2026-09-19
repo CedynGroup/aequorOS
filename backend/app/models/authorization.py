@@ -235,6 +235,16 @@ class AuthorizationAccessRequest(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "reason_category <> 'other' OR length(trim(reason_detail)) > 0",
             name="ck_authorization_access_requests_other_detail",
         ),
+        CheckConstraint(
+            "(module_scope = 'account' AND institution_id IS NULL) "
+            "OR (module_scope <> 'account' AND institution_id IS NOT NULL)",
+            name="ck_authorization_access_requests_institution_target",
+        ),
+        CheckConstraint(
+            "reason_category NOT IN ('temporary_cover', 'incident_break_glass') "
+            "OR valid_until IS NOT NULL",
+            name="ck_authorization_access_requests_temporary_expiry",
+        ),
         Index(
             "ix_authorization_access_requests_org_status",
             "organization_id",
@@ -251,8 +261,20 @@ class AuthorizationAccessRequest(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
             "sensitivity_scope",
             "permission",
             unique=True,
-            postgresql_where=sql_text("status = 'pending'"),
-            sqlite_where=sql_text("status = 'pending'"),
+            postgresql_where=sql_text("status = 'pending' AND institution_id IS NOT NULL"),
+            sqlite_where=sql_text("status = 'pending' AND institution_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_authorization_access_requests_pending_organization_scope",
+            "organization_id",
+            "requester_user_id",
+            "route",
+            "module_scope",
+            "sensitivity_scope",
+            "permission",
+            unique=True,
+            postgresql_where=sql_text("status = 'pending' AND institution_id IS NULL"),
+            sqlite_where=sql_text("status = 'pending' AND institution_id IS NULL"),
         ),
     )
 
@@ -260,7 +282,7 @@ class AuthorizationAccessRequest(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
         String(16), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
     requester_user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
-    institution_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    institution_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     route: Mapped[str] = mapped_column(String(255), nullable=False)
     page_title: Mapped[str] = mapped_column(String(255), nullable=False)
     module_scope: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -269,6 +291,7 @@ class AuthorizationAccessRequest(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     reason_category: Mapped[str] = mapped_column(String(32), nullable=False)
     reason_detail: Mapped[str] = mapped_column(Text, default="", nullable=False)
     reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_by_user_id: Mapped[UUID | None] = mapped_column(

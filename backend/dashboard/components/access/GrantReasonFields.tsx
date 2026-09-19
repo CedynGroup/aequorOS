@@ -23,26 +23,43 @@ export function reasonLabel(category: GrantReasonCategory): string {
   return REASON_OPTIONS.find(([value]) => value === category)?.[1] ?? category;
 }
 
+export function requiresExpiry(category: GrantReasonCategory): boolean {
+  return category === "temporary_cover" || category === "incident_break_glass";
+}
+
+/** True once the draft carries everything the server will validate. */
+export function reasonDraftComplete(value: GrantReasonDraft): boolean {
+  return (
+    (value.reasonCategory !== "other" || Boolean(value.reasonDetail.trim())) &&
+    (!requiresExpiry(value.reasonCategory) || Boolean(value.validUntil))
+  );
+}
+
+/**
+ * A `datetime-local` value is wall-clock time in the browser's zone, so it is
+ * built from local components — `toISOString()` would shift it by the offset.
+ */
+export function toDatetimeLocalValue(date: Date): string {
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+}
+
 function defaultExpiry(category: GrantReasonCategory): string {
   const date = new Date();
-  date.setDate(
-    date.getDate() + (category === "incident_break_glass" ? 1 : 30),
-  );
-  return date.toISOString().slice(0, 16);
+  date.setDate(date.getDate() + (category === "incident_break_glass" ? 1 : 30));
+  return toDatetimeLocalValue(date);
 }
 
 export function GrantReasonFields({
   value,
   onChange,
-  includeExpiry = true,
 }: {
   value: GrantReasonDraft;
   onChange: (next: GrantReasonDraft) => void;
-  includeExpiry?: boolean;
 }) {
-  const requiresExpiry =
-    value.reasonCategory === "temporary_cover" ||
-    value.reasonCategory === "incident_break_glass";
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="block">
@@ -54,13 +71,10 @@ export function GrantReasonFields({
           value={value.reasonCategory}
           onChange={(event) => {
             const reasonCategory = event.target.value as GrantReasonCategory;
-            const temporary =
-              reasonCategory === "temporary_cover" ||
-              reasonCategory === "incident_break_glass";
             onChange({
               ...value,
               reasonCategory,
-              validUntil: temporary
+              validUntil: requiresExpiry(reasonCategory)
                 ? value.reasonCategory === reasonCategory && value.validUntil
                   ? value.validUntil
                   : defaultExpiry(reasonCategory)
@@ -108,7 +122,7 @@ export function GrantReasonFields({
           placeholder="Add context for the approver"
         />
       </label>
-      {includeExpiry && requiresExpiry && (
+      {requiresExpiry(value.reasonCategory) && (
         <label className="block sm:col-span-2">
           <span className="mb-1.5 block text-caption font-medium text-navy">
             Access expires

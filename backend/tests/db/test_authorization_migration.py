@@ -68,6 +68,8 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
         "ck_authorization_access_requests_reason_category",
         "ck_authorization_access_requests_status",
         "ck_authorization_access_requests_other_detail",
+        "ck_authorization_access_requests_institution_target",
+        "ck_authorization_access_requests_temporary_expiry",
     }
     assert migrated_postgres_schema.constraints(expected_constraints) == expected_constraints
     assert migrated_postgres_schema.policies(expected_tables) == {
@@ -80,6 +82,7 @@ def test_authorization_migration_creates_constraints_and_forced_rls(
         "uq_authorization_bindings_active_org_owner",
         "ix_organization_owner_assignments_status",
         "uq_authorization_access_requests_pending_scope",
+        "uq_authorization_access_requests_pending_organization_scope",
     }
     assert migrated_postgres_schema.indexes(expected_indexes) == expected_indexes
 

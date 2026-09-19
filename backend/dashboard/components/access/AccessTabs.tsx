@@ -34,7 +34,9 @@ export default function AccessTabs() {
           <PermissionLink
             key={tab.href}
             href={tab.href}
-            reason={tab.admin && !canAdminister ? ACCESS_ADMIN_REASON : undefined}
+            reason={
+              tab.admin && !canAdminister ? ACCESS_ADMIN_REASON : undefined
+            }
             ariaLabel={tab.label}
             wrapperClassName="shrink-0"
             className={`inline-flex px-4 py-2.5 text-body font-medium border-b-2 whitespace-nowrap transition-colors ${

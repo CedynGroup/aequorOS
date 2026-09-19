@@ -89,12 +89,20 @@
       },
       "AccessRequestCreate": {
         "additionalProperties": false,
+        "description": "One exact route permission, targeted at an institution or \u2014 for Account\nAdministration routes, which the evaluator resolves organization-wide \u2014 at\nthe organization itself (no institution id).",
         "properties": {
           "institution_id": {
-            "maxLength": 16,
-            "minLength": 1,
-            "title": "Institution Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Id"
           },
           "module_scope": {
             "$ref": "#/components/schemas/ModuleScope"
@@ -132,11 +140,22 @@
           },
           "sensitivity_scope": {
             "$ref": "#/components/schemas/Sensitivity"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
           }
         },
         "required": [
           "route",
-          "institution_id",
           "module_scope",
           "sensitivity_scope",
           "permission",
@@ -171,12 +190,29 @@
             "type": "string"
           },
           "institution_id": {
-            "title": "Institution Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Id"
           },
           "institution_name": {
-            "title": "Institution Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Name"
+          },
+          "institution_scope": {
+            "$ref": "#/components/schemas/InstitutionScope"
           },
           "module_scope": {
             "$ref": "#/components/schemas/ModuleScope"
@@ -239,6 +275,18 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
           }
         },
         "required": [
@@ -248,6 +296,7 @@
           "requester_email",
           "route",
           "page_title",
+          "institution_scope",
           "institution_id",
           "institution_name",
           "module_scope",
@@ -256,6 +305,7 @@
           "reason_category",
           "reason_detail",
           "reference",
+          "valid_until",
           "status",
           "requested_at"
         ],

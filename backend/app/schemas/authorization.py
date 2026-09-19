@@ -7,11 +7,11 @@ that could fan out into a Cartesian product.
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Literal, Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.authorization import (
     BindingStatus,
@@ -84,20 +84,36 @@ class ScopedGrantInput(ClosedModel):
                 raise ValueError("organization-wide coverage must not include an institution id")
         elif not self.institution_id or not self.institution_id.strip():
             raise ValueError("institution coverage requires an exact institution id")
-        self.reason_detail = self.reason_detail.strip()
-        self.reference = self.reference.strip() if self.reference else None
-        if self.reason_category is GrantReasonCategory.OTHER and not self.reason_detail:
-            raise ValueError("reason detail is required when the category is other")
-        if (
-            self.reason_category
-            in {
-                GrantReasonCategory.TEMPORARY_COVER,
-                GrantReasonCategory.INCIDENT_BREAK_GLASS,
-            }
-            and self.valid_until is None
-        ):
-            raise ValueError("temporary cover and break-glass grants require an expiry")
+        _validate_grant_reason(self)
         return self
+
+
+TEMPORARY_REASON_CATEGORIES = frozenset(
+    {GrantReasonCategory.TEMPORARY_COVER, GrantReasonCategory.INCIDENT_BREAK_GLASS}
+)
+
+
+class _GrantReasonFields(Protocol):
+    reason_category: GrantReasonCategory
+    reason_detail: str
+    reference: str | None
+    valid_until: datetime | None
+
+
+def _aware_utc(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=UTC)
+
+
+def _validate_grant_reason(payload: _GrantReasonFields) -> None:
+    payload.reason_detail = payload.reason_detail.strip()
+    payload.reference = payload.reference.strip() if payload.reference else None
+    payload.valid_until = _aware_utc(payload.valid_until)
+    if payload.reason_category is GrantReasonCategory.OTHER and not payload.reason_detail:
+        raise ValueError("reason detail is required when the category is other")
+    if payload.reason_category in TEMPORARY_REASON_CATEGORIES and payload.valid_until is None:
+        raise ValueError("temporary cover and break-glass grants require an expiry")
 
 
 class BindingCreateRequest(ScopedGrantInput):
@@ -207,21 +223,28 @@ class InstitutionDirectoryRead(ClosedModel):
 
 
 class AccessRequestCreate(ClosedModel):
+    """One exact route permission, targeted at an institution or — for Account
+    Administration routes, which the evaluator resolves organization-wide — at
+    the organization itself (no institution id)."""
+
     route: str = Field(min_length=1, max_length=255, pattern=r"^/")
-    institution_id: str = Field(min_length=1, max_length=16)
+    institution_id: str | None = Field(default=None, min_length=1, max_length=16)
     module_scope: ModuleScope
     sensitivity_scope: Sensitivity
     permission: Permission
     reason_category: GrantReasonCategory
     reason_detail: str = Field(default="", max_length=2000)
     reference: str | None = Field(default=None, max_length=255)
+    valid_until: datetime | None = None
 
     @model_validator(mode="after")
     def validate_reason(self) -> AccessRequestCreate:
-        self.reason_detail = self.reason_detail.strip()
-        self.reference = self.reference.strip() if self.reference else None
-        if self.reason_category is GrantReasonCategory.OTHER and not self.reason_detail:
-            raise ValueError("reason detail is required when the category is other")
+        if self.module_scope is ModuleScope.ACCOUNT:
+            if self.institution_id is not None:
+                raise ValueError("organization-wide access requests must not name an institution")
+        elif not self.institution_id or not self.institution_id.strip():
+            raise ValueError("institution access requests require an exact institution id")
+        _validate_grant_reason(self)
         return self
 
 
@@ -232,16 +255,23 @@ class AccessRequestRead(ClosedModel):
     requester_email: str
     route: str
     page_title: str
-    institution_id: str
-    institution_name: str
+    institution_scope: InstitutionScope
+    institution_id: str | None
+    institution_name: str | None
     module_scope: ModuleScope
     sensitivity_scope: Sensitivity
     permission: Permission
     reason_category: GrantReasonCategory
     reason_detail: str
     reference: str | None
+    valid_until: datetime | None
     status: Literal["pending", "approved", "rejected"]
     requested_at: datetime
+
+    @field_validator("valid_until")
+    @classmethod
+    def _valid_until_utc(cls, value: datetime | None) -> datetime | None:
+        return _aware_utc(value)
 
 
 class AccessRequestListRead(ClosedModel):

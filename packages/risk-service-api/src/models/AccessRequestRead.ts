@@ -18,6 +18,13 @@ import {
   SensitivityToJSON,
   SensitivityToJSONTyped,
 } from "./Sensitivity";
+import type { InstitutionName } from "./InstitutionName";
+import {
+  InstitutionNameFromJSON,
+  InstitutionNameFromJSONTyped,
+  InstitutionNameToJSON,
+  InstitutionNameToJSONTyped,
+} from "./InstitutionName";
 import type { Permission } from "./Permission";
 import {
   PermissionFromJSON,
@@ -32,6 +39,13 @@ import {
   Reference1ToJSON,
   Reference1ToJSONTyped,
 } from "./Reference1";
+import type { InstitutionScope } from "./InstitutionScope";
+import {
+  InstitutionScopeFromJSON,
+  InstitutionScopeFromJSONTyped,
+  InstitutionScopeToJSON,
+  InstitutionScopeToJSONTyped,
+} from "./InstitutionScope";
 import type { ModuleScope } from "./ModuleScope";
 import {
   ModuleScopeFromJSON,
@@ -46,6 +60,20 @@ import {
   GrantReasonCategoryToJSON,
   GrantReasonCategoryToJSONTyped,
 } from "./GrantReasonCategory";
+import type { InstitutionId1 } from "./InstitutionId1";
+import {
+  InstitutionId1FromJSON,
+  InstitutionId1FromJSONTyped,
+  InstitutionId1ToJSON,
+  InstitutionId1ToJSONTyped,
+} from "./InstitutionId1";
+import type { ValidUntil } from "./ValidUntil";
+import {
+  ValidUntilFromJSON,
+  ValidUntilFromJSONTyped,
+  ValidUntilToJSON,
+  ValidUntilToJSONTyped,
+} from "./ValidUntil";
 
 /**
  *
@@ -61,16 +89,22 @@ export interface AccessRequestRead {
   id: string;
   /**
    *
-   * @type {string}
+   * @type {InstitutionId1}
    * @memberof AccessRequestRead
    */
-  institutionId: string;
+  institutionId: InstitutionId1;
   /**
    *
-   * @type {string}
+   * @type {InstitutionName}
    * @memberof AccessRequestRead
    */
-  institutionName: string;
+  institutionName: InstitutionName;
+  /**
+   *
+   * @type {InstitutionScope}
+   * @memberof AccessRequestRead
+   */
+  institutionScope: InstitutionScope;
   /**
    *
    * @type {ModuleScope}
@@ -149,6 +183,12 @@ export interface AccessRequestRead {
    * @memberof AccessRequestRead
    */
   status: AccessRequestReadStatusEnum;
+  /**
+   *
+   * @type {ValidUntil}
+   * @memberof AccessRequestRead
+   */
+  validUntil: ValidUntil;
 }
 
 /**
@@ -173,6 +213,8 @@ export function instanceOfAccessRequestRead(
     return false;
   if (!("institutionName" in value) || value["institutionName"] === undefined)
     return false;
+  if (!("institutionScope" in value) || value["institutionScope"] === undefined)
+    return false;
   if (!("moduleScope" in value) || value["moduleScope"] === undefined)
     return false;
   if (!("pageTitle" in value) || value["pageTitle"] === undefined) return false;
@@ -195,6 +237,8 @@ export function instanceOfAccessRequestRead(
   if (!("sensitivityScope" in value) || value["sensitivityScope"] === undefined)
     return false;
   if (!("status" in value) || value["status"] === undefined) return false;
+  if (!("validUntil" in value) || value["validUntil"] === undefined)
+    return false;
   return true;
 }
 
@@ -212,8 +256,9 @@ export function AccessRequestReadFromJSONTyped(
   return {
     ...json,
     id: json["id"],
-    institutionId: json["institution_id"],
-    institutionName: json["institution_name"],
+    institutionId: InstitutionId1FromJSON(json["institution_id"]),
+    institutionName: InstitutionNameFromJSON(json["institution_name"]),
+    institutionScope: InstitutionScopeFromJSON(json["institution_scope"]),
     moduleScope: ModuleScopeFromJSON(json["module_scope"]),
     pageTitle: json["page_title"],
     permission: PermissionFromJSON(json["permission"]),
@@ -227,6 +272,7 @@ export function AccessRequestReadFromJSONTyped(
     route: json["route"],
     sensitivityScope: SensitivityFromJSON(json["sensitivity_scope"]),
     status: json["status"],
+    validUntil: ValidUntilFromJSON(json["valid_until"]),
   };
 }
 
@@ -244,8 +290,9 @@ export function AccessRequestReadToJSONTyped(
 
   return {
     id: value["id"],
-    institution_id: value["institutionId"],
-    institution_name: value["institutionName"],
+    institution_id: InstitutionId1ToJSON(value["institutionId"]),
+    institution_name: InstitutionNameToJSON(value["institutionName"]),
+    institution_scope: InstitutionScopeToJSON(value["institutionScope"]),
     module_scope: ModuleScopeToJSON(value["moduleScope"]),
     page_title: value["pageTitle"],
     permission: PermissionToJSON(value["permission"]),
@@ -259,5 +306,6 @@ export function AccessRequestReadToJSONTyped(
     route: value["route"],
     sensitivity_scope: SensitivityToJSON(value["sensitivityScope"]),
     status: value["status"],
+    valid_until: ValidUntilToJSON(value["validUntil"]),
   };
 }

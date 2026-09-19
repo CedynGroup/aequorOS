@@ -53,13 +53,6 @@ import {
   FinancialObligationCreateInterestRateToJSON,
   FinancialObligationCreateInterestRateToJSONTyped,
 } from "./FinancialObligationCreateInterestRate";
-import type { InstitutionId } from "./InstitutionId";
-import {
-  InstitutionIdFromJSON,
-  InstitutionIdFromJSONTyped,
-  InstitutionIdToJSON,
-  InstitutionIdToJSONTyped,
-} from "./InstitutionId";
 import type { ReportingPeriodId } from "./ReportingPeriodId";
 import {
   ReportingPeriodIdFromJSON,
@@ -88,6 +81,13 @@ import {
   Status1ToJSON,
   Status1ToJSONTyped,
 } from "./Status1";
+import type { InstitutionId2 } from "./InstitutionId2";
+import {
+  InstitutionId2FromJSON,
+  InstitutionId2FromJSONTyped,
+  InstitutionId2ToJSON,
+  InstitutionId2ToJSONTyped,
+} from "./InstitutionId2";
 
 /**
  *
@@ -121,10 +121,10 @@ export interface FinancialObligationUpdate {
   facilityType?: FinancialAccountCreateAccountType;
   /**
    *
-   * @type {InstitutionId}
+   * @type {InstitutionId2}
    * @memberof FinancialObligationUpdate
    */
-  institutionId?: InstitutionId;
+  institutionId?: InstitutionId2;
   /**
    *
    * @type {FinancialObligationCreateInterestRate}
@@ -225,7 +225,7 @@ export function FinancialObligationUpdateFromJSONTyped(
     institutionId:
       json["institution_id"] == null
         ? undefined
-        : InstitutionIdFromJSON(json["institution_id"]),
+        : InstitutionId2FromJSON(json["institution_id"]),
     interestRate:
       json["interest_rate"] == null
         ? undefined
@@ -283,7 +283,7 @@ export function FinancialObligationUpdateToJSONTyped(
     facility_type: FinancialAccountCreateAccountTypeToJSON(
       value["facilityType"],
     ),
-    institution_id: InstitutionIdToJSON(value["institutionId"]),
+    institution_id: InstitutionId2ToJSON(value["institutionId"]),
     interest_rate: FinancialObligationCreateInterestRateToJSON(
       value["interestRate"],
     ),

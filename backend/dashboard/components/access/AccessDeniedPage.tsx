@@ -8,10 +8,12 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import {
   GrantReasonFields,
+  reasonDraftComplete,
   type GrantReasonDraft,
 } from "@/components/access/GrantReasonFields";
 import { authorizationApi, normalizeApiError } from "@/lib/api/client";
-import type { AccessDeniedRoute } from "@/lib/modules";
+import { fmtLocale } from "@/lib/format";
+import type { AccessDeniedRoute, AccessRequirement } from "@/lib/modules";
 
 const initialReason: GrantReasonDraft = {
   reasonCategory: "role_change",
@@ -19,6 +21,21 @@ const initialReason: GrantReasonDraft = {
   reference: "",
   validUntil: "",
 };
+
+function matches(
+  request: {
+    moduleScope: string;
+    sensitivityScope: string;
+    permission: string;
+  },
+  required: AccessRequirement,
+): boolean {
+  return (
+    request.moduleScope === required.moduleScope &&
+    request.sensitivityScope === required.sensitivityScope &&
+    request.permission === required.permission
+  );
+}
 
 export default function AccessDeniedPage({
   denied,
@@ -28,9 +45,15 @@ export default function AccessDeniedPage({
   route: string;
 }) {
   const queryClient = useQueryClient();
+  // Account Administration is evaluated organization-wide, so its requests
+  // target the organization itself rather than one institution.
+  const organizationScoped = denied.requirements.every(
+    (required) => required.moduleScope === "account",
+  );
   const institutions = useQuery({
     queryKey: ["access", "request-institutions"],
     queryFn: () => authorizationApi.listAccessRequestInstitutions(),
+    enabled: !organizationScoped,
   });
   const requests = useQuery({
     queryKey: ["access", "my-requests"],
@@ -40,31 +63,23 @@ export default function AccessDeniedPage({
   const [reason, setReason] = useState(initialReason);
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const targetInstitution =
-    institutionId || institutions.data?.institutions[0]?.id || "";
+  const institutionOptions = institutions.data?.institutions ?? [];
+  const targetInstitution = organizationScoped
+    ? null
+    : institutionId || institutionOptions[0]?.id || "";
   const pending = useMemo(
     () =>
       requests.data?.requests.filter(
         (request) =>
           request.status === "pending" &&
           request.route === route &&
-          request.institutionId === targetInstitution &&
-          denied.requirements.some(
-            (required) =>
-              request.moduleScope === required.moduleScope &&
-              request.sensitivityScope === required.sensitivityScope &&
-              request.permission === required.permission,
-          ),
+          (request.institutionId ?? null) === targetInstitution &&
+          denied.requirements.some((required) => matches(request, required)),
       ) ?? [],
     [denied.requirements, requests.data?.requests, route, targetInstitution],
   );
   const allRequirementsPending = denied.requirements.every((required) =>
-    pending.some(
-      (request) =>
-        request.moduleScope === required.moduleScope &&
-        request.sensitivityScope === required.sensitivityScope &&
-        request.permission === required.permission,
-    ),
+    pending.some((request) => matches(request, required)),
   );
   const create = useMutation({
     mutationFn: async () =>
@@ -73,13 +88,16 @@ export default function AccessDeniedPage({
           authorizationApi.createAuthorizationAccessRequest({
             accessRequestCreate: {
               route,
-              institutionId: targetInstitution,
+              institutionId: targetInstitution ?? undefined,
               moduleScope: required.moduleScope,
               sensitivityScope: required.sensitivityScope,
               permission: required.permission,
               reasonCategory: reason.reasonCategory,
               reasonDetail: reason.reasonDetail.trim(),
               reference: reason.reference.trim() || undefined,
+              validUntil: reason.validUntil
+                ? new Date(reason.validUntil).toISOString()
+                : undefined,
             },
           }),
         ),
@@ -94,9 +112,8 @@ export default function AccessDeniedPage({
       setError((await normalizeApiError(failure)).message),
   });
 
-  const complete =
-    Boolean(targetInstitution) &&
-    (reason.reasonCategory !== "other" || Boolean(reason.reasonDetail.trim()));
+  const targetReady = organizationScoped || Boolean(targetInstitution);
+  const complete = targetReady && reasonDraftComplete(reason);
 
   return (
     <>
@@ -123,7 +140,9 @@ export default function AccessDeniedPage({
                 </p>
                 <ul className="mt-2 space-y-1 text-body text-navy">
                   {denied.requirements.map((required) => (
-                    <li key={`${required.moduleScope}-${required.sensitivityScope}`}>
+                    <li
+                      key={`${required.moduleScope}-${required.sensitivityScope}`}
+                    >
                       {required.moduleLabel} · {required.sensitivityLabel} ·{" "}
                       {required.permissionLabel}
                     </li>
@@ -134,34 +153,25 @@ export default function AccessDeniedPage({
             <p className="text-body text-slate">
               An organization owner or admin can grant this access.
             </p>
-            {allRequirementsPending ? (
-              <p role="status" className="rounded-md bg-action-light px-4 py-3 text-body text-navy">
-                Requested on{" "}
-                {pending[0].requestedAt.toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                })}{" "}
-                · waiting for an organization owner
-              </p>
-            ) : formOpen ? (
+            {formOpen || allRequirementsPending ? (
               <form
                 className="space-y-4 rounded-md border border-border-light p-4"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  if (complete) create.mutate();
+                  if (complete && !allRequirementsPending) create.mutate();
                 }}
               >
-                {institutions.data && institutions.data.institutions.length > 1 && (
+                {institutionOptions.length > 1 && (
                   <label className="block">
                     <span className="mb-1.5 block text-caption font-medium text-navy">
                       Institution
                     </span>
                     <select
-                      value={targetInstitution}
+                      value={targetInstitution ?? ""}
                       onChange={(event) => setInstitutionId(event.target.value)}
                       className="w-full rounded-md border border-border bg-surface px-3 py-2.5 text-body text-navy"
                     >
-                      {institutions.data.institutions.map((institution) => (
+                      {institutionOptions.map((institution) => (
                         <option key={institution.id} value={institution.id}>
                           {institution.name}
                         </option>
@@ -169,33 +179,49 @@ export default function AccessDeniedPage({
                     </select>
                   </label>
                 )}
-                <GrantReasonFields
-                  value={reason}
-                  onChange={setReason}
-                  includeExpiry={false}
-                />
-                {error && <p role="alert" className="text-caption text-danger">{error}</p>}
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFormOpen(false)}
-                    className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy"
+                {allRequirementsPending ? (
+                  <p
+                    role="status"
+                    className="rounded-md bg-action-light px-4 py-3 text-body text-navy"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!complete || create.isPending}
-                    className="btn-primary px-4 py-2.5 text-body font-medium disabled:opacity-50"
-                  >
-                    {create.isPending ? "Requesting…" : "Submit request"}
-                  </button>
-                </div>
+                    Requested on{" "}
+                    {pending[0].requestedAt.toLocaleDateString(fmtLocale(), {
+                      day: "numeric",
+                      month: "short",
+                    })}{" "}
+                    · waiting for an organization owner
+                  </p>
+                ) : (
+                  <>
+                    <GrantReasonFields value={reason} onChange={setReason} />
+                    {error && (
+                      <p role="alert" className="text-caption text-danger">
+                        {error}
+                      </p>
+                    )}
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setFormOpen(false)}
+                        className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!complete || create.isPending}
+                        className="btn-primary px-4 py-2.5 text-body font-medium disabled:opacity-50"
+                      >
+                        {create.isPending ? "Requesting…" : "Submit request"}
+                      </button>
+                    </div>
+                  </>
+                )}
               </form>
             ) : (
               <button
                 type="button"
-                disabled={institutions.isLoading || !targetInstitution}
+                disabled={institutions.isLoading || !targetReady}
                 onClick={() => setFormOpen(true)}
                 className="btn-primary w-fit px-4 py-2.5 text-body font-medium disabled:opacity-50"
               >
