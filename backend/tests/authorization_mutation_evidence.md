@@ -76,7 +76,7 @@ organization. The committed negative control
 rolled-back `monkeypatch` (no product code changed): the sweep then reported the
 sibling-bank package leak, and passed once the patch was undone.
 
-Both layers reproduce the two confirmed same-organization cross-bank defects,
+The deterministic layer reproduced the two same-organization cross-bank defects,
 held in `object_reference_routes.KNOWN_DEFECTS`:
 `POST /banks/{bank_id}/system-of-record/{declaration_id}/approve` and `.../revoke`
 resolve the declaration by id within the organization only

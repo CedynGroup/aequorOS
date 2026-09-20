@@ -429,9 +429,10 @@ layer: it `pytest.mark.parametrize`s one case per route × HTTP method × layout
 fixes a fully entitled bank-A caller, and checks the refusal shape and that no
 table content changes, including on reads, using portable per-table content
 hashes. It runs on SQLite because its refusals come from the explicit
-organization/bank `WHERE` clauses in the guards and services, which hold without row-level security; its data-layer
-positive control confirms every seeded object exists for the tenant that owns
-it, so a refusal is authorization, not a missing fixture. It pins the two
+organization/bank `WHERE` clauses in the guards and services, which hold without
+row-level security. Its data-layer positive control confirms every seeded object
+exists for its owner; it does not establish that each request reaches the
+ownership guard rather than an earlier validation or permission check. It pins the two
 confirmed same-organization cross-bank defects in `KNOWN_DEFECTS`, skips them in
 the strict parametrization, and asserts they are still reproduced so a product
 fix forces their promotion.
@@ -441,8 +442,9 @@ layer, Postgres-only against a migrated schema with FORCE RLS so the RLS
 backstop is exercised too. Hypothesis varies legacy token roles alongside
 role/permission bundles, module scope, sensitivity scope, institution scope and
 binding lifecycle state, together with object placement (cross-organization,
-sibling bank or a single foreign child). Each example sweeps the applicable
-census and checks that the content digest of every table in both organizations
+sibling bank or a single foreign child). It excludes the `KNOWN_DEFECTS` cases
+pinned by the deterministic layer. Each example sweeps the applicable census
+and checks that the content digest of every table in both organizations
 is unchanged. The bounded sample (`max_examples=15`) checks the isolation
 invariant across generated authority combinations. Its committed negative
 control weakens the package bank guard under a rolled-back `monkeypatch` and
