@@ -403,6 +403,31 @@ Generative suites add coverage beyond the fixed examples:
   positive control before tenant-A requests. Other UUID resource kinds still use
   unknown IDs, so those requests do not prove isolation of existing child rows.
 
+`tests/db/test_authorization_object_reference_properties.py` extends that route
+enumeration to the classic IDOR shape: a route that carries a second object
+identifier beside `{bank_id}` — a `package_id`, `signoff_id`, `analysis_id`,
+`declaration_id`, `connection_id` and the rest — in its path, or a UUID `*_id`
+in its request body or query. It seeds one real object of every such kind for
+three tenants (organization A bank A, organization A sibling bank A2,
+organization B bank B), then references a foreign tenant's object under bank A's
+path or authority. Across the cross-organization and same-organization
+sibling-bank layouts it asserts that a read discloses no foreign identifier
+(a 200 that hides the row is a valid refusal), that a mutation never returns
+2xx, and that the row digest of every table in both organizations is unchanged
+before and after each request. The positive control is proven at the data
+layer — every seeded object is visible to the tenant that owns it under RLS — so
+a foreign reference's refusal is an authorization decision, not a missing
+fixture. Actor-label body fields (`assigned_to_user_id`, `approved_by_user_id`)
+are excluded because they record who acted, not an object whose data is read;
+routes needing multi-step fixtures (`push_batch_id`, `ingestion-batches`,
+`financial-workspace/map`) are listed as known-uncovered in the module docstring,
+and same-organization cross-*parent* nesting remains for a follow-up. Its
+committed negative control weakens the package bank guard under a rolled-back
+`monkeypatch` and confirms the property then reports the sibling-bank leak. The
+property currently reproduces two confirmed same-organization cross-bank
+defects, held in the module's `_KNOWN_DEFECTS` set and asserted as
+still-defective so a product fix forces their promotion into the strict property.
+
 Negative controls reuse the ownership and current-fact invariants: a test-scoped
 patch admitting public `org_owner` grants must violate the unassigned-organization
 invariant; transactional `NO FORCE ROW LEVEL SECURITY` must break table-owner
