@@ -363,11 +363,12 @@ Actions UI or with
 `gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It installs
 Chromium, starts MinIO with its built-in KMS, and runs this same command against
 real CI-local object storage. The run requires at least 20 journeys to execute
-and the quarantine in `e2e/support/quarantine.ts` to be empty. A journey may
-only be parked there by name, declared with `test.fail`, and with the workflow's
-gate edited to admit it; the custom reporter fails the run for any
-non-quarantined failure, unexpected quarantine pass, skipped or undiscovered
-quarantine entry, or `test.fail` declaration missing from that list.
+and the quarantine in `e2e/support/quarantine.ts` to match the size the
+workflow pins. A journey may only be parked there by name, declared with
+`test.fail` and a reason beside it, and with the workflow's gate edited to
+admit it; the custom reporter fails the run for any non-quarantined failure,
+unexpected quarantine pass, skipped or undiscovered quarantine entry, or
+`test.fail` declaration missing from that list.
 
 The Returns workspace opens on the regulator's most recent elapsed reporting
 anchor, and a return generates only from the exact snapshot as of that date —

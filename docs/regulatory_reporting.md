@@ -61,9 +61,9 @@ What changed, by workstream (`docs/submission_pipeline_plan.md`):
   backend + minted NextAuth cookies) covering authenticated navigation, live
   package generation, the deadline board, and role gates. The suite now runs in
   blocking CI against disposable MinIO. CI requires at least 20 journeys to
-  execute with an empty quarantine; the e2e book is the canonical fixture
-  carried forward to the regulator anchor currently due, so generation runs
-  against an exact snapshot rather than an earlier book.
+  execute against an exact, size-pinned quarantine; the e2e book is the
+  canonical fixture carried forward to the regulator anchor currently due, so
+  generation runs against an exact snapshot rather than an earlier book.
 
 Migrations `202607240018`–`202607240023` are applied to the primary DB.
 The status vocabulary, channel set, and family set in the sections below are

@@ -437,9 +437,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   **test** + build, `web.yml` gates `frontend` lint+build and `console`
   typecheck+test+build, and the manual-dispatch `dashboard-journeys.yml` runs the
   dashboard Playwright journeys against disposable MinIO. The journey reporter requires
-  at least 20 executions and an EMPTY quarantine (`e2e/support/quarantine.ts`, pinned to
-  zero in the workflow): a `test.fail` not named there, a named journey Playwright does
-  not discover, or an unexpected pass fails the run. The e2e book is the canonical
+  at least 20 executions and an exact, reasoned quarantine (`e2e/support/quarantine.ts`,
+  size pinned in the workflow): a `test.fail` not named there, a named journey Playwright
+  does not discover, or an unexpected pass fails the run. The e2e book is the canonical
   fixture carried forward to the reporting anchor currently due
   (`scripts/e2e_bootstrap.py` → `extend_canonical_test_book`), because the Returns
   workspace opens on the regulator's most recent elapsed anchor and only an exact
