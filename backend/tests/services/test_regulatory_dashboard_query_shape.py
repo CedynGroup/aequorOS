@@ -44,13 +44,15 @@ _MODULES = {
     "ftp": regulatory_ftp,
 }
 _FULL_HTTP_QUERY_COUNTS = {
-    "liquidity": 14,
+    # Router-level tenant-bank resolution adds one organization-scoped bank SELECT.
+    "liquidity": 15,
     # Scoped CAP view adds bank resolution plus principal, binding, and institution checks.
     "capital": 19,
     # Prefetched scoped IRRBB view reuses the dashboard's resolved bank.
     "irr": 16,
-    # Scoped FX view adds bank resolution plus principal, binding, and institution checks.
-    "fx": 16,
+    # Scoped FX view reuses the router-resolved tenant bank, then adds principal,
+    # binding, and institution checks.
+    "fx": 15,
     "ftp": 12,
 }
 

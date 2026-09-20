@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Final
+from fastapi import APIRouter
 
-from fastapi import APIRouter, Depends
-
-from app.api.deps import require_module_access, resolve_tenant_bank
+from app.api.deps import BANK_ROUTE_DEPENDENCIES, require_module_access
 from app.api.health import router as health_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.database_connections import router as database_direct_connections_router
@@ -75,7 +73,6 @@ api_router = APIRouter()
 api_router.include_router(health_router)
 
 v1_router = APIRouter(prefix="/v1")
-BANK_ROUTE_DEPENDENCIES: Final = (Depends(resolve_tenant_bank),)
 
 v1_router.include_router(auth_router)
 v1_router.include_router(attestation_router, dependencies=BANK_ROUTE_DEPENDENCIES)
