@@ -1236,13 +1236,11 @@ must not be represented as working:
    signee ID visible in Settings, unsigned state visible on a generated return,
    the certify dialog showing the figures digest plus the full Act 930 s.93(3)
    declaration before signing is possible, the SSO step-up return leg, route
-   guards, field placement, and unsigned export. It now runs in the blocking
-   Playwright CI job against disposable MinIO; the e2e book is carried forward
-   to the reporting anchor currently due, so the package-generation cases run
-   against a real computed position rather than an "awaiting data" refusal.
-   The ceremony journey's SSO step-up return leg stays quarantined until the
-   step-up routes derive their bounce-back origin from the request host
-   (`e2e/support/quarantine.ts` names the branch carrying that fix). A full
+   guards, field placement, and unsigned export. See the
+   [dashboard E2E guidance](../backend/dashboard/README.md#end-to-end-playwright)
+   for fixture coverage and workflow invocation, and
+   [the quarantine list](../backend/dashboard/e2e/support/quarantine.ts)
+   for the remaining ceremony failure and its repair. A full
    preparer-then-approver-then-verify pass through the UI is **not** yet
    driven; the submission gate and the two-signature flow are asserted in the
    backend suite instead. Noted because an earlier version of that journey

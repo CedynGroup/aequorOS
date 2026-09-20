@@ -436,14 +436,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `risk-service.yml` gates the backend, `dashboard.yml` gates typecheck + **lint** +
   **test** + build, `web.yml` gates `frontend` lint+build and `console`
   typecheck+test+build, and the manual-dispatch `dashboard-journeys.yml` runs the
-  dashboard Playwright journeys against disposable MinIO. The journey reporter requires
-  at least 20 executions and an exact, reasoned quarantine (`e2e/support/quarantine.ts`,
-  size pinned in the workflow): a `test.fail` not named there, a named journey Playwright
-  does not discover, or an unexpected pass fails the run. The e2e book is the canonical
-  fixture carried forward through the last month end on or before today
-  (`scripts/e2e_bootstrap.py` → `extend_canonical_test_book`), because the Returns
-  workspace opens on the regulator's latest anchor on or before today and only an exact
-  snapshot can generate it. Before these gates, `frontend/` and `console/` were in no
+  dashboard Playwright journeys against disposable MinIO. See
+  [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)
+  for the reasoned, size-pinned quarantine and the canonical fixture carried forward
+  through the last month end on or before today. Before these gates, `frontend/` and `console/` were in no
   workflow and the dashboard's fail-open guard, SSRF egress guard, and browser journeys
   were unenforced. Each workflow's header comment is its gate inventory — keep it accurate.
   `console` is deliberately NOT lint-gated (no ESLint dependency or config in that
