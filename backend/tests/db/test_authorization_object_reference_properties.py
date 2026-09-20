@@ -45,6 +45,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
 from app.core.authorization import InstitutionScope, ModuleScope, RoleBundle, SensitivityScope
+from app.core.security import ROLES
 from app.db.base import Base
 from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
@@ -100,6 +101,7 @@ _BINDING_SPEC = st.tuples(
 )
 _CALLER = st.tuples(
     st.integers(min_value=0, max_value=2),
+    st.lists(st.sampled_from(ROLES), max_size=2, unique=True).map(tuple),
     st.lists(_BINDING_SPEC, max_size=6),
     st.sampled_from(LAYOUTS),
 )
@@ -289,32 +291,6 @@ def object_reference_sweep(
         other_org=_seed_organization(engine, TENANT_B, with_users=True),
     )
     yield app, engine, tenants
-    _unwind_seeded_rows(engine)
-
-
-def _unwind_seeded_rows(engine: Engine) -> None:
-    """Remove seeded rows the migration chain cannot downgrade past.
-
-    Issued bank-scoped integration keys make their migration refuse to
-    downgrade, an ``enterprise_stress`` run no longer fits the 16-character
-    module column the older schema restores, and a ``bsd`` package predates the
-    return-family recode.  Service identities and machine bindings are dropped
-    wholesale by the table downgrades, so they are left in place — deleting a
-    user would cascade a ``SET NULL`` onto append-only ``audit_events``, which
-    the restricted migration role may not update.
-    """
-    with engine.begin() as connection:
-        connection.execute(text("DELETE FROM integration_keys"))
-        for organization_id in (ORG_A, ORG_B):
-            connection.execute(
-                text("SELECT set_config('app.organization_id', :organization_id, true)"),
-                {"organization_id": organization_id},
-            )
-            connection.execute(text("DELETE FROM enterprise_stress_signoffs"))
-            connection.execute(
-                text("DELETE FROM regulatory_runs WHERE module = 'enterprise_stress'")
-            )
-            connection.execute(text("DELETE FROM regulatory_packages"))
 
 
 def test_generated_callers_never_reach_foreign_objects(
@@ -326,10 +302,10 @@ def test_generated_callers_never_reach_foreign_objects(
 
     @settings(max_examples=15, deadline=None)
     @given(caller=_CALLER)
-    def property_check(caller: tuple[int, list[BindingSpec], Layout]) -> None:
-        user_slot, specs, layout = caller
+    def property_check(caller: tuple[int, tuple[str, ...], list[BindingSpec], Layout]) -> None:
+        user_slot, roles, specs, layout = caller
         _replace_home_bindings(engine, _generated_bindings(engine, specs))
-        auth = _caller_headers(TENANT_A.user_ids[user_slot], ())
+        auth = _caller_headers(TENANT_A.user_ids[user_slot], roles)
         with TestClient(app, raise_server_exceptions=False) as client:
             sweep = Sweep(
                 client=client, document=app.openapi(), engine=engine, tenants=tenants, routes=routes
