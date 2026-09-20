@@ -440,9 +440,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   at least 20 executions and an exact, reasoned quarantine (`e2e/support/quarantine.ts`,
   size pinned in the workflow): a `test.fail` not named there, a named journey Playwright
   does not discover, or an unexpected pass fails the run. The e2e book is the canonical
-  fixture carried forward to the reporting anchor currently due
+  fixture carried forward through the last month end on or before today
   (`scripts/e2e_bootstrap.py` → `extend_canonical_test_book`), because the Returns
-  workspace opens on the regulator's most recent elapsed anchor and only an exact
+  workspace opens on the regulator's latest anchor on or before today and only an exact
   snapshot can generate it. Before these gates, `frontend/` and `console/` were in no
   workflow and the dashboard's fail-open guard, SSRF egress guard, and browser journeys
   were unenforced. Each workflow's header comment is its gate inventory — keep it accurate.
