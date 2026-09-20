@@ -2,10 +2,12 @@
  * Playwright e2e for the submission pipeline (plan W7.5).
  *
  * Boots the FastAPI backend on a disposable sqlite file (demo seeding enabled
- * — the e2e fixture path, never production) and the Next.js dev server wired
- * to it. Global setup bootstraps tenant rows, seeds the sample bank through
- * the API, runs a liquidity baseline, and mints per-role session cookies — no
- * real credentials anywhere.
+ * — the e2e fixture path, never production), a local OIDC issuer
+ * (scripts/e2e_idp.py — the tenant's "identity provider", registered as its SSO
+ * connection during bootstrap) and the Next.js dev server wired to both.
+ * Global setup bootstraps tenant rows, seeds the sample bank through the API,
+ * runs a liquidity baseline, and mints per-role session cookies — no real
+ * credentials anywhere.
  *
  * Hermetic EXCEPT object storage. This file used to claim "fully hermetic",
  * which was wrong and cost a long diagnosis: validated packages persist their
@@ -28,8 +30,15 @@ acquireE2ERunLock(E2E_TMP);
 const runtimePorts = selectE2ERuntimePorts();
 export const E2E_BACKEND_PORT = runtimePorts.backend;
 export const E2E_DASHBOARD_PORT = runtimePorts.dashboard;
+export const E2E_IDP_PORT = runtimePorts.idp;
 export const E2E_BASE_URL = `http://127.0.0.1:${E2E_DASHBOARD_PORT}`;
 export const E2E_API_ORIGIN = `http://127.0.0.1:${E2E_BACKEND_PORT}`;
+// Plain http on loopback: the only issuer shape the backend and the dashboard
+// egress guards accept without TLS, and only on an undeployed APP_ENV.
+export const E2E_IDP_ORIGIN = `http://127.0.0.1:${E2E_IDP_PORT}`;
+// Authenticates the dashboard's server-to-server read of the SSO client config.
+// Any value enables the path; this one says what it is.
+const E2E_SSO_INTERNAL_KEY = "e2e-sso-internal-key-not-production-000";
 // Seals the disposable soft signing keys the ceremony journeys use. The
 // software key backend refuses to initialise when APP_ENV is production, so
 // this fixture value cannot reach a deployment.
@@ -55,6 +64,16 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: [
+    {
+      // Started first: the bootstrap below registers its issuer URL, and the
+      // dashboard's NextAuth discovers it on the first SSO sign-in.
+      command: "uv run python scripts/e2e_idp.py",
+      cwd: BACKEND_DIR,
+      url: `${E2E_IDP_ORIGIN}/.well-known/openid-configuration`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: { E2E_IDP_PORT: String(E2E_IDP_PORT) },
+    },
     {
       command:
         // Start from a FRESH disposable database every run. Terminal
@@ -107,7 +126,8 @@ export default defineConfig({
         ICAAP_SIGNING_ENABLED: "0",
         AUTH_JWT_SECRET: "e2e-backend-jwt-secret-not-production-000",
         IMPERSONATION_JWT_SECRET: "e2e-impersonation-secret-not-production-000",
-        SSO_INTERNAL_KEY: "",
+        SSO_INTERNAL_KEY: E2E_SSO_INTERNAL_KEY,
+        E2E_IDP_ISSUER: E2E_IDP_ORIGIN,
         // Computed, not written as a literal: the vault wants base64, and a
         // base64 literal in source is indistinguishable from a real key to a
         // secret scanner (gitleaks flagged exactly that). Keeping the readable
@@ -132,7 +152,10 @@ export default defineConfig({
         NEXT_DIST_DIR: ".next-e2e",
         AUTH_SECRET: "e2e-nextauth-secret-not-production-000",
         AUTH_TRUST_HOST: "true",
-        SSO_INTERNAL_KEY: "",
+        SSO_INTERNAL_KEY: E2E_SSO_INTERNAL_KEY,
+        // The dashboard's egress guard mirrors the backend's loopback
+        // carve-out and reads the same variable to decide it applies.
+        APP_ENV: "test",
       },
     },
   ],

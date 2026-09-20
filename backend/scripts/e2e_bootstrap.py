@@ -27,6 +27,14 @@ the software backend refuses to initialise when APP_ENV is production, so this
 path cannot exist in a real deployment. Without it the ceremony journey could
 only be skipped, and a skipped journey proves nothing.
 
+It also registers the local OIDC issuer (``scripts/e2e_idp.py``, started by
+``playwright.config.ts``) as the tenant's **SSO connection** when
+``E2E_IDP_ISSUER`` names it, through the same service the Settings page uses,
+so the browser SSO journeys sign in and step up against a real relying-party
+configuration rather than a mocked one. The connection restricts sign-in to
+the fixture domain; ``e2e.sso_analyst`` is the pre-provisioned officer the
+issuer's linked account maps onto.
+
 For the same reason every fixture user gets a **password hash**: signing requires
 step-up re-authentication, and the sessions Playwright mints are tokens with no
 password behind them, so ``verify_step_up``'s password path could never succeed
@@ -62,7 +70,7 @@ from app.core.authorization import (
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models import IntegrationKey, Organization, RegulatoryParameter, User
-from app.services import authorization, membership
+from app.services import authorization, membership, sso_config
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
 from app.services.organization_ownership import assign_initial_owner
@@ -108,7 +116,12 @@ E2E_USERS = {
     # NOT the `approver` fixture — one identity that both approves and files is
     # the defect the split closed, and the tenant grant surface blocks it.
     "validator": UUID("eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef"),
+    "sso_analyst": UUID("eeeeeeee-1111-4eee-8eee-eeeeeeeeeee1"),
 }
+#: The e2e tenant's SSO connection. Client id/secret mirror scripts/e2e_idp.py.
+E2E_SSO_CLIENT_ID = "aequoros-dashboard-e2e"
+E2E_SSO_CLIENT_SECRET = "e2e-idp-client-secret-not-production-000"  # noqa: S105 - disposable fixture
+E2E_SSO_ALLOWED_DOMAINS = ["aequoros.example"]
 
 #: The governed date from which an ICAAP report may be filed.
 #:
@@ -148,12 +161,11 @@ def main() -> None:
         for role, user_id in E2E_USERS.items():
             user = session.get(User, user_id)
             if user is None:
-                display_role = "Grant Member" if role == "grant_member" else role.capitalize()
                 user = User(
                     id=user_id,
                     organization_id=DEMO_ORG_ID,
                     email=f"e2e.{role}@aequoros.example",
-                    display_name=f"E2E {display_role}",
+                    display_name=f"E2E {_display_role(role)}",
                     # Account-plane fixtures become scalar account admins
                     # after initial ownership is assigned, so they do not
                     # create ambiguous owner candidates during bootstrap.
@@ -179,6 +191,8 @@ def main() -> None:
                             # unable to file on anything but its binding.
                             "validator",
                         }
+                        else "analyst"
+                        if role == "sso_analyst"
                         else role
                     ),
                     auth_provider="password",
@@ -246,6 +260,7 @@ def main() -> None:
             ("admin", RoleBundle.ANALYST),
             ("approver", RoleBundle.APPROVER),
             ("analyst", RoleBundle.ANALYST),
+            ("sso_analyst", RoleBundle.ANALYST),
         ):
             authorization.create_role_binding(
                 session,
@@ -417,6 +432,7 @@ def main() -> None:
             reason="make the authorized API Push page visible for browser evidence",
         )
         session.commit()
+        _register_sso_connection(session)
         _materialize_live_plane(session)
     print("e2e database bootstrapped")
 
@@ -442,6 +458,38 @@ def latest_month_end_on_or_before(today: date | None = None) -> date:
     if today.day == calendar.monthrange(today.year, today.month)[1]:
         return today
     return today.replace(day=1) - timedelta(days=1)
+
+
+def _display_role(role: str) -> str:
+    """``sso_analyst`` → ``SSO Analyst``; the name the shell and the approver picker show."""
+    return " ".join(
+        part.upper() if part == "sso" else part.capitalize() for part in role.split("_")
+    )
+
+
+def _register_sso_connection(session: Session) -> None:
+    """Point the tenant at the local issuer, through the product's own path.
+
+    ``upsert_connection`` seals the client secret with the credential vault and
+    applies the same issuer screening the Settings page does — the plain-http
+    loopback issuer passes only because APP_ENV is undeployed, which is exactly
+    the rule that keeps this issuer out of a deployment.
+    """
+    issuer = os.environ.get("E2E_IDP_ISSUER")
+    if not issuer:
+        print("sso connection: not registered (E2E_IDP_ISSUER unset)")
+        return
+    sso_config.upsert_connection(
+        session,
+        organization_id=DEMO_ORG_ID,
+        issuer=issuer,
+        client_id=E2E_SSO_CLIENT_ID,
+        client_secret=E2E_SSO_CLIENT_SECRET,
+        allowed_email_domains=E2E_SSO_ALLOWED_DOMAINS,
+        enabled=True,
+        actor_user_id=None,
+    )
+    print(f"sso connection: {issuer} registered for {DEMO_ORG_ID}")
 
 
 def _materialize_live_plane(session: Session) -> None:
@@ -497,10 +545,9 @@ def _enrol_signing_keys(session: Session) -> None:
     service = SignerKeyService(session, ctx)
     for role, user_id in E2E_USERS.items():
         identity = ensure_signer_identity(session, ctx, user_id)
-        display_role = "Grant Member" if role == "grant_member" else role.capitalize()
         service.issue(
             signer_id=identity.signer_id,
-            display_name=f"E2E {display_role}",
+            display_name=f"E2E {_display_role(role)}",
             organization_name="AequorOS E2E",
         )
         session.commit()

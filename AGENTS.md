@@ -477,7 +477,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   writes. Skip either and the failure is late and misleading: a missing registry surfaces as
   a fail-closed 409 naming a seed migration, a missing live plane as "no computed data yet"
   on every module page. Full prerequisites (object storage included):
-  `backend/dashboard/README.md` §End-to-end.
+  `backend/dashboard/README.md` §End-to-end. The same stack carries a local OIDC issuer
+  (`scripts/e2e_idp.py`, registered as the tenant's SSO connection by the bootstrap) so the
+  browser SSO round trip and the attestation step-up are proved for real —
+  `backend/dashboard/README.md` §Single sign-on against a local issuer.
   **Test databases are built once per pytest process, never per test**
   (`backend/tests/conftest.py`): rollback-isolated tests (tenant API and
   `tests/operator` alike) share one schema through a savepoint-bound sessionmaker,
