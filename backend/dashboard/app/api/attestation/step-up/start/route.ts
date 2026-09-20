@@ -8,6 +8,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from '@/auth';
+import { requestOrigin } from '@/lib/requestOrigin';
 import {
   backToCeremony,
   discover,
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Every outcome from here lands the signer back on the ceremony: they pressed a
   // button inside a signing dialog, and a JSON error page is not an answer to
   // that. The dialog explains the marker and offers the password path instead.
-  const origin = request.nextUrl.origin;
+  const origin = requestOrigin(request);
   let config;
   let endpoints;
   try {
