@@ -38,8 +38,12 @@ These executions cover both mutation proofs; the first run also executed
 isolation checks before weakening and after rollback. The disposable server was
 stopped and its worktree-local data removed. No product code was changed.
 
-
 ## Object-reference (IDOR) tests
+
+These recorded executions predate the single-foreign-child layout and the
+deterministic per-table content hashes; their counts do not certify those later
+changes. The current coverage contract is owned by
+[the foundation document](../docs/authorization_foundation.md#executable-verification).
 
 2026-09-19, Python 3.13. The deterministic coverage layer runs on the default
 SQLite database; the generative layer runs against a disposable local

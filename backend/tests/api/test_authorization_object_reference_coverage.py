@@ -9,10 +9,11 @@ fixtures seed one real object of every kind for three tenants (organization A
 bank A, organization A sibling bank A2, organization B bank B); a fully entitled
 bank-A caller then references a foreign tenant's object under bank A.
 
-Each case asserts the refusal shape: a read discloses no foreign identifier (a
-200 that hides the row is a valid refusal), and a mutation never returns 2xx and
-changes no table contents, for reads as well as mutations.  The two confirmed same-org cross-bank defects
-are quarantined in ``KNOWN_DEFECTS`` and pinned as still-defective by
+Each case checks for foreign identifiers beyond those sent in the request (a
+200 that hides the row is a valid read refusal), rejects successful mutations,
+and checks that table contents stay unchanged on reads and mutations. The two
+confirmed same-org cross-bank defects are quarantined in ``KNOWN_DEFECTS`` and
+pinned as still-defective by
 ``test_known_defects_are_still_reproduced`` so a fix forces their promotion.
 
 This layer runs on the default (non-Postgres) test database: the refusals it
