@@ -13,57 +13,59 @@ import { test, expect } from "@playwright/test";
 import path from "path";
 import { E2E_TMP } from "../playwright.config";
 import { requireObjectStorage } from "./support/object-storage";
+import { generateCurrentVersion } from "./support/generate";
 
 const RETURNS = "/submissions/returns?code=BSD3";
 const approverState = path.join(E2E_TMP, "approver.json");
 const analystState = path.join(E2E_TMP, "analyst.json");
 const viewerState = path.join(E2E_TMP, "viewer.json");
+// Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
+const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
 test.beforeAll(() => requireObjectStorage());
 
 test.describe("submission pipeline", () => {
   test.use({ storageState: approverState });
 
-  test.fail(
-    "journey 1: authenticated returns workspace generates a package",
-    async ({ page }) => {
-      await page.goto(RETURNS);
-      // Authenticated navigation lands on the workspace (not /login).
-      await expect(page).toHaveURL(/\/submissions\/returns/);
-      await expect(
-        page.getByRole("heading", { name: /returns workspace/i }),
-      ).toBeVisible();
+  test("journey 1: authenticated returns workspace generates a package", async ({
+    page,
+  }) => {
+    await page.goto(RETURNS);
+    // Authenticated navigation lands on the workspace (not /login).
+    await expect(page).toHaveURL(/\/submissions\/returns/);
+    await expect(
+      page.getByRole("heading", { name: /returns workspace/i }),
+    ).toBeVisible();
 
-      // Generate a package against the live backend, then confirm the lifecycle
-      // stepper advances to "Generated" — the UI round-tripped createRegulatoryPackage.
-      const generate = page
-        .getByRole("button", { name: /generate package|regenerate/i })
-        .first();
-      await expect(generate).toBeVisible({ timeout: 5_000 });
-      await generate.click();
-      await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
+    // Generate a package against the live backend, then confirm the lifecycle
+    // stepper advances to "Generated" — the UI round-tripped createRegulatoryPackage.
+    await generateCurrentVersion(page);
+    await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
 
-      // The stepper shows states REACHED, not activities in progress. The state a
-      // package is in must read as achieved, with the highlight on what has NOT
-      // happened yet — otherwise resting in a state is indistinguishable from
-      // being stuck in it. Reported from the live app on 2026-07-25: an approved,
-      // fully-certified return looked stuck because "Approved" rendered as the
-      // current step, next to a step then labelled "Approval".
-      const stepper = page.getByLabel("Package lifecycle").first();
-      await expect(stepper).toBeVisible();
-      // The waiting stage says it is waiting, and cannot be mistaken for the
-      // decided one.
-      await expect(stepper.getByText("Awaiting approval")).toBeVisible();
-      await expect(
-        stepper.getByText("Approved", { exact: true }),
-      ).toBeVisible();
+    // The stepper shows states REACHED, not activities in progress. The state a
+    // package is in must read as achieved, with the highlight on what has NOT
+    // happened yet — otherwise resting in a state is indistinguishable from
+    // being stuck in it. Reported from the live app on 2026-07-25: an approved,
+    // fully-certified return looked stuck because "Approved" rendered as the
+    // current step, next to a step then labelled "Approval".
+    const stepper = page.getByLabel("Package lifecycle").first();
+    await expect(stepper).toBeVisible();
+    // The waiting stage says it is waiting, and cannot be mistaken for the
+    // decided one.
+    await expect(stepper.getByText("Awaiting approval")).toBeVisible();
+    await expect(stepper.getByText("Approved", { exact: true })).toBeVisible();
 
-      // Validate is now offered — the workspace reflects backend state transitions.
-      await expect(
-        page.getByRole("button", { name: /validate/i }).first(),
-      ).toBeVisible();
-    },
-  );
+    // Validate is now offered — the workspace reflects backend state transitions.
+    await expect(
+      page.getByRole("button", { name: /validate/i }).first(),
+    ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "returns-workspace-generated.png"),
+        fullPage: true,
+      });
+    }
+  });
 
   test("journey 2: calendar deadline board loads with obligations", async ({
     page,
@@ -103,63 +105,67 @@ test.describe("submission pipeline", () => {
     await expect(lcrNsfr).toBeVisible();
   });
 
-  test.fail(
-    "journey 3: history renders the package/version ledger",
-    async ({ page }) => {
-      // Generate at least one package first so history is non-empty.
-      await page.goto(RETURNS);
-      const generate = page
-        .getByRole("button", { name: /generate package|regenerate/i })
-        .first();
-      await expect(generate).toBeVisible({ timeout: 5_000 });
-      await generate.click();
-      await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
+  test("journey 3: history renders the package/version ledger", async ({
+    page,
+  }) => {
+    // Generate at least one package first so history is non-empty.
+    await page.goto(RETURNS);
+    await generateCurrentVersion(page);
 
-      await page.goto("/submissions/history");
-      await expect(page).toHaveURL(/\/submissions\/history/);
-      await expect(page.getByText("LCR-NSFR").first()).toBeVisible();
-    },
-  );
-
-  test.fail(
-    "journey 4: a prior version yields its files, its signers, and a diff",
-    async ({ page }) => {
-      // Two generations, so a superseded version exists whatever earlier
-      // journeys left behind.
-      await page.goto(RETURNS);
-      for (let i = 0; i < 2; i += 1) {
-        const generate = page
-          .getByRole("button", { name: /generate package|regenerate/i })
-          .first();
-        await expect(generate).toBeVisible({ timeout: 5_000 });
-        await generate.click();
-        await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
-      }
-
-      const card = page.locator("section", {
-        has: page.getByRole("heading", { name: "Prior versions" }),
+    await page.goto("/submissions/history");
+    await expect(page).toHaveURL(/\/submissions\/history/);
+    await expect(page.getByText("LCR-NSFR").first()).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "history-ledger.png"),
+        fullPage: true,
       });
-      await expect(card).toBeVisible();
+    }
+  });
 
-      // The row is a disclosure, not a dead line of text.
-      const row = card.locator("li").first();
-      await row.getByRole("button").first().click();
+  test("journey 4: a prior version yields its files, its signers, and a diff", async ({
+    page,
+  }) => {
+    // Two generations, so a superseded version exists whatever earlier
+    // journeys left behind.
+    await page.goto(RETURNS);
+    await generateCurrentVersion(page);
+    const current = await generateCurrentVersion(page);
 
-      // Nothing was exported on this chain, so the card says so rather than
-      // offering a download that cannot resolve.
-      await expect(row.getByText(/Never exported/).first()).toBeVisible();
-      await expect(
-        row.getByText(/No signature was ever recorded/).first(),
-      ).toBeVisible();
+    const card = page.locator("section", {
+      has: page.getByRole("heading", { name: "Prior versions" }),
+    });
+    await expect(card).toBeVisible();
 
-      // The figures comparison is available even with no file to retrieve — the
-      // snapshot is immutable and always present.
-      await row.getByRole("button", { name: /compare with current/i }).click();
-      // Regeneration off unchanged canonical data reproduces the figures, so the
-      // honest verdict is that nothing moved.
-      await expect(row.getByText(/No figure differs from v\d+/)).toBeVisible();
-    },
-  );
+    // The row is a disclosure, not a dead line of text. Address the version
+    // this journey just superseded by name rather than by position: it is the
+    // one known to be unsigned and never exported, whatever earlier journeys
+    // left on the chain.
+    const row = card.locator("li", {
+      has: page.getByText(`v${current - 1}`, { exact: true }),
+    });
+    await row.getByRole("button").first().click();
+
+    // Nothing was exported on this chain, so the card says so rather than
+    // offering a download that cannot resolve.
+    await expect(row.getByText(/Never exported/).first()).toBeVisible();
+    await expect(
+      row.getByText(/No signature was ever recorded/).first(),
+    ).toBeVisible();
+
+    // The figures comparison is available even with no file to retrieve — the
+    // snapshot is immutable and always present.
+    await row.getByRole("button", { name: /compare with current/i }).click();
+    // Regeneration off unchanged canonical data reproduces the figures, so the
+    // honest verdict is that nothing moved.
+    await expect(row.getByText(/No figure differs from v\d+/)).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "prior-version-diff.png"),
+        fullPage: true,
+      });
+    }
+  });
 
   test("journey 5: analyst cannot approve; viewer cannot generate", async ({
     browser,

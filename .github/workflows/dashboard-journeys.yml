@@ -64,14 +64,18 @@ jobs:
           STORAGE_KMS_KEY_ID: aequoros-key
           PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
         run: mise exec -- pnpm --filter @aequoros/dashboard e2e
-      - name: The browser journeys must have executed, not skipped
+      # The quarantine (e2e/support/quarantine.ts) is pinned EMPTY here on
+      # purpose: parking a failing journey means editing this gate as well as
+      # naming the journey, so a quarantine is always a visible, reviewed
+      # decision with an issue behind it, never a quiet default.
+      - name: The browser journeys must have executed, not skipped or quarantined
         run: |
           set -euo pipefail
           jq . "$RUNNER_TEMP/journeys.json"
           jq -e '
             .executed >= 20 and
-            .quarantinedExecuted == 8 and
-            .quarantineSize == 8 and
+            .quarantinedExecuted == 0 and
+            .quarantineSize == 0 and
             (.integrityErrors | length) == 0
           ' "$RUNNER_TEMP/journeys.json" >/dev/null
       - name: Stop MinIO

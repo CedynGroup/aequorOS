@@ -1237,10 +1237,9 @@ must not be represented as working:
    the certify dialog showing the figures digest plus the full Act 930 s.93(3)
    declaration before signing is possible, the SSO step-up return leg, route
    guards, field placement, and unsigned export. It now runs in the blocking
-   Playwright CI job against disposable MinIO. Four package-generation cases in
-   this spec are in the suite's exact eight-test quarantine for pre-existing
-   regulator-anchor/fixture-snapshot drift (issue #151); the custom reporter
-   fails on an unexpected pass or quarantine/discovery mismatch. A full
+   Playwright CI job against disposable MinIO; the e2e book is carried forward
+   to the reporting anchor currently due, so the package-generation cases run
+   against a real computed position rather than an "awaiting data" refusal. A full
    preparer-then-approver-then-verify pass through the UI is **not** yet
    driven; the submission gate and the two-signature flow are asserted in the
    backend suite instead. Noted because an earlier version of that journey

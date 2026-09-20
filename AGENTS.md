@@ -350,12 +350,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `POST /operator/v1/tenants/{org}/fix/redrive-dedup` (session-gated, audited), and it is
   manual on purpose — the four stranded batches failed for three unrelated reasons.
 - **CI enforces every surface (2026-08-22; E2E added 2026-08-30).**
-  `risk-service.yml` gates the backend plus the dashboard Playwright journeys against
-  disposable MinIO, `dashboard.yml` gates typecheck + **lint** + **test** + build, and
-  `web.yml` gates `frontend` lint+build and `console` typecheck+test+build. The journey
-  reporter requires at least 20 executions and an exact eight-test expected-failure list
-  for regulator-anchor/fixture drift; discovery mismatch or an unexpected pass fails CI,
-  and issue #151 owns removal. Before these gates, `frontend/` and `console/` were in no
+  `risk-service.yml` gates the backend, `dashboard.yml` gates typecheck + **lint** +
+  **test** + build, `web.yml` gates `frontend` lint+build and `console`
+  typecheck+test+build, and the manual-dispatch `dashboard-journeys.yml` runs the
+  dashboard Playwright journeys against disposable MinIO. The journey reporter requires
+  at least 20 executions and an EMPTY quarantine (`e2e/support/quarantine.ts`, pinned to
+  zero in the workflow): a `test.fail` not named there, a named journey Playwright does
+  not discover, or an unexpected pass fails the run. The e2e book is the canonical
+  fixture carried forward to the reporting anchor currently due
+  (`scripts/e2e_bootstrap.py` → `extend_canonical_test_book`), because the Returns
+  workspace opens on the regulator's most recent elapsed anchor and only an exact
+  snapshot can generate it. Before these gates, `frontend/` and `console/` were in no
   workflow and the dashboard's fail-open guard, SSRF egress guard, and browser journeys
   were unenforced. Each workflow's header comment is its gate inventory — keep it accurate.
   `console` is deliberately NOT lint-gated (no ESLint dependency or config in that

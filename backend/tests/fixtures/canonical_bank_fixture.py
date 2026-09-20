@@ -36,6 +36,7 @@ from app.models import (
 )
 from app.models.regulatory import RegulatoryParameterMixin
 from app.services import parameter_register
+from app.services.reporting_periods import new_snapshot_period
 from tests.factories.reconciliation import allow_fixture_balance_gap
 
 # Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
@@ -580,6 +581,53 @@ def materialize_canonical_test_book(session: Session) -> CanonicalTestBookSummar
         fact_count=fact_count,
         param_count=param_count,
     )
+
+
+def extend_canonical_test_book(session: Session, *, through: date) -> list[date]:
+    """Carry the canonical book forward, one month-end snapshot at a time.
+
+    The regulator's reporting anchors are calendar dates that keep arriving
+    (``services/regulatory_reporting/anchors.py``), and an exact snapshot is
+    required to file on one — an earlier book is never substituted. A fixture
+    that stops at a fixed month therefore has no position for any anchor after
+    it. This appends a snapshot for every month end after the canonical
+    ``PERIOD_COUNT`` periods that falls on or before ``through``, so a stack
+    built today has a computed position on the anchor a return is currently
+    due on.
+
+    Every appended period repeats the LATEST canonical fact set unchanged —
+    the same book, later as-of dates — so each carries the tie-outs the
+    canonical book already proves, and engine output for the newest period is
+    identical to the canonical latest period. The canonical periods themselves
+    are untouched: golden suites that pin them keep pinning the same values.
+
+    Returns the appended period ends, oldest first (empty when ``through`` is
+    within the canonical span).
+    """
+    last_year, last_month = _period_month(PERIOD_COUNT - 1)
+    canonical_end = date(last_year, last_month, monthrange(last_year, last_month)[1])
+    appended: list[date] = []
+    period_end = _next_month_end(canonical_end)
+    while period_end <= through:
+        period = new_snapshot_period(
+            organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID, as_of=period_end
+        )
+        session.add(period)
+        session.flush()
+        facts = _build_period_facts(period, PERIOD_COUNT - 1)
+        _validate_period_facts(period, facts, PERIOD_COUNT - 1)
+        session.add_all(facts)
+        appended.append(period_end)
+        period_end = _next_month_end(period_end)
+    session.flush()
+    return appended
+
+
+def _next_month_end(period_end: date) -> date:
+    year, month = period_end.year, period_end.month + 1
+    if month > 12:  # noqa: PLR2004 - December rolls into the next year
+        year, month = year + 1, 1
+    return date(year, month, monthrange(year, month)[1])
 
 
 def _set_tenant_context(session: Session, organization_id: str) -> None:
