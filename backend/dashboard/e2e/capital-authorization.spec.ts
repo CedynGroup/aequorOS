@@ -8,7 +8,7 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 test.describe("unbound Capital user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
 
-  test("hides navigation, 404s deep links, and sends no Capital requests", async ({
+  test("disables navigation, redirects deep links, and sends no Capital requests", async ({
     page,
   }) => {
     const capitalRequests: string[] = [];
@@ -24,15 +24,19 @@ test.describe("unbound Capital user", () => {
 
     await page.goto("/");
     await expect(
-      page.getByText("No authorized institutions", { exact: true }),
+      page.getByText("No authorized institutions yet", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("navigation")).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("navigation")
+        .getByRole("link", { name: "Basel Capital", exact: true }),
+    ).toHaveAttribute("aria-disabled", "true");
 
     await page.goto("/basel");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
 
     await page.goto("/basel/planning");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
     expect(capitalRequests).toEqual([]);
 
     if (evidenceDir) {

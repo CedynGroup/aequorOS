@@ -10,7 +10,7 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 test.describe("unbound Liquidity Monitoring user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
 
-  test("hides navigation and 404s the deep link", async ({ page }) => {
+  test("disables navigation and redirects deep links", async ({ page }) => {
     const productRequests: string[] = [];
     page.on("request", (request) => {
       if (
@@ -21,17 +21,19 @@ test.describe("unbound Liquidity Monitoring user", () => {
     });
     await page.goto("/");
     await expect(
-      page.getByText("No authorized institutions", { exact: true }),
+      page.getByText("No authorized institutions yet", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("navigation")).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("navigation")
+        .getByRole("link", { name: "Liquidity", exact: true }),
+    ).toHaveAttribute("aria-disabled", "true");
 
     await page.goto("/liquidity");
-    await expect(
-      page.getByRole("link", { name: "Monitoring Tools" }),
-    ).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
 
     await page.goto("/liquidity/monitoring");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
     expect(productRequests).toEqual([]);
     if (evidenceDir) {
       await page.screenshot({
@@ -120,9 +122,12 @@ test.describe("exactly bound Liquidity user", () => {
     ).toBeVisible();
     const link = page.getByRole("link", { name: "Monitoring Tools" });
     await expect(link).toBeVisible();
-    await expect(page.getByRole("link", { name: /Capital|FTP/i })).toHaveCount(
-      0,
-    );
+    const ftp = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "FTP", exact: true });
+    await expect(ftp).toBeVisible();
+    await expect(ftp).toHaveAttribute("aria-disabled", "true");
+    await expect(ftp).not.toHaveAttribute("href", /.+/);
     const irrbb = page.getByRole("link", { name: "IRRBB", exact: true });
     await expect(irrbb).toBeVisible();
     await expect(irrbb).toHaveAttribute("aria-disabled", "true");
