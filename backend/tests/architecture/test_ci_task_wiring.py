@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ast
 import re
+import shlex
 import tomllib
 from pathlib import Path
 
@@ -408,9 +409,6 @@ def test_every_pytest_path_a_task_names_exists() -> None:
     )
 
 
-_IGNORED_PATH = re.compile(r"--ignore=(tests/[A-Za-z0-9_./-]*)")
-
-
 def test_the_full_suite_ignores_exactly_what_the_schema_and_locks_tasks_run() -> None:
     """`risk-service:test-postgres-suite` skips the Postgres-only suites because
     `test-postgres-schema` and `test-postgres-locks` already run them in the
@@ -419,11 +417,31 @@ def test_the_full_suite_ignores_exactly_what_the_schema_and_locks_tasks_run() ->
     every job, and a lock file added to the locks task but not ignored here
     just runs twice again. Pinning equality keeps it moved-not-dropped.
     """
-    body = _tasks(BACKEND_TASKS)["risk-service:test-postgres-suite"]
-    ignored = {match for command in _run_commands(body) for match in _IGNORED_PATH.findall(command)}
-    owned = set(_task_paths("risk-service:test-postgres-schema")) | set(
-        _task_paths("risk-service:test-postgres-locks")
-    )
+    tasks = _tasks(BACKEND_TASKS)
+
+    def pytest_arguments(task: str) -> list[str]:
+        arguments: list[str] = []
+        for command in _run_commands(tasks[task]):
+            tokens = shlex.split(command, comments=True)
+            assert tokens[:3] == ["uv", "run", "pytest"], task
+            assert not ({";", "&&", "||", "|", "&", ">", "<"} & set(tokens)), task
+            arguments.extend(tokens[3:])
+        assert arguments, task
+        return arguments
+
+    ignored: set[str] = set()
+    arguments = iter(pytest_arguments("risk-service:test-postgres-suite"))
+    for argument in arguments:
+        if argument == "--ignore":
+            ignored.add(next(arguments))
+        elif argument.startswith("--ignore="):
+            ignored.add(argument.partition("=")[2])
+    owned = {
+        argument
+        for task in ("risk-service:test-postgres-schema", "risk-service:test-postgres-locks")
+        for argument in pytest_arguments(task)
+        if argument.startswith("tests/")
+    }
 
     assert ignored == owned, (
         f"Ignored by the full suite but run by no other Postgres task: {sorted(ignored - owned)}; "
