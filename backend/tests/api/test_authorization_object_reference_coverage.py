@@ -11,10 +11,11 @@ bank-A caller then references a foreign tenant's object under bank A.
 
 Each case checks for foreign identifiers beyond those sent in the request (a
 200 that hides the row is a valid read refusal), rejects successful mutations,
-and checks that table contents stay unchanged on reads and mutations. The two
-confirmed same-org cross-bank defects are quarantined in ``KNOWN_DEFECTS`` and
-pinned as still-defective by
-``test_known_defects_are_still_reproduced`` so a fix forces their promotion.
+and checks that table contents stay unchanged on reads and mutations. Confirmed
+defects awaiting a fix are quarantined in ``KNOWN_DEFECTS`` and pinned as
+still-defective by ``test_known_defects_are_still_reproduced`` so a fix forces
+their promotion; the set is empty since the same-org cross-bank system-of-record
+approve/revoke defect it first caught was fixed.
 
 This layer runs on the default (non-Postgres) test database: the refusals it
 checks come from the explicit organization/bank ``WHERE`` clauses in the guards
