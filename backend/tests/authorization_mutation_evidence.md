@@ -112,12 +112,20 @@ Order of evidence:
    the disposable Postgres: **2 passed** (46.73s).
 
 The focused hermetic regression `tests/api/test_system_of_record_bank_scope.py`
-(three tests: declaration approve/revoke, withdrawal approve/reverse, and a
-withdrawal citing a foreign declaration; each with row-state, audit-event and
-job-queue side-effect checks, a foreign-vs-unknown-id 404 shape comparison, and
-an owning-bank positive control) failed **3/3** against the unfixed service and
-passed **3/3** with the fix. The disposable server was stopped and its data
-removed afterwards.
+contains three tests covering declaration approve/revoke, withdrawal approval
+of pending and applied sibling rows, withdrawal reversal, and a withdrawal
+request citing a foreign declaration. Every foreign refusal checks unchanged
+row state, object audit-event and tenant job-queue counts, and compares its
+404 envelope with the same route's response to a fresh unknown UUID, excluding
+request_id and normalizing the caller-supplied id. The citation test also checks
+that no withdrawal was created. Positive controls approve and revoke declarations
+under the sibling's own path, approve and reverse a pending withdrawal against
+the sample bank's duplicate book, retain the sibling's owning-path 409 on
+reapproval, and accept the sample bank's own declaration as a citation.
+The original three-test regression failed **3/3** against the unfixed service
+and passed **3/3** with the fix; the response comparisons and successful
+withdrawal lifecycle controls were completed during review. The disposable
+server was stopped and its data removed afterwards.
 
 ## Object-reference census after the filing chain (#230)
 
