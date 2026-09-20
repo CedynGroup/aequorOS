@@ -543,7 +543,7 @@ def materialize_canonical_test_book(session: Session) -> CanonicalTestBookSummar
             currency=CURRENCY,
             jurisdiction_code=JURISDICTION_CODE,
             license_type="universal",
-                institution_type="universal_bank",
+            institution_type="universal_bank",
         )
     )
     periods = _build_reporting_periods()
@@ -715,9 +715,7 @@ def _delete_bank_dependents(session: Session) -> None:
         # This fixture is the sole test-only reset path and runs in a disposable
         # test transaction; normal application sessions never set this GUC.
         session.execute(
-            sql_text(
-                "SELECT set_config('app.aequoros_regulatory_event_test_reset', '1', true)"
-            )
+            sql_text("SELECT set_config('app.aequoros_regulatory_event_test_reset', '1', true)")
         )
     params = {"bank_id": str(SAMPLE_BANK_ID), "organization_id": str(DEMO_ORG_ID)}
     for table in _DEPENDENT_TABLES:
@@ -731,16 +729,12 @@ def _delete_bank_dependents(session: Session) -> None:
             # resubmission requests) — cleared via their parent package,
             # which is deleted after this table.
             where = (
-                "WHERE package_id IN "
-                "(SELECT id FROM regulatory_packages WHERE bank_id = :bank_id)"
+                "WHERE package_id IN (SELECT id FROM regulatory_packages WHERE bank_id = :bank_id)"
             )
         elif "party_id" in columns:
             # Related-party children (roles, shareholdings) — cleared via
             # their parent party, which is deleted after this table.
-            where = (
-                "WHERE party_id IN "
-                "(SELECT id FROM related_parties WHERE bank_id = :bank_id)"
-            )
+            where = "WHERE party_id IN (SELECT id FROM related_parties WHERE bank_id = :bank_id)"
         elif "ingestion_batch_id" in columns:
             # Rows keyed to a batch rather than the bank (e.g. lineage_records);
             # cleared via their parent batch, which is deleted after this table.

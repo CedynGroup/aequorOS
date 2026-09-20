@@ -370,10 +370,9 @@ admit it; the custom reporter fails the run for any non-quarantined failure,
 unexpected quarantine pass, skipped or undiscovered quarantine entry, or
 `test.fail` declaration missing from that list.
 
-The Returns workspace opens on the regulator's latest reporting anchor on or
-before today, and a return generates only from the exact snapshot as of that
-date — an earlier book is never substituted. The canonical fixture ends at a fixed
-month, so `scripts/e2e_bootstrap.py` carries it forward
+Reporting-date selection and exact snapshot matching are governed by
+[the reporting-date contract](../../docs/regulatory_reporting.md#5a-reporting-date-vs-data-arrival-corrected-2026-08-23).
+The canonical fixture ends at a fixed month, so `scripts/e2e_bootstrap.py` carries it forward
 (`extend_canonical_test_book`) one month-end snapshot at a time through the last
 month end on or before today, each repeating the canonical latest fact set. That is
 what gives the package-generation journeys a real position to generate from

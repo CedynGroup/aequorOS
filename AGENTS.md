@@ -181,32 +181,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   no handler for any role or tenant. Never add seeding paths to the UI, and never
   re-add seed CLI scripts.
 
-- **The reporting date is the REGULATOR's — never derived from ingestion (corrected
-  2026-08-23).** A return's reporting dates come from its `ReturnDefinition` (cadence +
-  BoG anchor conventions) through the ONE authority
-  `app/services/regulatory_reporting/anchors.py`, which touches no tenant data; the
-  calendar and the Returns workspace both bind to it, so they cannot disagree.
-  `bank_reporting_periods` is the KEY FOR ONE COMPUTED FACT SNAPSHOT — created by the
-  data path when a book arrives with an as-of date — and must never again be offered as
-  the user's reporting-date list. It was, and that made BoG's calendar a function of
-  ingestion cadence: 6 of the 22 BSD forms are weekly (Friday close), generation matched
-  `period_end` exactly, and the reference tenant had **19 Friday period-ends against 517
-  Fridays** in its span (17 of them only because the month ended on a Friday) — 96% of
-  weekly filing dates unselectable, and a tenant that had ingested nothing showed an
-  EMPTY calendar. Direction, pinned by `tests/services/test_reporting_anchors.py`:
-  `ReturnDefinition -> reporting date -> snapshot lookup`. The snapshot match is **exact
-  for every cadence** (`common.get_snapshot_for_reporting_date`) — the daily
-  "latest period ending on or before" fallback was a fail-open that would file a
-  month-old book as a business day's position; a miss is `no_computed_position` (409)
-  naming the date required and the nearest earlier one, which is reported and NEVER
-  substituted. An anchor with no data is still listed (`data_status='awaiting_data'`) —
-  the deadline is BoG's and runs regardless. `period_start` stays day-1-of-month: it is
-  the fiscal month-to-date window BSD7 (YTD), BSD8 (opening balance) and
-  `implied_rating` read, not filler. Event-driven packs (`ReturnDefinition.event_driven`,
-  the LRT family) are the one exception: no regulator date exists, so they take their
-  as-of date from the bank's computed snapshots (`anchors.computed_snapshot_dates`,
-  labelled `reporting_date_source='computed_snapshot'`) — rule in
-  `docs/regulatory_reporting.md` §5a.
+- **Reporting-date authority:** use [docs/regulatory_reporting.md §5a](docs/regulatory_reporting.md#5a-reporting-date-vs-data-arrival-corrected-2026-08-23)
+  for periodic anchors, event-driven snapshot dates, and exact snapshot matching.
+  Regression coverage: `backend/tests/services/test_reporting_anchors.py`.
 - **Official BoG BSD returns are generated from the templates themselves (built 2026-08-15;
   registry `docs/bog_returns/00_full_return_registry.md`).** Every workbook under
   `docs/reporting/` (BSD1…BSD17, 24 files / 76 sheets) is a registered return (family `bsd`,
