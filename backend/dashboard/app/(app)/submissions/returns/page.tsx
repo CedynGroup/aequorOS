@@ -224,12 +224,17 @@ function ReturnsWorkspace() {
   // The reporting dates come from the RETURN — BoG's cadence — not from the
   // bank's ingested reporting periods. Selecting from the latter made the
   // filing calendar a function of data arrival: a weekly return could only be
-  // filed on a Friday that happened to also be a month end.
+  // filed on a Friday that happened to also be a month end. The one exception
+  // is an event-driven pack (the LRT corporate family): the regulator sets no
+  // reporting date for it, so the backend offers the bank's computed position
+  // dates instead and labels them as such.
   const anchorsQuery = useReturnAnchors(bankId, code);
   const anchors = useMemo<ReturnAnchorRead[]>(
     () => anchorsQuery.data?.anchors ?? [],
     [anchorsQuery.data]
   );
+  const snapshotDated =
+    anchorsQuery.data?.reportingDateSource === 'computed_snapshot';
   const anchorDates = useMemo(
     () => anchors.map((anchor) => isoDate(anchor.reportingDate)),
     [anchors]
@@ -328,6 +333,16 @@ function ReturnsWorkspace() {
                 )}
               </select>
             </label>
+            {snapshotDated && (
+              <p
+                data-testid="reporting-date-source"
+                className="basis-full text-caption text-slate"
+              >
+                Event-driven pack — the regulator sets no reporting date for
+                it. The dates offered are your computed position dates; the
+                pack reports your institution as of the one you choose.
+              </p>
+            )}
           </div>
         }
       />

@@ -27,7 +27,9 @@ from app.models import Bank, BankReportingPeriod
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services.regulatory_reporting import calendar, generation
 from app.services.regulatory_reporting.anchors import (
+    EVENT_DRIVEN_SNAPSHOT_LIMIT,
     anchor_dates,
+    computed_snapshot_dates,
     horizon_end_for,
     snapshot_coverage,
 )
@@ -205,10 +207,90 @@ def test_ineligible_return_says_why_instead_of_offering_dates(db_session: Sessio
 def test_unregistered_return_is_404_not_an_empty_anchor_list(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     with pytest.raises(HTTPException) as exc_info:
-        calendar.list_return_anchors(
-            db_session, MAKER, SAMPLE_BANK_ID, "NOT-A-RETURN", as_of=AS_OF
-        )
+        calendar.list_return_anchors(db_session, MAKER, SAMPLE_BANK_ID, "NOT-A-RETURN", as_of=AS_OF)
     assert exc_info.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Event-driven packs take their as-of date from the computed snapshots
+# ---------------------------------------------------------------------------
+
+
+def _seeded_period_ends(db: Session) -> list[date]:
+    return list(
+        db.scalars(
+            select(BankReportingPeriod.period_end)
+            .where(
+                BankReportingPeriod.organization_id == DEMO_ORG_ID,
+                BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+            )
+            .order_by(BankReportingPeriod.period_end.desc())
+        ).all()
+    )
+
+
+def test_periodic_return_anchors_are_labelled_the_regulators(db_session: Session) -> None:
+    """The event-driven path changes nothing for a periodic return."""
+    materialize_canonical_test_book(db_session)
+    result = calendar.list_return_anchors(
+        db_session, MAKER, SAMPLE_BANK_ID, "BSD2", horizon_months=3, as_of=AS_OF
+    )
+    assert result.reporting_date_source == "regulator_anchor"
+    definition = get_definition("BSD2")
+    assert definition is not None
+    assert [anchor.reporting_date for anchor in result.anchors] == sorted(
+        anchor_dates(definition, AS_OF, horizon_end_for(AS_OF, 3)), reverse=True
+    )
+    assert all(anchor.due_date is not None and anchor.rag is not None for anchor in result.anchors)
+
+
+def test_event_driven_pack_offers_the_computed_snapshot_dates(db_session: Session) -> None:
+    """An LRT pack has no regulator anchor; it offers the positions the bank holds."""
+    materialize_canonical_test_book(db_session)
+    definition = get_definition("LRT-PROFILE")
+    assert definition is not None and definition.event_driven
+    assert anchor_dates(definition, AS_OF, horizon_end_for(AS_OF, 3)) == []
+
+    result = calendar.list_return_anchors(
+        db_session, MAKER, SAMPLE_BANK_ID, "LRT-PROFILE", horizon_months=3, as_of=AS_OF
+    )
+    assert result.reporting_date_source == "computed_snapshot"
+    offered = [anchor.reporting_date for anchor in result.anchors]
+    expected = [end for end in _seeded_period_ends(db_session) if end <= AS_OF]
+    assert offered == expected[:EVENT_DRIVEN_SNAPSHOT_LIMIT], "newest first, bounded"
+    assert offered[0] == max(expected)
+    # Every offered date IS a computed position, and none carries a deadline the
+    # regulator never set.
+    assert all(anchor.data_status == "computed" for anchor in result.anchors)
+    assert all(anchor.nearest_computed_before is None for anchor in result.anchors)
+    assert all(anchor.due_date is None and anchor.rag is None for anchor in result.anchors)
+
+
+def test_event_driven_pack_with_nothing_computed_offers_no_dates(db_session: Session) -> None:
+    """No snapshot, no date: nothing is fabricated and no earlier book is borrowed."""
+    materialize_canonical_test_book(db_session)
+    bank = _bank(db_session)
+    earliest = min(_seeded_period_ends(db_session))
+    before_any_data = earliest - timedelta(days=1)
+
+    assert computed_snapshot_dates(db_session, MAKER, bank, before_any_data) == []
+    result = calendar.list_return_anchors(
+        db_session, MAKER, SAMPLE_BANK_ID, "LRT-PROFILE", as_of=before_any_data
+    )
+    assert result.reporting_date_source == "computed_snapshot"
+    assert result.anchors == []
+    assert result.ineligible_reason is None
+
+
+def test_computed_snapshot_dates_never_offer_a_future_position(db_session: Session) -> None:
+    """A snapshot dated after ``as_of`` is not a position the bank holds yet."""
+    materialize_canonical_test_book(db_session)
+    bank = _bank(db_session)
+    ends = _seeded_period_ends(db_session)
+    assert len(ends) >= 2
+    as_of = ends[1]
+    assert computed_snapshot_dates(db_session, MAKER, bank, as_of)[0] == ends[1]
+    assert ends[0] not in computed_snapshot_dates(db_session, MAKER, bank, as_of)
 
 
 # ---------------------------------------------------------------------------

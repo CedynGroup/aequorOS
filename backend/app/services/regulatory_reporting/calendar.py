@@ -29,6 +29,7 @@ from app.models import (
     RegulatorySubmissionEvent,
 )
 from app.schemas.regulatory_reporting import (
+    ReportingDateSource,
     ReportingObligationListRead,
     ReportingObligationRead,
     ReportingObligationSummaryRead,
@@ -37,6 +38,7 @@ from app.schemas.regulatory_reporting import (
 )
 from app.services.regulatory_reporting.anchors import (
     anchor_dates,
+    computed_snapshot_dates,
     horizon_end_for,
     snapshot_coverage,
 )
@@ -324,6 +326,11 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + horizon + injectab
     point: the obligation is BoG's and its deadline runs regardless, so the
     honest surface shows the date and says nothing has been computed for it —
     it does not omit the date and it does not silently offer an earlier book.
+
+    An event-driven pack has no regulator anchor to list, so it offers the
+    bank's computed position dates instead (``anchors.computed_snapshot_dates``)
+    — every one ``computed`` by construction, none carrying a deadline — and the
+    payload says which kind of date it is offering (``reporting_date_source``).
     """
     bank = get_bank_or_404(db, ctx, bank_id)
     today = as_of or date.today()
@@ -333,6 +340,9 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + horizon + injectab
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Return {return_code!r} is not registered.",
         )
+    reporting_date_source: ReportingDateSource = (
+        "computed_snapshot" if definition.event_driven else "regulator_anchor"
+    )
 
     eligibility = resolve_eligibility(db, ctx, bank, as_of=today)
     decision = eligibility.decide(definition, reporting_date=today)
@@ -343,12 +353,15 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + horizon + injectab
             frequency=definition.frequency,
             as_of=today,
             horizon_months=horizon_months,
+            reporting_date_source=reporting_date_source,
             anchors=[],
             ineligible_reason=" ".join(decision.blocking_reasons),
         )
 
-    horizon_end = horizon_end_for(today, horizon_months)
-    reporting_dates = anchor_dates(definition, today, horizon_end)
+    if definition.event_driven:
+        reporting_dates = computed_snapshot_dates(db, ctx, bank, today)
+    else:
+        reporting_dates = anchor_dates(definition, today, horizon_end_for(today, horizon_months))
     coverage = snapshot_coverage(db, ctx, bank, reporting_dates)
     overrides = _deadline_overrides(db, ctx, bank.id)
     packages, pending_reuploads = _calendar_package_state(
@@ -357,10 +370,15 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + horizon + injectab
 
     anchors: list[ReturnAnchorRead] = []
     for reporting_date in reporting_dates:
-        due_date = _due_date(definition, reporting_date, overrides)
         package = packages.get((definition.code, reporting_date))
         pending_reupload = package is not None and package.id in pending_reuploads
         covered = coverage[reporting_date]
+        # The registry's nominal deadline rule on an event-driven pack exists
+        # only to satisfy the package row shape; surfacing it would claim a
+        # remittance date the regulator never set.
+        due_date = (
+            None if definition.event_driven else _due_date(definition, reporting_date, overrides)
+        )
         anchors.append(
             ReturnAnchorRead(
                 reporting_date=reporting_date,
@@ -373,11 +391,15 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + horizon + injectab
                     package.status if package is not None else None  # type: ignore[arg-type]
                 ),
                 package_version=package.version if package is not None else None,
-                rag=_rag(  # type: ignore[arg-type]
-                    due_date,
-                    today,
-                    package.status if package is not None else None,
-                    pending_orass_reupload=pending_reupload,
+                rag=(
+                    None
+                    if due_date is None
+                    else _rag(  # type: ignore[arg-type]
+                        due_date,
+                        today,
+                        package.status if package is not None else None,
+                        pending_orass_reupload=pending_reupload,
+                    )
                 ),
             )
         )
@@ -388,5 +410,6 @@ def list_return_anchors(  # noqa: PLR0913 - tenant + return + horizon + injectab
         frequency=definition.frequency,
         as_of=today,
         horizon_months=horizon_months,
+        reporting_date_source=reporting_date_source,
         anchors=anchors,
     )

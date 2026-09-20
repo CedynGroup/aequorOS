@@ -202,7 +202,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   substituted. An anchor with no data is still listed (`data_status='awaiting_data'`) —
   the deadline is BoG's and runs regardless. `period_start` stays day-1-of-month: it is
   the fiscal month-to-date window BSD7 (YTD), BSD8 (opening balance) and
-  `implied_rating` read, not filler.
+  `implied_rating` read, not filler. Event-driven packs (`ReturnDefinition.event_driven`,
+  the LRT family) are the one exception: no regulator date exists, so they take their
+  as-of date from the bank's computed snapshots (`anchors.computed_snapshot_dates`,
+  labelled `reporting_date_source='computed_snapshot'`) — rule in
+  `docs/regulatory_reporting.md` §5a.
 - **Official BoG BSD returns are generated from the templates themselves (built 2026-08-15;
   registry `docs/bog_returns/00_full_return_registry.md`).** Every workbook under
   `docs/reporting/` (BSD1…BSD17, 24 files / 76 sheets) is a registered return (family `bsd`,

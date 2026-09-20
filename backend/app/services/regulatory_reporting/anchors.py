@@ -40,6 +40,15 @@ So the direction of the dependency is inverted here and stays inverted:
 The anchor exists whether or not the bank has data for it. Whether the bank
 CAN file it is a separate, honestly-reported fact — see :class:`AnchorCoverage`
 and ``common.get_snapshot_for_reporting_date``.
+
+Event-driven returns are the one deliberate exception, and they run the other
+way. An LRT corporate pack has no periodic cycle — it is filed because a
+corporate event happened — so the regulator fixes no reporting date for it and
+:func:`anchor_dates` yields none. Its figures are still the bank's position as
+of SOME date, resolved exactly like every other return, so the dates it may be
+generated for are the positions the bank actually holds:
+:func:`computed_snapshot_dates`. Periodic returns never take this path; a
+regulator's date is never replaced by whatever the bank happens to have.
 """
 
 from __future__ import annotations
@@ -197,3 +206,40 @@ def snapshot_coverage(
             nearest_before=nearest,
         )
     return coverage
+
+
+#: How many computed positions an event-driven pack offers as its as-of date.
+#: The newest is the one a corporate event is almost always reported against;
+#: the bound keeps a long-lived tenant from listing a decade of books.
+EVENT_DRIVEN_SNAPSHOT_LIMIT = 12
+
+
+def computed_snapshot_dates(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    *,
+    limit: int = EVENT_DRIVEN_SNAPSHOT_LIMIT,
+) -> list[date]:
+    """The bank's computed position dates on or before ``as_of``, newest first.
+
+    The as-of dates an EVENT-DRIVEN return may be generated for. Such a pack has
+    no regulator anchor (see the module docstring), yet generation still resolves
+    its snapshot exactly, so the only honest offer is the positions that exist:
+    one entry per computed snapshot, none fabricated, and never an earlier book
+    standing in for a later date. An empty list means nothing has been computed
+    yet — the same "awaiting data" fact a periodic anchor reports per date.
+    """
+    return list(
+        db.scalars(
+            select(BankReportingPeriod.period_end)
+            .where(
+                BankReportingPeriod.organization_id == ctx.organization_id,
+                BankReportingPeriod.bank_id == bank.id,
+                BankReportingPeriod.period_end <= as_of,
+            )
+            .order_by(BankReportingPeriod.period_end.desc())
+            .limit(limit)
+        ).all()
+    )

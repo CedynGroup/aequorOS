@@ -46,6 +46,8 @@ import {
 } from "./support/ceremony";
 
 const SAMPLE_BANK_ID = "BK-SAMP0001";
+// Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
+const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const adminState = path.join(E2E_TMP, "admin.json");
 const approverState = path.join(E2E_TMP, "approver.json");
 
@@ -315,43 +317,54 @@ test.describe("full lifecycle", () => {
     ).toBeVisible();
   });
 
-  // Quarantined (e2e/support/quarantine.ts): LRT packs are event-driven, so
-  // the registry yields no reporting anchors for them by design — and the
-  // workspace then offers no reporting date at all (the select is disabled
-  // and there is no Generate control). The register link reaches a dead end
-  // until event-driven returns get a way to choose their as-of date; that is
-  // a product gap, not fixture drift.
-  test.fail(
-    "journey 5: institution register drives the LRT corporate pack",
-    async ({ page }) => {
-      await page.goto("/institution");
-      await expect(
-        page.getByRole("heading", { name: "Institution Profile" }),
-      ).toBeVisible();
-      // Seeded corporate register (global-setup PUT institution-profile).
-      await expect(page.getByText("GH-UB-9001")).toBeVisible();
+  test("journey 5: institution register drives the LRT corporate pack", async ({
+    page,
+  }) => {
+    await page.goto("/institution");
+    await expect(
+      page.getByRole("heading", { name: "Institution Profile" }),
+    ).toBeVisible();
+    // Seeded corporate register (global-setup PUT institution-profile).
+    await expect(page.getByText("GH-UB-9001")).toBeVisible();
 
-      await page.getByRole("link", { name: /Generate LRT packs/ }).click();
-      await expect(page).toHaveURL(/code=LRT-PROFILE/);
-      // Scoped to the fidelity banner paragraph — the return <select> carries
-      // the same text in its LRT-PROFILE option.
-      await expect(
-        page.locator("p", {
-          hasText: "LRT-PROFILE — Corporate Profile Update pack",
-        }),
-      ).toBeVisible();
+    // An LRT pack is event-driven: the regulator sets no reporting date, so
+    // the link carries the institution's latest computed position and the
+    // workspace opens on it, ready to generate.
+    const register = page.getByRole("link", { name: /Generate LRT packs/ });
+    await expect(register).toHaveAttribute(
+      "href",
+      /code=LRT-PROFILE&date=\d{4}-\d{2}-\d{2}$/,
+    );
+    await register.click();
+    await expect(page).toHaveURL(/code=LRT-PROFILE&date=\d{4}-\d{2}-\d{2}/);
+    // Scoped to the fidelity banner paragraph — the return <select> carries
+    // the same text in its LRT-PROFILE option.
+    await expect(
+      page.locator("p", {
+        hasText: "LRT-PROFILE — Corporate Profile Update pack",
+      }),
+    ).toBeVisible();
+    await expect(page.getByTestId("reporting-date-source")).toContainText(
+      "computed position dates",
+    );
+    await expect(page.getByLabel("Reporting date")).toBeEnabled();
 
-      const generate = page
-        .getByRole("button", { name: /generate package|regenerate/i })
-        .first();
-      await expect(generate).toBeVisible({ timeout: 5_000 });
-      await generate.click();
-      // The pack pre-fills from the register (no engine runs) and lands in
-      // 'generated' — the stepper appears and validation is offered.
-      await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Validate", exact: true }),
-      ).toBeEnabled();
-    },
-  );
+    const generate = page
+      .getByRole("button", { name: /generate package|regenerate/i })
+      .first();
+    await expect(generate).toBeVisible({ timeout: 5_000 });
+    await generate.click();
+    // The pack pre-fills from the register (no engine runs) and lands in
+    // 'generated' — the stepper appears and validation is offered.
+    await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Validate", exact: true }),
+    ).toBeEnabled();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "lrt-profile-pack-generated.png"),
+        fullPage: true,
+      });
+    }
+  });
 });

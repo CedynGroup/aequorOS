@@ -54,6 +54,10 @@ type ObligationRag = Literal["overdue", "due_soon", "on_track"]
 #: and exists whether or not data has been ingested for it, so this is reported
 #: alongside every anchor rather than the anchor being hidden.
 type AnchorDataStatus = Literal["computed", "awaiting_data"]
+#: Where a return's selectable reporting dates come from. Periodic returns
+#: take the regulator's anchors; an event-driven pack has none and offers the
+#: bank's computed position dates instead (``anchors.computed_snapshot_dates``).
+type ReportingDateSource = Literal["regulator_anchor", "computed_snapshot"]
 
 
 class ClosedModel(BaseModel):
@@ -270,13 +274,17 @@ class ReportingObligationListRead(ClosedModel):
 class ReturnAnchorRead(ClosedModel):
     """One reporting date a return reports on, with what exists for it.
 
-    ``reporting_date`` comes from the return definition — BoG's cadence — not
-    from the bank's ingestion history, so this list is identical for two banks
-    filing the same return and is never empty for an eligible return.
+    For a periodic return ``reporting_date`` comes from the return definition —
+    BoG's cadence — not from the bank's ingestion history, so this list is
+    identical for two banks filing the same return and is never empty for an
+    eligible return. For an event-driven pack it is one of the bank's computed
+    position dates, and there is no regulator deadline to report.
     """
 
     reporting_date: date
-    due_date: date
+    # None for an event-driven pack: the regulator sets no remittance date for
+    # a filing that exists only because a corporate event happened.
+    due_date: date | None = None
     due_time: str | None = None
     data_status: AnchorDataStatus
     # The most recent computed position BEFORE this anchor, when this anchor has
@@ -286,7 +294,8 @@ class ReturnAnchorRead(ClosedModel):
     package_id: UUID | None = None
     package_status: PackageStatus | None = None
     package_version: int | None = None
-    rag: ObligationRag
+    # None alongside ``due_date``: no deadline, nothing to grade against.
+    rag: ObligationRag | None = None
 
 
 class ReturnAnchorListRead(ClosedModel):
@@ -295,6 +304,7 @@ class ReturnAnchorListRead(ClosedModel):
     frequency: ReturnFrequency
     as_of: date
     horizon_months: int
+    reporting_date_source: ReportingDateSource
     anchors: list[ReturnAnchorRead]
     # Set when the institution may not file this return at all (class,
     # jurisdiction, regulator, or a not-yet-commenced instrument), in the words

@@ -17,7 +17,4 @@ export const QUARANTINED_JOURNEYS: readonly string[] = [
   // localhost under Next dev); the requestOrigin fix for the step-up routes is
   // on fm/aeq-sso-local-issuer-e2e-journey, stacked on PR #205.
   "attestation.spec.ts › the certification ceremony › opting in locks submission, and the ceremony enforces what it shows",
-  // Event-driven LRT packs have no reporting anchors by design, and the
-  // workspace offers no other way to choose their as-of date — a product gap.
-  "full-lifecycle.spec.ts › full lifecycle › journey 5: institution register drives the LRT corporate pack",
 ];

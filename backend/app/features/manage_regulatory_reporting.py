@@ -126,7 +126,9 @@ def list_return_anchors(
     The dates are the REGULATOR's, derived from the return definition, so this
     is the list a preparer picks a reporting date from — not the bank's ingested
     reporting periods, which are a consequence of data arrival rather than a
-    filing calendar (``services/regulatory_reporting/anchors.py``).
+    filing calendar (``services/regulatory_reporting/anchors.py``). An
+    event-driven pack has no regulator date and offers the bank's computed
+    position dates instead; ``reporting_date_source`` says which.
     """
     return regulatory_reporting.list_return_anchors(db, ctx, bank_id, return_code, horizon_months)
 

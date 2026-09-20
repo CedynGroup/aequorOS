@@ -39,6 +39,20 @@ import {
   PackageIdToJSON,
   PackageIdToJSONTyped,
 } from "./PackageId";
+import type { ReturnAnchorReadRag } from "./ReturnAnchorReadRag";
+import {
+  ReturnAnchorReadRagFromJSON,
+  ReturnAnchorReadRagFromJSONTyped,
+  ReturnAnchorReadRagToJSON,
+  ReturnAnchorReadRagToJSONTyped,
+} from "./ReturnAnchorReadRag";
+import type { DueDate } from "./DueDate";
+import {
+  DueDateFromJSON,
+  DueDateFromJSONTyped,
+  DueDateToJSON,
+  DueDateToJSONTyped,
+} from "./DueDate";
 import type { NearestComputedBefore } from "./NearestComputedBefore";
 import {
   NearestComputedBeforeFromJSON,
@@ -53,20 +67,15 @@ import {
   PackageVersionToJSON,
   PackageVersionToJSONTyped,
 } from "./PackageVersion";
-import type { ObligationRag } from "./ObligationRag";
-import {
-  ObligationRagFromJSON,
-  ObligationRagFromJSONTyped,
-  ObligationRagToJSON,
-  ObligationRagToJSONTyped,
-} from "./ObligationRag";
 
 /**
  * One reporting date a return reports on, with what exists for it.
  *
- * ``reporting_date`` comes from the return definition — BoG's cadence — not
- * from the bank's ingestion history, so this list is identical for two banks
- * filing the same return and is never empty for an eligible return.
+ * For a periodic return ``reporting_date`` comes from the return definition —
+ * BoG's cadence — not from the bank's ingestion history, so this list is
+ * identical for two banks filing the same return and is never empty for an
+ * eligible return. For an event-driven pack it is one of the bank's computed
+ * position dates, and there is no regulator deadline to report.
  * @export
  * @interface ReturnAnchorRead
  */
@@ -79,10 +88,10 @@ export interface ReturnAnchorRead {
   dataStatus: AnchorDataStatus;
   /**
    *
-   * @type {Date}
+   * @type {DueDate}
    * @memberof ReturnAnchorRead
    */
-  dueDate: Date;
+  dueDate?: DueDate;
   /**
    *
    * @type {DueTime}
@@ -115,10 +124,10 @@ export interface ReturnAnchorRead {
   packageVersion?: PackageVersion;
   /**
    *
-   * @type {ObligationRag}
+   * @type {ReturnAnchorReadRag}
    * @memberof ReturnAnchorRead
    */
-  rag: ObligationRag;
+  rag?: ReturnAnchorReadRag;
   /**
    *
    * @type {Date}
@@ -135,8 +144,6 @@ export function instanceOfReturnAnchorRead(
 ): value is ReturnAnchorRead {
   if (!("dataStatus" in value) || value["dataStatus"] === undefined)
     return false;
-  if (!("dueDate" in value) || value["dueDate"] === undefined) return false;
-  if (!("rag" in value) || value["rag"] === undefined) return false;
   if (!("reportingDate" in value) || value["reportingDate"] === undefined)
     return false;
   return true;
@@ -156,7 +163,8 @@ export function ReturnAnchorReadFromJSONTyped(
   return {
     ...json,
     dataStatus: AnchorDataStatusFromJSON(json["data_status"]),
-    dueDate: new Date(json["due_date"]),
+    dueDate:
+      json["due_date"] == null ? undefined : DueDateFromJSON(json["due_date"]),
     dueTime:
       json["due_time"] == null ? undefined : DueTimeFromJSON(json["due_time"]),
     nearestComputedBefore:
@@ -175,7 +183,10 @@ export function ReturnAnchorReadFromJSONTyped(
       json["package_version"] == null
         ? undefined
         : PackageVersionFromJSON(json["package_version"]),
-    rag: ObligationRagFromJSON(json["rag"]),
+    rag:
+      json["rag"] == null
+        ? undefined
+        : ReturnAnchorReadRagFromJSON(json["rag"]),
     reportingDate: new Date(json["reporting_date"]),
   };
 }
@@ -194,7 +205,7 @@ export function ReturnAnchorReadToJSONTyped(
 
   return {
     data_status: AnchorDataStatusToJSON(value["dataStatus"]),
-    due_date: value["dueDate"].toISOString().substring(0, 10),
+    due_date: DueDateToJSON(value["dueDate"]),
     due_time: DueTimeToJSON(value["dueTime"]),
     nearest_computed_before: NearestComputedBeforeToJSON(
       value["nearestComputedBefore"],
@@ -204,7 +215,7 @@ export function ReturnAnchorReadToJSONTyped(
       value["packageStatus"],
     ),
     package_version: PackageVersionToJSON(value["packageVersion"]),
-    rag: ObligationRagToJSON(value["rag"]),
+    rag: ReturnAnchorReadRagToJSON(value["rag"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
   };
 }

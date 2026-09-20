@@ -31894,6 +31894,13 @@
         "title": "ReportScore",
         "type": "object"
       },
+      "ReportingDateSource": {
+        "enum": [
+          "regulator_anchor",
+          "computed_snapshot"
+        ],
+        "type": "string"
+      },
       "ReportingObligationListRead": {
         "additionalProperties": false,
         "properties": {
@@ -32390,6 +32397,9 @@
             ],
             "title": "Ineligible Reason"
           },
+          "reporting_date_source": {
+            "$ref": "#/components/schemas/ReportingDateSource"
+          },
           "return_code": {
             "title": "Return Code",
             "type": "string"
@@ -32401,6 +32411,7 @@
           "frequency",
           "as_of",
           "horizon_months",
+          "reporting_date_source",
           "anchors"
         ],
         "title": "ReturnAnchorListRead",
@@ -32408,15 +32419,22 @@
       },
       "ReturnAnchorRead": {
         "additionalProperties": false,
-        "description": "One reporting date a return reports on, with what exists for it.\n\n``reporting_date`` comes from the return definition \u2014 BoG's cadence \u2014 not\nfrom the bank's ingestion history, so this list is identical for two banks\nfiling the same return and is never empty for an eligible return.",
+        "description": "One reporting date a return reports on, with what exists for it.\n\nFor a periodic return ``reporting_date`` comes from the return definition \u2014\nBoG's cadence \u2014 not from the bank's ingestion history, so this list is\nidentical for two banks filing the same return and is never empty for an\neligible return. For an event-driven pack it is one of the bank's computed\nposition dates, and there is no regulator deadline to report.",
         "properties": {
           "data_status": {
             "$ref": "#/components/schemas/AnchorDataStatus"
           },
           "due_date": {
-            "format": "date",
-            "title": "Due Date",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
           },
           "due_time": {
             "anyOf": [
@@ -32475,7 +32493,14 @@
             "title": "Package Version"
           },
           "rag": {
-            "$ref": "#/components/schemas/ObligationRag"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObligationRag"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reporting_date": {
             "format": "date",
@@ -32485,9 +32510,7 @@
         },
         "required": [
           "reporting_date",
-          "due_date",
-          "data_status",
-          "rag"
+          "data_status"
         ],
         "title": "ReturnAnchorRead",
         "type": "object"
