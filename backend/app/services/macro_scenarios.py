@@ -13,8 +13,9 @@ the return/desk approval model already in the codebase:
 
 Only an ``approved`` scenario may feed an official run — ``resolve_for_official_run``
 is the guard the Phase 2 enterprise orchestrator calls. Every mutation carries a
-non-empty reason and is audit-logged. All reads/writes are org-scoped in code
-(defense-in-depth on top of the migration's RLS FORCE policies).
+non-empty reason and is audit-logged. Tenant-row reads/writes are org-scoped in
+code (defense-in-depth on top of the migration's RLS FORCE policies). System
+definitions follow the separate contract in docs/stress.md §3.1.1.
 """
 
 from __future__ import annotations

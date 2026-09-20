@@ -1,8 +1,9 @@
 """Governed macro-scenario library endpoints (docs/stress.md §3.1, Phase 1).
 
-The scenario spine's CRUD + maker-checker lifecycle. Scenarios are org-scoped
-(``bank_id`` optional in the body — NULL = a supervisory, org-wide scenario), so
-the collection lives at the tenant root rather than under ``/banks/{id}``.
+The scenario spine's CRUD + maker-checker lifecycle. Tenant-authored scenarios
+are org-scoped (``bank_id`` optional — NULL = org-wide, regardless of subtype),
+so the collection lives at the tenant root rather than under ``/banks/{id}``.
+Shared system definitions follow docs/stress.md §3.1.1.
 """
 
 from __future__ import annotations

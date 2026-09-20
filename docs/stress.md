@@ -173,7 +173,7 @@ documented, and reported **with and without** (¶78–81).
   tax; PAT; distributions; **adjusted retained earnings for CAR**.
 - **Table 4 — Statement of Financial Position:** foreign + domestic assets (cash, short-term
   investments, derivatives, loans, long-term investments, equities, PPE, other); capital; foreign
-  - domestic liabilities (**demand/savings/time deposits**, borrowings). Base + Stress, 3yr.
+  and domestic liabilities (**demand/savings/time deposits**, borrowings). Base + Stress, 3yr.
 - **Table 5 — Evolution of RWA & Capital Requirements:** RWA per Pillar-1 type (credit/
   operational/market) + Pillar-1 requirement (13% of RWA); Pillar-2 (credit concentration, IRRBB,
   sovereign, country & FX, reputational, other); Total. Base + Stress, 3yr. _(Stressed Total
@@ -426,9 +426,8 @@ stress board-pack composer under `app/(app)/reports/`.
 ## 5. Phased build plan
 
 **Phase 1 — the scenario spine.** Governed Scenario model (macro paths, versioned, maker-checker)
-
-- the translation layer (documented elasticities macro→risk params). Unifies the two scenario
-  stores. _Unblocks everything._
+and the translation layer (documented elasticities macro→risk params). Unifies the two scenario
+stores. _Unblocks everything._
 
 **Phase 2 — enterprise orchestrator + 3-year projection.** One scenario → all engines → the
 Appendix II Tables 1–6 projection, base + stress, immutable run. Remaining-above-minima checks.
@@ -465,8 +464,7 @@ The directive applies to **savings & loans and finance houses** (¶3), on a **pr
 
 `sdi.md` gains a "Stress testing (scoped)" subsection referencing this doc: which stress features
 are CORE/CONDITIONAL/EXCLUDED for an SDI, and the SDI stress data inputs (the same canonical book
-
-- the macro-scenario dataset).
+and the macro-scenario dataset).
 
 ---
 

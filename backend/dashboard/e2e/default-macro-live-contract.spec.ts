@@ -301,4 +301,25 @@ test("system contracts, governed clones, and real denied authority", async ({
       path: path.join(evidence, "real-denied-authority.png"),
       fullPage: true,
     });
+  for (const [lens, explanation] of [
+    [
+      "ftp",
+      "Requires Funds Transfer Pricing · Confidential · Run. Ask your organization owner or admin to grant it.",
+    ],
+    [
+      "fx",
+      "Requires FX run permission at confidential sensitivity. An organization owner can grant it.",
+    ],
+  ]) {
+    await page.goto(`/${lens}/scenarios`);
+    await expect(control).toBeVisible();
+    await expect(control).toBeDisabled();
+    await control.hover({ force: true });
+    await expect(page.getByRole("tooltip")).toHaveText(explanation);
+    if (evidence)
+      await page.screenshot({
+        path: path.join(evidence, `${lens}-denial-precedence.png`),
+        fullPage: true,
+      });
+  }
 });

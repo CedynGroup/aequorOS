@@ -27,7 +27,12 @@ test.describe("default macro scenarios", () => {
     await expect(
       page.getByText("BoG supervisory scenario", { exact: true }).first(),
     ).toBeVisible();
-    await expect(page.getByText("not runnable", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("listitem")
+        .filter({ hasText: "BoG supervisory scenario" })
+        .getByText("not runnable", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByLabel("Approved scenario")).not.toHaveValue("");
 
     if (evidenceDir) {

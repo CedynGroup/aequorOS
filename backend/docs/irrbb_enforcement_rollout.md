@@ -13,6 +13,7 @@ institution, and create each approved binding explicitly before deployment.
 | IRRBB dashboards and regulatory-run index                                                                | IRRBB / `aggregated` / `view`     |
 | Full IRRBB run detail, scenario catalogue, and saved-analysis index/detail                               | IRRBB / `confidential` / `view`   |
 | Run all regulatory scenarios, EaR compute-only analysis, and scenario analysis execution                 | IRRBB / `confidential` / `run`    |
+| Enterprise stress execution, including system defaults and runs excluding FX                             | IRRBB / `confidential` / `run`    |
 | Create a custom scenario or saved analysis                                                               | IRRBB / `confidential` / `create` |
 | Edit or archive a custom scenario; delete a saved analysis                                               | IRRBB / `confidential` / `edit`   |
 
@@ -24,8 +25,13 @@ start an engine, create a run, save an analysis, mutate a scenario, or write an
 audit event.
 
 Shared live projections filter IRRBB before serialization, counts, limits, and
-aggregation. Mixed execution retains its existing gates and checks IRRBB only
-when planned. Scheduled official-run actor selection and queue attribution follow
+aggregation. Mixed regulatory execution retains its existing gates and checks IRRBB only
+when planned. Enterprise stress separately requires IRRBB confidential run authority
+at `enterprise_stress.run_enterprise_stress_test` before period/scenario resolution
+or computation, in addition to its existing mutation gate and the conditional FX
+run gate in [the FX rollout contract](fx_enforcement_rollout.md).
+This applies to both organization scenarios and code-defined defaults.
+Scheduled official-run actor selection and queue attribution follow
 the [FX queued-run contract](fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
 
 No scalar role, token role, tenant membership, or binding for another module or
@@ -36,6 +42,11 @@ sensitivity grants IRRBB authority.
 The `/irr` dashboards require aggregated view; `/irr/scenarios` requires
 confidential view. Run buttons and the sensitivity analysis horizon
 control consume the exact confidential run capability from effective authority.
+The enterprise workbench applies this run gate across all module lenses. When
+multiple permissions are missing, the FTP lens's confidential-run denial or the
+FX lens's run denial takes precedence over the IRRBB denial. The
+[FTP](ftp_enforcement_rollout.md#dashboard-controls) and
+[FX](fx_enforcement_rollout.md) lens gates remain in effect.
 The shared permission-only disabled-control policy is defined in
 [the RBAC guide](../../docs/rbac.md); native disabled controls expose their
 explanation through a keyboard-focusable wrapper.
