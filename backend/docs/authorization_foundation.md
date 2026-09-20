@@ -418,12 +418,15 @@ Actor-label body fields (`assigned_to_user_id`, `approved_by_user_id`) are
 excluded because they record who acted, not an object whose data is read; routes
 needing multi-step fixtures (`push_batch_id`, `ingestion-batches`,
 `financial-workspace/map`) are listed as known-uncovered in the module
-docstrings, and same-organization cross-*parent* nesting remains for a follow-up.
+docstrings. A third `single_foreign_child` layout enumerates each eligible child
+on multi-reference routes, holding every other reference at home and substituting
+only that child from A2. This covers same-organization cross-parent nesting,
+including package/resubmission, party/shareholding and scenario/assumption guards.
 
 `tests/api/test_authorization_object_reference_coverage.py` is the deterministic
 layer: it `pytest.mark.parametrize`s one case per route × HTTP method × layout,
 fixes a fully entitled bank-A caller, and checks the refusal shape and that no
-row is inserted. It runs on the default (non-Postgres) database because the
+table content changes, including on reads, using portable per-table content hashes. It runs on the default (non-Postgres) database because the
 refusals it checks come from the explicit organization/bank `WHERE` clauses in
 the guards and services, which hold without row-level security; its data-layer
 positive control confirms every seeded object exists for the tenant that owns
@@ -437,7 +440,7 @@ layer, Postgres-only against a migrated schema with FORCE RLS so the RLS
 backstop is exercised too. It fixes nothing about the caller: Hypothesis varies
 role/permission bundle, module scope, sensitivity scope, institution scope and
 binding lifecycle state, together with object placement (cross-organization vs
-sibling bank), and each small example sweeps the whole census and additionally
+sibling bank or a single foreign child), and each small example sweeps the whole census and additionally
 asserts the content digest of every table in both organizations is unchanged —
 proving no *combination* of a bank-A caller's authority reaches a foreign
 object. Its committed negative control weakens the package bank guard under a

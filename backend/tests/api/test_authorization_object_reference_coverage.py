@@ -3,14 +3,15 @@
 Layer 1 of the object-reference (IDOR) proof.  It enumerates every ``/api/v1``
 route that carries an object identifier beside ``{bank_id}`` from the FastAPI
 registry (`tests.fixtures.object_reference_routes`) and parametrizes one case per
-route × HTTP method × {cross-organization, same-org sibling bank}.  Fixed
+route × HTTP method × {cross-organization, same-org sibling bank}, plus one
+single-foreign-child case per nested reference with home parents. Fixed
 fixtures seed one real object of every kind for three tenants (organization A
 bank A, organization A sibling bank A2, organization B bank B); a fully entitled
 bank-A caller then references a foreign tenant's object under bank A.
 
 Each case asserts the refusal shape: a read discloses no foreign identifier (a
 200 that hides the row is a valid refusal), and a mutation never returns 2xx and
-inserts no rows into any table.  The two confirmed same-org cross-bank defects
+changes no table contents, for reads as well as mutations.  The two confirmed same-org cross-bank defects
 are quarantined in ``KNOWN_DEFECTS`` and pinned as still-defective by
 ``test_known_defects_are_still_reproduced`` so a fix forces their promotion.
 
@@ -23,6 +24,7 @@ The RLS backstop and the generative authorization-dimension coverage live in
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -30,7 +32,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
@@ -47,10 +49,12 @@ from tests.fixtures.object_reference_routes import (
     TENANT_B,
     Layout,
     ObjectRoute,
+    Reference,
     Request,
     foreign_references,
     foreign_request,
     full_authority_bindings,
+    layout_children,
     leaked,
     object_routes,
 )
@@ -69,10 +73,16 @@ from tests.fixtures.reference_data import seed_global_reference_data
 _CENSUS_APP = create_app()
 _ROUTES = object_routes(_CENSUS_APP)
 _CASES = [
-    pytest.param(route, layout, id=f"{route.method}:{route.path}:{layout}")
+    pytest.param(
+        route,
+        layout,
+        child,
+        id=f"{route.method}:{route.path}:{layout}:{child.name if child else 'all'}",
+    )
     for route in _ROUTES
     for layout in LAYOUTS
-    if foreign_references(route, layout)
+    for child in layout_children(route, layout)
+    if foreign_references(route, layout, child)
 ]
 
 
@@ -92,34 +102,40 @@ class Coverage:
     home: ObjectSet
     sibling: ObjectSet
     other_org: ObjectSet
-    _count_statement: str
 
     def owner(self, layout: Layout) -> ObjectSet:
         return self.other_org if layout == "cross_organization" else self.sibling
 
-    def _counts(self) -> dict[str, int]:
+    def _digests(self) -> dict[str, str]:
         with self.engine.connect() as connection:
-            return {name: count for name, count in connection.execute(text(self._count_statement))}
+            return {
+                name: hashlib.sha256(
+                    repr(
+                        sorted(repr(tuple(row)) for row in connection.execute(select(table)))
+                    ).encode()
+                ).hexdigest()
+                for name, table in sorted(Base.metadata.tables.items())
+            }
 
-    def exercise(self, route: ObjectRoute, layout: Layout) -> Outcome:
+    def exercise(
+        self, route: ObjectRoute, layout: Layout, child: Reference | None = None
+    ) -> Outcome:
         built = foreign_request(
-            route, self.document, layout, home=self.home, owner=self.owner(layout)
+            route, self.document, layout, home=self.home, owner=self.owner(layout), child=child
         )
         assert built is not None, f"{route.label} [{layout}] has no foreign reference"
         request, requested = built
-        before = self._counts()
+        before = self._digests()
         response = self._send(route, request)
-        after = self._counts()
+        after = self._digests()
         problems: list[str] = []
-        inserted = sorted(
-            f"{name}+{after[name] - before[name]}" for name in after if after[name] > before[name]
-        )
+        changed = sorted(name for name in after if after[name] != before[name])
         if route.mutation and response.status_code in (200, 201, 202, 204):
             problems.append(f"accepted with {response.status_code}")
         elif not route.mutation and response.status_code not in (200, 403, 404):
             problems.append(f"unexpected read status {response.status_code}")
-        if route.mutation and inserted:
-            problems.append(f"inserted rows {inserted}")
+        if changed:
+            problems.append(f"changed tables {changed}")
         leak = leaked(response.text, self.owner(layout).identifiers(), requested)
         if leak:
             problems.append(f"leaked {leak}")
@@ -138,13 +154,6 @@ class Coverage:
                 authorization_version=1,
             ),
         )
-
-
-def _count_statement() -> str:
-    return " UNION ALL ".join(
-        f"SELECT '{name}' AS name, count(*) AS n FROM {name}"
-        for name in sorted(Base.metadata.tables)
-    )
 
 
 def _seed_tenant(session: Session, tenant: TenantSeed, *, with_users: bool) -> ObjectSet:
@@ -207,7 +216,6 @@ def coverage(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Coverage]:
                 home=home,
                 sibling=sibling,
                 other_org=other_org,
-                _count_statement=_count_statement(),
             )
     finally:
         session_mod.get_sessionmaker, deps_mod.get_sessionmaker, session_mod.get_engine = originals
@@ -221,14 +229,14 @@ class _FakeStorage:
         raise AssertionError("object-reference coverage must not reach object storage")
 
 
-@pytest.mark.parametrize(("route", "layout"), _CASES)
+@pytest.mark.parametrize(("route", "layout", "child"), _CASES)
 def test_foreign_object_reference_is_refused(
-    coverage: Coverage, route: ObjectRoute, layout: Layout
+    coverage: Coverage, route: ObjectRoute, layout: Layout, child: Reference | None
 ) -> None:
     """A fully entitled bank-A caller cannot read or mutate a foreign object."""
     if (route.method, route.path, layout) in KNOWN_DEFECTS:
         pytest.skip("quarantined product defect; see test_known_defects_are_still_reproduced")
-    outcome = coverage.exercise(route, layout)
+    outcome = coverage.exercise(route, layout, child)
     assert not outcome.problems, f"{route.label} [{layout}]: {outcome.problems} {outcome.detail}"
 
 

@@ -5,7 +5,8 @@ three things and must agree on them exactly: which routes carry an object
 identifier beside ``{bank_id}``, how to build a request that references a
 foreign tenant's object, and which foreign references belong to a documented
 product defect.  Keeping that here means a new object-reference route joins both
-tests at once.
+tests at once. The single-foreign-child layout holds parent references at home
+while substituting one sibling-owned child, including same-org cross-parent nesting.
 
 Route discovery walks the FastAPI registry: a path parameter is an object
 reference when its name ends in ``_id`` and is not ``bank_id``; a body or query
@@ -66,8 +67,12 @@ TENANT_B: Final = TenantSeed(
     marker="IDOR-TENANT-B-MARKER",
 )
 
-Layout = Literal["cross_organization", "sibling_bank"]
-LAYOUTS: Final[tuple[Layout, ...]] = ("cross_organization", "sibling_bank")
+Layout = Literal["cross_organization", "sibling_bank", "single_foreign_child"]
+LAYOUTS: Final[tuple[Layout, ...]] = (
+    "cross_organization",
+    "sibling_bank",
+    "single_foreign_child",
+)
 
 _MUTATION_METHODS: Final = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _CATALOGUE_VALUES: Final[Mapping[str, str]] = {
@@ -425,7 +430,33 @@ def build_request(
     return Request(path=route.path.format(**path_values), query=query, body=body)
 
 
-def foreign_references(route: ObjectRoute, layout: Layout) -> set[Reference]:
+def foreign_children(route: ObjectRoute) -> tuple[Reference, ...]:
+    """References nested beneath a home parent that can belong to a sibling object set."""
+    parents = [reference for reference in route.references if reference.location == "path"]
+    if len(route.references) < 2:
+        return ()
+    return tuple(
+        reference
+        for reference in route.references
+        if (not parents or reference != parents[0])
+        and (
+            reference.location == "path"
+            or KINDS_BY_NAME[reference.kind].bank_scoped
+            or route.path.startswith("/api/v1/cases/{case_id}/")
+        )
+    )
+
+
+def layout_children(route: ObjectRoute, layout: Layout) -> tuple[Reference | None, ...]:
+    """Enumerate each isolated child case, or the original all-foreign case."""
+    if layout == "single_foreign_child":
+        return foreign_children(route)
+    return (None,)
+
+
+def foreign_references(
+    route: ObjectRoute, layout: Layout, child: Reference | None = None
+) -> set[Reference]:
     """Which of ``route``'s references belong to the foreign tenant for ``layout``.
 
     Cross-organization makes every reference foreign; a sibling bank in the same
@@ -433,6 +464,11 @@ def foreign_references(route: ObjectRoute, layout: Layout) -> set[Reference]:
     organization-scoped object (a case, a macro scenario, a binding) is
     legitimately shared across the organization's banks.
     """
+    if layout == "single_foreign_child":
+        assert child in foreign_children(route), "select one eligible foreign child"
+        assert child is not None
+        return {child}
+    assert child is None
     if layout == "cross_organization":
         return set(route.references)
     return {
@@ -447,6 +483,7 @@ def foreign_request(
     *,
     home: ObjectSet,
     owner: ObjectSet,
+    child: Reference | None = None,
 ) -> tuple[Request, set[str]] | None:
     """A request under bank A that references ``layout``'s foreign objects.
 
@@ -454,7 +491,7 @@ def foreign_request(
     no-leak check), or ``None`` when the layout has no foreign reference for this
     route (an organization-scoped route under the sibling-bank layout).
     """
-    foreign = foreign_references(route, layout)
+    foreign = foreign_references(route, layout, child)
     if not foreign:
         return None
 
