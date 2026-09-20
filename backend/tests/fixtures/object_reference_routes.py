@@ -476,7 +476,7 @@ def foreign_references(
     }
 
 
-def foreign_request(
+def foreign_request(  # noqa: PLR0913 - explicit home, foreign owner and isolated child
     route: ObjectRoute,
     document: Mapping[str, Any],
     layout: Layout,

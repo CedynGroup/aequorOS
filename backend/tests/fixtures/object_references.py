@@ -10,7 +10,7 @@ seed the catalogue from here and share the route census in
 `tests/fixtures/object_reference_routes.py`.
 
 Factories take any session and only ``add``/``flush`` rows, so the same
-catalogue seeds a rollback-isolated SQLite session (coverage) and a FORCE-RLS
+catalogue seeds a disposable SQLite database (coverage) and a FORCE-RLS
 Postgres session (property) unchanged; the caller owns the organization GUC and
 the commit.  One object per kind per tenant is created, in dependency order;
 uniqueness-bound columns derive from the tenant's bank slug so three tenants

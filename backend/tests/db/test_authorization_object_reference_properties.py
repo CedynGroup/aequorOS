@@ -3,18 +3,18 @@
 Layer 2 of the object-reference proof, and the Postgres-only, RLS-backed
 complement to the deterministic coverage in
 `tests/api/test_authorization_object_reference_coverage.py`.  Where Layer 1 fixes
-a fully entitled caller and sweeps every route once, this layer fixes nothing
-about the caller and lets Hypothesis vary the dimensions that actually decide
-authorization — role/permission bundle, module scope, sensitivity scope,
-institution scope, and binding lifecycle state — together with object placement
+a fully entitled caller, this layer lets Hypothesis vary legacy token roles
+alongside the dimensions that decide binding authorization — role/permission
+bundle, module scope, sensitivity scope, institution scope, and binding lifecycle
+state — together with object placement
 (cross-organization, same-org sibling bank, or one foreign child with home
 parents, covering same-org cross-parent nesting).  That is where generation earns
-its cost: it proves no *combination* of a bank-A caller's authority reaches a
-foreign object, not just that the fully entitled one does not.
+its cost: it checks isolation across a bounded sample of caller authority
+combinations.
 
 For each generated caller and layout the property replaces bank A's bindings,
-sweeps every applicable route, and asserts that a read leaks no foreign
-identifier, a mutation never returns 2xx, and the content digest of every table
+sweeps every applicable route, checks for foreign identifiers beyond those sent
+in the request, rejects successful mutations, and checks that every table digest
 in both organizations is unchanged.  It runs against a migrated Postgres schema
 with FORCE RLS (`forward_migrated_postgres_schema`), so the RLS backstop is
 exercised alongside the explicit guards.  ``max_examples`` is deliberately
@@ -266,7 +266,9 @@ class Sweep:
                 if leak:
                     failures.append(f"{route.label} [{layout}]: leaked {leak}")
                 if route.mutation and response.status_code in (200, 201, 202, 204):
-                    failures.append(f"{route.label} [{layout}]: accepted with {response.status_code}")
+                    failures.append(
+                        f"{route.label} [{layout}]: accepted with {response.status_code}"
+                    )
         if changed := _changed_tables(before, _snapshot(self.engine, self.statement)):
             failures.append(f"[{layout}] side effects in {changed}")
         return failures
