@@ -65298,7 +65298,7 @@
     },
     "/api/v1/banks/{bank_id}/return-anchors": {
       "get": {
-        "description": "The reporting dates this return reports on, and what exists for each.\n\nThe dates are the REGULATOR's, derived from the return definition, so this\nis the list a preparer picks a reporting date from \u2014 not the bank's ingested\nreporting periods, which are a consequence of data arrival rather than a\nfiling calendar (``services/regulatory_reporting/anchors.py``).",
+        "description": "The reporting dates this return reports on, and what exists for each.\n\nThe dates are the REGULATOR's, derived from the return definition, so this\nis the list a preparer picks a reporting date from \u2014 not the bank's ingested\nreporting periods, which are a consequence of data arrival rather than a\nfiling calendar (``services/regulatory_reporting/anchors.py``). An\nevent-driven pack has no regulator date and offers the bank's computed\nposition dates instead; ``reporting_date_source`` says which.",
         "operationId": "listReturnAnchors",
         "parameters": [
           {
