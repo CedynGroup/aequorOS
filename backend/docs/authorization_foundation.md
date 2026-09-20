@@ -383,16 +383,38 @@ denial. The Liquidity Monitoring API tests pin both allowed and denied binding
 decisions, all scope and lifecycle mismatches, anti-composition, stale sessions,
 post-revocation denial, and fail-closed evaluator errors. The architecture test
 pins the route's named binding dependency and forbids legacy role dependencies.
-Two generative suites add coverage beyond the fixed examples:
+Generative suites add coverage beyond the fixed examples:
 
 - `tests/core/test_authorization_properties.py` compares the evaluator with an
   independent per-binding oracle across binding order, partial cross-row
-  matches, runtime conditions, and exact lifecycle boundaries; and
+  matches, runtime conditions, and exact lifecycle boundaries;
 - `tests/api/test_authorization_state_machine.py` exercises arbitrary sequences
   of token-family issue, refresh rotation, authorization invalidation, scoped
   grant creation, and exact single-row revocation. It checks the effective union
   against an independent finite oracle, including sensitivity, after every
-  transition and proves no unrequested cross-product appears.
+  transition and proves no unrequested cross-product appears. Its ownership
+  machine checks initial assignment, idempotent owner read access, public grants,
+  JIT approval, revocation, and refusal of public owner creation or revocation,
+  preserving assignment and audit evidence after each transition; and
+- `tests/db/test_authorization_tenant_isolation_properties.py` generates tenant
+  bindings against a migrated Postgres schema with FORCE RLS, checks direct
+  current-fact isolation, and discovers bank GET and organization listing routes
+  from FastAPI. A persisted tenant-B reporting period and fact have an HTTP 200
+  positive control before tenant-A requests. Other UUID resource kinds still use
+  unknown IDs, so those requests do not prove isolation of existing child rows.
+
+Negative controls reuse the ownership and current-fact invariants: a test-scoped
+patch admitting public `org_owner` grants must violate the unassigned-organization
+invariant; transactional `NO FORCE ROW LEVEL SECURITY` must break table-owner
+isolation. Restoration and rollback must restore the respective protections.
+Execution results are recorded in
+[the mutation evidence](../tests/authorization_mutation_evidence.md).
+
+Known coverage limits remain: ownership transfer and owner deactivation have no
+product API to exercise. The route property checks identifier leakage in successful
+responses but accepts 200, 403, or 404 for bank reads; universal sibling-bank 404
+behavior is separately tracked by the strict
+`aeq-rbac-cross-tenant-route-404` expected failure.
 
 ## Product rollout boundary
 

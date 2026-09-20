@@ -4,6 +4,9 @@ The session machine covers issue, rotation, and atomic invalidation. The grant
 machine drives the real create/revoke API over arbitrary scalar scope tuples and
 checks both persisted rows and the evaluator's exact effective union after every
 transition.
+
+Ownership transfer and owner deactivation remain an explicit coverage gap until
+the product has a promote-transfer API; this module does not mock one into being.
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import TypedDict
 from uuid import UUID
 
 import jwt
@@ -42,16 +46,29 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
-from app.models import AuthorizationBinding, Bank, RefreshToken, User
-from app.services import authentication, authorization
+from app.models import (
+    AuditEvent,
+    AuthorizationBinding,
+    Bank,
+    Organization,
+    OrganizationOwnerAssignment,
+    RefreshToken,
+    User,
+)
+from app.services import (
+    authentication,
+    authorization,
+    grant_administration,
+    organization_ownership,
+)
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, USER_1, headers
 
 
 @contextmanager
-def _session() -> Iterator[Session]:
+def _session(organization_id: str = ORG_1) -> Iterator[Session]:
     session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
+    session.info["organization_id"] = organization_id
     try:
         yield session
     finally:
@@ -525,3 +542,551 @@ def test_grant_administration_state_machine_preserves_exact_union(
         GrantAdministrationMachine,
         settings=settings(max_examples=15, stateful_step_count=10, deadline=None),
     )
+
+
+_OWNERSHIP_ORG = "OR-OWNPROP1"
+_OWNERSHIP_BANK = "BK-OWNPROP1"
+_OWNERSHIP_OWNER = UUID("10000000-0000-4000-8000-000000000001")
+_OWNERSHIP_MEMBERS = (
+    UUID("10000000-0000-4000-8000-000000000002"),
+    UUID("10000000-0000-4000-8000-000000000003"),
+)
+_OWNERSHIP_JIT = UUID("10000000-0000-4000-8000-000000000004")
+_OWNERSHIP_GRANTABLE_ROLES = (*_ADMIN_ROLES, RoleBundle.ACCOUNT_ADMIN)
+
+
+def _seed_ownership_surface() -> None:
+    with _session(_OWNERSHIP_ORG) as session:
+        session.add(
+            Organization(
+                id=_OWNERSHIP_ORG,
+                name="Property Ownership Organization",
+            )
+        )
+        session.add(
+            Bank(
+                id=_OWNERSHIP_BANK,
+                organization_id=_OWNERSHIP_ORG,
+                name="Property Ownership Bank",
+                short_name="Ownership",
+                currency="GHS",
+                jurisdiction_code="GH",
+                license_type="universal_bank",
+                institution_type=FALLBACK_TYPE_CODE,
+            )
+        )
+        session.add_all(
+            [
+                User(
+                    id=_OWNERSHIP_OWNER,
+                    organization_id=_OWNERSHIP_ORG,
+                    email="owner@property-ownership.example",
+                    display_name="Property Owner",
+                    role="account_admin",
+                    auth_provider="password",
+                    is_active=True,
+                ),
+                *[
+                    User(
+                        id=user_id,
+                        organization_id=_OWNERSHIP_ORG,
+                        email=f"member-{index}@property-ownership.example",
+                        display_name=f"Property Member {index}",
+                        role="viewer",
+                        auth_provider="password",
+                        is_active=True,
+                    )
+                    for index, user_id in enumerate(_OWNERSHIP_MEMBERS, start=1)
+                ],
+                User(
+                    id=_OWNERSHIP_JIT,
+                    organization_id=_OWNERSHIP_ORG,
+                    email="jit@property-ownership.example",
+                    display_name="Property JIT Request",
+                    role="viewer",
+                    auth_provider="oidc",
+                    sso_subject="property-jit-subject",
+                    is_active=False,
+                ),
+            ]
+        )
+        session.commit()
+
+
+def _ownership_headers() -> dict[str, str]:
+    with _session(_OWNERSHIP_ORG) as session:
+        owner = session.get(User, _OWNERSHIP_OWNER)
+        assert owner is not None
+        version = owner.authorization_version
+    return headers(
+        org_id=_OWNERSHIP_ORG,
+        user_id=_OWNERSHIP_OWNER,
+        roles=("account_admin",),
+        authorization_version=version,
+    )
+
+
+def _ownership_scope(
+    role: RoleBundle,
+    module: Module,
+    sensitivity: Sensitivity,
+) -> dict[str, str | None]:
+    if role is RoleBundle.ACCOUNT_ADMIN:
+        return {
+            "institution_scope": InstitutionScope.ORGANIZATION.value,
+            "institution_id": None,
+            "module_scope": ModuleScope.ACCOUNT.value,
+            "sensitivity_scope": SensitivityScope.ALL.value,
+        }
+    return {
+        "institution_scope": InstitutionScope.INSTITUTION.value,
+        "institution_id": _OWNERSHIP_BANK,
+        "module_scope": module.value,
+        "sensitivity_scope": sensitivity.value,
+    }
+
+
+def _assert_ownership_model(session: Session, *, owner_assigned: bool) -> None:
+    owner_rows = [
+        row
+        for row in session.scalars(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.organization_id == _OWNERSHIP_ORG,
+                AuthorizationBinding.role_bundle == RoleBundle.ORG_OWNER.value,
+                AuthorizationBinding.status == "active",
+            )
+        )
+        if grant_administration.binding_is_effective(row)
+    ]
+    assignment = session.get(OrganizationOwnerAssignment, _OWNERSHIP_ORG)
+    if not owner_assigned:
+        assert owner_rows == [], "ownership invariant: no owner without system assignment"
+        assert assignment is None
+    else:
+        assert len(owner_rows) == 1, "ownership invariant: exactly one effective owner"
+        owner_binding = owner_rows[0]
+        owner = session.get(User, owner_binding.principal_user_id)
+        assert owner is not None and owner.is_active
+        assert owner.id == _OWNERSHIP_OWNER
+        assert assignment is not None
+        assert assignment.status == "assigned"
+        assert assignment.basis == ("exactly_one_eligible_active_human_administrator")
+        assert assignment.owner_user_id == owner.id
+        assert assignment.owner_binding_id == owner_binding.id
+        assert organization_ownership.owner_read_access_exists(
+            session,
+            organization_id=_OWNERSHIP_ORG,
+            user_id=owner.id,
+        )
+
+
+def test_ownership_surface_state_machine_preserves_single_owner(
+    db_client: TestClient,
+) -> None:
+    """Exercise only the ownership mutations the product currently exposes.
+
+    System assignment is evidenced by ``organization_owner_assignments``.
+    Public grant and JIT mutations must emit append-only binding audit events.
+    """
+
+    _seed_ownership_surface()
+
+    class OwnershipSurfaceMachine(RuleBasedStateMachine):
+        def __init__(self) -> None:
+            super().__init__()
+            with _session(_OWNERSHIP_ORG) as session:
+                session.execute(
+                    delete(AuditEvent).where(AuditEvent.organization_id == _OWNERSHIP_ORG)
+                )
+                session.execute(
+                    delete(OrganizationOwnerAssignment).where(
+                        OrganizationOwnerAssignment.organization_id == _OWNERSHIP_ORG
+                    )
+                )
+                session.execute(
+                    delete(AuthorizationBinding).where(
+                        AuthorizationBinding.organization_id == _OWNERSHIP_ORG
+                    )
+                )
+                session.execute(
+                    delete(RefreshToken).where(
+                        RefreshToken.user_id.in_(
+                            (_OWNERSHIP_OWNER, *_OWNERSHIP_MEMBERS, _OWNERSHIP_JIT)
+                        )
+                    )
+                )
+                for user_id in (_OWNERSHIP_OWNER, *_OWNERSHIP_MEMBERS, _OWNERSHIP_JIT):
+                    user = session.get(User, user_id)
+                    assert user is not None
+                    user.authorization_version = 1
+                    user.is_active = user_id != _OWNERSHIP_JIT
+                    user.role = "account_admin" if user_id == _OWNERSHIP_OWNER else "viewer"
+                    user.access_rejected_at = None
+                    user.last_login_at = None
+                session.commit()
+            self.owner_assigned = False
+            self.jit_pending = True
+            self.active_public_bindings: set[UUID] = set()
+            self.accepted_audits: set[tuple[str, str]] = set()
+
+        def _binding_snapshot(self) -> tuple[tuple[str, str, str], ...]:
+            with _session(_OWNERSHIP_ORG) as session:
+                return tuple(
+                    (
+                        str(row.id),
+                        row.role_bundle,
+                        row.status,
+                    )
+                    for row in session.scalars(
+                        select(AuthorizationBinding)
+                        .where(AuthorizationBinding.organization_id == _OWNERSHIP_ORG)
+                        .order_by(AuthorizationBinding.id)
+                    )
+                )
+
+        def _audit_snapshot(self) -> tuple[tuple[str, str | None], ...]:
+            with _session(_OWNERSHIP_ORG) as session:
+                return tuple(
+                    (row.event_type, row.entity_id)
+                    for row in session.scalars(
+                        select(AuditEvent)
+                        .where(AuditEvent.organization_id == _OWNERSHIP_ORG)
+                        .order_by(AuditEvent.id)
+                    )
+                )
+
+        def _record_binding_audit(self, event_type: str, binding_id: str) -> None:
+            self.accepted_audits.add((event_type, binding_id))
+            with _session(_OWNERSHIP_ORG) as session:
+                assert (
+                    session.scalar(
+                        select(AuditEvent.id).where(
+                            AuditEvent.organization_id == _OWNERSHIP_ORG,
+                            AuditEvent.event_type == event_type,
+                            AuditEvent.entity_id == binding_id,
+                        )
+                    )
+                    is not None
+                )
+
+        @rule()
+        def assign_initial_owner_once(self) -> None:
+            if not self.owner_assigned:
+                with _session(_OWNERSHIP_ORG) as session:
+                    owner = session.get(User, _OWNERSHIP_OWNER)
+                    assert owner is not None
+                    assignment = organization_ownership.assign_initial_owner(
+                        session,
+                        organization_id=_OWNERSHIP_ORG,
+                        candidate=owner,
+                        granted_by_id="ownership-property",
+                    )
+                    owner_binding = session.get(AuthorizationBinding, assignment.owner_binding_id)
+                    assert owner_binding is not None
+                    assert assignment.status == "assigned"
+                    assert assignment.basis == ("exactly_one_eligible_active_human_administrator")
+                    assert assignment.owner_user_id == _OWNERSHIP_OWNER
+                    assert assignment.owner_binding_id == owner_binding.id
+                self.owner_assigned = True
+                return
+
+            bindings_before = self._binding_snapshot()
+            audits_before = self._audit_snapshot()
+            with _session(_OWNERSHIP_ORG) as session:
+                owner = session.get(User, _OWNERSHIP_OWNER)
+                assert owner is not None
+                with pytest.raises(organization_ownership.OwnerAssignmentError):
+                    organization_ownership.assign_initial_owner(
+                        session,
+                        organization_id=_OWNERSHIP_ORG,
+                        candidate=owner,
+                        granted_by_id="ownership-property-repeat",
+                    )
+                session.rollback()
+            assert self._binding_snapshot() == bindings_before
+            assert self._audit_snapshot() == audits_before
+
+        @precondition(lambda self: self.owner_assigned)
+        @rule()
+        def owner_read_access_is_idempotent(self) -> None:
+            bindings_before = self._binding_snapshot()
+            audits_before = self._audit_snapshot()
+            with _session(_OWNERSHIP_ORG) as session:
+                owner = session.get(User, _OWNERSHIP_OWNER)
+                assert owner is not None
+                assert (
+                    organization_ownership.ensure_owner_read_access(
+                        session,
+                        organization_id=_OWNERSHIP_ORG,
+                        owner=owner,
+                        granted_by_id="ownership-property-repeat",
+                    )
+                    is None
+                )
+            assert self._binding_snapshot() == bindings_before
+            assert self._audit_snapshot() == audits_before
+
+        @precondition(lambda self: self.owner_assigned)
+        @rule(
+            target_slot=st.integers(min_value=0, max_value=15),
+            role=st.sampled_from(_OWNERSHIP_GRANTABLE_ROLES),
+            module=st.sampled_from(_ADMIN_MODULES),
+            sensitivity=st.sampled_from(_ADMIN_SENSITIVITIES),
+        )
+        def create_public_grant(
+            self,
+            target_slot: int,
+            role: RoleBundle,
+            module: Module,
+            sensitivity: Sensitivity,
+        ) -> None:
+            target = _OWNERSHIP_MEMBERS[target_slot % len(_OWNERSHIP_MEMBERS)]
+            payload: dict[str, object] = {
+                "principal_user_id": str(target),
+                "role_bundle": role.value,
+                **_ownership_scope(role, module, sensitivity),
+                "reason": "ownership property public grant",
+            }
+            preview = db_client.post(
+                "/api/v1/authorization/bindings/preview",
+                headers=_ownership_headers(),
+                json=payload,
+            )
+            assert preview.status_code == 200, preview.text
+            payload["expected_authority_sentence"] = preview.json()["authority_sentence"]
+            bindings_before = self._binding_snapshot()
+            audits_before = self._audit_snapshot()
+            response = db_client.post(
+                "/api/v1/authorization/bindings",
+                headers=_ownership_headers(),
+                json=payload,
+            )
+            if response.status_code == 409:
+                assert response.json()["error"]["details"]["error_code"] == ("scoped_grant_refused")
+                assert self._binding_snapshot() == bindings_before
+                assert self._audit_snapshot() == audits_before
+                return
+            assert response.status_code == 201, response.text
+            binding_id = response.json()["binding"]["id"]
+            self.active_public_bindings.add(UUID(binding_id))
+            self._record_binding_audit("authorization.binding_granted", binding_id)
+
+        @precondition(lambda self: self.owner_assigned and self.jit_pending)
+        @rule(
+            role=st.sampled_from(_OWNERSHIP_GRANTABLE_ROLES),
+            module=st.sampled_from(_ADMIN_MODULES),
+            sensitivity=st.sampled_from(_ADMIN_SENSITIVITIES),
+        )
+        def approve_jit_request(
+            self,
+            role: RoleBundle,
+            module: Module,
+            sensitivity: Sensitivity,
+        ) -> None:
+            payload: dict[str, object] = {
+                "principal_user_id": str(_OWNERSHIP_JIT),
+                "role_bundle": role.value,
+                **_ownership_scope(role, module, sensitivity),
+                "reason": "ownership property JIT approval",
+            }
+            preview = db_client.post(
+                "/api/v1/authorization/bindings/preview",
+                headers=_ownership_headers(),
+                json=payload,
+            )
+            assert preview.status_code == 200, preview.text
+            payload.pop("principal_user_id")
+            payload["expected_authority_sentence"] = preview.json()["authority_sentence"]
+            with _session(_OWNERSHIP_ORG) as session:
+                before_ids = set(
+                    session.scalars(
+                        select(AuthorizationBinding.id).where(
+                            AuthorizationBinding.organization_id == _OWNERSHIP_ORG
+                        )
+                    )
+                )
+            response = db_client.post(
+                f"/api/v1/auth/sso/access-requests/{_OWNERSHIP_JIT}/approve",
+                headers=_ownership_headers(),
+                json=payload,
+            )
+            assert response.status_code == 200, response.text
+            public_binding_id = UUID(response.json()["binding"]["id"])
+            with _session(_OWNERSHIP_ORG) as session:
+                user = session.get(User, _OWNERSHIP_JIT)
+                assert user is not None and user.is_active
+                created_ids = (
+                    set(
+                        session.scalars(
+                            select(AuthorizationBinding.id).where(
+                                AuthorizationBinding.organization_id == _OWNERSHIP_ORG
+                            )
+                        )
+                    )
+                    - before_ids
+                )
+            assert public_binding_id in created_ids
+            assert len(created_ids) == 2
+            for binding_id in created_ids:
+                self._record_binding_audit(
+                    "authorization.binding_granted",
+                    str(binding_id),
+                )
+            self.active_public_bindings.add(public_binding_id)
+            self.jit_pending = False
+
+        @precondition(lambda self: self.owner_assigned and bool(self.active_public_bindings))
+        @rule(slot=st.integers(min_value=0, max_value=31))
+        def revoke_public_grant(self, slot: int) -> None:
+            binding_id = sorted(self.active_public_bindings, key=str)[
+                slot % len(self.active_public_bindings)
+            ]
+            response = db_client.post(
+                f"/api/v1/authorization/bindings/{binding_id}/revoke",
+                headers=_ownership_headers(),
+                json={"reason": "ownership property public revocation"},
+            )
+            assert response.status_code == 200, response.text
+            self.active_public_bindings.remove(binding_id)
+            self._record_binding_audit(
+                "authorization.binding_revoked",
+                str(binding_id),
+            )
+
+        @precondition(lambda self: self.owner_assigned)
+        @rule(target_slot=st.integers(min_value=0, max_value=15))
+        def public_service_refuses_owner_creation(self, target_slot: int) -> None:
+            target = _OWNERSHIP_MEMBERS[target_slot % len(_OWNERSHIP_MEMBERS)]
+            bindings_before = self._binding_snapshot()
+            audits_before = self._audit_snapshot()
+            with _session(_OWNERSHIP_ORG) as session:
+                with pytest.raises(grant_administration.GrantAdministrationError) as exc_info:
+                    grant_administration.create_scoped_grant(
+                        session,
+                        organization_id=_OWNERSHIP_ORG,
+                        principal_user_id=target,
+                        role_bundle=RoleBundle.ORG_OWNER,
+                        scope=authorization.BindingScope(
+                            InstitutionScope.ORGANIZATION,
+                            None,
+                            ModuleScope.ACCOUNT,
+                            SensitivityScope.ALL,
+                        ),
+                        actor_user_id=_OWNERSHIP_OWNER,
+                        reason="ownership property forbidden owner grant",
+                        expected_authority_sentence="not reached",
+                    )
+                assert type(exc_info.value) is grant_administration.GrantAdministrationError
+                session.rollback()
+            assert self._binding_snapshot() == bindings_before
+            assert self._audit_snapshot() == audits_before
+
+        @precondition(lambda self: self.owner_assigned)
+        @rule()
+        def public_service_refuses_owner_revocation(self) -> None:
+            bindings_before = self._binding_snapshot()
+            audits_before = self._audit_snapshot()
+            with _session(_OWNERSHIP_ORG) as session:
+                owner_binding_id = session.scalar(
+                    select(AuthorizationBinding.id).where(
+                        AuthorizationBinding.organization_id == _OWNERSHIP_ORG,
+                        AuthorizationBinding.role_bundle == RoleBundle.ORG_OWNER.value,
+                        AuthorizationBinding.status == "active",
+                    )
+                )
+                assert owner_binding_id is not None
+                with pytest.raises(grant_administration.GrantAdministrationError) as exc_info:
+                    grant_administration.revoke_scoped_grant(
+                        session,
+                        organization_id=_OWNERSHIP_ORG,
+                        binding_id=owner_binding_id,
+                        actor_user_id=_OWNERSHIP_OWNER,
+                        reason="ownership property forbidden owner revocation",
+                    )
+                assert type(exc_info.value) is grant_administration.GrantAdministrationError
+                session.rollback()
+            assert self._binding_snapshot() == bindings_before
+            assert self._audit_snapshot() == audits_before
+
+        @invariant()
+        def ownership_and_audit_evidence_match_the_model(self) -> None:
+            with _session(_OWNERSHIP_ORG) as session:
+                _assert_ownership_model(session, owner_assigned=self.owner_assigned)
+
+                for event_type, entity_id in self.accepted_audits:
+                    assert (
+                        session.scalar(
+                            select(AuditEvent.id).where(
+                                AuditEvent.organization_id == _OWNERSHIP_ORG,
+                                AuditEvent.event_type == event_type,
+                                AuditEvent.entity_id == entity_id,
+                            )
+                        )
+                        is not None
+                    )
+
+    run_state_machine_as_test(
+        OwnershipSurfaceMachine,
+        settings=settings(max_examples=15, stateful_step_count=10, deadline=None),
+    )
+
+
+class _OwnerGrantArgs(TypedDict):
+    organization_id: str
+    principal_user_id: UUID
+    role_bundle: RoleBundle
+    scope: authorization.BindingScope
+    actor_user_id: UUID
+    reason: str
+    expected_authority_sentence: str
+    commit: bool
+
+
+def test_ownership_invariant_detects_public_owner_grant_mutation(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control: admitting public owner grants must break the machine's invariant."""
+    _seed_ownership_surface()
+    scope = authorization.BindingScope(
+        InstitutionScope.ORGANIZATION,
+        None,
+        ModuleScope.ACCOUNT,
+        SensitivityScope.ALL,
+    )
+    with _session(_OWNERSHIP_ORG) as session:
+        _assert_ownership_model(session, owner_assigned=False)
+        sentence = grant_administration.scoped_authority_sentence(
+            session,
+            organization_id=_OWNERSHIP_ORG,
+            principal_user_id=_OWNERSHIP_MEMBERS[0],
+            role_bundle=RoleBundle.ORG_OWNER,
+            scope=scope,
+        )
+        grant_args = _OwnerGrantArgs(
+            organization_id=_OWNERSHIP_ORG,
+            principal_user_id=_OWNERSHIP_MEMBERS[0],
+            role_bundle=RoleBundle.ORG_OWNER,
+            scope=scope,
+            actor_user_id=_OWNERSHIP_OWNER,
+            reason="ownership mutation negative control",
+            expected_authority_sentence=sentence,
+            commit=False,
+        )
+        with pytest.raises(grant_administration.GrantAdministrationError, match="not grantable"):
+            grant_administration.create_scoped_grant(session, **grant_args)
+        validate = grant_administration.validate_public_grant
+
+        def admit_owner(role_bundle: RoleBundle, scope: authorization.BindingScope) -> None:
+            if role_bundle is not RoleBundle.ORG_OWNER:
+                validate(role_bundle, scope)
+
+        with monkeypatch.context() as mutation:
+            mutation.setattr(grant_administration, "validate_public_grant", admit_owner)
+            grant_administration.create_scoped_grant(session, **grant_args)
+            with pytest.raises(AssertionError, match="ownership invariant"):
+                _assert_ownership_model(session, owner_assigned=False)
+            session.rollback()
+        _assert_ownership_model(session, owner_assigned=False)
+        with pytest.raises(grant_administration.GrantAdministrationError, match="not grantable"):
+            grant_administration.create_scoped_grant(session, **grant_args)
