@@ -20,10 +20,10 @@ with FORCE RLS (`forward_migrated_postgres_schema`), so the RLS backstop is
 exercised alongside the explicit guards.  ``max_examples`` is deliberately
 small: each example sweeps the whole route census.
 
-The two confirmed same-org cross-bank defects are excluded here (their strict
-pin and promotion guard live in Layer 1's ``KNOWN_DEFECTS`` test); the negative
-control weakens the package bank guard under a rolled-back monkeypatch and
-confirms the sweep then reports the leak.  The schema is dropped without the
+Quarantined defects (``KNOWN_DEFECTS``, currently empty) are excluded here;
+their strict pin and promotion guard live in Layer 1.  The negative control
+weakens the package bank guard under a rolled-back monkeypatch and confirms the
+sweep then reports the leak.  The schema is dropped without the
 downgrade round trip because issued integration keys and ``enterprise_stress``
 runs are rows the older schemas refuse to carry.
 """

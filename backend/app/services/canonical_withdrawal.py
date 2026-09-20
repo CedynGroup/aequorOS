@@ -65,6 +65,7 @@ from app.models import (
 )
 from app.models.canonical import CanonicalMetadataMixin, is_current_generation
 from app.models.canonical_withdrawal import WITHDRAWABLE_ENTITIES
+from app.services import system_of_record
 from app.services.audit import record_event
 from app.services.withdrawal_impact import invalidate_register
 
@@ -223,6 +224,10 @@ def request_withdrawal(  # noqa: PLR0913 - a governed act names every field
             detail="A withdrawal requires a named requester.",
         )
     _model_for(entity)
+    if declaration_id is not None:
+        # The cited declaration must be one of this bank's own; a sibling
+        # bank's register entry is not evidence for this bank's withdrawal.
+        system_of_record.get_declaration(db, ctx.organization_id, bank.id, declaration_id)
     in_scope = count_in_scope(
         db,
         organization_id=ctx.organization_id,
@@ -296,16 +301,11 @@ def approve_withdrawal(
     approved_by: str,
 ) -> CanonicalWithdrawal:
     """Approve and apply a pending withdrawal. Approver must not be the requester."""
-    row = get_withdrawal(db, ctx.organization_id, withdrawal_id)
+    row = get_withdrawal(db, ctx.organization_id, bank.id, withdrawal_id)
     if row.status != "pending":
         raise WithdrawalError(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Withdrawal {withdrawal_id} is already {row.status}.",
-        )
-    if row.bank_id != bank.id:
-        raise WithdrawalError(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Withdrawal {withdrawal_id} does not belong to bank {bank.id}.",
         )
     if not approved_by or not approved_by.strip():
         raise WithdrawalError(
@@ -468,12 +468,7 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
     reason: str,
 ) -> CanonicalWithdrawal:
     """Restore a withdrawn book, recording who reversed it and why."""
-    row = get_withdrawal(db, ctx.organization_id, withdrawal_id)
-    if row.bank_id != bank.id:
-        raise WithdrawalError(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Withdrawal {withdrawal_id} does not belong to bank {bank.id}.",
-        )
+    row = get_withdrawal(db, ctx.organization_id, bank.id, withdrawal_id)
     if row.status != "applied":
         raise WithdrawalError(
             status_code=status.HTTP_409_CONFLICT,
@@ -633,11 +628,19 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
 # ---------------------------------------------------------------------------
 
 
-def get_withdrawal(db: Session, organization_id: str, withdrawal_id: UUID) -> CanonicalWithdrawal:
+def get_withdrawal(
+    db: Session, organization_id: str, bank_id: str, withdrawal_id: UUID
+) -> CanonicalWithdrawal:
+    """One of the bank's own withdrawals, or the same 404 a foreign id gets.
+
+    Bank-scoped at the query so a sibling bank's withdrawal is refused before
+    any state check could reveal what state it is in.
+    """
     row = db.scalar(
         select(CanonicalWithdrawal).where(
             CanonicalWithdrawal.id == withdrawal_id,
             CanonicalWithdrawal.organization_id == organization_id,
+            CanonicalWithdrawal.bank_id == bank_id,
         )
     )
     if row is None:

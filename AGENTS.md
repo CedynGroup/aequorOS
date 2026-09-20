@@ -160,6 +160,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   dependencies in `deps.py` take the resolved bank as `TenantBank` rather than
   re-resolving it. Mounting a new bank router without it fails
   `tests/api/test_cross_tenant_bank_routes.py` (OpenAPI-enumerated).
+  **By-id lookups under `/banks/{bank_id}` must be bank-scoped at the query.** Two
+  banks of one organization share an RLS tenant, so the policy cannot tell them apart
+  and an organization-only `WHERE` lets a caller reach a sibling bank's row by id
+  (that is how a sibling's system-of-record declaration got approved). Every service
+  lookup that resolves a child object (`declaration_id`, `withdrawal_id`, a cited
+  evidence id in a request body) filters on the route's resolved bank too, so a
+  sibling's row is the route's ordinary 404 before any state check — never a 403 or
+  409 that would confirm it exists. The property suite
+  `tests/db/test_authorization_object_reference_properties.py` enumerates such routes
+  from OpenAPI and fails on a leak; a route it catches goes in `_KNOWN_DEFECTS` only
+  until fixed, and the suite forces its promotion.
   Preserve baseline membership as system-managed lifecycle evidence, never evaluator
   fallback access. Activation/deactivation must use `app/services/membership.py`;
   [the foundation contract](backend/docs/authorization_foundation.md#baseline-membership)
