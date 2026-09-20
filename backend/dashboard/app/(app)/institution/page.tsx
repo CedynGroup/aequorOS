@@ -5,7 +5,8 @@
  * identity, authorisation, capital, listing, and ownership split, with the
  * backend's advisory warnings surfaced as amber notes. Editing PUTs the full
  * profile with a required audit reason; the register is the data source for
- * the LRT return family (deep link to the Returns workspace).
+ * the LRT return family (deep link to the Returns workspace, opened on the
+ * institution's latest computed position so the pack is ready to generate).
  */
 
 import { useState } from 'react';
@@ -25,9 +26,10 @@ import { useBankContext } from '@/components/shell/BankContext';
 import { isApiError } from '@/lib/api/client';
 import {
   useInstitutionProfile,
+  useReturnAnchors,
   useSaveInstitutionProfile,
 } from '@/lib/api/hooks';
-import { fmtTimestamp, labelize, num } from '@/lib/api/values';
+import { fmtTimestamp, isoDate, labelize, num } from '@/lib/api/values';
 import { currencyCode, fmtCurrencyFull, fmtPct, submissionPortal } from '@/lib/format';
 import {
   Field,
@@ -45,6 +47,14 @@ export default function InstitutionProfilePage() {
 
   const query = useInstitutionProfile(bankId);
   const [editing, setEditing] = useState(false);
+  // An LRT pack is event-driven, so its as-of dates are the bank's computed
+  // positions (newest first) rather than a regulator calendar. Carrying the
+  // newest one on the link opens the workspace ready to generate.
+  const lrtAnchors = useReturnAnchors(bankId, 'LRT-PROFILE');
+  const latestPosition = lrtAnchors.data?.anchors[0]?.reportingDate;
+  const lrtHref = latestPosition
+    ? `/submissions/returns?code=LRT-PROFILE&date=${isoDate(latestPosition)}`
+    : '/submissions/returns?code=LRT-PROFILE';
 
   // The composed read returns profile: null until first configured; treat a
   // 404 (register endpoint unavailable for the bank) the same way.
@@ -58,7 +68,7 @@ export default function InstitutionProfilePage() {
         title="Institution Profile"
         action={
           <Link
-            href="/submissions/returns?code=LRT-PROFILE"
+            href={lrtHref}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-navy border border-border rounded-md hover:bg-surface"
           >
             Generate LRT packs
