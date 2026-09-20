@@ -95,6 +95,7 @@ def compute_window(
         ("liquidity", Module.LIQUIDITY),
         ("irr", Module.IRRBB),
         ("fx", Module.FX),
+        ("ftp", Module.FTP),
     ):
         decision = scoped_authorization.evaluate_bank_permission(
             db,
@@ -109,6 +110,7 @@ def compute_window(
     liquidity_allowed = allowed["liquidity"]
     irrbb_allowed = allowed["irr"]
     fx_allowed = allowed["fx"]
+    ftp_allowed = allowed["ftp"]
     periods = _periods_in_window(db, ctx, bank, start_date, end_date)
     ratios = [
         *(_liquidity_series(db, ctx, bank, periods) if liquidity_allowed else []),
@@ -129,6 +131,7 @@ def compute_window(
             liquidity_allowed=liquidity_allowed,
             irrbb_allowed=irrbb_allowed,
             fx_allowed=fx_allowed,
+            ftp_allowed=ftp_allowed,
         ),
     )
 
@@ -259,6 +262,7 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
     liquidity_allowed: bool,
     irrbb_allowed: bool,
     fx_allowed: bool,
+    ftp_allowed: bool,
 ) -> list[WindowDailyStatRead]:
     query = (
         select(LiveMetricSnapshot)
@@ -276,6 +280,8 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
         query = query.where(LiveMetricSnapshot.module != "irr")
     if not fx_allowed:
         query = query.where(LiveMetricSnapshot.module != "fx")
+    if not ftp_allowed:
+        query = query.where(LiveMetricSnapshot.module != "ftp")
     values_by_module: dict[str, list[Decimal]] = {}
     for row in db.scalars(query):
         key = _PRIMARY_METRIC_KEY.get(row.module)

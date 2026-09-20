@@ -5,10 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
+from app.core.authorization import Module, Permission, Sensitivity
 from app.schemas.regulatory_ftp import FtpDashboardRead, FtpScenarioBatchCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
-from app.services import regulatory_ftp
+from app.services import regulatory_ftp, scoped_authorization
 
 router = APIRouter(tags=["regulatory-ftp"])
 
@@ -23,9 +24,25 @@ def run_all_ftp_scenarios(
     bank_id: str,
     payload: FtpScenarioBatchCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> RegulatoryRunBatchRead:
-    return regulatory_ftp.run_all_ftp_scenarios(db, ctx, bank_id, payload)
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.FTP,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="ftp_run_all_scenarios",
+        denial_detail="Running FTP calculations requires an active scoped binding.",
+    )
+    return regulatory_ftp.run_all_ftp_scenarios(
+        db,
+        ctx,
+        bank.id,
+        payload,
+        resolved_bank=bank,
+    )
 
 
 @router.get(
@@ -39,4 +56,20 @@ def get_ftp_dashboard(
     ctx: Tenant,
     reporting_period_id: Annotated[UUID | None, Query()] = None,
 ) -> FtpDashboardRead:
-    return regulatory_ftp.get_ftp_dashboard(db, ctx, bank_id, reporting_period_id)
+    bank = scoped_authorization.require_bank_permission_prefetched(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.FTP,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="ftp_dashboard",
+        denial_detail="FTP access requires an active scoped binding.",
+    )
+    return regulatory_ftp.get_ftp_dashboard(
+        db,
+        ctx,
+        bank.id,
+        reporting_period_id,
+        resolved_bank=bank,
+    )

@@ -59,7 +59,10 @@ export default function SavedAnalysesIndex() {
     moduleScope.fxAggregatedView ? bankId : undefined,
     "fx",
   );
-  const ftp = useSavedAnalyses(bankId, "ftp");
+  const ftp = useSavedAnalyses(
+    moduleScope.ftpAggregatedView ? bankId : undefined,
+    "ftp",
+  );
 
   const moduleQueries = [
     ["liquidity", liquidity],

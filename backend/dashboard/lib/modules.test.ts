@@ -32,6 +32,7 @@ const resolved = (
     "settings",
     "irrbb",
     "fx",
+    "ftp",
   ]),
   modules: new Set([
     "command_center",
@@ -46,6 +47,7 @@ const resolved = (
     "reports",
     "settings",
     "irrbb",
+    "ftp",
   ]),
   organizationModules: new Set(["settings"]),
   hasInstitutionAuthority: true,
@@ -63,6 +65,9 @@ const resolved = (
   fxAggregatedView: true,
   fxConfidentialView: true,
   fxRun: true,
+  ftpAggregatedView: true,
+  ftpConfidentialView: true,
+  ftpRun: true,
   ...capabilities,
   isResolved: true,
 });
@@ -103,6 +108,13 @@ for (const moduleCase of [
     label: "Foreign Exchange",
     aggregated: "fxAggregatedView",
     confidential: "fxConfidentialView",
+    scenarioSensitivity: "Confidential",
+  },
+  {
+    prefix: "/ftp",
+    label: "Funds Transfer Pricing",
+    aggregated: "ftpAggregatedView",
+    confidential: "ftpConfidentialView",
     scenarioSensitivity: "Confidential",
   },
 ] as const) {
@@ -243,6 +255,30 @@ assert.deepEqual(hrefAccess("/fx", deniedFx), {
     "Requires Foreign Exchange · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(isPathVisible("/fx/scenarios", deniedFx), true);
+
+const aggregatedFtpOnly = resolved(true, true, {
+  ftpConfidentialView: false,
+  ftpRun: false,
+});
+assert.equal(isHrefVisible("/ftp", aggregatedFtpOnly), true);
+assert.equal(isPathVisible("/ftp/products", aggregatedFtpOnly), true);
+assert.deepEqual(hrefAccess("/ftp/scenarios", aggregatedFtpOnly), {
+  state: "disabled",
+  reason:
+    "Requires Funds Transfer Pricing · Confidential · View. Ask your organization owner or admin to grant it.",
+});
+
+const deniedFtp = resolved(true, true, {
+  ftpAggregatedView: false,
+  ftpConfidentialView: true,
+});
+assert.equal(isHrefVisible("/ftp", deniedFtp), false);
+assert.deepEqual(hrefAccess("/ftp", deniedFtp), {
+  state: "disabled",
+  reason:
+    "Requires Funds Transfer Pricing · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(isPathVisible("/ftp/scenarios", deniedFtp), true);
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),
