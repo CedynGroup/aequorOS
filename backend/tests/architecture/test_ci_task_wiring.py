@@ -408,6 +408,31 @@ def test_every_pytest_path_a_task_names_exists() -> None:
     )
 
 
+_IGNORED_PATH = re.compile(r"--ignore=(tests/[A-Za-z0-9_./-]*)")
+
+
+def test_the_full_suite_ignores_exactly_what_the_schema_and_locks_tasks_run() -> None:
+    """`risk-service:test-postgres-suite` skips the Postgres-only suites because
+    `test-postgres-schema` and `test-postgres-locks` already run them in the
+    same CI run, on the same image and role. That is only a de-duplication
+    while the two sets match: an `--ignore` with no owner drops coverage from
+    every job, and a lock file added to the locks task but not ignored here
+    just runs twice again. Pinning equality keeps it moved-not-dropped.
+    """
+    body = _tasks(BACKEND_TASKS)["risk-service:test-postgres-suite"]
+    ignored = {match for command in _run_commands(body) for match in _IGNORED_PATH.findall(command)}
+    owned = set(_task_paths("risk-service:test-postgres-schema")) | set(
+        _task_paths("risk-service:test-postgres-locks")
+    )
+
+    assert ignored == owned, (
+        f"Ignored by the full suite but run by no other Postgres task: {sorted(ignored - owned)}; "
+        f"run by the schema/locks tasks but still duplicated in the full suite: "
+        f"{sorted(owned - ignored)}"
+    )
+    assert all((TESTS.parent / path).exists() for path in ignored)
+
+
 def test_the_hermetic_run_still_proves_it_collected_every_module() -> None:
     """The collection-equality step is the only check that CI SAW every test.
 

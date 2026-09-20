@@ -78,9 +78,17 @@ run = "uv run pytest tests/db"
 # with row-level security switched off, so "3,237 passed" is not evidence about
 # Postgres: Boolean server defaults, String-vs-UUID comparisons, row locks and
 # advisory locks all behave differently there. Requires TEST_DATABASE_URL.
+#
+# Ownership of the Postgres-only suites: `tests/db` belongs to
+# `risk-service:test-postgres-schema` and the three lock files to
+# `risk-service:test-postgres-locks`, both run by CI's "Postgres schema, RLS
+# and locks" job against the same image and the same restricted role as this
+# task. They are ignored here so a failure surfaces once, in the job named for
+# it, rather than costing this job seven minutes to report it a second time.
+# The hermetic `risk-service:test` still collects everything.
 [tasks."risk-service:test-postgres-suite"]
 description = "Run the full pytest suite against Postgres; requires TEST_DATABASE_URL"
-run = "uv run pytest"
+run = "uv run pytest --ignore=tests/db --ignore=tests/api/test_calculations.py --ignore=tests/api/test_liquidity.py --ignore=tests/api/test_scenarios.py"
 
 # The DB-backed regulatory/attestation/auth/vendor API surface. It is gated on
 # REAL_DATA_DATABASE_URL pointing at the PRIMARY database (it asserts against

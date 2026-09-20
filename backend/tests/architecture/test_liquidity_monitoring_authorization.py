@@ -7,6 +7,7 @@ from fastapi.routing import APIRoute
 from app.main import create_app
 
 _PATH = "/api/v1/banks/{bank_id}/liquidity-monitoring"
+_ROUTES = [route for route in create_app().routes if isinstance(route, APIRoute)]
 
 
 def _dependency_names(route: APIRoute) -> set[str]:
@@ -21,24 +22,13 @@ def _dependency_names(route: APIRoute) -> set[str]:
 
 
 def _route(path: str, method: str) -> APIRoute:
-    routes = [
-        route
-        for route in create_app().routes
-        if isinstance(route, APIRoute) and route.path == path and method in route.methods
-    ]
+    routes = [route for route in _ROUTES if route.path == path and method in route.methods]
     assert len(routes) == 1, f"{method} {path} must have exactly one route"
     return routes[0]
 
 
 def test_liquidity_monitoring_route_cannot_revert_to_legacy_authorization() -> None:
-    routes = [
-        route
-        for route in create_app().routes
-        if isinstance(route, APIRoute) and route.path == _PATH and "GET" in route.methods
-    ]
-
-    assert len(routes) == 1, "Liquidity Monitoring must have exactly one GET detail route"
-    dependencies = _dependency_names(routes[0])
+    dependencies = _dependency_names(_route(_PATH, "GET"))
     assert "require_liquidity_monitoring_view" in dependencies
     assert not any(name.startswith("require_role_") for name in dependencies)
     assert "get_mutation_tenant_context" not in dependencies
