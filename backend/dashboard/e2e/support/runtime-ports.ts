@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 export type E2ERuntimePorts = {
   backend: number;
   dashboard: number;
+  /** The local OIDC issuer (scripts/e2e_idp.py) the SSO journeys sign in at. */
+  idp: number;
 };
 
 const PORTS_SELECTED = "E2E_RUNTIME_PORTS_SELECTED";
@@ -20,27 +22,29 @@ function configuredPort(name: string): number {
 }
 
 /**
- * Select both ports in one child process while both sockets are held open.
+ * Select every port in one child process while all the sockets are held open.
  *
- * Playwright evaluates its config before it starts either web server, so it
+ * Playwright evaluates its config before it starts any web server, so it
  * needs concrete ports rather than port 0. The selected values are copied into
  * process.env: global setup and worker processes inherit them when they import
- * playwright.config.ts again instead of allocating a second pair.
+ * playwright.config.ts again instead of allocating a second set.
  *
- * E2E_BACKEND_PORT / E2E_DASHBOARD_PORT are optional preferences. If either is
- * already occupied, the OS supplies a free replacement instead of failing the
- * run.
+ * E2E_BACKEND_PORT / E2E_DASHBOARD_PORT / E2E_IDP_PORT are optional
+ * preferences. If one is already occupied, the OS supplies a free replacement
+ * instead of failing the run.
  */
 export function selectE2ERuntimePorts(): E2ERuntimePorts {
   if (process.env[PORTS_SELECTED] === "1") {
     return {
       backend: configuredPort("E2E_BACKEND_PORT"),
       dashboard: configuredPort("E2E_DASHBOARD_PORT"),
+      idp: configuredPort("E2E_IDP_PORT"),
     };
   }
 
   const requestedBackend = configuredPort("E2E_BACKEND_PORT");
   const requestedDashboard = configuredPort("E2E_DASHBOARD_PORT");
+  const requestedIdp = configuredPort("E2E_IDP_PORT");
   const allocator = String.raw`
     const net = require('node:net');
 
@@ -67,12 +71,16 @@ export function selectE2ERuntimePorts(): E2ERuntimePorts {
     (async () => {
       const backend = await bind(Number(process.argv[1]));
       const dashboard = await bind(Number(process.argv[2]));
-      const backendPort = backend.address().port;
-      const dashboardPort = dashboard.address().port;
-      console.log(JSON.stringify({ backend: backendPort, dashboard: dashboardPort }));
+      const idp = await bind(Number(process.argv[3]));
+      console.log(JSON.stringify({
+        backend: backend.address().port,
+        dashboard: dashboard.address().port,
+        idp: idp.address().port,
+      }));
       await Promise.all([
         new Promise((resolve) => backend.close(resolve)),
         new Promise((resolve) => dashboard.close(resolve)),
+        new Promise((resolve) => idp.close(resolve)),
       ]);
     })().catch((error) => {
       console.error(error);
@@ -83,13 +91,20 @@ export function selectE2ERuntimePorts(): E2ERuntimePorts {
   const selected = JSON.parse(
     execFileSync(
       process.execPath,
-      ["-e", allocator, String(requestedBackend), String(requestedDashboard)],
+      [
+        "-e",
+        allocator,
+        String(requestedBackend),
+        String(requestedDashboard),
+        String(requestedIdp),
+      ],
       { encoding: "utf8" },
     ),
   ) as E2ERuntimePorts;
 
   process.env.E2E_BACKEND_PORT = String(selected.backend);
   process.env.E2E_DASHBOARD_PORT = String(selected.dashboard);
+  process.env.E2E_IDP_PORT = String(selected.idp);
   process.env[PORTS_SELECTED] = "1";
   return selected;
 }

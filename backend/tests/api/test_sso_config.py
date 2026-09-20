@@ -123,6 +123,31 @@ def test_enabling_without_a_secret_is_refused(
     assert r.status_code == 422
 
 
+def test_loopback_http_issuer_is_stored_only_on_an_undeployed_environment(
+    db_client: TestClient,
+    vault_key: None,
+    account_admin_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The one exception to https: a local stub IdP (the e2e stack's issuer),
+    accepted by the schema, the verifier AND the service on ``local``/``test``
+    only. Elsewhere the same request is a plain 422, before anything is stored —
+    the e2e bootstrap registers its issuer through this path, so the service
+    layer has to agree with the boundary it sits behind."""
+    payload = {**_PAYLOAD, "issuer": "http://127.0.0.1:8120"}
+    put = db_client.put("/api/v1/auth/sso/connection", json=payload, headers=account_admin_headers)
+    assert put.status_code == 200, put.text
+    assert put.json()["issuer"] == "http://127.0.0.1:8120"
+
+    monkeypatch.setenv("APP_ENV", "staging")
+    get_settings.cache_clear()
+    refused = db_client.put(
+        "/api/v1/auth/sso/connection", json=payload, headers=account_admin_headers
+    )
+    assert refused.status_code == 422
+    get_settings.cache_clear()
+
+
 def test_jit_requires_a_domain_allow_list(
     db_client: TestClient,
     vault_key: None,
