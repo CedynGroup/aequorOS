@@ -59,11 +59,9 @@ What changed, by workstream (`docs/submission_pipeline_plan.md`):
   `(org,package,kind)` artifact uniqueness; server-side family/date-range package
   filters; downloadable `.eml` downtime bundle; a Playwright e2e suite (hermetic
   backend + minted NextAuth cookies) covering authenticated navigation, live
-  package generation, the deadline board, and role gates. The suite now runs in
-  blocking CI against disposable MinIO. CI requires at least 20 journeys to
-  execute against an exact, size-pinned quarantine; the e2e book is the
-  canonical fixture carried forward to the regulator anchor currently due, so
-  generation runs against an exact snapshot rather than an earlier book.
+  package generation, the deadline board, and role gates. See the
+  [dashboard E2E guidance](../backend/dashboard/README.md#end-to-end-playwright)
+  for fixture coverage, workflow invocation, and quarantine enforcement.
 
 Migrations `202607240018`–`202607240023` are applied to the primary DB.
 The status vocabulary, channel set, and family set in the sections below are
