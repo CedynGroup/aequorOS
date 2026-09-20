@@ -3,6 +3,11 @@ name: Dashboard Playwright journeys
 # Deliberately manual-only. These browser journeys are an authoritative,
 # maintainer-invoked diagnostic run, not part of routine pull-request or push
 # CI. Do not add pull_request or push triggers here.
+#
+# The stack Playwright boots (backend/dashboard/playwright.config.ts) includes
+# the local OIDC issuer the SSO journeys sign in at (backend/scripts/e2e_idp.py).
+# It is a plain Python process started as a Playwright web server, so unlike
+# MinIO below it needs no container and no step of its own here.
 on:
   workflow_dispatch:
 
@@ -63,7 +68,18 @@ jobs:
           STORAGE_RETIRE_AFTER: "2099-01-01"
           STORAGE_KMS_KEY_ID: aequoros-key
           PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
+          E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
         run: mise exec -- pnpm --filter @aequoros/dashboard e2e
+      # Reviewer-visible screenshots the authorization and SSO journeys write
+      # (the issuer's form, the signed-in shell, the refusals, the step-up
+      # return). Uploaded even on failure: that is when they matter most.
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-journey-evidence
+          path: ${{ runner.temp }}/evidence
+          if-no-files-found: ignore
       - name: The browser journeys must have executed, not skipped
         run: |
           set -euo pipefail

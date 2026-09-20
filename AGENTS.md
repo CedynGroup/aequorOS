@@ -385,7 +385,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   writes. Skip either and the failure is late and misleading: a missing registry surfaces as
   a fail-closed 409 naming a seed migration, a missing live plane as "no computed data yet"
   on every module page. Full prerequisites (object storage included):
-  `backend/dashboard/README.md` §End-to-end.
+  `backend/dashboard/README.md` §End-to-end. The same stack carries a local OIDC issuer
+  (`scripts/e2e_idp.py`, registered as the tenant's SSO connection by the bootstrap) so the
+  browser SSO round trip and the attestation step-up are proved for real —
+  `backend/dashboard/README.md` §Single sign-on against a local issuer.
 - Regulatory `input_hash` must stay **value-based**: the snapshot `facts` list excludes `fact.id`
   and is sorted by canonical JSON (`INPUT_SCHEMA_VERSION = "bank-facts-v2"`). The live engine
   re-derives facts (new UUIDs) on every refresh, so an id- or order-dependent hash would break

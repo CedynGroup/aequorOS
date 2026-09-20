@@ -215,7 +215,7 @@ test.describe("sign-in failures", () => {
     await page
       .getByLabel("Password")
       .fill("deliberately-wrong-not-the-fixture-password");
-    await page.getByRole("button", { name: /^Sign in/ }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
     // Scoped to the form: Next's route announcer also carries role="alert"
     // and is empty, which silently swallows a bare getByRole('alert').
