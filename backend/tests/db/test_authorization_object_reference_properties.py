@@ -7,7 +7,8 @@ a fully entitled caller and sweeps every route once, this layer fixes nothing
 about the caller and lets Hypothesis vary the dimensions that actually decide
 authorization — role/permission bundle, module scope, sensitivity scope,
 institution scope, and binding lifecycle state — together with object placement
-(cross-organization vs same-org sibling bank).  That is where generation earns
+(cross-organization, same-org sibling bank, or one foreign child with home
+parents, covering same-org cross-parent nesting).  That is where generation earns
 its cost: it proves no *combination* of a bank-A caller's authority reaches a
 foreign object, not just that the fully entitled one does not.
 
@@ -71,6 +72,7 @@ from tests.fixtures.object_reference_routes import (
     ObjectRoute,
     binding,
     foreign_request,
+    layout_children,
     leaked,
     object_routes,
 )
@@ -247,22 +249,24 @@ class Sweep:
         for route in self.routes:
             if (route.method, route.path, layout) in KNOWN_DEFECTS:
                 continue
-            built = foreign_request(
-                route,
-                self.document,
-                layout,
-                home=self.tenants.home,
-                owner=self.tenants.owner(layout),
-            )
-            if built is None:
-                continue
-            request, requested = built
-            response = self._send(route, request.path, request.query, request.body, auth)
-            leak = leaked(response.text, self.tenants.owner(layout).identifiers(), requested)
-            if leak:
-                failures.append(f"{route.label} [{layout}]: leaked {leak}")
-            if route.mutation and response.status_code in (200, 201, 202, 204):
-                failures.append(f"{route.label} [{layout}]: accepted with {response.status_code}")
+            for child in layout_children(route, layout):
+                built = foreign_request(
+                    route,
+                    self.document,
+                    layout,
+                    home=self.tenants.home,
+                    owner=self.tenants.owner(layout),
+                    child=child,
+                )
+                if built is None:
+                    continue
+                request, requested = built
+                response = self._send(route, request.path, request.query, request.body, auth)
+                leak = leaked(response.text, self.tenants.owner(layout).identifiers(), requested)
+                if leak:
+                    failures.append(f"{route.label} [{layout}]: leaked {leak}")
+                if route.mutation and response.status_code in (200, 201, 202, 204):
+                    failures.append(f"{route.label} [{layout}]: accepted with {response.status_code}")
         if changed := _changed_tables(before, _snapshot(self.engine, self.statement)):
             failures.append(f"[{layout}] side effects in {changed}")
         return failures
