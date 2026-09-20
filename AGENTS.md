@@ -349,16 +349,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `GET /operator/v1/jobs/stuck-dedup` (fleet board, read) +
   `POST /operator/v1/tenants/{org}/fix/redrive-dedup` (session-gated, audited), and it is
   manual on purpose — the four stranded batches failed for three unrelated reasons.
-- **CI enforces every surface (2026-08-22; E2E added 2026-08-30).**
-  `risk-service.yml` gates the backend plus the dashboard Playwright journeys against
-  disposable MinIO, `dashboard.yml` gates typecheck + **lint** + **test** + build, and
-  `web.yml` gates `frontend` lint+build and `console` typecheck+test+build. The journey
-  reporter requires at least 20 executions and an exact eight-test expected-failure list
-  for regulator-anchor/fixture drift; discovery mismatch or an unexpected pass fails CI,
-  and issue #151 owns removal. Before these gates, `frontend/` and `console/` were in no
-  workflow and the dashboard's fail-open guard, SSRF egress guard, and browser journeys
-  were unenforced. Each workflow's header comment is its gate inventory — keep it accurate.
-  See ARCHITECTURE.md §8 for local validation commands and CI coverage.
+- **Validation and CI coverage:** see [ARCHITECTURE.md §8](ARCHITECTURE.md#8-validation-commands)
+  for local commands and workflow inventories; the dashboard README owns the
+  [manual browser journey run](backend/dashboard/README.md#end-to-end-playwright).
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,
@@ -385,10 +378,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   writes. Skip either and the failure is late and misleading: a missing registry surfaces as
   a fail-closed 409 naming a seed migration, a missing live plane as "no computed data yet"
   on every module page. Full prerequisites (object storage included):
-  `backend/dashboard/README.md` §End-to-end. The same stack carries a local OIDC issuer
-  (`scripts/e2e_idp.py`, registered as the tenant's SSO connection by the bootstrap) so the
-  browser SSO round trip and the attestation step-up are proved for real —
-  `backend/dashboard/README.md` §Single sign-on against a local issuer.
+  `backend/dashboard/README.md` §End-to-end; for SSO, see its
+  [local issuer guidance](backend/dashboard/README.md#single-sign-on-against-a-local-issuer).
 - Regulatory `input_hash` must stay **value-based**: the snapshot `facts` list excludes `fact.id`
   and is sorted by canonical JSON (`INPUT_SCHEMA_VERSION = "bank-facts-v2"`). The live engine
   re-derives facts (new UUIDs) on every refresh, so an id- or order-dependent hash would break
