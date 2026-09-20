@@ -1,13 +1,8 @@
 /**
  * Playwright e2e for the submission pipeline (plan W7.5).
  *
- * Boots the FastAPI backend on a disposable sqlite file (demo seeding enabled
- * — the e2e fixture path, never production), a local OIDC issuer
- * (scripts/e2e_idp.py — the tenant's "identity provider", registered as its SSO
- * connection during bootstrap) and the Next.js dev server wired to both.
- * Global setup bootstraps tenant rows, seeds the sample bank through the API,
- * runs a liquidity baseline, and mints per-role session cookies — no real
- * credentials anywhere.
+ * Boots the disposable API, local OIDC issuer, and dashboard. Stack setup and
+ * prerequisites are documented in README.md §End-to-end (Playwright).
  *
  * Hermetic EXCEPT object storage. This file used to claim "fully hermetic",
  * which was wrong and cost a long diagnosis: validated packages persist their
