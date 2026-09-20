@@ -50,6 +50,7 @@ from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.factories import CaseFactory, DocumentFactory
 from tests.api.helpers import ORG_1, USER_1, headers
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 _UNSAFE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
 
@@ -162,6 +163,15 @@ def _impersonation_headers(org_id: str = ORG_1) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _materialize_sample_bank() -> None:
+    session = get_sessionmaker()()
+    try:
+        materialize_canonical_test_book(session)
+        session.commit()
+    finally:
+        session.close()
+
+
 def _call(client: TestClient, method: str, path: str, hdrs: dict[str, str]) -> Any:
     return client.request(method, path, headers=hdrs, json={})
 
@@ -203,13 +213,16 @@ def test_account_admin_cannot_use_approver_gated_regulatory_submission(
 ) -> None:
     """The legacy admin split must remove operational superuser authority.
 
-    The resource need not exist: the role dependency runs before the workflow
-    lookup, proving an account-only administrator cannot reach the submission
-    service through the real regulatory route.
+    The bank must exist in the caller's organization because tenant-bank
+    resolution precedes the role dependency; the regulatory package still need
+    not exist, because the role dependency runs before the workflow lookup,
+    proving an account-only administrator cannot reach the submission service
+    through the real regulatory route.
     """
 
+    _materialize_sample_bank()
     response = db_client.post(
-        f"/api/v1/banks/BK-SAMP0001/regulatory-packages/{uuid4()}/submit",
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{uuid4()}/submit",
         headers=headers(roles=("account_admin",)),
         json={"channel": "email"},
     )
@@ -596,13 +609,24 @@ def test_bank_regulatory_plane_is_unchanged_by_the_boundary_guard(
         "scenario_code": "baseline",
     }
 
+    _materialize_sample_bank()
     for role in ("viewer", "examiner"):
         refused = db_client.post(
-            "/api/v1/banks/BK-NOEXIST9/regulatory-runs",
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-runs",
             headers=headers(roles=(role,)),
             json=official_run,
         )
         assert refused.status_code == 403, f"{role}: {refused.text}"
+
+        hidden = db_client.post(
+            "/api/v1/banks/BK-NOEXIST9/regulatory-runs",
+            headers=headers(roles=(role,)),
+            json=official_run,
+        )
+        assert hidden.status_code == 404, f"{role}: {hidden.text}"
+        assert set(hidden.json()) == {"error"}
+        assert set(hidden.json()["error"]) == {"code", "message", "request_id"}
+        assert hidden.json()["error"]["message"] == "Bank not found."
 
     impersonated = db_client.post(
         "/api/v1/banks/BK-NOEXIST9/regulatory-runs",
