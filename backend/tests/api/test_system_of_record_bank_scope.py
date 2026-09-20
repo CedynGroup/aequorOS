@@ -204,7 +204,7 @@ def test_a_sibling_banks_declaration_cannot_be_approved_or_revoked_under_this_ba
         headers=_approver(),
         json=REVOCATION,
     )
-    _assert_refused_without_side_effects(
+    revoke_shape = _assert_refused_without_side_effects(
         refused_revoke, SystemOfRecordDeclaration, approved, approved_before, approved_counts
     )
 
@@ -216,6 +216,13 @@ def test_a_sibling_banks_declaration_cannot_be_approved_or_revoked_under_this_ba
         json=APPROVAL,
     )
     assert _not_found_shape(unknown, unknown_id) == foreign_shape
+    unknown_id = uuid4()
+    unknown = db_client.post(
+        f"{REGISTER_URL.format(bank_id=bank_id)}/{unknown_id}/revoke",
+        headers=_approver(),
+        json=REVOCATION,
+    )
+    assert _not_found_shape(unknown, unknown_id) == revoke_shape
 
     # Positive control: the owning bank's path still approves and revokes them.
     owner_approve = db_client.post(
@@ -253,9 +260,16 @@ def test_a_sibling_banks_withdrawal_cannot_be_approved_or_reversed_under_this_ba
         headers=_approver(),
         json=APPROVAL,
     )
-    _assert_refused_without_side_effects(
+    foreign_shape = _assert_refused_without_side_effects(
         refused_approve, CanonicalWithdrawal, pending, pending_before, pending_counts
     )
+    unknown_id = uuid4()
+    unknown = db_client.post(
+        f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{unknown_id}/approve",
+        headers=_approver(),
+        json=APPROVAL,
+    )
+    assert _not_found_shape(unknown, unknown_id) == foreign_shape
 
     # An applied sibling withdrawal is 404 too — not the 409 its state would earn
     # under its own bank, which would reveal that state.
@@ -264,17 +278,31 @@ def test_a_sibling_banks_withdrawal_cannot_be_approved_or_reversed_under_this_ba
         headers=_approver(),
         json=APPROVAL,
     )
-    _assert_refused_without_side_effects(
+    foreign_shape = _assert_refused_without_side_effects(
         refused_reapprove, CanonicalWithdrawal, applied, applied_before, applied_counts
     )
+    unknown_id = uuid4()
+    unknown = db_client.post(
+        f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{unknown_id}/approve",
+        headers=_approver(),
+        json=APPROVAL,
+    )
+    assert _not_found_shape(unknown, unknown_id) == foreign_shape
     refused_reverse = db_client.post(
         f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{applied}/reverse",
         headers=_approver(),
         json=REVERSAL,
     )
-    _assert_refused_without_side_effects(
+    foreign_shape = _assert_refused_without_side_effects(
         refused_reverse, CanonicalWithdrawal, applied, applied_before, applied_counts
     )
+    unknown_id = uuid4()
+    unknown = db_client.post(
+        f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{unknown_id}/reverse",
+        headers=_approver(),
+        json=REVERSAL,
+    )
+    assert _not_found_shape(unknown, unknown_id) == foreign_shape
 
     # Positive control: under its own bank the applied withdrawal's state is
     # what refuses re-approval.
@@ -285,11 +313,32 @@ def test_a_sibling_banks_withdrawal_cannot_be_approved_or_reversed_under_this_ba
     )
     assert owner_reapprove.status_code == 409, owner_reapprove.text
 
+    own_pending = _seed_withdrawal(bank_id, status="pending")
+    owner_approve = db_client.post(
+        f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{own_pending}/approve",
+        headers=_approver(),
+        json=APPROVAL,
+    )
+    assert owner_approve.status_code == 200, owner_approve.text
+    assert owner_approve.json()["status"] == "applied"
+    assert owner_approve.json()["bank_id"] == bank_id
+    assert _row_state(CanonicalWithdrawal, own_pending)["status"] == "applied"
+    owner_reverse = db_client.post(
+        f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{own_pending}/reverse",
+        headers=_approver(),
+        json=REVERSAL,
+    )
+    assert owner_reverse.status_code == 200, owner_reverse.text
+    assert owner_reverse.json()["status"] == "reversed"
+    assert owner_reverse.json()["bank_id"] == bank_id
+    assert _row_state(CanonicalWithdrawal, own_pending)["status"] == "reversed"
+
 
 def test_a_withdrawal_cannot_cite_a_sibling_banks_declaration(db_client: TestClient) -> None:
     bank_id = _seed_banks(db_client)
     foreign = _seed_declaration(SIBLING_BANK_ID, status="approved", effective_from=date(2026, 1, 1))
     own = _seed_declaration(bank_id, status="approved", effective_from=date(2026, 1, 1))
+    foreign_before = _row_state(SystemOfRecordDeclaration, foreign)
     foreign_counts = _side_effect_counts(foreign)
     request = {
         "entity": "position",
@@ -306,8 +355,16 @@ def test_a_withdrawal_cannot_cite_a_sibling_banks_declaration(db_client: TestCli
         headers=analyst,
         json={**request, "declaration_id": str(foreign)},
     )
-    assert refused.status_code == 404, refused.text
-    assert _side_effect_counts(foreign) == foreign_counts
+    foreign_shape = _assert_refused_without_side_effects(
+        refused, SystemOfRecordDeclaration, foreign, foreign_before, foreign_counts
+    )
+    unknown_id = uuid4()
+    unknown = db_client.post(
+        WITHDRAWALS_URL.format(bank_id=bank_id),
+        headers=analyst,
+        json={**request, "declaration_id": str(unknown_id)},
+    )
+    assert _not_found_shape(unknown, unknown_id) == foreign_shape
     session = get_sessionmaker()()
     session.info["organization_id"] = ORG_1
     try:
