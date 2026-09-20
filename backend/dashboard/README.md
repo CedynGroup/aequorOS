@@ -339,8 +339,9 @@ diagnosis:
    Locally it arrives from the untracked `backend/.env` (`S3_ENDPOINT`,
    `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`); a fresh clone, a git worktree
    or CI has none. The `attestation`, `full-lifecycle`,
-   `submission-lifecycle`, and opt-in `visual-tour` specs refuse immediately
-   without it rather than letting package assertions time out one at a time.
+   `submission-lifecycle`, and opt-in `visual-tour` specs, plus the SSO
+   attestation journey, refuse immediately without it rather than letting
+   package assertions time out one at a time.
    Storage-free specs remain runnable without any S3 configuration. The
    manually dispatched GitHub Actions workflow starts a disposable MinIO with
    its built-in KMS and runs the standard suite against that real object store.

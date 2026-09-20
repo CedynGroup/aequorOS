@@ -9,8 +9,8 @@
  * artifacts to S3/MinIO and the backend has no filesystem mode, so the suite
  * silently depends on S3_* reaching it from the untracked backend/.env. That
  * is why it passes on a developer machine and fails in a fresh clone, a git
- * worktree, or CI. The four package-capable specs refuse immediately without
- * it, while storage-free journeys can still run on a cold worktree.
+ * worktree, or CI. Package-capable journeys refuse immediately without it,
+ * while storage-free journeys can still run on a cold worktree.
  *
  * Run: pnpm e2e   (first run: npx playwright install chromium)
  */
