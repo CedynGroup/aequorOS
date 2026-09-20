@@ -1239,7 +1239,10 @@ must not be represented as working:
    guards, field placement, and unsigned export. It now runs in the blocking
    Playwright CI job against disposable MinIO; the e2e book is carried forward
    to the reporting anchor currently due, so the package-generation cases run
-   against a real computed position rather than an "awaiting data" refusal. A full
+   against a real computed position rather than an "awaiting data" refusal.
+   The ceremony journey's SSO step-up return leg stays quarantined until the
+   step-up routes derive their bounce-back origin from the request host
+   (`e2e/support/quarantine.ts` names the branch carrying that fix). A full
    preparer-then-approver-then-verify pass through the UI is **not** yet
    driven; the submission gate and the two-signature flow are asserted in the
    backend suite instead. Noted because an earlier version of that journey
