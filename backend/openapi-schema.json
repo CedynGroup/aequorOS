@@ -46195,6 +46195,13 @@
         "title": "ReportScore",
         "type": "object"
       },
+      "ReportingDateSource": {
+        "enum": [
+          "regulator_anchor",
+          "computed_snapshot"
+        ],
+        "type": "string"
+      },
       "ReportingObligationListRead": {
         "additionalProperties": false,
         "properties": {
@@ -46737,6 +46744,9 @@
             "title": "Lookback Months",
             "type": "integer"
           },
+          "reporting_date_source": {
+            "$ref": "#/components/schemas/ReportingDateSource"
+          },
           "return_code": {
             "title": "Return Code",
             "type": "string"
@@ -46749,6 +46759,7 @@
           "as_of",
           "horizon_months",
           "lookback_months",
+          "reporting_date_source",
           "anchors"
         ],
         "title": "ReturnAnchorListRead",
@@ -46756,7 +46767,7 @@
       },
       "ReturnAnchorRead": {
         "additionalProperties": false,
-        "description": "One reporting date a return reports on, with what exists for it.\n\n``reporting_date`` comes from the return definition \u2014 BoG's cadence \u2014 not\nfrom the bank's ingestion history, so this list is identical for two banks\nfiling the same return and is never empty for an eligible return.",
+        "description": "One reporting date a return reports on, with what exists for it.\n\nFor a periodic return ``reporting_date`` comes from the return definition \u2014\nBoG's cadence \u2014 not from the bank's ingestion history, so this list is\nidentical for two banks filing the same return and is never empty for an\neligible return. For an event-driven pack it is one of the bank's computed\nposition dates, and there is no regulator deadline to report.",
         "properties": {
           "data_status": {
             "$ref": "#/components/schemas/AnchorDataStatus"
@@ -94325,7 +94336,7 @@
     },
     "/api/v1/banks/{bank_id}/return-anchors": {
       "get": {
-        "description": "The reporting dates this return reports on, and what exists for each.\n\nThe dates are the REGULATOR's, derived from the return definition, so this\nis the list a preparer picks a reporting date from \u2014 not the bank's ingested\nreporting periods, which are a consequence of data arrival rather than a\nfiling calendar (``services/regulatory_reporting/anchors.py``).\n\n``lookback_months`` is the trailing half of that window and ``horizon_months``\nthe forward half. Elapsed reporting dates are offered because an overdue\nreturn is exactly the one still owed to the regulator; each carries its true\n``data_status``, and a date with no computed position is listed, never hidden.",
+        "description": "The reporting dates this return reports on, and what exists for each.\n\nThe dates are the REGULATOR's, derived from the return definition, so this\nis the list a preparer picks a reporting date from \u2014 not the bank's ingested\nreporting periods, which are a consequence of data arrival rather than a\nfiling calendar (``services/regulatory_reporting/anchors.py``).\n\n``lookback_months`` is the trailing half of that window and ``horizon_months``\nthe forward half. Elapsed reporting dates are offered because an overdue\nreturn is exactly the one still owed to the regulator; each carries its true\n``data_status``, and a date with no computed position is listed, never hidden.\nAn event-driven pack has no regulator date and offers the bank's computed\nposition dates instead; ``reporting_date_source`` says which.",
         "operationId": "listReturnAnchors",
         "parameters": [
           {

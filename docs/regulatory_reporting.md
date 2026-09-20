@@ -92,6 +92,8 @@ superseded by this delta where they differ.
    `bank_reporting_periods.period_end` values, which are snapshots created by the data path.
    The figures are then resolved **exactly** as of the selected date for every cadence; a missing
    snapshot is refused (`no_computed_position`, 409), never filled from the nearest earlier book.
+   Event-driven packs (the LRT corporate family) are the one exception: the regulator sets no
+   reporting date for them, so they take their as-of date from the bank's computed snapshots.
    See §5a.
 
 ## 2. Package lifecycle
@@ -177,7 +179,8 @@ keeps its `WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact` label.
   instructions with the research-confirmed addresses; records the event; no actual SMTP in MVP).
 - `workflow.py` — state machine + maker-checker + audit events (`record_event`).
 - `anchors.py` — the reporting dates a return reports on, from the registry alone (no DB, no
-  tenant), plus `snapshot_coverage` (which of those dates the bank has computed figures for).
+  tenant), plus `snapshot_coverage` (which of those dates the bank has computed figures for) and
+  `computed_snapshot_dates` (the as-of dates an event-driven pack may be generated for).
 - `calendar.py` — obligations for the next N months per registry + bank config; RAG staleness;
   `list_return_anchors` (the per-return picker the Returns workspace binds to). Both surfaces
   link only the current solo package for each anchor and batch those package reads into one query,
@@ -222,6 +225,20 @@ its deadline runs regardless. Generation resolves the snapshot **exactly** for e
 daily "latest period ending on or before" fallback was removed with it, since it would have filed a
 month-old book as a business day's position — and refuses with `no_computed_position` naming the
 date required, the nearest earlier computed date, and the remedy.
+
+**Event-driven returns take their as-of date from computed snapshots; periodic returns from
+regulator anchors.** An event-driven pack (`ReturnDefinition.event_driven`, the LRT corporate
+family) is filed because a corporate event happened, so the regulator fixes no reporting date for
+it and `anchor_dates` yields none — expanding its nominal frequency would fabricate obligations. Its
+figures are still the bank's position as of some date, resolved exactly like every other return, so
+`list_return_anchors` offers the positions the bank actually holds: `anchors.computed_snapshot_dates`
+(newest first, bounded by `EVENT_DRIVEN_SNAPSHOT_LIMIT`), every one `computed`, none carrying a
+deadline (`due_date`/`rag` are null). The payload's `reporting_date_source` says which kind of date
+it offers — `regulator_anchor` or `computed_snapshot` — and the Returns workspace labels the picker
+accordingly; the institution-register link carries the newest position so the pack opens ready to
+generate. A bank with nothing computed gets an empty list, never an earlier book and never a
+fabricated date. Periodic returns are untouched by this path, and the calendar still never lists
+event-driven packs as obligations.
 
 ## 6. API (`app/features/manage_regulatory_reporting.py`)
 

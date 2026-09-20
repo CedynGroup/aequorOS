@@ -2380,7 +2380,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).  ``lookback_months`` is the trailing half of that window and ``horizon_months`` the forward half. Elapsed reporting dates are offered because an overdue return is exactly the one still owed to the regulator; each carries its true ``data_status``, and a date with no computed position is listed, never hidden.
+   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).  ``lookback_months`` is the trailing half of that window and ``horizon_months`` the forward half. Elapsed reporting dates are offered because an overdue return is exactly the one still owed to the regulator; each carries its true ``data_status``, and a date with no computed position is listed, never hidden. An event-driven pack has no regulator date and offers the bank\'s computed position dates instead; ``reporting_date_source`` says which.
    * List Return Anchors
    */
   async listReturnAnchorsRaw(
@@ -2444,7 +2444,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).  ``lookback_months`` is the trailing half of that window and ``horizon_months`` the forward half. Elapsed reporting dates are offered because an overdue return is exactly the one still owed to the regulator; each carries its true ``data_status``, and a date with no computed position is listed, never hidden.
+   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).  ``lookback_months`` is the trailing half of that window and ``horizon_months`` the forward half. Elapsed reporting dates are offered because an overdue return is exactly the one still owed to the regulator; each carries its true ``data_status``, and a date with no computed position is listed, never hidden. An event-driven pack has no regulator date and offers the bank\'s computed position dates instead; ``reporting_date_source`` says which.
    * List Return Anchors
    */
   async listReturnAnchors(

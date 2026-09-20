@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { ReportingDateSource } from "./ReportingDateSource";
+import {
+  ReportingDateSourceFromJSON,
+  ReportingDateSourceFromJSONTyped,
+  ReportingDateSourceToJSON,
+  ReportingDateSourceToJSONTyped,
+} from "./ReportingDateSource";
 import type { ReturnAnchorRead } from "./ReturnAnchorRead";
 import {
   ReturnAnchorReadFromJSON,
@@ -109,6 +116,12 @@ export interface ReturnAnchorListRead {
   lookbackMonths: number;
   /**
    *
+   * @type {ReportingDateSource}
+   * @memberof ReturnAnchorListRead
+   */
+  reportingDateSource: ReportingDateSource;
+  /**
+   *
    * @type {string}
    * @memberof ReturnAnchorListRead
    */
@@ -128,6 +141,11 @@ export function instanceOfReturnAnchorListRead(
   if (!("horizonMonths" in value) || value["horizonMonths"] === undefined)
     return false;
   if (!("lookbackMonths" in value) || value["lookbackMonths"] === undefined)
+    return false;
+  if (
+    !("reportingDateSource" in value) ||
+    value["reportingDateSource"] === undefined
+  )
     return false;
   if (!("returnCode" in value) || value["returnCode"] === undefined)
     return false;
@@ -165,6 +183,9 @@ export function ReturnAnchorListReadFromJSONTyped(
         ? undefined
         : IneligibleReasonFromJSON(json["ineligible_reason"]),
     lookbackMonths: json["lookback_months"],
+    reportingDateSource: ReportingDateSourceFromJSON(
+      json["reporting_date_source"],
+    ),
     returnCode: json["return_code"],
   };
 }
@@ -191,6 +212,9 @@ export function ReturnAnchorListReadToJSONTyped(
     horizon_months: value["horizonMonths"],
     ineligible_reason: IneligibleReasonToJSON(value["ineligibleReason"]),
     lookback_months: value["lookbackMonths"],
+    reporting_date_source: ReportingDateSourceToJSON(
+      value["reportingDateSource"],
+    ),
     return_code: value["returnCode"],
   };
 }
