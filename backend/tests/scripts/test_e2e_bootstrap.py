@@ -1,6 +1,6 @@
 """The e2e book reaches the reporting anchor currently due.
 
-The Returns workspace opens on the regulator's most recent elapsed anchor, and a
+The Returns workspace opens on the regulator's latest anchor on or before today, and a
 return is only ever generated from the exact snapshot as of that date. The
 canonical book ends at a fixed month, so the hermetic e2e bootstrap carries it
 forward month by month; these tests pin that the carry-forward lands on the
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -20,7 +21,7 @@ from app.models import BankFinancialFact, BankReportingPeriod
 from app.services.regulatory_reporting import calendar
 from app.services.regulatory_reporting.anchors import anchor_dates, horizon_end_for
 from app.services.regulatory_reporting.registry import get_definition
-from scripts.e2e_bootstrap import latest_elapsed_month_end
+from scripts.e2e_bootstrap import latest_month_end_on_or_before
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -59,14 +60,17 @@ def _fact_signature(db: Session, period_end: date) -> set[tuple[str, str, str]]:
     return {(fact.fact_group, fact.category, str(fact.amount)) for fact in facts}
 
 
-def test_latest_elapsed_month_end_matches_the_monthly_anchor_currently_due() -> None:
+@pytest.mark.parametrize(
+    "today",
+    [date(2026, 9, 19), date(2026, 9, 30), date(2026, 10, 1), date(2027, 1, 1)],
+)
+def test_latest_month_end_on_or_before_matches_the_workspace_anchor(today: date) -> None:
     """The bootstrap's target date is the anchor the workspace defaults to."""
     monthly = get_definition("LCR-NSFR")
     assert monthly is not None and monthly.frequency == "monthly"
-    for today in (date(2026, 9, 19), date(2026, 9, 30), date(2026, 10, 1), date(2027, 1, 1)):
-        anchors = anchor_dates(monthly, today, horizon_end_for(today, 3))
-        due_now = max(anchor for anchor in anchors if anchor < today)
-        assert latest_elapsed_month_end(today) == due_now
+    anchors = sorted(anchor_dates(monthly, today, horizon_end_for(today, 3)), reverse=True)
+    selected = next(anchor for anchor in anchors if anchor <= today)
+    assert latest_month_end_on_or_before(today) == selected
 
 
 def test_carry_forward_reaches_the_anchor_and_leaves_the_canonical_book_alone(
@@ -109,17 +113,25 @@ def test_carry_forward_is_a_no_op_inside_the_canonical_span(db_session: Session)
     assert _period_ends(db_session) == canonical_ends
 
 
-def test_the_workspace_anchor_is_computed_after_the_carry_forward(db_session: Session) -> None:
+@pytest.mark.parametrize(
+    ("today", "expected_anchor"),
+    [
+        (date(2026, 9, 19), date(2026, 8, 31)),
+        (date(2026, 9, 30), date(2026, 9, 30)),
+        (date(2026, 10, 1), date(2026, 9, 30)),
+        (date(2027, 1, 1), date(2026, 12, 31)),
+    ],
+)
+def test_the_workspace_anchor_is_computed_after_the_carry_forward(
+    db_session: Session, today: date, expected_anchor: date
+) -> None:
     """What the journeys see: the default anchor is generate-able, not awaiting data."""
     materialize_canonical_test_book(db_session)
-    today = date(2026, 9, 19)
-    extend_canonical_test_book(db_session, through=latest_elapsed_month_end(today))
+    extend_canonical_test_book(db_session, through=latest_month_end_on_or_before(today))
     for code in ("LCR-NSFR", "LMT"):
         result = calendar.list_return_anchors(
             db_session, MAKER, SAMPLE_BANK_ID, code, horizon_months=3, as_of=today
         )
-        elapsed = [anchor for anchor in result.anchors if anchor.reporting_date < today]
-        assert elapsed, f"{code}: no elapsed anchor offered"
-        due_now = max(elapsed, key=lambda anchor: anchor.reporting_date)
-        assert due_now.reporting_date == date(2026, 8, 31)
-        assert due_now.data_status == "computed"
+        selected = next(anchor for anchor in result.anchors if anchor.reporting_date <= today)
+        assert selected.reporting_date == expected_anchor
+        assert selected.data_status == "computed"

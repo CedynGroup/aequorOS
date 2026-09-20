@@ -12,13 +12,13 @@ institution profile, every package — flows through the API in the Playwright
 global setup and the journeys themselves: the same paths the product uses.
 
 The book is carried forward because the Returns workspace opens on the
-regulator's anchor (the most recent elapsed month end for a monthly return —
+regulator's anchor (the last month end on or before today for a monthly return —
 ``services/regulatory_reporting/anchors.py``), and a return can only be
 generated from an EXACT snapshot as of that date. The canonical book ends at
 a fixed month; without the carry-forward every anchor after it reads "no
 position has been computed", correctly, and the generate journeys have
 nothing to drive. ``extend_canonical_test_book`` appends one snapshot per
-month end through the last one before today, each repeating the canonical
+month end through the last month end on or before today, each repeating the canonical
 latest fact set unchanged.
 
 It also enrols a **software signing key** per human role so the attestation
@@ -41,6 +41,7 @@ Usage: DATABASE_URL=sqlite+pysqlite:///<path> uv run python scripts/e2e_bootstra
 
 from __future__ import annotations
 
+import calendar
 import hashlib
 import os
 from datetime import date, timedelta
@@ -312,7 +313,7 @@ def main() -> None:
 def _materialize_book(session: Session) -> None:
     """Seed the canonical book and carry it forward to the anchor currently due."""
     summary = materialize_canonical_test_book(session)
-    appended = extend_canonical_test_book(session, through=latest_elapsed_month_end())
+    appended = extend_canonical_test_book(session, through=latest_month_end_on_or_before())
     print(
         f"canonical book: {summary.periods} periods, carried forward through "
         f"{appended[-1].isoformat() if appended else 'the canonical span'} "
@@ -320,14 +321,16 @@ def _materialize_book(session: Session) -> None:
     )
 
 
-def latest_elapsed_month_end(today: date | None = None) -> date:
-    """The last month end strictly before ``today``.
+def latest_month_end_on_or_before(today: date | None = None) -> date:
+    """The last month end on or before ``today``.
 
-    Mirrors ``anchors._period_end_anchors``: a monthly return's most recent
-    ELAPSED anchor is the latest month end before ``as_of``, so on the last day
-    of a month the anchor due is still the previous month's.
+    Mirrors the Returns workspace's first anchor <= today in descending order,
+    including today itself when it is a month end.
     """
-    return (today or date.today()).replace(day=1) - timedelta(days=1)
+    today = today or date.today()
+    if today.day == calendar.monthrange(today.year, today.month)[1]:
+        return today
+    return today.replace(day=1) - timedelta(days=1)
 
 
 def _materialize_live_plane(session: Session) -> None:
