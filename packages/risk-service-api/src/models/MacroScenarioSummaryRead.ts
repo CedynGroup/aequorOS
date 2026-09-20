@@ -32,6 +32,13 @@ import {
   ApprovedBy1ToJSON,
   ApprovedBy1ToJSONTyped,
 } from "./ApprovedBy1";
+import type { ScenarioOwner } from "./ScenarioOwner";
+import {
+  ScenarioOwnerFromJSON,
+  ScenarioOwnerFromJSONTyped,
+  ScenarioOwnerToJSON,
+  ScenarioOwnerToJSONTyped,
+} from "./ScenarioOwner";
 import type { BankId1 } from "./BankId1";
 import {
   BankId1FromJSON,
@@ -104,10 +111,28 @@ export interface MacroScenarioSummaryRead {
   id: string;
   /**
    *
+   * @type {boolean}
+   * @memberof MacroScenarioSummaryRead
+   */
+  isImmutable?: boolean;
+  /**
+   *
+   * @type {boolean}
+   * @memberof MacroScenarioSummaryRead
+   */
+  isRunnable?: boolean;
+  /**
+   *
    * @type {string}
    * @memberof MacroScenarioSummaryRead
    */
   name: string;
+  /**
+   *
+   * @type {ScenarioOwner}
+   * @memberof MacroScenarioSummaryRead
+   */
+  owner?: ScenarioOwner;
   /**
    *
    * @type {number}
@@ -194,7 +219,12 @@ export function MacroScenarioSummaryReadFromJSONTyped(
     createdBy: CreatedByFromJSON(json["created_by"]),
     horizonYears: json["horizon_years"],
     id: json["id"],
+    isImmutable:
+      json["is_immutable"] == null ? undefined : json["is_immutable"],
+    isRunnable: json["is_runnable"] == null ? undefined : json["is_runnable"],
     name: json["name"],
+    owner:
+      json["owner"] == null ? undefined : ScenarioOwnerFromJSON(json["owner"]),
     pathCount: json["path_count"],
     scenarioType: AppSchemasStressScenarioTypeFromJSON(json["scenario_type"]),
     severity: ActionItemInMinSeverityFromJSON(json["severity"]),
@@ -226,7 +256,10 @@ export function MacroScenarioSummaryReadToJSONTyped(
     created_by: CreatedByToJSON(value["createdBy"]),
     horizon_years: value["horizonYears"],
     id: value["id"],
+    is_immutable: value["isImmutable"],
+    is_runnable: value["isRunnable"],
     name: value["name"],
+    owner: ScenarioOwnerToJSON(value["owner"]),
     path_count: value["pathCount"],
     scenario_type: AppSchemasStressScenarioTypeToJSON(value["scenarioType"]),
     severity: ActionItemInMinSeverityToJSON(value["severity"]),

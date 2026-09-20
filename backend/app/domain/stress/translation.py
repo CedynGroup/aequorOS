@@ -126,6 +126,10 @@ class ShockMapping:
     terms: tuple[ElasticityTerm, ...]
     floor: Decimal | None = None
     cap: Decimal | None = None
+    # Optional enrichments do not expand the module's fail-closed minimum input
+    # contract. Activation prerequisites can omit an optional mapping entirely.
+    required: bool = True
+    activate_when_present: tuple[str, ...] = ()
     # Extra metadata, ignored by the maths — provenance for readers/audits.
     rationale: str = field(default="")
 
@@ -395,6 +399,22 @@ DEFAULT_ELASTICITIES: dict[str, tuple[ShockMapping, ...]] = {
             (_t("interest_rate", _DELTA, "10000"),),
             rationale="Parallel curve shift: 1:1 with the market rate.",
         ),
+        ShockMapping(
+            "short_bp",
+            _ADDITIVE,
+            (_t("policy_rate", _DELTA, "10000"),),
+            required=False,
+            activate_when_present=("policy_rate", "gog_yield"),
+            rationale="Short-end shift: 1:1 with the policy-rate path.",
+        ),
+        ShockMapping(
+            "long_bp",
+            _ADDITIVE,
+            (_t("gog_yield", _DELTA, "10000"),),
+            required=False,
+            activate_when_present=("policy_rate", "gog_yield"),
+            rationale="Long-end shift: 1:1 with the sovereign-yield path.",
+        ),
     ),
     # Cedi depreciation → NOP revaluation shock (%).
     "fx": (
@@ -483,6 +503,7 @@ def required_variables(
             {
                 term.variable
                 for mapping in _register_for(module, overrides)
+                if mapping.required
                 for term in mapping.terms
             }
         )
@@ -497,9 +518,7 @@ def missing_variables(
     """The required variables the supplied paths do not carry (empty = complete)."""
     present = {point.variable for point in scenario_paths}
     return tuple(
-        variable
-        for variable in required_variables(module, overrides)
-        if variable not in present
+        variable for variable in required_variables(module, overrides) if variable not in present
     )
 
 
@@ -569,8 +588,20 @@ def translate(
             )
         )
     result: dict[str, Decimal] = {}
+    present = {point.variable for point in scenario_paths}
     for mapping in mappings:
+        if mapping.activate_when_present and not set(mapping.activate_when_present) <= present:
+            continue
         value = _shock_value(scenario_paths, mapping)
         if value != mapping.neutral:
             result[mapping.shock_key] = value
+    if module == "irr" and "long_bp" in result:
+        result.setdefault("short_bp", Decimal(0))
+    if (
+        module == "irr"
+        and "short_bp" in result
+        and "parallel_bp" not in result
+        and "long_bp" not in result
+    ):
+        result["decay_years"] = Decimal("3")
     return result

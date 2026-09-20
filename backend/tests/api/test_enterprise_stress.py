@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.core.authorization import (
     GrantorType,
@@ -28,10 +28,12 @@ from app.core.authorization import (
 )
 from app.db.session import get_sessionmaker
 from app.models import AuthorizationBinding, RegulatoryRun, User
-from app.services import authorization
+from app.services import authorization, default_macro_scenarios
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_fx_authorization import _grant
 from tests.api.test_ingestion import seed_bank
+
+pytestmark = pytest.mark.usefixtures("irrbb_run_authority")
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 LATEST_URL = "/api/v1/banks/{bank_id}/enterprise-stress/latest"
@@ -221,6 +223,127 @@ def test_enterprise_stress_persists_run_projection_and_appendix(db_client: TestC
         headers=headers(ORG_2),
     )
     assert foreign.status_code == 404
+
+
+def test_enterprise_stress_runs_a_system_default_without_approval(
+    db_client: TestClient,
+    monkeypatch,
+) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    scenario = default_macro_scenarios.DEFAULT_BY_CODE["system_irr_parallel_up_200"]
+
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": str(scenario.id),
+            "reporting_period_id": period_id,
+            "reason": "Run the platform IRRBB parallel-up default.",
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["scenario_id"] == str(scenario.id)
+    assert body["scenario_code"] == scenario.code
+    assert body["outcome"]["irr"]["delta_eve"] != "0.0000"
+
+    # Immutable runs reopen from their own scenario snapshot even after a
+    # catalogue version retires the original system identifier.
+    monkeypatch.delitem(default_macro_scenarios.DEFAULT_BY_ID, scenario.id)
+    reopened = db_client.get(
+        f"{RUNS_URL.format(bank_id=bank_id)}/{body['run_id']}",
+        headers=headers(),
+    )
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["scenario_id"] == str(scenario.id)
+    assert reopened.json()["scenario_code"] == scenario.code
+
+    latest = db_client.get(
+        LATEST_URL.format(bank_id=bank_id),
+        params={"reporting_period_id": period_id, "scenario_id": str(scenario.id)},
+        headers=headers(),
+    )
+    assert latest.status_code == 200, latest.text
+    assert latest.json()["run_id"] == body["run_id"]
+    assert latest.json()["scenario_id"] == str(scenario.id)
+
+
+def test_latest_run_distinguishes_system_and_tenant_scenarios_with_same_code(
+    db_client: TestClient,
+) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    system = default_macro_scenarios.DEFAULT_BY_CODE["system_adverse_bog_style"]
+    tenant_id = _create_scenario(db_client, code=system.code)
+    _approve_scenario(db_client, tenant_id, _seed_checker(db_client))
+    run_ids = {}
+    for scenario_id in (str(system.id), tenant_id, tenant_id):
+        response = db_client.post(
+            RUNS_URL.format(bank_id=bank_id),
+            headers=headers(),
+            json={
+                "scenario_id": scenario_id,
+                "reporting_period_id": period_id,
+                "reason": "Exercise scenario identity with a shared code.",
+            },
+        )
+        assert response.status_code == 201, response.text
+        run_ids[scenario_id] = response.json()["run_id"]
+
+    for scenario_id, run_id in run_ids.items():
+        params = {"reporting_period_id": period_id, "scenario_id": scenario_id}
+        latest = db_client.get(LATEST_URL.format(bank_id=bank_id), params=params, headers=headers())
+        assert latest.status_code == 200, latest.text
+        assert latest.json()["run_id"] == run_id
+        assert latest.json()["scenario_id"] == scenario_id
+        foreign = db_client.get(
+            LATEST_URL.format(bank_id=bank_id), params=params, headers=headers(ORG_2)
+        )
+        assert foreign.status_code == 404
+
+
+@pytest.mark.parametrize("rotation", ["steepener", "flattener"])
+def test_cloned_rotation_with_flat_policy_rate_runs(db_client: TestClient, rotation: str) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    system = default_macro_scenarios.DEFAULT_BY_CODE[f"system_irr_{rotation}"]
+    clone = db_client.post(
+        f"{SCENARIO_URL}/{system.id}/clone",
+        headers=headers(),
+        json={"reason": "Customize the long end independently."},
+    )
+    assert clone.status_code == 201, clone.text
+    scenario_id = clone.json()["id"]
+    paths = [
+        {
+            "variable": point["variable"],
+            "year_index": point["year_index"],
+            "base_value": point["base_value"],
+            "stress_value": (
+                point["base_value"] if point["variable"] == "policy_rate" else point["stress_value"]
+            ),
+        }
+        for point in clone.json()["paths"]
+    ]
+    edited = db_client.patch(
+        f"{SCENARIO_URL}/{scenario_id}",
+        headers=headers(),
+        json={"paths": paths, "reason": "Keep policy rates flat."},
+    )
+    assert edited.status_code == 200, edited.text
+    _approve_scenario(db_client, scenario_id, _seed_checker(db_client))
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(),
+        json={
+            "scenario_id": scenario_id,
+            "reporting_period_id": period_id,
+            "reason": "Run the approved long-end rotation.",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert Decimal(response.json()["outcome"]["irr"]["delta_eve"]) != 0
 
 
 def test_enterprise_stress_requires_an_approved_scenario(db_client: TestClient) -> None:
@@ -544,3 +667,41 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
         stored = session.get(RegulatoryRun, UUID(run_id))
         assert stored.metrics == original_metrics
         assert stored.inputs == original_inputs
+
+
+@pytest.mark.parametrize("sensitivity", [None, SensitivityScope.AGGREGATED])
+def test_system_run_requires_confidential_irrbb_authority(
+    db_client: TestClient, sensitivity: SensitivityScope | None
+) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    with get_sessionmaker()() as session:
+        session.execute(
+            delete(AuthorizationBinding).where(
+                AuthorizationBinding.principal_user_id == USER_1,
+                AuthorizationBinding.module_scope == ModuleScope.IRRBB,
+            )
+        )
+        session.commit()
+        before = list(session.scalars(select(RegulatoryRun.id)))
+    version = 1
+    if sensitivity is not None:
+        _, version = _grant(
+            role_bundle=RoleBundle.ANALYST,
+            institution_id=bank_id,
+            module_scope=ModuleScope.IRRBB,
+            sensitivity_scope=sensitivity,
+        )
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(roles=("analyst",), authorization_version=version),
+        json={
+            "scenario_id": str(default_macro_scenarios.DEFAULT_BY_CODE["system_base_consensus"].id),
+            "reporting_period_id": period_id,
+            "include_fx": False,
+            "reason": "Verify exact default run authority",
+        },
+    )
+    assert response.status_code == 403, response.text
+    with get_sessionmaker()() as session:
+        assert list(session.scalars(select(RegulatoryRun.id))) == before

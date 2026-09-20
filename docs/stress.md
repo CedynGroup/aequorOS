@@ -3,8 +3,9 @@
 **What this is:** a review of AequorOS's current stress-testing implementation (backend + UI)
 against the **Bank of Ghana Guideline on Stress Testing, 2026 (Exposure Draft, Feb 2026)**
 (`docs/EXPOSURE-Draft-Directive-on-Stress-Testing_FEBRUARY-2026.pdf`), the gaps, and a
-buildable target architecture for another agent to implement. **Status: current build is
-partial; this is the plan to close it.**
+buildable target architecture. **The gap inventory and build plan describe the
+2026-08-19 baseline, not current feature availability.** The current default-scenario
+contract and workbench behavior are documented in §3.1.1.
 
 **The authority:** the BoG Guideline. It applies to **RFIs = banks, savings & loans, finance
 houses, finance & leasing, FHCs** (¶3) — so it also scopes into `sdi.md` (see §8). **Effective
@@ -23,7 +24,7 @@ s.92(1); read with the Risk Management Directive 2021, the CRD 2018, and the IRR
 
 The platform has the **compute primitives** (per-module stress overlays, reverse-stress
 bisection, forecast projection, VaR) and the **chart primitives** (recharts waterfall, tornado,
-threshold lines, projection paths) — but not the **stress-testing *framework*** the directive
+threshold lines, projection paths) — but not the **stress-testing _framework_** the directive
 requires. Three structural gaps dominate:
 
 1. **No macro-scenario layer.** Every shock in the platform is a **direct risk-parameter
@@ -44,25 +45,26 @@ requires. Three structural gaps dominate:
 
 ### Compliance scorecard (directive part → current state)
 
-| Directive area | Requirement (¶) | Current state | Verdict |
-|---|---|---|---|
-| Governance & framework | Board attestation, Stress Testing Committee, scenario approval, model validation (¶10–29, ¶57–63) | Immutable runs exist; **no stress-run sign-off/challenge, no framework attestation, no runtime scenario approval** | **PARTIAL** |
-| Scenario design (macro) | Macro variables, consistent, ≥1 severe downturn, historical + hypothetical, forward-looking (¶34–43, AppIII) | Direct parameter overrides only; **no macro layer**; codes frozen at deploy | **GAP** |
-| Sensitivity / scenario / enterprise / reverse taxonomy | Full taxonomy (defs; ¶6, ¶40, ¶50) | Scenario ✓, reverse ✓; **enterprise-wide integrated = absent**; sensitivity = fixed single-factor only | **PARTIAL** |
-| Models & methodologies | Fit-for-purpose, justified overlays, range of methods (¶44–47) | Fixed engines; no methodology registry/validation | **PARTIAL** |
-| IFRS 9 ECL under stress | PD/LGD/ECL linkage; **Perfect Foresight (3yr)**; **Single Scenario (100% weight)** (¶48–49, AppI¶5–6) | ECL engine exists; **not driven by a stress scenario, no perfect-foresight/single-scenario mode** | **GAP** |
-| 3-year projection | Pre/post-stress capital ≥3yr; remain above all minima (¶68, ¶77) | 4-quarter capital path; 5-year forecast; **not 3yr stress projection to Appendix II** | **GAP** |
-| Per-risk methods | Credit/market/operational/liquidity/IRRBB/concentration/contingent-leverage/macro (AppI) | Credit (RWA-growth proxy), liquidity, IRRBB, FX present; **operational stress, concentration stress, contingent-leverage = absent** | **PARTIAL** |
-| Management actions | Broad set, triggers, **results with & without** (¶78–81, AppII T1) | Deterministic recommended-action **text** only; **not modelled, no with/without** | **GAP** |
-| Reporting | Appendix II Tables 1–6; annual ICAAP submission by **end-March**; vulnerability granularity (¶64–67, AppII) | STRESS-PACK + ICAAP-STRESS returns exist (own format); **not the Appendix II tables** | **GAP** |
-| ICAAP integration (Part IV, banks only) | Stress within ICAAP; capital+liquidity plans (¶68–77) | ICAAP-STRESS companion return; **no capital-restoration/ICAAP stress projection** | **PARTIAL** |
-| UI / product | A usable stress workbench | One table, no charts, write-only saves | **BELOW GRADE** |
+| Directive area                                         | Requirement (¶)                                                                                              | Current state                                                                                                                       | Verdict         |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| Governance & framework                                 | Board attestation, Stress Testing Committee, scenario approval, model validation (¶10–29, ¶57–63)            | Immutable runs exist; **no stress-run sign-off/challenge, no framework attestation, no runtime scenario approval**                  | **PARTIAL**     |
+| Scenario design (macro)                                | Macro variables, consistent, ≥1 severe downturn, historical + hypothetical, forward-looking (¶34–43, AppIII) | Direct parameter overrides only; **no macro layer**; codes frozen at deploy                                                         | **GAP**         |
+| Sensitivity / scenario / enterprise / reverse taxonomy | Full taxonomy (defs; ¶6, ¶40, ¶50)                                                                           | Scenario ✓, reverse ✓; **enterprise-wide integrated = absent**; sensitivity = fixed single-factor only                              | **PARTIAL**     |
+| Models & methodologies                                 | Fit-for-purpose, justified overlays, range of methods (¶44–47)                                               | Fixed engines; no methodology registry/validation                                                                                   | **PARTIAL**     |
+| IFRS 9 ECL under stress                                | PD/LGD/ECL linkage; **Perfect Foresight (3yr)**; **Single Scenario (100% weight)** (¶48–49, AppI¶5–6)        | ECL engine exists; **not driven by a stress scenario, no perfect-foresight/single-scenario mode**                                   | **GAP**         |
+| 3-year projection                                      | Pre/post-stress capital ≥3yr; remain above all minima (¶68, ¶77)                                             | 4-quarter capital path; 5-year forecast; **not 3yr stress projection to Appendix II**                                               | **GAP**         |
+| Per-risk methods                                       | Credit/market/operational/liquidity/IRRBB/concentration/contingent-leverage/macro (AppI)                     | Credit (RWA-growth proxy), liquidity, IRRBB, FX present; **operational stress, concentration stress, contingent-leverage = absent** | **PARTIAL**     |
+| Management actions                                     | Broad set, triggers, **results with & without** (¶78–81, AppII T1)                                           | Deterministic recommended-action **text** only; **not modelled, no with/without**                                                   | **GAP**         |
+| Reporting                                              | Appendix II Tables 1–6; annual ICAAP submission by **end-March**; vulnerability granularity (¶64–67, AppII)  | STRESS-PACK + ICAAP-STRESS returns exist (own format); **not the Appendix II tables**                                               | **GAP**         |
+| ICAAP integration (Part IV, banks only)                | Stress within ICAAP; capital+liquidity plans (¶68–77)                                                        | ICAAP-STRESS companion return; **no capital-restoration/ICAAP stress projection**                                                   | **PARTIAL**     |
+| UI / product                                           | A usable stress workbench                                                                                    | One table, no charts, write-only saves                                                                                              | **BELOW GRADE** |
 
 ---
 
 ## 1. What the directive requires (the yardstick)
 
 ### 1.1 Taxonomy & definitions (¶5–6, Part I)
+
 - **Sensitivity analysis** — single/limited risk factor, no cohesive narrative.
 - **Scenario analysis** — joint movement of many macro/financial parameters, consistent.
 - **Enterprise-wide stress test** — the RFI as a whole, not one business line/portfolio.
@@ -75,6 +77,7 @@ requires. Three structural gaps dominate:
   liquid-asset prices). **Second-round / feedback effects** amplify initial shocks.
 
 ### 1.2 Governance (Part II, ¶10–29)
+
 Board holds ultimate responsibility; a **Stress Testing Committee** develops/implements; roles
 split across **scenario development & approval, model development & validation, reporting &
 challenge, use of outputs** (¶16). Policies documented and Board-approved (¶17). **Board attests
@@ -82,6 +85,7 @@ it has reviewed and challenged both the framework and the results, with a ration
 credibility** (¶20). Annual review; **independent validation** (¶57–63).
 
 ### 1.3 Scenario design (¶33–43, AppIII)
+
 - Capture **all material risks** (on/off-balance, earnings, operational, reputational, climate).
 - Each scenario built on **macroeconomic variables in a consistent manner**: **GDP, interest
   rate, inflation, FX** (¶34), plus **unemployment, asset prices** (¶43).
@@ -95,8 +99,10 @@ credibility** (¶20). Annual review; **independent validation** (¶57–63).
   GSS, Bloomberg, IMF, World Bank, Reuters, Fitch, AfDB, EIU.
 
 ### 1.4 Models & methodologies (¶44–50)
+
 Fit-for-purpose; **justify all overlays/expert judgement** with challenge/validation (¶45); a
 **range of methodologies**; key outputs = **implied losses, solvency (CAR), liquidity** (¶46).
+
 - **IFRS 9 ECL under stress (¶48–49, AppI¶5–6):** demonstrate the link scenario → **PD, LGD,
   ECL**; **Perfect Foresight** — assume accurate prediction of **≥3 years** of macro from day one;
   **Single Scenario** — ascribe **100% probability weight** to the stress scenario.
@@ -104,6 +110,7 @@ Fit-for-purpose; **justify all overlays/expert judgement** with challenge/valida
   liquidity, funding** (¶50).
 
 ### 1.5 Use, review, reporting (¶51–67)
+
 Regular schedule + ad hoc (¶53); results feed **risk appetite, capital & liquidity planning,
 contingency & recovery, ICAAP** (¶55). Annual framework review + independent validation;
 **solvency–liquidity interlinkage** (¶59(f)). **RFIs submit annual stress-test results to BoG as
@@ -115,6 +122,7 @@ granularity (currency, business line, sector, borrower groups); Board minutes; i
 reviews.
 
 ### 1.6 ICAAP integration (Part IV, ¶68–81 — banks only per fn.16)
+
 Project **pre/post-stress regulatory capital ≥3 years** (¶68). Stress the AppI risks →
 **NII, NPLs, profitability, investment portfolio, capital** (¶71). **≥1 severe adverse macro
 scenario** (severe downturn and/or market-wide + idiosyncratic liquidity shock); **≥3-year
@@ -123,6 +131,7 @@ leverage, paid-up capital** (¶77). **Management actions** — broad, credible, 
 documented, and reported **with and without** (¶78–81).
 
 ### 1.7 Per-risk methodologies (Appendix I)
+
 - **Credit & counterparty** — PD, LGD, EAD; market-wide / idiosyncratic (largest counterparty) /
   sector-specific / combined shocks; collateral-value stress; impact on **IFRS-9 impairment + BoG
   provisions, RWA, NII/fees, cost, capital**.
@@ -147,6 +156,7 @@ documented, and reported **with and without** (¶78–81).
 - **Macroeconomic** — well-defined, severe-but-plausible, justified.
 
 ### 1.8 Output contract (Appendix II — the regulatory deliverable)
+
 - **Table 1 — Summary Results:** Current + 3-year projection. Capital gap; **Pre-Adverse (Base
   Case)** CET1/Tier1/Tier2/Total Reg Cap/RWA + ratios; **Impact of Adverse** losses **by CRD
   exposure class** (GoG, BoG, other sovereigns/central banks, PSE, MDB, banks, other FI,
@@ -163,11 +173,11 @@ documented, and reported **with and without** (¶78–81).
   tax; PAT; distributions; **adjusted retained earnings for CAR**.
 - **Table 4 — Statement of Financial Position:** foreign + domestic assets (cash, short-term
   investments, derivatives, loans, long-term investments, equities, PPE, other); capital; foreign
-  + domestic liabilities (**demand/savings/time deposits**, borrowings). Base + Stress, 3yr.
+  and domestic liabilities (**demand/savings/time deposits**, borrowings). Base + Stress, 3yr.
 - **Table 5 — Evolution of RWA & Capital Requirements:** RWA per Pillar-1 type (credit/
   operational/market) + Pillar-1 requirement (13% of RWA); Pillar-2 (credit concentration, IRRBB,
-  sovereign, country & FX, reputational, other); Total. Base + Stress, 3yr. *(Stressed Total
-  Pillar-1 RWA must equal Table 1's stressed RWA.)*
+  sovereign, country & FX, reputational, other); Total. Base + Stress, 3yr. _(Stressed Total
+  Pillar-1 RWA must equal Table 1's stressed RWA.)_
 - **Table 6 — Key Risk Drivers & Forecasting Assumptions:** GoG-securities yield, GDP growth,
   interest rates, unemployment, **FX (USD/GBP/EUR → GHS)**, inflation, GSE index, fiscal deficit.
   Base + Stress, 3yr, with sources.
@@ -177,6 +187,7 @@ documented, and reported **with and without** (¶78–81).
 ## 2. What's built today (with paths)
 
 ### 2.1 Backend — 18 stress features, all top-down parameter overrides
+
 - **Liquidity:** `apply_liquidity_stress` (`app/domain/liquidity/engine.py:277`) — run-off/inflow/
   HQLA-haircut/ASF-RSF overrides; behavioural stressed ladder (`:494`); FX-depreciation currency
   gaps (`:413`). Breach multiplier (`app/services/regulatory_liquidity.py:1619`).
@@ -184,7 +195,7 @@ documented, and reported **with and without** (¶78–81).
   `STRESS_QUARTERS=4`) — RWA growth, CET1 retention, FX multiplier; trigger/action ladder (`:564`).
   Breach multiplier (`app/services/regulatory_capital.py:1575`).
 - **Reverse stress:** `run_reverse_stress` (`app/services/reverse_stress.py:72`) — bisection for
-  the severity *k* breaching a floor, two **independent** axes (liquidity=LCR, capital=CET1);
+  the severity _k_ breaching a floor, two **independent** axes (liquidity=LCR, capital=CET1);
   immutable `RegulatoryRun`.
 - **IRRBB:** 6 Basel ΔEVE scenarios + EaR (`app/domain/irr/engine.py:384,470`). **FX:** depreciation
   scenarios + stressed VaR (`app/domain/fx/engine.py:479,373`). **FTP:** curve/funding stress.
@@ -194,6 +205,7 @@ documented, and reported **with and without** (¶78–81).
   (`:974`).
 
 ### 2.2 The scenario data model (two walled-off stores)
+
 - **System (regulatory) scenarios:** codes **hardcoded** per module (`regulatory_liquidity.py:100`,
   `regulatory_capital.py:108`, …); values in `param_stress_shock` (`app/models/regulatory.py:224`,
   effective-dated + approval columns). **No runtime write path** — `ParamStressShock` is
@@ -205,10 +217,11 @@ documented, and reported **with and without** (¶78–81).
   saved (`SavedScenarioAnalysis`, never a `RegulatoryRun`).
 
 ### 2.3 UI — the workbench is a spreadsheet
+
 - The four "stress" routes (`basel/stress`, `liquidity/stress`, `irr/scenarios`, `fx/scenarios`)
   are thin wrappers over **one** component, `components/workbench/ScenarioWorkbench.tsx` (662
   lines), which renders **one HTML `<table>` and zero charts** (`:500-627`).
-- Shock authoring is a **raw key/value text form** validated against an allowed-keys *string*
+- Shock authoring is a **raw key/value text form** validated against an allowed-keys _string_
   (`:411-414`). The delta column is computed vs **`results[0]`** — whichever scenario was ticked
   first (`:544`), not a designated base case.
 - **Saved analyses are write-only** — list/save/delete hooks only, **no detail/re-open endpoint**
@@ -229,8 +242,10 @@ that fans out coherently into every engine and rolls up into a 3-year enterprise
 Appendix II format.** Seven components.
 
 ### 3.1 Macro-scenario model (the missing spine)
+
 A **first-class, governed Scenario** entity (replacing the frozen `param_stress_shock` +
 quarantined `StressScenario` split with one library):
+
 - `scenario_type` ∈ base | adverse | historical | hypothetical | reverse | supervisory (¶5–6).
 - **Macro-variable paths** over ≥3 years (the Table 6 drivers): GoG yield, GDP growth, policy/
   market interest rate, inflation, unemployment, FX USD/GBP/EUR→GHS, GSE index, fiscal deficit,
@@ -240,9 +255,87 @@ quarantined `StressScenario` split with one library):
   reusable across runs — an actual **scenario library**. Persist supervisory (BoG-provided)
   scenarios as a `supervisory` subtype for the bottom-up-supervisory path (¶13).
 
+#### 3.1.1 Code-defined default set and calibration
+
+The platform ships immutable, code-defined defaults from
+`backend/app/services/default_macro_scenarios.py`. They are resolved at read/run time, not seeded
+as tenant rows, so the e2e bootstrap, local sandbox and every new organization see the same
+versioned set without a provisioning step. Their UUIDv5 identifiers are stable per code and
+definition version; a new definition version has a new ID. They appear as
+`owner=system`, `status=approved`, and need no maker-checker transition. Editing, submitting,
+approving or archiving one is refused; **Clone to editable draft** copies its year-end points into
+a normal organization-owned draft, where the existing maker-checker rules apply unchanged.
+
+The workbench opens on **Scenarios & run**, with the adverse default selected (the
+parallel-up default on the IRRBB lens) and a run reason prefilled. The library labels system
+entries and non-runnable entries; the run selector excludes non-runnable scenarios. System
+entries expose cloning instead of mutation actions, and the BoG placeholder cannot be cloned
+because it has no numeric path. A fresh organization needs no scenario provisioning, but
+execution still requires an ingested institution, a reporting period, the required inputs and
+run authority. The visible-disabled run control follows the
+[IRRBB authority and shared tooltip contract](../backend/docs/irrbb_enforcement_rollout.md#dashboard-controls).
+
+Saved runs reopen from their immutable scenario snapshot, even after the corresponding system
+definition version is no longer in the current catalogue. Latest-result lookup matches the
+scenario ID stored in that snapshot, not its code, so a tenant scenario with the same code cannot
+replace a system scenario's result. Both reads remain scoped to the tenant and institution.
+
+Every runnable definition carries **three annual points** for all 13 Table 6
+drivers. Scenario details, clones, and enterprise projections use the same annual path.
+
+| Code                                                         | Type / severity        | Calibration                                                                                                                                                                                       |
+| ------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `system_base_consensus`                                      | base                   | Published 2026 Ghana anchors with a gradual three-year normalization path. Stress equals base.                                                                                                    |
+| `system_adverse_bog_style`                                   | adverse / moderate     | AequorOS calibration: year-1 +450bp domestic rates, 20% cedi depreciation, +6pp inflation, −5pp GDP growth, then recovery. **Not a BoG-prescribed numeric path.**                                 |
+| `system_severe_stagflation`                                  | hypothetical / severe  | AequorOS calibration: year-1 +500bp rates, 35% cedi depreciation, +10pp inflation, −8pp GDP growth, with sharper equity/commodity and unemployment stress. **Not a BoG-prescribed numeric path.** |
+| `system_irr_parallel_up_200`, `system_irr_parallel_down_200` | supervisory / moderate | Preserve the existing BCBS workbench calibration: parallel ±200bp.                                                                                                                                |
+| `system_irr_short_up_250`, `system_irr_short_down_250`       | supervisory / moderate | Preserve the existing short-end ±250bp shock with the parameter register's three-year tenor decay.                                                                                                |
+| `system_irr_steepener`                                       | supervisory / moderate | Preserve the existing −65bp short / +90bp long rotation.                                                                                                                                          |
+| `system_irr_flattener`                                       | supervisory / moderate | Preserve the existing +80bp short / −60bp long rotation.                                                                                                                                          |
+| `system_bog_supervisory_placeholder`                         | supervisory / severe   | **Approved but non-runnable.** Reserved for an official regulator-issued numeric path; the exposure draft names drivers and sources but publishes no numbers.                                     |
+
+**Base anchors (calibration date 17 September 2026).** IMF WEO April 2026 supplies
+2026 real GDP growth **4.8%** and consumer-price inflation **5.8%**. The July 2026 BoG MPC
+decision supplies the **14%** policy rate. AfDB's June 2026 Ghana outlook supplies fiscal deficits
+of **2.6% of GDP in 2026** and **2.2% in 2027**. Market anchors are USD/GHS **11.45**,
+GBP/GHS **15.36**, EUR/GHS **13.20**, GSE-CI **15,076.3**, cocoa **USD 5,979/tonne** and
+gold **USD 4,491/oz**. The latest published unemployment anchor is **13.6%**. The 18% market
+rate and GoG-yield anchors are explicitly a platform convention of policy rate +400bp, not an
+official forecast. Base endpoints then converge toward the BoG 8% ±2pp inflation target; FX
+levels crawl 4% annually; other market levels normalize gradually. These interpolation choices
+are methodology assumptions, not sourced forecasts.
+
+**Adverse/severe labelling.** Appendix III of the February 2026 BoG stress-testing exposure draft
+requires GDP, inflation, rates, unemployment, USD/GBP/EUR→GHS, GSE, fiscal deficit and other
+material drivers, and names BoG/GSS/IMF/World Bank/AfDB and market-data vendors as sources. It
+does **not** publish one universal numeric supervisory path. The adverse and severe values above
+are therefore named AequorOS calibrations. The separate BoG supervisory entry remains
+non-runnable until BoG publishes a numeric path; the platform does not present internal numbers
+as regulator-issued assumptions.
+
+**IRRBB calibration.** The six runnable rate paths reproduce the existing parameter-register
+set byte-for-byte: ±200bp parallel; ±250bp short with three-year decay; steepener −65/+90; and
+flattener +80/−60. The BoG IRRBB exposure draft (February 2026, Appendix II–III Tables 5–6) is
+the GHS local-calibration source: GHS parallel **450bp**, short **500bp**, long **300bp**, with
+the published steepener/flattener formulas. AequorOS already carries the ±450bp GHS parallel
+rows as informational add-ons; this default set deliberately does not rewrite the six existing
+BCBS workbench shocks.
+
+Sources:
+
+- [BoG Guideline on Stress Testing, exposure draft, February 2026](https://www.bog.gov.gh/reg_directives/guidelines-on-stress-testing-exposure-draft/)
+- [BoG regulations and directives library (IRRBB exposure draft)](https://www.bog.gov.gh/downloads/supervision-and-regulation-downloads/regulations-directives/)
+- [IMF Ghana country page / April 2026 WEO](https://www.imf.org/en/Countries/GHA)
+- [BoG MPC press release, July 2026](https://www.bog.gov.gh/mpc_press_release/mpc-press-release-july-2026)
+- [AfDB Ghana Economic Outlook, June 2026](https://www.afdb.org/en/countries/west-africa/ghana/ghana-economic-outlook)
+- [BCBS IRRBB standard (2016)](https://www.bis.org/bcbs/publ/d368.htm) and
+  [2024 recalibration](https://www.bis.org/bcbs/publ/d578.htm)
+
 ### 3.2 Translation layer (macro → risk parameters)
+
 The satellite step the platform lacks: map each scenario's macro paths to the **risk parameters**
 each engine consumes (¶38(e), ¶48). Minimum viable, transparent, and documented per ¶45:
+
 - macro → **PD/LGD** multipliers by segment (credit); macro → **deposit run-off / inflow** (liquidity);
   FX path → **NOP revaluation**; rate path → **IRRBB curve shift**; GDP/inflation → **RWA growth,
   NII, fee income**. Each mapping is an auditable, overridable coefficient set (expert-judgement
@@ -250,14 +343,17 @@ each engine consumes (¶38(e), ¶48). Minimum viable, transparent, and documente
   satellite models later; start with documented linear elasticities.
 
 ### 3.3 Enterprise orchestrator
+
 One scenario run drives **liquidity + capital + IRR + FX + credit coherently** and produces a
 single enterprise outcome (¶40, ¶50). Couples solvency and liquidity (¶59(f)); supports
 second-round effects (¶5). Replaces today's independent per-module scenario objects. Output is an
 immutable `RegulatoryRun` (keep the existing reproducibility spine — value-based `input_hash`).
 
 ### 3.4 3-year projection engine → Appendix II
+
 A dynamic balance-sheet/P&L/capital projection over ≥3 years, base + stress, producing **Tables
 1–6 exactly** (§1.8). This is the regulatory deliverable and the ICAAP submission (¶67, ¶68). Must:
+
 - carry the CRD capital build (CET1/AT1/Tier2 with caps + deductions) — Table 2;
 - roll P&L into adjusted retained earnings for CAR — Table 3;
 - project the balance sheet by the Table 4 line taxonomy;
@@ -265,11 +361,13 @@ A dynamic balance-sheet/P&L/capital projection over ≥3 years, base + stress, p
 - check remaining above **all** minima (CAR 13%, CET1, Tier1, leverage, paid-up) — ¶77.
 
 ### 3.5 IFRS-9 ECL under stress (¶48–49)
+
 A stress mode over the existing ECL engine (`app/domain/capital/ecl.py`): scenario → PD/LGD → ECL,
 with **Perfect Foresight** (project ≥3 years of macro from day one) and **Single Scenario** (100%
 weight). Feeds Table 1's losses-by-exposure-class and Table 3's impairment line.
 
 ### 3.6 Per-risk stress methods (Appendix I) — fill the missing ones
+
 Present-and-adequate: liquidity, IRRBB, FX, credit (as RWA-growth proxy — upgrade to PD/LGD/EAD).
 **To build:** bottom-up credit (exposure-level PD/LGD/EAD, downgrade migration), **concentration
 stress** (single-name/sector/geo default — not just LE reporting), **operational-risk scenario
@@ -277,11 +375,13 @@ simulations** (the seven AppI¶12 scenarios), **contingent-leverage** stress. Ma
 FVOCI/HTM revaluation.
 
 ### 3.7 Management-actions modelling (¶78–81)
+
 Model a **library of credible actions** (raise capital, cut dividend, reduce RWA, asset sales,
 risk-appetite change) with triggers and timelines; produce results **with and without** (Table 1
-"Management actions" + "Post-capitalisation" blocks). Replaces today's deterministic action *text*.
+"Management actions" + "Post-capitalisation" blocks). Replaces today's deterministic action _text_.
 
 ### 3.8 Governance & reporting
+
 - **Stress-run sign-off / challenge workflow** and **Board attestation of framework + results**
   (¶20) — reuse the attestation spine that exists for returns.
 - **Annual ICAAP stress submission** in the Appendix II format by **end-March** (¶67) — a new
@@ -290,7 +390,7 @@ risk-appetite change) with triggers and timelines; produce results **with and wi
 - **Data inputs:** a new **`macro_scenarios` reference-dataset kind** (or the governed Scenario
   table) carrying the Table 6 macro paths; the canonical position book (exposure-level, for
   bottom-up credit & concentration); the capital `capital_structure` register; `param_stress_shock`
-  becomes the *translated* output, not the authored input.
+  becomes the _translated_ output, not the authored input.
 
 ---
 
@@ -300,7 +400,7 @@ Rebuild around `components/workbench/ScenarioWorkbench.tsx`, the reverse-stress 
 stress board-pack composer under `app/(app)/reports/`.
 
 1. **Typed scenario builder** — author a scenario as **macro-variable paths** (Table 6 drivers over
-   3 years) *and/or* a typed shock palette (parallel/steepener/flattener, per-bucket run-off %,
+   3 years) _and/or_ a typed shock palette (parallel/steepener/flattener, per-bucket run-off %,
    per-asset haircut, PD/LGD multipliers) with units and validation — not a raw key/value textarea.
 2. **Governed scenario library** — versioned, tagged by type/severity, reusable across modules,
    with the maker-checker approval state visible.
@@ -326,8 +426,8 @@ stress board-pack composer under `app/(app)/reports/`.
 ## 5. Phased build plan
 
 **Phase 1 — the scenario spine.** Governed Scenario model (macro paths, versioned, maker-checker)
-+ the translation layer (documented elasticities macro→risk params). Unifies the two scenario
-stores. *Unblocks everything.*
+and the translation layer (documented elasticities macro→risk params). Unifies the two scenario
+stores. _Unblocks everything._
 
 **Phase 2 — enterprise orchestrator + 3-year projection.** One scenario → all engines → the
 Appendix II Tables 1–6 projection, base + stress, immutable run. Remaining-above-minima checks.
@@ -353,6 +453,7 @@ bearing gaps; the UI (P6) is worthless until the scenario model beneath it is re
 
 The directive applies to **savings & loans and finance houses** (¶3), on a **proportionate basis**
 (¶7, ¶82, AppI¶1). Two scoping facts:
+
 - **Part IV ICAAP is banks-only** (fn.16) — so an SDI runs **solvency + liquidity stress** and the
   AppI risk methods, but **not** the full ICAAP capital-restoration projection. The SDI stress
   scope is the enterprise scenario + liquidity stress (against the **binding LMTD Table 1 ratios**,
@@ -363,7 +464,7 @@ The directive applies to **savings & loans and finance houses** (¶3), on a **pr
 
 `sdi.md` gains a "Stress testing (scoped)" subsection referencing this doc: which stress features
 are CORE/CONDITIONAL/EXCLUDED for an SDI, and the SDI stress data inputs (the same canonical book
-+ the macro-scenario dataset).
+and the macro-scenario dataset).
 
 ---
 

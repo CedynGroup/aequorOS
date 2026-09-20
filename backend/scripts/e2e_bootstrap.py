@@ -76,6 +76,7 @@ E2E_USERS = {
     "integration_admin": UUID("eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8"),
     "liquidity_viewer": UUID("eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9"),
     "liquidity_aggregated_viewer": UUID("eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea"),
+    "macro_viewer": UUID("eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec"),
     "invite_fresh": UUID("eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb"),
 }
 
@@ -124,6 +125,7 @@ def main() -> None:
                             "liquidity_viewer",
                             "liquidity_aggregated_viewer",
                             "invite_fresh",
+                            "macro_viewer",
                         }
                         else role
                     ),

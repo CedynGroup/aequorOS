@@ -54,7 +54,7 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
-pytestmark = pytest.mark.usefixtures("fx_run_authority")
+pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1

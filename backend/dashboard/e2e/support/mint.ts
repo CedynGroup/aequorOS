@@ -87,6 +87,11 @@ export const E2E_USERS: Record<
     roles: ["viewer"],
     authv: 3,
   },
+  macro_viewer: {
+    id: "eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec",
+    roles: ["viewer"],
+    authv: 2,
+  },
   invite_fresh: {
     id: "eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb",
     roles: ["viewer"],

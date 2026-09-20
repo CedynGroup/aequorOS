@@ -17,10 +17,13 @@ from app.api.deps import TenantContext
 from app.models import User
 from app.schemas.stress import (
     MacroScenarioApproval,
+    MacroScenarioClone,
     MacroScenarioCreate,
     MacroScenarioTransition,
+    MacroScenarioUpdate,
 )
-from app.services import macro_scenarios
+from app.services import default_macro_scenarios, macro_scenarios
+from app.services.institution_types import SEED_TYPES
 from tests.api.helpers import ORG_1, USER_1
 
 CHECKER = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
@@ -97,3 +100,86 @@ def test_supervisory_code_uniqueness_enforced_for_null_bank(db_session: Session)
         macro_scenarios.create_scenario(db_session, MAKER_CTX, _supervisory_payload())
     assert exc.value.status_code == 409
     assert exc.value.detail["error_code"] == "scenario_code_exists"  # type: ignore[index]
+
+
+def test_default_catalogue_covers_every_institution_type() -> None:
+    type_codes = {spec.type_code for spec in SEED_TYPES}
+    assert {scenario.code for scenario in default_macro_scenarios.DEFAULT_MACRO_SCENARIOS} >= {
+        "system_base_consensus",
+        "system_adverse_bog_style",
+        "system_severe_stagflation",
+        "system_irr_parallel_up_200",
+        "system_irr_parallel_down_200",
+        "system_irr_short_up_250",
+        "system_irr_short_down_250",
+        "system_irr_steepener",
+        "system_irr_flattener",
+        "system_bog_supervisory_placeholder",
+    }
+    for scenario in default_macro_scenarios.DEFAULT_MACRO_SCENARIOS:
+        assert set(scenario.institution_type_applicability) == type_codes
+        if scenario.runnable:
+            assert len(scenario.paths) == 13 * 3
+        else:
+            assert scenario.code == "system_bog_supervisory_placeholder"
+            assert scenario.paths == ()
+
+
+def test_system_defaults_are_immutable_and_clone_to_editable_draft(
+    db_session: Session,
+) -> None:
+    system = default_macro_scenarios.DEFAULT_BY_CODE["system_adverse_bog_style"]
+
+    with pytest.raises(HTTPException) as edit_exc:
+        macro_scenarios.update_scenario(
+            db_session,
+            MAKER_CTX,
+            system.id,
+            MacroScenarioUpdate(name="Changed", reason="Attempt system edit."),
+        )
+    assert edit_exc.value.detail["error_code"] == "system_scenario_immutable"  # type: ignore[index]
+
+    with pytest.raises(HTTPException) as archive_exc:
+        macro_scenarios.archive_scenario(
+            db_session,
+            MAKER_CTX,
+            system.id,
+            MacroScenarioTransition(reason="Attempt system archive."),
+        )
+    assert archive_exc.value.detail["error_code"] == "system_scenario_immutable"  # type: ignore[index]
+
+    clone = macro_scenarios.clone_system_scenario(
+        db_session,
+        MAKER_CTX,
+        system.id,
+        MacroScenarioClone(reason="Customize the platform adverse case."),
+    )
+    assert clone.owner == "organization"
+    assert clone.status == "draft"
+    assert clone.is_runnable is False
+    assert clone.is_immutable is False
+    assert len(clone.paths) == 13 * 3
+
+    edited = macro_scenarios.update_scenario(
+        db_session,
+        MAKER_CTX,
+        clone.id,
+        MacroScenarioUpdate(name="Institution adverse case", reason="Own the assumptions."),
+    )
+    assert edited.name == "Institution adverse case"
+
+
+def test_official_run_resolves_runnable_system_default_without_approval(
+    db_session: Session,
+) -> None:
+    default = default_macro_scenarios.DEFAULT_BY_CODE["system_irr_parallel_up_200"]
+    resolved = macro_scenarios.resolve_for_official_run(db_session, MAKER_CTX, default.id)
+    assert resolved.id == default.id
+    assert resolved.status == "approved"
+    assert resolved.owner == "system"
+    assert len(resolved.paths) == 13 * 3
+
+    placeholder = default_macro_scenarios.DEFAULT_BY_CODE["system_bog_supervisory_placeholder"]
+    with pytest.raises(HTTPException) as exc:
+        macro_scenarios.resolve_for_official_run(db_session, MAKER_CTX, placeholder.id)
+    assert exc.value.detail["error_code"] == "system_scenario_not_runnable"  # type: ignore[index]

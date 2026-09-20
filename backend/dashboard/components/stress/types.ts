@@ -10,7 +10,7 @@
  * matching the FastAPI response bodies.
  */
 
-import type { ScenarioStatus, ScenarioType, Severity } from './macro';
+import type { ScenarioStatus, ScenarioType, Severity } from "./macro";
 
 // --- Macro scenarios (schemas/stress.py) -------------------------------------
 
@@ -34,6 +34,9 @@ export type MacroScenarioSummary = {
   path_count: number;
   created_by: string | null;
   approved_by: string | null;
+  owner: "organization" | "system";
+  is_runnable: boolean;
+  is_immutable: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -61,6 +64,9 @@ export type MacroScenario = {
   approved_by: string | null;
   approval_timestamp: string | null;
   institution_type_applicability: string[] | null;
+  owner: "organization" | "system";
+  is_runnable: boolean;
+  is_immutable: boolean;
   paths: MacroPath[];
   created_at: string;
   updated_at: string;
@@ -90,7 +96,7 @@ export type MacroScenarioCreate = {
 
 // --- Management-action plans (schemas/management_actions.py) ------------------
 
-export type PlanStatus = 'draft' | 'pending_approval' | 'approved' | 'archived';
+export type PlanStatus = "draft" | "pending_approval" | "approved" | "archived";
 
 export type ActionItem = {
   action_id: string;
@@ -192,7 +198,7 @@ export type EnterpriseStressRunSummary = {
 /** One projected year in `projection.{current,base[],stress[]}` (service `_serialize_projection`). */
 export type ProjectionYear = {
   year: number;
-  leg: 'current' | 'base' | 'stress';
+  leg: "current" | "base" | "stress";
   car_pct: string;
   cet1_ratio_pct: string;
   tier1_ratio_pct: string;
@@ -270,9 +276,10 @@ export type Table1Summary = {
   capital_gap: string | null;
   management_actions: Table1ManagementActions | null;
   post_capitalisation: CapitalSnapshot[] | null;
-  residual_capital_required_after_actions:
-    | { worst: string | null; rows: { year: number; residual_capital_required: string | null }[] }
-    | null;
+  residual_capital_required_after_actions: {
+    worst: string | null;
+    rows: { year: number; residual_capital_required: string | null }[];
+  } | null;
 };
 
 export type Table2CetBuild = {
@@ -462,7 +469,8 @@ export type EnterpriseStressRunCreate = {
 };
 
 // --- Enterprise-stress sign-off / Board attestation (backend EnterpriseStressSignoff) ---
-export type StressSignoffStatus = 'draft' | 'pending_attestation' | 'attested' | 'withdrawn';
+export type StressSignoffStatus =
+  "draft" | "pending_attestation" | "attested" | "withdrawn";
 
 export type StressSignoffSummary = {
   id: string;
