@@ -276,23 +276,11 @@ KNOWN_UNCOVERED: Final[frozenset[tuple[str, str]]] = ICAAP_DEFERRED | frozenset(
         ("POST", "/api/v1/cases/{case_id}/financial-workspace/map"),
     }
 )
-#: Confirmed product defects the tests flag but PR #208's shared guard does not
-#: yet cover; kept out of the strict assertion and pinned as still-defective so a
-#: fix forces their promotion.  See the PR description.
-KNOWN_DEFECTS: Final[frozenset[tuple[str, str, Layout]]] = frozenset(
-    {
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/system-of-record/{declaration_id}/approve",
-            "sibling_bank",
-        ),
-        (
-            "POST",
-            "/api/v1/banks/{bank_id}/system-of-record/{declaration_id}/revoke",
-            "sibling_bank",
-        ),
-    }
-)
+#: Confirmed product defects the tests reproduce but that are not yet fixed;
+#: kept out of the strict assertions and pinned as still-defective so a fix
+#: forces their promotion.  Empty means every route in the census is under the
+#: strict tests.
+KNOWN_DEFECTS: Final[frozenset[tuple[str, str, Layout]]] = frozenset()
 
 
 @dataclass(frozen=True)

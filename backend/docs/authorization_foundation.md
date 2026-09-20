@@ -456,10 +456,18 @@ hashes. It runs on SQLite because its refusals come from the explicit
 organization/bank `WHERE` clauses in the guards and services, which hold without
 row-level security. Its data-layer positive control confirms every seeded object
 exists for its owner; it does not establish that each request reaches the
-ownership guard rather than an earlier validation or permission check. It pins the two
-confirmed same-organization cross-bank defects in `KNOWN_DEFECTS`, skips them in
-the strict parametrization, and asserts they are still reproduced so a product
-fix forces their promotion.
+ownership guard rather than an earlier validation or permission check. Defects
+it reproduces are pinned in `object_reference_routes.KNOWN_DEFECTS`, skipped in
+the strict parametrization, and asserted as still reproduced so a product fix
+forces their promotion; the set is currently empty. Its first catch —
+same-organization cross-bank approve/revoke of a system-of-record declaration,
+because the service resolved the declaration by id within the organization
+only — is fixed: by-id lookups under `/banks/{bank_id}`
+(`system_of_record.get_declaration`, `canonical_withdrawal.get_withdrawal`, and
+a withdrawal's cited `declaration_id`) are bank-scoped at the query and return
+the route's ordinary 404 for a sibling bank's row before any state check, with
+no side effects. `tests/api/test_system_of_record_bank_scope.py` is the
+hermetic regression.
 
 `tests/db/test_authorization_object_reference_properties.py` is the generative
 layer, Postgres-only against a migrated schema with FORCE RLS so the RLS
