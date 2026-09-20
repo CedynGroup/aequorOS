@@ -1,27 +1,34 @@
-"""Object catalogue for the object-reference (IDOR) authorization property.
+"""Object catalogue for the object-reference (IDOR) authorization tests.
 
 Every identifier family a tenant route accepts — a ``{package_id}`` path
 segment, a ``reporting_period_id`` body field, a ``scenario_id`` query value —
 is one :class:`ObjectKind`: where the identifier appears, and a factory that
-persists one referenced object for a tenant.  The property seeds the catalogue
-once per tenant and then references one tenant's objects from another tenant's
-bank, so every kind here must be creatable from bare rows without the product
-API.  Object rows are created through ORM sessions carrying
-``session.info["organization_id"]`` so FORCE RLS admits the insert.
+persists one referenced object for a tenant.  Both the deterministic coverage
+test (`tests/api/test_authorization_object_reference_coverage.py`) and the
+generative property (`tests/db/test_authorization_object_reference_properties.py`)
+seed the catalogue from here and share the route census in
+`tests/fixtures/object_reference_routes.py`.
+
+Factories take any session and only ``add``/``flush`` rows, so the same
+catalogue seeds a rollback-isolated SQLite session (coverage) and a FORCE-RLS
+Postgres session (property) unchanged; the caller owns the organization GUC and
+the commit.  One object per kind per tenant is created, in dependency order;
+uniqueness-bound columns derive from the tenant's bank slug so three tenants
+coexist.
 """
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, Final
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
-from app.api.deps import TenantContext
 from app.core.authorization import InstitutionScope, ModuleScope, RoleBundle, SensitivityScope
 from app.models import (
     AuthorizationBinding,
@@ -79,7 +86,6 @@ from app.models import (
     TemenosConnection,
     User,
 )
-from app.services.integration_keys import issue_key
 
 AS_OF: Final = date(2026, 9, 18)
 PERIOD_START: Final = date(2026, 9, 1)
@@ -104,39 +110,27 @@ class TenantSeed:
         """A second human so maker-checker fixtures do not collapse onto the actor."""
         return self.user_ids[1]
 
+    @property
+    def slug(self) -> str:
+        """A per-tenant suffix for columns unique within a shared organization."""
+        return self.bank_id.lower()
+
 
 @dataclass
 class ObjectSet:
-    """Objects persisted for one tenant, keyed by object kind.
-
-    ``serial`` distinguishes repeated seeds of the same tenant: uniqueness-bound
-    columns (period ends, codes, emails, storage keys) derive from it so a fresh
-    set can always be created beside an earlier one.
-    """
+    """The persisted objects for one tenant, keyed by object kind."""
 
     tenant: TenantSeed
-    serial: int = 0
     ids: dict[str, str] = field(default_factory=dict)
-    integration_key: str | None = None
-    reads: set[str] = field(default_factory=set, repr=False)
 
     def __getitem__(self, kind: str) -> str:
-        self.reads.add(kind)
         return self.ids[kind]
-
-    @property
-    def salt(self) -> str:
-        return f"{self.tenant.bank_id.lower()}-{self.serial}"
-
-    @property
-    def as_of(self) -> date:
-        return AS_OF - timedelta(days=self.serial)
 
     def identifiers(self) -> set[str]:
         return {*self.ids.values(), self.tenant.marker}
 
 
-Factory = Callable[[Session, TenantSeed, ObjectSet], Any]
+Factory = Callable[[Session, TenantSeed, "ObjectSet"], Any]
 
 
 @dataclass(frozen=True)
@@ -150,8 +144,6 @@ class ObjectKind:
     path_prefixes: tuple[str, ...] = ()
     #: Whether the object row belongs to a bank (sibling-bank layouts apply).
     bank_scoped: bool = True
-    #: Kinds the factory reads; a fresh object of this kind gets fresh parents.
-    requires: tuple[str, ...] = ()
 
 
 def _uuid(session: Session, row: Any) -> str:
@@ -160,12 +152,12 @@ def _uuid(session: Session, row: Any) -> str:
     return str(row.id)
 
 
-def _period(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _period(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     period = BankReportingPeriod(
         organization_id=tenant.organization_id,
         bank_id=tenant.bank_id,
         period_start=PERIOD_START,
-        period_end=objects.as_of,
+        period_end=AS_OF,
         label=tenant.marker,
         status="open",
     )
@@ -261,14 +253,14 @@ def _ingestion_batch(session: Session, tenant: TenantSeed, _objects: ObjectSet) 
     )
 
 
-def _mapping_config(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _mapping_config(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
         MappingConfigRecord(
             organization_id=tenant.organization_id,
             bank_id=tenant.bank_id,
             source_system="MANUAL_UPLOAD",
-            version=objects.serial + 1,
+            version=1,
             status="draft",
             name=tenant.marker,
             config={},
@@ -293,7 +285,7 @@ def _position_snapshot(session: Session, tenant: TenantSeed, objects: ObjectSet)
     provenance = {
         "organization_id": tenant.organization_id,
         "bank_id": tenant.bank_id,
-        "as_of_date": objects.as_of,
+        "as_of_date": AS_OF,
         "source_system": "MANUAL_UPLOAD",
         "ingestion_batch_id": UUID(objects["ingestion_batch"]),
         "lineage_id": UUID(objects["lineage"]),
@@ -301,7 +293,7 @@ def _position_snapshot(session: Session, tenant: TenantSeed, objects: ObjectSet)
     position = CanonicalPosition(
         position_type="LOAN",
         currency="GHS",
-        source_reference=f"{tenant.marker}-position-{objects.salt}",
+        source_reference=f"{tenant.marker}-position-{tenant.slug}",
         **provenance,
     )
     session.add(position)
@@ -311,7 +303,7 @@ def _position_snapshot(session: Session, tenant: TenantSeed, objects: ObjectSet)
         CanonicalPositionSnapshot(
             position_id=position.id,
             balance=Decimal("1000"),
-            source_reference=f"{tenant.marker}-snapshot-{objects.salt}",
+            source_reference=f"{tenant.marker}-snapshot-{tenant.slug}",
             **provenance,
         ),
     )
@@ -389,14 +381,14 @@ def _shareholding(session: Session, tenant: TenantSeed, objects: ObjectSet) -> s
     )
 
 
-def _database_connection(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _database_connection(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
         DatabaseDirectConnection(
             organization_id=tenant.organization_id,
             bank_id=tenant.bank_id,
             backend="jdbc",
-            display_name=f"{tenant.marker} {objects.salt}",
+            display_name=f"{tenant.marker} {tenant.slug}",
             host="db.example.test",
             database="core",
             vault_path=f"object-reference/{tenant.bank_id}/database",
@@ -405,28 +397,28 @@ def _database_connection(session: Session, tenant: TenantSeed, objects: ObjectSe
     )
 
 
-def _market_data_connection(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _market_data_connection(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
         MarketDataConnection(
             organization_id=tenant.organization_id,
             bank_id=tenant.bank_id,
             vendor="bloomberg",
-            display_name=f"{tenant.marker} {objects.salt}",
+            display_name=f"{tenant.marker} {tenant.slug}",
             vault_path=f"object-reference/{tenant.bank_id}/market-data",
             created_by=tenant.actor_id,
         ),
     )
 
 
-def _temenos_connection(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _temenos_connection(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
         TemenosConnection(
             organization_id=tenant.organization_id,
             bank_id=tenant.bank_id,
             connection_mode="OPEN_API",
-            display_name=f"{tenant.marker} {objects.salt}",
+            display_name=f"{tenant.marker} {tenant.slug}",
             endpoint="https://core.example.test",
             vault_path=f"object-reference/{tenant.bank_id}/temenos",
             default_currency="GHS",
@@ -480,7 +472,7 @@ def _package(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
             bank_id=tenant.bank_id,
             return_family="bsd",
             return_code="BSD1",
-            reporting_date=objects.as_of,
+            reporting_date=AS_OF,
             frequency="monthly",
             status="draft",
             version=1,
@@ -556,14 +548,14 @@ def _analysis(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
     )
 
 
-def _stress_scenario(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _stress_scenario(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
         StressScenario(
             organization_id=tenant.organization_id,
             bank_id=tenant.bank_id,
             module="liquidity",
-            code=f"custom-{objects.salt}",
+            code=f"custom-{tenant.slug}",
             name=tenant.marker,
             shocks={},
             created_by=tenant.actor_id,
@@ -588,7 +580,7 @@ def _withdrawal(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> st
     )
 
 
-def _declaration(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _declaration(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
         SystemOfRecordDeclaration(
@@ -596,7 +588,7 @@ def _declaration(session: Session, tenant: TenantSeed, objects: ObjectSet) -> st
             bank_id=tenant.bank_id,
             position_type="LOAN",
             source_system="MANUAL_UPLOAD",
-            effective_from=objects.as_of,
+            effective_from=AS_OF,
             source_citation=tenant.marker,
             rationale=tenant.marker,
             proposed_by=tenant.marker,
@@ -606,13 +598,13 @@ def _declaration(session: Session, tenant: TenantSeed, objects: ObjectSet) -> st
     )
 
 
-def _macro_scenario(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _macro_scenario(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
         MacroScenario(
             organization_id=tenant.organization_id,
             bank_id=tenant.bank_id,
-            code=f"macro-{objects.salt}",
+            code=f"macro-{tenant.slug}",
             name=tenant.marker,
             scenario_type="hypothetical",
             created_by=tenant.actor_id,
@@ -620,13 +612,13 @@ def _macro_scenario(session: Session, tenant: TenantSeed, objects: ObjectSet) ->
     )
 
 
-def _management_action_plan(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _management_action_plan(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
         ManagementActionPlan(
             organization_id=tenant.organization_id,
             bank_id=tenant.bank_id,
-            code=f"plan-{objects.salt}",
+            code=f"plan-{tenant.slug}",
             name=tenant.marker,
             created_by=tenant.actor_id,
         ),
@@ -839,7 +831,7 @@ def _document(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
         organization_id=tenant.organization_id,
         provider="s3",
         bucket="object-reference-property",
-        object_key=f"{tenant.marker}/{objects.salt}/document.pdf",
+        object_key=f"{tenant.marker}/{tenant.slug}/document.pdf",
         status="uploaded",
         created_by=tenant.actor_id,
     )
@@ -910,19 +902,54 @@ def _job(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     )
 
 
-def _integration_key(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
-    issued = issue_key(
-        session,
-        TenantContext(
-            organization_id=tenant.organization_id,
-            actor_user_id=tenant.actor_id,
-            authorization_version=1,
-        ),
-        tenant.bank_id,
-        tenant.marker,
+def _integration_key(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    """Persist an integration key's rows directly (service user, key, binding).
+
+    The lifecycle routes authenticate the human account administrator, so the
+    row content — not a live ``aeq_live_…`` credential — is what a foreign
+    reference targets.  Rows are added to the caller's session so the key seeds
+    identically under SQLite rollback and FORCE-RLS Postgres.
+    """
+    service_user = User(
+        id=uuid4(),
+        organization_id=tenant.organization_id,
+        email=f"integration-{tenant.slug}@service.aequoros.invalid",
+        display_name=f"Integration — {tenant.marker}",
+        role="viewer",
+        auth_provider="service",
+        is_active=True,
     )
-    objects.integration_key = issued.key
-    return str(issued.record.id)
+    session.add(service_user)
+    session.flush()
+    raw = f"aeq_live_object_reference_{tenant.slug}"
+    key = IntegrationKey(
+        organization_id=tenant.organization_id,
+        bank_id=tenant.bank_id,
+        service_user_id=service_user.id,
+        label=tenant.marker,
+        key_prefix="aeq_live_…",
+        key_hash=hashlib.sha256(raw.encode()).hexdigest(),
+        created_by=tenant.actor_id,
+    )
+    key_id = _uuid(session, key)
+    session.add(
+        AuthorizationBinding(
+            organization_id=tenant.organization_id,
+            principal_user_id=service_user.id,
+            principal_type="machine",
+            role_bundle=RoleBundle.INTEGRATION_WRITER.value,
+            institution_scope=InstitutionScope.INSTITUTION.value,
+            institution_id=tenant.bank_id,
+            module_scope=ModuleScope.DATA.value,
+            sensitivity_scope=SensitivityScope.RESTRICTED.value,
+            granted_by_type="system",
+            granted_by_id="object-reference-property",
+            grant_reason=f"integration key for {tenant.marker}",
+            status="active",
+        )
+    )
+    session.flush()
+    return key_id
 
 
 def _binding(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
@@ -945,18 +972,18 @@ def _binding(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     )
 
 
-def _access_request(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+def _access_request(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
         User(
             id=uuid4(),
             organization_id=tenant.organization_id,
-            email=f"access-request-{objects.salt}@example.test",
+            email=f"access-request-{tenant.slug}@example.test",
             display_name=tenant.marker,
             is_active=False,
             role="viewer",
             auth_provider="oidc",
-            sso_subject=f"object-reference-{objects.salt}",
+            sso_subject=f"object-reference-{tenant.slug}",
         ),
     )
 
@@ -986,54 +1013,32 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
             f"{_BANK_PREFIX}/regulatory-runs/{{run_id}}",
             f"{_BANK_PREFIX}/examiner/runs/{{run_id}}",
         ),
-        requires=("period",),
     ),
     ObjectKind(
         "enterprise_stress_run",
         _regulatory_run("enterprise_stress"),
         (f"{_BANK_PREFIX}/enterprise-stress/runs/{{run_id}}",),
-        requires=("period",),
     ),
     ObjectKind(
         "forecast_run",
         _regulatory_run("forecast"),
         (f"{_BANK_PREFIX}/forecast/runs/{{run_id}}",),
-        requires=("period",),
     ),
-    ObjectKind(
-        "signoff",
-        _signoff,
-        (f"{_BANK_PREFIX}/enterprise-stress/signoffs/{{signoff_id}}",),
-        requires=(
-            "enterprise_stress_run",
-            "period",
-        ),
-    ),
+    ObjectKind("signoff", _signoff, (f"{_BANK_PREFIX}/enterprise-stress/signoffs/{{signoff_id}}",)),
     ObjectKind(
         "implied_rating_run",
         _implied_rating_run,
         (f"{_BANK_PREFIX}/implied-rating/runs/{{run_id}}",),
-        requires=("period",),
     ),
     ObjectKind(
         "ingestion_batch", _ingestion_batch, (f"{_BANK_PREFIX}/ingestion-batches/{{batch_id}}",)
     ),
     ObjectKind("mapping_config", _mapping_config),
-    ObjectKind(
-        "lineage",
-        _lineage,
-        ("/api/v1/lineage/{lineage_id}",),
-        bank_scoped=False,
-        requires=("ingestion_batch",),
-    ),
+    ObjectKind("lineage", _lineage, ("/api/v1/lineage/{lineage_id}",), bank_scoped=False),
     ObjectKind(
         "position_snapshot",
         _position_snapshot,
         (f"{_BANK_PREFIX}/position-snapshots/{{snapshot_id}}",),
-        requires=(
-            "ingestion_batch",
-            "lineage",
-        ),
     ),
     ObjectKind("license", _license, (f"{_BANK_PREFIX}/licenses/{{license_id}}",)),
     ObjectKind("name_history", _name_history, (f"{_BANK_PREFIX}/name-history/{{entry_id}}",)),
@@ -1044,7 +1049,6 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         "shareholding",
         _shareholding,
         (f"{_BANK_PREFIX}/related-parties/{{party_id}}/shareholdings/{{shareholding_id}}",),
-        requires=("related_party",),
     ),
     ObjectKind(
         "database_connection",
@@ -1067,23 +1071,16 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         _reconciliation_exception,
         (f"{_BANK_PREFIX}/reconciliation/exceptions/{{exception_id}}",),
     ),
-    ObjectKind(
-        "package",
-        _package,
-        (f"{_BANK_PREFIX}/regulatory-packages/{{package_id}}",),
-        requires=("regulatory_run",),
-    ),
+    ObjectKind("package", _package, (f"{_BANK_PREFIX}/regulatory-packages/{{package_id}}",)),
     ObjectKind(
         "package_artifact",
         _package_artifact,
         (f"{_BANK_PREFIX}/regulatory-artifacts/{{artifact_id}}",),
-        requires=("package",),
     ),
     ObjectKind(
         "artifact_version",
         _artifact_version,
         (f"{_BANK_PREFIX}/regulatory-artifact-versions/{{version_id}}",),
-        requires=("package",),
     ),
     ObjectKind(
         "resubmission_request",
@@ -1091,13 +1088,11 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         (
             f"{_BANK_PREFIX}/regulatory-packages/{{package_id}}/resubmission-requests/{{request_id}}",
         ),
-        requires=("package",),
     ),
     ObjectKind(
         "analysis",
         _analysis,
         (f"{_BANK_PREFIX}/scenario-workbench/{{module}}/analyses/{{analysis_id}}",),
-        requires=("period",),
     ),
     ObjectKind(
         "stress_scenario",
@@ -1128,107 +1123,66 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         _risk_scenario,
         (f"{_CASE_PREFIX}/scenarios/{{scenario_id}}",),
         bank_scoped=False,
-        requires=("case",),
     ),
     ObjectKind(
         "assumption",
         _assumption,
         (f"{_CASE_PREFIX}/scenarios/{{scenario_id}}/assumptions/{{assumption_id}}",),
         bank_scoped=False,
-        requires=(
-            "case",
-            "risk_scenario",
-        ),
     ),
     ObjectKind(
         "calculation_run",
         _calculation_run,
         (f"{_CASE_PREFIX}/calculation-runs/{{run_id}}",),
         bank_scoped=False,
-        requires=(
-            "case",
-            "risk_scenario",
-        ),
     ),
     ObjectKind(
         "projection",
         _projection,
         (f"{_CASE_PREFIX}/capital-projections/{{projection_id}}",),
         bank_scoped=False,
-        requires=(
-            "case",
-            "risk_scenario",
-            "calculation_run",
-        ),
     ),
     ObjectKind(
         "financial_institution",
         _financial_institution,
         (f"{_CASE_PREFIX}/financial-workspace/institutions/{{institution_id}}",),
         bank_scoped=False,
-        requires=("case",),
     ),
     ObjectKind(
         "account",
         _account,
         (f"{_CASE_PREFIX}/financial-workspace/accounts/{{account_id}}",),
         bank_scoped=False,
-        requires=(
-            "case",
-            "financial_institution",
-        ),
     ),
     ObjectKind(
         "financial_period",
         _financial_period,
         (f"{_CASE_PREFIX}/financial-workspace/reporting-periods/{{reporting_period_id}}",),
         bank_scoped=False,
-        requires=("case",),
     ),
     ObjectKind(
         "balance",
         _balance,
         (f"{_CASE_PREFIX}/financial-workspace/balances/{{balance_id}}",),
         bank_scoped=False,
-        requires=(
-            "case",
-            "account",
-            "financial_period",
-        ),
     ),
     ObjectKind(
         "cash_flow",
         _cash_flow,
         (f"{_CASE_PREFIX}/financial-workspace/cash-flows/{{cash_flow_id}}",),
         bank_scoped=False,
-        requires=(
-            "case",
-            "account",
-            "financial_period",
-        ),
     ),
     ObjectKind(
         "obligation",
         _obligation,
         (f"{_CASE_PREFIX}/financial-workspace/obligations/{{obligation_id}}",),
         bank_scoped=False,
-        requires=(
-            "case",
-            "financial_institution",
-            "account",
-            "financial_period",
-        ),
     ),
     ObjectKind(
         "covenant",
         _covenant,
         (f"{_CASE_PREFIX}/financial-workspace/covenants/{{covenant_id}}",),
         bank_scoped=False,
-        requires=(
-            "case",
-            "obligation",
-            "financial_period",
-        ),
     ),
     ObjectKind(
         "finding",
@@ -1238,28 +1192,19 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
             f"{_CASE_PREFIX}/liquidity/findings/{{finding_id}}",
         ),
         bank_scoped=False,
-        requires=("case",),
     ),
-    ObjectKind(
-        "document",
-        _document,
-        ("/api/v1/documents/{document_id}",),
-        bank_scoped=False,
-        requires=("case",),
-    ),
+    ObjectKind("document", _document, ("/api/v1/documents/{document_id}",), bank_scoped=False),
     ObjectKind(
         "assessment",
         _assessment,
         ("/api/v1/assessments/{assessment_id}",),
         bank_scoped=False,
-        requires=("case",),
     ),
     ObjectKind(
         "assessment_run",
         _assessment_run,
         ("/api/v1/assessment-runs/{run_id}",),
         bank_scoped=False,
-        requires=("assessment",),
     ),
     ObjectKind(
         "notification",
@@ -1401,18 +1346,11 @@ def path_parameter_kind(path: str, parameter: str) -> str | None:
     return None
 
 
-def _create(session: Session, kind: ObjectKind, objects: ObjectSet) -> None:
-    objects.reads.clear()
-    objects.ids[kind.name] = str(kind.factory(session, objects.tenant, objects))
-    undeclared = objects.reads - set(kind.requires)
-    assert not undeclared, f"{kind.name} reads undeclared kinds {sorted(undeclared)}"
-
-
 def seed_objects(session: Session, tenant: TenantSeed) -> ObjectSet:
     """Persist one object of every kind for ``tenant`` in creation order."""
     objects = ObjectSet(tenant=tenant)
     for kind in OBJECT_KINDS:
-        _create(session, kind, objects)
+        objects.ids[kind.name] = str(kind.factory(session, tenant, objects))
     return objects
 
 
