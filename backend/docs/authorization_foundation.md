@@ -413,8 +413,9 @@ Execution results are recorded in
 Known coverage limits remain: ownership transfer and owner deactivation have no
 product API to exercise. The generated route property checks identifier leakage in
 successful responses; the separate sibling-bank read regression now enforces the
-[bank-route existence rule](../../docs/rbac.md#4-tenancy--the-two-planes) without an
-expected failure. `tests/api/test_cross_tenant_bank_routes.py` also enumerates
+[bank-route existence rule](../../docs/rbac.md#4-tenancy--the-two-planes), implemented
+by `app/api/deps.py::resolve_tenant_bank`, without an expected failure.
+`tests/api/test_cross_tenant_bank_routes.py` also enumerates
 OpenAPI bank-path and bank-query operations, generates request inputs for reads and
 mutations, and checks the shared dependency and standard error envelope for an
 authenticated sibling-organization member with no bindings on Postgres.

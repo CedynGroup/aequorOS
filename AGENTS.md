@@ -153,13 +153,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   or transaction context carry `requires_contextual_authorization` and are never execution
   authority; bank detail/period/fact routes 404 without institution coverage; shell
   navigation and deep links consume the projection, never token roles.
-  **Bank-route existence rule (built 2026-09-18; owner `docs/rbac.md` §4).** Every
-  router that takes a path or query `bank_id` mounts with `BANK_ROUTE_DEPENDENCIES`
-  (`app/api/deps.py::resolve_tenant_bank`) so an unknown or sibling-organization bank
-  is the same 404 envelope before any entitlement/permission dependency; permission
-  dependencies in `deps.py` take the resolved bank as `TenantBank` rather than
-  re-resolving it. Mounting a new bank router without it fails
-  `tests/api/test_cross_tenant_bank_routes.py` (OpenAPI-enumerated).
+  **Bank-route existence rule:** follow [docs/rbac.md §4](docs/rbac.md#4-tenancy--the-two-planes)
+  for the cross-tenant 404 contract, `app/api/deps.py::resolve_tenant_bank` mounting
+  requirements, and regression coverage when adding bank routes.
   Preserve baseline membership as system-managed lifecycle evidence, never evaluator
   fallback access. Activation/deactivation must use `app/services/membership.py`;
   [the foundation contract](backend/docs/authorization_foundation.md#baseline-membership)
