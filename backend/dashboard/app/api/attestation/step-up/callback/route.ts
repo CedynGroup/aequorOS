@@ -10,6 +10,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from '@/auth';
+import { requestOrigin } from '@/lib/requestOrigin';
 import {
   apiBase,
   backToCeremony as back,
@@ -24,7 +25,7 @@ import {
 } from '@/lib/attestation/stepUp';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const origin = request.nextUrl.origin;
+  const origin = requestOrigin(request);
   const session = await auth();
   const context = await readStateCookie();
   await clearStateCookie();

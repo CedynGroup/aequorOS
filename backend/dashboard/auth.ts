@@ -223,7 +223,10 @@ async function revokeBackendSession(refreshToken: unknown): Promise<void> {
 
 const baseConfig = {
   session: { strategy: "jwt" },
-  pages: { signIn: "/login" },
+  // Both on the login page: a refused SSO identity (no provisioned account,
+  // domain not allowed) is a sign-in outcome the form explains, not the
+  // "problem with the server configuration" page Auth.js would otherwise show.
+  pages: { signIn: "/login", error: "/login" },
   events: {
     async signOut(message) {
       await revokeBackendSession(
