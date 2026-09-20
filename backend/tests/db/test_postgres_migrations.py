@@ -105,6 +105,27 @@ def postgres_schema_url(database_url: str, schema_name: str, *, role: str | None
 
 @pytest.fixture
 def migrated_postgres_schema(monkeypatch: pytest.MonkeyPatch) -> Iterator[MigratedPostgresSchema]:
+    """A schema migrated to head and downgraded to base again on teardown."""
+    yield from _migrated_schema(monkeypatch, downgrade=True)
+
+
+@pytest.fixture
+def forward_migrated_postgres_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[MigratedPostgresSchema]:
+    """A schema migrated to head and dropped without downgrading.
+
+    For suites whose seeded rows the older schemas cannot carry back (issued
+    bank-scoped integration keys, ``enterprise_stress`` runs, ``bsd`` packages,
+    service identities); the round trip itself is proven by
+    :func:`migrated_postgres_schema`.
+    """
+    yield from _migrated_schema(monkeypatch, downgrade=False)
+
+
+def _migrated_schema(
+    monkeypatch: pytest.MonkeyPatch, *, downgrade: bool
+) -> Iterator[MigratedPostgresSchema]:
     test_database_url = os.environ["TEST_DATABASE_URL"]
     if not make_url(test_database_url).drivername.startswith("postgresql"):
         pytest.skip("TEST_DATABASE_URL must point to Postgres.")
@@ -129,7 +150,8 @@ def migrated_postgres_schema(monkeypatch: pytest.MonkeyPatch) -> Iterator[Migrat
     try:
         command.upgrade(alembic_config, "head")
         yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
-        command.downgrade(alembic_config, "base")
+        if downgrade:
+            command.downgrade(alembic_config, "base")
     finally:
         clear_database_caches()
         app_engine.dispose()
