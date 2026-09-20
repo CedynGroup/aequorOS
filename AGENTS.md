@@ -157,16 +157,10 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   for the cross-tenant 404 contract, `app/api/deps.py::resolve_tenant_bank` mounting
   requirements, and regression coverage when adding bank routes.
   **By-id lookups under `/banks/{bank_id}` must be bank-scoped at the query.** Two
-  banks of one organization share an RLS tenant, so the policy cannot tell them apart
-  and an organization-only `WHERE` lets a caller reach a sibling bank's row by id
-  (that is how a sibling's system-of-record declaration got approved). Every service
-  lookup that resolves a child object (`declaration_id`, `withdrawal_id`, a cited
-  evidence id in a request body) filters on the route's resolved bank too, so a
-  sibling's row is the route's ordinary 404 before any state check — never a 403 or
-  409 that would confirm it exists. The property suite
-  `tests/db/test_authorization_object_reference_properties.py` enumerates such routes
-  from OpenAPI and fails on a leak; a route it catches goes in `_KNOWN_DEFECTS` only
-  until fixed, and the suite forces its promotion.
+  banks of one organization share an RLS tenant, so organization scoping alone
+  cannot isolate their child objects. See the
+  [foundation contract](backend/docs/authorization_foundation.md#executable-verification)
+  for refusal semantics and the regression coverage.
   Preserve baseline membership as system-managed lifecycle evidence, never evaluator
   fallback access. Activation/deactivation must use `app/services/membership.py`;
   [the foundation contract](backend/docs/authorization_foundation.md#baseline-membership)
