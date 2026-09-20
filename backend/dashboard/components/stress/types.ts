@@ -17,7 +17,6 @@ import type { ScenarioStatus, ScenarioType, Severity } from "./macro";
 export type MacroPath = {
   variable: string;
   year_index: number;
-  quarter_index: number | null;
   base_value: string;
   stress_value: string;
 };

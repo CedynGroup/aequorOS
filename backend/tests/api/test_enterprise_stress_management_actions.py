@@ -21,7 +21,7 @@ from app.models import User
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_ingestion import seed_bank
 
-pytestmark = pytest.mark.usefixtures("fx_run_authority")
+pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 SCENARIO_URL = "/api/v1/macro-scenarios"

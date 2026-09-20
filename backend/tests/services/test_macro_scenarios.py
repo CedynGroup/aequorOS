@@ -119,7 +119,7 @@ def test_default_catalogue_covers_every_institution_type() -> None:
     for scenario in default_macro_scenarios.DEFAULT_MACRO_SCENARIOS:
         assert set(scenario.institution_type_applicability) == type_codes
         if scenario.runnable:
-            assert len(scenario.paths) == 13 * 12
+            assert len(scenario.paths) == 13 * 3
         else:
             assert scenario.code == "system_bog_supervisory_placeholder"
             assert scenario.paths == ()

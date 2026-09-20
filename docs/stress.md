@@ -280,10 +280,8 @@ definition version is no longer in the current catalogue. Latest-result lookup m
 scenario ID stored in that snapshot, not its code, so a tenant scenario with the same code cannot
 replace a system scenario's result. Both reads remain scoped to the tenant and institution.
 
-Every runnable definition carries **12 quarterly points over three years** for all 13 Table 6
-drivers. The enterprise projection remains annual and consumes the Q4 point for each year; the
-full quarterly path stays visible in the scenario detail and is included in the code-defined
-calibration.
+Every runnable definition carries **three annual points** for all 13 Table 6
+drivers. Scenario details, clones, and enterprise projections use the same annual path.
 
 | Code                                                         | Type / severity        | Calibration                                                                                                                                                                                       |
 | ------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

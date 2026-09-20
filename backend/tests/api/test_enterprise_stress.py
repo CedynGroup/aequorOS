@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.core.authorization import (
     GrantorType,
@@ -32,6 +32,8 @@ from app.services import authorization, default_macro_scenarios
 from tests.api.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.api.test_fx_authorization import _grant
 from tests.api.test_ingestion import seed_bank
+
+pytestmark = pytest.mark.usefixtures("irrbb_run_authority")
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 LATEST_URL = "/api/v1/banks/{bank_id}/enterprise-stress/latest"
@@ -665,3 +667,41 @@ def test_enterprise_readers_project_fx_without_hiding_non_fx(
         stored = session.get(RegulatoryRun, UUID(run_id))
         assert stored.metrics == original_metrics
         assert stored.inputs == original_inputs
+
+
+@pytest.mark.parametrize("sensitivity", [None, SensitivityScope.AGGREGATED])
+def test_system_run_requires_confidential_irrbb_authority(
+    db_client: TestClient, sensitivity: SensitivityScope | None
+) -> None:
+    bank_id = seed_bank(db_client)
+    period_id = _period_id(db_client, bank_id)
+    with get_sessionmaker()() as session:
+        session.execute(
+            delete(AuthorizationBinding).where(
+                AuthorizationBinding.principal_user_id == USER_1,
+                AuthorizationBinding.module_scope == ModuleScope.IRRBB,
+            )
+        )
+        session.commit()
+        before = list(session.scalars(select(RegulatoryRun.id)))
+    version = 1
+    if sensitivity is not None:
+        _, version = _grant(
+            role_bundle=RoleBundle.ANALYST,
+            institution_id=bank_id,
+            module_scope=ModuleScope.IRRBB,
+            sensitivity_scope=sensitivity,
+        )
+    response = db_client.post(
+        RUNS_URL.format(bank_id=bank_id),
+        headers=headers(roles=("analyst",), authorization_version=version),
+        json={
+            "scenario_id": str(default_macro_scenarios.DEFAULT_BY_CODE["system_base_consensus"].id),
+            "reporting_period_id": period_id,
+            "include_fx": False,
+            "reason": "Verify exact default run authority",
+        },
+    )
+    assert response.status_code == 403, response.text
+    with get_sessionmaker()() as session:
+        assert list(session.scalars(select(RegulatoryRun.id))) == before

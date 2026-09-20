@@ -108,28 +108,21 @@ def _system_or_none(scenario_id: UUID) -> default_macro_scenarios.DefaultMacroSc
 
 def _system_paths(
     scenario: default_macro_scenarios.DefaultMacroScenario,
-    *,
-    annual_only: bool = False,
 ) -> list[MacroPathRead]:
-    source = default_macro_scenarios.annual_paths(scenario) if annual_only else scenario.paths
     return [
         MacroPathRead(
             variable=path.variable,
             year_index=path.year_index,
-            quarter_index=path.quarter_index,
             base_value=path.base_value,
             stress_value=path.stress_value,
         )
-        for path in source
+        for path in scenario.paths
     ]
 
 
 def _system_points(
     scenario: default_macro_scenarios.DefaultMacroScenario,
-    *,
-    annual_only: bool = False,
 ) -> tuple[MacroPathPoint, ...]:
-    source = default_macro_scenarios.annual_paths(scenario) if annual_only else scenario.paths
     return tuple(
         MacroPathPoint(
             variable=path.variable,
@@ -137,7 +130,7 @@ def _system_points(
             base_value=path.base_value,
             stress_value=path.stress_value,
         )
-        for path in source
+        for path in scenario.paths
     )
 
 
@@ -156,7 +149,7 @@ def _resolved_system(
         source=scenario.source,
         status="approved",
         version=scenario.version,
-        paths=_system_points(scenario, annual_only=True),
+        paths=_system_points(scenario),
         owner="system",
         is_runnable=scenario.runnable,
     )
@@ -259,7 +252,6 @@ def _read(scenario: MacroScenario, paths: list[MacroScenarioPath]) -> MacroScena
             MacroPathRead(
                 variable=path.variable,
                 year_index=path.year_index,
-                quarter_index=None,
                 base_value=path.base_value,
                 stress_value=path.stress_value,
             )
@@ -673,7 +665,6 @@ def clone_system_scenario(
                 ),
             },
         )
-    annual_paths = default_macro_scenarios.annual_paths(scenario)
     created = create_scenario(
         db,
         ctx,
@@ -698,7 +689,7 @@ def clone_system_scenario(
                     base_value=path.base_value,
                     stress_value=path.stress_value,
                 )
-                for path in annual_paths
+                for path in scenario.paths
             ],
             reason=payload.reason,
         ),

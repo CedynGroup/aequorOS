@@ -49,7 +49,6 @@ IRRBB_SOURCE = (
 class DefaultMacroPath:
     variable: str
     year_index: int
-    quarter_index: int
     base_value: Decimal
     stress_value: Decimal
 
@@ -78,26 +77,6 @@ def _id(code: str) -> UUID:
 def _d(value: str | int | Decimal) -> Decimal:
     return Decimal(str(value))
 
-
-def _interpolate(start: Decimal, end: Decimal, step: int, steps: int = 4) -> Decimal:
-    return start + (end - start) * Decimal(step) / Decimal(steps)
-
-
-_CURRENT = {
-    "gog_yield": _d("0.18"),
-    "gdp_growth": _d("0.048"),
-    "policy_rate": _d("0.14"),
-    "interest_rate": _d("0.18"),
-    "inflation": _d("0.058"),
-    "unemployment": _d("0.136"),
-    "fx_usd_ghs": _d("11.45"),
-    "fx_gbp_ghs": _d("15.36"),
-    "fx_eur_ghs": _d("13.20"),
-    "gse_index": _d("15076.3"),
-    "fiscal_deficit": _d("-0.026"),
-    "cocoa_price": _d("5979"),
-    "gold_price": _d("4491"),
-}
 
 _BASE_ENDPOINTS = {
     "gog_yield": ("0.18", "0.17", "0.16"),
@@ -148,35 +127,22 @@ _SEVERE_ENDPOINTS = {
 }
 
 
-def _quarterly_paths(
+def _annual_paths(
     stress_endpoints: dict[str, tuple[str, str, str]],
 ) -> tuple[DefaultMacroPath, ...]:
-    paths: list[DefaultMacroPath] = []
-    for variable in MACRO_VARIABLES:
-        base_targets = tuple(_d(value) for value in _BASE_ENDPOINTS[variable])
-        stress_targets = tuple(_d(value) for value in stress_endpoints[variable])
-        base_start = _CURRENT[variable]
-        stress_start = _CURRENT[variable]
-        for year_index in range(1, 4):
-            base_end = base_targets[year_index - 1]
-            stress_end = stress_targets[year_index - 1]
-            for quarter_in_year in range(1, 5):
-                quarter_index = (year_index - 1) * 4 + quarter_in_year
-                paths.append(
-                    DefaultMacroPath(
-                        variable=variable,
-                        year_index=year_index,
-                        quarter_index=quarter_index,
-                        base_value=_interpolate(base_start, base_end, quarter_in_year),
-                        stress_value=_interpolate(stress_start, stress_end, quarter_in_year),
-                    )
-                )
-            base_start = base_end
-            stress_start = stress_end
-    return tuple(paths)
+    return tuple(
+        DefaultMacroPath(
+            variable=variable,
+            year_index=year_index,
+            base_value=_d(_BASE_ENDPOINTS[variable][year_index - 1]),
+            stress_value=_d(stress_endpoints[variable][year_index - 1]),
+        )
+        for variable in MACRO_VARIABLES
+        for year_index in range(1, 4)
+    )
 
 
-_BASE_PATHS = _quarterly_paths(_BASE_ENDPOINTS)
+_BASE_PATHS = _annual_paths(_BASE_ENDPOINTS)
 
 
 def _rate_paths(
@@ -194,7 +160,6 @@ def _rate_paths(
         DefaultMacroPath(
             variable=path.variable,
             year_index=path.year_index,
-            quarter_index=path.quarter_index,
             base_value=path.base_value,
             stress_value=path.base_value + deltas.get(path.variable, Decimal(0)),
         )
@@ -238,7 +203,7 @@ DEFAULT_MACRO_SCENARIOS: tuple[DefaultMacroScenario, ...] = (
     _scenario(
         "system_base_consensus",
         "Base consensus path",
-        "Quarterly three-year base path anchored to published 2026 Ghana macro data.",
+        "Annual three-year base path anchored to published 2026 Ghana macro data.",
         "base",
         None,
         (
@@ -262,7 +227,7 @@ DEFAULT_MACRO_SCENARIOS: tuple[DefaultMacroScenario, ...] = (
             "rise, and a 5pp GDP-growth reduction, then recovers over years 2-3."
         ),
         BOG_STRESS_SOURCE,
-        _quarterly_paths(_ADVERSE_ENDPOINTS),
+        _annual_paths(_ADVERSE_ENDPOINTS),
     ),
     _scenario(
         "system_severe_stagflation",
@@ -276,12 +241,12 @@ DEFAULT_MACRO_SCENARIOS: tuple[DefaultMacroScenario, ...] = (
             "rise, an 8pp GDP-growth reduction, and pronounced equity/commodity declines."
         ),
         BOG_STRESS_SOURCE,
-        _quarterly_paths(_SEVERE_ENDPOINTS),
+        _annual_paths(_SEVERE_ENDPOINTS),
     ),
     _scenario(
         "system_irr_parallel_up_200",
         "IRRBB parallel +200bp",
-        "Three-year quarterly macro path reproducing the existing parallel-up IRRBB shock.",
+        "Three-year annual macro path reproducing the existing parallel-up IRRBB shock.",
         "supervisory",
         "moderate",
         "Policy, market, and sovereign rates move up together by 200bp.",
@@ -295,7 +260,7 @@ DEFAULT_MACRO_SCENARIOS: tuple[DefaultMacroScenario, ...] = (
     _scenario(
         "system_irr_parallel_down_200",
         "IRRBB parallel -200bp",
-        "Three-year quarterly macro path reproducing the existing parallel-down IRRBB shock.",
+        "Three-year annual macro path reproducing the existing parallel-down IRRBB shock.",
         "supervisory",
         "moderate",
         "Policy, market, and sovereign rates move down together by 200bp.",
@@ -309,7 +274,7 @@ DEFAULT_MACRO_SCENARIOS: tuple[DefaultMacroScenario, ...] = (
     _scenario(
         "system_irr_short_up_250",
         "IRRBB short rates +250bp",
-        "Three-year quarterly macro path reproducing the existing short-rate-up shock.",
+        "Three-year annual macro path reproducing the existing short-rate-up shock.",
         "supervisory",
         "moderate",
         "The policy-rate path rises 250bp while the market and sovereign anchors stay flat.",
@@ -319,7 +284,7 @@ DEFAULT_MACRO_SCENARIOS: tuple[DefaultMacroScenario, ...] = (
     _scenario(
         "system_irr_short_down_250",
         "IRRBB short rates -250bp",
-        "Three-year quarterly macro path reproducing the existing short-rate-down shock.",
+        "Three-year annual macro path reproducing the existing short-rate-down shock.",
         "supervisory",
         "moderate",
         "The policy-rate path falls 250bp while the market and sovereign anchors stay flat.",
@@ -329,7 +294,7 @@ DEFAULT_MACRO_SCENARIOS: tuple[DefaultMacroScenario, ...] = (
     _scenario(
         "system_irr_steepener",
         "IRRBB steepener",
-        "Three-year quarterly path reproducing the existing -65bp short/+90bp long rotation.",
+        "Three-year annual path reproducing the existing -65bp short/+90bp long rotation.",
         "supervisory",
         "moderate",
         "Policy rates fall 65bp and sovereign yields rise 90bp around a flat market-rate anchor.",
@@ -342,7 +307,7 @@ DEFAULT_MACRO_SCENARIOS: tuple[DefaultMacroScenario, ...] = (
     _scenario(
         "system_irr_flattener",
         "IRRBB flattener",
-        "Three-year quarterly path reproducing the existing +80bp short/-60bp long rotation.",
+        "Three-year annual path reproducing the existing +80bp short/-60bp long rotation.",
         "supervisory",
         "moderate",
         "Policy rates rise 80bp and sovereign yields fall 60bp around a flat market-rate anchor.",
@@ -378,8 +343,3 @@ DEFAULT_BY_CODE = {scenario.code: scenario for scenario in DEFAULT_MACRO_SCENARI
 
 def get(scenario_id: UUID) -> DefaultMacroScenario | None:
     return DEFAULT_BY_ID.get(scenario_id)
-
-
-def annual_paths(scenario: DefaultMacroScenario) -> tuple[DefaultMacroPath, ...]:
-    """The year-end points consumed by the existing annual projection engine."""
-    return tuple(path for path in scenario.paths if path.quarter_index % 4 == 0)

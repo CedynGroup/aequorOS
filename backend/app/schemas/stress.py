@@ -47,7 +47,6 @@ class MacroPathIn(ClosedModel):
 class MacroPathRead(ClosedModel):
     variable: str
     year_index: int
-    quarter_index: int | None = None
     base_value: Decimal
     stress_value: Decimal
 

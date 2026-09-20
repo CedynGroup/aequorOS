@@ -211,7 +211,7 @@ def test_system_irr_calibrations_are_preserved(code: str, expected: dict[str, De
     scenario = default_macro_scenarios.DEFAULT_BY_CODE[f"system_irr_{code}"]
     paths = tuple(
         MacroPathPoint(p.variable, p.year_index, p.base_value, p.stress_value)
-        for p in default_macro_scenarios.annual_paths(scenario)
+        for p in scenario.paths
     )
     curve = {Decimal("1"): Decimal("20"), Decimal("10"): Decimal("20")}
     assert scenario_shifts(code, translate(paths, "irr"), curve) == scenario_shifts(

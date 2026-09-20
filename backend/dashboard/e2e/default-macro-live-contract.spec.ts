@@ -78,10 +78,10 @@ test("system contracts, governed clones, and real denied authority", async ({
       expect((await run(scenario.id)).status).toBe(409);
       continue;
     }
-    expect(detail.body.paths).toHaveLength(156);
-    expect(
-      new Set(detail.body.paths.map((p: any) => p.quarter_index)).size,
-    ).toBe(12);
+    expect(detail.body.paths).toHaveLength(39);
+    expect(new Set(detail.body.paths.map((p: any) => p.year_index)).size).toBe(
+      3,
+    );
     const suffix = scenario.code.replace("system_irr_", "");
     if (calibrations[suffix]) {
       const translation = await api(
@@ -234,7 +234,7 @@ test("system contracts, governed clones, and real denied authority", async ({
     expect(Number(result.body.outcome.irr.delta_eve)).not.toBe(0);
   }
   const grant = {
-    principal_user_id: E2E_USERS.viewer.id,
+    principal_user_id: E2E_USERS.macro_viewer.id,
     role_bundle: "viewer",
     institution_scope: "organization",
     module_scope: "all",
@@ -261,11 +261,17 @@ test("system contracts, governed clones, and real denied authority", async ({
       )
     ).status,
   ).toBe(201);
-  expect((await run(system.id, "viewer", 2)).status).toBe(403);
+  expect(
+    (await run(system.id, "macro_viewer", E2E_USERS.macro_viewer.authv + 1))
+      .status,
+  ).toBe(403);
   await page.context().addCookies([
     {
       name: "authjs.session-token",
-      value: await mintSessionCookie("viewer", 2),
+      value: await mintSessionCookie(
+        "macro_viewer",
+        E2E_USERS.macro_viewer.authv + 1,
+      ),
       domain: "127.0.0.1",
       path: "/",
     },
@@ -281,6 +287,15 @@ test("system contracts, governed clones, and real denied authority", async ({
   await expect(page.getByRole("tooltip")).toHaveText(
     "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.",
   );
+  const cloneControls = page.getByRole("button", {
+    name: "Cloning requires the Analyst role or higher.",
+    exact: true,
+  });
+  await expect(cloneControls).toHaveCount(9);
+  for (const cloneControl of await cloneControls.all()) {
+    await expect(cloneControl).toBeVisible();
+    await expect(cloneControl).toBeDisabled();
+  }
   if (evidence)
     await page.screenshot({
       path: path.join(evidence, "real-denied-authority.png"),

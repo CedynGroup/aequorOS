@@ -966,7 +966,6 @@ export * from "./PullAsOfDate";
 export * from "./PushBatchOpen";
 export * from "./PushBatchStatusRead";
 export * from "./PushRecordsPage";
-export * from "./QuarterIndex";
 export * from "./QueryTimeoutSeconds";
 export * from "./QuotaSummaryRead";
 export * from "./Quote";

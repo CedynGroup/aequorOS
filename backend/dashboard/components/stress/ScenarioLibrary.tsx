@@ -9,6 +9,8 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import { Archive, CheckCircle2, Copy, Pencil, Plus, Send } from "lucide-react";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { useImpersonation } from "@/components/impersonation/useImpersonation";
 import SectionCard from "@/components/ui/SectionCard";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
 import QueryBoundary from "@/components/ui/QueryBoundary";
@@ -52,6 +54,11 @@ export default function ScenarioLibrary({
   onEdit: (scenarioId: string) => void;
   onNew: () => void;
 }) {
+  const { profile } = useUserProfile();
+  const inspection = useImpersonation();
+  const canClone =
+    !inspection.impersonating &&
+    ["admin", "approver", "analyst"].includes(profile?.role ?? "");
   const [statusFilter, setStatusFilter] = useState<ScenarioStatus | "">("");
   const [typeFilter, setTypeFilter] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -204,7 +211,12 @@ export default function ScenarioLibrary({
                   <div className="flex items-center gap-1.5 shrink-0">
                     {s.owner === "system" && s.path_count > 0 && (
                       <IconBtn
-                        title="Clone to editable draft"
+                        title={
+                          canClone
+                            ? "Clone to editable draft"
+                            : "Cloning requires the Analyst role or higher."
+                        }
+                        disabled={!canClone}
                         onClick={() =>
                           void runTransition(async () => {
                             const draft = await clone.mutateAsync({
@@ -288,11 +300,13 @@ function IconBtn({
   title,
   onClick,
   tone,
+  disabled,
 }: {
   children: ReactNode;
   title: string;
   onClick: () => void;
   tone?: "success";
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -300,6 +314,7 @@ function IconBtn({
       title={title}
       aria-label={title}
       onClick={onClick}
+      disabled={disabled}
       className={`inline-flex items-center justify-center h-7 w-7 rounded-md border border-border-light hover:bg-surface ${
         tone === "success" ? "text-success" : "text-slate"
       }`}

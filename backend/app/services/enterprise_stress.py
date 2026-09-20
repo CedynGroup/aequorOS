@@ -1631,6 +1631,15 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
             sensitivity=Sensitivity.CONFIDENTIAL,
             surface="enterprise_stress_fx",
         )
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.IRRBB,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="enterprise_stress_irrbb",
+    )
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     scenario = macro_scenarios.resolve_for_official_run(db, ctx, payload.scenario_id)
     if scenario.bank_id is not None and scenario.bank_id != bank.id:

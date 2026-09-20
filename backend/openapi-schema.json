@@ -23627,17 +23627,6 @@
             "title": "Base Value",
             "type": "string"
           },
-          "quarter_index": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Quarter Index"
-          },
           "stress_value": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Stress Value",
