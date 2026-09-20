@@ -153,6 +153,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   or transaction context carry `requires_contextual_authorization` and are never execution
   authority; bank detail/period/fact routes 404 without institution coverage; shell
   navigation and deep links consume the projection, never token roles.
+  **Bank-route existence rule:** follow [docs/rbac.md §4](docs/rbac.md#4-tenancy--the-two-planes)
+  for the cross-tenant 404 contract, `app/api/deps.py::resolve_tenant_bank` mounting
+  requirements, and regression coverage when adding bank routes.
   Preserve baseline membership as system-managed lifecycle evidence, never evaluator
   fallback access. Activation/deactivation must use `app/services/membership.py`;
   [the foundation contract](backend/docs/authorization_foundation.md#baseline-membership)

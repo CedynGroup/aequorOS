@@ -188,6 +188,17 @@ Every access check answers: **who (role) → may do what (permission) → on wha
 
 - **Tenant plane** — everything a bank's own users touch, hard-scoped to their
   `organization_id` by RLS. No tenant role can ever reach cross-tenant data.
+- **Bank-route existence rule** — every tenant API route that accepts a path or
+  query `bank_id` runs the shared `resolve_tenant_bank` dependency before module or
+  permission checks. Unknown banks and banks owned by another organization
+  return the same 404 envelope and never mention permissions; RLS remains
+  defense in depth rather than the route's existence-hiding mechanism. This
+  guard does not change scoped-authority denials for a bank in the caller's own
+  organization. Mount bank routers with `BANK_ROUTE_DEPENDENCIES`, defined in
+  `app/api/deps.py`; permission dependencies there consume the resolved bank as
+  `TenantBank` rather than re-resolving it. The OpenAPI-enumerated regression in
+  `backend/tests/api/test_cross_tenant_bank_routes.py` checks dependency coverage
+  and sibling-bank 404 responses for reads and mutations on Postgres.
 - **Platform plane** — the _only_ cross-tenant surface, for AequorOS staff. It
   must run outside RLS — **the same architectural seam as the existing
   `WORKER_DATABASE_URL` BYPASSRLS worker** — or it reads empty. It is the most

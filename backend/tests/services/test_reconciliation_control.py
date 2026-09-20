@@ -1236,7 +1236,7 @@ def test_the_reconciliation_escape_valve_router_is_registered() -> None:
     router. The AST row above pins the mechanism; this pins the identity."""
     source = (_BACKEND_ROOT / "app/api/router.py").read_text(encoding="utf-8")
     assert "from app.features.manage_reconciliation import router" in source
-    assert "v1_router.include_router(reconciliation_router)" in source
+    assert "v1_router.include_router(reconciliation_router," in source
 
 
 def _derive_official_then_break_the_book(db_session: Session) -> BankReportingPeriod:
