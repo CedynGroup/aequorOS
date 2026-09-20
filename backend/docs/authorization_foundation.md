@@ -403,30 +403,46 @@ Generative suites add coverage beyond the fixed examples:
   positive control before tenant-A requests. Other UUID resource kinds still use
   unknown IDs, so those requests do not prove isolation of existing child rows.
 
-`tests/db/test_authorization_object_reference_properties.py` extends that route
-enumeration to the classic IDOR shape: a route that carries a second object
-identifier beside `{bank_id}` — a `package_id`, `signoff_id`, `analysis_id`,
-`declaration_id`, `connection_id` and the rest — in its path, or a UUID `*_id`
-in its request body or query. It seeds one real object of every such kind for
-three tenants (organization A bank A, organization A sibling bank A2,
-organization B bank B), then references a foreign tenant's object under bank A's
-path or authority. Across the cross-organization and same-organization
-sibling-bank layouts it asserts that a read discloses no foreign identifier
-(a 200 that hides the row is a valid refusal), that a mutation never returns
-2xx, and that the row digest of every table in both organizations is unchanged
-before and after each request. The positive control is proven at the data
-layer — every seeded object is visible to the tenant that owns it under RLS — so
-a foreign reference's refusal is an authorization decision, not a missing
-fixture. Actor-label body fields (`assigned_to_user_id`, `approved_by_user_id`)
-are excluded because they record who acted, not an object whose data is read;
-routes needing multi-step fixtures (`push_batch_id`, `ingestion-batches`,
-`financial-workspace/map`) are listed as known-uncovered in the module docstring,
-and same-organization cross-*parent* nesting remains for a follow-up. Its
-committed negative control weakens the package bank guard under a rolled-back
-`monkeypatch` and confirms the property then reports the sibling-bank leak. The
-property currently reproduces two confirmed same-organization cross-bank
-defects, held in the module's `_KNOWN_DEFECTS` set and asserted as
-still-defective so a product fix forces their promotion into the strict property.
+Two paired tests extend that route enumeration to the classic IDOR shape: a
+route that carries a second object identifier beside `{bank_id}` — a
+`package_id`, `signoff_id`, `analysis_id`, `declaration_id`, `connection_id` and
+the rest — in its path, or a UUID `*_id` in its request body or query. Both draw
+the same census and object catalogue from `tests/fixtures/object_references.py`
+and `tests/fixtures/object_reference_routes.py`, seed one real object of every
+such kind for three tenants (organization A bank A, organization A sibling bank
+A2, organization B bank B), and reference a foreign tenant's object under bank
+A. Across the cross-organization and same-organization sibling-bank layouts each
+asserts that a read discloses no foreign identifier (a 200 that hides the row is
+a valid refusal) and that a mutation never returns 2xx and has no side effect.
+Actor-label body fields (`assigned_to_user_id`, `approved_by_user_id`) are
+excluded because they record who acted, not an object whose data is read; routes
+needing multi-step fixtures (`push_batch_id`, `ingestion-batches`,
+`financial-workspace/map`) are listed as known-uncovered in the module
+docstrings, and same-organization cross-*parent* nesting remains for a follow-up.
+
+`tests/api/test_authorization_object_reference_coverage.py` is the deterministic
+layer: it `pytest.mark.parametrize`s one case per route × HTTP method × layout,
+fixes a fully entitled bank-A caller, and checks the refusal shape and that no
+row is inserted. It runs on the default (non-Postgres) database because the
+refusals it checks come from the explicit organization/bank `WHERE` clauses in
+the guards and services, which hold without row-level security; its data-layer
+positive control confirms every seeded object exists for the tenant that owns
+it, so a refusal is authorization, not a missing fixture. It pins the two
+confirmed same-organization cross-bank defects in `KNOWN_DEFECTS`, skips them in
+the strict parametrization, and asserts they are still reproduced so a product
+fix forces their promotion.
+
+`tests/db/test_authorization_object_reference_properties.py` is the generative
+layer, Postgres-only against a migrated schema with FORCE RLS so the RLS
+backstop is exercised too. It fixes nothing about the caller: Hypothesis varies
+role/permission bundle, module scope, sensitivity scope, institution scope and
+binding lifecycle state, together with object placement (cross-organization vs
+sibling bank), and each small example sweeps the whole census and additionally
+asserts the content digest of every table in both organizations is unchanged —
+proving no *combination* of a bank-A caller's authority reaches a foreign
+object. Its committed negative control weakens the package bank guard under a
+rolled-back `monkeypatch` and confirms the sweep then reports the sibling-bank
+leak.
 
 Negative controls reuse the ownership and current-fact invariants: a test-scoped
 patch admitting public `org_owner` grants must violate the unassigned-organization
