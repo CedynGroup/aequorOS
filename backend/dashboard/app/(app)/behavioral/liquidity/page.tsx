@@ -44,9 +44,11 @@ const columns: Column<BehavioralLiquiditySegmentRead>[] = [
 ];
 
 export default function BehavioralLiquidityPage() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const [dimension, setDimension] = useState<(typeof DIMENSIONS)[number]['key']>('product');
-  const query = useBehavioralLiquidity(bank?.id);
+  const query = useBehavioralLiquidity(
+    moduleScope.behavioralAggregatedView ? bank?.id : undefined,
+  );
   const report = query.data;
   const rows = report?.segments.filter((segment) => segment.dimension === dimension) ?? [];
   const worstRunoff = rows.reduce<number | null>((worst, row) => row.observedMonthlyRunoffPct == null ? worst : worst === null || row.observedMonthlyRunoffPct > worst ? row.observedMonthlyRunoffPct : worst, null);

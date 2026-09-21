@@ -15,6 +15,7 @@ import type {
   BehavioralProductEstimate,
 } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import { DisabledWithReason } from '@/components/ui/DisabledWithReason';
 import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
 import EmptyState from '@/components/ui/EmptyState';
@@ -34,6 +35,7 @@ import {
   type BehavioralModelSlug,
 } from '@/lib/api/hooks';
 import { fmtDateUTC } from '@/lib/api/values';
+import { BEHAVIORAL_CONFIDENTIAL_RUN_REASON } from '@/lib/modules';
 
 export type BehavioralPageConfig = {
   title: string;
@@ -65,10 +67,14 @@ export default function BehavioralModelPage({
   slug: BehavioralModelSlug;
   config: BehavioralPageConfig;
 }) {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
+  const canRun = moduleScope.behavioralRun === true;
 
-  const query = useBehavioralModel(bankId, slug);
+  const query = useBehavioralModel(
+    moduleScope.behavioralAggregatedView ? bankId : undefined,
+    slug,
+  );
   const train = useTrainBehavioralModel(bankId, slug);
   const apply = useApplyBehavioralModel(bankId, slug);
 
@@ -157,6 +163,23 @@ export default function BehavioralModelPage({
     );
   };
 
+  const retrainButton = (descriptionId?: string) => (
+    <button
+      type="button"
+      onClick={() => train.mutate()}
+      disabled={!canRun || !bankId || train.isPending}
+      aria-describedby={descriptionId}
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {train.isPending ? (
+        <Loader2 size={13} className="animate-spin" aria-hidden />
+      ) : (
+        <RotateCw size={13} aria-hidden />
+      )}
+      Retrain
+    </button>
+  );
+
   return (
     <>
       <PageHeader
@@ -164,19 +187,13 @@ export default function BehavioralModelPage({
         title={config.title}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
-          <button
-            type="button"
-            onClick={() => train.mutate()}
-            disabled={!bankId || train.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-40"
-          >
-            {train.isPending ? (
-              <Loader2 size={13} className="animate-spin" aria-hidden />
-            ) : (
-              <RotateCw size={13} aria-hidden />
-            )}
-            Retrain
-          </button>
+          canRun ? (
+            retrainButton()
+          ) : (
+            <DisabledWithReason reason={BEHAVIORAL_CONFIDENTIAL_RUN_REASON}>
+              {(descriptionId) => retrainButton(descriptionId)}
+            </DisabledWithReason>
+          )
         }
       />
 

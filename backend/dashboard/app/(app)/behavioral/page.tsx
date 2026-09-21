@@ -76,9 +76,9 @@ function confTone(c: number) {
 }
 
 export default function BehavioralOverviewPage() {
-  const { bank, period } = useBankContext();
+  const { bank } = useBankContext();
   const scope = useModuleScope();
-  const bankId = bank?.id;
+  const bankId = scope.behavioralAggregatedView ? bank?.id : undefined;
 
   return (
     <>
