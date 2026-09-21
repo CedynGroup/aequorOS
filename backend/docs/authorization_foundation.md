@@ -429,11 +429,23 @@ and checks for persisted side effects.
 Actor-label body fields (`assigned_to_user_id`, `approved_by_user_id`) are
 excluded because they record who acted, not an object whose data is read.
 `KNOWN_UNCOVERED` in `tests/fixtures/object_reference_routes.py` owns the
-excluded-route list, including routes that need multi-step fixtures. A third
+excluded-route list, including routes that need multi-step fixtures and, one
+explicit entry per route, the ICAAP workspace routes deferred on 2026-09-20
+(`ICAAP_DEFERRED`); each must be deleted and its kind seeded when ICAAP is
+picked up. A third
 `single_foreign_child` layout enumerates each eligible child
 on multi-reference routes, holding every other reference at home and substituting
 only that child from A2. This covers same-organization cross-parent nesting,
 including package/resubmission, party/shareholding and scenario/assumption guards.
+
+Both layers read the census at collection, so a route whose identifier the
+catalogue does not know fails them at collection rather than in one case.
+`tests/architecture/test_object_reference_census.py` runs that census in the
+architecture job on every PR — no Postgres — and names the exact uncatalogued
+identifiers, and checks that every `KNOWN_UNCOVERED` and `KNOWN_DEFECTS` entry
+still names a mounted route. It exists because two PRs that were each green on
+their own base (the census and the filing-chain routes) broke both suites only
+once main carried both.
 
 `tests/api/test_authorization_object_reference_coverage.py` is the deterministic
 layer: it `pytest.mark.parametrize`s one case per route × HTTP method × layout,
