@@ -37,6 +37,8 @@ from tests.services.test_icaap_stress_reverse_stress import (
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
+pytestmark = pytest.mark.usefixtures("forecasting_run_authority")
+
 __all__ = ["storage"]
 
 GENERATION = Path(__file__).parents[3] / "app/services/regulatory_reporting/generation.py"

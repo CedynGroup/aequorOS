@@ -329,6 +329,24 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      forecastingAggregatedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "fcst",
+        "aggregated",
+        "view",
+      ),
+      forecastingConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "fcst",
+        "confidential",
+        "view",
+      ),
+      forecastingRun: hasEffectiveCapability(
+        institutionCapabilities,
+        "fcst",
+        "confidential",
+        "run",
+      ),
       isResolved: !banksQuery.isLoading && !profileQuery.isLoading,
     }),
     [

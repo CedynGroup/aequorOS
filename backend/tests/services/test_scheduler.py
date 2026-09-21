@@ -34,7 +34,7 @@ def _grant_official_run(
     user_id: UUID,
     sensitivity: SensitivityScope = SensitivityScope.CONFIDENTIAL,
 ) -> None:
-    for module in (ModuleScope.FX, ModuleScope.FTP):
+    for module in (ModuleScope.FX, ModuleScope.FTP, ModuleScope.FORECASTING):
         authorization.create_role_binding(
             session,
             organization_id=ORG_1,

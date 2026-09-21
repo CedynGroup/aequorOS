@@ -38,6 +38,7 @@ def get_bank_alerts(
         ("irr", Module.IRRBB),
         ("fx", Module.FX),
         ("ftp", Module.FTP),
+        ("forecast", Module.FORECASTING),
     ):
         decision = scoped_authorization.evaluate_bank_permission(
             db,

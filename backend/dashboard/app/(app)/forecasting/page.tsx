@@ -38,6 +38,7 @@ import WaterfallChart, {
   type WaterfallStep,
 } from '@/components/forecasting/charts/WaterfallChart';
 import RatioPathChart from '@/components/forecasting/charts/RatioPathChart';
+import ForecastingRunGate from '@/components/forecasting/RunGate';
 import { useScenarioRunSet } from '@/components/forecasting/hooks';
 import {
   liabilitiesOf,
@@ -57,6 +58,7 @@ import {
 } from '@/lib/api/hooks';
 import { isoDate, labelize, num, statusTone } from '@/lib/api/values';
 import { currencyCode, fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
+import { FORECASTING_CONFIDENTIAL_VIEW_REASON } from '@/lib/modules';
 import { seriesColor } from '@/lib/chartTheme';
 
 const PRESET_SCENARIOS: { code: ForecastScenarioCode; label: string }[] = [
@@ -105,9 +107,14 @@ export default function BalanceSheetForecastPage() {
 }
 
 function BalanceSheetWorkspace() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  // Run summaries ride aggregated view (the page's own gate); a full run is
+  // confidential, so its query is never issued without that authority.
+  const canViewRuns = moduleScope.forecastingConfidentialView === true;
+  const runDetailBankId = canViewRuns ? bankId : undefined;
+  const canRun = moduleScope.forecastingRun === true;
   const searchParams = useSearchParams();
   const requestedRunId = searchParams.get('run');
 
@@ -122,9 +129,9 @@ function BalanceSheetWorkspace() {
   const activeRunId =
     selectedRunId ?? requestedRunId ?? null;
 
-  const runQuery = useForecastRun(bankId, activeRunId);
+  const runQuery = useForecastRun(runDetailBankId, activeRunId);
   const createRun = useCreateForecastRun(bankId);
-  const scenarioSet = useScenarioRunSet(bankId);
+  const scenarioSet = useScenarioRunSet(bankId, canViewRuns);
 
   const run = runQuery.data;
 
@@ -173,30 +180,39 @@ function BalanceSheetWorkspace() {
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              disabled={createRun.isPending || !periodId}
-              title={periodId ? undefined : 'A derived reporting period is required before a forecast can be run.'}
-              onClick={() =>
-                periodId &&
-                createRun.mutate(
-                  {
-                    reportingPeriodId: periodId,
-                    scenarioCode: scenario,
-                    horizonYears,
-                  },
-                  { onSuccess: (created) => setSelectedRunId(created.id) }
-                )
-              }
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            >
-              {createRun.isPending ? (
-                <Loader2 size={13} className="animate-spin" aria-hidden />
-              ) : (
-                <PlayCircle size={13} aria-hidden />
+            <ForecastingRunGate canRun={canRun}>
+              {(descriptionId) => (
+                <button
+                  type="button"
+                  disabled={!canRun || createRun.isPending || !periodId}
+                  aria-describedby={descriptionId}
+                  title={
+                    periodId || !canRun
+                      ? undefined
+                      : 'A derived reporting period is required before a forecast can be run.'
+                  }
+                  onClick={() =>
+                    periodId &&
+                    createRun.mutate(
+                      {
+                        reportingPeriodId: periodId,
+                        scenarioCode: scenario,
+                        horizonYears,
+                      },
+                      { onSuccess: (created) => setSelectedRunId(created.id) }
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {createRun.isPending ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden />
+                  ) : (
+                    <PlayCircle size={13} aria-hidden />
+                  )}
+                  Run forecast
+                </button>
               )}
-              Run forecast
-            </button>
+            </ForecastingRunGate>
           </div>
         }
       />
@@ -240,6 +256,12 @@ function BalanceSheetWorkspace() {
                 description="Ingest current financial data and reviewed base assumptions. The live pipeline will calculate the baseline automatically; saved and official forecasts remain optional evidence snapshots."
               />
             )
+          ) : !canViewRuns ? (
+            <EmptyState
+              Icon={PlayCircle}
+              title="This run is confidential"
+              description={FORECASTING_CONFIDENTIAL_VIEW_REASON}
+            />
           ) : runQuery.isLoading ? (
             <SkeletonChart height={320} />
           ) : runQuery.error ? (

@@ -15,6 +15,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -28,6 +29,8 @@ from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_ca
 from tests.services.test_capital_plan import _content
 
 MAKER = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+
+pytestmark = pytest.mark.usefixtures("forecasting_run_authority")
 
 
 def _period_id(db: Session):

@@ -30,6 +30,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.capital.ecl import EclAssumption
 from app.domain.capital.engine import (
     CapitalComputationError,
@@ -118,7 +119,7 @@ from app.schemas.regulatory_liquidity import (
     RegulatoryRunErrorRead,
     RegulatoryValidationRead,
 )
-from app.services import regulatory_parameters, sdi_regime
+from app.services import regulatory_parameters, scoped_authorization, sdi_regime
 from app.services.audit import record_event
 from app.services.live_state import current_snapshot, load_current_facts
 from app.services.live_types import LiveModuleResult, findings_from_validations, worst_status
@@ -288,6 +289,7 @@ def create_forecast_run(
 ) -> ForecastRunRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
+    _require_run_authority(db, ctx, bank, surface="forecast_run")
     # Regime gate BEFORE anything is computed or persisted (forensic architecture
     # audit sections 6 + 10): this projection's compliance outputs are Basel
     # ratios, which are not the regime an SDI is supervised under. No run row is
@@ -382,17 +384,20 @@ def compute_live(
         ),
     )
     module_status = worst_status(*statuses)
-    snapshot = current_snapshot(_build_snapshot(
-        bank,
-        period,
-        module=MODULE_FORECAST,
-        scenario_code=BASE_SCENARIO,
-        facts=facts,
-        active=active,
-        assumptions=assumptions,
-        overrides=None,
-        horizon_years=5,
-    ), current.source_as_of_date)
+    snapshot = current_snapshot(
+        _build_snapshot(
+            bank,
+            period,
+            module=MODULE_FORECAST,
+            scenario_code=BASE_SCENARIO,
+            facts=facts,
+            active=active,
+            assumptions=assumptions,
+            overrides=None,
+            horizon_years=5,
+        ),
+        current.source_as_of_date,
+    )
     return LiveModuleResult(
         metrics={
             **{field: str(getattr(summary, field)) for field in _SUMMARY_FIELDS},
@@ -461,6 +466,7 @@ def run_strategic_optimizer(
 ) -> OptimizerResultRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
+    _require_run_authority(db, ctx, bank, surface="optimizer_run")
     sdi_regime.require_bank_forecast_regime(db, bank)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     facts = _load_facts(db, ctx, bank, period)
@@ -507,6 +513,7 @@ def run_whatif_analysis(
 ) -> WhatIfResultRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
+    _require_run_authority(db, ctx, bank, surface="whatif_run")
     sdi_regime.require_bank_forecast_regime(db, bank)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     facts = _load_facts(db, ctx, bank, period)
@@ -889,8 +896,7 @@ def _balance_ties_row(years: Sequence[ProjectionYear]) -> tuple[str, bool, str, 
         (row, row.total_assets - (row.loans + row.securities + row.cash)) for row in years
     ]
     funding_residuals = [
-        (row, row.total_assets - (row.deposits + row.borrowings_plug + row.equity))
-        for row in years
+        (row, row.total_assets - (row.deposits + row.borrowings_plug + row.equity)) for row in years
     ]
     for label, residuals in (("asset", asset_residuals), ("funding", funding_residuals)):
         baseline_row, baseline = residuals[0]
@@ -1192,8 +1198,7 @@ def _period_labels(period: BankReportingPeriod, years: int = PROJECTION_YEARS) -
 
 def _live_period_labels(as_of_date: date, years: int = PROJECTION_YEARS) -> list[str]:
     return [f"{as_of_date.year:04d}-{as_of_date.month:02d}"] + [
-        f"{as_of_date.year + offset:04d}-{as_of_date.month:02d}"
-        for offset in range(1, years + 1)
+        f"{as_of_date.year + offset:04d}-{as_of_date.month:02d}" for offset in range(1, years + 1)
     ]
 
 
@@ -1693,3 +1698,21 @@ def _require_actor(ctx: TenantContext) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="X-User-Id header is required."
         )
+
+
+def _require_run_authority(db: Session, ctx: TenantContext, bank: Bank, *, surface: str) -> None:
+    """One complete Forecasting/confidential/run binding, before any run row exists.
+
+    The route dependency already decided this for interactive callers; the
+    official-run path reaches ``create_forecast_run`` from the worker, so the
+    service owns the denial regardless of who called it.
+    """
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface=surface,
+    )

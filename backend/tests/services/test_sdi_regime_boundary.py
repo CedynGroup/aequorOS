@@ -57,7 +57,9 @@ from app.services import (
 from tests.api.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)
-_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+
+pytestmark = pytest.mark.usefixtures("forecasting_run_authority")
 _SEED_START = date(2020, 1, 1)
 
 
