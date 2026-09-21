@@ -27,6 +27,8 @@ export const ModuleScope = {
   Reg: "reg",
   Risk: "risk",
   Markets: "markets",
+  Credit: "credit",
+  Institution: "institution",
   Account: "account",
   Audit: "audit",
 } as const;

@@ -1,5 +1,37 @@
 import assert from "node:assert/strict";
-import { canAddGrantToMember, visibleGrantFragments } from "./grants";
+import type { ModuleScope } from "@aequoros/risk-service-api";
+import {
+  MODULE_OPTIONS,
+  canAddGrantToMember,
+  compactGrantFragment,
+  visibleGrantFragments,
+} from "./grants";
+
+// The composer offers every module scope the generated contract accepts: a
+// value added to the backend vocabulary without a label here would be
+// ungrantable from Members. This is a compile-time check — the record below
+// has a required key for each scope the options leave out.
+type OfferedModuleScope = (typeof MODULE_OPTIONS)[number][0];
+const everyModuleScopeIsOffered: Record<
+  Exclude<ModuleScope, OfferedModuleScope>,
+  never
+> = {};
+assert.deepEqual(everyModuleScopeIsOffered, {});
+for (const [moduleScope, label] of [
+  ["credit", "Credit"],
+  ["institution", "Institution Profile"],
+] as const) {
+  assert.equal(
+    compactGrantFragment({
+      effective: true,
+      roleBundle: "viewer",
+      moduleScope,
+      institutionScope: "institution",
+      institutionName: "Aequor Bank Ghana",
+    } as never),
+    `Viewer · ${label} · Aequor Bank Ghana`,
+  );
+}
 
 const draft = {
   roleBundle: "analyst",

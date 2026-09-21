@@ -262,6 +262,91 @@ def test_create_and_list_keep_every_scalar_dimension_exact(
         assert audit.details["reason"] == _payload()["reason"]
 
 
+@pytest.mark.parametrize(
+    ("module", "sentence"),
+    [
+        (
+            Module.CREDIT,
+            "Amma Owusu is a Viewer in Credit for Aequor Bank Ghana, covering Aggregated data.",
+        ),
+        (
+            Module.INSTITUTION,
+            "Amma Owusu is a Viewer in Institution Profile for Aequor Bank Ghana, "
+            "covering Aggregated data.",
+        ),
+    ],
+    ids=["credit", "institution"],
+)
+def test_credit_and_institution_grants_round_trip_as_exact_vocabulary(
+    grant_client: TestClient, module: Module, sentence: str
+) -> None:
+    """The two modules are grantable vocabulary and nothing more.
+
+    Nothing consumes either module yet, so the grant must be exact in every
+    dimension, must not reach a neighbouring module, and must revoke on its own.
+    """
+
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client, role="viewer", module=module.value, sensitivity="aggregated"
+        ),
+    )
+    assert created.status_code == 201, created.text
+    binding = created.json()["binding"]
+    assert binding["module_scope"] == module.value
+    assert binding["authority_sentence"] == sentence
+
+    listed = grant_client.get(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        params={"principal_user_id": str(GRANTEE)},
+    )
+    assert listed.status_code == 200, listed.text
+    assert [row["module_scope"] for row in listed.json()["bindings"]] == [module.value]
+
+    with _session() as db:
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        assert authorization.evaluate_permission(
+            db, principal, Permission.VIEW, _resource(BANK_A, module, Sensitivity.AGGREGATED)
+        ).allowed
+        neighbours = (Module.RISK, Module.ACCOUNT, Module.CAPITAL)
+        for other in neighbours:
+            assert not authorization.evaluate_permission(
+                db, principal, Permission.VIEW, _resource(BANK_A, other, Sensitivity.AGGREGATED)
+            ).allowed, other
+        assert not authorization.evaluate_permission(
+            db, principal, Permission.VIEW, _resource(BANK_B, module, Sensitivity.AGGREGATED)
+        ).allowed
+        assert not authorization.evaluate_permission(
+            db, principal, Permission.RUN, _resource(BANK_A, module, Sensitivity.AGGREGATED)
+        ).allowed
+
+    revoked = grant_client.post(
+        f"/api/v1/authorization/bindings/{binding['id']}/revoke",
+        headers=_owner_headers(),
+        json={"reason": "Responsibility reassigned"},
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.json()["module_scope"] == module.value
+
+    with _session() as db:
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        assert not authorization.evaluate_permission(
+            db, principal, Permission.VIEW, _resource(BANK_A, module, Sensitivity.AGGREGATED)
+        ).allowed
+        audit = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "authorization.binding_revoked",
+                AuditEvent.entity_id == binding["id"],
+            )
+        )
+        assert audit is not None
+        assert audit.details["scope"]["module_scope"] == module.value
+        assert audit.details["authority_sentence"] == sentence
+
+
 def test_preview_and_persisted_organization_wide_sentences_are_identical(
     grant_client: TestClient,
 ) -> None:
@@ -886,9 +971,7 @@ def test_approving_and_filing_cannot_land_on_one_identity(grant_client: TestClie
     approver = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_reviewed_payload(
-            grant_client, role="approver", reason="Independent checker duties"
-        ),
+        json=_reviewed_payload(grant_client, role="approver", reason="Independent checker duties"),
     )
     assert approver.status_code == 201, approver.text
 

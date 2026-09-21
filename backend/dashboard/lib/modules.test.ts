@@ -572,6 +572,23 @@ for (const [capabilities, visible] of [
   }
 }
 
+// Credit and Institution are grantable vocabulary ahead of their cutovers: a
+// binding on either opens no module yet, because `/credit` still enforces
+// through Risk & Limits and `/institution` through Account.
+for (const vocabularyModule of ["credit", "institution"] as const) {
+  const vocabularyOnly = {
+    module: vocabularyModule,
+    sensitivity: "confidential",
+    permission: "view",
+    requiresContextualAuthorization: false,
+  } as const;
+  assert.deepEqual(
+    effectiveInstitutionModules(null, [vocabularyOnly]),
+    new Set(),
+  );
+  assert.deepEqual(effectiveOrganizationModules([vocabularyOnly]), new Set());
+}
+
 // ---------------------------------------------------------------------------
 // ICAAP workspace (P1). Two independent gates, both fail-closed:
 //   1. exact CAP/confidential view authority,
