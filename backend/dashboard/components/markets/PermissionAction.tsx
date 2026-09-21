@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * A Markets action that stays visible when the user lacks the exact grant.
@@ -9,8 +9,8 @@
  * elsewhere; this component is only for permission gaps.
  */
 
-import type { ReactNode } from 'react';
-import { DisabledWithReason } from '@/components/ui/DisabledWithReason';
+import type { ReactNode } from "react";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 
 export default function PermissionAction({
   reason,

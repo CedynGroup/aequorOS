@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Markets hub — the consumption side of market data, as a tabbed enterprise
@@ -21,60 +21,62 @@
  * grant — a missing one leaves the control visible but disabled.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import { useState } from 'react';
-import Link from 'next/link';
-import { ArrowUpRight, CalendarClock, CandlestickChart } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary from '@/components/ui/QueryBoundary';
-import SubTabs from '@/components/ui/SubTabs';
-import { useBankContext } from '@/components/shell/BankContext';
-import SdiModuleContext from '@/components/sdi/SdiModuleContext';
+import PageContainer from "@/components/ui/PageContainer";
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowUpRight, CalendarClock, CandlestickChart } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import SubTabs from "@/components/ui/SubTabs";
+import { useBankContext } from "@/components/shell/BankContext";
+import SdiModuleContext from "@/components/sdi/SdiModuleContext";
 import {
   useLiveSnapshots,
   useLiveSummary,
   useMarketDataSourcePreferences,
   useMarketDataViews,
-} from '@/lib/api/hooks';
-import { fmtDateUTC, fmtTimestamp, isoDate } from '@/lib/api/values';
+} from "@/lib/api/hooks";
+import { fmtDateUTC, fmtTimestamp, isoDate } from "@/lib/api/values";
 import {
   MARKETS_CONFIDENTIAL_CREATE_REASON,
   MARKETS_CONFIDENTIAL_EDIT_REASON,
   MARKETS_CONFIDENTIAL_VIEW_REASON,
-} from '@/lib/modules';
-import CurveBoard from '@/components/markets/CurveBoard';
-import CurveThumbnails from '@/components/markets/CurveThumbnails';
-import CurvesExplorer from '@/components/markets/CurvesExplorer';
-import ForwardTab from '@/components/markets/ForwardTab';
-import FxBoard from '@/components/markets/FxBoard';
-import FxForwardsBoard from '@/components/markets/FxForwardsBoard';
-import ImpliedRatingCard from '@/components/markets/ImpliedRatingCard';
-import SdiFinancialStrengthCard from '@/components/markets/SdiFinancialStrengthCard';
-import SdiFinancialStrengthTrend from '@/components/markets/SdiFinancialStrengthTrend';
-import RatingsStrip from '@/components/markets/RatingsStrip';
-import IndicesStrip from '@/components/markets/IndicesStrip';
-import RatesBoard, { isReferenceRateCode } from '@/components/markets/RatesBoard';
-import OverlayDrawer from '@/components/markets/OverlayDrawer';
-import SourceIndicator from '@/components/markets/SourceIndicator';
-import SourcesControlRoom from '@/components/markets/SourcesControlRoom';
+} from "@/lib/modules";
+import CurveBoard from "@/components/markets/CurveBoard";
+import CurveThumbnails from "@/components/markets/CurveThumbnails";
+import CurvesExplorer from "@/components/markets/CurvesExplorer";
+import ForwardTab from "@/components/markets/ForwardTab";
+import FxBoard from "@/components/markets/FxBoard";
+import FxForwardsBoard from "@/components/markets/FxForwardsBoard";
+import ImpliedRatingCard from "@/components/markets/ImpliedRatingCard";
+import SdiFinancialStrengthCard from "@/components/markets/SdiFinancialStrengthCard";
+import SdiFinancialStrengthTrend from "@/components/markets/SdiFinancialStrengthTrend";
+import RatingsStrip from "@/components/markets/RatingsStrip";
+import IndicesStrip from "@/components/markets/IndicesStrip";
+import RatesBoard, {
+  isReferenceRateCode,
+} from "@/components/markets/RatesBoard";
+import OverlayDrawer from "@/components/markets/OverlayDrawer";
+import SourceIndicator from "@/components/markets/SourceIndicator";
+import SourcesControlRoom from "@/components/markets/SourcesControlRoom";
 
-const MANAGE_SOURCES_HREF = '/data-engine/market-data';
+const MANAGE_SOURCES_HREF = "/data-engine/market-data";
 
-type TabKey = 'overview' | 'curves' | 'market-data' | 'sources';
-type MarketDataView = 'forward' | 'rates' | 'fx';
+type TabKey = "overview" | "curves" | "market-data" | "sources";
+type MarketDataView = "forward" | "rates" | "fx";
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'curves', label: 'Curves' },
-  { key: 'market-data', label: 'Market data' },
-  { key: 'sources', label: 'Sources' },
+  { key: "overview", label: "Overview" },
+  { key: "curves", label: "Curves" },
+  { key: "market-data", label: "Market data" },
+  { key: "sources", label: "Sources" },
 ];
 
 const MARKET_DATA_TABS: { key: MarketDataView; label: string }[] = [
-  { key: 'forward', label: 'Forward curves' },
-  { key: 'rates', label: 'Rates' },
-  { key: 'fx', label: 'FX' },
+  { key: "forward", label: "Forward curves" },
+  { key: "rates", label: "Rates" },
+  { key: "fx", label: "FX" },
 ];
 
 function ManageSourcesLink() {
@@ -136,9 +138,9 @@ function ReproductionBanner({ asOfDate }: { asOfDate: Date }) {
     <div className="rounded-lg border border-warning/30 bg-warning-light px-4 py-2.5 flex items-center gap-2 text-caption text-navy">
       <CalendarClock size={14} className="text-warning shrink-0" aria-hidden />
       <span>
-        Reproducing the Markets surface as published on{' '}
-        <span className="font-mono font-medium">{fmtDateUTC(asOfDate)}</span>. Every value is the
-        golden copy as it stood then — not re-derived.
+        Reproducing the Markets surface as published on{" "}
+        <span className="font-mono font-medium">{fmtDateUTC(asOfDate)}</span>.
+        Every value is the golden copy as it stood then — not re-derived.
       </span>
     </div>
   );
@@ -167,10 +169,13 @@ function Section({
 export default function MarketsPage() {
   const { bank, moduleScope } = useBankContext();
   const [asOf, setAsOf] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabKey>('overview');
-  const [marketDataView, setMarketDataView] = useState<MarketDataView>('forward');
+  const [tab, setTab] = useState<TabKey>("overview");
+  const [marketDataView, setMarketDataView] =
+    useState<MarketDataView>("forward");
   const [overlayCurveName, setOverlayCurveName] = useState<string | null>(null);
-  const [selectedCurveName, setSelectedCurveName] = useState<string | null>(null);
+  const [selectedCurveName, setSelectedCurveName] = useState<string | null>(
+    null,
+  );
 
   // Every market-data query keys off this: undefined until the projection
   // says the user holds MARKETS/published view on the selected bank.
@@ -194,13 +199,13 @@ export default function MarketsPage() {
   const isReproduction = asOf !== null && asOf < todayIso;
   const liveRating = isReproduction
     ? undefined
-    : liveSummary.data?.modules.find((module) => module.module === 'rating');
+    : liveSummary.data?.modules.find((module) => module.module === "rating");
   const sdiFinancialStrength =
-    liveRating?.metrics.assessment_kind === 'sdi_financial_strength';
+    liveRating?.metrics.assessment_kind === "sdi_financial_strength";
   // The plane-2 daily ladder for the rating module. Already exposed by
   // ``GET /banks/{id}/live-snapshots`` — the trend is a read of what was
   // recorded each day, not a recomputation of history.
-  const ratingLadder = useLiveSnapshots(bank?.id, 'rating', 45);
+  const ratingLadder = useLiveSnapshots(bank?.id, "rating", 45);
   // The SDI scorecard has THREE unavailable states and they mean different
   // things to an operator. Rendering one message for all of them told a reader
   // the methodology was awaiting approval when it had already been approved and
@@ -209,21 +214,23 @@ export default function MarketsPage() {
   //   not_computable      — approved, but a mandatory component has no evidence
   //                         AT THIS as-of date (omitted, never scored neutral)
   const sdiAssessmentState =
-    typeof liveRating?.metrics.assessment_state === 'string'
+    typeof liveRating?.metrics.assessment_state === "string"
       ? liveRating.metrics.assessment_state
       : undefined;
   const sdiMethodologyPending =
-    sdiFinancialStrength && sdiAssessmentState === 'methodology_pending';
+    sdiFinancialStrength && sdiAssessmentState === "methodology_pending";
   const sdiNotComputable =
-    sdiFinancialStrength && sdiAssessmentState === 'not_computable';
+    sdiFinancialStrength && sdiAssessmentState === "not_computable";
   const sdiReason =
-    typeof liveRating?.metrics.reason === 'string' ? liveRating.metrics.reason : undefined;
-
+    typeof liveRating?.metrics.reason === "string"
+      ? liveRating.metrics.reason
+      : undefined;
 
   const referenceRates =
     data?.indices.filter((index) => isReferenceRateCode(index.indexCode)) ?? [];
   const otherIndices =
-    data?.indices.filter((index) => !isReferenceRateCode(index.indexCode)) ?? [];
+    data?.indices.filter((index) => !isReferenceRateCode(index.indexCode)) ??
+    [];
   const overlayCurve =
     data?.curves.find((curve) => curve.curveName === overlayCurveName) ?? null;
 
@@ -255,15 +262,16 @@ export default function MarketsPage() {
     if (!data) return null;
     // The Forward tab reads a separate endpoint and carries its own curve
     // empty-state, so it is not blanked by the shared "no market data" guard.
-    if (isEmpty && !(tab === 'market-data' && marketDataView === 'forward')) return emptyState;
+    if (isEmpty && !(tab === "market-data" && marketDataView === "forward"))
+      return emptyState;
 
-    if (tab === 'overview') {
+    if (tab === "overview") {
       return (
         <div className="space-y-6">
           {!isReproduction &&
           sdiFinancialStrength &&
           liveRating &&
-          liveRating.metrics.availability !== 'unavailable' &&
+          liveRating.metrics.availability !== "unavailable" &&
           ratingLadder.data?.snapshots?.length ? (
             // SDI with an assessed history: the current assessment and how it
             // got here sit side by side — one read, no scrolling between them.
@@ -298,102 +306,106 @@ export default function MarketsPage() {
           ) : null}
 
           {!isReproduction &&
-          !(
-            sdiFinancialStrength &&
-            liveRating &&
-            liveRating.metrics.availability !== 'unavailable' &&
-            ratingLadder.data?.snapshots?.length
-          ) && (
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.85fr)] gap-5 items-start">
-              <Section
-                title="Credit monitor"
-                subtitle="Live internal assessment derived from Treasury and ALM inputs"
-              >
-                {liveRating &&
-                liveRating.metrics.availability !== 'unavailable' ? (
-                  // An SDI gets its OWN card: AEQ-GH-SDI-FS releases component
-                  // scores, not the bank scorecard's grade / PD / sovereign
-                  // ceiling, so ImpliedRatingCard would render an empty grade
-                  // block and read as a broken rating. (An SDI WITH an assessed
-                  // trend renders in the side-by-side block above; this branch
-                  // is the no-history-yet case.)
-                  sdiFinancialStrength ? (
-                    <SdiFinancialStrengthCard rating={liveRating} />
-                  ) : (
-                    <ImpliedRatingCard rating={liveRating} />
-                  )
-                ) : (
-                  <div className="border border-border bg-surface-raised px-5 py-4 text-body text-slate rounded-lg">
-                    <p>
-                      {liveRating?.pipelineState === 'failed'
-                        ? 'The prior live assessment is no longer current.'
-                        : sdiMethodologyPending
-                          ? 'SDI financial-strength methodology pending approval.'
-                        : sdiNotComputable
-                          ? 'SDI financial-strength assessment not computable at this date.'
-                        : sdiFinancialStrength
-                          ? 'SDI financial-strength assessment unavailable.'
-                        : 'No live assessment is available yet.'}
-                    </p>
-                    {sdiMethodologyPending ? (
-                      <p className="mt-2 text-caption text-navy/85 leading-relaxed">
-                        No credit grade or probability of default is issued until the
-                        `AEQ-GH-SDI-FS` methodology is calibrated, independently validated, and
-                        approved.
-                      </p>
-                    ) : sdiNotComputable ? null : sdiFinancialStrength ? (
-                      <p className="mt-2 text-caption text-navy/85 leading-relaxed">
-                        {sdiReason ??
-                          'The SDI financial-strength assessment is unavailable at this date.'}
-                      </p>
-                    ) : liveRating?.pipelineState === 'failed' ? (
-                      <p className="mt-2 text-caption text-navy/85 leading-relaxed">
-                        A current canonical financial book is required before the assessment can
-                        be recomputed. The live pipeline retries automatically at the latest
-                        available reporting date.
-                      </p>
-                    ) : typeof liveRating?.metrics.reason === 'string' &&
-                    liveRating.metrics.reason ? (
-                      <p className="mt-2 text-caption text-navy/85 leading-relaxed">
-                        Missing prerequisite: {liveRating.metrics.reason}
-                      </p>
+            !(
+              sdiFinancialStrength &&
+              liveRating &&
+              liveRating.metrics.availability !== "unavailable" &&
+              ratingLadder.data?.snapshots?.length
+            ) && (
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.85fr)] gap-5 items-start">
+                <Section
+                  title="Credit monitor"
+                  subtitle="Live internal assessment derived from Treasury and ALM inputs"
+                >
+                  {liveRating &&
+                  liveRating.metrics.availability !== "unavailable" ? (
+                    // An SDI gets its OWN card: AEQ-GH-SDI-FS releases component
+                    // scores, not the bank scorecard's grade / PD / sovereign
+                    // ceiling, so ImpliedRatingCard would render an empty grade
+                    // block and read as a broken rating. (An SDI WITH an assessed
+                    // trend renders in the side-by-side block above; this branch
+                    // is the no-history-yet case.)
+                    sdiFinancialStrength ? (
+                      <SdiFinancialStrengthCard rating={liveRating} />
                     ) : (
-                      <p className="mt-2 text-caption text-slate leading-relaxed">
-                        A canonical-data refresh will calculate the assessment once its required
-                        market and live-engine inputs are available.
+                      <ImpliedRatingCard rating={liveRating} />
+                    )
+                  ) : (
+                    <div className="border border-border bg-surface-raised px-5 py-4 text-body text-slate rounded-lg">
+                      <p>
+                        {liveRating?.pipelineState === "failed"
+                          ? "The prior live assessment is no longer current."
+                          : sdiMethodologyPending
+                            ? "SDI financial-strength methodology pending approval."
+                            : sdiNotComputable
+                              ? "SDI financial-strength assessment not computable at this date."
+                              : sdiFinancialStrength
+                                ? "SDI financial-strength assessment unavailable."
+                                : "No live assessment is available yet."}
                       </p>
-                    )}
-                    {liveRating && (
-                      <p className="mt-2 text-caption text-slate">
-                        {liveRating.pipelineState === 'failed'
-                          ? `Last calculation failed ${fmtTimestamp(liveRating.computedAt)}.`
-                          : `Last calculation ${fmtTimestamp(liveRating.computedAt)}.`}{' '}
-                        Source data as of {fmtDateUTC(liveRating.sourceAsOfDate)}.
-                      </p>
-                    )}
-                    {liveRating?.pipelineError && (
-                      <p className="mt-1 text-caption text-critical">
-                        {liveRating.pipelineError}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </Section>
+                      {sdiMethodologyPending ? (
+                        <p className="mt-2 text-caption text-navy/85 leading-relaxed">
+                          No credit grade or probability of default is issued
+                          until the `AEQ-GH-SDI-FS` methodology is calibrated,
+                          independently validated, and approved.
+                        </p>
+                      ) : sdiNotComputable ? null : sdiFinancialStrength ? (
+                        <p className="mt-2 text-caption text-navy/85 leading-relaxed">
+                          {sdiReason ??
+                            "The SDI financial-strength assessment is unavailable at this date."}
+                        </p>
+                      ) : liveRating?.pipelineState === "failed" ? (
+                        <p className="mt-2 text-caption text-navy/85 leading-relaxed">
+                          A current canonical financial book is required before
+                          the assessment can be recomputed. The live pipeline
+                          retries automatically at the latest available
+                          reporting date.
+                        </p>
+                      ) : typeof liveRating?.metrics.reason === "string" &&
+                        liveRating.metrics.reason ? (
+                        <p className="mt-2 text-caption text-navy/85 leading-relaxed">
+                          Missing prerequisite: {liveRating.metrics.reason}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-caption text-slate leading-relaxed">
+                          A canonical-data refresh will calculate the assessment
+                          once its required market and live-engine inputs are
+                          available.
+                        </p>
+                      )}
+                      {liveRating && (
+                        <p className="mt-2 text-caption text-slate">
+                          {liveRating.pipelineState === "failed"
+                            ? `Last calculation failed ${fmtTimestamp(liveRating.computedAt)}.`
+                            : `Last calculation ${fmtTimestamp(liveRating.computedAt)}.`}{" "}
+                          Source data as of{" "}
+                          {fmtDateUTC(liveRating.sourceAsOfDate)}.
+                        </p>
+                      )}
+                      {liveRating?.pipelineError && (
+                        <p className="mt-1 text-caption text-critical">
+                          {liveRating.pipelineError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </Section>
 
-              <Section
-                title="Agency observations"
-                subtitle="Market ratings used to frame the sovereign and counterparty context"
-              >
-                {data.ratings.length > 0 ? (
-                  <RatingsStrip ratings={data.ratings} />
-                ) : (
-                  <div className="border border-border bg-surface-raised px-5 py-4 text-caption text-slate rounded-lg">
-                    No agency observations are available on the selected source.
-                  </div>
-                )}
-              </Section>
-            </div>
-          )}
+                <Section
+                  title="Agency observations"
+                  subtitle="Market ratings used to frame the sovereign and counterparty context"
+                >
+                  {data.ratings.length > 0 ? (
+                    <RatingsStrip ratings={data.ratings} />
+                  ) : (
+                    <div className="border border-border bg-surface-raised px-5 py-4 text-caption text-slate rounded-lg">
+                      No agency observations are available on the selected
+                      source.
+                    </div>
+                  )}
+                </Section>
+              </div>
+            )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border-light py-3">
             <span className="text-micro font-medium uppercase tracking-wider text-slate">
@@ -403,17 +415,17 @@ export default function MarketsPage() {
               <SourceIndicator
                 category="curves"
                 preference={prefs.data?.curves}
-                onManage={() => setTab('sources')}
+                onManage={() => setTab("sources")}
               />
               <SourceIndicator
                 category="fx"
                 preference={prefs.data?.fx}
-                onManage={() => setTab('sources')}
+                onManage={() => setTab("sources")}
               />
               <SourceIndicator
                 category="rates"
                 preference={prefs.data?.rates}
-                onManage={() => setTab('sources')}
+                onManage={() => setTab("sources")}
               />
             </div>
           </div>
@@ -427,7 +439,10 @@ export default function MarketsPage() {
                   title="Rate monitor"
                   subtitle="Policy, reference, and lending rates on the selected source"
                 >
-                  <RatesBoard indices={referenceRates} groups={['policy', 'lending']} />
+                  <RatesBoard
+                    indices={referenceRates}
+                    groups={["policy", "lending"]}
+                  />
                 </Section>
               )}
 
@@ -447,7 +462,10 @@ export default function MarketsPage() {
                   title="Money market"
                   subtitle="Interbank and bill auction rates on the selected source"
                 >
-                  <RatesBoard indices={referenceRates} groups={['money-market']} />
+                  <RatesBoard
+                    indices={referenceRates}
+                    groups={["money-market"]}
+                  />
                 </Section>
               )}
 
@@ -460,7 +478,7 @@ export default function MarketsPage() {
                     curves={data.curves}
                     onOpen={(curveName) => {
                       setSelectedCurveName(curveName);
-                      setTab('curves');
+                      setTab("curves");
                     }}
                   />
                 </Section>
@@ -468,7 +486,10 @@ export default function MarketsPage() {
             </div>
 
             {otherIndices.length > 0 && (
-              <Section title="Indicators" subtitle="Macro indices and forecasts by scenario">
+              <Section
+                title="Indicators"
+                subtitle="Macro indices and forecasts by scenario"
+              >
                 <IndicesStrip indices={otherIndices} />
               </Section>
             )}
@@ -477,7 +498,7 @@ export default function MarketsPage() {
       );
     }
 
-    if (tab === 'curves') {
+    if (tab === "curves") {
       if (data.curves.length === 0) {
         return (
           <EmptyState
@@ -493,7 +514,7 @@ export default function MarketsPage() {
             <SourceIndicator
               category="curves"
               preference={prefs.data?.curves}
-              onManage={() => setTab('sources')}
+              onManage={() => setTab("sources")}
             />
           </div>
           <Section
@@ -508,8 +529,8 @@ export default function MarketsPage() {
               onSelectCurve={setSelectedCurveName}
               onOpenForward={(curveName) => {
                 setSelectedCurveName(curveName);
-                setMarketDataView('forward');
-                setTab('market-data');
+                setMarketDataView("forward");
+                setTab("market-data");
               }}
               onEditOverlays={(curveName) => setOverlayCurveName(curveName)}
               editOverlaysReason={editOverlaysReason}
@@ -529,7 +550,7 @@ export default function MarketsPage() {
       );
     }
 
-    if (tab === 'market-data' && marketDataView === 'forward') {
+    if (tab === "market-data" && marketDataView === "forward") {
       if (!marketsBankId) return null;
       return (
         <ForwardTab
@@ -542,7 +563,7 @@ export default function MarketsPage() {
       );
     }
 
-    if (tab === 'market-data' && marketDataView === 'fx') {
+    if (tab === "market-data" && marketDataView === "fx") {
       if (data.fxRates.length === 0 && data.fxForwards.length === 0) {
         return (
           <EmptyState
@@ -556,18 +577,26 @@ export default function MarketsPage() {
         <div className="space-y-6">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-light pb-4">
             <div>
-              <p className="text-micro font-medium uppercase tracking-wider text-slate">Foreign exchange</p>
+              <p className="text-micro font-medium uppercase tracking-wider text-slate">
+                Foreign exchange
+              </p>
               <h2 className="mt-1 text-h2 text-navy">FX market monitor</h2>
-              <p className="mt-1 text-caption text-slate">Historical spot observations and market-implied forward forecasts from the selected source.</p>
+              <p className="mt-1 text-caption text-slate">
+                Historical spot observations and market-implied forward
+                forecasts from the selected source.
+              </p>
             </div>
             <SourceIndicator
               category="fx"
               preference={prefs.data?.fx}
-              onManage={() => setTab('sources')}
+              onManage={() => setTab("sources")}
             />
           </div>
           {data.fxRates.length > 0 && (
-            <Section title="Historical spot" subtitle="Arbitrated spot observations, one-day movement, and persisted quote history.">
+            <Section
+              title="Historical spot"
+              subtitle="Arbitrated spot observations, one-day movement, and persisted quote history."
+            >
               <FxBoard fxRates={data.fxRates} />
             </Section>
           )}
@@ -595,14 +624,19 @@ export default function MarketsPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-light pb-4">
           <div>
-            <p className="text-micro font-medium uppercase tracking-wider text-slate">Reference data</p>
+            <p className="text-micro font-medium uppercase tracking-wider text-slate">
+              Reference data
+            </p>
             <h2 className="mt-1 text-h2 text-navy">Rates monitor</h2>
-            <p className="mt-1 text-caption text-slate">Policy, money-market, lending, and macro inputs resolved on the selected source plane.</p>
+            <p className="mt-1 text-caption text-slate">
+              Policy, money-market, lending, and macro inputs resolved on the
+              selected source plane.
+            </p>
           </div>
           <SourceIndicator
             category="rates"
             preference={prefs.data?.rates}
-            onManage={() => setTab('sources')}
+            onManage={() => setTab("sources")}
           />
         </div>
         <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.85fr)] items-start">
@@ -615,21 +649,26 @@ export default function MarketsPage() {
             </Section>
           )}
           {otherIndices.length > 0 && (
-            <Section title="Indicators" subtitle="Scenario-tagged macro inputs and forecasts">
+            <Section
+              title="Indicators"
+              subtitle="Scenario-tagged macro inputs and forecasts"
+            >
               <IndicesStrip indices={otherIndices} />
             </Section>
           )}
         </div>
-        {data.curves.some((curve) => curve.curveType === 'forward') && (
+        {data.curves.some((curve) => curve.curveType === "forward") && (
           <Section
             title="Published forward-rate forecasts"
             subtitle="Approved desk forward curves are the term structure of expected market rates. Open one to inspect every published tenor."
           >
             <CurveThumbnails
-              curves={data.curves.filter((curve) => curve.curveType === 'forward')}
+              curves={data.curves.filter(
+                (curve) => curve.curveType === "forward",
+              )}
               onOpen={(curveName) => {
                 setSelectedCurveName(curveName);
-                setMarketDataView('forward');
+                setMarketDataView("forward");
               }}
             />
           </Section>
@@ -652,13 +691,19 @@ export default function MarketsPage() {
       />
 
       <SdiModuleContext title="SDI ALM context">
-        Market curves and government-security reference data support valuation and proportionate balance-sheet management. FX views are relevant only where the institution has a material foreign-currency book.
+        Market curves and government-security reference data support valuation
+        and proportionate balance-sheet management. FX views are relevant only
+        where the institution has a material foreign-currency book.
       </SdiModuleContext>
 
       <PageContainer className="py-6 space-y-6">
-        <SubTabs items={TABS} active={tab} onChange={(key) => setTab(key as TabKey)} />
+        <SubTabs
+          items={TABS}
+          active={tab}
+          onChange={(key) => setTab(key as TabKey)}
+        />
 
-        {tab === 'market-data' && (
+        {tab === "market-data" && (
           <SubTabs
             items={MARKET_DATA_TABS}
             active={marketDataView}
@@ -666,11 +711,11 @@ export default function MarketsPage() {
           />
         )}
 
-        {isReproduction && tab !== 'sources' && data && (
+        {isReproduction && tab !== "sources" && data && (
           <ReproductionBanner asOfDate={data.asOfDate} />
         )}
 
-        {tab === 'sources' ? (
+        {tab === "sources" ? (
           marketsBankId ? (
             <SourcesControlRoom bankId={marketsBankId} asOf={asOf} />
           ) : null
