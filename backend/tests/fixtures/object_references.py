@@ -46,6 +46,7 @@ from app.models import (
     DatabaseDirectConnection,
     Document,
     EnterpriseStressSignoff,
+    FilingWorkflowTemplate,
     FinancialAccount,
     FinancialBalance,
     FinancialCashFlow,
@@ -69,6 +70,7 @@ from app.models import (
     RegulatoryArtifactVersion,
     RegulatoryPackage,
     RegulatoryPackageArtifact,
+    RegulatoryPackageAttachment,
     RegulatoryResubmissionRequest,
     RegulatoryRun,
     RelatedParty,
@@ -519,6 +521,29 @@ def _artifact_version(session: Session, tenant: TenantSeed, objects: ObjectSet) 
     )
 
 
+def _package_attachment(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        RegulatoryPackageAttachment(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            package_id=UUID(objects["package"]),
+            package_version=1,
+            kind="board_resolution",
+            title=tenant.marker,
+            original_filename=f"{tenant.marker}.pdf",
+            media_type="application/pdf",
+            byte_size=1,
+            sha256="0" * 64,
+            storage_tier="outputs",
+            object_path=f"object-reference/{tenant.marker}-attachment.pdf",
+            source="package_upload",
+            gate="optional",
+            attached_by=tenant.maker_id,
+        ),
+    )
+
+
 def _resubmission_request(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
     return _uuid(
         session,
@@ -527,6 +552,21 @@ def _resubmission_request(session: Session, tenant: TenantSeed, objects: ObjectS
             package_id=UUID(objects["package"]),
             reason=tenant.marker,
             requested_by=tenant.maker_id,
+        ),
+    )
+
+
+def _filing_workflow_template(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        FilingWorkflowTemplate(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            version=1,
+            status="draft",
+            stages=[],
+            reason=tenant.marker,
+            proposed_by=tenant.maker_id,
         ),
     )
 
@@ -1083,11 +1123,21 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         (f"{_BANK_PREFIX}/regulatory-artifact-versions/{{version_id}}",),
     ),
     ObjectKind(
+        "package_attachment",
+        _package_attachment,
+        (f"{_BANK_PREFIX}/regulatory-packages/{{package_id}}/attachments/{{attachment_id}}",),
+    ),
+    ObjectKind(
         "resubmission_request",
         _resubmission_request,
         (
             f"{_BANK_PREFIX}/regulatory-packages/{{package_id}}/resubmission-requests/{{request_id}}",
         ),
+    ),
+    ObjectKind(
+        "filing_workflow_template",
+        _filing_workflow_template,
+        (f"{_BANK_PREFIX}/filing-workflow-templates/{{template_id}}",),
     ),
     ObjectKind(
         "analysis",
@@ -1262,7 +1312,9 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "package": RegulatoryPackage,
     "package_artifact": RegulatoryPackageArtifact,
     "artifact_version": RegulatoryArtifactVersion,
+    "package_attachment": RegulatoryPackageAttachment,
     "resubmission_request": RegulatoryResubmissionRequest,
+    "filing_workflow_template": FilingWorkflowTemplate,
     "analysis": SavedScenarioAnalysis,
     "stress_scenario": StressScenario,
     "withdrawal": CanonicalWithdrawal,
