@@ -22,7 +22,8 @@ small: each example sweeps the whole route census.
 
 The two confirmed same-org cross-bank defects are excluded here (their strict
 pin and promotion guard live in Layer 1's ``KNOWN_DEFECTS`` test); the negative
-control weakens the package bank guard under a rolled-back monkeypatch and
+control weakens both package bank guards — the route dependency's path
+resolver and the service lookup behind it — under a rolled-back monkeypatch and
 confirms the sweep then reports the leak.  The schema is dropped without the
 downgrade round trip because issued integration keys and ``enterprise_stress``
 runs are rows the older schemas refuse to carry.
@@ -38,20 +39,22 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
+from app.api import deps
+from app.api.deps import TenantContext
 from app.core.authorization import InstitutionScope, ModuleScope, RoleBundle, SensitivityScope
 from app.core.security import ROLES
 from app.db.base import Base
 from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
-from app.models import AuthorizationBinding, Organization, User
+from app.models import AuthorizationBinding, Organization, RegulatoryPackage, User
 from app.services.regulatory_reporting import common as regulatory_common
 from tests.api.helpers import headers
 from tests.db.test_postgres_migrations import (
@@ -327,8 +330,11 @@ def test_object_reference_property_detects_weakened_package_guard(
 ) -> None:
     """Negative control: a package lookup that ignores the bank must fail the sweep.
 
-    The guard is weakened only under a rolled-back monkeypatch — no product code
-    changes — and the same sweep that passes strictly must then report the leak.
+    The package is guarded twice — ``require_package_view`` resolves it from
+    the path with the bank in the ``WHERE`` before the handler runs, and the
+    service's ``get_package_or_404`` repeats the check — so both are weakened,
+    only under a rolled-back monkeypatch and with no product code change, and
+    the same sweep that passes strictly must then report the leak.
     """
     app, engine, tenants = object_reference_sweep
     routes = [
@@ -339,13 +345,27 @@ def test_object_reference_property_detects_weakened_package_guard(
     assert routes
     _replace_home_bindings(engine, _fully_entitled_bindings())
     auth = _caller_headers(TENANT_A.actor_id, ("admin",))
-    original = regulatory_common.get_package_or_404
+    original_lookup = regulatory_common.get_package_or_404
+    original_resolve = deps._resolve_package_from_path  # pyright: ignore[reportPrivateUsage]
 
     def unscoped_lookup(db: Session, ctx: Any, bank_id: str, package_id: UUID) -> Any:
         # The defect under test: resolve the package by id inside the caller's
         # organization but ignore which bank the path names.
         del bank_id
-        return original(db, ctx, TENANT_A2.bank_id, package_id)
+        return original_lookup(db, ctx, TENANT_A2.bank_id, package_id)
+
+    def unscoped_resolve(
+        request: Request, db: Session, ctx: TenantContext
+    ) -> tuple[Any, RegulatoryPackage | None]:
+        bank, package = original_resolve(request, db, ctx)
+        if bank is None or package is not None:
+            return bank, package
+        return bank, db.scalar(
+            select(RegulatoryPackage).where(
+                RegulatoryPackage.id == UUID(str(request.path_params["package_id"])),
+                RegulatoryPackage.organization_id == ctx.organization_id,
+            )
+        )
 
     with (
         TestClient(app, raise_server_exceptions=False) as client,
@@ -354,6 +374,7 @@ def test_object_reference_property_detects_weakened_package_guard(
         sweep = Sweep(
             client=client, document=app.openapi(), engine=engine, tenants=tenants, routes=routes
         )
+        patched.setattr(deps, "_resolve_package_from_path", unscoped_resolve)
         patched.setattr(regulatory_common, "get_package_or_404", unscoped_lookup)
         patched.setattr(
             "app.services.regulatory_reporting.packages.get_package_or_404", unscoped_lookup

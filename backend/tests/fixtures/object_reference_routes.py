@@ -13,6 +13,11 @@ reference when its name ends in ``_id`` and is not ``bank_id``; a body or query
 field is one when :func:`object_references.reference_field_kind` maps it to a
 seeded kind.  Catalogue path/query parameters (``module``, ``signing_role``, …)
 take fixed valid values so the request reaches the object lookup.
+
+Both suites read the census at collection, so an uncatalogued identifier
+errors them before a single case runs; ``tests/architecture/
+test_object_reference_census.py`` runs :func:`uncatalogued_references` on
+every PR without Postgres and names the identifiers to catalogue.
 """
 
 from __future__ import annotations
@@ -104,8 +109,158 @@ _BODY_OVERRIDES: Final[Mapping[tuple[str, str], Mapping[str, Any]]] = {
         "label": "probe"
     },
 }
+#: ICAAP deferred (captain, 2026-09-20); catalogue before ICAAP ships.  Every
+#: ICAAP route that carries an object identifier is named here one by one — no
+#: prefix wildcard — so picking the workspace back up means deleting each entry
+#: and seeding its kind, not discovering after merge that the census never saw
+#: it.  The routes without an identifier (list, create) are not object-reference
+#: routes and are absent from the census by construction.
+ICAAP_DEFERRED: Final[frozenset[tuple[str, str]]] = frozenset(
+    {
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}"),
+        ("PATCH", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/allocation"),
+        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/allocation"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/appetite"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/appetite/metrics"),
+        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/appetite/metrics/{metric_id}"),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/appetite/metrics/{metric_id}/retire",
+        ),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/archive"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments"),
+        (
+            "GET",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments/{attachment_id}/download",
+        ),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments/{attachment_id}/withdraw",
+        ),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/audit-reviews"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/audit-reviews"),
+        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/audit-reviews/{review_id}"),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/audit-reviews/{review_id}/finalise",
+        ),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/bindings"),
+        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/manual-table"),
+        ("DELETE", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/pin"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/pin"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/refresh"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}/retire"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/capital-triggers"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/challenges"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/challenges"),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/challenges/{challenge_id}/responses",
+        ),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/clone"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/disclosure"),
+        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/disclosure"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/disclosure/decision"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/disclosure/submit"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/draft.docx"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/draft.pdf"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/filing"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/freeze"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/freeze-preflight"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/parameters"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/capital-plan-proposal"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items"),
+        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}/approve"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}/compute"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}/retire"),
+        (
+            "GET",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}/revisions",
+        ),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/table5"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/readiness"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/rebase"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation"),
+        (
+            "PUT",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/controls/{control_code}/explanations/{comparison_key}",
+        ),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/requirement/compute",
+        ),
+        (
+            "PUT",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/requirement/lines/{line_key}/explanation",
+        ),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/resources/lines"),
+        (
+            "DELETE",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/resources/lines/{line_id}",
+        ),
+        (
+            "PUT",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/resources/lines/{line_id}",
+        ),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/resources/load-regulatory",
+        ),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/return"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/risks"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/risks"),
+        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/risks/{risk_key}"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/risks/{risk_key}/retire"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts"),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts",
+        ),
+        (
+            "GET",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}",
+        ),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}/accept",
+        ),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}/reject",
+        ),
+        (
+            "PUT",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/requirements/{item_id}",
+        ),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/versions"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/versions"),
+        (
+            "GET",
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/versions/{version_no}",
+        ),
+        ("PUT", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/working"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/stages"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/stages/{seq}/decisions"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/submit-for-review"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/supervisory-addons/{addon_id}/confirm"),
+        ("GET", "/api/v1/banks/{bank_id}/icaap/supervisory-addons/{addon_id}/letter"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/supervisory-addons/{addon_id}/withdraw"),
+        ("PATCH", "/api/v1/banks/{bank_id}/icaap/workflow-templates/{template_id}"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/workflow-templates/{template_id}/decision"),
+        ("POST", "/api/v1/banks/{bank_id}/icaap/workflow-templates/{template_id}/submit"),
+    }
+)
 #: Routes the enumeration finds that the sweep cannot exercise automatically.
-KNOWN_UNCOVERED: Final[frozenset[tuple[str, str]]] = frozenset(
+KNOWN_UNCOVERED: Final[frozenset[tuple[str, str]]] = ICAAP_DEFERRED | frozenset(
     {
         ("POST", "/api/v1/cases/{case_id}/financial-workspace/{unsupported_entity_type}"),
         (
@@ -246,8 +401,9 @@ def _route_references(route: APIRoute) -> tuple[list[Reference], type[BaseModel]
     return references, body_model
 
 
-def object_routes(app: FastAPI) -> list[ObjectRoute]:
-    """Every ``/api/v1`` route carrying an object identifier beside ``bank_id``."""
+def _census(app: FastAPI) -> list[ObjectRoute]:
+    """Every ``/api/v1`` route carrying an object identifier beside ``bank_id``,
+    catalogued or not, minus :data:`KNOWN_UNCOVERED`."""
     routes: list[ObjectRoute] = []
     for route in app.routes:
         if not isinstance(route, APIRoute) or not route.path.startswith("/api/v1/"):
@@ -267,15 +423,36 @@ def object_routes(app: FastAPI) -> list[ObjectRoute]:
                     body_model=body_model,
                 )
             )
-    assert routes, "the FastAPI object-reference route census is empty"
-    unresolved = sorted(
+    return sorted(routes, key=lambda route: (route.path, route.method))
+
+
+def _uncatalogued(routes: list[ObjectRoute]) -> list[str]:
+    return sorted(
         f"{route.label}: {reference.location} {reference.name}"
         for route in routes
         for reference in route.references
         if reference.kind.startswith("unknown:")
     )
+
+
+def uncatalogued_references(app: FastAPI) -> list[str]:
+    """Object identifiers the census finds with no catalogue entry.
+
+    Each entry reads ``"METHOD /path: location name"``.  A new route lands here
+    until its identifier has an :class:`~tests.fixtures.object_references.ObjectKind`
+    (path) or a ``REFERENCE_FIELDS`` row (body/query), or the route is listed in
+    :data:`KNOWN_UNCOVERED` with its reason.
+    """
+    return _uncatalogued(_census(app))
+
+
+def object_routes(app: FastAPI) -> list[ObjectRoute]:
+    """The exercisable census: every route with all of its identifiers catalogued."""
+    routes = _census(app)
+    assert routes, "the FastAPI object-reference route census is empty"
+    unresolved = _uncatalogued(routes)
     assert not unresolved, f"object identifiers without a catalogue entry: {unresolved}"
-    return sorted(routes, key=lambda route: (route.path, route.method))
+    return routes
 
 
 # --- request generation -----------------------------------------------------

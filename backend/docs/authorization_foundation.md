@@ -429,11 +429,24 @@ and checks for persisted side effects.
 Actor-label body fields (`assigned_to_user_id`, `approved_by_user_id`) are
 excluded because they record who acted, not an object whose data is read.
 `KNOWN_UNCOVERED` in `tests/fixtures/object_reference_routes.py` owns the
-excluded-route list, including routes that need multi-step fixtures. A third
+excluded-route list, including routes that need multi-step fixtures and, one
+explicit entry per route, the ICAAP workspace routes deferred on 2026-09-20
+(`ICAAP_DEFERRED`); each must be deleted and its kind seeded before ICAAP ships.
+Never replace these explicit decisions with a prefix wildcard. A third
 `single_foreign_child` layout enumerates each eligible child
 on multi-reference routes, holding every other reference at home and substituting
 only that child from A2. This covers same-organization cross-parent nesting,
 including package/resubmission, party/shareholding and scenario/assumption guards.
+
+Both layers read the census at collection, so a route whose identifier the
+catalogue does not know fails them at collection rather than in one case.
+`tests/architecture/test_object_reference_census.py` runs that census in the
+architecture job on every PR — no Postgres — and names the exact uncatalogued
+identifiers, and checks that every `KNOWN_UNCOVERED` and `KNOWN_DEFECTS` entry
+still names a mounted route. Catalogue a new path identifier with a seeded
+`ObjectKind`, or a body/query reference with a `REFERENCE_FIELDS` entry in
+`tests/fixtures/object_references.py`; record routes that cannot be exercised in
+`KNOWN_UNCOVERED` with a reason.
 
 `tests/api/test_authorization_object_reference_coverage.py` is the deterministic
 layer: it `pytest.mark.parametrize`s one case per route × HTTP method × layout,
@@ -458,8 +471,9 @@ pinned by the deterministic layer. Each example sweeps the applicable census
 and checks that the content digest of every table in both organizations
 is unchanged. The bounded sample (`max_examples=15`) checks the isolation
 invariant across generated authority combinations. Its committed negative
-control weakens the package bank guard under a rolled-back `monkeypatch` and
-confirms the sweep then reports the sibling-bank leak.
+control weakens both package bank guards — the route dependency's path resolver
+and the service lookup — under a rolled-back `monkeypatch` and confirms the
+sweep then reports the sibling-bank leak.
 
 Negative controls reuse the ownership and current-fact invariants: a test-scoped
 patch admitting public `org_owner` grants must violate the unassigned-organization

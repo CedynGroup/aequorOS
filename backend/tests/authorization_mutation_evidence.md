@@ -85,3 +85,54 @@ bank A approved/revoked a sibling bank's declaration — a 200 that returned the
 sibling bank's identifier and mutated its row. Recorded for the product owner;
 no product code was changed in this test-only change. The disposable server was
 stopped and its worktree-local data removed afterwards.
+
+## Object-reference census after the filing chain (#230)
+
+2026-09-20, Python 3.13, disposable local PostgreSQL (Docker, `postgres` role)
+migrated to head `202609200065`. PR #226 (the census) and PR #230 (the filing
+chain, ICAAP workspace and dynamic attestation) were each green on their own
+base; on main together the census failed at collection with 126 object
+identifiers across 91 routes that had no catalogue entry, so both suites
+errored before running a case.
+
+```sh
+uv run pytest tests/architecture/test_object_reference_census.py -q
+uv run pytest tests/api/test_authorization_object_reference_coverage.py -q
+TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
+  tests/db/test_authorization_object_reference_properties.py -q
+```
+
+Catalogued with seeded fixtures: `filing_workflow_template`
+(`/banks/{bank_id}/filing-workflow-templates/{template_id}` PATCH, `/submit`,
+`/decision`) and `package_attachment`
+(`/regulatory-packages/{package_id}/attachments/{attachment_id}/download` and
+`/withdraw`). The filing-chain routes under `/regulatory-packages/{package_id}/workflow`
+and the attachment list/upload routes reference only `package_id` and joined the
+census through the existing `package` kind. Every ICAAP route carrying an object
+identifier (86 routes) is listed one by one in `ICAAP_DEFERRED`, folded into
+`KNOWN_UNCOVERED`, under the captain's 2026-09-20 deferral of ICAAP. The ongoing
+[catalogue and deferral contract](../docs/authorization_foundation.md#executable-verification)
+owns the requirements for extending coverage.
+
+Guard result: **3 passed** (~24s). `test_every_object_reference_is_catalogued`
+resolved the census on the live route table; the two companion checks confirmed
+every `KNOWN_UNCOVERED` and `KNOWN_DEFECTS` entry still names a mounted route.
+
+Coverage layer result: **431 passed, 2 skipped** (223s; 341 before #230). Every
+newly enumerated filing-chain, template and attachment case was refused with
+404 on the cross-organization, sibling-bank and single-foreign-child layouts
+(probed statuses: `not_found` from the template lookup, "Regulatory package not
+found." from `require_package_view`, and `Not Found` from the attachment lookup
+under a home package), with no leaked foreign identifier and no table-content
+change. No new defect was found; `KNOWN_DEFECTS` is unchanged and its two
+system-of-record entries are still reproduced.
+
+Generative layer result: **2 passed**. The negative control had to change with
+#230, not because the product weakened but because it strengthened: the package
+GET route now resolves its package inside `require_package_view`
+(`deps._resolve_package_from_path`, bank in the `WHERE`) before the handler's
+`get_package_or_404` runs, so weakening only the service lookup no longer
+leaked and the control failed with "the weakened package guard went unnoticed".
+It now weakens both layers under the same rolled-back `monkeypatch`, the sweep
+reports the sibling-bank leak, and passes once the patch is undone. No product
+code was changed. The disposable schemas were dropped by the fixture.
