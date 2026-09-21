@@ -21,13 +21,14 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.api.deps import DbSession, MarketsPublishedView, MutationTenant
+from app.core.authorization import Module, Permission, Sensitivity
 from app.schemas.market_data_sources import (
     ForwardGridRead,
     PlanesRead,
     SourcePreferencesRead,
     SourcePreferencesUpdate,
 )
-from app.services import market_data_sources
+from app.services import market_data_sources, scoped_authorization
 
 router = APIRouter(tags=["market-data-sources"])
 
@@ -72,8 +73,22 @@ def get_market_data_planes(
     as_of: Annotated[date | None, Query()] = None,
 ) -> PlanesRead:
     resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
+    decision = scoped_authorization.evaluate_bank_permission(
+        db,
+        access.ctx,
+        access.bank,
+        permission=Permission.VIEW,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="market_data_planes.overlays",
+    )
     return market_data_sources.resolve_planes(
-        db, access.ctx, access.bank.id, category, resolved_as_of
+        db,
+        access.ctx,
+        access.bank.id,
+        category,
+        resolved_as_of,
+        include_overlays=decision is not None and decision.allowed,
     )
 
 
