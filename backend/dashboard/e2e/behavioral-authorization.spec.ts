@@ -42,6 +42,14 @@ function recordBehavioralRequests(page: Page): string[] {
   return requests;
 }
 
+/** The model page has rendered the estimates the read returned. */
+async function expectModelLoaded(page: Page, title: string) {
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Per-product estimates" }),
+  ).toBeVisible();
+}
+
 async function expectNotFound(page: Page, href: string) {
   await page.goto(href);
   await expect(page.getByText(/404|not found/i).first()).toBeVisible();
@@ -76,6 +84,12 @@ test.describe("unbound Behavioral user", () => {
         name: /Requires Behavioral Models · Aggregated · View/i,
       }),
     ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "behavioral-unbound-nav.png"),
+        fullPage: true,
+      });
+    }
     await expectNotFound(page, "/behavioral");
     await expectNotFound(page, "/behavioral/nmd-duration");
     await expectNotFound(page, "/behavioral/liquidity");
@@ -137,10 +151,14 @@ test.describe("Behavioral reader without run permission", () => {
       }
     });
 
+    const modelRead = page.waitForResponse(
+      (response) =>
+        /\/behavioral\/nmd-duration$/.test(response.url()) &&
+        response.request().method() === "GET",
+    );
     await page.goto("/behavioral/nmd-duration");
-    await expect(
-      page.getByRole("heading", { name: "NMD Duration" }),
-    ).toBeVisible();
+    expect((await modelRead).status()).toBe(200);
+    await expectModelLoaded(page, "NMD Duration");
     const retrain = page.getByRole("button", { name: "Retrain" });
     await expect(retrain).toBeVisible();
     await expect(retrain).toBeDisabled();
@@ -158,6 +176,7 @@ test.describe("Behavioral reader without run permission", () => {
 
     if (evidenceDir) {
       await page.goto("/behavioral/nmd-duration");
+      await expectModelLoaded(page, "NMD Duration");
       await expect(retrain).toBeDisabled();
       await retrain.locator("..").focus();
       await expect(
@@ -176,6 +195,7 @@ test.describe("Behavioral analyst", () => {
 
   test("retrains a model with effective authority", async ({ page }) => {
     await page.goto("/behavioral/nmd-duration");
+    await expectModelLoaded(page, "NMD Duration");
     const retrain = page.getByRole("button", { name: "Retrain" });
     await expect(retrain).toBeVisible();
     await expect(retrain).toBeEnabled();
