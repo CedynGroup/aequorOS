@@ -98,6 +98,22 @@ def test_markets_routes_carry_exactly_one_scoped_gate(method: str, path: str, ga
     [
         ("PUT", "/api/v1/banks/{bank_id}/market-data/source-preferences"),
         ("POST", "/api/v1/banks/{bank_id}/market-data/connections"),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/validate",
+        ),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/test",
+        ),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/disable",
+        ),
+        (
+            "POST",
+            "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/enable",
+        ),
         ("PATCH", "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}"),
         ("DELETE", "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}"),
     ],
