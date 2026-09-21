@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx2 import Response
 from loguru import logger
 from sqlalchemy import delete, func, select
 
@@ -62,6 +62,7 @@ BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 SIBLING_BANK_ID = "BK-MKT00002"
 CURVE = "GHS_SOVEREIGN"
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
 
 class MarketsRoute(NamedTuple):
     name: str
@@ -615,9 +616,7 @@ def test_t3_partial_bindings_never_compose_into_markets_authority(
 ) -> None:
     """A Data grant on the bank plus a Markets grant on a sibling do not add up."""
     _add_sibling_bank()
-    _grant(
-        markets_route.bundle, module=ModuleScope.DATA, sensitivity=markets_route.sensitivity
-    )
+    _grant(markets_route.bundle, module=ModuleScope.DATA, sensitivity=markets_route.sensitivity)
     _, version = _grant(
         markets_route.bundle,
         sensitivity=markets_route.sensitivity,
@@ -986,9 +985,7 @@ def test_private_overlay_projection_requires_confidential_view(
 
     def read_projection(version: int) -> tuple[dict[str, Any], dict[str, Any]]:
         views = db_client.get(f"{BASE}/market-data/views", headers=_auth(version))
-        planes = db_client.get(
-            f"{BASE}/market-data/planes?category=curves", headers=_auth(version)
-        )
+        planes = db_client.get(f"{BASE}/market-data/planes?category=curves", headers=_auth(version))
         assert views.status_code == 200, views.text
         assert planes.status_code == 200, planes.text
         return views.json(), planes.json()
@@ -996,7 +993,8 @@ def test_private_overlay_projection_requires_confidential_view(
     def assert_base_only(views: dict[str, Any], planes: dict[str, Any]) -> None:
         curve = next(curve for curve in views["curves"] if curve["curve_name"] == CURVE)
         assert [Decimal(point["rate"]) for point in curve["points"]] == [
-            Decimal("0.24"), Decimal("0.22")
+            Decimal("0.24"),
+            Decimal("0.22"),
         ]
         assert curve["overlay_components"] == []
         assert curve["adjusted_points"] == []
@@ -1021,7 +1019,8 @@ def test_private_overlay_projection_requires_confidential_view(
     assert curve["overlay_components"][0]["overlay_id"] == str(overlay_id)
     assert Decimal(curve["overlay_components"][0]["value"]) == Decimal("25")
     assert [Decimal(point["rate"]) for point in curve["adjusted_points"]] == [
-        Decimal("0.2425"), Decimal("0.2225")
+        Decimal("0.2425"),
+        Decimal("0.2225"),
     ]
     vendor = next(plane for plane in planes["planes"] if plane["source"] == "vendor")
     assert vendor["items"][0]["adjusted_points"] == curve["adjusted_points"]
