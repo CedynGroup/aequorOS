@@ -445,6 +445,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   workspace); see ARCHITECTURE.md §8. Which Postgres job owns which test suites is
   defined by the `risk-service:test-postgres-*` task comments in `backend/mise.toml`
   and pinned by `tests/architecture/test_ci_task_wiring.py`.
+  **A Postgres-only failure in deferred ICAAP work is quarantined, not fixed
+  around (2026-09-21):** a strict `pytest.mark.xfail(raises=<exact exception>,
+  reason="#<issue>: …", strict=True)` conditioned on `TEST_DATABASE_URL`, one
+  tracking issue per defect class, marker at the narrowest level that covers the
+  affected set (a module-level `pytestmark` DOES catch a fixture's setup error when
+  `raises=` matches). Markers live in `tests/fixtures/icaap/postgres_quarantine.py`
+  (#247, #248) and `tests/db/test_icaap_workspace_migration.py` (#235). A logging
+  assertion that passes alone but fails in the full Postgres run is the in-process
+  `alembic.command.upgrade` — `alembic/env.py` explains.
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,
