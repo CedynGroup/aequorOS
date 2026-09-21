@@ -4,8 +4,8 @@
 vocabulary so that Credit analytics and institution master data can later be
 cut over to scoped bindings (enforcement matrix PRs 20 and 21). This revision
 is vocabulary only: no route consults either module yet, no bundle changes,
-and no binding is created — an Org Owner may grant one, and it confers nothing
-until the consuming surface is enforced.
+and no binding is created — an Org Owner may grant one, but it does not
+authorize Credit or institution master-data surfaces until their cutovers.
 
 The CHECK constraint that decides which values the column will ACCEPT was last
 written by ``202608250044`` from a literal list, while the model derives it
@@ -14,8 +14,9 @@ the enum and only a MIGRATED database can refuse the new values, exactly as
 ``202609200065`` found for the ``validator`` bundle. Any future module needs
 this migration too.
 
-No data moves: the constraint is widened, never narrowed, so nothing that is
-currently stored can fail it.
+On upgrade, no data moves: the constraint is widened, so nothing that is
+currently stored can fail it. Downgrade removes bindings using the added scopes
+before narrowing the constraint.
 """
 
 from __future__ import annotations
