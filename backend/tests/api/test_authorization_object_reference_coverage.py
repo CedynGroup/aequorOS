@@ -39,6 +39,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
 from app.features.ingest_data import get_ingestion_storage
+from app.features.manage_icaap_attachments import get_icaap_storage as get_attachment_storage
+from app.features.manage_icaap_supervisory_addons import get_icaap_storage as get_addon_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import Organization, User
@@ -208,6 +210,8 @@ def coverage(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Coverage]:
     app = create_app()
     fake_storage = _FakeStorage()
     app.dependency_overrides[get_object_storage] = lambda: fake_storage
+    app.dependency_overrides[get_attachment_storage] = lambda: fake_storage
+    app.dependency_overrides[get_addon_storage] = lambda: fake_storage
     app.dependency_overrides[get_ingestion_storage] = lambda: fake_storage
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
@@ -267,3 +271,29 @@ def test_seeded_objects_exist_for_their_owners(coverage: Coverage) -> None:
                 if session.get(MODEL_BY_KIND[kind.name], UUID(objects[kind.name])) is None:
                     missing.append(f"{objects.tenant.bank_id}:{kind.name}")
     assert not missing, f"positive control: seeded objects are missing: {missing}"
+
+
+@pytest.mark.parametrize(
+    "kind", ["icaap_cycle", "icaap_block", "icaap_template", "filing_template"]
+)
+def test_home_icaap_and_filing_routes_are_reachable(coverage: Coverage, kind: str) -> None:
+    """A hidden surface must not make the foreign-object sweep vacuously pass."""
+    if kind == "icaap_cycle":
+        path = f"/icaap/cycles/{coverage.home[kind]}"
+    elif kind == "icaap_block":
+        path = f"/icaap/cycles/{coverage.home['icaap_cycle']}/blocks/{coverage.home[kind]}"
+    elif kind == "icaap_template":
+        path = "/icaap/workflow-templates"
+    else:
+        path = "/filing-workflow-templates"
+    response = coverage.client.get(
+        f"/api/v1/banks/{TENANT_A.bank_id}{path}",
+        headers=headers(
+            org_id=TENANT_A.organization_id,
+            user_id=TENANT_A.actor_id,
+            roles=("admin",),
+            authorization_version=1,
+        ),
+    )
+    assert response.status_code == 200, response.text
+    assert coverage.home[kind] in response.text

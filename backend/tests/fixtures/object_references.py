@@ -38,6 +38,7 @@ from app.models import (
     BankNameHistory,
     BankProduct,
     BankReportingPeriod,
+    BankSupervisoryAddon,
     CalculationRun,
     CanonicalPosition,
     CanonicalPositionSnapshot,
@@ -54,6 +55,17 @@ from app.models import (
     FinancialInstitution,
     FinancialObligation,
     FinancialReportingPeriod,
+    IcaapAiSuggestion,
+    IcaapAppetiteMetric,
+    IcaapAttachment,
+    IcaapAuditReview,
+    IcaapChallenge,
+    IcaapCycle,
+    IcaapDataBlock,
+    IcaapPillar2Item,
+    IcaapResourcesReconciliationLine,
+    IcaapSection,
+    IcaapWorkflowTemplate,
     ImpliedRatingRun,
     IngestionBatch,
     IntegrationKey,
@@ -1036,6 +1048,264 @@ def _user(_session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return str(tenant.maker_id)
 
 
+def _icaap_cycle(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapCycle(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            fiscal_year=2026,
+            as_of_date=AS_OF,
+            cycle_kind="annual",
+            basis="solo",
+            title=tenant.marker,
+            framework_code="bog_icaap",
+            framework_version="2026.02-ed.1",
+            framework_sha256="a" * 64,
+            due_date_basis="bank_set",
+            due_date=AS_OF,
+            created_by=tenant.maker_id,
+        ),
+    )
+
+
+def _icaap_section(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapSection(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            cycle_id=UUID(objects["icaap_cycle"]),
+            section_key="executive_summary",
+            letter="a",
+            position=1,
+        ),
+    )
+
+
+def _icaap_block(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapDataBlock(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            cycle_id=UUID(objects["icaap_cycle"]),
+            block_type="manual_table",
+            block_key="probe",
+            created_by=tenant.maker_id,
+        ),
+    )
+
+
+def _icaap_attachment(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapAttachment(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            cycle_id=UUID(objects["icaap_cycle"]),
+            kind="senior_management_report",
+            title=tenant.marker,
+            original_filename="report.pdf",
+            media_type="application/pdf",
+            byte_size=100,
+            sha256="a" * 64,
+            storage_tier="outputs",
+            object_path=f"{tenant.slug}/report.pdf",
+            uploaded_by=tenant.maker_id,
+        ),
+    )
+
+
+def _workflow_template(model: type) -> Factory:
+    def factory(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+        return _uuid(
+            session,
+            model(
+                organization_id=tenant.organization_id,
+                bank_id=tenant.bank_id,
+                version=1,
+                reason=tenant.marker,
+                proposed_by=tenant.maker_id,
+            ),
+        )
+
+    return factory
+
+
+def _icaap_item(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapPillar2Item(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            cycle_id=UUID(objects["icaap_cycle"]),
+            item_key="probe",
+            risk_key="credit",
+            category_key="credit",
+            component_key="credit",
+            method="not_capitalised",
+            source="judgemental",
+            currency="GHS",
+            created_by=tenant.maker_id,
+            updated_by=tenant.maker_id,
+        ),
+    )
+
+
+def _icaap_metric(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapAppetiteMetric(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            cycle_id=UUID(objects["icaap_cycle"]),
+            metric_key="probe",
+            label=tenant.marker,
+            measure_kind="qualitative",
+            qualitative_statement=tenant.marker,
+            created_by=tenant.maker_id,
+            updated_by=tenant.maker_id,
+        ),
+    )
+
+
+def _icaap_review(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapAuditReview(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            cycle_id=UUID(objects["icaap_cycle"]),
+            review_kind="internal_audit",
+            reviewer_function="Audit",
+            scope=tenant.marker,
+            frequency_statement="annual",
+            performed_on=AS_OF,
+            overall_opinion="satisfactory",
+            independence_statement=tenant.marker,
+            recorded_by=tenant.maker_id,
+        ),
+    )
+
+
+def _icaap_challenge(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapChallenge(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            cycle_id=UUID(objects["icaap_cycle"]),
+            challenge_no=1,
+            round=1,
+            raised_in="board",
+            raised_by_name=tenant.marker,
+            raised_on=AS_OF,
+            target_kind="cycle",
+            challenge_text=tenant.marker,
+            severity="low",
+            recorded_by=tenant.maker_id,
+        ),
+    )
+
+
+def _icaap_resource_line(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapResourcesReconciliationLine(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            cycle_id=UUID(objects["icaap_cycle"]),
+            line_key="probe",
+            position=1,
+            label=tenant.marker,
+            tier="cet1",
+            origin="manual",
+            internal_amount=Decimal(1),
+            regulatory_eligible=False,
+            explanation=tenant.marker,
+            created_by=tenant.maker_id,
+            updated_by=tenant.maker_id,
+        ),
+    )
+
+
+def _supervisory_addon(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        BankSupervisoryAddon(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            letter_reference=tenant.marker,
+            letter_date=AS_OF,
+            effective_from=AS_OF,
+            applies_to_basis="solo",
+            basis="absolute",
+            basis_value=Decimal(1),
+            currency="GHS",
+            letter_original_filename="letter.pdf",
+            letter_media_type="application/pdf",
+            letter_byte_size=100,
+            letter_sha256="a" * 64,
+            letter_storage_tier="outputs",
+            letter_object_path=f"{tenant.slug}/letter.pdf",
+            created_by=tenant.maker_id,
+        ),
+    )
+
+
+def _icaap_suggestion(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        IcaapAiSuggestion(
+            id=uuid4(),
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            cycle_id=UUID(objects["icaap_cycle"]),
+            section_id=UUID(objects["icaap_section"]),
+            section_key="executive_summary",
+            cycle_round=1,
+            requested_by=tenant.maker_id,
+            fact_sheet_mode="standard",
+            fact_sheet={},
+            fact_sheet_sha256="a" * 64,
+            framework_code="bog_icaap",
+            framework_version="2026.02-ed.1",
+            framework_sha256="a" * 64,
+            prompt_version="v1",
+            prompt_sha256="a" * 64,
+            model_requested="probe",
+            effort="medium",
+            max_output_tokens=1000,
+            fallbacks_mode="default",
+            consent_version="v1",
+        ),
+    )
+
+
+def _package_attachment(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        RegulatoryPackageAttachment(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            package_id=UUID(objects["package"]),
+            package_version=1,
+            kind="board_resolution",
+            title=tenant.marker,
+            original_filename="resolution.pdf",
+            media_type="application/pdf",
+            byte_size=100,
+            sha256="a" * 64,
+            storage_tier="outputs",
+            object_path=f"{tenant.slug}/resolution.pdf",
+            source="package_upload",
+            gate="submission",
+            attached_by=tenant.maker_id,
+        ),
+    )
+
+
 _BANK_PREFIX: Final = "/api/v1/banks/{bank_id}"
 _CASE_PREFIX: Final = "/api/v1/cases/{case_id}"
 
@@ -1281,6 +1551,72 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         ("/api/v1/auth/sso/access-requests/{user_id}",),
         bank_scoped=False,
     ),
+    ObjectKind("icaap_cycle", _icaap_cycle, ("/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}",)),
+    ObjectKind("icaap_section", _icaap_section),
+    ObjectKind(
+        "icaap_block",
+        _icaap_block,
+        ("/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/blocks/{block_id}",),
+    ),
+    ObjectKind(
+        "icaap_attachment",
+        _icaap_attachment,
+        ("/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/attachments/{attachment_id}",),
+    ),
+    ObjectKind(
+        "icaap_template",
+        _workflow_template(IcaapWorkflowTemplate),
+        ("/api/v1/banks/{bank_id}/icaap/workflow-templates/{template_id}",),
+    ),
+    ObjectKind(
+        "filing_template",
+        _workflow_template(FilingWorkflowTemplate),
+        ("/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}",),
+    ),
+    ObjectKind(
+        "icaap_item",
+        _icaap_item,
+        ("/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}",),
+    ),
+    ObjectKind(
+        "icaap_metric",
+        _icaap_metric,
+        ("/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/appetite/metrics/{metric_id}",),
+    ),
+    ObjectKind(
+        "icaap_review",
+        _icaap_review,
+        ("/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/audit-reviews/{review_id}",),
+    ),
+    ObjectKind(
+        "icaap_challenge",
+        _icaap_challenge,
+        ("/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/challenges/{challenge_id}",),
+    ),
+    ObjectKind(
+        "icaap_resource_line",
+        _icaap_resource_line,
+        (
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/reconciliation/resources/lines/{line_id}",
+        ),
+    ),
+    ObjectKind(
+        "supervisory_addon",
+        _supervisory_addon,
+        ("/api/v1/banks/{bank_id}/icaap/supervisory-addons/{addon_id}",),
+    ),
+    ObjectKind(
+        "icaap_suggestion",
+        _icaap_suggestion,
+        (
+            "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}",
+        ),
+    ),
+    ObjectKind(
+        "package_attachment",
+        _package_attachment,
+        ("/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attachments/{attachment_id}",),
+    ),
 )
 
 KINDS_BY_NAME: Final[Mapping[str, ObjectKind]] = {kind.name: kind for kind in OBJECT_KINDS}
@@ -1288,6 +1624,20 @@ KINDS_BY_NAME: Final[Mapping[str, ObjectKind]] = {kind.name: kind for kind in OB
 #: The ORM model each id-bearing kind resolves to, for the data-layer existence
 #: control.  ``bank`` and ``user`` are identity references, not seeded objects.
 MODEL_BY_KIND: Final[Mapping[str, type]] = {
+    "icaap_cycle": IcaapCycle,
+    "icaap_section": IcaapSection,
+    "icaap_block": IcaapDataBlock,
+    "icaap_attachment": IcaapAttachment,
+    "icaap_template": IcaapWorkflowTemplate,
+    "filing_template": FilingWorkflowTemplate,
+    "icaap_item": IcaapPillar2Item,
+    "icaap_metric": IcaapAppetiteMetric,
+    "icaap_review": IcaapAuditReview,
+    "icaap_challenge": IcaapChallenge,
+    "icaap_resource_line": IcaapResourcesReconciliationLine,
+    "supervisory_addon": BankSupervisoryAddon,
+    "icaap_suggestion": IcaapAiSuggestion,
+    "package_attachment": RegulatoryPackageAttachment,
     "period": BankReportingPeriod,
     "regulatory_run": RegulatoryRun,
     "enterprise_stress_run": RegulatoryRun,
@@ -1347,6 +1697,12 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
 #: Body and query identifier fields, resolved by the most specific route path
 #: substring first.  A field absent here is not an object reference.
 REFERENCE_FIELDS: Final[tuple[tuple[str, str, str], ...]] = (
+    ("/icaap/", "manual_evidence_attachment_id", "icaap_attachment"),
+    ("/icaap/", "evidence_attachment_id", "icaap_attachment"),
+    ("/icaap/", "report_attachment_id", "icaap_attachment"),
+    ("/icaap/", "minutes_attachment_id", "icaap_attachment"),
+    ("/icaap/", "reviewed_cycle_id", "icaap_cycle"),
+    ("/icaap/", "supersedes_review_id", "icaap_review"),
     ("/financial-workspace/", "reporting_period_id", "financial_period"),
     ("/financial-workspace/", "institution_id", "financial_institution"),
     ("/financial-workspace/", "account_id", "account"),

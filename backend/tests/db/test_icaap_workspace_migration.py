@@ -31,7 +31,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import DatabaseError, ProgrammingError
+from sqlalchemy.exc import DatabaseError
 
 from alembic import command
 from tests.api.helpers import ORG_1, ORG_2
@@ -134,22 +134,6 @@ def connection(icaap_schema: MigratedPostgresSchema) -> Iterator[Connection]:
             yield conn
         finally:
             transaction.rollback()
-
-
-#: Two enforcement layers, either may refuse first: the migration's REVOKE
-#: (a non-superuser role gets InsufficientPrivilege) or, for a role that kept
-#: the privilege, the append-only trigger and RESTRICTIVE policy.
-_UNALTERABLE = r"append-only|permission denied|restrict|policy"
-
-
-#: Issue #235: the migration revokes UPDATE from the OWNER, and Postgres runs a
-#: foreign-key check as ``SELECT … FOR KEY SHARE`` under the owner, so no child
-#: row can be inserted at all. Strict, so the fix is reported as a pass.
-_FK_INSERT_REFUSED = pytest.mark.xfail(
-    raises=ProgrammingError,
-    reason="#235: REVOKE UPDATE from the owner denies every FK insert against the parent",
-    strict=True,
-)
 
 
 def _refused(connection: Connection, statement: str, params: dict[str, Any], match: str) -> None:
@@ -433,7 +417,28 @@ def test_a_committed_version_can_never_be_rewritten(connection: Connection) -> N
         connection,
         "UPDATE icaap_section_versions SET plain_text = 'rewritten' WHERE id = :id",
         {"id": str(version_id)},
-        _UNALTERABLE,
+        "(append-only|restrict|policy|permission denied)",
+    )
+
+
+def test_owner_reference_lock_does_not_allow_rewriting_evidence_id(connection: Connection) -> None:
+    """The owner's key-share privilege must not become permission to rewrite a key."""
+    cycle_id, attachment_id = uuid4(), uuid4()
+    _insert_cycle(connection, cycle_id)
+    _insert_attachment(connection, cycle_id, attachment_id)
+    statement = "UPDATE icaap_attachments SET id = :new_id WHERE id = :id"
+    params = {"id": str(attachment_id), "new_id": str(uuid4())}
+    if _bypasses_rls(connection):
+        _refused(connection, statement, params, "append-only")
+    else:
+        # The restrictive UPDATE policy hides every row, including from its owner.
+        assert connection.execute(text(statement), params).rowcount == 0
+    assert (
+        connection.scalar(
+            text("SELECT count(*) FROM icaap_attachments WHERE id = :id"),
+            {"id": str(attachment_id)},
+        )
+        == 1
     )
 
 
@@ -445,11 +450,10 @@ def test_an_uploaded_document_can_never_be_rewritten(connection: Connection) -> 
         connection,
         "UPDATE icaap_attachments SET sha256 = :digest WHERE id = :id",
         {"id": str(attachment_id), "digest": "b" * 64},
-        _UNALTERABLE,
+        "(append-only|restrict|policy|permission denied)",
     )
 
 
-@_FK_INSERT_REFUSED
 def test_deleting_a_draft_cycle_takes_its_children_with_it(connection: Connection) -> None:
     """DELETE stays reachable so a cycle can be removed whole."""
     cycle_id, section_id, version_id, attachment_id = uuid4(), uuid4(), uuid4(), uuid4()
