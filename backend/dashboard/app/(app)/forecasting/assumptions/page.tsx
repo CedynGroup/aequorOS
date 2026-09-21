@@ -42,13 +42,20 @@ export default function AssumptionsPage() {
   const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
-  const scenariosQuery = useForecastScenarios(bankId);
-  const runsQuery = useForecastRuns(bankId, { limit: 50 });
+  // The preset catalogue and run index ride aggregated view; the resolved
+  // set is read off the full run, which is confidential. No query is issued
+  // before the projection resolves.
+  const forecastingBankId = moduleScope.forecastingAggregatedView
+    ? bankId
+    : undefined;
+  const scenariosQuery = useForecastScenarios(forecastingBankId);
+  const runsQuery = useForecastRuns(forecastingBankId, { limit: 50 });
   const latestId = latestSucceededId(runsQuery.data?.runs ?? []);
-  // The resolved set is read off the full run, which is confidential; the
-  // preset catalogue below rides the page's own aggregated view.
   const canViewRuns = moduleScope.forecastingConfidentialView === true;
-  const runQuery = useForecastRun(canViewRuns ? bankId : undefined, latestId);
+  const runQuery = useForecastRun(
+    canViewRuns ? forecastingBankId : undefined,
+    latestId,
+  );
 
   return (
     <>

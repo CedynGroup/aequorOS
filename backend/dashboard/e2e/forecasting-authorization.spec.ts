@@ -31,7 +31,8 @@ async function projectForecasting(
       .institution_capabilities) {
       institution.capabilities = institution.capabilities.filter(keep);
     }
-    await route.fulfill({ response, json: profile });
+    // A navigation can cancel the request while the profile is in flight.
+    await route.fulfill({ response, json: profile }).catch(() => undefined);
   });
 }
 
@@ -53,7 +54,8 @@ async function expectDisabledWithReason(
 }
 
 test.afterEach(async ({ page }) => {
-  await page.unrouteAll({ behavior: "wait" });
+  // Abandon, never await, a profile handler the last navigation cancelled.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test.describe("unbound Forecasting user", () => {
@@ -125,6 +127,7 @@ test.describe("Forecasting reader without run permission", () => {
     ).toBeVisible(FIRST_PAINT);
     await expectDisabledWithReason(page, "Run forecast", RUN_REASON);
     if (evidenceDir) {
+      await page.waitForLoadState("networkidle");
       await page.screenshot({
         path: path.join(evidenceDir, "forecasting-reader-disabled-run.png"),
         fullPage: true,
@@ -154,6 +157,7 @@ test.describe("Forecasting reader without run permission", () => {
 
     expect(mutations).toEqual([]);
     if (evidenceDir) {
+      await page.waitForLoadState("networkidle");
       await page.screenshot({
         path: path.join(evidenceDir, "forecasting-reader-whatif.png"),
         fullPage: true,
@@ -219,6 +223,10 @@ test.describe("Forecasting aggregated-only reader", () => {
 
     if (evidenceDir) {
       await page.goto("/forecasting");
+      await expect(
+        page.getByRole("link", { name: "NII Forecast", exact: true }),
+      ).toHaveAttribute("aria-disabled", "true", FIRST_PAINT);
+      await page.waitForLoadState("networkidle");
       await page.screenshot({
         path: path.join(evidenceDir, "forecasting-aggregated-reader.png"),
         fullPage: true,
