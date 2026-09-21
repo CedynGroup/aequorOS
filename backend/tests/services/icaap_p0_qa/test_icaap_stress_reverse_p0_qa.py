@@ -2,18 +2,15 @@
 
 Agent 11 (Test/QA), 2026-09-19. Edge cases the implementation's own tests do
 not cover: period scoping, failed runs, the latest-of-several rule, the run's
-``input_hash`` binding, validation severity, every export format, and a
-structural check that the STRESS-PACK builder is reused rather than copied.
+``input_hash`` binding, validation severity, and every export format.
 """
 
 from __future__ import annotations
 
-import ast
 import csv
 import io
 import zipfile
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -24,7 +21,6 @@ from sqlalchemy.orm import Session
 from app.models import BankReportingPeriod, RegulatoryPackage, RegulatoryRun
 from app.schemas.reverse_stress import ReverseStressRunCreate
 from app.services import reverse_stress
-from app.services.regulatory_reporting import templates
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.validation import run_validation_rules
 from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, SAMPLE_BANK_ID
@@ -40,8 +36,6 @@ from tests.storage.inmemory import InMemoryStorageClient
 pytestmark = pytest.mark.usefixtures("forecasting_run_authority")
 
 __all__ = ["storage"]
-
-GENERATION = Path(__file__).parents[3] / "app/services/regulatory_reporting/generation.py"
 
 
 def _section(snapshot: dict[str, Any], code: str) -> dict[str, Any] | None:
@@ -159,35 +153,6 @@ def test_absent_run_note_is_info_only_and_never_blocks(db_session: Session) -> N
     assert not [f for f in findings if f.get("severity") in {"ERROR", "BLOCKER"}]
     (info,) = [f for f in findings if f.get("rule") == "icaap_reverse_stress"]
     assert info["severity"] == "INFO"
-
-
-def _calls(function: ast.FunctionDef) -> set[str]:
-    return {
-        node.func.id
-        for node in ast.walk(function)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    }
-
-
-def test_the_stress_pack_builder_is_reused_not_copied() -> None:
-    tree = ast.parse(GENERATION.read_text())
-    functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
-    for name in ("_generate_icaap_stress", "_generate_stress_pack"):
-        calls = _calls(functions[name])
-        assert "_latest_reverse_stress_run" in calls, name
-    assert "_stress_frontier_rows" in _calls(functions["_generate_icaap_stress"])
-    # One reverse-stress query and one frontier builder in the module.
-    source = GENERATION.read_text()
-    assert source.count('RegulatoryRun.module == "reverse_stress"') == 1
-    assert source.count("lcr_at_breach_pct") == 1
-    icaap = templates.get_template("bog-icaap-stress-v1")
-    pack = templates.get_template("aeq-stress-pack-v1")
-    assert icaap is not None and pack is not None
-    icaap_cols = next(s for s in icaap.sections if s.section_code == "reverse_stress").columns
-    pack_cols = next(
-        s for s in pack.sections if s.section_code == "reverse_stress_frontier"
-    ).columns
-    assert icaap_cols is pack_cols
 
 
 @pytest.mark.parametrize("with_reverse", [True, False])

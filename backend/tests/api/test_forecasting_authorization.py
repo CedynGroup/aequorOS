@@ -523,6 +523,82 @@ def test_run_detail_and_frontier_are_hidden_without_confidential_view(
     assert frontier.status_code == 403, frontier.text
 
 
+@pytest.mark.parametrize("confidential", [False, True])
+@pytest.mark.parametrize(
+    ("module", "summary", "details"),
+    [
+        (
+            "forecast",
+            {"avg_roe_pct": "12", "year5_car_pct": "18"},
+            {"path": [{"year": 1}], "assumptions": {"growth_pct": "7"}},
+        ),
+        (
+            "optimizer",
+            {"candidates_evaluated": 20, "feasible_count": 4},
+            {
+                "top": [{"decision": {"loan_growth_pct": "9"}}],
+                "base_assumptions": {"growth_pct": "7"},
+                "binding_constraint_histogram": {"capital": 16},
+            },
+        ),
+        (
+            "whatif",
+            {"shock_code": "rate_shock_up_400"},
+            {
+                "shock": {"rate_bps": "400"},
+                "base_assumptions": {"growth_pct": "7"},
+                "shocked_assumptions": {"growth_pct": "3"},
+                "base_summary": {"year5_car_pct": "18"},
+                "shocked_summary": {"year5_car_pct": "14"},
+                "base_path": [{"year": 1}],
+                "shocked_path": [{"year": 1}],
+                "deltas": [{"year": 1, "car_delta_pp": "-4"}],
+                "year5": {"car_pct": {"base": "18", "shocked": "14"}},
+            },
+        ),
+        (
+            "reverse_stress",
+            {},
+            {
+                "liquidity_axis": {"breach": "25"},
+                "capital_axis": {"breach": "30"},
+                "narrative": "Confidential frontier narrative",
+            },
+        ),
+    ],
+)
+def test_registry_projects_forecasting_metrics_for_aggregated_viewers(
+    db_client: TestClient,
+    confidential: bool,
+    module: str,
+    summary: dict[str, object],
+    details: dict[str, object],
+) -> None:
+    period_id = _seed_book()
+    run_id = _add_regulatory_run(period_id, module=module)
+    metrics = {**summary, **details}
+    with get_sessionmaker()() as session:
+        run = session.get(RegulatoryRun, run_id)
+        assert run is not None
+        run.metrics = metrics
+        session.commit()
+    _, version = _grant()
+    if confidential:
+        _, version = _grant(sensitivity=SensitivityScope.CONFIDENTIAL)
+
+    for params in ({}, {"module": module}):
+        response = db_client.get(REGULATORY_RUNS_BASE, headers=_auth(version), params=params)
+        assert response.status_code == 200, response.text
+        assert response.json()["total"] == 1
+        (listed,) = response.json()["runs"]
+        assert listed["id"] == str(run_id)
+        assert listed["metrics"] == (metrics if confidential else summary)
+    with get_sessionmaker()() as session:
+        run = session.get(RegulatoryRun, run_id)
+        assert run is not None
+        assert run.metrics == metrics
+
+
 def test_regulatory_registry_filters_every_forecasting_module_before_count_and_page(
     db_client: TestClient,
 ) -> None:

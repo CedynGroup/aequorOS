@@ -134,6 +134,12 @@ test.describe("Forecasting reader without run permission", () => {
       });
     }
 
+    await page.goto("/forecasting/scenario");
+    await expect(
+      page.getByRole("heading", { name: "Scenario Manager" }),
+    ).toBeVisible(FIRST_PAINT);
+    await expectDisabledWithReason(page, "Run Base case", RUN_REASON);
+
     await page.goto("/forecasting/reverse-stress");
     await expect(
       page.getByRole("heading", { name: "Reverse Stress Testing" }),
@@ -163,6 +169,37 @@ test.describe("Forecasting reader without run permission", () => {
         fullPage: true,
       });
     }
+  });
+});
+
+test.describe("Forecasting confidential-only reader", () => {
+  test.use({ storageState: path.join(E2E_TMP, "admin.json") });
+
+  test("explains the missing preset grant beside the disabled scenario run", async ({
+    page,
+  }) => {
+    test.slow();
+    await projectForecasting(
+      page,
+      (capability) =>
+        capability.module === "fcst" &&
+        capability.permission === "view" &&
+        capability.sensitivity === "confidential",
+    );
+    const requests: string[] = [];
+    page.on("request", (request) => {
+      if (FORECASTING_ROUTE.test(request.url())) requests.push(request.url());
+    });
+    await page.goto("/forecasting/scenario");
+    await expect(
+      page.getByRole("heading", { name: "Scenario Manager" }),
+    ).toBeVisible(FIRST_PAINT);
+    await expectDisabledWithReason(
+      page,
+      "Run scenario",
+      /Requires Forecasting · Aggregated · View/i,
+    );
+    expect(requests).toEqual([]);
   });
 });
 
