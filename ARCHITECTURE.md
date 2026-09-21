@@ -544,7 +544,7 @@ the regulatory fail-open guard and the browser-runtime SSRF guard were unenforce
 
 | Workflow                             | Jobs                                                                                                                                                                                                                                                              |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/risk-service.yml` | `static` · `architecture` · `postgres` · `postgres-suite` (the only full backend suite in CI, with OpenBao) · `storage` · `journeys` (Playwright + MinIO; exact eight-journey fixture-drift quarantine tracked in #151) · `api-fresh` · `real-data` (conditional) |
+| `.github/workflows/risk-service.yml` | `static` · `architecture` · `postgres` · `postgres-suite` (with OpenBao) · `storage` · `journeys` (Playwright + MinIO; exact eight-journey fixture-drift quarantine tracked in #151) · `api-fresh` · `real-data` (conditional) |
 | `.github/workflows/dashboard.yml`    | `dashboard` — client typecheck, dashboard typecheck, lint, test, production build + Command Center entry-graph guard                                                                                                                                              |
 | `.github/workflows/web.yml`          | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                                                                     |
 
@@ -552,7 +552,9 @@ Each workflow carries its own gate inventory in a header comment; keep it accura
 add a step.
 
 The hermetic SQLite suite remains available to developers as `mise run risk-service:test`, but
-CI no longer exercises SQLite compatibility; its only full backend-suite run uses Postgres.
+CI no longer exercises SQLite compatibility. Postgres suite ownership is defined in the
+task comments in [backend/mise.toml](backend/mise.toml) and pinned by
+[the CI wiring guard](backend/tests/architecture/test_ci_task_wiring.py).
 
 ---
 

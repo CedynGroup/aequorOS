@@ -437,7 +437,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   workflow and the dashboard's fail-open guard, SSRF egress guard, and browser journeys
   were unenforced. Each workflow's header comment is its gate inventory — keep it accurate.
   `console` is deliberately NOT lint-gated (no ESLint dependency or config in that
-  workspace); see ARCHITECTURE.md §8.
+  workspace); see ARCHITECTURE.md §8. Which Postgres job owns which test suites is
+  defined by the `risk-service:test-postgres-*` task comments in `backend/mise.toml`
+  and pinned by `tests/architecture/test_ci_task_wiring.py`.
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,

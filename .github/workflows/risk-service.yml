@@ -43,11 +43,11 @@ name: Risk Service CI
 #                 guard on tenant isolation. main currently runs
 #                 test-postgres-migrations instead, i.e. one file of tests/db, so
 #                 that guard is gated NOWHERE until this file is merged.
-#   postgres-suite — the full backend suite against Postgres, including OpenBao
-#                 signing. This is CI's only full-suite execution; the local
-#                 `risk-service:test` task retains the hermetic SQLite path for
-#                 developers. The `--min-executed 3000` floor proves the suite
-#                 did not accidentally collect or execute nothing.
+#   postgres-suite — the remaining backend suite against Postgres, including
+#                 OpenBao signing. Suite ownership is defined in backend/mise.toml
+#                 and pinned by tests/architecture/test_ci_task_wiring.py.
+#                 The `--min-executed 3000` floor proves the suite did not
+#                 accidentally collect or execute nothing.
 #   storage     — the S3-compatible object-store contract: SSE-KMS at rest, the
 #                 hash-chained access log, per-institution provisioning. Added
 #                 2026-08-22. It self-skips without S3_*, and no job had ever
