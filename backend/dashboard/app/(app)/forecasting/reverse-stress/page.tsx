@@ -62,7 +62,12 @@ export default function ReverseStress() {
   const periodId = period?.id;
   const canRun = moduleScope.forecastingRun === true;
 
-  const latest = useLatestReverseStress(bankId, periodId);
+  // The frontier is confidential run detail; it is never requested before the
+  // projection says the caller may open it.
+  const latest = useLatestReverseStress(
+    moduleScope.forecastingConfidentialView ? bankId : undefined,
+    periodId,
+  );
   const run = useRunReverseStress(bankId);
 
   const frontier = latest.data ?? null;

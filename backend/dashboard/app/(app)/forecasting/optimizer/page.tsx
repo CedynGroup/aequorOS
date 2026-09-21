@@ -198,11 +198,14 @@ export default function StrategicOptimizer() {
   const bankId = bank?.id;
   const periodId = period?.id;
   const canRun = moduleScope.forecastingRun === true;
+  // The stored optimizer run is Forecasting run detail; nothing is requested
+  // before the projection says the caller may open it.
+  const runsBankId = moduleScope.forecastingConfidentialView ? bankId : undefined;
 
   const runOptimizer = useRunOptimizer(bankId);
-  const runsQuery = useRegulatoryRuns(bankId, { module: 'optimizer', limit: 1 });
+  const runsQuery = useRegulatoryRuns(runsBankId, { module: 'optimizer', limit: 1 });
   const latestStoredId = runsQuery.data?.runs[0]?.id ?? null;
-  const storedRun = useRegulatoryRun(bankId, latestStoredId);
+  const storedRun = useRegulatoryRun(runsBankId, latestStoredId);
 
   const view: OptimizerView | null = runOptimizer.data
     ? fromResult(runOptimizer.data)
