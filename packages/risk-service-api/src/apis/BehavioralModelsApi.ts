@@ -42,12 +42,12 @@ export interface GetBehavioralLiquidityRequest {
 }
 
 export interface GetBehavioralModelRequest {
-  bankId: any;
+  bankId: string;
   model: GetBehavioralModelModelEnum;
 }
 
 export interface TrainBehavioralModelRequest {
-  bankId: any;
+  bankId: string;
   model: TrainBehavioralModelModelEnum;
 }
 
