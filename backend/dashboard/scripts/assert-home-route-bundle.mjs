@@ -80,7 +80,7 @@ if (offendingEditorChunks.length > 0) {
     "Command Center initial entry graph contains the ICAAP editor's " +
       `ProseMirror runtime: ${offendingEditorChunks.join(", ")}. Tiptap must be ` +
       "reached only through components/icaap/SectionEditorLoader.tsx, which " +
-      'imports it with dynamic(..., { ssr: false }).',
+      "imports it with dynamic(..., { ssr: false }).",
   );
 }
 

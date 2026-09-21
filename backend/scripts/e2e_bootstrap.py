@@ -487,8 +487,7 @@ def _govern_icaap_commencement(session: Session) -> None:
         }
     session.flush()
     print(
-        f"governed {FIRST_AS_OF_PARAM} to {E2E_ICAAP_FIRST_AS_OF.isoformat()} "
-        f"({len(rows)} row(s))"
+        f"governed {FIRST_AS_OF_PARAM} to {E2E_ICAAP_FIRST_AS_OF.isoformat()} ({len(rows)} row(s))"
     )
 
 

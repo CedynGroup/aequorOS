@@ -210,8 +210,9 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
   request-rendered with `cache: "no-store"`, while product data keeps using the
   explicit TanStack Query policy documented below.
 - Production builds use Turbopack's per-route client manifests. The Command
-  Center bundle guard reads those manifests and continues to require Recharts
-  to stay out of the initial route graph.
+  Center bundle guard (`scripts/assert-home-route-bundle.mjs`) requires Recharts
+  and the ICAAP ProseMirror editor to stay out of the initial route graph, and
+  verifies their runtime markers in the deferred chart and section-editor chunks.
 
 ## Query cache and refresh policy
 
