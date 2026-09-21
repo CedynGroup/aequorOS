@@ -63,39 +63,64 @@ SIBLING_BANK_ID = "BK-MKT00002"
 CURVE = "GHS_SOVEREIGN"
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-# Every read route with the sensitivity its exact grant must name.
-READ_ROUTES: tuple[tuple[str, str, SensitivityScope], ...] = (
-    ("views", f"{BASE}/market-data/views", SensitivityScope.PUBLISHED),
-    ("source_preferences", f"{BASE}/market-data/source-preferences", SensitivityScope.PUBLISHED),
-    ("planes", f"{BASE}/market-data/planes?category=curves", SensitivityScope.PUBLISHED),
-    (
-        "forward_grid",
-        f"{BASE}/market-data/curves/{CURVE}/forward-grid",
-        SensitivityScope.PUBLISHED,
-    ),
-    ("scopes", f"{BASE}/market-data/scopes", SensitivityScope.PUBLISHED),
-    ("quota", f"{BASE}/market-data/quota", SensitivityScope.PUBLISHED),
-    (
-        "template",
-        f"/api/v1/market-data/templates/yield_curve?bank_id={SAMPLE_BANK_ID}",
-        SensitivityScope.PUBLISHED,
-    ),
-    ("rating_runs", f"{BASE}/implied-rating/runs", SensitivityScope.CONFIDENTIAL),
-    ("overlays", f"{BASE}/market-data/overlays", SensitivityScope.CONFIDENTIAL),
-    ("connections", f"{BASE}/market-data/connections", SensitivityScope.RESTRICTED),
-)
-READ_ROUTE_IDS = [route[0] for route in READ_ROUTES]
-
-
 class MarketsRoute(NamedTuple):
     name: str
     url: str
     sensitivity: SensitivityScope
-    bundle: RoleBundle
+    bundle: RoleBundle = RoleBundle.VIEWER
 
 
-DENIAL_ROUTES = (
-    *(MarketsRoute(*route, RoleBundle.VIEWER) for route in READ_ROUTES),
+MARKETS_ROUTES = (
+    MarketsRoute(
+        "views",
+        f"{BASE}/market-data/views",
+        SensitivityScope.PUBLISHED,
+    ),
+    MarketsRoute(
+        "source_preferences",
+        f"{BASE}/market-data/source-preferences",
+        SensitivityScope.PUBLISHED,
+    ),
+    MarketsRoute(
+        "planes",
+        f"{BASE}/market-data/planes?category=curves",
+        SensitivityScope.PUBLISHED,
+    ),
+    MarketsRoute(
+        "forward_grid",
+        f"{BASE}/market-data/curves/{CURVE}/forward-grid",
+        SensitivityScope.PUBLISHED,
+    ),
+    MarketsRoute(
+        "scopes",
+        f"{BASE}/market-data/scopes",
+        SensitivityScope.PUBLISHED,
+    ),
+    MarketsRoute(
+        "quota",
+        f"{BASE}/market-data/quota",
+        SensitivityScope.PUBLISHED,
+    ),
+    MarketsRoute(
+        "template",
+        f"/api/v1/market-data/templates/yield_curve?bank_id={SAMPLE_BANK_ID}",
+        SensitivityScope.PUBLISHED,
+    ),
+    MarketsRoute(
+        "rating_runs",
+        f"{BASE}/implied-rating/runs",
+        SensitivityScope.CONFIDENTIAL,
+    ),
+    MarketsRoute(
+        "overlays",
+        f"{BASE}/market-data/overlays",
+        SensitivityScope.CONFIDENTIAL,
+    ),
+    MarketsRoute(
+        "connections",
+        f"{BASE}/market-data/connections",
+        SensitivityScope.RESTRICTED,
+    ),
     MarketsRoute(
         "rating_detail",
         f"{BASE}/implied-rating/runs/{{run_id}}",
@@ -129,7 +154,7 @@ DENIAL_ROUTES = (
 )
 
 
-@pytest.fixture(params=DENIAL_ROUTES, ids=lambda route: route.name)
+@pytest.fixture(params=MARKETS_ROUTES, ids=lambda route: route.name)
 def markets_route(request: pytest.FixtureRequest) -> MarketsRoute:
     return request.param
 
@@ -148,20 +173,54 @@ def forbidden_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def denied_request(
-    db_client: TestClient, markets_route: MarketsRoute, forbidden_mutations: None
-) -> Callable[[int], Response]:
+def market_request(
+    db_client: TestClient, markets_route: MarketsRoute
+) -> Callable[[dict[str, str]], Response]:
     period_id = _seed_book()
-    if markets_route.bundle == RoleBundle.ANALYST:
-        _seed_curve()
-        overlay_id = _add_overlay()
-        return lambda version: _mutation_calls(
-            db_client, _auth(version, "admin"), period_id, overlay_id
-        )[markets_route.name]()
+    _seed_curve()
     url = markets_route.url
+    payload: dict[str, Any] = {}
     if markets_route.name == "rating_detail":
         url = url.format(run_id=_add_rating_run(period_id))
-    return lambda version: db_client.get(url, headers=_auth(version, "admin"))
+    elif markets_route.name == "rating_run":
+        payload = {"reporting_period_id": str(period_id)}
+    elif markets_route.name == "overlay_create":
+        payload = _overlay_payload()
+    elif markets_route.name == "overlay_end":
+        url = url.format(overlay_id=_add_overlay())
+        payload = {"effective_to": "2026-12-31"}
+    elif markets_route.name == "upload":
+        return lambda auth: _upload(db_client, auth)
+    if markets_route.bundle == RoleBundle.ANALYST:
+        return lambda auth: db_client.post(url, headers=auth, json=payload)
+    return lambda auth: db_client.get(url, headers=auth)
+
+
+@pytest.fixture
+def denied_request(
+    market_request: Callable[[dict[str, str]], Response], forbidden_mutations: None
+) -> Callable[[int], Response]:
+    return lambda version: market_request(_auth(version, "admin"))
+
+
+@pytest.fixture
+def rating_engine_calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, UUID]]:
+    calls: list[tuple[str, UUID]] = []
+
+    def stub_run(
+        db: object, ctx: object, bank_id: str, reporting_period_id: UUID, **_kwargs: object
+    ) -> ImpliedRatingRun:
+        _ = db, ctx
+        calls.append((bank_id, reporting_period_id))
+        run_id = _add_rating_run(reporting_period_id, bank_id)
+        with get_sessionmaker()() as session:
+            row = session.get(ImpliedRatingRun, run_id)
+            assert row is not None
+            session.expunge(row)
+            return row
+
+    monkeypatch.setattr(implied_rating, "run", stub_run)
+    return calls
 
 
 @pytest.fixture(autouse=True)
@@ -421,7 +480,20 @@ def _assert_authorized(name: str, response: Response) -> None:
             "No published forward grid for this curve at the requested date."
         )
         return
-    assert response.status_code == 200, response.text
+    expected_status = 201 if name in {"rating_run", "overlay_create"} else 200
+    assert response.status_code == expected_status, response.text
+    if name == "overlay_create":
+        with get_sessionmaker()() as session:
+            assert session.get(MarketDataOverlay, UUID(response.json()["id"])) is not None
+    if name == "overlay_end":
+        assert response.json()["effective_to"] == "2026-12-31"
+        with get_sessionmaker()() as session:
+            overlay = session.get(MarketDataOverlay, UUID(response.json()["id"]))
+            assert overlay is not None
+            assert overlay.effective_to == date(2026, 12, 31)
+    if name == "upload":
+        assert response.json()["bank_id"] == SAMPLE_BANK_ID
+        assert response.json()["canonical_records_produced"] > 0
     if name == "template":
         assert response.headers["content-type"].startswith(XLSX_MEDIA_TYPE)
 
@@ -463,53 +535,43 @@ def _binding_extras(records: list[dict[str, object]]) -> list[dict[str, object]]
     ]
 
 
-# ---------------------------------------------------------------------------
-# T1 – T7: the binding dimensions, exercised on every read route
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(("name", "url", "sensitivity"), READ_ROUTES, ids=READ_ROUTE_IDS)
-def test_t1_exact_and_explicit_organization_bindings_allow_reads(
-    db_client: TestClient,
-    name: str,
-    url: str,
-    sensitivity: SensitivityScope,
+@pytest.mark.parametrize(
+    "institution_scope", [InstitutionScope.INSTITUTION, InstitutionScope.ORGANIZATION]
+)
+@pytest.mark.usefixtures("upload_storage")
+def test_t1_exact_and_explicit_organization_bindings_allow(
+    markets_route: MarketsRoute,
+    market_request: Callable[[dict[str, str]], Response],
+    rating_engine_calls: list[tuple[str, UUID]],
+    institution_scope: InstitutionScope,
 ) -> None:
-    _seed_book()
-    _seed_curve()
-    _, exact_version = _grant(sensitivity=sensitivity)
-    _assert_authorized(name, db_client.get(url, headers=_auth(exact_version)))
-
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
-        session.execute(
-            delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
-        )
-        session.commit()
-    finally:
-        session.close()
-    _, organization_version = _grant(
-        sensitivity=sensitivity,
-        institution_scope=InstitutionScope.ORGANIZATION,
-        institution_id=None,
+    _, version = _grant(
+        markets_route.bundle,
+        sensitivity=markets_route.sensitivity,
+        institution_scope=institution_scope,
+        institution_id=(
+            SAMPLE_BANK_ID if institution_scope == InstitutionScope.INSTITUTION else None
+        ),
     )
-    _assert_authorized(name, db_client.get(url, headers=_auth(organization_version)))
+    response = market_request(_auth(version, "viewer"))
+    _assert_authorized(markets_route.name, response)
+    if markets_route.name == "rating_run":
+        assert len(rating_engine_calls) == 1
+        assert rating_engine_calls[0] == (
+            SAMPLE_BANK_ID,
+            UUID(response.json()["reporting_period_id"]),
+        )
+    else:
+        assert rating_engine_calls == []
 
 
-@pytest.mark.parametrize(("name", "url", "sensitivity"), READ_ROUTES, ids=READ_ROUTE_IDS)
-def test_t2_scalar_roles_cannot_read_markets_without_a_binding(
-    db_client: TestClient,
-    name: str,
-    url: str,
-    sensitivity: SensitivityScope,
+def test_t2_scalar_roles_cannot_access_markets_without_a_binding(
+    market_request: Callable[[dict[str, str]], Response], forbidden_mutations: None
 ) -> None:
-    _ = name, sensitivity
-    _seed_book()
     for role in ("admin", "analyst", "approver", "viewer"):
-        response = db_client.get(url, headers=_auth(1, role))
+        response = market_request(_auth(1, role))
         assert response.status_code == 403, (role, response.text)
-    assert response.json()["error"]["message"].endswith("requires an active scoped binding.")
+        assert response.json()["error"]["message"].endswith("requires an active scoped binding.")
 
 
 @pytest.mark.parametrize(
@@ -565,17 +627,17 @@ def test_t3_partial_bindings_never_compose_into_markets_authority(
     assert response.status_code == 403, response.text
 
 
-def test_data_engine_authority_does_not_open_markets(db_client: TestClient) -> None:
+def test_data_engine_authority_does_not_open_markets(
+    denied_request: Callable[[int], Response],
+) -> None:
     """Ingestion operators see Markets only through a separate Markets grant."""
-    _seed_book()
     _, version = _grant(
         RoleBundle.ANALYST,
         module=ModuleScope.DATA,
         sensitivity=SensitivityScope.ALL,
     )
-    for _name, url, _sensitivity in READ_ROUTES:
-        assert db_client.get(url, headers=_auth(version)).status_code == 403, url
-    assert _upload(db_client, _auth(version)).status_code == 403
+    response = denied_request(version)
+    assert response.status_code == 403, response.text
 
 
 @pytest.mark.parametrize(
@@ -609,18 +671,15 @@ def test_t4_inactive_markets_binding_denies_despite_admin_claim(
     assert response.status_code == 403, response.text
 
 
-@pytest.mark.parametrize(("name", "url", "sensitivity"), READ_ROUTES, ids=READ_ROUTE_IDS)
 def test_t5_cross_tenant_markets_probe_stays_hidden(
-    db_client: TestClient,
-    name: str,
-    url: str,
-    sensitivity: SensitivityScope,
+    market_request: Callable[[dict[str, str]], Response], forbidden_mutations: None
 ) -> None:
-    _ = name, sensitivity
-    _seed_book()
-    response = db_client.get(url, headers=headers(ORG_2))
+    models = (ImpliedRatingRun, MarketDataOverlay, IngestionBatch, AuditEvent)
+    before = [_count(model) for model in models]
+    response = market_request(headers(ORG_2))
     assert response.status_code == 404, response.text
     assert response.json()["error"]["message"] == "Bank not found."
+    assert [_count(model) for model in models] == before
 
 
 def test_t6_stale_authorization_version_denies_before_markets_evaluation(
