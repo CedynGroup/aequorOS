@@ -24,7 +24,7 @@ jobs:
         with:
           # Pinned to match the repository's other CI workflows.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       - name: Install workspace dependencies

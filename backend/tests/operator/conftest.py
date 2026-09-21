@@ -11,18 +11,17 @@ from __future__ import annotations
 
 import io
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import pytest
 from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, event
-from sqlalchemy.orm import Session
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import get_operator_settings, get_settings
-from app.db.base import Base
-from app.db.session import get_engine, get_sessionmaker
+import app.operator.deps as operator_deps
+import app.operator.features.auth as operator_auth_feature
+from app.core.config import get_operator_settings
 from app.models import InstitutionType, Jurisdiction, RegulatoryParameter
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.main import create_operator_app
@@ -30,6 +29,12 @@ from app.operator.services import operator_auth
 from app.operator.services.tenant_provisioning import ProvisioningClients
 from app.services.regulatory_parameters import seed_rows as _regparam_seed_rows
 from app.storage.config import StorageEngineSettings
+from tests.conftest import (
+    _rollback_sessionmaker_lifecycle,
+    _TestDatabase,
+    build_test_database,
+    sqlite_database_url,
+)
 
 DEV_TOKEN = "operator-dev-token-for-tests"
 # ≥32 bytes: PyJWT warns below the RFC 7518 minimum for HS256.
@@ -210,14 +215,6 @@ def operator_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_operator_settings.cache_clear()
 
 
-def _enable_sqlite_foreign_keys(engine: Engine) -> None:
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_connection, _connection_record) -> None:  # noqa: ANN001
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-
 # The institution-type registry (docs/sdi.md §1) — the operator suite builds
 # the schema with create_all (no seed migration runs), so provisioning
 # validation and the ``banks.institution_type`` FK need these reference rows.
@@ -313,42 +310,64 @@ def fake_s3() -> FakeS3Client:
     return FakeS3Client()
 
 
+@pytest.fixture(scope="session")
+def _operator_test_database(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[_TestDatabase]:
+    """The operator schema, built on SQLite once per pytest process.
+
+    Separate from the tenant suite's shared database on purpose: that one
+    carries two demo tenants, and the operator tests assert over exactly the
+    institutions they provision themselves.
+    """
+    with build_test_database(
+        sqlite_database_url(tmp_path_factory, "operator"), seed=_seed_jurisdictions
+    ) as database:
+        yield database
+
+
+@pytest.fixture
+def _operator_bound_sessionmaker(
+    _operator_test_database: _TestDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[sessionmaker]:
+    """Bind one test to a connection whose outer transaction is never committed.
+
+    The operator app resolves its own sessionmaker (``get_operator_sessionmaker``,
+    imported by name into the sign-in feature), so it is redirected here on top
+    of the shared lifecycle's redirection of ``app.db.session``. Every request
+    commit becomes a savepoint release and the test's writes vanish at teardown
+    — the same isolation the tenant API's ``db_client`` has.
+    """
+    with _rollback_sessionmaker_lifecycle(_operator_test_database, monkeypatch) as maker:
+        monkeypatch.setattr(operator_deps, "get_operator_sessionmaker", lambda: maker)
+        monkeypatch.setattr(operator_auth_feature, "get_operator_sessionmaker", lambda: maker)
+        yield maker
+
+
 @pytest.fixture
 def operator_client(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    _operator_bound_sessionmaker: sessionmaker,
     fake_s3: FakeS3Client,
 ) -> Iterator[TestClient]:
-    """Operator app over a fresh SQLite database with the fake S3 injected."""
-    database_url = f"sqlite+pysqlite:///{tmp_path / 'operator_test.db'}"
-    monkeypatch.setenv("DATABASE_URL", database_url)
-    get_settings.cache_clear()
-    get_engine.cache_clear()
-
-    engine = get_engine(database_url)
-    _enable_sqlite_foreign_keys(engine)
-    try:
-        Base.metadata.create_all(engine)
-        _seed_jurisdictions(engine)
-        app = create_operator_app()
-        app.dependency_overrides[get_provisioning_clients] = lambda: ProvisioningClients(
-            s3_client=fake_s3,
-            storage_settings=fake_storage_settings(),
-        )
-        with TestClient(app, raise_server_exceptions=False) as client:
-            yield client
-    finally:
-        Base.metadata.drop_all(engine)
-        engine.dispose()
-        get_settings.cache_clear()
-        get_engine.cache_clear()
+    """Operator app over the rollback-isolated database with the fake S3 injected."""
+    _ = _operator_bound_sessionmaker
+    app = create_operator_app()
+    app.dependency_overrides[get_provisioning_clients] = lambda: ProvisioningClients(
+        s3_client=fake_s3,
+        storage_settings=fake_storage_settings(),
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+        yield client
 
 
 @pytest.fixture
-def operator_db(operator_client: TestClient) -> Iterator[Session]:
-    """A session on the same SQLite database the operator client uses."""
+def operator_db(
+    operator_client: TestClient, _operator_bound_sessionmaker: sessionmaker
+) -> Iterator[Session]:
+    """A session sharing the operator client's transaction."""
     _ = operator_client
-    session = get_sessionmaker()()
+    session = _operator_bound_sessionmaker()
     try:
         yield session
     finally:

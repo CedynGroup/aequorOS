@@ -8,6 +8,7 @@ bank data enters through adapters, ETL, canonical persistence, and activation.
 from __future__ import annotations
 
 import math
+import weakref
 from calendar import monthrange
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -16,7 +17,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import Engine, delete, select
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
@@ -542,7 +543,7 @@ def materialize_canonical_test_book(session: Session) -> CanonicalTestBookSummar
             currency=CURRENCY,
             jurisdiction_code=JURISDICTION_CODE,
             license_type="universal",
-                institution_type="universal_bank",
+            institution_type="universal_bank",
         )
     )
     periods = _build_reporting_periods()
@@ -659,9 +660,30 @@ _DEPENDENT_TABLES: tuple[str, ...] = (
 )
 
 
+# Column names of every dependent table present in an engine's schema. The
+# sweep runs on every materialisation, and each ``get_columns`` is a catalogue
+# round trip on Postgres, so the introspection happens once per engine.
+_DEPENDENT_COLUMNS: weakref.WeakKeyDictionary[Engine, dict[str, frozenset[str]]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _dependent_table_columns(engine: Engine) -> dict[str, frozenset[str]]:
+    columns = _DEPENDENT_COLUMNS.get(engine)
+    if columns is None:
+        inspector = sql_inspect(engine)
+        existing = set(inspector.get_table_names())
+        columns = {
+            table: frozenset(column["name"] for column in inspector.get_columns(table))
+            for table in _DEPENDENT_TABLES
+            if table in existing
+        }
+        _DEPENDENT_COLUMNS[engine] = columns
+    return columns
+
+
 def _delete_bank_dependents(session: Session) -> None:
-    inspector = sql_inspect(session.get_bind())
-    existing = set(inspector.get_table_names())
+    dependent_columns = _dependent_table_columns(session.get_bind().engine)
     if session.get_bind().dialect.name == "postgresql":
         # Migration 202608220031 makes approvals/submission events append-only.
         # This fixture is the sole test-only reset path and runs in a disposable
@@ -672,10 +694,7 @@ def _delete_bank_dependents(session: Session) -> None:
             )
         )
     params = {"bank_id": str(SAMPLE_BANK_ID), "organization_id": str(DEMO_ORG_ID)}
-    for table in _DEPENDENT_TABLES:
-        if table not in existing:
-            continue
-        columns = {column["name"] for column in inspector.get_columns(table)}
+    for table, columns in dependent_columns.items():
         if "bank_id" in columns:
             where = "WHERE bank_id = :bank_id AND organization_id = :organization_id"
         elif "package_id" in columns:
@@ -709,22 +728,27 @@ def _delete_bank_dependents(session: Session) -> None:
 
 
 def _delete_existing_seed(session: Session) -> None:
-    _delete_bank_dependents(session)
-    session.execute(
-        delete(BankFinancialFact).where(
-            BankFinancialFact.bank_id == SAMPLE_BANK_ID,
-            BankFinancialFact.organization_id == DEMO_ORG_ID,
+    # Periods, facts and every dependent table hang off the bank row by foreign
+    # key, so a rollback-isolated test that starts without the bank has nothing
+    # to sweep. The parameter registers are keyed by organization, not bank, and
+    # are always cleared.
+    if session.scalar(select(Bank.id).where(Bank.id == SAMPLE_BANK_ID)) is not None:
+        _delete_bank_dependents(session)
+        session.execute(
+            delete(BankFinancialFact).where(
+                BankFinancialFact.bank_id == SAMPLE_BANK_ID,
+                BankFinancialFact.organization_id == DEMO_ORG_ID,
+            )
         )
-    )
-    session.execute(
-        delete(BankReportingPeriod).where(
-            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
-            BankReportingPeriod.organization_id == DEMO_ORG_ID,
+        session.execute(
+            delete(BankReportingPeriod).where(
+                BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+                BankReportingPeriod.organization_id == DEMO_ORG_ID,
+            )
         )
-    )
-    session.execute(
-        delete(Bank).where(Bank.id == SAMPLE_BANK_ID, Bank.organization_id == DEMO_ORG_ID)
-    )
+        session.execute(
+            delete(Bank).where(Bank.id == SAMPLE_BANK_ID, Bank.organization_id == DEMO_ORG_ID)
+        )
     for model in _PARAMETER_MODELS:
         session.execute(
             delete(model).where(
