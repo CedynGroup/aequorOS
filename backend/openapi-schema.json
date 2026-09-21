@@ -63106,7 +63106,8 @@
             "name": "bank_id",
             "required": true,
             "schema": {
-              "title": "Bank Id"
+              "title": "Bank Id",
+              "type": "string"
             }
           },
           {
@@ -63336,7 +63337,8 @@
             "name": "bank_id",
             "required": true,
             "schema": {
-              "title": "Bank Id"
+              "title": "Bank Id",
+              "type": "string"
             }
           },
           {
