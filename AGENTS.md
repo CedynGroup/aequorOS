@@ -188,6 +188,20 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   is BLOCKED at assignment until the stage engine's per-object condition lands. Contract:
   `backend/docs/filing_submit_authority_rollout.md`; design + remaining steps 2-5:
   `backend/docs/filing_workflow_redesign.md`.
+- **Every route that accepts an object id must be in the IDOR census (2026-09-20).**
+  `tests/fixtures/object_references.py` seeds one object per identifier kind for
+  three tenants and `tests/fixtures/object_reference_routes.py` enumerates every
+  `/api/v1` route carrying a `*_id` beside `bank_id`; both IDOR suites read that
+  census at COLLECTION, so an uncatalogued identifier errors both before a case
+  runs. `tests/architecture/test_object_reference_census.py` runs the census on
+  every PR without Postgres and names the identifiers to catalogue — it exists
+  because #226 (the census) and #230 (the filing chain) were each green on their
+  own base and broke both suites only on main. A new route's `{x_id}` needs an
+  `ObjectKind` (path) or a `REFERENCE_FIELDS` row (body/query); a route that
+  cannot be exercised goes in `KNOWN_UNCOVERED` with its reason, a confirmed
+  cross-bank leak in `KNOWN_DEFECTS` (pinned as still-defective). ICAAP's 86
+  id-bearing routes sit one-by-one in `ICAAP_DEFERRED` (captain, 2026-09-20);
+  delete each entry and seed its kind when ICAAP ships — never a prefix wildcard.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).
