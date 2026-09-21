@@ -99,7 +99,7 @@ E2E_USERS = {
     # nothing else. Deliberately holds NO Regulatory Reporting access, because
     # that is the real shape of the person — the ICAAP filing surface has to
     # give them a signature they could not otherwise give.
-    "board": UUID("eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef"),
+    "board": UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"),
     # The officer who transmits a return to the regulator, and only that.
     # Filing stopped sharing the approver's permission on 2026-09-20
     # (docs/filing_workflow_redesign.md §6 step 1): a Validator holds an exact
@@ -107,7 +107,7 @@ E2E_USERS = {
     # so they can open the return they are being asked to file. Deliberately
     # NOT the `approver` fixture — one identity that both approves and files is
     # the defect the split closed, and the tenant grant surface blocks it.
-    "validator": UUID("eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed"),
+    "validator": UUID("eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef"),
 }
 
 #: The governed date from which an ICAAP report may be filed.

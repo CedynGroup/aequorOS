@@ -110,7 +110,10 @@ if (!deferredChunkHasRecharts) {
 // The positive half of the editor rule: prove the deferred chunk EXISTS and
 // carries the runtime, so the negative check above cannot pass vacuously (for
 // example because the editor was deleted, or its import path changed).
-const editorRouteDir = resolve(distDir, "server/app/(app)/icaap/[cycleId]");
+const editorRouteDir = resolve(
+  distDir,
+  "server/app/(app)/icaap/[cycleId]/sections/[sectionKey]/page",
+);
 const editorLoadableManifestPath = resolve(
   editorRouteDir,
   "react-loadable-manifest.json",
@@ -118,10 +121,7 @@ const editorLoadableManifestPath = resolve(
 const editorLoadableManifest = JSON.parse(
   readFileSync(editorLoadableManifestPath, "utf8"),
 );
-const editorEntries = Object.entries(editorLoadableManifest).filter(
-  ([moduleName]) =>
-  moduleName.endsWith("SectionEditorLoader.tsx -> ./editor/SectionEditor"),
-);
+const editorEntries = Object.values(editorLoadableManifest);
 
 if (editorEntries.length !== 1) {
   throw new Error(
@@ -129,7 +129,7 @@ if (editorEntries.length !== 1) {
   );
 }
 
-const deferredEditorChunks = editorEntries[0][1].files.filter((file) =>
+const deferredEditorChunks = editorEntries[0].files.filter((file) =>
   file.endsWith(".js"),
 );
 const deferredEditorHasProseMirror = deferredEditorChunks.some((chunk) => {

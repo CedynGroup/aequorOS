@@ -12,16 +12,18 @@
 import PageContainer from "@/components/ui/PageContainer";
 import { useBankContext } from "@/components/shell/BankContext";
 import RiskRegister from "@/components/icaap/p2/RiskRegister";
+import { use } from "react";
 
 export default function IcaapRisksPage({
   params,
 }: {
-  params: { cycleId: string };
+  params: Promise<{ cycleId: string }>;
 }) {
+  const { cycleId } = use(params);
   const { bank } = useBankContext();
   return (
     <PageContainer className="py-6">
-      {bank && <RiskRegister bankId={bank.id} cycleId={params.cycleId} />}
+      {bank && <RiskRegister bankId={bank.id} cycleId={cycleId} />}
     </PageContainer>
   );
 }

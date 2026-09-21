@@ -12,16 +12,18 @@
 import PageContainer from "@/components/ui/PageContainer";
 import { useBankContext } from "@/components/shell/BankContext";
 import StressCapitalPlan from "@/components/icaap/p2/StressCapitalPlan";
+import { use } from "react";
 
 export default function IcaapStressPage({
   params,
 }: {
-  params: { cycleId: string };
+  params: Promise<{ cycleId: string }>;
 }) {
+  const { cycleId } = use(params);
   const { bank } = useBankContext();
   return (
     <PageContainer className="py-6">
-      {bank && <StressCapitalPlan bankId={bank.id} cycleId={params.cycleId} />}
+      {bank && <StressCapitalPlan bankId={bank.id} cycleId={cycleId} />}
     </PageContainer>
   );
 }
