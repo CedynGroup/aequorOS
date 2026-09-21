@@ -128,6 +128,10 @@ MODULE_IRR = "irr"
 MODULE_IRR_SF = "irr_sf"
 MODULE_FX = "fx"
 MODULE_FTP = "ftp"
+MODULE_FORECAST = "forecast"
+MODULE_OPTIMIZER = "optimizer"
+MODULE_WHATIF = "whatif"
+MODULE_REVERSE_STRESS = "reverse_stress"
 
 
 @dataclass(frozen=True)
@@ -154,6 +158,13 @@ _REGULATORY_RUN_AUTHORIZATION = {
         "irrbb_sf",
     ),
     MODULE_FTP: _RegulatoryRunAuthorizationPolicy(Module.FTP, "ftp"),
+    # The projection, the optimizer, the what-if lab and the reverse-stress
+    # frontier are four run modules under ONE Forecasting authority; a binding
+    # that hides Forecasting hides all four from the generic run routes.
+    MODULE_FORECAST: _RegulatoryRunAuthorizationPolicy(Module.FORECASTING, "forecasting"),
+    MODULE_OPTIMIZER: _RegulatoryRunAuthorizationPolicy(Module.FORECASTING, "forecasting"),
+    MODULE_WHATIF: _RegulatoryRunAuthorizationPolicy(Module.FORECASTING, "forecasting"),
+    MODULE_REVERSE_STRESS: _RegulatoryRunAuthorizationPolicy(Module.FORECASTING, "forecasting"),
 }
 
 BASELINE_SCENARIO = "baseline"
@@ -282,17 +293,22 @@ def list_regulatory_runs(  # noqa: PLR0913
             else ()
         )
     )
+    # Several run modules share one authority (the four Forecasting modules),
+    # so each distinct policy is decided once and applied to every module it covers.
+    allowed_by_policy: dict[_RegulatoryRunAuthorizationPolicy, bool] = {}
     for protected_module, policy in protected_modules:
-        decision = scoped_authorization.evaluate_bank_permission(
-            db,
-            ctx,
-            bank,
-            permission=Permission.VIEW,
-            module=policy.module,
-            sensitivity=Sensitivity.AGGREGATED,
-            surface=f"regulatory_run_list_{policy.surface_prefix}",
-        )
-        if decision is None or not decision.allowed:
+        if policy not in allowed_by_policy:
+            decision = scoped_authorization.evaluate_bank_permission(
+                db,
+                ctx,
+                bank,
+                permission=Permission.VIEW,
+                module=policy.module,
+                sensitivity=Sensitivity.AGGREGATED,
+                surface=f"regulatory_run_list_{policy.surface_prefix}",
+            )
+            allowed_by_policy[policy] = decision is not None and decision.allowed
+        if not allowed_by_policy[policy]:
             conditions += (RegulatoryRun.module != protected_module,)
     if module is not None:
         conditions += (RegulatoryRun.module == module,)

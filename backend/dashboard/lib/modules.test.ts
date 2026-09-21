@@ -37,6 +37,7 @@ const resolved = (
     "irrbb",
     "fx",
     "ftp",
+    "forecasting",
   ]),
   modules: new Set([
     "command_center",
@@ -52,6 +53,7 @@ const resolved = (
     "settings",
     "irrbb",
     "ftp",
+    "forecasting",
   ]),
   organizationModules: new Set(["settings"]),
   hasInstitutionAuthority: true,
@@ -72,6 +74,9 @@ const resolved = (
   ftpAggregatedView: true,
   ftpConfidentialView: true,
   ftpRun: true,
+  forecastingAggregatedView: true,
+  forecastingConfidentialView: true,
+  forecastingRun: true,
   ...capabilities,
   isResolved: true,
 });
@@ -105,6 +110,7 @@ for (const moduleCase of [
     label: "IRRBB",
     aggregated: "irrbbAggregatedView",
     confidential: "irrbbConfidentialView",
+    confidentialRoute: "/scenarios",
     scenarioSensitivity: "Confidential",
   },
   {
@@ -112,6 +118,7 @@ for (const moduleCase of [
     label: "Foreign Exchange",
     aggregated: "fxAggregatedView",
     confidential: "fxConfidentialView",
+    confidentialRoute: "/scenarios",
     scenarioSensitivity: "Confidential",
   },
   {
@@ -119,6 +126,15 @@ for (const moduleCase of [
     label: "Funds Transfer Pricing",
     aggregated: "ftpAggregatedView",
     confidential: "ftpConfidentialView",
+    confidentialRoute: "/scenarios",
+    scenarioSensitivity: "Confidential",
+  },
+  {
+    prefix: "/forecasting",
+    label: "Forecasting",
+    aggregated: "forecastingAggregatedView",
+    confidential: "forecastingConfidentialView",
+    confidentialRoute: "/scenario",
     scenarioSensitivity: "Confidential",
   },
 ] as const) {
@@ -141,7 +157,10 @@ for (const moduleCase of [
     assert.equal(isHrefVisible(href, resolved(true)), true);
     assert.equal(isPathVisible(href, resolved(true)), true);
   }
-  for (const suffix of ["/scenarios", "/scenarios/detail?analysis=saved"]) {
+  for (const suffix of [
+    moduleCase.confidentialRoute,
+    `${moduleCase.confidentialRoute}/detail?analysis=saved`,
+  ]) {
     const href = `${moduleCase.prefix}${suffix}`;
     assert.equal(isPathVisible(href, deniedModule), false);
     assert.deepEqual(hrefAccess(href, deniedModule), {
@@ -155,7 +174,10 @@ for (const moduleCase of [
   });
   assert.equal(isPathVisible(moduleCase.prefix, confidentialOnlyModule), false);
   assert.equal(
-    isPathVisible(`${moduleCase.prefix}/scenarios`, confidentialOnlyModule),
+    isPathVisible(
+      `${moduleCase.prefix}${moduleCase.confidentialRoute}`,
+      confidentialOnlyModule,
+    ),
     moduleCase.scenarioSensitivity === "Confidential",
   );
 }
@@ -283,6 +305,40 @@ assert.deepEqual(hrefAccess("/ftp", deniedFtp), {
     "Requires Funds Transfer Pricing · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(isPathVisible("/ftp/scenarios", deniedFtp), true);
+
+const aggregatedForecastingOnly = resolved(true, true, {
+  forecastingConfidentialView: false,
+  forecastingRun: false,
+});
+assert.equal(isHrefVisible("/forecasting", aggregatedForecastingOnly), true);
+assert.equal(
+  isPathVisible("/forecasting/assumptions", aggregatedForecastingOnly),
+  true,
+);
+for (const href of [
+  "/forecasting/nii",
+  "/forecasting/whatif",
+  "/forecasting/reverse-stress",
+  "/forecasting/optimizer",
+]) {
+  assert.deepEqual(hrefAccess(href, aggregatedForecastingOnly), {
+    state: "disabled",
+    reason:
+      "Requires Forecasting · Confidential · View. Ask your organization owner or admin to grant it.",
+  });
+}
+
+const deniedForecasting = resolved(true, true, {
+  forecastingAggregatedView: false,
+  forecastingConfidentialView: true,
+});
+assert.equal(isHrefVisible("/forecasting", deniedForecasting), false);
+assert.deepEqual(hrefAccess("/forecasting", deniedForecasting), {
+  state: "disabled",
+  reason:
+    "Requires Forecasting · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(isPathVisible("/forecasting/scenario", deniedForecasting), true);
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),

@@ -954,6 +954,11 @@ def test_queued_official_run_mints_authorized_fx_results(
         module_scope=ModuleScope.FTP,
         sensitivity_scope=SensitivityScope.CONFIDENTIAL,
     )
+    _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.FORECASTING,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
     _, version = _grant(
         role_bundle=RoleBundle.ANALYST,
         sensitivity_scope=SensitivityScope.CONFIDENTIAL,

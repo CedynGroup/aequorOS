@@ -1,7 +1,9 @@
 """Reverse stress endpoints (Phase 2 item 4).
 
-POST computes and persists the frontier (analyst+ — it mints an immutable
-run); GET returns the latest frontier for a period.
+POST computes and persists the frontier — it mints an immutable run, so it
+requires Forecasting confidential run; GET returns the latest frontier for a
+period under Forecasting confidential view. The service re-checks run
+authority before it searches.
 """
 
 from __future__ import annotations
@@ -10,7 +12,7 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, ForecastingConfidentialView, ForecastingRun
 from app.schemas.reverse_stress import ReverseStressRead, ReverseStressRunCreate
 from app.services import reverse_stress
 
@@ -27,9 +29,9 @@ def run_reverse_stress(
     bank_id: str,
     payload: ReverseStressRunCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: ForecastingRun,
 ) -> ReverseStressRead:
-    return reverse_stress.run_reverse_stress(db, ctx, bank_id, payload)
+    return reverse_stress.run_reverse_stress(db, access.ctx, bank_id, payload)
 
 
 @router.get(
@@ -41,6 +43,6 @@ def get_latest_reverse_stress(
     bank_id: str,
     reporting_period_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: ForecastingConfidentialView,
 ) -> ReverseStressRead:
-    return reverse_stress.get_latest_reverse_stress(db, ctx, bank_id, reporting_period_id)
+    return reverse_stress.get_latest_reverse_stress(db, access.ctx, bank_id, reporting_period_id)

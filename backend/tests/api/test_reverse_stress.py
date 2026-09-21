@@ -10,10 +10,13 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.api.helpers import ORG_2, headers
 from tests.api.test_ingestion import seed_bank
+
+pytestmark = pytest.mark.usefixtures("forecasting_run_authority")
 
 RUNS_URL = "/api/v1/banks/{bank_id}/reverse-stress/runs"
 LATEST_URL = "/api/v1/banks/{bank_id}/reverse-stress/latest"

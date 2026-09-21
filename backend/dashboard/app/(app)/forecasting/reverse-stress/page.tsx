@@ -8,6 +8,7 @@ import KpiStat from '@/components/ui/KpiStat';
 import SectionCard from '@/components/ui/SectionCard';
 import EmptyState from '@/components/ui/EmptyState';
 import QueryBoundary from '@/components/ui/QueryBoundary';
+import ForecastingRunGate from '@/components/forecasting/RunGate';
 import { useBankContext } from '@/components/shell/BankContext';
 import { useLatestReverseStress, useRunReverseStress } from '@/lib/api/hooks';
 import ReverseStressFrontier, {
@@ -56,9 +57,10 @@ function frontierAxis(
 }
 
 export default function ReverseStress() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  const canRun = moduleScope.forecastingRun === true;
 
   const latest = useLatestReverseStress(bankId, periodId);
   const run = useRunReverseStress(bankId);
@@ -67,21 +69,28 @@ export default function ReverseStress() {
   const liquidity = frontier?.liquidityAxis as Axis;
   const capital = frontier?.capitalAxis as Axis;
 
+  const runButton = (
+    <ForecastingRunGate canRun={canRun}>
+      {(descriptionId) => (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={!canRun || !bankId || !periodId || run.isPending}
+          aria-describedby={descriptionId}
+          onClick={() => periodId && run.mutate(periodId)}
+        >
+          {run.isPending ? 'Searching frontier…' : 'Run reverse stress'}
+        </button>
+      )}
+    </ForecastingRunGate>
+  );
+
   return (
     <>
       <PageHeader
         eyebrow="Forecasting"
         title="Reverse Stress Testing"
-        action={
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            disabled={!bankId || !periodId || run.isPending}
-            onClick={() => periodId && run.mutate(periodId)}
-          >
-            {run.isPending ? 'Searching frontier…' : 'Run reverse stress'}
-          </button>
-        }
+        action={runButton}
       />
 
       <QueryBoundary
@@ -172,16 +181,7 @@ export default function ReverseStress() {
               Icon={Target}
               title="No reverse-stress frontier yet"
               description="The search scales the combined liquidity scenario (run-offs, inflow haircuts, HQLA haircuts) and the severe capital scenario (credit losses, RWA growth, FX RWA) by bisection until the LCR floor or the four-quarter CET1 minimum breaks, then reports the multiplier and the ratio at breach. Both engines need a succeeded baseline for the current reporting period."
-              action={
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-                  disabled={!bankId || !periodId || run.isPending}
-                  onClick={() => periodId && run.mutate(periodId)}
-                >
-                  {run.isPending ? 'Searching frontier…' : 'Run reverse stress'}
-                </button>
-              }
+              action={runButton}
             />
           )}
         </PageContainer>

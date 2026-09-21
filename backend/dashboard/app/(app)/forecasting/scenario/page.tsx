@@ -36,6 +36,7 @@ import {
   type AssumptionKey,
   scenarioLabel,
 } from '@/components/forecasting/lib';
+import ForecastingRunGate from '@/components/forecasting/RunGate';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useCreateForecastRun,
@@ -113,9 +114,10 @@ const COMPARE_METRICS = [
 type CompareMetricCode = (typeof COMPARE_METRICS)[number]['code'];
 
 export default function ScenariosPage() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
+  const canRun = moduleScope.forecastingRun === true;
 
   const scenariosQuery = useForecastScenarios(bankId);
   const runsQuery = useForecastRuns(bankId, { limit: 50 });
@@ -150,6 +152,7 @@ export default function ScenariosPage() {
               scenarios={scenariosQuery.data}
               periodId={periodId}
               createRun={createRun}
+              canRun={canRun}
             />
           )}
 
@@ -194,10 +197,12 @@ function ScenarioDesigner({
   scenarios,
   periodId,
   createRun,
+  canRun,
 }: {
   scenarios: ForecastScenarioListRead;
   periodId: string | undefined;
   createRun: ReturnType<typeof useCreateForecastRun>;
+  canRun: boolean;
 }) {
   const [preset, setPreset] = useState<ForecastPresetCode>('base');
   const [overrides, setOverrides] = useState<Partial<FormValues>>({});
@@ -247,19 +252,24 @@ function ScenarioDesigner({
       title="Scenario designer"
       subtitle="Start from a preset, adjust any assumption, and save a new projection run"
       actions={
-        <button
-          type="button"
-          disabled={createRun.isPending || !periodId}
-          onClick={submit}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-        >
-          {createRun.isPending ? (
-            <Loader2 size={13} className="animate-spin" aria-hidden />
-          ) : (
-            <PlayCircle size={13} aria-hidden />
+        <ForecastingRunGate canRun={canRun}>
+          {(descriptionId) => (
+            <button
+              type="button"
+              disabled={!canRun || createRun.isPending || !periodId}
+              aria-describedby={descriptionId}
+              onClick={submit}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {createRun.isPending ? (
+                <Loader2 size={13} className="animate-spin" aria-hidden />
+              ) : (
+                <PlayCircle size={13} aria-hidden />
+              )}
+              Run {isCustom ? 'custom scenario' : scenarioLabel(preset)}
+            </button>
           )}
-          Run {isCustom ? 'custom scenario' : scenarioLabel(preset)}
-        </button>
+        </ForecastingRunGate>
       }
     >
       <div className="space-y-5">

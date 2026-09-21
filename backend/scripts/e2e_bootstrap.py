@@ -93,6 +93,10 @@ E2E_USERS = {
     # the defect the split closed, and the tenant grant surface blocks it.
     "validator": UUID("eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed"),
 }
+# Two fixtures sharing an id silently become ONE user carrying both grant sets
+# (the bootstrap looks each id up before creating it), and the second signing-key
+# enrolment then refuses. Catch it at import, before a journey inherits it.
+assert len(set(E2E_USERS.values())) == len(E2E_USERS), "E2E user ids must be unique"
 
 #: The governed date from which an ICAAP report may be filed.
 #:

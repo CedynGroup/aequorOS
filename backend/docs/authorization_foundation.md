@@ -525,7 +525,11 @@ engine, shared workbench, and run-registry requirements are owned by the
 surfaces, result projections, and required grants are owned by the
 [FX rollout contract](fx_enforcement_rollout.md). FTP dashboards, runs, shared
 workbench entries, and deployment grants are owned by the
-[FTP rollout contract](ftp_enforcement_rollout.md). Regulatory filing — the
+[FTP rollout contract](ftp_enforcement_rollout.md). Forecasting — the
+projection, optimizer, what-if and reverse-stress routes, their rows in shared
+projections and the run registry, and the capital-plan projection they feed —
+is owned by the [Forecasting rollout contract](forecasting_enforcement_rollout.md).
+Regulatory filing — the
 submit and poll routes, the Validator bundle, and the grants that must exist
 before any return can be transmitted — is owned by the
 [filing submit authority rollout](filing_submit_authority_rollout.md). Existing

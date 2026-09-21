@@ -415,6 +415,11 @@ def test_official_enqueue_preserves_mixed_module_gate(
     )
     version = _grant(
         RoleBundle.ANALYST,
+        module=ModuleScope.FORECASTING,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+    version = _grant(
+        RoleBundle.ANALYST,
         module=ModuleScope.FX,
         sensitivity=SensitivityScope.CONFIDENTIAL,
     )
@@ -577,6 +582,11 @@ def test_activation_reaches_derivation_with_required_authority(
         version = _grant(
             RoleBundle.ANALYST,
             module=ModuleScope.FTP,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+        )
+        version = _grant(
+            RoleBundle.ANALYST,
+            module=ModuleScope.FORECASTING,
             sensitivity=SensitivityScope.CONFIDENTIAL,
         )
     response = db_client.post(

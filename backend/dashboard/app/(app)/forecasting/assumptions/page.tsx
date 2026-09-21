@@ -36,15 +36,19 @@ import {
   useForecastScenarios,
 } from '@/lib/api/hooks';
 import { num } from '@/lib/api/values';
+import { FORECASTING_CONFIDENTIAL_VIEW_REASON } from '@/lib/modules';
 
 export default function AssumptionsPage() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
   const scenariosQuery = useForecastScenarios(bankId);
   const runsQuery = useForecastRuns(bankId, { limit: 50 });
   const latestId = latestSucceededId(runsQuery.data?.runs ?? []);
-  const runQuery = useForecastRun(bankId, latestId);
+  // The resolved set is read off the full run, which is confidential; the
+  // preset catalogue below rides the page's own aggregated view.
+  const canViewRuns = moduleScope.forecastingConfidentialView === true;
+  const runQuery = useForecastRun(canViewRuns ? bankId : undefined, latestId);
 
   return (
     <>
@@ -87,6 +91,12 @@ export default function AssumptionsPage() {
                   <ArrowRight size={13} aria-hidden />
                 </Link>
               }
+            />
+          ) : !canViewRuns ? (
+            <EmptyState
+              Icon={BookOpen}
+              title="Resolved assumptions are confidential"
+              description={FORECASTING_CONFIDENTIAL_VIEW_REASON}
             />
           ) : runQuery.data ? (
             <ResolvedSection

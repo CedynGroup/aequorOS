@@ -22,7 +22,7 @@
 > Every other product route retains its existing authorization behavior until
 > its separate rollout.
 >
-> **Permission-only disabled controls:** When a Liquidity, IRRBB, FX, or FTP control is unavailable
+> **Permission-only disabled controls:** When a Liquidity, IRRBB, FX, FTP, or Forecasting control is unavailable
 > only because the current user lacks an exact permission, keep it visible and
 > disabled. Its hover/focus tooltip must name the required product permission
 > (module, sensitivity, and action) and direct the user to their organization

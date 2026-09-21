@@ -37,10 +37,15 @@ import { seriesColor } from '@/lib/chartTheme';
 const SCENARIO_ORDER = ['base', 'adverse', 'severely_adverse'] as const;
 
 export default function NiiForecastPage() {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
-  const scenarioSet = useScenarioRunSet(bankId);
+  // The route guard already requires confidential view for this tab; the
+  // hook takes the same projection so no run detail is requested without it.
+  const scenarioSet = useScenarioRunSet(
+    bankId,
+    moduleScope.forecastingConfidentialView === true,
+  );
   const runsByScenario: Record<string, ForecastRunRead | undefined> = {
     base: scenarioSet.base,
     adverse: scenarioSet.adverse,
