@@ -23,7 +23,7 @@
 > its separate rollout. For the `institution` vocabulary added on 2026-09-20,
 > see the [as-built scope and rollout boundary](../backend/docs/authorization_foundation.md#institution-vocabulary-built-2026-09-20).
 >
-> **Permission-only disabled controls:** When a Liquidity, IRRBB, FX, FTP, or Forecasting control is unavailable
+> **Permission-only disabled controls:** When a Liquidity, IRRBB, FX, FTP, Forecasting, or Behavioral control is unavailable
 > only because the current user lacks an exact permission, keep it visible and
 > disabled. Its hover/focus tooltip must name the required product permission
 > (module, sensitivity, and action) and direct the user to their organization

@@ -1,39 +1,41 @@
-'use client';
+"use client";
 
-import PageContainer from '@/components/ui/PageContainer';
-import { useState } from 'react';
-import Link from 'next/link';
+import PageContainer from "@/components/ui/PageContainer";
+import { useState } from "react";
+import Link from "next/link";
 import {
   CheckCircle2,
   CloudOff,
   Database,
   Loader2,
   RotateCw,
-} from 'lucide-react';
+} from "lucide-react";
 import type {
   BehavioralApplyRead,
   BehavioralProductEstimate,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import SectionCard from '@/components/ui/SectionCard';
-import EmptyState from '@/components/ui/EmptyState';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import StatusPill from '@/components/ui/StatusPill';
-import { SkeletonChart } from '@/components/ui/Skeleton';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import PrepaymentCurveChart from '@/components/charts/PrepaymentCurveChart';
-import FeedsChip, { type Feed } from '@/components/behavioral/FeedsChip';
-import ModelProvenanceCard from '@/components/behavioral/ModelProvenanceCard';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
+import KpiStat from "@/components/ui/KpiStat";
+import SectionCard from "@/components/ui/SectionCard";
+import EmptyState from "@/components/ui/EmptyState";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import StatusPill from "@/components/ui/StatusPill";
+import { SkeletonChart } from "@/components/ui/Skeleton";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import PrepaymentCurveChart from "@/components/charts/PrepaymentCurveChart";
+import FeedsChip, { type Feed } from "@/components/behavioral/FeedsChip";
+import ModelProvenanceCard from "@/components/behavioral/ModelProvenanceCard";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   isServiceUnavailableError,
   useApplyBehavioralModel,
   useBehavioralModel,
   useTrainBehavioralModel,
   type BehavioralModelSlug,
-} from '@/lib/api/hooks';
-import { fmtDateUTC } from '@/lib/api/values';
+} from "@/lib/api/hooks";
+import { fmtDateUTC } from "@/lib/api/values";
+import { BEHAVIORAL_CONFIDENTIAL_RUN_REASON } from "@/lib/modules";
 
 export type BehavioralPageConfig = {
   title: string;
@@ -51,11 +53,11 @@ export type BehavioralPageConfig = {
 };
 
 function confTone(c: number) {
-  return c >= 0.5 ? 'compliant' : c >= 0.25 ? 'approaching' : 'pending';
+  return c >= 0.5 ? "compliant" : c >= 0.25 ? "approaching" : "pending";
 }
 
-function confStatus(c: number): 'ok' | 'warn' | 'crit' {
-  return c >= 0.5 ? 'ok' : c >= 0.25 ? 'warn' : 'crit';
+function confStatus(c: number): "ok" | "warn" | "crit" {
+  return c >= 0.5 ? "ok" : c >= 0.25 ? "warn" : "crit";
 }
 
 export default function BehavioralModelPage({
@@ -65,10 +67,14 @@ export default function BehavioralModelPage({
   slug: BehavioralModelSlug;
   config: BehavioralPageConfig;
 }) {
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
+  const canRun = moduleScope.behavioralRun === true;
 
-  const query = useBehavioralModel(bankId, slug);
+  const query = useBehavioralModel(
+    moduleScope.behavioralAggregatedView ? bankId : undefined,
+    slug,
+  );
   const train = useTrainBehavioralModel(bankId, slug);
   const apply = useApplyBehavioralModel(bankId, slug);
 
@@ -93,40 +99,44 @@ export default function BehavioralModelPage({
 
   const columns: Column<BehavioralProductEstimate>[] = [
     {
-      key: 'product',
-      header: 'Product',
+      key: "product",
+      header: "Product",
       render: (p) => (
-        <span className="font-mono text-caption text-navy">{p.productCode}</span>
+        <span className="font-mono text-caption text-navy">
+          {p.productCode}
+        </span>
       ),
     },
     {
-      key: 'value',
+      key: "value",
       header: config.valueLabel,
-      align: 'right',
+      align: "right",
       numeric: true,
       render: (p) => (
-        <span className="font-mono tnum text-navy">{config.format(p.value)}</span>
+        <span className="font-mono tnum text-navy">
+          {config.format(p.value)}
+        </span>
       ),
     },
     ...(config.showCore
       ? [
           {
-            key: 'core',
-            header: 'Core %',
-            align: 'right' as const,
+            key: "core",
+            header: "Core %",
+            align: "right" as const,
             numeric: true,
             render: (p: BehavioralProductEstimate) => (
               <span className="font-mono tnum text-slate">
-                {p.corePct != null ? `${(p.corePct * 100).toFixed(0)}%` : '—'}
+                {p.corePct != null ? `${(p.corePct * 100).toFixed(0)}%` : "—"}
               </span>
             ),
           },
         ]
       : []),
     {
-      key: 'conf',
-      header: 'Confidence',
-      align: 'right',
+      key: "conf",
+      header: "Confidence",
+      align: "right",
       render: (p) => (
         <StatusPill tone={confTone(p.confidence)}>
           {(p.confidence * 100).toFixed(0)}%
@@ -134,9 +144,9 @@ export default function BehavioralModelPage({
       ),
     },
     {
-      key: 'method',
-      header: 'Method',
-      align: 'right',
+      key: "method",
+      header: "Method",
+      align: "right",
       render: (p) => (
         <span className="text-micro font-medium uppercase tracking-wider text-slate">
           {p.method}
@@ -153,9 +163,26 @@ export default function BehavioralModelPage({
         unit: p.unit,
         confidence: p.confidence,
       })),
-      { onSuccess: (r) => setApplied(r) }
+      { onSuccess: (r) => setApplied(r) },
     );
   };
+
+  const retrainButton = (descriptionId?: string) => (
+    <button
+      type="button"
+      onClick={() => train.mutate()}
+      disabled={!canRun || !bankId || train.isPending}
+      aria-describedby={descriptionId}
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {train.isPending ? (
+        <Loader2 size={13} className="animate-spin" aria-hidden />
+      ) : (
+        <RotateCw size={13} aria-hidden />
+      )}
+      Retrain
+    </button>
+  );
 
   return (
     <>
@@ -164,19 +191,13 @@ export default function BehavioralModelPage({
         title={config.title}
         asOf={period ? fmtDateUTC(period.periodEnd) : undefined}
         action={
-          <button
-            type="button"
-            onClick={() => train.mutate()}
-            disabled={!bankId || train.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-40"
-          >
-            {train.isPending ? (
-              <Loader2 size={13} className="animate-spin" aria-hidden />
-            ) : (
-              <RotateCw size={13} aria-hidden />
-            )}
-            Retrain
-          </button>
+          canRun ? (
+            retrainButton()
+          ) : (
+            <DisabledWithReason reason={BEHAVIORAL_CONFIDENTIAL_RUN_REASON}>
+              {(descriptionId) => retrainButton(descriptionId)}
+            </DisabledWithReason>
+          )
         }
       />
 
@@ -190,12 +211,18 @@ export default function BehavioralModelPage({
         )}
         {offline ? (
           <div className="card border-l-4 border-l-critical bg-critical-light/40 p-5 flex items-start gap-3">
-            <CloudOff size={18} className="text-critical shrink-0 mt-0.5" aria-hidden />
+            <CloudOff
+              size={18}
+              className="text-critical shrink-0 mt-0.5"
+              aria-hidden
+            />
             <div className="min-w-0 flex-1">
-              <p className="text-body font-medium text-navy">This model is unavailable</p>
+              <p className="text-body font-medium text-navy">
+                This model is unavailable
+              </p>
               <p className="mt-1 text-body text-navy/80 leading-relaxed">
-                The backend could not load the behavioral ML runtime. Check the backend
-                logs, then retry.
+                The backend could not load the behavioral ML runtime. Check the
+                backend logs, then retry.
               </p>
             </div>
             <button
@@ -208,14 +235,17 @@ export default function BehavioralModelPage({
             </button>
           </div>
         ) : query.error ? (
-          <ErrorPanel error={query.error} onRetry={() => void query.refetch()} />
+          <ErrorPanel
+            error={query.error}
+            onRetry={() => void query.refetch()}
+          />
         ) : query.isLoading ? (
           <div className="space-y-3">
             <SkeletonChart height={260} />
             <p className="text-caption text-slate flex items-center gap-2">
               <Loader2 size={13} className="animate-spin" aria-hidden />
-              Training on first request — the model fits on the bank&apos;s ingested history
-              before responding.
+              Training on first request — the model fits on the bank&apos;s
+              ingested history before responding.
             </p>
           </div>
         ) : result ? (
@@ -226,7 +256,7 @@ export default function BehavioralModelPage({
                 label={`Average ${config.valueLabel.toLowerCase()}`}
                 value={config.avgValue(avg).toFixed(config.avgDecimals)}
                 unit={config.avgSuffix}
-                hint={`across ${products.length} product${products.length === 1 ? '' : 's'}`}
+                hint={`across ${products.length} product${products.length === 1 ? "" : "s"}`}
               />
               <KpiStat
                 label="Weighted confidence"
@@ -240,22 +270,22 @@ export default function BehavioralModelPage({
                 value={
                   result.accuracy.cvRmse != null
                     ? result.accuracy.cvRmse.toFixed(3)
-                    : '—'
+                    : "—"
                 }
-                unit={result.accuracy.cvRmse != null ? 'RMSE' : undefined}
+                unit={result.accuracy.cvRmse != null ? "RMSE" : undefined}
                 hint={
                   result.accuracy.cvRmse == null
-                    ? 'not cross-validated'
+                    ? "not cross-validated"
                     : result.accuracy.cvMae != null
-                    ? `time-series CV · MAE ${result.accuracy.cvMae.toFixed(3)}`
-                    : 'time-series CV'
+                      ? `time-series CV · MAE ${result.accuracy.cvMae.toFixed(3)}`
+                      : "time-series CV"
                 }
               />
               <KpiStat
                 label="Training data"
-                value={result.accuracy.sampleCount.toLocaleString('en-US')}
+                value={result.accuracy.sampleCount.toLocaleString("en-US")}
                 unit="rows"
-                status={result.method === 'ml' ? 'ok' : 'warn'}
+                status={result.method === "ml" ? "ok" : "warn"}
                 hint={`${result.accuracy.monthCoverage} months · ${result.method.toUpperCase()}`}
               />
             </div>
@@ -275,8 +305,8 @@ export default function BehavioralModelPage({
                         onClick={() => setCurveCode(p.productCode)}
                         className={`px-2 py-1 rounded text-micro font-mono transition-colors ${
                           activeCurve.productCode === p.productCode
-                            ? 'bg-action text-white'
-                            : 'text-slate hover:bg-surface'
+                            ? "bg-action text-white"
+                            : "text-slate hover:bg-surface"
                         }`}
                       >
                         {p.productCode}
@@ -286,11 +316,14 @@ export default function BehavioralModelPage({
                 }
                 footer={
                   <span>
-                    model{' '}
-                    <span className="font-mono text-navy">{result.modelVersion}</span>
+                    model{" "}
+                    <span className="font-mono text-navy">
+                      {result.modelVersion}
+                    </span>
                     {result.asOfDate && (
                       <>
-                        {' '}· trained as of{' '}
+                        {" "}
+                        · trained as of{" "}
                         <span className="font-mono tnum text-navy">
                           {fmtDateUTC(result.asOfDate)}
                         </span>
@@ -309,7 +342,7 @@ export default function BehavioralModelPage({
               actions={
                 result.asOfDate ? (
                   <span className="text-caption text-slate">
-                    as of{' '}
+                    as of{" "}
                     <span className="font-mono text-navy">
                       {fmtDateUTC(result.asOfDate)}
                     </span>
@@ -319,7 +352,11 @@ export default function BehavioralModelPage({
               noPadding
             >
               {products.length ? (
-                <DataTable columns={columns} rows={products} density="comfortable" />
+                <DataTable
+                  columns={columns}
+                  rows={products}
+                  density="comfortable"
+                />
               ) : (
                 <EmptyState
                   Icon={Database}
@@ -344,18 +381,25 @@ export default function BehavioralModelPage({
               >
                 <div className="space-y-4">
                   <p className="text-body text-navy/85 leading-relaxed">
-                    Review the estimates above. Applying records them as a new accepted
-                    behavioral-assumptions batch with model provenance (SR 11-7), preserving
-                    the other models&apos; current assumptions.
+                    Review the estimates above. Applying records them as a new
+                    accepted behavioral-assumptions batch with model provenance
+                    (SR 11-7), preserving the other models&apos; current
+                    assumptions.
                   </p>
                   {applied ? (
                     <div className="flex items-start gap-3 rounded border border-success/30 bg-success-light/40 p-3">
-                      <CheckCircle2 size={18} className="text-success shrink-0 mt-0.5" aria-hidden />
+                      <CheckCircle2
+                        size={18}
+                        className="text-success shrink-0 mt-0.5"
+                        aria-hidden
+                      />
                       <div className="text-body text-navy">
                         Applied {applied.appliedRows} estimate
-                        {applied.appliedRows === 1 ? '' : 's'} as of{' '}
-                        <span className="font-mono">{fmtDateUTC(applied.asOfDate)}</span> (
-                        {applied.totalRows} total assumption rows).
+                        {applied.appliedRows === 1 ? "" : "s"} as of{" "}
+                        <span className="font-mono">
+                          {fmtDateUTC(applied.asOfDate)}
+                        </span>{" "}
+                        ({applied.totalRows} total assumption rows).
                         <span className="block text-caption text-slate mt-0.5 font-mono">
                           batch {applied.ingestionBatchId.slice(0, 8)}…
                         </span>
@@ -368,7 +412,13 @@ export default function BehavioralModelPage({
                       disabled={apply.isPending}
                       className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary disabled:opacity-40"
                     >
-                      {apply.isPending && <Loader2 size={14} className="animate-spin" aria-hidden />}
+                      {apply.isPending && (
+                        <Loader2
+                          size={14}
+                          className="animate-spin"
+                          aria-hidden
+                        />
+                      )}
                       Apply {products.length} estimates
                     </button>
                   )}
