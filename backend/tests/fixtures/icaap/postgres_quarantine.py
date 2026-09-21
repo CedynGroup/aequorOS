@@ -11,22 +11,13 @@ from __future__ import annotations
 import os
 
 import pytest
-from sqlalchemy.exc import DataError, ProgrammingError
+from sqlalchemy.exc import DataError
 
 _ON_POSTGRES = os.getenv("TEST_DATABASE_URL") is not None
 
-#: Issue #247: the route modules' seeding fixtures compare the ``date`` column
-#: ``bank_reporting_periods.period_end`` to a string, which SQLite coerces and
-#: Postgres refuses (``operator does not exist: date = character varying``).
-DATE_COMPARED_TO_TEXT = pytest.mark.xfail(
-    _ON_POSTGRES,
-    raises=ProgrammingError,
-    reason="#247: seeding fixture compares period_end (date) to a string parameter",
-    strict=True,
-)
-
-#: Issue #248: Postgres ``text`` cannot hold a NUL byte, so the narrative the
-#: test stores is refused at the write rather than exercised at the export.
+#: Issue #248: Postgres ``text`` cannot hold a NUL byte, so the legacy narrative
+#: the test plants (bypassing ``reject_control_characters``) is refused at the
+#: write rather than exercised at the export.
 NUL_IN_STORED_NARRATIVE = pytest.mark.xfail(
     _ON_POSTGRES,
     raises=DataError,
@@ -34,4 +25,4 @@ NUL_IN_STORED_NARRATIVE = pytest.mark.xfail(
     strict=True,
 )
 
-__all__ = ["DATE_COMPARED_TO_TEXT", "NUL_IN_STORED_NARRATIVE"]
+__all__ = ["NUL_IN_STORED_NARRATIVE"]

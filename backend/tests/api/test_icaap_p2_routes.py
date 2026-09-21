@@ -7,6 +7,7 @@ actually sees.
 
 from __future__ import annotations
 
+from datetime import date
 from uuid import UUID, uuid4
 
 import pytest
@@ -32,13 +33,10 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.fixtures.icaap.postgres_quarantine import DATE_COMPARED_TO_TEXT
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/icaap"
-AS_OF = "2025-12-31"
+AS_OF = date(2025, 12, 31)
 CHECKER = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
-
-pytestmark = DATE_COMPARED_TO_TEXT
 
 
 @pytest.fixture(autouse=True)
@@ -295,7 +293,7 @@ def test_the_parameter_listing_shows_every_governed_figure_with_provenance(
     response = db_client.get(f"{BASE}/cycles/{cycle_id}/parameters", headers=auth)
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["as_of"] == AS_OF
+    assert body["as_of"] == AS_OF.isoformat()
     assert body["missing"] == []
     codes = {entry["param_code"] for entry in body["parameters"]}
     assert "ccr_name_bands_hhi" in codes

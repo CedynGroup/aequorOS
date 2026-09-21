@@ -451,7 +451,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   tracking issue per defect class, marker at the narrowest level that covers the
   affected set (a module-level `pytestmark` DOES catch a fixture's setup error when
   `raises=` matches). Markers live in `tests/fixtures/icaap/postgres_quarantine.py`
-  (#247, #248) and `tests/db/test_icaap_workspace_migration.py` (#235). A logging
+  (#248) and `tests/db/test_icaap_workspace_migration.py` (#235); a test-only cause
+  (a fixture binding a string to a `date` column, #247) is fixed, not marked. A logging
   assertion that passes alone but fails in the full Postgres run is the in-process
   `alembic.command.upgrade` — `alembic/env.py` explains.
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
