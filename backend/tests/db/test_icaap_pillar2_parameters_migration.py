@@ -73,6 +73,7 @@ def _migration() -> ModuleType:
 
 
 def _rows(schema: MigratedPostgresSchema) -> list[dict[str, Any]]:
+    """The Ghanaian generations only: ``202609200063`` seeds the same codes for NG/KE."""
     with schema.app_engine.begin() as connection:
         rows = connection.execute(
             text(
@@ -81,7 +82,7 @@ def _rows(schema: MigratedPostgresSchema) -> list[dict[str, Any]]:
                        value_json, unit, source_citation, confirmation_status, status,
                        proposed_by, approved_by, effective_from, effective_to
                 FROM regulatory_parameter
-                WHERE param_code = ANY(:codes)
+                WHERE param_code = ANY(:codes) AND jurisdiction_code = 'GH'
                 ORDER BY param_code, effective_from
                 """
             ),
@@ -196,7 +197,7 @@ def _assert_one_generation_per_icaap_code(schema: MigratedPostgresSchema) -> Non
                 """
                 SELECT param_code, count(*) AS generations
                 FROM regulatory_parameter
-                WHERE param_code = ANY(:codes)
+                WHERE param_code = ANY(:codes) AND jurisdiction_code = 'GH'
                 GROUP BY param_code
                 ORDER BY param_code
                 """
