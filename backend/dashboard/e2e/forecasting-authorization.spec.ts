@@ -156,6 +156,8 @@ test.describe("Forecasting reader without run permission", () => {
     const whatIfRun = page.getByRole("button", { name: /^(Run|Re-run) / });
     await expect(whatIfRun.first()).toBeVisible(FIRST_PAINT);
     await expect(whatIfRun.first()).toBeDisabled();
+    // Initial data can replace the control and discard focus during rendering.
+    await page.waitForLoadState("networkidle");
     await whatIfRun.first().locator("..").focus();
     await expect(whatIfRun.first().locator("..")).toHaveAccessibleDescription(
       RUN_REASON,

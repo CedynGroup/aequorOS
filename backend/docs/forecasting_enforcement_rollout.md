@@ -22,10 +22,23 @@ The four persisted run modules — `forecast`, `optimizer`, `whatif`, and
 `reverse_stress` — answer to the one Forecasting authority. The shared
 regulatory-run registry filters all four before total counts, offsets, and
 limits; a run the caller may not open returns the same 404 as an unknown or
-cross-tenant id. A denied execution cannot start an engine, create a run row,
+cross-tenant id. For callers without confidential view, registry metrics contain
+only allowlisted headline scalars; forecast paths and assumptions, optimizer
+candidates and decisions, what-if paths and comparisons, and reverse-stress axes
+and narrative are withheld. Reverse-stress summary metrics are empty. Callers
+with confidential view retain full metrics on rows admitted by aggregated view.
+The per-module summary policy lives in
+`regulatory_liquidity._REGULATORY_RUN_AUTHORIZATION`; this cutover applies it
+only to Forecasting, leaving FTP, FX, and IRRBB output unchanged. Regression
+coverage is in `tests/api/test_forecasting_authorization.py`.
+
+Run-detail denials use 404 "Regulatory run not found."; the period-keyed latest
+reverse-stress read denies missing authority with 403.
+A denied execution cannot start an engine, create a run row,
 derive facts, enqueue work, or write an audit event: the route dependency
 decides before the handler, and the service re-checks confidential run before
-its first read so the official-run path is held to the same rule.
+the period lookup or computation, after resolving the bank, so the official-run
+path is held to the same rule.
 
 Shared live projections filter the `forecast` module before serialization,
 counts, limits, and aggregation. Mixed execution retains its existing gates and
@@ -72,6 +85,11 @@ Without it the control remains visible and disabled with "Requires Forecasting
 shared permission-only disabled-control policy is defined in
 [the RBAC guide](../../docs/rbac.md); native disabled controls expose their
 explanation through a keyboard-focusable wrapper.
+
+If a confidential-view reader lacks aggregated view, the scenario designer
+cannot load presets. Its run control remains visible and disabled with
+"Requires Forecasting · Aggregated · View. Ask your organization owner or admin
+to grant it."
 
 Basel → Planning requests the forecast run index only with aggregated view and
 a run's path only with confidential view; the Command Center pulse wall and its
