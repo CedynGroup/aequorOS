@@ -18,6 +18,7 @@ export const ProjectionUnavailableCode = {
   MissingParameter: "missing_parameter",
   InstitutionTypeUnresolved: "institution_type_unresolved",
   JurisdictionUnresolved: "jurisdiction_unresolved",
+  ForecastingViewRequired: "forecasting_view_required",
 } as const;
 export type ProjectionUnavailableCode =
   (typeof ProjectionUnavailableCode)[keyof typeof ProjectionUnavailableCode];

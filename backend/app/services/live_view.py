@@ -45,15 +45,16 @@ _MODULE_ORDER = {
 }
 
 #: Live-engine rows the summary serves only to a principal holding an exact
-#: aggregated ``view`` binding on the engine's module. Capital, rating and
-#: forecast rows are still served to every tenant reader — their module
-#: cutovers own that decision; this list must only ever grow.
+#: aggregated ``view`` binding on the engine's module. Capital and rating
+#: rows are still served to every tenant reader — their module cutovers own
+#: that decision; this list must only ever grow.
 _GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
     ("liquidity", Module.LIQUIDITY),
     ("credit", Module.CREDIT),
     ("irr", Module.IRRBB),
     ("fx", Module.FX),
     ("ftp", Module.FTP),
+    ("forecast", Module.FORECASTING),
 )
 
 
@@ -264,6 +265,7 @@ def mint_official_run(
         ("irr", Module.IRRBB),
         ("fx", Module.FX),
         ("ftp", Module.FTP),
+        ("forecast", Module.FORECASTING),
     ):
         if module_scope.runs_module(db, bank, engine):
             scoped_authorization.require_resolved_bank_permission(
@@ -347,6 +349,7 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
         "credit": Module.CREDIT,
         "fx": Module.FX,
         "ftp": Module.FTP,
+        "forecast": Module.FORECASTING,
     }.get(module)
     if protected_module is not None:
         scoped_authorization.require_resolved_bank_permission(

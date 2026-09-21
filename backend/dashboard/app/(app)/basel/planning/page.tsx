@@ -41,6 +41,7 @@ import {
 import { fmtCurrency, fmtPct, regShort } from "@/lib/format";
 
 import { SCENARIO_LABELS } from "@/components/forecasting/lib";
+import { FORECASTING_CONFIDENTIAL_VIEW_REASON } from "@/lib/modules";
 
 const SCENARIO_ORDER = [
   "base",
@@ -107,8 +108,16 @@ export default function CapitalPlanning() {
   const planningBankId = moduleScope.capitalConfidentialView
     ? bankId
     : undefined;
-  const forecastBankId = moduleScope.modules?.has("forecasting")
-    ? planningBankId
+  // The forecast section reads Forecasting's own routes, so it follows the
+  // Forecasting projection rather than the capital one: summaries need
+  // aggregated view, a full run confidential view.
+  const forecastRunsBankId =
+    moduleScope.modules?.has("forecasting") &&
+    moduleScope.forecastingAggregatedView
+      ? planningBankId
+      : undefined;
+  const forecastRunBankId = moduleScope.forecastingConfidentialView
+    ? forecastRunsBankId
     : undefined;
 
   const dashboard = useCapitalDashboard(dashboardBankId, periodId);
@@ -117,7 +126,7 @@ export default function CapitalPlanning() {
     moduleScope.capitalRun === true &&
     moduleScope.liquidityConfidentialView === true;
   const refreshIlaap = useRefreshIlaap(canRefreshIlaap ? bankId : undefined);
-  const forecastRuns = useForecastRuns(forecastBankId, { limit: 100 });
+  const forecastRuns = useForecastRuns(forecastRunsBankId, { limit: 100 });
 
   // Latest succeeded forecast run per scenario for the selected period.
   const latestByScenario = useMemo(() => {
@@ -145,7 +154,7 @@ export default function CapitalPlanning() {
   const activeRunId = activeScenario
     ? latestByScenario.get(activeScenario)?.id
     : undefined;
-  const forecastRun = useForecastRun(forecastBankId, activeRunId);
+  const forecastRun = useForecastRun(forecastRunBankId, activeRunId);
 
   const data = dashboard.data;
   // NEW-51. Same rule as the Basel overview: the CAR ladder is the tenant's
@@ -229,7 +238,7 @@ export default function CapitalPlanning() {
         onRetry={() => {
           if (dashboardBankId) void dashboard.refetch();
           if (planningBankId) void capitalPlan.refetch();
-          if (forecastBankId) void forecastRuns.refetch();
+          if (forecastRunsBankId) void forecastRuns.refetch();
         }}
       >
         <PageContainer className="py-6 space-y-6">
@@ -421,7 +430,9 @@ export default function CapitalPlanning() {
                       <div className="h-full flex items-center justify-center text-body text-slate">
                         {forecastRun.isLoading
                           ? "Loading projection…"
-                          : "No projection path on this run."}
+                          : forecastRunBankId
+                            ? "No projection path on this run."
+                            : FORECASTING_CONFIDENTIAL_VIEW_REASON}
                       </div>
                     )}
                   </ChartFrame>

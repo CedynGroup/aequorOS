@@ -342,6 +342,7 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
         "require_icaap_ai_draft",
         "require_ai_settings_administration",
         "require_fx_run",
+        "require_forecasting_run",
         "require_grant_administration",
         "get_scoped_mutation_tenant_context",
         "require_package_validate",
@@ -948,6 +949,7 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     detail: str,
     conditions: tuple[ConditionCheck, ...] = (),
     require_whole_institution: bool = True,
+    denial_status: int = status.HTTP_403_FORBIDDEN,
 ) -> InstitutionPermissionAccess:
     """Require one complete active binding for an exact tenant institution.
 
@@ -972,6 +974,9 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     explicitly and must then apply ``access.data_scope`` to the rows, the page and
     every count; the credit blotter, its facets and the activity grid are the
     first three (``backend/docs/credit_enforcement_rollout.md``).
+
+    ``denial_status`` lets an object-detail route hide what the caller may not
+    see behind the same 404 a cross-tenant probe receives.
     """
 
     from app.services import authorization as authorization_service  # noqa: PLC0415
@@ -987,7 +992,7 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
             permission=permission.value,
             surface=surface,
         )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+        raise HTTPException(status_code=denial_status, detail=detail)
 
     principal = authorization_service.principal_locator(ctx)
     resource = ResourceLocator(
@@ -1022,7 +1027,7 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
             permission=permission.value,
             surface=surface,
         )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail) from exc
+        raise HTTPException(status_code=denial_status, detail=detail) from exc
 
     authorization_service.record_binding_decision(
         decision,
@@ -1039,7 +1044,7 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
             permission=permission.value,
             surface=surface,
         )
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+        raise HTTPException(status_code=denial_status, detail=detail)
     # The scope is re-read from the bindings that MATCHED this decision; the id
     # list is a selector, never the grant (``effective_data_scope``).
     data_scope = authorization_service.effective_data_scope(
@@ -1738,6 +1743,81 @@ def require_fx_run(
     )
 
 
+def require_forecasting_aggregated_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.AGGREGATED,
+        permission=Permission.VIEW,
+        surface="forecasting_aggregated_view",
+        detail="Forecasting access requires an active scoped binding.",
+    )
+
+
+def require_forecasting_confidential_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="forecasting_confidential_view",
+        detail="Forecasting access requires an active scoped binding.",
+    )
+
+
+def require_forecasting_run_detail_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """Confidential view for one run addressed by its opaque ID.
+
+    A run the caller may not open is indistinguishable from one that does not
+    exist, so the denial is the same 404 the service raises for an unknown ID.
+    """
+
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="forecasting_run_detail",
+        detail="Regulatory run not found.",
+        denial_status=status.HTTP_404_NOT_FOUND,
+    )
+
+
+def require_forecasting_run(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="forecasting_run",
+        detail="Running Forecasting calculations requires an active scoped binding.",
+    )
+
+
 def require_capital_plan_write(
     db: DbSession,
     ctx: Tenant,
@@ -2347,6 +2427,16 @@ IcaapWorkflowApprove = Annotated[IcaapAccess, Depends(require_icaap_workflow_app
 IcaapDisclosureApprove = Annotated[IcaapAccess, Depends(require_icaap_disclosure_approve)]
 FxAggregatedView = Annotated[InstitutionPermissionAccess, Depends(require_fx_aggregated_view)]
 FxRun = Annotated[InstitutionPermissionAccess, Depends(require_fx_run)]
+ForecastingAggregatedView = Annotated[
+    InstitutionPermissionAccess, Depends(require_forecasting_aggregated_view)
+]
+ForecastingConfidentialView = Annotated[
+    InstitutionPermissionAccess, Depends(require_forecasting_confidential_view)
+]
+ForecastingRunDetailView = Annotated[
+    InstitutionPermissionAccess, Depends(require_forecasting_run_detail_view)
+]
+ForecastingRun = Annotated[InstitutionPermissionAccess, Depends(require_forecasting_run)]
 CapitalPlanWrite = Annotated[InstitutionPermissionAccess, Depends(require_capital_plan_write)]
 CapitalPlanApproveAccess = Annotated[
     InstitutionPermissionAccess, Depends(require_capital_plan_approve)

@@ -94,7 +94,7 @@ _PRIMARY_METRIC_KEY: dict[str, str] = {
 
 #: Daily-snapshot modules served only to a principal holding an exact aggregated
 #: ``view`` binding on the engine's module, filtered in SQL before aggregation.
-#: Capital, rating and forecast rows are still served to every tenant reader —
+#: Capital and rating rows are still served to every tenant reader —
 #: their module cutovers own that decision, and this list stays identical to
 #: ``live_view._GATED_ENGINE_MODULES`` so the two surfaces cannot disagree about
 #: who may read an engine. It must only ever grow.
@@ -104,6 +104,7 @@ _GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
     ("irr", Module.IRRBB),
     ("fx", Module.FX),
     ("ftp", Module.FTP),
+    ("forecast", Module.FORECASTING),
 )
 
 

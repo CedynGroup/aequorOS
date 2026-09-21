@@ -39,6 +39,7 @@ const resolved = (
     "irrbb",
     "fx",
     "ftp",
+    "forecasting",
   ]),
   modules: new Set([
     "command_center",
@@ -54,6 +55,7 @@ const resolved = (
     "settings",
     "irrbb",
     "ftp",
+    "forecasting",
   ]),
   organizationModules: new Set(["settings"]),
   hasInstitutionAuthority: true,
@@ -74,6 +76,9 @@ const resolved = (
   ftpAggregatedView: true,
   ftpConfidentialView: true,
   ftpRun: true,
+  forecastingAggregatedView: true,
+  forecastingConfidentialView: true,
+  forecastingRun: true,
   ...capabilities,
   isResolved: true,
 });
@@ -107,6 +112,7 @@ for (const moduleCase of [
     label: "IRRBB",
     aggregated: "irrbbAggregatedView",
     confidential: "irrbbConfidentialView",
+    confidentialRoute: "/scenarios",
     scenarioSensitivity: "Confidential",
   },
   {
@@ -114,6 +120,7 @@ for (const moduleCase of [
     label: "Foreign Exchange",
     aggregated: "fxAggregatedView",
     confidential: "fxConfidentialView",
+    confidentialRoute: "/scenarios",
     scenarioSensitivity: "Confidential",
   },
   {
@@ -121,6 +128,15 @@ for (const moduleCase of [
     label: "Funds Transfer Pricing",
     aggregated: "ftpAggregatedView",
     confidential: "ftpConfidentialView",
+    confidentialRoute: "/scenarios",
+    scenarioSensitivity: "Confidential",
+  },
+  {
+    prefix: "/forecasting",
+    label: "Forecasting",
+    aggregated: "forecastingAggregatedView",
+    confidential: "forecastingConfidentialView",
+    confidentialRoute: "/scenario",
     scenarioSensitivity: "Confidential",
   },
 ] as const) {
@@ -143,7 +159,10 @@ for (const moduleCase of [
     assert.equal(isHrefVisible(href, resolved(true)), true);
     assert.equal(isPathVisible(href, resolved(true)), true);
   }
-  for (const suffix of ["/scenarios", "/scenarios/detail?analysis=saved"]) {
+  for (const suffix of [
+    moduleCase.confidentialRoute,
+    `${moduleCase.confidentialRoute}/detail?analysis=saved`,
+  ]) {
     const href = `${moduleCase.prefix}${suffix}`;
     assert.equal(isPathVisible(href, deniedModule), false);
     assert.deepEqual(hrefAccess(href, deniedModule), {
@@ -157,7 +176,10 @@ for (const moduleCase of [
   });
   assert.equal(isPathVisible(moduleCase.prefix, confidentialOnlyModule), false);
   assert.equal(
-    isPathVisible(`${moduleCase.prefix}/scenarios`, confidentialOnlyModule),
+    isPathVisible(
+      `${moduleCase.prefix}${moduleCase.confidentialRoute}`,
+      confidentialOnlyModule,
+    ),
     moduleCase.scenarioSensitivity === "Confidential",
   );
 }
@@ -290,6 +312,40 @@ assert.deepEqual(hrefAccess("/ftp", deniedFtp), {
     "Requires Funds Transfer Pricing · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(isPathVisible("/ftp/scenarios", deniedFtp), true);
+
+const aggregatedForecastingOnly = resolved(true, true, {
+  forecastingConfidentialView: false,
+  forecastingRun: false,
+});
+assert.equal(isHrefVisible("/forecasting", aggregatedForecastingOnly), true);
+assert.equal(
+  isPathVisible("/forecasting/assumptions", aggregatedForecastingOnly),
+  true,
+);
+for (const href of [
+  "/forecasting/nii",
+  "/forecasting/whatif",
+  "/forecasting/reverse-stress",
+  "/forecasting/optimizer",
+]) {
+  assert.deepEqual(hrefAccess(href, aggregatedForecastingOnly), {
+    state: "disabled",
+    reason:
+      "Requires Forecasting · Confidential · View. Ask your organization owner or admin to grant it.",
+  });
+}
+
+const deniedForecasting = resolved(true, true, {
+  forecastingAggregatedView: false,
+  forecastingConfidentialView: true,
+});
+assert.equal(isHrefVisible("/forecasting", deniedForecasting), false);
+assert.deepEqual(hrefAccess("/forecasting", deniedForecasting), {
+  state: "disabled",
+  reason:
+    "Requires Forecasting · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(isPathVisible("/forecasting/scenario", deniedForecasting), true);
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),
@@ -1181,7 +1237,10 @@ assert.match(
     source.includes("biSubscriptionsEnabled"),
     "FeatureFlagsRead no longer carries biSubscriptionsEnabled",
   );
-  const modules = readFileSync(joinPath(dashboardRoot, "lib/modules.ts"), "utf8");
+  const modules = readFileSync(
+    joinPath(dashboardRoot, "lib/modules.ts"),
+    "utf8",
+  );
   assert.equal(
     modules.includes("notificationCapabilitiesFromFeatureFlags"),
     false,
@@ -1203,12 +1262,22 @@ assert.match(
     "utf8",
   );
   const subscriptions = readFileSync(
-    joinPath(dashboardRoot, "app", "(app)", "explore", "subscriptions", "page.tsx"),
+    joinPath(
+      dashboardRoot,
+      "app",
+      "(app)",
+      "explore",
+      "subscriptions",
+      "page.tsx",
+    ),
     "utf8",
   );
 
   // Both pages read the deployment flags.
-  assert.ok(alerts.includes("useBiNotificationCapabilities("), "alerts page reads the flags");
+  assert.ok(
+    alerts.includes("useBiNotificationCapabilities("),
+    "alerts page reads the flags",
+  );
   assert.ok(
     subscriptions.includes("useBiNotificationCapabilities("),
     "subscriptions page reads the flags",
@@ -1217,20 +1286,28 @@ assert.match(
   const waiting = [...alerts.matchAll(/"Waiting for figures"/g)];
   assert.equal(waiting.length, 1, "one site decides the 'waiting' copy");
   assert.ok(
-    alerts.includes('if (evaluationEnabled === true) return "Waiting for figures";'),
+    alerts.includes(
+      'if (evaluationEnabled === true) return "Waiting for figures";',
+    ),
     "'Waiting for figures' must be gated on the deployment saying it evaluates alerts",
   );
   assert.ok(
-    alerts.includes('if (evaluationEnabled === false) return "Not judged here";'),
+    alerts.includes(
+      'if (evaluationEnabled === false) return "Not judged here";',
+    ),
     "a shut flag must read as the deployment's, not the bank's",
   );
   // "Sending" likewise.
   assert.ok(
-    subscriptions.includes('if (deliveryEnabled === true) return { label: "Sending"'),
+    subscriptions.includes(
+      'if (deliveryEnabled === true) return { label: "Sending"',
+    ),
     "'Sending' must be gated on the deployment saying it delivers reports",
   );
   assert.ok(
-    subscriptions.includes('if (deliveryEnabled === false) return { label: "Not sending here"'),
+    subscriptions.includes(
+      'if (deliveryEnabled === false) return { label: "Not sending here"',
+    ),
     "a shut flag must read as the deployment's, not the bank's",
   );
   assert.doesNotMatch(
@@ -1247,8 +1324,14 @@ assert.match(
   ] as const) {
     const refusal = source.indexOf(`biRefusalSentence(${errorExpr}) ??`);
     const grant = source.indexOf(`isBiAccessDenied(${errorExpr})`);
-    assert.ok(refusal >= 0, `${name}: the history must consult biRefusalSentence`);
-    assert.ok(grant >= 0, `${name}: the history must keep the grant paraphrase`);
+    assert.ok(
+      refusal >= 0,
+      `${name}: the history must consult biRefusalSentence`,
+    );
+    assert.ok(
+      grant >= 0,
+      `${name}: the history must keep the grant paraphrase`,
+    );
     assert.ok(
       refusal < grant,
       `${name}: the server's sentence must be consulted before the grant paraphrase, ` +
