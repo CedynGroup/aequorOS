@@ -45,9 +45,10 @@ cutover.
 
 ## Dashboard controls
 
-Every `/behavioral` page requires aggregated view. Without it the module is
-absent from navigation, a deep link answers 404, and no Behavioral request is
-issued. The Retrain control on each model page consumes the exact confidential
+Every `/behavioral` page requires aggregated view. Without it the Behavioral
+navigation entry stays visible but disabled with “Requires Behavioral Models ·
+Aggregated · View. Ask your organization owner or admin to grant it.” Deep links
+answer 404, and no Behavioral request is issued. The Retrain control on each model page consumes the exact confidential
 run capability from effective authority. Without it the control remains visible
 and disabled with “Requires Behavioral Models · Confidential · Run. Ask your
 organization owner or admin to grant it.” The shared permission-only
