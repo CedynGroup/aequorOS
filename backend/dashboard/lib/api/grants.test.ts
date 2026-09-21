@@ -22,6 +22,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { ModuleScope } from "@aequoros/risk-service-api";
 import {
   BOOK_COVERAGE_OPTIONS,
   BranchDirectoryShapeError,
@@ -39,6 +40,7 @@ import {
   grantScopeDisplay,
   grantScopeRefusal,
   institutionBranchesKey,
+  MODULE_OPTIONS,
   parseBranchDirectory,
   ssoApprovalRequest,
   statedDataScope,
@@ -533,6 +535,39 @@ test("the preview fingerprint moves with the coverage", () => {
     ),
     "the same set of branches is the same sentence",
   );
+});
+
+// --- every module scope is grantable ---------------------------------------
+
+// The composer offers every module scope the generated contract accepts: a
+// value added to the backend vocabulary without a label here would be
+// ungrantable from Members. This is a compile-time check — the record below
+// has a required key for each scope the options leave out.
+type OfferedModuleScope = (typeof MODULE_OPTIONS)[number][0];
+const everyModuleScopeIsOffered: Record<
+  Exclude<ModuleScope, OfferedModuleScope>,
+  never
+> = {};
+
+test("every module scope is offered once, under its label", () => {
+  assert.deepEqual(everyModuleScopeIsOffered, {});
+  const offered = MODULE_OPTIONS.map(([moduleScope]) => moduleScope);
+  assert.equal(new Set(offered).size, offered.length);
+  for (const [moduleScope, label] of [
+    ["credit", "Credit"],
+    ["institution", "Institution Profile"],
+  ] as const) {
+    assert.equal(
+      compactGrantFragment({
+        effective: true,
+        roleBundle: "viewer",
+        moduleScope,
+        institutionScope: "institution",
+        institutionName: "Aequor Bank Ghana",
+      } as never),
+      `Viewer · ${label} · Aequor Bank Ghana`,
+    );
+  }
 });
 
 // --- the members list shows what was granted --------------------------------

@@ -294,7 +294,13 @@ def test_authenticated_read_surfaces_reject_inactive_users(
 
 _ADMIN_TARGET = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 _ADMIN_BANKS = ("BK-PROP0001", "BK-PROP0002")
-_ADMIN_MODULES = (Module.LIQUIDITY, Module.REGULATORY, Module.FX)
+_ADMIN_MODULES = (
+    Module.LIQUIDITY,
+    Module.REGULATORY,
+    Module.FX,
+    Module.CREDIT,
+    Module.INSTITUTION,
+)
 _ADMIN_SENSITIVITIES = (
     Sensitivity.PUBLISHED,
     Sensitivity.CONFIDENTIAL,

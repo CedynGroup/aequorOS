@@ -53,6 +53,7 @@ class Module(StrEnum):
     REGULATORY = "reg"
     RISK = "risk"
     MARKETS = "markets"
+    INSTITUTION = "institution"
     ACCOUNT = "account"
     AUDIT = "audit"
 
@@ -82,6 +83,7 @@ class ModuleScope(StrEnum):
     REGULATORY = Module.REGULATORY
     RISK = Module.RISK
     MARKETS = Module.MARKETS
+    INSTITUTION = Module.INSTITUTION
     ACCOUNT = Module.ACCOUNT
     AUDIT = Module.AUDIT
 
