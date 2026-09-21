@@ -12,7 +12,7 @@ import io
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, NamedTuple
 from uuid import UUID, uuid4
 
 import pytest
@@ -85,6 +85,83 @@ READ_ROUTES: tuple[tuple[str, str, SensitivityScope], ...] = (
     ("connections", f"{BASE}/market-data/connections", SensitivityScope.RESTRICTED),
 )
 READ_ROUTE_IDS = [route[0] for route in READ_ROUTES]
+
+
+class MarketsRoute(NamedTuple):
+    name: str
+    url: str
+    sensitivity: SensitivityScope
+    bundle: RoleBundle
+
+
+DENIAL_ROUTES = (
+    *(MarketsRoute(*route, RoleBundle.VIEWER) for route in READ_ROUTES),
+    MarketsRoute(
+        "rating_detail",
+        f"{BASE}/implied-rating/runs/{{run_id}}",
+        SensitivityScope.CONFIDENTIAL,
+        RoleBundle.VIEWER,
+    ),
+    MarketsRoute(
+        "rating_run",
+        f"{BASE}/implied-rating/runs",
+        SensitivityScope.CONFIDENTIAL,
+        RoleBundle.ANALYST,
+    ),
+    MarketsRoute(
+        "overlay_create",
+        f"{BASE}/market-data/overlays",
+        SensitivityScope.CONFIDENTIAL,
+        RoleBundle.ANALYST,
+    ),
+    MarketsRoute(
+        "overlay_end",
+        f"{BASE}/market-data/overlays/{{overlay_id}}/end",
+        SensitivityScope.CONFIDENTIAL,
+        RoleBundle.ANALYST,
+    ),
+    MarketsRoute(
+        "upload",
+        f"{BASE}/market-data/uploads",
+        SensitivityScope.PUBLISHED,
+        RoleBundle.ANALYST,
+    ),
+)
+
+
+@pytest.fixture(params=DENIAL_ROUTES, ids=lambda route: route.name)
+def markets_route(request: pytest.FixtureRequest) -> MarketsRoute:
+    return request.param
+
+
+@pytest.fixture
+def forbidden_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Unauthorized Markets mutation reached a side effect")
+
+    monkeypatch.setattr(implied_rating, "run", forbidden)
+    monkeypatch.setattr(market_data_overlays, "create_overlay", forbidden)
+    monkeypatch.setattr(market_data_overlays, "end_overlay", forbidden)
+    monkeypatch.setattr(
+        "app.adapters.market_data.manual_upload.service.upload_market_data", forbidden
+    )
+
+
+@pytest.fixture
+def denied_request(
+    db_client: TestClient, markets_route: MarketsRoute, forbidden_mutations: None
+) -> Callable[[int], Response]:
+    period_id = _seed_book()
+    if markets_route.bundle == RoleBundle.ANALYST:
+        _seed_curve()
+        overlay_id = _add_overlay()
+        return lambda version: _mutation_calls(
+            db_client, _auth(version, "admin"), period_id, overlay_id
+        )[markets_route.name]()
+    url = markets_route.url
+    if markets_route.name == "rating_detail":
+        url = url.format(run_id=_add_rating_run(period_id))
+    return lambda version: db_client.get(url, headers=_auth(version, "admin"))
 
 
 @pytest.fixture(autouse=True)
@@ -436,43 +513,56 @@ def test_t2_scalar_roles_cannot_read_markets_without_a_binding(
 
 
 @pytest.mark.parametrize(
-    "changes",
-    [
-        {"institution_id": SIBLING_BANK_ID},
-        {"module_scope": ModuleScope.DATA.value},
-        {"sensitivity_scope": SensitivityScope.CONFIDENTIAL.value},
-        {"role_bundle": RoleBundle.ACCOUNT_ADMIN.value},
-    ],
-    ids=["wrong_bank", "wrong_module", "wrong_sensitivity", "wrong_bundle"],
+    "dimension", ["wrong_bank", "wrong_module", "wrong_sensitivity", "wrong_bundle"]
 )
 def test_t3_partial_markets_binding_denies(
-    db_client: TestClient,
-    changes: dict[str, str],
+    markets_route: MarketsRoute,
+    denied_request: Callable[[int], Response],
+    dimension: str,
 ) -> None:
-    _seed_book()
-    if changes.get("institution_id") == SIBLING_BANK_ID:
+    if dimension == "wrong_bank":
         _add_sibling_bank()
-    binding_id, version = _grant()
-    _amend_binding(binding_id, changes)
+    changes: dict[str, dict[str, object]] = {
+        "wrong_bank": {"institution_id": SIBLING_BANK_ID},
+        "wrong_module": {"module_scope": ModuleScope.DATA.value},
+        "wrong_sensitivity": {
+            "sensitivity_scope": (
+                SensitivityScope.CONFIDENTIAL
+                if markets_route.sensitivity == SensitivityScope.PUBLISHED
+                else SensitivityScope.PUBLISHED
+            ).value
+        },
+        "wrong_bundle": {
+            "role_bundle": (
+                RoleBundle.VIEWER
+                if markets_route.bundle == RoleBundle.ANALYST
+                else RoleBundle.ACCOUNT_ADMIN
+            ).value
+        },
+    }
+    binding_id, version = _grant(markets_route.bundle, sensitivity=markets_route.sensitivity)
+    _amend_binding(binding_id, changes[dimension])
 
-    response = db_client.get(f"{BASE}/market-data/views", headers=_auth(version))
+    response = denied_request(version)
     assert response.status_code == 403, response.text
 
 
 def test_t3_partial_bindings_never_compose_into_markets_authority(
-    db_client: TestClient,
+    markets_route: MarketsRoute,
+    denied_request: Callable[[int], Response],
 ) -> None:
     """A Data grant on the bank plus a Markets grant on a sibling do not add up."""
-    _seed_book()
     _add_sibling_bank()
-    _grant(module=ModuleScope.DATA, sensitivity=SensitivityScope.ALL)
-    _, version = _grant(institution_id=SIBLING_BANK_ID)
-    for url in (
-        f"{BASE}/market-data/views",
-        f"{BASE}/market-data/overlays",
-        f"{BASE}/market-data/connections",
-    ):
-        assert db_client.get(url, headers=_auth(version)).status_code == 403, url
+    _grant(
+        markets_route.bundle, module=ModuleScope.DATA, sensitivity=markets_route.sensitivity
+    )
+    _, version = _grant(
+        markets_route.bundle,
+        sensitivity=markets_route.sensitivity,
+        institution_id=SIBLING_BANK_ID,
+    )
+    response = denied_request(version)
+    assert response.status_code == 403, response.text
 
 
 def test_data_engine_authority_does_not_open_markets(db_client: TestClient) -> None:
@@ -508,14 +598,14 @@ def test_data_engine_authority_does_not_open_markets(db_client: TestClient) -> N
     ids=["suspended", "revoked", "not_yet_valid", "expired"],
 )
 def test_t4_inactive_markets_binding_denies_despite_admin_claim(
-    db_client: TestClient,
+    markets_route: MarketsRoute,
+    denied_request: Callable[[int], Response],
     changes: dict[str, object],
 ) -> None:
-    _seed_book()
-    binding_id, version = _grant()
+    binding_id, version = _grant(markets_route.bundle, sensitivity=markets_route.sensitivity)
     _amend_binding(binding_id, changes)
 
-    response = db_client.get(f"{BASE}/market-data/views", headers=_auth(version, "admin"))
+    response = denied_request(version)
     assert response.status_code == 403, response.text
 
 
@@ -534,20 +624,26 @@ def test_t5_cross_tenant_markets_probe_stays_hidden(
 
 
 def test_t6_stale_authorization_version_denies_before_markets_evaluation(
-    db_client: TestClient,
+    markets_route: MarketsRoute,
+    denied_request: Callable[[int], Response],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _seed_book()
-    _grant()
-    response = db_client.get(f"{BASE}/market-data/views", headers=_auth(1))
-    assert response.status_code == 401
+    _, version = _grant(markets_route.bundle, sensitivity=markets_route.sensitivity)
+
+    def forbidden_evaluation(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Stale authorization version reached Markets evaluation")
+
+    monkeypatch.setattr(authorization, "evaluate_permission", forbidden_evaluation)
+    response = denied_request(version - 1)
+    assert response.status_code == 401, response.text
 
 
 def test_t7_evaluator_failure_denies_closed_with_telemetry(
-    db_client: TestClient,
+    markets_route: MarketsRoute,
+    denied_request: Callable[[int], Response],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _seed_book()
-    _, version = _grant()
+    _, version = _grant(markets_route.bundle, sensitivity=markets_route.sensitivity)
 
     def fail_evaluation(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("evaluator unavailable")
@@ -555,11 +651,11 @@ def test_t7_evaluator_failure_denies_closed_with_telemetry(
     monkeypatch.setattr(authorization, "evaluate_permission", fail_evaluation)
     records, sink_id = _capture_binding_records()
     try:
-        response = db_client.get(f"{BASE}/market-data/views", headers=_auth(version))
+        response = denied_request(version)
     finally:
         logger.remove(sink_id)
 
-    assert response.status_code == 403
+    assert response.status_code == 403, response.text
     decisions = _binding_extras(records)
     assert len(decisions) == 1
     assert decisions[0]["reason"] == "binding_evaluation_failed"
@@ -652,7 +748,7 @@ def _mutation_calls(
 )
 def test_t8_denied_mutations_run_no_engine_and_persist_nothing(
     db_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
+    forbidden_mutations: None,
     grant: tuple[RoleBundle, SensitivityScope] | None,
 ) -> None:
     period_id = _seed_book()
@@ -661,15 +757,6 @@ def test_t8_denied_mutations_run_no_engine_and_persist_nothing(
     if grant is not None:
         _, version = _grant(grant[0], sensitivity=grant[1])
 
-    def forbidden(*_args: object, **_kwargs: object) -> None:
-        pytest.fail("Unauthorized Markets mutation reached a side effect")
-
-    monkeypatch.setattr(implied_rating, "run", forbidden)
-    monkeypatch.setattr(market_data_overlays, "create_overlay", forbidden)
-    monkeypatch.setattr(market_data_overlays, "end_overlay", forbidden)
-    monkeypatch.setattr(
-        "app.adapters.market_data.manual_upload.service.upload_market_data", forbidden
-    )
     models = (ImpliedRatingRun, MarketDataOverlay, IngestionBatch, AuditEvent)
     before = [_count(model) for model in models]
 
