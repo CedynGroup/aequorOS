@@ -233,7 +233,7 @@ def test_authorization_version_session_state_machine(db_client: TestClient) -> N
 @pytest.mark.parametrize(
     "path",
     (
-        "/api/v1/market-data/templates/yield_curve",
+        "/api/v1/banks",
         "/api/v1/regulatory-reporting/templates",
     ),
 )
@@ -249,7 +249,7 @@ def test_authenticated_read_surfaces_accept_current_active_users(
 @pytest.mark.parametrize(
     "path",
     (
-        "/api/v1/market-data/templates/yield_curve",
+        "/api/v1/banks",
         "/api/v1/regulatory-reporting/templates",
     ),
 )
@@ -272,7 +272,7 @@ def test_authenticated_read_surfaces_reject_stale_access_tokens(
 @pytest.mark.parametrize(
     "path",
     (
-        "/api/v1/market-data/templates/yield_curve",
+        "/api/v1/banks",
         "/api/v1/regulatory-reporting/templates",
     ),
 )

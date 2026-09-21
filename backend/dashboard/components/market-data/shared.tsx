@@ -173,10 +173,12 @@ export const TEMPLATE_KINDS: { kind: string; label: string }[] = [
 /**
  * Download one upload template. The endpoint is tenant-scoped, so a plain
  * anchor cannot carry the headers — fetch the bytes and hand them to the
- * browser as a Blob download.
+ * browser as a Blob download. The workbook is bank-neutral, but the download
+ * is authorized by the caller's Markets view grant on the named bank.
  */
-export async function downloadTemplate(kind: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/market-data/templates/${kind}`, {
+export async function downloadTemplate(kind: string, bankId: string): Promise<void> {
+  const query = new URLSearchParams({ bank_id: bankId });
+  const response = await fetch(`${apiBaseUrl}/market-data/templates/${kind}?${query}`, {
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   });
   if (!response.ok) {

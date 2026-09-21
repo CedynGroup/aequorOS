@@ -90,6 +90,7 @@ export interface GetMarketDataQuotaRequest {
 
 export interface GetMarketDataTemplateRequest {
   kind: GetMarketDataTemplateKindEnum;
+  bankId: string;
 }
 
 export interface GetMarketDataViewsRequest {
@@ -564,7 +565,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Download the .xlsx upload template for one scope category (§8.2).
+   * Download the .xlsx upload template for one scope category (§8.2).  The workbook is bank-neutral; the ``bank_id`` query names the institution whose Markets view grant authorizes the download.
    * Get Market Data Template
    */
   async getMarketDataTemplateRaw(
@@ -578,7 +579,18 @@ export class MarketDataApi extends runtime.BaseAPI {
       );
     }
 
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getMarketDataTemplate().',
+      );
+    }
+
     const queryParameters: any = {};
+
+    if (requestParameters["bankId"] != null) {
+      queryParameters["bank_id"] = requestParameters["bankId"];
+    }
 
     const headerParameters: runtime.HTTPHeaders = {};
 
@@ -607,7 +619,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   }
 
   /**
-   * Download the .xlsx upload template for one scope category (§8.2).
+   * Download the .xlsx upload template for one scope category (§8.2).  The workbook is bank-neutral; the ``bank_id`` query names the institution whose Markets view grant authorizes the download.
    * Get Market Data Template
    */
   async getMarketDataTemplate(

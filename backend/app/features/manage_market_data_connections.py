@@ -6,7 +6,11 @@ connections themselves — onboarding, validation, test pulls, rotation,
 disable/enable, revocation — plus the scope catalog and quota views.
 
 Credentials are write-only: they appear in request bodies only, and no
-response ever carries credential values.
+response ever carries credential values. The connection list still carries
+credential metadata (fingerprint, expiry, status), so it requires an exact
+MARKETS/restricted view binding; the scope catalog and quota ledger are
+published-tier reads. Lifecycle mutations keep the legacy analyst gate until
+configuration authority lands.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, MarketsPublishedView, MarketsRestrictedView, MutationTenant
 from app.schemas.market_data_connections import (
     MarketDataConnectionCreate,
     MarketDataConnectionListRead,
@@ -36,9 +40,9 @@ router = APIRouter(tags=["market-data"])
     operation_id="listMarketDataConnections",
 )
 def list_market_data_connections(
-    bank_id: str, db: DbSession, ctx: Tenant
+    bank_id: str, db: DbSession, access: MarketsRestrictedView
 ) -> MarketDataConnectionListRead:
-    return market_data_connections.list_connections(db, ctx, bank_id)
+    return market_data_connections.list_connections(db, access.ctx, access.bank.id)
 
 
 @router.post(
@@ -146,8 +150,10 @@ def revoke_market_data_connection(
     response_model=MarketDataScopeListRead,
     operation_id="listMarketDataScopes",
 )
-def list_market_data_scopes(bank_id: str, db: DbSession, ctx: Tenant) -> MarketDataScopeListRead:
-    return market_data_connections.list_scopes(db, ctx, bank_id)
+def list_market_data_scopes(
+    bank_id: str, db: DbSession, access: MarketsPublishedView
+) -> MarketDataScopeListRead:
+    return market_data_connections.list_scopes(db, access.ctx, access.bank.id)
 
 
 @router.get(
@@ -155,5 +161,7 @@ def list_market_data_scopes(bank_id: str, db: DbSession, ctx: Tenant) -> MarketD
     response_model=MarketDataQuotaListRead,
     operation_id="getMarketDataQuota",
 )
-def get_market_data_quota(bank_id: str, db: DbSession, ctx: Tenant) -> MarketDataQuotaListRead:
-    return market_data_connections.get_quota(db, ctx, bank_id)
+def get_market_data_quota(
+    bank_id: str, db: DbSession, access: MarketsPublishedView
+) -> MarketDataQuotaListRead:
+    return market_data_connections.get_quota(db, access.ctx, access.bank.id)

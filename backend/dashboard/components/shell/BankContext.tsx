@@ -359,6 +359,42 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      marketsPublishedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "published",
+        "view",
+      ),
+      marketsConfidentialView: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "confidential",
+        "view",
+      ),
+      marketsRestrictedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "restricted",
+        "view",
+      ),
+      marketsUpload: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "published",
+        "create",
+      ),
+      marketsOverlayCreate: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "confidential",
+        "create",
+      ),
+      marketsOverlayEdit: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "confidential",
+        "edit",
+      ),
       isResolved: !banksQuery.isLoading && !profileQuery.isLoading,
     }),
     [

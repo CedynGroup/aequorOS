@@ -10,7 +10,9 @@
  * records. The preview mirrors the server formula:
  *   adjusted = base × Π(multiplicative) + Σ(additive bps)/10000 + Σ(fixed).
  * Only this bank's overlays are ever shown — other banks' overlays are
- * invisible by construction (RLS-forced tenant isolation).
+ * invisible by construction (RLS-forced tenant isolation). Opening the drawer
+ * needs MARKETS/confidential view; saving and ending a spread each need their
+ * own exact grant, and a missing one leaves the control visible but disabled.
  */
 
 import { useMemo, useState } from 'react';
@@ -47,6 +49,7 @@ import { fmtDateUTC, num } from '@/lib/api/values';
 import { fmtPct } from '@/lib/format';
 import { tenorLabel } from './CurveBoard';
 import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from './chips';
+import PermissionAction from './PermissionAction';
 
 const COMPONENT_TAGS = [
   'term_liquidity_premium',
@@ -117,11 +120,17 @@ export default function OverlayDrawer({
   bankName,
   curve,
   onClose,
+  createReason,
+  endReason,
 }: {
   bankId: string;
   bankName: string;
   curve: YieldCurveViewRead;
   onClose: () => void;
+  /** The grant the user lacks to save a spread, or undefined when authorized. */
+  createReason?: string;
+  /** The grant the user lacks to end a spread, or undefined when authorized. */
+  endReason?: string;
 }) {
   const overlaysQuery = useMarketDataOverlays(bankId, {
     baseCurveName: curve.curveName,
@@ -226,7 +235,7 @@ export default function OverlayDrawer({
   const saveDisabled = !hasPending || createOverlay.isPending;
 
   const save = async () => {
-    if (saveDisabled) return;
+    if (saveDisabled || createReason) return;
     await createOverlay.mutateAsync({
       baseRefKind: 'curve',
       baseCurveName: curve.curveName,
@@ -389,8 +398,8 @@ export default function OverlayDrawer({
                         </p>
                       )}
                     </div>
-                    <button
-                      type="button"
+                    <PermissionAction
+                      reason={endReason}
                       disabled={endOverlay.isPending}
                       onClick={() =>
                         endOverlay.mutate({
@@ -398,10 +407,10 @@ export default function OverlayDrawer({
                           effectiveTo: todayIso(),
                         })
                       }
-                      className="text-caption font-medium text-critical hover:underline whitespace-nowrap disabled:opacity-50"
+                      className="text-caption font-medium text-critical hover:underline whitespace-nowrap"
                     >
                       End today
-                    </button>
+                    </PermissionAction>
                   </li>
                 ))}
               </ul>
@@ -505,14 +514,14 @@ export default function OverlayDrawer({
                   : 'Saving the spread failed.'}
               </p>
             )}
-            <button
-              type="button"
-              onClick={() => void save()}
+            <PermissionAction
+              reason={createReason}
               disabled={saveDisabled}
-              className="px-3.5 py-2 text-caption font-medium btn-primary disabled:opacity-50"
+              onClick={() => void save()}
+              className="px-3.5 py-2 text-caption font-medium btn-primary"
             >
               {createOverlay.isPending ? 'Saving…' : 'Save spread'}
-            </button>
+            </PermissionAction>
           </div>
 
           <p className="text-caption text-slate border-t border-border-light pt-3">

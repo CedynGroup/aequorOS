@@ -8,6 +8,12 @@
  * file+as-of upload that lands canonical market data and auto-recomputes
  * dependent modules. Vendor concepts stay behind the adapters; this page
  * speaks scopes, freshness, and quota only.
+ *
+ * Markets authority is read from the effective-authority projection: the
+ * connection list needs MARKETS/restricted view (it carries credential
+ * metadata), quota and templates need MARKETS/published view, and the manual
+ * upload needs MARKETS/published create. A missing grant leaves the control
+ * visible but disabled with the sentence the user needs to ask for.
  */
 
 import PageContainer from '@/components/ui/PageContainer';
@@ -17,7 +23,13 @@ import type { MarketDataUploadRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
 import EmptyState from '@/components/ui/EmptyState';
 import { useBankContext } from '@/components/shell/BankContext';
+import PermissionAction from '@/components/markets/PermissionAction';
 import { isApiError } from '@/lib/api/client';
+import {
+  MARKETS_PUBLISHED_CREATE_REASON,
+  MARKETS_PUBLISHED_VIEW_REASON,
+  MARKETS_RESTRICTED_VIEW_REASON,
+} from '@/lib/modules';
 import {
   useMarketDataConnections,
   useMarketDataQuota,
@@ -28,9 +40,14 @@ import AddSourcePanel from '@/components/market-data/AddSourcePanel';
 import { TEMPLATE_KINDS, downloadTemplate } from '@/components/market-data/shared';
 
 export default function MarketDataPage() {
-  const { bank } = useBankContext();
-  const connections = useMarketDataConnections(bank?.id);
-  const quota = useMarketDataQuota(bank?.id);
+  const { bank, moduleScope } = useBankContext();
+  const canViewConnections = moduleScope.marketsRestrictedView === true;
+  const connections = useMarketDataConnections(
+    canViewConnections ? bank?.id : undefined
+  );
+  const quota = useMarketDataQuota(
+    moduleScope.marketsPublishedView ? bank?.id : undefined
+  );
   const [adding, setAdding] = useState(false);
 
   const rows = connections.data?.connections ?? [];
@@ -59,7 +76,11 @@ export default function MarketDataPage() {
               </button>
             )}
           </div>
-          {connections.isLoading ? (
+          {!canViewConnections ? (
+            <p className="card p-6 text-body text-slate" data-testid="market-data-connections-restricted">
+              {MARKETS_RESTRICTED_VIEW_REASON}
+            </p>
+          ) : connections.isLoading ? (
             <div className="card p-6 text-body text-slate inline-flex items-center gap-2">
               <Loader2 size={14} className="animate-spin" aria-hidden />
               Loading market data sources…
@@ -101,17 +122,38 @@ export default function MarketDataPage() {
           )}
         </section>
 
-        <ManualUploadSection bankId={bank?.id} />
+        <ManualUploadSection
+          bankId={bank?.id}
+          templateReason={
+            moduleScope.marketsPublishedView
+              ? undefined
+              : MARKETS_PUBLISHED_VIEW_REASON
+          }
+          uploadReason={
+            moduleScope.marketsUpload ? undefined : MARKETS_PUBLISHED_CREATE_REASON
+          }
+        />
       </PageContainer>
     </>
   );
 }
 
-function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
+function ManualUploadSection({
+  bankId,
+  templateReason,
+  uploadReason,
+}: {
+  bankId: string | undefined;
+  /** The grant missing for template downloads, or undefined when authorized. */
+  templateReason?: string;
+  /** The grant missing for the upload itself, or undefined when authorized. */
+  uploadReason?: string;
+}) {
   const upload = useUploadMarketData(bankId);
   const [file, setFile] = useState<File | null>(null);
   const [asOfDate, setAsOfDate] = useState('');
   const result: MarketDataUploadRead | undefined = upload.data;
+  const canUpload = uploadReason === undefined;
 
   return (
     <section className="space-y-4">
@@ -125,15 +167,18 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
           </p>
           <div className="flex flex-wrap gap-2">
             {TEMPLATE_KINDS.map(({ kind, label }) => (
-              <button
+              <PermissionAction
                 key={kind}
-                type="button"
-                onClick={() => void downloadTemplate(kind)}
+                reason={templateReason}
+                disabled={!bankId}
+                onClick={() => {
+                  if (bankId) void downloadTemplate(kind, bankId);
+                }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption text-navy border border-border rounded-md hover:bg-surface"
               >
                 <FileSpreadsheet size={13} aria-hidden />
                 {label}
-              </button>
+              </PermissionAction>
             ))}
           </div>
         </div>
@@ -148,7 +193,7 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
             className="flex flex-wrap items-end gap-3"
             onSubmit={(event) => {
               event.preventDefault();
-              if (file && asOfDate) upload.mutate({ file, asOfDate });
+              if (canUpload && file && asOfDate) upload.mutate({ file, asOfDate });
             }}
           >
             <label className="block">
@@ -169,10 +214,13 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
                 className="px-3 py-1.5 text-caption text-navy bg-surface-raised border border-border rounded-md"
               />
             </label>
-            <button
-              type="submit"
+            <PermissionAction
+              reason={uploadReason}
               disabled={!file || !asOfDate || upload.isPending}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+              onClick={() => {
+                if (canUpload && file && asOfDate) upload.mutate({ file, asOfDate });
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
             >
               {upload.isPending ? (
                 <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -180,7 +228,7 @@ function ManualUploadSection({ bankId }: { bankId: string | undefined }) {
                 <UploadCloud size={13} aria-hidden />
               )}
               Upload
-            </button>
+            </PermissionAction>
           </form>
           {upload.error && (
             <p className="mt-3 text-caption text-critical">

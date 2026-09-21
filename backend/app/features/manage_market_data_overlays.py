@@ -1,11 +1,11 @@
 """Per-bank market data overlay API (spec §9, §11b).
 
-The tenant's private spread layer on the AequorOS golden copy. Viewers read;
-analysts and above mutate (the standard ``MutationTenant`` gate, matching the
-sibling market-data endpoints). Overlays are append-only versioned: POST
-creates (optionally superseding a prior version), ``/end`` closes the
-effective window. Composition onto curves happens in the read views —
-these endpoints never touch canonical market data.
+The tenant's private spread layer on the AequorOS golden copy, so every
+route requires an exact MARKETS/confidential binding on the target bank:
+``view`` to list, ``create`` to add a version, ``edit`` to close one.
+Overlays are append-only versioned: POST creates (optionally superseding a
+prior version), ``/end`` closes the effective window. Composition onto curves
+happens in the read views — these endpoints never touch canonical market data.
 """
 
 from __future__ import annotations
@@ -16,7 +16,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import (
+    DbSession,
+    MarketsConfidentialView,
+    MarketsOverlayCreate,
+    MarketsOverlayEdit,
+)
 from app.db.base import utc_now
 from app.schemas.market_data_overlays import (
     MarketDataOverlayCreate,
@@ -37,15 +42,15 @@ router = APIRouter(tags=["market-data"])
 def list_market_data_overlays(  # noqa: PLR0913 - filters are the read contract
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: MarketsConfidentialView,
     as_of: Annotated[date | None, Query()] = None,
     include_history: Annotated[bool, Query()] = False,
     base_curve_name: Annotated[str | None, Query(max_length=80)] = None,
 ) -> MarketDataOverlayListRead:
     return market_data_overlays.list_overlays(
         db,
-        ctx,
-        bank_id,
+        access.ctx,
+        access.bank.id,
         as_of=as_of if as_of is not None else utc_now().date(),
         include_history=include_history,
         base_curve_name=base_curve_name,
@@ -62,9 +67,9 @@ def create_market_data_overlay(
     bank_id: str,
     payload: MarketDataOverlayCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: MarketsOverlayCreate,
 ) -> MarketDataOverlayRead:
-    return market_data_overlays.create_overlay(db, ctx, bank_id, payload)
+    return market_data_overlays.create_overlay(db, access.ctx, access.bank.id, payload)
 
 
 @router.post(
@@ -77,6 +82,6 @@ def end_market_data_overlay(
     overlay_id: UUID,
     payload: MarketDataOverlayEnd,
     db: DbSession,
-    ctx: MutationTenant,
+    access: MarketsOverlayEdit,
 ) -> MarketDataOverlayRead:
-    return market_data_overlays.end_overlay(db, ctx, bank_id, overlay_id, payload)
+    return market_data_overlays.end_overlay(db, access.ctx, access.bank.id, overlay_id, payload)

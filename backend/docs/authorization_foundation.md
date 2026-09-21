@@ -539,7 +539,10 @@ projections and the run registry, and the capital-plan projection they feed —
 is owned by the [Forecasting rollout contract](forecasting_enforcement_rollout.md).
 Behavioral model estimates, liquidity behavior, and retraining are owned by the
 [Behavioral rollout contract](behavioral_enforcement_rollout.md); model
-application stays with the governed model-application cutover. Regulatory
+application stays with the governed model-application cutover. Markets views,
+implied ratings, private curve overlays, manual market-data uploads, and
+connection metadata reads are owned by the
+[Markets rollout contract](markets_enforcement_rollout.md). Regulatory
 filing — the submit and poll routes, the Validator bundle, and the grants that
 must exist before any return can be transmitted — is owned by the
 [filing submit authority rollout](filing_submit_authority_rollout.md). Existing

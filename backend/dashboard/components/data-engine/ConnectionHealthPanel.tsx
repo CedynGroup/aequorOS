@@ -95,10 +95,14 @@ function remediation(row: HealthRow): string | null {
 }
 
 export default function ConnectionHealthPanel() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const dbDirect = useDatabaseConnections(bank?.id);
   const temenos = useTemenosConnections(bank?.id);
-  const marketData = useMarketDataConnections(bank?.id);
+  // Market-data connection metadata is Markets/restricted: without that exact
+  // grant the panel lists the other sources and issues no market-data request.
+  const marketData = useMarketDataConnections(
+    moduleScope.marketsRestrictedView ? bank?.id : undefined
+  );
 
   // Read-only reachability probes — the same test endpoints the source tabs use.
   const testDatabase = useTestDatabaseConnection(bank?.id);

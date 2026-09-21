@@ -13,6 +13,12 @@
  * Tabs: Overview · Curves · Market data · Sources. Market data contains the
  * Forward curves, Rates, and FX sub-navigation; the as-of scrubber reproduces
  * the complete surface as published then.
+ *
+ * Authority comes from the server's effective-authority projection, never a
+ * token role: the route needs MARKETS/published view (the guard 404s without
+ * it and no market-data request is issued), the spread editor needs
+ * MARKETS/confidential view, and saving or ending a spread needs its own exact
+ * grant — a missing one leaves the control visible but disabled.
  */
 
 import PageContainer from '@/components/ui/PageContainer';
@@ -32,6 +38,11 @@ import {
   useMarketDataViews,
 } from '@/lib/api/hooks';
 import { fmtDateUTC, fmtTimestamp, isoDate } from '@/lib/api/values';
+import {
+  MARKETS_CONFIDENTIAL_CREATE_REASON,
+  MARKETS_CONFIDENTIAL_EDIT_REASON,
+  MARKETS_CONFIDENTIAL_VIEW_REASON,
+} from '@/lib/modules';
 import CurveBoard from '@/components/markets/CurveBoard';
 import CurveThumbnails from '@/components/markets/CurveThumbnails';
 import CurvesExplorer from '@/components/markets/CurvesExplorer';
@@ -154,16 +165,29 @@ function Section({
 }
 
 export default function MarketsPage() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const [asOf, setAsOf] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('overview');
   const [marketDataView, setMarketDataView] = useState<MarketDataView>('forward');
   const [overlayCurveName, setOverlayCurveName] = useState<string | null>(null);
   const [selectedCurveName, setSelectedCurveName] = useState<string | null>(null);
 
-  const views = useMarketDataViews(bank?.id, asOf ?? undefined);
+  // Every market-data query keys off this: undefined until the projection
+  // says the user holds MARKETS/published view on the selected bank.
+  const marketsBankId = moduleScope.marketsPublishedView ? bank?.id : undefined;
+  const editOverlaysReason = moduleScope.marketsConfidentialView
+    ? undefined
+    : MARKETS_CONFIDENTIAL_VIEW_REASON;
+  const createOverlayReason = moduleScope.marketsOverlayCreate
+    ? undefined
+    : MARKETS_CONFIDENTIAL_CREATE_REASON;
+  const endOverlayReason = moduleScope.marketsOverlayEdit
+    ? undefined
+    : MARKETS_CONFIDENTIAL_EDIT_REASON;
+
+  const views = useMarketDataViews(marketsBankId, asOf ?? undefined);
   const liveSummary = useLiveSummary(bank?.id);
-  const prefs = useMarketDataSourcePreferences(bank?.id);
+  const prefs = useMarketDataSourcePreferences(marketsBankId);
   const data = views.data;
 
   const todayIso = isoDate(new Date());
@@ -488,6 +512,7 @@ export default function MarketsPage() {
                 setTab('market-data');
               }}
               onEditOverlays={(curveName) => setOverlayCurveName(curveName)}
+              editOverlaysReason={editOverlaysReason}
             />
           </Section>
           <Section
@@ -497,6 +522,7 @@ export default function MarketsPage() {
             <CurveBoard
               curves={data.curves}
               onEditOverlays={(curveName) => setOverlayCurveName(curveName)}
+              editOverlaysReason={editOverlaysReason}
             />
           </Section>
         </div>
@@ -504,10 +530,10 @@ export default function MarketsPage() {
     }
 
     if (tab === 'market-data' && marketDataView === 'forward') {
-      if (!bank) return null;
+      if (!marketsBankId) return null;
       return (
         <ForwardTab
-          bankId={bank.id}
+          bankId={marketsBankId}
           curves={data.curves}
           asOf={asOf}
           selectedCurveName={selectedCurveName}
@@ -645,8 +671,8 @@ export default function MarketsPage() {
         )}
 
         {tab === 'sources' ? (
-          bank ? (
-            <SourcesControlRoom bankId={bank.id} asOf={asOf} />
+          marketsBankId ? (
+            <SourcesControlRoom bankId={marketsBankId} asOf={asOf} />
           ) : null
         ) : (
           <QueryBoundary
@@ -660,12 +686,14 @@ export default function MarketsPage() {
         )}
       </PageContainer>
 
-      {bank && overlayCurve && (
+      {bank && overlayCurve && !editOverlaysReason && (
         <OverlayDrawer
           bankId={bank.id}
           bankName={bank.name}
           curve={overlayCurve}
           onClose={() => setOverlayCurveName(null)}
+          createReason={createOverlayReason}
+          endReason={endOverlayReason}
         />
       )}
     </>
