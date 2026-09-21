@@ -61,20 +61,35 @@ def test_the_bindings_constraint_accepts_every_vocabulary_value(
     vocabulary: type[StrEnum],
 ) -> None:
     with migrated_postgres_schema.app_engine.connect() as connection:
-        definition = connection.execute(
+        expression = connection.execute(
             # Scoped to THIS migrated schema: the disposable test schemas are
             # created alongside each other, so the constraint name alone is not
             # unique across the database.
             text(
-                "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c "
+                "SELECT pg_get_expr(c.conbin, c.conrelid) FROM pg_constraint c "
                 "JOIN pg_class t ON t.oid = c.conrelid "
                 "JOIN pg_namespace n ON n.oid = t.relnamespace "
-                "WHERE c.conname = :name AND n.nspname = :schema"
+                "WHERE c.conname = :name AND n.nspname = :schema "
+                "AND t.relname = 'authorization_bindings' AND c.contype = 'c'"
             ),
             {"name": constraint, "schema": migrated_postgres_schema.schema_name},
         ).scalar_one()
 
-    missing = [member.value for member in vocabulary if f"'{member.value}'" not in definition]
+        column = constraint.removeprefix("ck_authorization_bindings_")
+        missing = []
+        for member in vocabulary:
+            with connection.begin_nested() as savepoint:
+                accepted = connection.execute(
+                    text(
+                        f"SELECT ({expression}) IS NOT FALSE "
+                        f'FROM (SELECT CAST(:value AS text) AS "{column}") AS candidate'
+                    ),
+                    {"value": member.value},
+                ).scalar_one()
+                if not accepted:
+                    missing.append(member.value)
+                savepoint.rollback()
+
     assert not missing, (
         f"{constraint} rejects {missing}. A new {vocabulary.__name__} value needs a "
         "migration widening this constraint — the model derives it from the enum, "
