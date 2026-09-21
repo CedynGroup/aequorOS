@@ -22,7 +22,6 @@ import { requireObjectStorage } from "./support/object-storage";
 import { generateCurrentVersion } from "./support/generate";
 
 const RETURNS = "/submissions/returns?code=BSD3";
-const approverState = path.join(E2E_TMP, "approver.json");
 const analystState = path.join(E2E_TMP, "analyst.json");
 const viewerState = path.join(E2E_TMP, "viewer.json");
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
@@ -31,7 +30,10 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 test.beforeAll(() => requireObjectStorage());
 
 test.describe("submission pipeline", () => {
-  test.use({ storageState: approverState });
+  // The preparer's session: generating a return is the preparer's act, and an
+  // approver's workspace offers no Generate control at all
+  // (docs/filing_workflow_redesign.md §4b.1).
+  test.use({ storageState: analystState });
 
   test("journey 1: authenticated returns workspace generates a package", async ({
     page,

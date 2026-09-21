@@ -65,13 +65,12 @@ test.describe("attestation surfaces", () => {
     );
 
     // A reviewer must be able to SEE that a return is unsigned, not infer it
-    // from an absence.
-    await expect(
-      page.getByText("Attestation", { exact: false }).first(),
-    ).toBeVisible();
-    await expect(
-      page.getByText(/unsigned|not certified|awaiting/i).first(),
-    ).toBeVisible();
+    // from an absence: the state is a pill beside the checks, and the clearance
+    // line says what is outstanding rather than only that filing is blocked.
+    await expect(page.getByText("Unsigned").first()).toBeVisible();
+    const clearance = page.getByTestId("attestation-clearance").first();
+    await expect(clearance).toHaveText(/^Not cleared to submit/i);
+    await expect(clearance).toContainText(/preparer/i);
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "attestation-unsigned-state.png"),

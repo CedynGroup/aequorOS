@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import BankFinancialFact, BankReportingPeriod
 from app.services.regulatory_reporting import calendar
-from app.services.regulatory_reporting.anchors import anchor_dates, horizon_end_for
+from app.services.regulatory_reporting.anchors import anchor_dates, anchor_window
 from app.services.regulatory_reporting.registry import get_definition
 from scripts.e2e_bootstrap import E2E_USERS, latest_month_end_on_or_before
 from tests.fixtures.canonical_bank_fixture import (
@@ -77,7 +77,7 @@ def test_latest_month_end_on_or_before_matches_the_workspace_anchor(today: date)
     """The bootstrap's target date is the anchor the workspace defaults to."""
     monthly = get_definition("LCR-NSFR")
     assert monthly is not None and monthly.frequency == "monthly"
-    anchors = sorted(anchor_dates(monthly, today, horizon_end_for(today, 3)), reverse=True)
+    anchors = sorted(anchor_dates(monthly, anchor_window(today)), reverse=True)
     selected = next(anchor for anchor in anchors if anchor <= today)
     assert latest_month_end_on_or_before(today) == selected
 
