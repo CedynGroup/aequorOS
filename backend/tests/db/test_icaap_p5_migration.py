@@ -28,6 +28,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
@@ -163,9 +164,7 @@ def test_the_seed_is_idempotent_and_leaves_an_operator_generation_alone(
     seeded_codes = sorted(
         row["param_code"] for row in rows if row["proposed_by"] == "platform_seed"
     )
-    assert seeded_codes == sorted(
-        code for code in CODES if code != "irrbb_sf_nii_horizon_months"
-    )
+    assert seeded_codes == sorted(code for code in CODES if code != "irrbb_sf_nii_horizon_months")
 
     with migrated_postgres_schema.app_engine.begin() as connection:
         connection.execute(
@@ -260,14 +259,20 @@ def test_a_run_row_carrying_the_new_module_value_is_accepted(
     """
     engine = migrated_postgres_schema.app_engine
 
+    def insert(connection: Connection, module: str) -> None:
+        # The tenant GUC matches the fabricated organization, so row-level
+        # security admits the row and the CHECK and foreign keys decide.
+        connection.execute(text("SELECT set_config('app.organization_id', 'OR-NONE0001', true)"))
+        connection.execute(
+            text(_RUN_INSERT),
+            {"id": uuid4(), "period": uuid4(), "user": uuid4(), "module": module},
+        )
+
     # Accepted: ``irr_sf`` passes the CHECK, so the row gets as far as the
     # foreign keys. If the widening had not landed, the CHECK would fire first
     # and name itself.
     with engine.begin() as connection, pytest.raises(IntegrityError) as accepted:
-        connection.execute(
-            text(_RUN_INSERT),
-            {"id": uuid4(), "period": uuid4(), "user": uuid4(), "module": "irr_sf"},
-        )
+        insert(connection, "irr_sf")
     message = str(accepted.value.orig)
     assert "ck_regulatory_runs_module" not in message, (
         "the module CHECK refused 'irr_sf' — the P5 widening did not land"
@@ -276,8 +281,5 @@ def test_a_run_row_carrying_the_new_module_value_is_accepted(
 
     # Rejected: an unknown value is refused by the module CHECK, named.
     with engine.begin() as connection, pytest.raises(IntegrityError) as rejected:
-        connection.execute(
-            text(_RUN_INSERT),
-            {"id": uuid4(), "period": uuid4(), "user": uuid4(), "module": "irr_sf_typo"},
-        )
+        insert(connection, "irr_sf_typo")
     assert "ck_regulatory_runs_module" in str(rejected.value.orig)

@@ -146,6 +146,12 @@ def connection(filing_schema: MigratedPostgresSchema) -> Iterator[Connection]:
             transaction.rollback()
 
 
+#: Two enforcement layers, either may refuse first: the migration's REVOKE
+#: (a non-superuser role gets InsufficientPrivilege) or, for a role that kept
+#: the privilege, the append-only trigger and RESTRICTIVE policy.
+_UNALTERABLE = r"append-only|permission denied|restrict|policy"
+
+
 def _refused(connection: Connection, statement: str, params: dict[str, Any], match: str) -> None:
     savepoint = connection.begin_nested()
     with pytest.raises(DatabaseError, match=match):
@@ -555,7 +561,7 @@ def test_a_pinned_stage_can_never_be_rewritten(connection: Connection) -> None:
         connection,
         "UPDATE icaap_cycle_stages SET decision_kind = 'approve' WHERE id = :id",
         {"id": str(stage_id)},
-        "(append-only|restrict|policy)",
+        _UNALTERABLE,
     )
 
 
@@ -568,7 +574,7 @@ def test_a_decision_can_never_be_rewritten(connection: Connection) -> None:
         connection,
         "UPDATE icaap_stage_decisions SET review_digest = :other WHERE id = :id",
         {"id": str(decision_id), "other": _OTHER_DIGEST},
-        "(append-only|restrict|policy)",
+        _UNALTERABLE,
     )
 
 
@@ -580,7 +586,7 @@ def test_a_filed_document_can_never_be_rewritten(connection: Connection) -> None
         connection,
         "UPDATE regulatory_package_attachments SET sha256 = :other WHERE id = :id",
         {"id": str(attachment_id), "other": _OTHER_DIGEST},
-        "(append-only|restrict|policy)",
+        _UNALTERABLE,
     )
 
 

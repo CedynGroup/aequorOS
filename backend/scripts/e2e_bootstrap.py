@@ -83,7 +83,7 @@ E2E_USERS = {
     # nothing else. Deliberately holds NO Regulatory Reporting access, because
     # that is the real shape of the person — the ICAAP filing surface has to
     # give them a signature they could not otherwise give.
-    "board": UUID("eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec"),
+    "board": UUID("eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef"),
     # The officer who transmits a return to the regulator, and only that.
     # Filing stopped sharing the approver's permission on 2026-09-20
     # (docs/filing_workflow_redesign.md §6 step 1): a Validator holds an exact
