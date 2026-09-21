@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Wraps a Forecasting execution control in the fleet's permission-only
@@ -8,9 +8,9 @@
  * native button can describe itself with the reason.
  */
 
-import type { ReactNode } from 'react';
-import { DisabledWithReason } from '@/components/ui/DisabledWithReason';
-import { FORECASTING_CONFIDENTIAL_RUN_REASON } from '@/lib/modules';
+import type { ReactNode } from "react";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
+import { FORECASTING_CONFIDENTIAL_RUN_REASON } from "@/lib/modules";
 
 export default function ForecastingRunGate({
   canRun,
