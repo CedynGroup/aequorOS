@@ -110,9 +110,11 @@ def _rate_metrics(
         if rate is not None and date in short_rates
     ]
     if len(indexed) < _MIN_RATE_OBSERVATIONS:
-        return None, None, [
-            "At least six matched deposit-rate and market-rate observations are required."
-        ]
+        return (
+            None,
+            None,
+            ["At least six matched deposit-rate and market-rate observations are required."],
+        )
     deposit_rates = np.asarray([row[1] for row in indexed], dtype=float)
     market_rates = np.asarray([row[2] for row in indexed], dtype=float)
     if np.var(market_rates) == 0:
@@ -131,9 +133,7 @@ def _rate_metrics(
         if correlation > best_correlation:
             best_lag, best_correlation = lag, correlation
     reasons = (
-        []
-        if best_lag is not None
-        else ["Rate series cannot support a repricing-lag estimate."]
+        [] if best_lag is not None else ["Rate series cannot support a repricing-lag estimate."]
     )
     return beta, best_lag, reasons
 

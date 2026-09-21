@@ -7,11 +7,11 @@ deployment.
 
 ## Affected surfaces
 
-| Surface                                                                       | Required complete binding     |
-| ----------------------------------------------------------------------------- | ----------------------------- |
-| Model estimates (`GET /banks/{id}/behavioral/{model}`) and the `/behavioral` pages | BEH / `aggregated` / `view`   |
-| Observed deposit behavior and CFP overlays (`GET /banks/{id}/behavioral/liquidity`) | BEH / `aggregated` / `view`   |
-| Retrain a model (`POST /banks/{id}/behavioral/{model}/train`)                 | BEH / `confidential` / `run`  |
+| Surface                                                                             | Required complete binding    |
+| ----------------------------------------------------------------------------------- | ---------------------------- |
+| Model estimates (`GET /banks/{id}/behavioral/{model}`) and the `/behavioral` pages  | BEH / `aggregated` / `view`  |
+| Observed deposit behavior and CFP overlays (`GET /banks/{id}/behavioral/liquidity`) | BEH / `aggregated` / `view`  |
+| Retrain a model (`POST /banks/{id}/behavioral/{model}/train`)                       | BEH / `confidential` / `run` |
 
 Applying estimates as reviewed assumptions
 (`POST /banks/{id}/behavioral/{model}/apply`) is outside this cutover. It
@@ -118,10 +118,10 @@ Create only rows approved from the inventory through the authorization service.
 Follow the foundation's
 [authorization-version and session transition contract](authorization_foundation.md#authorization-version-and-deployment-transition).
 
-| Duty                                          | `principal_type` | `role_bundle`                                 | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
-| --------------------------------------------- | ---------------- | --------------------------------------------- | ------------------- | ---------------- | -------------- | ------------------- |
-| Read model estimates and liquidity behavior   | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `beh`          | `aggregated`        |
-| Retrain models                                | `human`          | `analyst`                                     | `institution`       | exact `BK-*`     | `beh`          | `confidential`      |
+| Duty                                        | `principal_type` | `role_bundle`                                 | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
+| ------------------------------------------- | ---------------- | --------------------------------------------- | ------------------- | ---------------- | -------------- | ------------------- |
+| Read model estimates and liquidity behavior | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `beh`          | `aggregated`        |
+| Retrain models                              | `human`          | `analyst`                                     | `institution`       | exact `BK-*`     | `beh`          | `confidential`      |
 
 If the institution explicitly approves coverage across all its banks, replace
 only `institution_scope` with `organization` and `institution_id` with `NULL`.
