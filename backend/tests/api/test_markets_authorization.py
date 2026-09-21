@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -27,6 +28,7 @@ from app.core.authorization import (
     ModuleScope,
     PrincipalType,
     RoleBundle,
+    Sensitivity,
     SensitivityScope,
 )
 from app.core.observability import Condition
@@ -43,6 +45,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
     MarketDataOverlay,
+    MarketDataSourcePreference,
     User,
 )
 from app.services import authorization, implied_rating, market_data_overlays
@@ -816,3 +819,77 @@ def test_t10_unauthorized_object_ids_return_404_like_a_cross_tenant_probe(
         f"/api/v1/banks/{SIBLING_BANK_ID}/market-data/overlays", headers=headers(ORG_2)
     )
     assert foreign_probe.status_code == 404, foreign_probe.text
+
+
+@pytest.mark.parametrize("organization_wide", [False, True])
+def test_private_overlay_projection_requires_confidential_view(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch, organization_wide: bool
+) -> None:
+    _seed_book()
+    _seed_curve()
+    overlay_id = _add_overlay()
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        session.add(
+            MarketDataSourcePreference(
+                organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, curves_source="vendor"
+            )
+        )
+        session.commit()
+    _, version = _grant()
+
+    def read_projection(version: int) -> tuple[dict[str, Any], dict[str, Any]]:
+        views = db_client.get(f"{BASE}/market-data/views", headers=_auth(version))
+        planes = db_client.get(
+            f"{BASE}/market-data/planes?category=curves", headers=_auth(version)
+        )
+        assert views.status_code == 200, views.text
+        assert planes.status_code == 200, planes.text
+        return views.json(), planes.json()
+
+    def assert_base_only(views: dict[str, Any], planes: dict[str, Any]) -> None:
+        curve = next(curve for curve in views["curves"] if curve["curve_name"] == CURVE)
+        assert [Decimal(point["rate"]) for point in curve["points"]] == [
+            Decimal("0.24"), Decimal("0.22")
+        ]
+        assert curve["overlay_components"] == []
+        assert curve["adjusted_points"] == []
+        assert planes["overlay"] == {"available": False, "delta_preview": []}
+        assert planes["overlay_enabled"] is False
+        items = [item for plane in planes["planes"] for item in plane["items"]]
+        assert items
+        for item in items:
+            assert item["adjusted_points"] == []
+            assert item["points"] == curve["points"]
+
+    assert_base_only(*read_projection(version))
+    _, version = _grant(
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+        institution_scope=(
+            InstitutionScope.ORGANIZATION if organization_wide else InstitutionScope.INSTITUTION
+        ),
+        institution_id=None if organization_wide else SAMPLE_BANK_ID,
+    )
+    views, planes = read_projection(version)
+    curve = next(curve for curve in views["curves"] if curve["curve_name"] == CURVE)
+    assert curve["overlay_components"][0]["overlay_id"] == str(overlay_id)
+    assert Decimal(curve["overlay_components"][0]["value"]) == Decimal("25")
+    assert [Decimal(point["rate"]) for point in curve["adjusted_points"]] == [
+        Decimal("0.2425"), Decimal("0.2225")
+    ]
+    vendor = next(plane for plane in planes["planes"] if plane["source"] == "vendor")
+    assert vendor["items"][0]["adjusted_points"] == curve["adjusted_points"]
+    assert planes["overlay"]["available"] is True
+    assert len(planes["overlay"]["delta_preview"]) == 2
+    for delta in planes["overlay"]["delta_preview"]:
+        assert Decimal(delta["delta"]) == Decimal("0.0025")
+
+    evaluate = authorization.evaluate_permission
+
+    def fail_confidential(*args: Any, **kwargs: Any) -> Any:
+        if args[3].sensitivity == Sensitivity.CONFIDENTIAL:
+            raise RuntimeError("confidential evaluator unavailable")
+        return evaluate(*args, **kwargs)
+
+    monkeypatch.setattr(authorization, "evaluate_permission", fail_confidential)
+    assert_base_only(*read_projection(version))

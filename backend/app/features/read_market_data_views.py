@@ -4,7 +4,9 @@ Thin HTTP layer over :mod:`app.services.market_data`: discovers which scopes
 the canonical store can answer for the bank at the requested as-of date and
 serves each one through the vendor-blind getters, so every value carries §15
 arbitration and a §11.4 freshness attribution. No vendor concept appears
-outside the attribution's ``source_system``.
+outside the attribution's ``source_system``. Published view authority exposes
+base curves; private components and adjusted points additionally require one
+complete MARKETS/confidential/view binding at the response-projection boundary.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.api.deps import DbSession, MarketsPublishedView
+from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.models import MarketDataOverlay
 from app.schemas.market_data_views import (
@@ -28,7 +31,7 @@ from app.schemas.market_data_views import (
     YieldCurvePointRead,
     YieldCurveViewRead,
 )
-from app.services import market_data, market_data_overlays
+from app.services import market_data, market_data_overlays, scoped_authorization
 
 router = APIRouter(tags=["market-data"])
 
@@ -59,8 +62,20 @@ def get_market_data_views(
     # curve at read time (spec §2, §9): golden data untouched, adjusted
     # series emitted alongside the base.
     overlays_by_curve: dict[str, list[MarketDataOverlay]] = {}
-    for overlay in market_data_overlays.active_curve_overlays(db, org, bank.id, effective_as_of):
-        overlays_by_curve.setdefault(overlay.base_curve_name or "", []).append(overlay)
+    decision = scoped_authorization.evaluate_bank_permission(
+        db,
+        access.ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="market_data_views.overlays",
+    )
+    if decision is not None and decision.allowed:
+        for overlay in market_data_overlays.active_curve_overlays(
+            db, org, bank.id, effective_as_of
+        ):
+            overlays_by_curve.setdefault(overlay.base_curve_name or "", []).append(overlay)
 
     curves: list[YieldCurveViewRead] = []
     for curve in market_data.list_yield_curves(db, org, bank.id, as_of=effective_as_of, now=now):

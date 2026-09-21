@@ -21,6 +21,7 @@ Markets authority is split by what the data **is**, not by which page shows it:
 | Surface                                                                                                   | Required complete binding          |
 | --------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | `GET …/market-data/views`, `source-preferences`, `planes`, `curves/{name}/forward-grid`, `scopes`, `quota` | MARKETS / `published` / `view`     |
+| Private components, adjusted values, and overlay delta previews in `views` / `planes` | Additional MARKETS / `confidential` / `view` |
 | `GET /market-data/templates/{kind}?bank_id=` (organization-level path, institution named by the query)    | MARKETS / `published` / `view`     |
 | `POST …/market-data/uploads` (manual market-data upload)                                                  | MARKETS / `published` / `create`   |
 | `GET …/implied-rating/runs`, `GET …/implied-rating/runs/{id}`                                             | MARKETS / `confidential` / `view`  |
@@ -29,6 +30,11 @@ Markets authority is split by what the data **is**, not by which page shows it:
 | `POST …/market-data/overlays` (new or superseding version)                                                | MARKETS / `confidential` / `create` |
 | `POST …/market-data/overlays/{id}/end`                                                                    | MARKETS / `confidential` / `edit`  |
 | `GET …/market-data/connections`                                                                           | MARKETS / `restricted` / `view`    |
+
+The views and planes response-projection boundaries evaluate the additional confidential
+view decision on the exact bank (or explicit organization-wide coverage). A denial or
+evaluator failure preserves published base curves but omits private components,
+adjusted points, and delta previews; scalar roles and partial bindings never suffice.
 
 Every institution route resolves the tenant-owned bank first: an unknown or
 foreign bank is 404 before any permission is evaluated. An overlay or rating run

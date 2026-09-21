@@ -736,8 +736,14 @@ def _present_sources(
     return set(rows)
 
 
-def resolve_planes(
-    db: Session, ctx: TenantContext, bank_id: str, category: str, as_of: date
+def resolve_planes(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    category: str,
+    as_of: date,
+    *,
+    include_overlays: bool,
 ) -> PlanesRead:
     """The same scope resolved under each base plane, side by side (spec §4)."""
     if category not in CATEGORIES:
@@ -754,7 +760,15 @@ def resolve_planes(
     planes: list[PlaneRead] = []
     for source in SOURCE_CHOICES:
         resolved = resolve_source_systems(source, present)
-        items = _plane_items(db, org, bank_id, category, as_of, resolved, overlay=choice.overlay)
+        items = _plane_items(
+            db,
+            org,
+            bank_id,
+            category,
+            as_of,
+            resolved,
+            overlay=choice.overlay and include_overlays,
+        )
         planes.append(
             PlaneRead(
                 source=source,
@@ -768,9 +782,13 @@ def resolve_planes(
         category=category,
         as_of=as_of,
         selected_source=choice.source,
-        overlay_enabled=choice.overlay,
+        overlay_enabled=choice.overlay and include_overlays,
         planes=planes,
-        overlay=_overlay_preview(db, org, bank_id, category, as_of, choice, present),
+        overlay=(
+            _overlay_preview(db, org, bank_id, category, as_of, choice, present)
+            if include_overlays
+            else PlaneOverlayRead(available=False, delta_preview=[])
+        ),
     )
 
 
