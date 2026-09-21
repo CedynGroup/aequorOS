@@ -14,7 +14,12 @@ _ = (audit_event, financial, organization, risk, user)
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # ``fileConfig`` disables every logger that already exists unless told
+    # otherwise, and this module is imported in-process by the Postgres test
+    # suite's ``command.upgrade`` calls: with the default, every application
+    # logger created before the upgrade (``app.ai`` among them) went silent for
+    # the rest of the run. Configure the alembic/sqlalchemy loggers only.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

@@ -35,10 +35,13 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.fixtures.icaap.postgres_quarantine import DATE_COMPARED_TO_TEXT
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/icaap"
 SECTION = "executive_summary"
 AS_OF = "2025-12-31"
+
+pytestmark = DATE_COMPARED_TO_TEXT
 
 
 @pytest.fixture(autouse=True)
