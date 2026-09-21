@@ -232,8 +232,8 @@ on one canonical store — the live tier for intraday awareness, the official ti
   each cheap module computes a baseline metric + limit evaluation (`compute_live`, reusing the
   same domain engines as the detail views), **upserts** one `live_metrics` row, and reconciles open `live_findings`
   (continuing breaches keep identity; cleared breaches are superseded). It creates **zero**
-  `RegulatoryRun` rows. Forecast has no cheap path, so its live row mirrors the latest succeeded
-  official forecast run (populated on the next refresh after an official run).
+  `RegulatoryRun` rows. Forecast computes its current five-year baseline through
+  `regulatory_forecasting.compute_live`, independently of saved official runs.
 - **Official tier** — `pipeline.run_official` (`job_type=official_run`): reuses
   `data_activation.run_official_modules` to mint the immutable 22-scenario + forecast run set for
   filing. Facts are re-derived only when the period has none, so repeat official runs on unchanged
