@@ -37,6 +37,7 @@ import {
   scenarioLabel,
 } from '@/components/forecasting/lib';
 import ForecastingRunGate from '@/components/forecasting/RunGate';
+import { DisabledWithReason } from '@/components/ui/DisabledWithReason';
 import { useBankContext } from '@/components/shell/BankContext';
 import {
   useCreateForecastRun,
@@ -155,6 +156,23 @@ export default function ScenariosPage() {
         }}
       >
         <PageContainer className="py-6 space-y-6">
+          {!moduleScope.forecastingAggregatedView && (
+            <SectionCard title="Scenario designer">
+              <DisabledWithReason reason="Requires Forecasting · Aggregated · View. Ask your organization owner or admin to grant it.">
+                {(descriptionId) => (
+                  <button
+                    type="button"
+                    disabled
+                    aria-describedby={descriptionId}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <PlayCircle size={13} aria-hidden />
+                    Run scenario
+                  </button>
+                )}
+              </DisabledWithReason>
+            </SectionCard>
+          )}
           {scenariosQuery.data && (
             <ScenarioDesigner
               scenarios={scenariosQuery.data}
