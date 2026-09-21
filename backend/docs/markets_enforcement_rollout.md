@@ -18,18 +18,18 @@ Markets authority is split by what the data **is**, not by which page shows it:
 
 ## Affected surfaces
 
-| Surface                                                                                                   | Required complete binding          |
-| --------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `GET …/market-data/views`, `source-preferences`, `planes`, `curves/{name}/forward-grid`, `scopes`, `quota` | MARKETS / `published` / `view`     |
-| Private components, adjusted values, and overlay delta previews in `views` / `planes` | Additional MARKETS / `confidential` / `view` |
-| `GET /market-data/templates/{kind}?bank_id=` (organization-level path, institution named by the query)    | MARKETS / `published` / `view`     |
-| `POST …/market-data/uploads` (manual market-data upload)                                                  | MARKETS / `published` / `create`   |
-| `GET …/implied-rating/runs`, `GET …/implied-rating/runs/{id}`                                             | MARKETS / `confidential` / `view`  |
-| `POST …/implied-rating/runs`                                                                              | MARKETS / `confidential` / `run`   |
-| `GET …/market-data/overlays`                                                                              | MARKETS / `confidential` / `view`  |
-| `POST …/market-data/overlays` (new or superseding version)                                                | MARKETS / `confidential` / `create` |
-| `POST …/market-data/overlays/{id}/end`                                                                    | MARKETS / `confidential` / `edit`  |
-| `GET …/market-data/connections`                                                                           | MARKETS / `restricted` / `view`    |
+| Surface                                                                                                    | Required complete binding                    |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `GET …/market-data/views`, `source-preferences`, `planes`, `curves/{name}/forward-grid`, `scopes`, `quota` | MARKETS / `published` / `view`               |
+| Private components, adjusted values, and overlay delta previews in `views` / `planes`                      | Additional MARKETS / `confidential` / `view` |
+| `GET /market-data/templates/{kind}?bank_id=` (organization-level path, institution named by the query)     | MARKETS / `published` / `view`               |
+| `POST …/market-data/uploads` (manual market-data upload)                                                   | MARKETS / `published` / `create`             |
+| `GET …/implied-rating/runs`, `GET …/implied-rating/runs/{id}`                                              | MARKETS / `confidential` / `view`            |
+| `POST …/implied-rating/runs`                                                                               | MARKETS / `confidential` / `run`             |
+| `GET …/market-data/overlays`                                                                               | MARKETS / `confidential` / `view`            |
+| `POST …/market-data/overlays` (new or superseding version)                                                 | MARKETS / `confidential` / `create`          |
+| `POST …/market-data/overlays/{id}/end`                                                                     | MARKETS / `confidential` / `edit`            |
+| `GET …/market-data/connections`                                                                            | MARKETS / `restricted` / `view`              |
 
 The views and planes response-projection boundaries evaluate the additional confidential
 view decision on the exact bank (or explicit organization-wide coverage). A denial or
@@ -72,9 +72,9 @@ Markets grants do not open the Data Engine.
 
 ## Dashboard controls
 
-`/markets` requires MARKETS/`published`/`view`; without it the module is absent
-from navigation, a deep link resolves as 404, and no market-data request is
-issued. Within the hub:
+`/markets` requires MARKETS/`published`/`view`; without it the navigation entry stays visible but disabled with
+“Requires Markets · Published · View. Ask your organization owner or admin to
+grant it.” A deep link resolves as 404, and no market-data request is issued. Within the hub:
 
 - **Edit spreads** (curve board and curves explorer) needs
   MARKETS/`confidential`/`view`. Without it the control stays visible and
@@ -145,7 +145,8 @@ ORDER BY u.organization_id, b.id, u.email, ab.role_bundle, ab.sensitivity_scope;
 Who this cutover affects, beyond the obvious Markets readers:
 
 - anyone who uploads market-data workbooks or downloads the templates
-  (Data Engine → Market Data), who today needs only the scalar `analyst` role;
+  (Data Engine → Market Data), whose pre-cutover access relied on authentication
+  for templates and the scalar `analyst` gate for uploads;
 - anyone who runs or reads implied-rating runs through the API;
 - anyone who maintains private curve spreads;
 - anyone whose Data Engine overview or Settings page lists market-data
@@ -171,13 +172,13 @@ Create only rows approved from the inventory through the authorization service.
 Follow the foundation's
 [authorization-version and session transition contract](authorization_foundation.md#authorization-version-and-deployment-transition).
 
-| Duty                                                        | `principal_type` | `role_bundle`                                 | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
-| ----------------------------------------------------------- | ---------------- | --------------------------------------------- | ------------------- | ---------------- | -------------- | ------------------- |
-| Read the Markets hub, source planes, quota, and templates   | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `markets`      | `published`         |
-| Upload market-data workbooks                                | `human`          | `analyst`                                     | `institution`       | exact `BK-*`     | `markets`      | `published`         |
-| Read implied-rating runs and private spreads                | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `markets`      | `confidential`      |
-| Run implied ratings; add and end private spreads            | `human`          | `analyst`                                     | `institution`       | exact `BK-*`     | `markets`      | `confidential`      |
-| Read connection metadata (fingerprint, expiry, status)      | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `markets`      | `restricted`        |
+| Duty                                                      | `principal_type` | `role_bundle`                                 | `institution_scope` | `institution_id` | `module_scope` | `sensitivity_scope` |
+| --------------------------------------------------------- | ---------------- | --------------------------------------------- | ------------------- | ---------------- | -------------- | ------------------- |
+| Read the Markets hub, source planes, quota, and templates | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `markets`      | `published`         |
+| Upload market-data workbooks                              | `human`          | `analyst`                                     | `institution`       | exact `BK-*`     | `markets`      | `published`         |
+| Read implied-rating runs and private spreads              | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `markets`      | `confidential`      |
+| Run implied ratings; add and end private spreads          | `human`          | `analyst`                                     | `institution`       | exact `BK-*`     | `markets`      | `confidential`      |
+| Read connection metadata (fingerprint, expiry, status)    | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `markets`      | `restricted`        |
 
 If the institution explicitly approves coverage across all its banks, replace
 only `institution_scope` with `organization` and `institution_id` with `NULL`.

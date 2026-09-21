@@ -179,22 +179,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   authority. Ownership and directory view remain unassigned; explicit staff owner
   designation is still required. The authoritative rollout contract is
   `backend/docs/account_administration_enforcement_rollout.md`.
-  **Markets authority is split by what the data IS (built 2026-09-21; contract
-  `backend/docs/markets_enforcement_rollout.md`).** Vendor/desk market data is
-  MARKETS/`published` (hub views, source planes, forward grids, scopes, quota,
-  templates, and the manual upload — `create`), material derived from the bank's
-  own book is MARKETS/`confidential` (implied-rating runs `view`/`run`, private
-  curve overlays `view`/`create`/`edit`), and credential-bearing connection
-  metadata is MARKETS/`restricted` `view`. The manual market-data upload is OWNED
-  BY MARKETS, never DATA: it writes market-data canonical state through the
-  adapter, so a Data Engine grant does not upload market data and a Markets grant
-  does not ingest a book. The template download keeps its organization-level
-  path but REQUIRES `bank_id` and is decided on that bank — the projection has no
-  organization-wide Markets capability, so an organization-target check would
-  lock out every institution-scoped analyst. Connection lifecycle and the
-  source-preference PUT stay on the legacy analyst gate until configuration
-  authority lands; `tests/architecture/test_markets_authorization.py` pins both
-  sides.
+  **Markets authority follows the data, not the page.** Manual market-data
+  uploads belong to Markets, not Data Engine. The authoritative tier, projection,
+  template-target, and held-configuration contracts live in
+  [the Markets rollout](backend/docs/markets_enforcement_rollout.md), pinned by
+  `backend/tests/architecture/test_markets_authorization.py`.
   **Filing is its OWN authority (built 2026-09-20; no migration).** Approving a return
   and transmitting it to the regulator shared `Permission.APPROVE`, and on an ungated
   family the scalar `approver` role alone satisfied submit — so whoever approved could
