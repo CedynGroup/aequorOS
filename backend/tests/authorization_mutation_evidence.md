@@ -127,6 +127,12 @@ and passed **3/3** with the fix; the response comparisons and successful
 withdrawal lifecycle controls were completed during review. The disposable
 server was stopped and its data removed afterwards.
 
+Re-verified 2026-09-21 after rebasing onto `main` with the #230 filing chain and
+the #233 census repair: census guard, focused regression and service suites
+**23 passed**; coverage layer **433 passed, 0 skipped** (the two former
+system-of-record skips now run in the strict parametrization); generative layer
+on the disposable Postgres `risk_service_test` role **2 passed** (36.9s).
+
 ## Object-reference census after the filing chain (#230)
 
 2026-09-20, Python 3.13, disposable local PostgreSQL (Docker, `postgres` role)
