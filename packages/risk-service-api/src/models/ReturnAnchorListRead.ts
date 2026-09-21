@@ -25,6 +25,20 @@ import {
   IneligibleReasonToJSON,
   IneligibleReasonToJSONTyped,
 } from "./IneligibleReason";
+import type { DeadlineNote } from "./DeadlineNote";
+import {
+  DeadlineNoteFromJSON,
+  DeadlineNoteFromJSONTyped,
+  DeadlineNoteToJSON,
+  DeadlineNoteToJSONTyped,
+} from "./DeadlineNote";
+import type { EffectiveFrom } from "./EffectiveFrom";
+import {
+  EffectiveFromFromJSON,
+  EffectiveFromFromJSONTyped,
+  EffectiveFromToJSON,
+  EffectiveFromToJSONTyped,
+} from "./EffectiveFrom";
 import type { ReturnFrequency } from "./ReturnFrequency";
 import {
   ReturnFrequencyFromJSON,
@@ -59,6 +73,18 @@ export interface ReturnAnchorListRead {
   bankId: string;
   /**
    *
+   * @type {DeadlineNote}
+   * @memberof ReturnAnchorListRead
+   */
+  deadlineNote?: DeadlineNote;
+  /**
+   *
+   * @type {EffectiveFrom}
+   * @memberof ReturnAnchorListRead
+   */
+  effectiveFrom?: EffectiveFrom;
+  /**
+   *
    * @type {ReturnFrequency}
    * @memberof ReturnAnchorListRead
    */
@@ -75,6 +101,12 @@ export interface ReturnAnchorListRead {
    * @memberof ReturnAnchorListRead
    */
   ineligibleReason?: IneligibleReason;
+  /**
+   *
+   * @type {number}
+   * @memberof ReturnAnchorListRead
+   */
+  lookbackMonths: number;
   /**
    *
    * @type {string}
@@ -94,6 +126,8 @@ export function instanceOfReturnAnchorListRead(
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
   if (!("frequency" in value) || value["frequency"] === undefined) return false;
   if (!("horizonMonths" in value) || value["horizonMonths"] === undefined)
+    return false;
+  if (!("lookbackMonths" in value) || value["lookbackMonths"] === undefined)
     return false;
   if (!("returnCode" in value) || value["returnCode"] === undefined)
     return false;
@@ -116,12 +150,21 @@ export function ReturnAnchorListReadFromJSONTyped(
     anchors: (json["anchors"] as Array<any>).map(ReturnAnchorReadFromJSON),
     asOf: new Date(json["as_of"]),
     bankId: json["bank_id"],
+    deadlineNote:
+      json["deadline_note"] == null
+        ? undefined
+        : DeadlineNoteFromJSON(json["deadline_note"]),
+    effectiveFrom:
+      json["effective_from"] == null
+        ? undefined
+        : EffectiveFromFromJSON(json["effective_from"]),
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
     horizonMonths: json["horizon_months"],
     ineligibleReason:
       json["ineligible_reason"] == null
         ? undefined
         : IneligibleReasonFromJSON(json["ineligible_reason"]),
+    lookbackMonths: json["lookback_months"],
     returnCode: json["return_code"],
   };
 }
@@ -142,9 +185,12 @@ export function ReturnAnchorListReadToJSONTyped(
     anchors: (value["anchors"] as Array<any>).map(ReturnAnchorReadToJSON),
     as_of: value["asOf"].toISOString().substring(0, 10),
     bank_id: value["bankId"],
+    deadline_note: DeadlineNoteToJSON(value["deadlineNote"]),
+    effective_from: EffectiveFromToJSON(value["effectiveFrom"]),
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     horizon_months: value["horizonMonths"],
     ineligible_reason: IneligibleReasonToJSON(value["ineligibleReason"]),
+    lookback_months: value["lookbackMonths"],
     return_code: value["returnCode"],
   };
 }

@@ -1,0 +1,429 @@
+{
+  "schema_version": "icaap-editor-v1",
+  "note": "Shared by the backend validator tests and the dashboard Tiptap parity test. Every document here is exercised by both stacks, so a divergence between the browser's schema and the server's allowlist fails a test rather than reaching a filed report.",
+  "block_id": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5b",
+  "other_block_id": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5c",
+  "suggestion_id": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5d",
+  "valid": [
+    {
+      "name": "empty_document",
+      "why": "A section nobody has written yet. The server must be able to hold it.",
+      "doc": {"type": "doc", "content": []}
+    },
+    {
+      "name": "plain_paragraph",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "The institution assesses its capital adequacy annually."}]}
+        ]
+      }
+    },
+    {
+      "name": "headings_two_three_four",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Capital adequacy"}]},
+          {"type": "heading", "attrs": {"level": 3}, "content": [{"type": "text", "text": "Methodology"}]},
+          {"type": "heading", "attrs": {"level": 4}, "content": [{"type": "text", "text": "Assumptions"}]}
+        ]
+      }
+    },
+    {
+      "name": "marks_bold_italic_underline",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {"type": "text", "text": "material", "marks": [{"type": "bold"}]},
+              {"type": "text", "text": " and "},
+              {"type": "text", "text": "immaterial", "marks": [{"type": "italic"}]},
+              {"type": "text", "text": " risks", "marks": [{"type": "underline"}, {"type": "bold"}]}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "hard_break",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "First line"}, {"type": "hardBreak"}, {"type": "text", "text": "Second line"}]}
+        ]
+      }
+    },
+    {
+      "name": "bullet_list",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "bulletList",
+            "content": [
+              {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Credit risk"}]}]},
+              {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Market risk"}]}]}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ordered_list_with_start",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "orderedList",
+            "attrs": {"start": 3, "type": null},
+            "content": [
+              {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Third item"}]}]}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nested_list_inside_list_item",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "bulletList",
+            "content": [
+              {
+                "type": "listItem",
+                "content": [
+                  {"type": "paragraph", "content": [{"type": "text", "text": "Concentration"}]},
+                  {
+                    "type": "bulletList",
+                    "content": [
+                      {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Single name"}]}]}
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "blockquote",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "blockquote", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "The Board challenged the severity of the adverse scenario."}]}]}
+        ]
+      }
+    },
+    {
+      "name": "data_block_atom",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "The capital position as at the year end:"}]},
+          {"type": "dataBlock", "attrs": {"blockId": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5b"}}
+        ]
+      }
+    },
+    {
+      "name": "fact_ref_atom",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {"type": "text", "text": "The total capital ratio was "},
+              {"type": "factRef", "attrs": {"blockId": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5b", "factKey": "car_pct", "suggestionId": null}},
+              {"type": "text", "text": "."}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "paragraph_with_ai_suggestion_id",
+      "why": "D-028: P4 provenance rides on an attribute that exists from P1, so adopting an AI draft needs no document migration.",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "attrs": {"aiSuggestionId": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5d"},
+            "content": [{"type": "text", "text": "Drafted from the risk register and reviewed by the preparer."}]
+          }
+        ]
+      }
+    },
+    {
+      "name": "fact_ref_with_suggestion_id",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {"type": "factRef", "attrs": {"blockId": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5b", "factKey": "cet1_ratio_pct", "suggestionId": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5d"}}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "markup_characters_are_text",
+      "why": "Angle brackets and ampersands are content, not markup. The renderers escape them.",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "<b>not bold</b> & <script>alert(1)</script>"}]}
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown_node_image",
+      "code": "unknown_node",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {"type": "doc", "content": [{"type": "image", "attrs": {"src": "https://example.test/x.png"}}]}
+    },
+    {
+      "name": "unknown_node_table",
+      "code": "unknown_node",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {"type": "doc", "content": [{"type": "table", "content": []}]}
+    },
+    {
+      "name": "unknown_node_code_block",
+      "code": "unknown_node",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {"type": "doc", "content": [{"type": "codeBlock", "content": [{"type": "text", "text": "rm -rf /"}]}]}
+    },
+    {
+      "name": "unknown_mark_link",
+      "code": "unknown_mark",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "paragraph", "content": [{"type": "text", "text": "click", "marks": [{"type": "link", "attrs": {"href": "https://example.test"}}]}]}
+        ]
+      }
+    },
+    {
+      "name": "unknown_mark_strike",
+      "code": "unknown_mark",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {
+        "type": "doc",
+        "content": [{"type": "paragraph", "content": [{"type": "text", "text": "gone", "marks": [{"type": "strike"}]}]}]
+      }
+    },
+    {
+      "name": "html_string_instead_of_document",
+      "code": "not_an_object",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": "<p>The capital ratio was 15%.</p>"
+    },
+    {
+      "name": "top_node_is_not_doc",
+      "code": "not_a_doc",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {"type": "paragraph", "content": [{"type": "text", "text": "orphan"}]}
+    },
+    {
+      "name": "heading_level_one",
+      "code": "bad_attr",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {"type": "doc", "content": [{"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": "Too big"}]}]}
+    },
+    {
+      "name": "heading_level_is_a_string",
+      "code": "bad_attr",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {"type": "doc", "content": [{"type": "heading", "attrs": {"level": "2"}, "content": [{"type": "text", "text": "Stringly typed"}]}]}
+    },
+    {
+      "name": "heading_level_is_a_boolean",
+      "code": "bad_attr",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {"type": "doc", "content": [{"type": "heading", "attrs": {"level": true}, "content": [{"type": "text", "text": "Not a level"}]}]}
+    },
+    {
+      "name": "heading_missing_level",
+      "code": "missing_attr",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {"type": "doc", "content": [{"type": "heading", "content": [{"type": "text", "text": "No level"}]}]}
+    },
+    {
+      "name": "data_block_without_block_id",
+      "code": "missing_attr",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {"type": "doc", "content": [{"type": "dataBlock"}]}
+    },
+    {
+      "name": "data_block_id_is_not_a_uuid",
+      "code": "bad_attr",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {"type": "doc", "content": [{"type": "dataBlock", "attrs": {"blockId": "not-a-uuid"}}]}
+    },
+    {
+      "name": "fact_key_is_not_a_fact_key",
+      "code": "bad_attr",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "paragraph", "content": [{"type": "factRef", "attrs": {"blockId": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5b", "factKey": "Car Pct!"}}]}
+        ]
+      }
+    },
+    {
+      "name": "unknown_attribute_on_paragraph",
+      "code": "unknown_key",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {
+        "type": "doc",
+        "content": [{"type": "paragraph", "attrs": {"style": "color:red"}, "content": [{"type": "text", "text": "styled"}]}]
+      }
+    },
+    {
+      "name": "unknown_key_on_node",
+      "code": "unknown_key",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {
+        "type": "doc",
+        "content": [{"type": "paragraph", "html": "<b>x</b>", "content": [{"type": "text", "text": "x"}]}]
+      }
+    },
+    {
+      "name": "empty_text_node",
+      "code": "bad_text",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": ""}]}]}
+    },
+    {
+      "name": "control_character_in_text",
+      "code": "bad_text",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "before\u0000after"}]}]}
+    },
+    {
+      "name": "newline_inside_text_node",
+      "code": "bad_text",
+      "rejected_by": "grammar",
+      "structural": false,
+      "why": "A line break is a hardBreak node, so a raw newline would render differently in the editor and in the filed PDF.",
+      "doc": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "line one\nline two"}]}]}
+    },
+    {
+      "name": "marks_on_a_block_node",
+      "code": "unknown_mark",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {
+        "type": "doc",
+        "content": [{"type": "paragraph", "marks": [{"type": "bold"}], "content": [{"type": "text", "text": "x"}]}]
+      }
+    },
+    {
+      "name": "duplicate_mark",
+      "code": "unknown_mark",
+      "rejected_by": "grammar",
+      "structural": false,
+      "doc": {
+        "type": "doc",
+        "content": [{"type": "paragraph", "content": [{"type": "text", "text": "x", "marks": [{"type": "bold"}, {"type": "bold"}]}]}]
+      }
+    },
+    {
+      "name": "list_item_starting_with_a_list",
+      "code": "bad_content",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "bulletList",
+            "content": [
+              {"type": "listItem", "content": [{"type": "bulletList", "content": [{"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "x"}]}]}]}]}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty_bullet_list",
+      "code": "bad_content",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {"type": "doc", "content": [{"type": "bulletList", "content": []}]}
+    },
+    {
+      "name": "text_at_block_level",
+      "code": "bad_content",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {"type": "doc", "content": [{"type": "text", "text": "loose text"}]}
+    },
+    {
+      "name": "content_inside_an_atom",
+      "code": "bad_content",
+      "rejected_by": "grammar",
+      "structural": true,
+      "doc": {
+        "type": "doc",
+        "content": [{"type": "dataBlock", "attrs": {"blockId": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5b"}, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "x"}]}]}]
+      }
+    }
+  ],
+  "service_invalid": [
+    {
+      "name": "fact_ref_to_a_block_the_cycle_does_not_have",
+      "code": "unknown_block",
+      "why": "The grammar accepts any well-formed UUID; only the service knows which blocks this ICAAP holds.",
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "paragraph", "content": [{"type": "factRef", "attrs": {"blockId": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a99", "factKey": "car_pct"}}]}
+        ]
+      }
+    },
+    {
+      "name": "fact_ref_to_a_figure_the_block_does_not_publish",
+      "code": "unknown_fact",
+      "why": "The block exists; the fact key is not one it exposes. Only the service can tell.",
+      "uses_cycle_block": true,
+      "doc": {
+        "type": "doc",
+        "content": [
+          {"type": "paragraph", "content": [{"type": "factRef", "attrs": {"blockId": "018f3a2c-9c1e-7b3d-8a44-0c1d2e3f4a5b", "factKey": "not_a_published_fact"}}]}
+        ]
+      }
+    }
+  ]
+}

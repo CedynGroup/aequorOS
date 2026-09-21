@@ -145,10 +145,23 @@ reporting_date → due_date), generator, template id + fidelity grade, channel d
 
 `POST /banks/{bank}/regulatory-packages/{id}/export?kind=` — `pdf` (values only; **the BoG
 submission package**), `xlsx` / `xlsx_official` (sealed values-only Excel, sheets protected — the
-governance twin of the PDF), `xlsx_working` (official BoG BSD forms only: the same official
-layout with the template's live formulas for ALM/Finance review; labelled WORKING COPY; a
-distinct artifact kind that is never filed and never signed), `csv`. Rendering:
-`bog_forms/render.py` (`mode="official"|"working"`); kinds admitted by migration `202608160015`.
+governance twin of the PDF, and the copy officers sign), `xlsx_working` (official BoG BSD forms
+only: the same official layout with the template's live formulas; labelled FORMULA COPY), `csv`.
+Rendering: `bog_forms/render.py` (`mode="official"|"working"`); kinds admitted by migration
+`202608160015`.
+
+**Both Excel copies of an official BoG form are filed (founder decision 2026-09-20).** BoG prefer
+the Excel form with its formulas live, so `xlsx_working` joins the filing set alongside the
+protected values-only workbook — filed, never signed. The signed record of truth does not move:
+certification still pins its revision to the values-only PDF, and every surface that shows the
+formula copy says it is not the signed record.
+
+`workflow.filing_admits_artifact(kind, generator=…)` is the one place the question is asked, and
+it is deny-by-default on **two** axes: the kind must be in `FILABLE_WORKING_ARTIFACT_KINDS`
+(today `xlsx_working` only — `docx_working` is not), and the return's generator must be named for
+that kind in `WORKING_ARTIFACT_FILING_GENERATORS` (today `bog_form` only). An SDI packet's
+working copy is an AequorOS calculation sheet, not BoG's workbook, so it is **not** filed and
+keeps its `WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact` label.
 
 ## 5. Services (`app/services/regulatory_reporting/`)
 

@@ -43,7 +43,12 @@ from app.domain.authority.outcomes import (
 )
 from app.domain.capital.engine import CapitalLineItem, CapitalRatiosResult, RwaResult
 from app.domain.stress.credit_bottom_up import CRD_EXPOSURE_CLASSES
-from app.domain.stress.management_actions import ManagementActionsResult, PostActionYear
+from app.domain.stress.management_actions import (
+    RECOGNITION_CAP_CODES,
+    ManagementActionsResult,
+    PostActionYear,
+    RecognitionCaps,
+)
 from app.domain.stress.projection import (
     EnterpriseProjection,
     ProjectedYear,
@@ -91,9 +96,10 @@ MONEY = Decimal("0.001")  # GHS'000 to three decimals
 # and the caller resolves it from the control plane. Absence refuses; it is never
 # assumed.
 
-# AT1 is eligible up to 1.5% of RWA, Tier 2 up to 2% of RWA (AppII Table 2).
-AT1_CAP_PCT_RWA = Decimal("1.5")
-TIER2_CAP_PCT_RWA = Decimal("2")
+# The AT1 / Tier 2 recognition caps of Table 2 are governed parameters
+# (``at1_cap_pct_rwa`` / ``tier2_cap_pct_rwa``), passed in as ``RecognitionCaps``
+# (founder directive D-024; regulatory audit M21). This module carried them as
+# literals until 2026-09-19.
 
 
 def thousands(value: Decimal) -> Decimal:
@@ -529,11 +535,11 @@ def _cet1_build(ratios: CapitalRatiosResult) -> Cet1Build:  # noqa: PLR0912 - a 
     )
 
 
-def _table2_row(year: ProjectedYear, label: str) -> Table2Row:
+def _table2_row(year: ProjectedYear, label: str, caps: RecognitionCaps) -> Table2Row:
     ratios = year.ratios
     total_rwa = year.rwa.total_rwa
-    at1_cap = total_rwa * AT1_CAP_PCT_RWA / _HUNDRED
-    tier2_cap = total_rwa * TIER2_CAP_PCT_RWA / _HUNDRED
+    at1_cap = total_rwa * caps.at1_pct_rwa / _HUNDRED
+    tier2_cap = total_rwa * caps.tier2_pct_rwa / _HUNDRED
     return Table2Row(
         label=label,
         total_rwa=thousands(total_rwa),
@@ -863,6 +869,7 @@ def build_appendix_ii(  # noqa: PLR0913 - the builder names its full optional-ov
     *,
     currency: str,
     car_target_pct: Decimal,
+    recognition_caps: RecognitionCaps | None,
     paid_up_min: Decimal | None = None,
     source: str | None = None,
     exposure_class_losses: Mapping[int, Mapping[str, Decimal]] | None = None,
@@ -883,6 +890,11 @@ def build_appendix_ii(  # noqa: PLR0913 - the builder names its full optional-ov
     institution-class aware; a bank modelling an internal target ABOVE that floor
     passes it here. This module never assumes one — see the note where the old
     ``DEFAULT_CAR_TARGET_PCT`` literal used to live.
+
+    ``recognition_caps`` is REQUIRED and carries no default either (D-024,
+    audit M21): the governed AT1 / Tier 2 recognition ceilings Table 2 caps the
+    eligible amounts at. ``None`` is accepted only where Table 2 is not built
+    (``basel_applicable=False``); a Basel build without them refuses.
 
     ``paid_up_min`` defaults to the floor carried on the projection's minima
     checks.
@@ -924,9 +936,25 @@ def build_appendix_ii(  # noqa: PLR0913 - the builder names its full optional-ov
     # the credit-RWA base automatically because s.29 zeroes market/operational RWA).
     table2_rows: list[Table2Row] = []
     if basel_applicable:
-        table2_rows.append(_table2_row(projection.current, "current"))
-        table2_rows += [_table2_row(year, f"base_y{year.year}") for year in projection.base]
-        table2_rows += [_table2_row(year, f"stress_y{year.year}") for year in projection.stress]
+        if recognition_caps is None:
+            raise NotComputable(
+                outcome(
+                    OutcomeState.MISSING_REQUIRED_INPUT,
+                    metric_id="appendix_ii.table2.eligible_capital",
+                    reason=(
+                        "The Additional Tier 1 and Tier 2 recognition caps are not "
+                        "configured for this institution, so the eligible amounts in "
+                        "Table 2 cannot be established."
+                    ),
+                    items=tuple(f"param:{code}" for code in RECOGNITION_CAP_CODES),
+                )
+            )
+        caps = recognition_caps
+        table2_rows.append(_table2_row(projection.current, "current", caps))
+        table2_rows += [_table2_row(year, f"base_y{year.year}", caps) for year in projection.base]
+        table2_rows += [
+            _table2_row(year, f"stress_y{year.year}", caps) for year in projection.stress
+        ]
 
     opening = _opening_retained(projection)
     base_openings = _retained_trajectory(projection.base, opening)

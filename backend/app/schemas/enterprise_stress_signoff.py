@@ -12,7 +12,9 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas.text import reject_control_characters
 
 
 class ClosedModel(BaseModel):
@@ -30,10 +32,18 @@ class StressSignoffCreate(ClosedModel):
     #: ¶67(a)(b): risks / exposures / entities covered + macro conditions and
     #: assumptions.
     scenario_narrative: str = Field(min_length=1, max_length=16000)
-    #: ¶67(d), ¶45: methodologies + justification of expert-judgement overlays.
+    #: ¶67(b), ¶45: justification of the assumptions and of expert-judgement
+    #: overlays.
     assumptions_rationale: str = Field(min_length=1, max_length=16000)
+    #: ¶67(c): the methodologies used.
     methodology_summary: str | None = Field(default=None, max_length=16000)
     reason: str = Field(min_length=1, max_length=1000)
+
+    # The narratives print on the filed Appendix II (PDF, XLSX, CSV); a control
+    # character cannot be written into a workbook, so it is refused at the door.
+    _no_control_characters = field_validator(
+        "scenario_narrative", "assumptions_rationale", "methodology_summary"
+    )(reject_control_characters)
 
 
 class StressSignoffUpdate(ClosedModel):
@@ -41,6 +51,10 @@ class StressSignoffUpdate(ClosedModel):
     assumptions_rationale: str | None = Field(default=None, min_length=1, max_length=16000)
     methodology_summary: str | None = Field(default=None, max_length=16000)
     reason: str = Field(min_length=1, max_length=1000)
+
+    _no_control_characters = field_validator(
+        "scenario_narrative", "assumptions_rationale", "methodology_summary"
+    )(reject_control_characters)
 
 
 class StressSignoffTransition(ClosedModel):
@@ -53,6 +67,10 @@ class StressSignoffAttestation(ClosedModel):
     #: ¶16 reporting & challenge / ¶20: the Board's challenge and review record.
     board_challenge: str | None = Field(default=None, max_length=16000)
     reason: str = Field(min_length=1, max_length=1000)
+
+    _no_control_characters = field_validator("credibility_rationale", "board_challenge")(
+        reject_control_characters
+    )
 
 
 class StressSignoffRead(ClosedModel):

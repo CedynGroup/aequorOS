@@ -26,6 +26,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
+from app.services.regulatory_reporting.exports.text import xml_safe
 from app.services.regulatory_reporting.templates import (
     ColumnSpec,
     RenderedCell,
@@ -72,7 +73,13 @@ def _write_cell(sheet: Worksheet, row_idx: int, col_idx: int, cell: RenderedCell
         target.alignment = Alignment(horizontal="center")
         return
     if cell.kind == "text":
-        sheet.cell(row=row_idx, column=col_idx, value=str(cell.value))
+        # Control characters a workbook cannot hold are made printable here, at
+        # render time (``exports.text``); the snapshot keeps the exact text.
+        target = sheet.cell(row=row_idx, column=col_idx, value=xml_safe(str(cell.value)))
+        # openpyxl stores any string starting with "=" as a FORMULA. A rendered
+        # text cell is snapshot data — for a narrative, text a user typed — so it
+        # is pinned as a string and can never be evaluated by the spreadsheet.
+        target.data_type = "s"
         return
     # Decimal — openpyxl stores it as a real number, formatting handles display.
     target = sheet.cell(row=row_idx, column=col_idx, value=cell.value)
@@ -128,7 +135,7 @@ def _metadata_sheet(workbook: Workbook, rendered: RenderedReturn) -> None:
     for row_idx, (label, value) in enumerate(rendered.metadata_pairs, start=1):
         label_cell = sheet.cell(row=row_idx, column=1, value=label)
         label_cell.font = Font(bold=True)
-        sheet.cell(row=row_idx, column=2, value=value)
+        sheet.cell(row=row_idx, column=2, value=xml_safe(value))
     row_idx = len(rendered.metadata_pairs) + 2
     sheet.cell(row=row_idx, column=1, value="Attestation").font = Font(bold=True)
     for offset, line in enumerate(rendered.attestation_lines, start=1):
@@ -138,6 +145,11 @@ def _metadata_sheet(workbook: Workbook, rendered: RenderedReturn) -> None:
         sheet.cell(row=row_idx, column=1, value="Template notes").font = Font(bold=True)
         for offset, note in enumerate(rendered.template.notes, start=1):
             sheet.cell(row=row_idx + offset, column=2, value=note)
+        row_idx += len(rendered.template.notes) + 2
+    if rendered.report_notes:
+        sheet.cell(row=row_idx, column=1, value="Report notes").font = Font(bold=True)
+        for offset, note in enumerate(rendered.report_notes, start=1):
+            sheet.cell(row=row_idx + offset, column=2, value=xml_safe(note)).data_type = "s"
     sheet.column_dimensions["A"].width = 24
     sheet.column_dimensions["B"].width = 110
 
@@ -454,7 +466,7 @@ def _provenance_sheet(workbook: Workbook, rendered: RenderedReturn, used_titles:
     sheet = workbook.create_sheet(_sheet_title("Fidelity & Provenance", used_titles))
     row_idx = 1
     for line in rendered.provenance_lines:
-        sheet.cell(row=row_idx, column=1, value=line).font = Font(bold=(row_idx == 1))
+        sheet.cell(row=row_idx, column=1, value=xml_safe(line)).font = Font(bold=(row_idx == 1))
         row_idx += 1
     row_idx += 1
     headers = ("Module", "Run ID", "Input Hash", "Engine Version")
@@ -465,7 +477,7 @@ def _provenance_sheet(workbook: Workbook, rendered: RenderedReturn, used_titles:
     row_idx += 1
     for module, run_id, input_hash, engine_version in rendered.provenance_runs:
         for col_idx, value in enumerate((module, run_id, input_hash, engine_version), start=1):
-            sheet.cell(row=row_idx, column=col_idx, value=value)
+            sheet.cell(row=row_idx, column=col_idx, value=xml_safe(value))
         row_idx += 1
     row_idx += 1
     sheet.cell(row=row_idx, column=1, value="Per-section fidelity").font = Font(bold=True)
@@ -503,6 +515,14 @@ def _normalize_zip(data: bytes, pinned: datetime) -> bytes:
     return normalized.getvalue()
 
 
+#: The same normalisation, under a public name. Every OOXML container has the
+#: wall-clock problem this solves, so the ICAAP DOCX exports
+#: (``services/icaap/render/docx.py``) reuse it rather than growing a second,
+#: drifting copy: python-docx stamps zip entries at save time exactly as
+#: openpyxl does.
+normalize_zip = _normalize_zip
+
+
 def render_xlsx(
     rendered: RenderedReturn,
     *,
@@ -532,4 +552,4 @@ def render_xlsx(
     return _normalize_zip(buffer.getvalue(), pinned)
 
 
-__all__ = ["render_xlsx"]
+__all__ = ["normalize_zip", "render_xlsx"]

@@ -32,6 +32,13 @@ import {
   ValidationPassedToJSON,
   ValidationPassedToJSONTyped,
 } from "./ValidationPassed";
+import type { CurrentStageTitle } from "./CurrentStageTitle";
+import {
+  CurrentStageTitleFromJSON,
+  CurrentStageTitleFromJSONTyped,
+  CurrentStageTitleToJSON,
+  CurrentStageTitleToJSONTyped,
+} from "./CurrentStageTitle";
 import type { ReturnFamily } from "./ReturnFamily";
 import {
   ReturnFamilyFromJSON,
@@ -39,6 +46,13 @@ import {
   ReturnFamilyToJSON,
   ReturnFamilyToJSONTyped,
 } from "./ReturnFamily";
+import type { CurrentStageSeq } from "./CurrentStageSeq";
+import {
+  CurrentStageSeqFromJSON,
+  CurrentStageSeqFromJSONTyped,
+  CurrentStageSeqToJSON,
+  CurrentStageSeqToJSONTyped,
+} from "./CurrentStageSeq";
 import type { SubmissionRevision } from "./SubmissionRevision";
 import {
   SubmissionRevisionFromJSON,
@@ -114,6 +128,18 @@ export interface RegulatoryPackageSummaryRead {
   createdAt: Date;
   /**
    *
+   * @type {CurrentStageSeq}
+   * @memberof RegulatoryPackageSummaryRead
+   */
+  currentStageSeq?: CurrentStageSeq;
+  /**
+   *
+   * @type {CurrentStageTitle}
+   * @memberof RegulatoryPackageSummaryRead
+   */
+  currentStageTitle?: CurrentStageTitle;
+  /**
+   *
    * @type {ReturnFrequency}
    * @memberof RegulatoryPackageSummaryRead
    */
@@ -136,6 +162,12 @@ export interface RegulatoryPackageSummaryRead {
    * @memberof RegulatoryPackageSummaryRead
    */
   id: string;
+  /**
+   *
+   * @type {boolean}
+   * @memberof RegulatoryPackageSummaryRead
+   */
+  isRehearsal?: boolean;
   /**
    *
    * @type {Notes}
@@ -208,6 +240,12 @@ export interface RegulatoryPackageSummaryRead {
    * @memberof RegulatoryPackageSummaryRead
    */
   version: number;
+  /**
+   *
+   * @type {number}
+   * @memberof RegulatoryPackageSummaryRead
+   */
+  workflowRound?: number;
 }
 
 /**
@@ -274,10 +312,20 @@ export function RegulatoryPackageSummaryReadFromJSONTyped(
     bankId: json["bank_id"],
     basis: ReturnBasisFromJSON(json["basis"]),
     createdAt: new Date(json["created_at"]),
+    currentStageSeq:
+      json["current_stage_seq"] == null
+        ? undefined
+        : CurrentStageSeqFromJSON(json["current_stage_seq"]),
+    currentStageTitle:
+      json["current_stage_title"] == null
+        ? undefined
+        : CurrentStageTitleFromJSON(json["current_stage_title"]),
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
     generatedAt: new Date(json["generated_at"]),
     generatedBy: json["generated_by"],
     id: json["id"],
+    isRehearsal:
+      json["is_rehearsal"] == null ? undefined : json["is_rehearsal"],
     notes: NotesFromJSON(json["notes"]),
     regulatorComments: RegulatorCommentsFromJSON(json["regulator_comments"]),
     reportingDate: new Date(json["reporting_date"]),
@@ -290,6 +338,8 @@ export function RegulatoryPackageSummaryReadFromJSONTyped(
     updatedAt: new Date(json["updated_at"]),
     validationPassed: ValidationPassedFromJSON(json["validation_passed"]),
     version: json["version"],
+    workflowRound:
+      json["workflow_round"] == null ? undefined : json["workflow_round"],
   };
 }
 
@@ -312,10 +362,13 @@ export function RegulatoryPackageSummaryReadToJSONTyped(
     bank_id: value["bankId"],
     basis: ReturnBasisToJSON(value["basis"]),
     created_at: value["createdAt"].toISOString(),
+    current_stage_seq: CurrentStageSeqToJSON(value["currentStageSeq"]),
+    current_stage_title: CurrentStageTitleToJSON(value["currentStageTitle"]),
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     generated_at: value["generatedAt"].toISOString(),
     generated_by: value["generatedBy"],
     id: value["id"],
+    is_rehearsal: value["isRehearsal"],
     notes: NotesToJSON(value["notes"]),
     regulator_comments: RegulatorCommentsToJSON(value["regulatorComments"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
@@ -328,5 +381,6 @@ export function RegulatoryPackageSummaryReadToJSONTyped(
     updated_at: value["updatedAt"].toISOString(),
     validation_passed: ValidationPassedToJSON(value["validationPassed"]),
     version: value["version"],
+    workflow_round: value["workflowRound"],
   };
 }

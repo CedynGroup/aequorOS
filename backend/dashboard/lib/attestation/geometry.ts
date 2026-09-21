@@ -21,6 +21,7 @@ import type {
   PlacementFieldType,
   PlacementFieldTypeRead,
   SignatureFieldPlacement,
+  SignatureFieldPlacementRead,
 } from '@aequoros/risk-service-api';
 import { FIELD_TYPE_LABELS } from './fields';
 
@@ -124,7 +125,9 @@ export function limitsByFieldType(
 }
 
 /** What a box prints. Defaulted because the generated field carries a default. */
-export function fieldTypeOf(placement: SignatureFieldPlacement): PlacementFieldType {
+export function fieldTypeOf(
+  placement: SignatureFieldPlacementRead
+): PlacementFieldType {
   return placement.fieldType ?? 'signature';
 }
 
@@ -142,7 +145,7 @@ export function fieldTypeOf(placement: SignatureFieldPlacement): PlacementFieldT
  * exactly the duplication this indirection exists to avoid.
  */
 export function placementViolation(
-  placement: SignatureFieldPlacement,
+  placement: SignatureFieldPlacementRead,
   space: PageSpace,
   limits: PlacementLimits
 ): string | null {
@@ -229,7 +232,9 @@ export function newPlacement(
 }
 
 /** Whether both roles have the one signature field the document must carry. */
-export function signatureRolesPlaced(placements: SignatureFieldPlacement[]): Set<string> {
+export function signatureRolesPlaced(
+  placements: SignatureFieldPlacementRead[]
+): Set<string> {
   return new Set(
     placements
       .filter((placement) => fieldTypeOf(placement) === 'signature')

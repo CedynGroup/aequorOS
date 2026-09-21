@@ -30,6 +30,7 @@ the package's ``attestation_cycle``, so a withdrawn attestation stays legible
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
@@ -41,15 +42,20 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.models import AttestationSignature, RegulatoryPackage
-from app.services.attestation import digests
+from app.services.attestation import digests, layouts
 from app.services.attestation.policy import SigningPolicy, resolve_policy
 from app.services.audit import record_event
 
 GENESIS_HASH = "0" * 64
 
-#: Certification may only begin from a clean validated package: the figures
-#: must have passed validation with zero errors before anyone attests to them.
-CERTIFIABLE_STATUSES: frozenset[str] = frozenset({"validated"})
+#: Certification may only begin from a package whose MACHINE CHECKS have
+#: passed with zero errors: nobody attests to figures the rules engine has
+#: refused. The gate reads ``package.checks_passed`` rather than the old
+#: ``validated`` status, which is now only a projection of "checks passed and
+#: the return has not been sent for approval yet"
+#: (``docs/filing_workflow_redesign.md`` §3.1). ``CERTIFIABLE_STATUSES`` remains
+#: the set of positions from which a PREPARER may open the ceremony.
+CERTIFIABLE_STATUSES: frozenset[str] = frozenset({"generated", "validated"})
 
 #: Slots whose holder is a CHECKER — the second pair of eyes a regulated filing
 #: requires. Canonical here because this module owns the release guard;
@@ -225,9 +231,21 @@ def verify_chain(db: Session, ctx: TenantContext) -> tuple[bool, str | None]:
 
 
 def ensure_certifiable(
-    package: RegulatoryPackage, policy: SigningPolicy, role: str
+    package: RegulatoryPackage,
+    policy: SigningPolicy,
+    role: str,
+    signatures: Sequence[AttestationSignature] | None = None,
 ) -> None:
-    """Guard the preconditions common to every certification act."""
+    """Guard the preconditions common to every certification act.
+
+    ``signatures`` are the package's current attestation cycle. They are only
+    consulted where the policy enforces an order — which is every ceremony with
+    more than two signature fields, because there the order is a precondition of
+    the document's validity rather than a preference (see
+    :meth:`SigningPolicy.enforces_order`). A caller that omits them on such a
+    package is a programming error and says so, rather than quietly skipping the
+    check that keeps the Board's ``/All`` lock honest.
+    """
     if not policy.require_signature:
         raise AttestationConflict(
             "signature_not_required",
@@ -252,22 +270,78 @@ def ensure_certifiable(
                 "This return has already been certified by a preparer. Void the "
                 "current attestation to start again.",
             )
-        if package.status not in CERTIFIABLE_STATUSES:
-            raise AttestationConflict(
-                "not_validated",
-                "A return must pass validation with zero errors before it can be "
-                f"certified (current status: '{package.status}').",
-            )
+        # A stored report that carries errors is the specific answer and is
+        # given first; "no clean result at all" is the general one. Collapsing
+        # them would tell an officer with three ERROR findings only that the
+        # return is "not validated".
         report = package.validation_report or {}
-        if report.get("error_count") or not report.get("passed"):
+        if report and (report.get("error_count") or not report.get("passed")):
             raise AttestationConflict(
                 "validation_not_clean",
                 "Validation has not passed cleanly; the figures cannot be attested to yet.",
+            )
+        if package.status not in CERTIFIABLE_STATUSES or not package.checks_passed:
+            raise AttestationConflict(
+                "not_validated",
+                "A return must pass its checks with zero errors before it can be "
+                f"certified (current status: '{package.status}').",
             )
     elif package.attestation_state != "preparer_certified":
         raise AttestationConflict(
             "preparer_certification_missing",
             "The preparer must certify this return before an approver can.",
+        )
+    _ensure_signing_order(package, policy, role, signatures)
+
+
+def _ensure_signing_order(
+    package: RegulatoryPackage,
+    policy: SigningPolicy,
+    role: str,
+    signatures: Sequence[AttestationSignature] | None,
+) -> None:
+    """Refusal layer 1 of 3 on signing out of turn (P3-DESIGN §1.5).
+
+    The other two are the certification dialog, which shows the outstanding
+    roles and disables the action, and the bytes layer, where
+    ``pdf_signing.sign_as_board`` refuses a document whose earlier fields are
+    unsigned. Three layers for one rule because the consequence of getting past
+    all three is not an error message: it is a filed PDF whose Board signature a
+    verifier reports as illegally modified, which nobody discovers until an
+    examiner opens it.
+
+    Enforced BEFORE the step-up authorisation is consumed (``signing.certify``
+    calls this ahead of ``consume_authorization``), so a refusal never burns an
+    officer's one-shot token.
+    """
+    layout = layouts.layout_for_family(package.return_family)
+    if role == "preparer" or not policy.enforces_order(layout):
+        return
+    order = policy.field_roles(layout)
+    if role not in order:
+        # A role with no field on the artifact — a witness, on a policy that also
+        # records signatures the document does not carry. Ordering is a property
+        # of the LOCK CHAIN, so there is nothing here for it to be a property of:
+        # a detached signature cannot invalidate another signature by arriving
+        # late. Refusing it would invent a rule P3 never decided.
+        return
+    if signatures is None:
+        msg = (
+            f"ensure_certifiable must be given the current signatures to check the "
+            f"signing order for a '{package.return_family}' return."
+        )
+        raise ValueError(msg)
+    signed = {signature.signing_role for signature in signatures}
+    outstanding = [
+        earlier for earlier in order[: order.index(role)] if earlier not in signed
+    ]
+    if outstanding:
+        raise AttestationConflict(
+            "signing_order",
+            f"This return is signed in order and {outstanding} "
+            f"{'have' if len(outstanding) > 1 else 'has'} not signed yet. The last "
+            f"signature seals every field in the document, so one arriving after it "
+            f"would invalidate it — the Board signs last, over what management approved.",
         )
 
 
@@ -412,29 +486,45 @@ def ensure_signing_configured() -> None:
 def ensure_submittable(
     db: Session, ctx: TenantContext, package: RegulatoryPackage
 ) -> None:
-    """The submission gate: every required signature must be present.
+    """The submission gate: every required signature, and every required document.
 
     Called from the existing submission path, so no return can reach a channel
     without its attestation complete.
+
+    The DOCUMENT half is new (audit C-6) and applies to every family, including
+    the ones whose signatures are suspended. ``ATTESTATION_ESIGN_REQUIRED=0``
+    and a per-return relaxation both say something about SIGNATURES; neither has
+    ever said anything about whether the Board's resolution accompanies the
+    filing, and letting a signing switch exempt a regulator document would make
+    a signing-infrastructure control into a regulatory one. So the signature
+    checks stay inside the ``require_signature`` branch, exactly as they were,
+    and the attachment check sits outside it.
     """
+    from app.services.regulatory_reporting import (  # noqa: PLC0415 - breaks an import cycle
+        attachments as reporting_attachments,
+    )
+    from app.services.regulatory_reporting import family_hooks  # noqa: PLC0415
+
     policy = package_policy(db, ctx, package)
-    if not policy.require_signature:
-        return
-    ensure_signing_configured()
-    signatures = current_signatures(db, ctx, package)
-    missing = outstanding_slots(policy, signatures)
-    if missing:
-        detail = ", ".join(f"{role} ×{count}" for role, count in missing)
-        raise AttestationConflict(
-            "attestation_incomplete",
-            f"This return cannot be submitted until it is fully certified. Outstanding: {detail}.",
-        )
-    if package.attestation_state != "fully_certified":
-        raise AttestationConflict(
-            "attestation_incomplete",
-            "This return is not fully certified and cannot be submitted.",
-        )
-    ensure_digest_unchanged(package, compute_binding(package))
+    if policy.require_signature:
+        ensure_signing_configured()
+        signatures = current_signatures(db, ctx, package)
+        missing = outstanding_slots(policy, signatures)
+        if missing:
+            detail = ", ".join(f"{role} ×{count}" for role, count in missing)
+            raise AttestationConflict(
+                "attestation_incomplete",
+                "This return cannot be submitted until it is fully certified. "
+                f"Outstanding: {detail}.",
+            )
+        if package.attestation_state != "fully_certified":
+            raise AttestationConflict(
+                "attestation_incomplete",
+                "This return is not fully certified and cannot be submitted.",
+            )
+        ensure_digest_unchanged(package, compute_binding(package))
+    reporting_attachments.ensure_required_attachments(db, ctx, package, policy)
+    family_hooks.ensure_submittable(db, ctx, package, policy)
 
 
 # --- transitions ------------------------------------------------------------
@@ -462,16 +552,20 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
     the decision row here is what makes "signed but not approved" unreachable
     from any endpoint rather than from one.
     """
+    from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
+
     now = datetime.now(UTC)
     if role == "preparer":
         package.attestation_state = "preparer_certified"
         package.certification_digest = binding.certification_digest
         package.content_digest = binding.content_digest
         package.certified_at = now
-        # Status and attestation state move together — never a window where a
-        # package is certified but not routed.
-        if package.status == "validated":
-            package.status = "pending_approval"
+        # The preparer's certification IS the act of sending the return into
+        # the review chain, so the chain is started here rather than leaving a
+        # window in which a package is certified but nobody holds it. The status
+        # follows the chain, which is why nothing assigns it directly any more.
+        if package.checks_passed and (package.current_stage_seq or 1) <= 1:
+            filing_chain.start_chain(db, ctx, package, actor=package.generated_by)
 
     if is_fully_certified(policy, signatures_after):
         # ``released`` is false only for a package already approved through the
@@ -487,7 +581,6 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
         package.attestation_state = "fully_certified"
         package.fully_certified_at = now
         if released:
-            package.status = "approved"
             # A checker's signature over the frozen figures IS their approval,
             # so the decision is attributed to the CHECKER rather than to
             # whoever happened to sign last — the guard above has already
@@ -506,6 +599,14 @@ def apply_certification(  # noqa: PLR0913 - transition needs the full context
                 actor_user_id=checkers[-1].signer_user_id,
                 reason=reason,
             )
+        # The family's own reaction to a complete attestation, AFTER the status
+        # has moved so the hook sees the package as the rest of the system will
+        # (ICAAP: the cycle becomes board_approved).
+        from app.services.regulatory_reporting import (  # noqa: PLC0415 - breaks a cycle
+            family_hooks,
+        )
+
+        family_hooks.on_fully_certified(db, ctx, package)
 
     record_event(
         db,
@@ -564,6 +665,9 @@ def void_attestation(
             "already_submitted",
             "This return has already been submitted; use the resubmission path instead.",
         )
+    from app.services.regulatory_reporting import family_hooks  # noqa: PLC0415 - breaks a cycle
+
+    family_hooks.ensure_voidable(db, ctx, package)
     voided_cycle = package.attestation_cycle
     package.attestation_cycle = voided_cycle + 1
     package.attestation_state = "unsigned"
@@ -574,6 +678,14 @@ def void_attestation(
     package.void_reason = reason
     if package.status in {"pending_approval", "approved"}:
         package.status = "generated"
+        # The chain follows the status back, or the two would disagree: a
+        # voided certification means the figures are open again and every
+        # reviewing stage has to look afresh. Guarded on ``> 1`` because a
+        # send-back that voids in the same transaction has already moved the
+        # chain, and a second bump would report a round nobody ran.
+        if package.current_stage_seq is not None and package.current_stage_seq > 1:
+            package.current_stage_seq = 1
+            package.workflow_round += 1
 
     record_event(
         db,

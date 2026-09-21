@@ -40,6 +40,12 @@ export interface SigningPolicyRead {
   distinctSigners: boolean;
   /**
    *
+   * @type {boolean}
+   * @memberof SigningPolicyRead
+   */
+  orderedSlots?: boolean;
+  /**
+   *
    * @type {PolicyId}
    * @memberof SigningPolicyRead
    */
@@ -117,6 +123,8 @@ export function SigningPolicyReadFromJSONTyped(
   return {
     ...json,
     distinctSigners: json["distinct_signers"],
+    orderedSlots:
+      json["ordered_slots"] == null ? undefined : json["ordered_slots"],
     policyId: PolicyIdFromJSON(json["policy_id"]),
     requireSignature: json["require_signature"],
     requireSignedPdf: json["require_signed_pdf"],
@@ -142,6 +150,7 @@ export function SigningPolicyReadToJSONTyped(
 
   return {
     distinct_signers: value["distinctSigners"],
+    ordered_slots: value["orderedSlots"],
     policy_id: PolicyIdToJSON(value["policyId"]),
     require_signature: value["requireSignature"],
     require_signed_pdf: value["requireSignedPdf"],

@@ -53,6 +53,11 @@ from app.services.regulatory_reporting.common import (
 from app.services.regulatory_reporting.provenance import ReportAuthority
 
 RULE_VERSION = "regulatory-package-validation-v1.3.0"
+#: The version of a FAMILY's own ruleset, stamped alongside ``rule_version``
+#: when that family's hook contributed findings. Separate from RULE_VERSION on
+#: purpose: a change to the ICAAP rules must not move the generic version and
+#: re-date every other return's report.
+FAMILY_RULE_VERSIONS: dict[str, str] = {"icaap": "icaap-validation-v1"}
 COMPLETENESS_RULE = "package.sections_complete"
 CONSISTENCY_RULE = "package.totals_consistent"
 MOVEMENT_RULE = "package.prior_period_movement"
@@ -397,12 +402,23 @@ def _generation_note_findings(snapshot: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def run_validation_rules(db: Session, package: RegulatoryPackage) -> list[dict[str, str]]:
-    """Pure rule pipeline over one package snapshot; returns ordered findings."""
+    """Pure rule pipeline over one package snapshot; returns ordered findings.
+
+    The family hook runs LAST and its findings may be ``ERROR``. That is the
+    difference between a family rule and a generation note: a note is the
+    generator's advisory commentary and is downgraded, while a family rule is a
+    rule about the filing — an ICAAP whose Appendix II annex is stale is not
+    validated, it is wrong. A family with no hook contributes nothing, so every
+    other return's report is byte-identical to what it was.
+    """
+    from app.services.regulatory_reporting import family_hooks  # noqa: PLC0415 - lazy seam
+
     return [
         *_completeness_findings(package.snapshot),
         *_consistency_findings(package.snapshot),
         *_movement_findings(db, package),
         *_generation_note_findings(package.snapshot),
+        *family_hooks.validation_findings(db, package),
     ]
 
 
@@ -415,8 +431,8 @@ def validate_package(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Only generated or validated packages can be validated; this package "
-                f"is '{package.status}'."
+                f"Checks can only be re-run on a return that is still in preparation; "
+                f"this return is '{package.status}'."
             ),
         )
 
@@ -425,7 +441,9 @@ def validate_package(
     warning_count = sum(1 for finding in findings if finding["severity"] == "WARNING")
     info_count = sum(1 for finding in findings if finding["severity"] == "INFO")
     passed = error_count == 0
-    package.validation_report = {
+    from app.services.regulatory_reporting import family_hooks  # noqa: PLC0415 - lazy seam
+
+    report: dict[str, Any] = {
         "rule_version": RULE_VERSION,
         "validated_at": datetime.now(UTC).isoformat(),
         "passed": passed,
@@ -434,7 +452,25 @@ def validate_package(
         "info_count": info_count,
         "findings": findings,
     }
-    package.status = "validated" if passed else "generated"
+    # Stamped only when a hook actually ran, so an existing report cannot gain a
+    # key that says a family ruleset was applied when none was.
+    if family_hooks.for_package(package) is not None:
+        report["family_rule_version"] = FAMILY_RULE_VERSIONS.get(
+            package.return_family, f"{package.return_family}-validation-v1"
+        )
+    package.validation_report = report
+    # ``checks_passed`` is the AUTHORITY on machine validation
+    # (``docs/filing_workflow_redesign.md`` §3.1). It is an attribute of the
+    # package that gates ENTRY to the review chain, not a lifecycle step and not
+    # a person: nobody "validates" here, the rules engine reports.
+    package.checks_passed = passed
+    # The ``validated`` status survives only as a PROJECTION of "checks passed
+    # and the return has not been sent for approval yet". Nothing reads it as a
+    # gate any more — every gate reads ``checks_passed`` — and a return that is
+    # already in the chain keeps its chain position rather than being dragged
+    # back by a re-run of the checks.
+    if package.current_stage_seq is None or package.current_stage_seq <= 1:
+        package.status = "validated" if passed else "generated"
     record_event(
         db,
         ctx,

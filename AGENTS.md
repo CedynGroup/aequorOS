@@ -174,6 +174,20 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   authority. Ownership and directory view remain unassigned; explicit staff owner
   designation is still required. The authoritative rollout contract is
   `backend/docs/account_administration_enforcement_rollout.md`.
+  **Filing is its OWN authority (built 2026-09-20; no migration).** Approving a return
+  and transmitting it to the regulator shared `Permission.APPROVE`, and on an ungated
+  family the scalar `approver` role alone satisfied submit — so whoever approved could
+  file to BoG. `Permission.SUBMIT` is now carried by the `validator` bundle
+  (`view`+`submit`, never `approve`) and `require_package_submit` takes one scoped path
+  for EVERY family: interactive human, then a complete binding over REG/restricted for
+  the exact institution; visibility still decides first, so a gated ICAAP stays 404.
+  `SUBMIT` names maker/checker as REQUIRED context, so a route that omits it denies.
+  **Nothing was backfilled and nobody can file until an Org Owner grants the Validator
+  sentence** — backfilling the approvers would re-encode the defect, and the pre-cutover
+  set stays queryable because no `users` row changed. Approver+Validator on one identity
+  is BLOCKED at assignment until the stage engine's per-object condition lands. Contract:
+  `backend/docs/filing_submit_authority_rollout.md`; design + remaining steps 2-5:
+  `backend/docs/filing_workflow_redesign.md`.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).
@@ -206,6 +220,46 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   the deadline is BoG's and runs regardless. `period_start` stays day-1-of-month: it is
   the fiscal month-to-date window BSD7 (YTD), BSD8 (opening balance) and
   `implied_rating` read, not filler.
+  **The anchor window runs BOTH ways (2026-09-19).** It used to be "the most recent
+  elapsed period end plus the horizon", which made an overdue return unreachable: a
+  tenant whose book stopped at 30 June was offered only 31 Aug…31 Dec, every one
+  `awaiting_data`, while June — the one period it could actually file — was absent.
+  `AnchorWindow(as_of, start, end)` now carries a `lookback_months` (default 6 = two
+  quarters, callers may widen to 24) beside `horizon_months`, and ALL cadences derive
+  from that one window, so the calendar and the Returns workspace cannot disagree. The
+  pre-existing "most recent elapsed anchor" floor is KEPT on top of the window: a
+  semi-annual or annual return whose only elapsed anchor predates the lookback is still
+  offered it, because dropping it would hide an obligation rather than tidy a list.
+  `reporting_deadline_scan.py` deliberately pins its own shorter `_LOOKBACK_MONTHS = 2`
+  — sharing the picker's window would re-announce the entire historical backlog as one
+  critical notification per elapsed anchor per return per day.
+- **ICAAP workspace and filing (built 2026-09-19..20; contract
+  [`backend/docs/icaap_workspace_and_filing.md`](backend/docs/icaap_workspace_and_filing.md),
+  authorization [`icaap_enforcement_rollout.md`](backend/docs/icaap_enforcement_rollout.md),
+  shape ARCHITECTURE.md §3d).** The first surface that is a DOCUMENT UNDER REVIEW
+  rather than a computed view, and it adds four structures that are easy to
+  assume away. **There is a SECOND package-mint site:** `generate_frozen_package`
+  is a PEER of `generate_package` (caller owns what is in the snapshot, mint site
+  owns what a package IS) — gates may sit on either side, **neither side may drop
+  one**, which is why `freeze_cycle` runs the reporting-period and reconciliation
+  gates itself. **`family_hooks` is the one seam a family may use** — lazy
+  `importlib` dispatch, a no-op default per hook, deliberately not
+  `if return_family == "icaap"` in five services. **The `ai` job lane exists**
+  (`icaap_ai_draft` its only member; the default lane excludes it by construction
+  and `app/worker.py::resolve_job_types` refuses a mixed-lane process) because the
+  process holding the model key must run nothing else. **Jurisdiction is data
+  under `app/domain/icaap/frameworks/<code>/`** with no `if jurisdiction ==` — and
+  the Nigeria and Kenya manifests were built WITHOUT reading their primary texts
+  (recorded in each file's `## Provenance of this manifest`); obtain and verify
+  them before a customer relies on either. Two rules the audits caught being
+  broken: a rehearsal cycle runs the FULL lifecycle on purpose (block the
+  dangerous act — filing a rehearsal — not the safe one), and the DISPATCH plane
+  must not write to the CALCULATION plane's parameter ledger, so
+  `PrefetchedParameterResolver.load()` requires an explicit `record=` with no
+  default (adding one registry entry had moved an unrelated family's content
+  digest). Every ICAAP read of a governed row goes through
+  `app/services/icaap/parameters.py`; no ICAAP module may touch the live plane
+  (`tests/architecture/test_icaap_boundaries.py`).
 - **Official BoG BSD returns are generated from the templates themselves (built 2026-08-15;
   registry `docs/bog_returns/00_full_return_registry.md`).** Every workbook under
   `docs/reporting/` (BSD1…BSD17, 24 files / 76 sheets) is a registered return (family `bsd`,
@@ -216,10 +270,20 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `sources_ext/<form>.py`); the engine then **evaluates the templates' own formulas**
   (`formulas.py`: SUM/IF/+−×÷/%/`[n]Sheet!` external links — 100% of 5,903 cells) so every
   roll-up is BoG's — never re-implement or "simplify" a BoG line, never bind a formula cell.
-  Export = THREE artifacts per sealed run: `pdf` (values — the BoG submission package),
-  `xlsx`/`xlsx_official` (official layout, values-only, sheets protected — audit twin),
-  `xlsx_working` (official layout with the template's LIVE formulas, labelled WORKING COPY,
-  never filed/signed; BSD forms only; migration 202608160015) — with a "Completion notes" sheet;
+  Export = THREE artifacts per sealed run: `pdf` (values — the BoG submission package, and the
+  signed record), `xlsx`/`xlsx_official` (official layout, values-only, sheets protected — audit
+  twin), `xlsx_working` (official layout with the template's LIVE formulas, labelled FORMULA
+  COPY; BSD forms only; migration 202608160015) — with a "Completion notes" sheet;
+  **BOTH Excel copies of a BoG FORM are FILED (founder decision 2026-09-20)** — BoG prefer the
+  form with live formulas, so `xlsx_working` rides alongside the protected copy; it is filed and
+  NEVER signed, the values-only/PDF artifact stays the signed record of truth, and every surface
+  that shows the formula copy must say so. `workflow.filing_admits_artifact(kind, generator=)`
+  is the ONLY place that is decided, deny-by-default on two axes: the kind must be in
+  `FILABLE_WORKING_ARTIFACT_KINDS` (`docx_working` is not) AND the generator must be named for
+  it in `WORKING_ARTIFACT_FILING_GENERATORS` (`bog_form` only). The scoping is deliberate: the
+  decision named BoG's own workbook, so an SDI packet's working sheet is NOT filed and keeps its
+  "not a filing artifact" label — filing it would infer a second regulator's preference from a
+  decision that stated one. Never reopen either axis to a blanket allow.
   input cells with no honest source are `input_required`/`unmapped`, never dropped. Blank data
   grids (no `0` placeholder) are bound with `grid_lines`, captured inputs with `leaf_lines`.
   Legacy recode (migration `202608150013`): the pre-template `BSD2`(CAR)/`BSD3`(LCR) entries are
@@ -250,6 +314,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Regenerate scenario and other API contracts with
   `mise run risk-service:openapi-client`; validate the generated package with
   `pnpm --filter @aequoros/risk-service-api test`.
+  **Regenerating while a `next dev` server is up poisons it — restart the dashboard
+  (2026-09-19).** The task DELETES and rewrites `packages/risk-service-api/src`, so a
+  running dev server reading `src/index.ts` mid-rewrite caches the failure and then
+  serves **404 for every `/_next/static/chunks/*`** while still returning 200 for the
+  HTML. The symptom is a WHITE PAGE with no console error worth the name, and it does
+  not self-heal on reload. Fix: `rm -rf backend/dashboard/.next` and restart the dev
+  server. Two schema shapes also break generation itself, both fixed but easy to
+  reintroduce: two Pydantic classes sharing a NAME across modules (FastAPI then emits
+  `app__schemas__x__Name` component keys the generator cannot map back), and a
+  `Decimal` form field (Pydantic types it `number | string`, and the alias lands in an
+  operation request interface, not in `src/models/`).
 - Keep `packages/risk-service-api/src` excluded centrally from style linting and
   formatting; generated files must contain no inline suppressions, while type-checking,
   package tests, and freshness checks remain required. Client regeneration intentionally

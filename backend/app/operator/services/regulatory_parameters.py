@@ -23,8 +23,40 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
+from app.domain.policy import parameter_shapes
 from app.models import RegulatoryParameter
 from app.schemas.operator import RegulatoryParameterProposeRequest
+
+
+def _check_shape(row_or_payload: RegulatoryParameter | RegulatoryParameterProposeRequest) -> None:
+    """Hold a table-valued parameter to its declared shape (D-037).
+
+    Checked at BOTH maker and checker steps, not once: the draft a checker sees
+    may have been written by a direct insert, or before the code's shape was
+    registered, and approving it is what makes it govern a calculation. A
+    malformed band table is the dangerous case — a gap in its cover returns no
+    add-on for the exposures inside it, which reads downstream exactly like a
+    genuine zero.
+    """
+    try:
+        parameter_shapes.validate(
+            row_or_payload.param_code,
+            row_or_payload.value_numeric,
+            row_or_payload.value_json,
+        )
+    except parameter_shapes.ParameterShapeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "error_code": "parameter_shape_invalid",
+                "param_code": row_or_payload.param_code,
+                "path": exc.path,
+                "message": (
+                    f"{row_or_payload.param_code} does not match the value shape its code "
+                    f"requires — {exc.path}: {exc.message}."
+                ),
+            },
+        ) from exc
 
 
 def list_parameters(  # noqa: PLR0913 - query filters, one per column
@@ -78,6 +110,7 @@ def propose(
     proposed_by: str,
 ) -> RegulatoryParameter:
     """Maker step: create a ``draft`` generation. Not yet visible to the resolver."""
+    _check_shape(payload)
     if payload.effective_from < date.today():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -149,6 +182,7 @@ def approve(
                 "(four-eyes / dual control, docs/sdi.md §7 Phase C)."
             ),
         )
+    _check_shape(row)
     # The prior open (or overlapping) approved generation for the same key.
     prior = db.scalar(
         select(RegulatoryParameter)

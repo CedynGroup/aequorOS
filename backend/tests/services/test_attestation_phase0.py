@@ -25,6 +25,7 @@ import re
 import zipfile
 import zlib
 from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -49,7 +50,9 @@ from app.models import (
     Outlet,
     RegulatoryArtifactVersion,
     RegulatoryPackage,
+    RegulatoryParameter,
     RegulatoryResubmissionRequest,
+    RegulatoryRun,
     RelatedParty,
     RelatedPartyRole,
     Shareholding,
@@ -61,6 +64,9 @@ from app.services import institution_profile, regulatory_liquidity
 from app.services.attestation import digests, register_state
 from app.services.regulatory_reporting import exports as reporting_exports
 from app.services.regulatory_reporting import generation, workflow
+from app.services.regulatory_reporting.eligibility import (
+    governed_effective_parameter_codes,
+)
 from app.services.regulatory_reporting.exports import export_package
 from app.services.regulatory_reporting.registry import REGISTRY
 from app.services.regulatory_reporting.templates import CONSOLIDATED_BASIS
@@ -240,6 +246,75 @@ def test_content_digest_survives_a_source_run_rerun(db_session: Session) -> None
     assert second.content_digest == first_digest  # the content fingerprint does not
 
 
+def test_a_new_registry_entry_cannot_move_another_familys_content_digest(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The CLASS behind the test above, so the next registry entry cannot rediscover it.
+
+    A ``ReturnDefinition`` may name an ``effective_from_parameter`` — founder
+    directive D-024: the date a directive bites is a governed console row, never
+    a literal. Resolving it is a DISPATCH question: ``eligibility`` reads EVERY
+    registered return's commencement date, across EVERY family, to answer "which
+    returns exist for this institution". Those reads used to land in the
+    session-scoped governed-row ledger that the next engine run drains, so an
+    ICAAP entry joined a LIQUIDITY run's ``parameter_provenance``, moved its
+    ``parameter_rows_digest``, and moved the LCR-NSFR ``content_digest`` — the
+    value every signer signs — across a rerun over an unchanged book.
+
+    This registers a SYNTHETIC entry naming a governed row no engine reads. Its
+    row must never reach a liquidity run's provenance and the liquidity content
+    fingerprint must not move. A patch that special-cased the ICAAP code would
+    leave this red, which is the point: the guarantee is about the registry, not
+    about one parameter.
+    """
+    _seed_with_baseline_run(db_session)
+
+    probe_code = "zz_registry_probe_first_as_of_date"
+    db_session.add(
+        RegulatoryParameter(
+            scope_type="institution_class",
+            scope_key="bank",
+            param_code=probe_code,
+            jurisdiction_code="GH",
+            value_json={"schema": "icaap-effective-date-v1", "date": "2026-01-01"},
+            unit="date",
+            source_citation="Synthetic registry entry — boundary test only",
+            confirmation_status="pending",
+            effective_from=date(2020, 1, 1),
+            status="approved",
+            proposed_by="test",
+            approved_by="test",
+        )
+    )
+    db_session.flush()
+    monkeypatch.setitem(
+        REGISTRY,
+        "ZZ-PROBE",
+        replace(
+            REGISTRY["ICAAP-UPDATE"],
+            code="ZZ-PROBE",
+            template_id="zz-probe-v1",
+            effective_from=None,
+            effective_from_parameter=probe_code,
+        ),
+    )
+    # Non-vacuity: the dispatch scan must genuinely reach the new entry's code.
+    assert probe_code in governed_effective_parameter_codes()
+
+    first = _generate(db_session)
+    _rerun_liquidity(db_session)
+    second = _generate(db_session)
+
+    rerun = db_session.scalars(
+        select(RegulatoryRun).order_by(RegulatoryRun.started_at, RegulatoryRun.id)
+    ).all()[-1]
+    assert rerun.parameter_provenance is not None
+    assert probe_code not in {entry["param_code"] for entry in rerun.parameter_provenance}, (
+        "a registry entry's commencement date reached an unrelated engine run's provenance"
+    )
+    assert second.content_digest == first.content_digest
+
+
 def test_content_digest_excludes_run_identity_and_nothing_else(db_session: Session) -> None:
     """Both directions of the exclusion, on a REAL package snapshot.
 
@@ -353,12 +428,66 @@ def test_all_registered_returns_route_through_the_single_sealing_site() -> None:
     # 39 bank returns + the 4 SDI reports added 2026-08-22 (family "sdi":
     # SDI-LMT-MONTHLY, SDI-IRRBB-QUARTERLY, SDI-LE-MONTHLY, SDI-STRESS-ANNUAL)
     # + NPL-MONTHLY (family "credit", 2026-09-01) - the Notice 2025/23 monthly
-    # NPL report, the first return both institution classes file.
-    assert len(REGISTRY) == 44  # noqa: PLR2004
+    # NPL report, the first return both institution classes file
+    # + the 3 ICAAP FILING returns (family "icaap", 2026-09-19) - see below.
+    assert len(REGISTRY) == 47  # noqa: PLR2004
     assert sum(1 for d in REGISTRY.values() if d.family == "bsd") == 23  # noqa: PLR2004
     assert sum(1 for d in REGISTRY.values() if d.family == "sdi") == 4  # noqa: PLR2004
+    assert sum(1 for d in REGISTRY.values() if d.family == "icaap") == 3  # noqa: PLR2004
+    # The ICAAP filing family has a SECOND mint site, and that is the point of
+    # it: an ICAAP package exists because a cycle was reviewed and frozen, so it
+    # is minted by ``generate_frozen_package`` and deliberately has no entry in
+    # ``_GENERATORS`` (the generic POST refuses it by name). The G13 guarantee
+    # is not weakened by that, it is doubled: both mint sites seal
+    # ``content_digest`` unconditionally, which the next test proves by reading
+    # the source rather than by trusting this comment.
+    freeze_minted = {
+        code
+        for code, definition in REGISTRY.items()
+        if definition.family in generation.FREEZE_ONLY_FAMILIES
+    }
+    assert freeze_minted, "the freeze-minted family vanished; this guard is now vacuous"
     for definition in REGISTRY.values():
+        if definition.code in freeze_minted:
+            assert definition.generator not in generators, (
+                f"{definition.code} is freeze-minted and must NOT be reachable from the "
+                "generic package endpoint"
+            )
+            continue
         assert definition.generator in generators, definition.code
+
+
+def test_both_package_mint_sites_seal_the_content_digest() -> None:
+    """G13, restated for the second mint site the ICAAP freeze introduced.
+
+    ``RegulatoryPackage(...)`` is constructed in exactly two places in
+    ``generation.py``, and both set ``content_digest`` and ``snapshot_sha256``.
+    Read from the source, so a third mint site — or one that forgot the seal —
+    fails here instead of shipping an unsealed filing.
+    """
+    import ast  # noqa: PLC0415
+    import inspect  # noqa: PLC0415
+
+    tree = ast.parse(inspect.getsource(generation))
+    minting: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not (isinstance(node.func, ast.Name) and node.func.id == "RegulatoryPackage"):
+            continue
+        sealed = {
+            keyword.arg
+            for keyword in node.keywords
+            if keyword.arg in {"content_digest", "snapshot_sha256"}
+        }
+        assert sealed == {"content_digest", "snapshot_sha256"}, (
+            f"a package is minted at line {node.lineno} without sealing its content"
+        )
+        minting.append(str(node.lineno))
+    assert len(minting) == 2, (  # noqa: PLR2004
+        "expected exactly two mint sites (generate_package, generate_frozen_package); "
+        f"found {len(minting)} at lines {minting}"
+    )
 
 
 # ---------------------------------------------------------------------------

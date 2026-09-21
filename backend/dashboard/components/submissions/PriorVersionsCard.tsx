@@ -241,7 +241,14 @@ function ComparisonTable({
   );
 }
 
-function ComparisonPanel({
+/**
+ * The server's line-by-line version diff, rendered.
+ *
+ * Exported because the Compare page needs exactly this and a second renderer
+ * would be a second opinion: the diff an examiner reads has to be the one the
+ * platform computed, shown one way.
+ */
+export function ComparisonPanel({
   comparison,
   currentVersion,
 }: {

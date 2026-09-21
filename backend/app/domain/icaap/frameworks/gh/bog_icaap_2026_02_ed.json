@@ -1,0 +1,2929 @@
+{
+  "schema": "aequoros-icaap-framework-v1",
+  "code": "bog_icaap",
+  "jurisdiction": "GH",
+  "regulator": "BOG",
+  "title": "Bank of Ghana Guideline on ICAAP (Exposure Draft, February 2026)",
+  "short_title": "BoG ICAAP Guideline (ED Feb 2026)",
+  "version": "2026.02-ed.1",
+  "status": "exposure_draft",
+  "effective_from": "2027-01-01",
+  "effective_from_citations": [
+    {
+      "doc": "BOG-ICAAP-ED",
+      "ref": "9"
+    }
+  ],
+  "first_as_of_date": "2026-12-31",
+  "first_as_of_basis": "inferred",
+  "first_as_of_note": "The Guideline takes effect on 1 January 2027 and the report starts from the 31 December position; whether FY2026 or FY2027 is the first filing is not stated. Default FY2026 pending BoG confirmation (requirements.md open item).",
+  "institution_classes": [
+    "bank"
+  ],
+  "filing_return_code": "ICAAP-REPORT",
+  "supersedes": null,
+  "section_key_map": [],
+  "cross_framework_section_map": [],
+  "documents": [
+    {
+      "id": "BOG-ICAAP-ED",
+      "title": "Guideline on Internal Capital Adequacy Assessment Process (ICAAP)",
+      "short_label": "ICAAP Guideline",
+      "issuer": "Bank of Ghana",
+      "issued": "2026-02",
+      "status": "exposure_draft",
+      "url": "https://www.bog.gov.gh/wp-content/uploads/2026/02/Guideline-on-ICAAP-12-2-26-clean.pdf"
+    },
+    {
+      "id": "BOG-STRESS-ED",
+      "title": "Guideline on Stress Testing",
+      "short_label": "Stress Testing Guideline",
+      "issuer": "Bank of Ghana",
+      "issued": "2026-02",
+      "status": "exposure_draft",
+      "url": "https://www.bog.gov.gh/wp-content/uploads/2026/02/EXPOSURE-Draft-Directive-on-Stress-Testing_FEBRUARY-2026.pdf"
+    },
+    {
+      "id": "BOG-LRMD-ED",
+      "title": "Liquidity Risk Management Directive",
+      "short_label": "Liquidity Risk Management Directive",
+      "issuer": "Bank of Ghana",
+      "issued": "2026-02",
+      "status": "exposure_draft",
+      "url": "https://www.bog.gov.gh/wp-content/uploads/2026/02/Liquidity-Risk-Management-Directive-Cleaned-11.12.25.pdf"
+    }
+  ],
+  "related_instruments": [
+    {
+      "id": "BOG-CRD-2018",
+      "title": "Capital Requirements Directive",
+      "issued": "2018-06",
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "5"
+        }
+      ]
+    },
+    {
+      "id": "BOG-CCR-2025",
+      "title": "Guidelines on Measurement and Management of Credit Concentration Risk",
+      "issued": "2025-09",
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "5"
+        },
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "28"
+        }
+      ]
+    },
+    {
+      "id": "BOG-IRRBB-ED",
+      "title": "Guidelines on the Management and Measurement of Interest Rate Risk in the Banking Book",
+      "issued": "2026-02",
+      "status": "exposure_draft",
+      "named_by": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "5"
+        },
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "28"
+        }
+      ]
+    },
+    {
+      "id": "BOG-STRESS-ED",
+      "title": "Guideline on Stress Testing",
+      "issued": "2026-02",
+      "status": "exposure_draft",
+      "named_by": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "5"
+        }
+      ]
+    },
+    {
+      "id": "BOG-RMD",
+      "title": "Risk Management Directive",
+      "issued": null,
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "49(e)-fn5"
+        }
+      ]
+    }
+  ],
+  "deadline": {
+    "as_of": "fy_end",
+    "fy_end_month_day": "12-31",
+    "months_after_fye_param": "icaap_submission_months",
+    "citations": [
+      {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "72"
+      }
+    ]
+  },
+  "document_citations": [
+    {
+      "doc": "BOG-ICAAP-ED",
+      "ref": "43"
+    },
+    {
+      "doc": "BOG-ICAAP-ED",
+      "ref": "44"
+    },
+    {
+      "doc": "BOG-ICAAP-ED",
+      "ref": "49"
+    }
+  ],
+  "sections": [
+    {
+      "key": "executive_summary",
+      "letter": "a",
+      "order": 1,
+      "title": "Executive Summary",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(a)"
+      },
+      "source_status": "sourced",
+      "guidance": "A clear, concise overview of the methodology, key findings and strategic implications (ICAAP Guideline ¶50).",
+      "data_blocks": [
+        "capital_position",
+        "capital_plan",
+        "institution_profile"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "050a",
+          "text": "State the objective of the report and the entities it covers, including subsidiaries.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "50(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:institution_profile"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "050b_i",
+          "text": "Summarise the level and composition of internal capital compared with Pillar 1 requirements.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "50(b)(i)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_position",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "050b_ii",
+          "text": "Summarise the assessment of how robust the institution's risk management systems are.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "50(b)(ii)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "050c",
+          "text": "Summarise the financial position, strategic outlook, balance-sheet strength and projected profitability.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "50(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:financials",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "050d",
+          "text": "Give a brief overview of the capital plan, dividend policy and future capital management objectives.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "50(d)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "050e",
+          "text": "Outline the material risks, justify current risk levels, and set out planned actions for any risk judged unacceptable.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "50(e)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_register"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "050f",
+          "text": "Conclude whether capital resources are adequate over the planning horizon, including through an economic downturn.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "50(f)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan",
+            "block:appendix_ii"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "050g",
+          "text": "Identify the key areas that need further analysis or decisions.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "50(g)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "050h",
+          "text": "Name the bodies and functions that carried out the assessment, the challenges met along the way, and who approved the final report.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "50(h)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "workflow:stage_decisions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "structure_operations",
+      "letter": "b",
+      "order": 2,
+      "title": "Structure and Operations",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(b)"
+      },
+      "source_status": "sourced",
+      "guidance": "A concise overview of the organisational structure and historical financial performance (ICAAP Guideline ¶51).",
+      "data_blocks": [
+        "institution_profile",
+        "financials",
+        "capital_position",
+        "pillar1_rwa"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "051a",
+          "text": "Describe the legal entity status, any group affiliation, and the operational structure.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "51(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:institution_profile"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "051b",
+          "text": "Summarise key financial metrics: operating profit and its drivers, profit before and after tax, dividends paid, and shareholders' funds.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "51(b)"
+            }
+          ],
+          "evidence": [
+            "block:financials"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "051c",
+          "text": "Compare eligible capital resources with regulatory capital requirements.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "51(c)"
+            }
+          ],
+          "evidence": [
+            "block:capital_position"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "051d",
+          "text": "Give an overview of customer deposits and interbank funding sources.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "51(d)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:financials"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "051e",
+          "text": "Provide a balance-sheet snapshot, including total assets and the main components.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "51(e)"
+            }
+          ],
+          "evidence": [
+            "block:financials"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "051f",
+          "text": "Draw conclusions from historical trends and explain what they imply for future financial and strategic positioning.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "51(f)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:financials"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "003_solo_group",
+          "text": "Where the institution has subsidiaries, assess Pillar 2 on both a stand-alone and a group basis; BoG monitors capital adequacy at solo and consolidated levels.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "3"
+            }
+          ],
+          "evidence": [
+            "workflow:basis_companion_cycle"
+          ],
+          "waivable": false,
+          "applies_when": "has_subsidiaries"
+        },
+        {
+          "id": "004_parent_support",
+          "text": "For a subsidiary of a foreign bank, describe the strength and reliability of support from the parent, which BoG assesses with information from the home supervisor.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "4"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "attachment:parent_support_evidence"
+          ],
+          "waivable": true,
+          "applies_when": "foreign_bank_subsidiary"
+        }
+      ]
+    },
+    {
+      "key": "governance",
+      "letter": "c",
+      "order": 3,
+      "title": "Governance and Management of the ICAAP",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(c)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "The governance framework and internal processes for preparing, reviewing and implementing the ICAAP (ICAAP Guideline ¶52). Only ¶52(a)-(b) were recovered; the rest of ¶52 is pending BoG text.",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "052a",
+          "text": "Describe the procedures for preparing, updating and reviewing the ICAAP.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "52(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "052b",
+          "text": "Define the responsibilities of the Board, Senior Management and key functions such as internal audit, finance, compliance and risk management.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "52(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "business_model_strategy",
+      "letter": "d",
+      "order": 4,
+      "title": "Business Model and Strategy",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(d)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(d). The section's own paragraph is pending BoG text; the items below come from the Guideline's disclosure paragraphs.",
+      "data_blocks": [
+        "financials",
+        "capital_plan"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "077",
+          "text": "Keep risk-profile measures and financial projections accurate, current and consistent with the latest strategic plan, and document material changes such as expansion, acquisitions or changes to incentive structures.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "77"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "078",
+          "text": "Summarise the external factors that shape strategy and risk management: macroeconomic, industry, market and competitive conditions.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "78"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "risk_management_framework",
+      "letter": "e",
+      "order": 5,
+      "title": "Risk Management Framework",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(e)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(e); its footnote asks institutions to align with the BoG Risk Management Directive. The section's own paragraph is pending BoG text.",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "049e_fn5",
+          "text": "Show how the risk management framework aligns with the Bank of Ghana Risk Management Directive.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "49(e)-fn5"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "081_esg",
+          "text": "Describe the environmental, social and governance (ESG) framework and related activities.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "81"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "risk_appetite",
+      "letter": "f",
+      "order": 6,
+      "title": "Risk Appetite Statement",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(f)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(f). The section's own paragraph is pending BoG text; ¶76 and ¶82 set the sourced expectations.",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "076",
+          "text": "Set out an overarching strategy that names each material risk and the appetite for it, covering qualitative and quantitative dimensions with Board-approved thresholds and directional indicators.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "76"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_appetite"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "082_appetite",
+          "text": "In the capital adequacy discussion, describe risk appetite consistently with the CRD, the Risk Management Directive, other relevant guidelines and the ICAAP requirements.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "82"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "risk_identification_materiality",
+      "letter": "g",
+      "order": 7,
+      "title": "Risk Identification and Materiality Assessment",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(g)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(g). The section's own paragraph is pending BoG text; ¶29(a), ¶75 and the Appendix set the sourced expectations.",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "029a",
+          "text": "Cover all material risks: Pillar 1 risks, Pillar 1 risks not fully captured (for example credit concentration), risks outside Pillar 1 (for example IRRBB, business and strategic risk), and external factors such as business-cycle effects.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "29(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_register"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "075",
+          "text": "Address every material risk the Board identifies, including those covered by Pillar 1, in a concise risk profile that uses consistent risk descriptions and does not duplicate policies.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "75"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_register"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app_categories",
+          "text": "Where material, analyse each risk category listed in the Guideline's Appendix.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App"
+            }
+          ],
+          "evidence": [
+            "block:risk_register"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "pillar2_quantification",
+      "letter": "h",
+      "order": 8,
+      "title": "Quantification of Pillar 2 Capital Requirements",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(h)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(h). The section's own paragraph is pending BoG text; ¶28, ¶29(b), ¶48 and ¶81 set the sourced expectations.",
+      "data_blocks": [
+        "pillar1_rwa",
+        "concentration",
+        "irrbb"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "028",
+          "text": "Assess and quantify Pillar 2 risks in line with the applicable BoG guidelines, including those on credit concentration risk and IRRBB.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "28"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:concentration",
+            "block:irrbb",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "029b",
+          "text": "Make the internal capital assessment forward-looking, reflecting strategic plans and their link to macroeconomic factors.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "29(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "048",
+          "text": "Identify loss factors for general and specific risks, estimate the capital cost attributable to them from potential losses, and stress-test material risks to validate the conclusions.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "48"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "081_mtm_sovereign",
+          "text": "Describe any larger-than-normal mark-to-market losses and potential sovereign risk exposures.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "81"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "stress_testing",
+      "letter": "i",
+      "order": 9,
+      "title": "Stress Testing",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(i)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(i). The ICAAP Guideline's own paragraph is pending BoG text; the Stress Testing Guideline (¶20, ¶34-¶36, ¶67-¶77, Appendices II-III) sets the sourced expectations.",
+      "data_blocks": [
+        "appendix_ii",
+        "stress_narratives",
+        "reverse_stress",
+        "management_actions"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "st067",
+          "text": "Submit the annual stress test results in the Appendix II formats as part of the ICAAP, by the end of March of the following year.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67"
+            }
+          ],
+          "evidence": [
+            "block:appendix_ii"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st067a",
+          "text": "Describe the risks, exposures and entities covered by the stress test.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st067b",
+          "text": "Describe prevailing and projected macroeconomic conditions and justify the assumptions used.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st067c",
+          "text": "Describe the methodologies used and justify any material change from the previous methodologies.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st067d",
+          "text": "Show the impact on profitability, capital adequacy, liquidity and every material risk indicator at each significant balance-sheet date over the horizon, as amounts and key ratios.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67(d)"
+            }
+          ],
+          "evidence": [
+            "block:appendix_ii"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st067e",
+          "text": "Describe the management actions considered and assess whether they are reasonable.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67(e)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:management_actions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st067f",
+          "text": "Where management actions are considered, present stress and reverse stress results both with and without them.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67(f)"
+            }
+          ],
+          "evidence": [
+            "block:appendix_ii",
+            "block:reverse_stress"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st067g",
+          "text": "Assess vulnerable areas and their risk factors at a meaningful level of detail (for example currency, business line, sector or borrower group) and explain the causes of stressed losses.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67(g)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "attachment:technical_annex"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st067h",
+          "text": "Provide extracts of Board and Board Risk Committee minutes on their deliberation of the stress and reverse stress test results.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67(h)"
+            }
+          ],
+          "evidence": [
+            "attachment:stress_test_board_minutes"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st067i",
+          "text": "Report the assessment and results of any independent review of the stress testing.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "67(i)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "attachment:independent_review_report"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "st068",
+          "text": "Project the pre- and post-stress regulatory capital position, and the expected effect of proposed management actions, for at least {param:icaap_stress_horizon_years_min} years ahead.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "68"
+            }
+          ],
+          "evidence": [
+            "block:appendix_ii"
+          ],
+          "waivable": false,
+          "applies_when": null,
+          "param_refs": [
+            "icaap_stress_horizon_years_min"
+          ]
+        },
+        {
+          "id": "st069",
+          "text": "Assess future capital resources against projected capital requirements under a range of severe but plausible scenarios.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "69"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:appendix_ii"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st071",
+          "text": "Stress-test at least the common risks in the Stress Testing Guideline's Appendix I and, where applicable, project effects on net interest income, NPLs, profitability, the investment portfolio and capital.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "71"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:appendix_ii"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st072",
+          "text": "Cover sovereign exposure risk under credit or market risk according to its accounting treatment, and under IRRBB; with significant unhedged foreign-currency exposure, consider how exchange-rate moves change obligors' creditworthiness.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "72"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st075a",
+          "text": "Cover every material risk from on- and off-balance-sheet positions, including asset classes, sector and geographic distribution of exposures, and deposit mix.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "75(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st075b",
+          "text": "Use a range of scenarios including at least one severe but plausible adverse macroeconomic scenario.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "75(b)"
+            },
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "35"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st075c",
+          "text": "Cover the same forward-looking period as the ICAAP, update the stress tests at least as often, and span no less than {param:icaap_stress_horizon_years_min} years.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "75(c)"
+            }
+          ],
+          "evidence": [
+            "block:appendix_ii"
+          ],
+          "waivable": false,
+          "applies_when": null,
+          "param_refs": [
+            "icaap_stress_horizon_years_min"
+          ]
+        },
+        {
+          "id": "st076",
+          "text": "Show a clear link between risk appetite, business strategy and the ICAAP stress tests, including stress-testing the capital and liquidity plans and buffers.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "76"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st077",
+          "text": "Assess whether the institution stays above every regulatory capital requirement: minimum capital adequacy, CET1 ratio, Tier 1 ratio, leverage ratio and paid-up capital.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "77"
+            }
+          ],
+          "evidence": [
+            "block:appendix_ii",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st020",
+          "text": "Include the Board's attestation that it reviewed and challenged the stress testing framework and results, with its rationale for their credibility.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "20"
+            }
+          ],
+          "evidence": [
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st034",
+          "text": "Explain how the scenarios capture the risks through key macroeconomic variables, and document why any material risk is excluded.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "34"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st036",
+          "text": "Consider reverse stress tests that explore scenarios leading to insolvency or illiquidity.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "36"
+            }
+          ],
+          "evidence": [
+            "block:reverse_stress"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "st_app3",
+          "text": "Explain in detail how macroeconomic parameters were translated into shocks on individual portfolios.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "App-III"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "attachment:technical_annex"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "capital_planning",
+      "letter": "j",
+      "order": 10,
+      "title": "Capital Planning",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(j)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(j). The section's own paragraph is pending BoG text; ¶79-¶80 and the Stress Testing Guideline (¶73-¶74, Appendix II Table 5) set the sourced expectations.",
+      "data_blocks": [
+        "capital_plan",
+        "appendix_ii"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "079",
+          "text": "Set out the Capital Management Plan comprehensively, including capital sources and capital conservation practices.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "79"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan",
+            "attachment:capital_management_policy"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "080",
+          "text": "Disclose any contractual, commercial, regulatory or statutory restriction on moving capital within the group, such as dividend caps.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "80"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": "group_member"
+        },
+        {
+          "id": "st073",
+          "text": "Show that capital and liquidity buffers cover the risks faced now or potentially, as reflected in the capital and liquidity plans submitted with the ICAAP.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "73"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st074_capital",
+          "text": "Evaluate how reliable the capital plan is under stress, taking account of the severity and likelihood of the scenario.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "74"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:appendix_ii"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st_t5_horizon",
+          "text": "Report risk-weighted assets by Pillar 1 risk type and capital requirements by Pillar 2 risk type, under base and stress cases, over a planning horizon of at least {param:icaap_capital_planning_horizon_years_min} years.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "App-II-T5"
+            }
+          ],
+          "evidence": [
+            "block:appendix_ii",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null,
+          "param_refs": [
+            "icaap_capital_planning_horizon_years_min"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "liquidity_planning",
+      "letter": "k",
+      "order": 11,
+      "title": "Liquidity Planning and Management",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(k)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(k). The section's own paragraph is pending BoG text; the Liquidity Risk Management Directive (¶12, ¶24-¶27) and the Stress Testing Guideline (¶70, ¶74) set the sourced expectations.",
+      "data_blocks": [
+        "ilaap"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "lrmd012",
+          "text": "Embed the outcome of the ILAAP, which supports the Board's quarterly Liquidity Adequacy Statement, in the annual ICAAP report.",
+          "citations": [
+            {
+              "doc": "BOG-LRMD-ED",
+              "ref": "12"
+            }
+          ],
+          "evidence": [
+            "block:ilaap"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "lrmd024",
+          "text": "Explain how the ILAAP supports implementing and monitoring the strategy and risk appetite, and keeps the institution within the limits and thresholds of the Risk Appetite Statement.",
+          "citations": [
+            {
+              "doc": "BOG-LRMD-ED",
+              "ref": "24"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "lrmd025",
+          "text": "Cover the internal audit function's review, at least annually, of how the approved liquidity risk framework is implemented and how effective it is.",
+          "citations": [
+            {
+              "doc": "BOG-LRMD-ED",
+              "ref": "25"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "lrmd026_027",
+          "text": "Describe the regular internal review of ILAAP outcomes and assumptions, how results reach the Board and Senior Management, and how weaknesses are addressed.",
+          "citations": [
+            {
+              "doc": "BOG-LRMD-ED",
+              "ref": "26"
+            },
+            {
+              "doc": "BOG-LRMD-ED",
+              "ref": "27"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st070",
+          "text": "Show that the capital and liquidity contingency plans take the stress test results into account as an integral part of the ICAAP.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "70"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:ilaap"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st074_liquidity",
+          "text": "Test whether the liquidity plan would still meet obligations as they fall due under stress.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "74"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:ilaap"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "capital_allocation_reconciliation",
+      "letter": "l",
+      "order": 12,
+      "title": "Capital Allocation and Reconciliation of Internal Capital",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(l)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(l). No item text has been recovered for this section; the checklist is pending BoG text.",
+      "data_blocks": [
+        "capital_position"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": []
+    },
+    {
+      "key": "management_actions",
+      "letter": "m",
+      "order": 13,
+      "title": "Management Actions",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(m)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(m). The ICAAP Guideline's own paragraph is pending BoG text; the Stress Testing Guideline (¶78-¶81, Appendix II) sets the sourced expectations.",
+      "data_blocks": [
+        "management_actions"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "st078",
+          "text": "Identify a broad range of credible actions the Board and Senior Management could take to stay solvent under severe but plausible stress.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "78"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:management_actions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st079",
+          "text": "Identify the most relevant actions and when to take them; define triggers in advance for contingent actions; keep actions consistent with Board-approved strategies and policies such as the dividend policy.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "79"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:management_actions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st080",
+          "text": "Consider the acceptable types of action (such as raising capital, reducing risk-weighted assets, revising appetite, limits or policies, or reducing distributions) and note which need prior BoG approval.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "80"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:management_actions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st081",
+          "text": "Document anticipated actions separately for each scenario, scaled to its severity.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "81"
+            }
+          ],
+          "evidence": [
+            "block:management_actions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st_app2_4",
+          "text": "Justify every expected cash inflow from the proposed actions and the assumptions behind it.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "App-II-4"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st_app2_fp",
+          "text": "Explain the basis for each action's timeline, any expected difficulty in meeting it, and the alternative actions if execution runs into trouble.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "App-II-FP(a)"
+            },
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "App-II-FP(b)"
+            },
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "App-II-FP(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "internal_audit_review",
+      "letter": "n",
+      "order": 14,
+      "title": "Internal Audit and Review of ICAAP",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(n)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(n). The section's own paragraph is pending BoG text; ¶42 sets the sourced expectation.",
+      "data_blocks": [],
+      "ai_draftable": false,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "042",
+          "text": "Have the ICAAP independently reviewed and audited at least once a year.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "42"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:audit_review",
+            "attachment:independent_review_report"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "challenge_adoption",
+      "letter": "o",
+      "order": 15,
+      "title": "Challenge and Adoption of the ICAAP",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(o)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(o). The section's own paragraph is pending BoG text; ¶45 and Stress Testing Guideline ¶63 set the sourced expectations.",
+      "data_blocks": [],
+      "ai_draftable": false,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "045_challenge",
+          "text": "Show that the Board robustly challenged the ICAAP document before approving it.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "45"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:challenge_log"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "st063",
+          "text": "Show that the Board Risk Committee and independent units, or external experts, challenged the stress testing exercise.",
+          "citations": [
+            {
+              "doc": "BOG-STRESS-ED",
+              "ref": "63"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:challenge_log"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "approval_review_use",
+      "letter": "p",
+      "order": 16,
+      "title": "Approval, Review, and Use of ICAAP within the bank",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(p)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(p). The section's own paragraph is pending BoG text; ¶45-¶46 and ¶71-¶73 set the sourced expectations.",
+      "data_blocks": [],
+      "ai_draftable": false,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "045_approval",
+          "text": "Obtain Board approval of the ICAAP before submission, and keep it derived from and consistent with internal strategies, policies and procedures, with a clear summary of key findings.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "45"
+            }
+          ],
+          "evidence": [
+            "workflow:board_signature"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "046",
+          "text": "Use the document to keep the Board informed of ongoing risk assessment and mitigation and of current and projected capital requirements.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "46"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "071",
+          "text": "Submit the report with the relevant Board resolutions and Senior Management reports, which record their comments on the ICAAP according to their responsibilities.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "71"
+            }
+          ],
+          "evidence": [
+            "attachment:board_resolution",
+            "attachment:senior_management_report"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "073",
+          "text": "Review and update the ICAAP at least annually, and update and resubmit it promptly when a material change (for example a merger, a business-model change, a major macroeconomic shift, a significant disposal or force majeure) makes it inapplicable.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "73"
+            },
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "73-fn8"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "internal_models",
+      "letter": "q",
+      "order": 17,
+      "title": "Use of Internal Models for Capital Assessment",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "49(q)"
+      },
+      "source_status": "pending_primary_text",
+      "guidance": "Heading from ¶49(q). No item text has been recovered for this section; the checklist is pending BoG text.",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": []
+    }
+  ],
+  "table5_rows": [
+    {
+      "key": "credit_concentration",
+      "label": "Credit Concentration",
+      "order": 1
+    },
+    {
+      "key": "irrbb",
+      "label": "IRRBB",
+      "order": 2
+    },
+    {
+      "key": "sovereign",
+      "label": "Sovereign",
+      "order": 3
+    },
+    {
+      "key": "country_and_fx",
+      "label": "Country and FX",
+      "order": 4
+    },
+    {
+      "key": "reputational",
+      "label": "Reputational",
+      "order": 5
+    },
+    {
+      "key": "others",
+      "label": "Others",
+      "order": 6
+    }
+  ],
+  "table5_citation": {
+    "doc": "BOG-STRESS-ED",
+    "ref": "App-II-T5"
+  },
+  "risk_categories": [
+    {
+      "key": "credit",
+      "number": 1,
+      "title": "Credit Risk (including credit concentration risk)",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-1"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "partial",
+      "custom": false,
+      "components": [
+        {
+          "key": "credit_concentration",
+          "table5_row": "credit_concentration",
+          "p29_class": "pillar1_not_fully_captured",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "benchmark_mapped",
+            "hhi_proportional_heuristic",
+            "granularity_adjustment",
+            "judgemental"
+          ]
+        },
+        {
+          "key": "sovereign",
+          "table5_row": "sovereign",
+          "p29_class": "pillar1_not_fully_captured",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "sovereign_stress_addon",
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": [
+        {
+          "id": "app1a",
+          "text": "Check how fully Pillar 1 captures credit risk and that the CRD risk weights have been applied correctly.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-1(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app1b",
+          "text": "Check that credit facilities are correctly classified and that provisioning for non-performing facilities is adequate.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-1(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app1c",
+          "text": "Validate the method and calculation of credit risk-weighted assets.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-1(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar1_rwa"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app1d",
+          "text": "Review credit risk mitigation policies, instruments and compliance with minimum requirements, including management of related legal, documentation and liquidity risks.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-1(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app1e",
+          "text": "Assess exposure limits and concentrations by counterparty, currency, sector, geography, asset class, product and other factors.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-1(e)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:concentration"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "operational",
+      "number": 2,
+      "title": "Operational Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-2"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "partial",
+      "custom": false,
+      "components": [
+        {
+          "key": "operational",
+          "table5_row": "others",
+          "p29_class": "pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "operational_scenario_net_p1",
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": [
+        {
+          "id": "app2a",
+          "text": "Consider the structure and complexity of the business model and operations.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-2(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app2b",
+          "text": "Validate the business mapping process.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-2(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app2c",
+          "text": "Review policies and practices affecting people, processes and systems.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-2(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app2d",
+          "text": "Examine external factors likely to affect operations and the ability to maintain critical functions.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-2(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app2e",
+          "text": "Assess the effect on operations and revenue of losing key personnel.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-2(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app2f",
+          "text": "Evaluate how management decisions affect business conduct.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-2(f)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app2g",
+          "text": "Describe how operational loss events and near misses are identified and recorded, and how loss experience and scenarios improve internal controls.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-2(g)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "market",
+      "number": 3,
+      "title": "Market Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-3"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "partial",
+      "custom": false,
+      "components": [
+        {
+          "key": "fx",
+          "table5_row": "country_and_fx",
+          "p29_class": "pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "fx_nop_addon",
+            "judgemental"
+          ]
+        },
+        {
+          "key": "other_market",
+          "table5_row": "others",
+          "p29_class": "pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "cyber_it",
+      "number": 4,
+      "title": "Cyber and Information Technology (CIT) Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-4"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "cyber_it",
+          "table5_row": "others",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "legal_compliance",
+      "number": 5,
+      "title": "Legal and Compliance Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-5"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "legal_compliance",
+          "table5_row": "others",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "liquidity",
+      "number": 6,
+      "title": "Liquidity Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-6"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "liquidity",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "not_capitalised"
+          ]
+        },
+        {
+          "key": "funding_cost",
+          "table5_row": "others",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "irrbb",
+      "number": 7,
+      "title": "Interest Rate Risk in the Banking Book (IRRBB)",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-7"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "irrbb",
+          "table5_row": "irrbb",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "irrbb_interim_delta_eve",
+            "irrbb_standardised_framework"
+          ],
+          "method_mandates": [
+            {
+              "method": "irrbb_standardised_framework",
+              "mandatory_from_param": "irrbb_sf_mandatory_from_as_of",
+              "replaces": "irrbb_interim_delta_eve"
+            }
+          ]
+        }
+      ],
+      "sub_requirements": [
+        {
+          "id": "app7a",
+          "text": "Assess the quality of the IRRBB stress test, including its scenarios and assumptions, and whether capital is adequate.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-7(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:irrbb"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app7b",
+          "text": "Evaluate how robust the internal IRRBB policies, procedures, controls and reporting are.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-7(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "business_strategic",
+      "number": 8,
+      "title": "Business and Strategic Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-8"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "business_strategic",
+          "table5_row": "others",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": [
+        {
+          "id": "app8a",
+          "text": "Assess how changing economic conditions and business environments could affect the viability and sustainability of the business model.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-8(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app8b",
+          "text": "Evaluate how robust the business strategy is and how well it is implemented.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-8(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app8c",
+          "text": "Review the risks and vulnerabilities of the business model.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-8(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "app8d",
+          "text": "Assess whether strategic goals fit the environment in which the institution has material operations.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-8(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "reputational",
+      "number": 9,
+      "title": "Reputational Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-9"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "reputational",
+          "table5_row": "reputational",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": [
+        {
+          "id": "app9a",
+          "text": "Assess whether policies and procedures identify sources of reputational risk, including negative coverage in traditional or social media.",
+          "citations": [
+            {
+              "doc": "BOG-ICAAP-ED",
+              "ref": "App-9(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "model",
+      "number": 10,
+      "title": "Model Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-10"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "model",
+          "table5_row": "others",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "country_transfer",
+      "number": 11,
+      "title": "Country and Transfer Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-11"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "country_transfer",
+          "table5_row": "country_and_fx",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "aml_cft",
+      "number": 12,
+      "title": "Anti-Money Laundering/Combating the Financing of Terrorism",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-12"
+      },
+      "title_status": "partial",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "aml_cft",
+          "table5_row": "others",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "climate",
+      "number": 13,
+      "title": "Climate-Related Financial Risk",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-13"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "climate",
+          "table5_row": "others",
+          "p29_class": "external",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "emerging",
+      "number": 14,
+      "title": "Any other identified material emerging risks",
+      "citation": {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "App-14"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": true,
+      "components": [
+        {
+          "key": "emerging",
+          "table5_row": "others",
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    }
+  ],
+  "attachments": [
+    {
+      "kind": "senior_management_report",
+      "title": "Senior Management report on the ICAAP",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "71"
+        }
+      ],
+      "gate": "freeze",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "approval_review_use"
+      ]
+    },
+    {
+      "kind": "board_resolution",
+      "title": "Board resolution approving the ICAAP",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "71"
+        },
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "45"
+        }
+      ],
+      "gate": "submission",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "approval_review_use"
+      ]
+    },
+    {
+      "kind": "stress_test_board_minutes",
+      "title": "Extract of Board and Board Risk Committee minutes on stress test results",
+      "citations": [
+        {
+          "doc": "BOG-STRESS-ED",
+          "ref": "67(h)"
+        }
+      ],
+      "gate": "freeze",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "stress_testing"
+      ]
+    },
+    {
+      "kind": "independent_review_report",
+      "title": "Independent review report",
+      "citations": [
+        {
+          "doc": "BOG-STRESS-ED",
+          "ref": "67(i)"
+        },
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "42"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "stress_testing",
+        "internal_audit_review"
+      ]
+    },
+    {
+      "kind": "capital_management_policy",
+      "title": "Capital Management Plan or policy",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "79"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "capital_planning"
+      ]
+    },
+    {
+      "kind": "technical_annex",
+      "title": "Technical annex (methodologies, models, scenarios)",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "47"
+        },
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "49"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ],
+      "applies_when": null,
+      "section_keys": []
+    },
+    {
+      "kind": "parent_support_evidence",
+      "title": "Evidence of parent support",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "4"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf"
+      ],
+      "applies_when": "foreign_bank_subsidiary",
+      "section_keys": [
+        "structure_operations"
+      ]
+    },
+    {
+      "kind": "regulator_request_letter",
+      "title": "Regulator's request for an updated ICAAP",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "74"
+        }
+      ],
+      "gate": "freeze",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf"
+      ],
+      "applies_when": "cycle_kind:regulator_request",
+      "section_keys": []
+    },
+    {
+      "kind": "manual_table_evidence",
+      "title": "Source evidence for a manually entered table",
+      "citations": [],
+      "gate": "per_block",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ],
+      "applies_when": null,
+      "section_keys": []
+    }
+  ],
+  "stages": [
+    {
+      "seq": 1,
+      "key": "preparation",
+      "title": "Preparation",
+      "decision": "prepare",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "52(b)"
+        }
+      ]
+    },
+    {
+      "seq": 2,
+      "key": "cro_review",
+      "title": "Chief Risk Officer review",
+      "decision": "review",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "52(b)"
+        }
+      ]
+    },
+    {
+      "seq": 3,
+      "key": "ceo_review",
+      "title": "Chief Executive / Managing Director review",
+      "decision": "review",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "71"
+        }
+      ]
+    },
+    {
+      "seq": 4,
+      "key": "brc_review",
+      "title": "Board Risk Committee challenge and approval",
+      "decision": "approve",
+      "default_officer_titles": [],
+      "freeze_on_approve": true,
+      "citations": [
+        {
+          "doc": "BOG-STRESS-ED",
+          "ref": "63"
+        },
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "45"
+        }
+      ]
+    },
+    {
+      "seq": 5,
+      "key": "board_approval",
+      "title": "Board approval (signature on the frozen report)",
+      "decision": "attest",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "45"
+        },
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "71"
+        }
+      ]
+    }
+  ],
+  "stages_source_status": "platform_default",
+  "material_change_triggers": [
+    {
+      "code": "mergers_acquisitions",
+      "label": "Merger or acquisition",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "73-fn8"
+        }
+      ]
+    },
+    {
+      "code": "business_model_change",
+      "label": "Material change in business model",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "73-fn8"
+        }
+      ]
+    },
+    {
+      "code": "macroeconomic_shift",
+      "label": "Significant shift in macroeconomic factors",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "73-fn8"
+        }
+      ]
+    },
+    {
+      "code": "disposal",
+      "label": "Sale of a significant business line or subsidiary",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "73-fn8"
+        }
+      ]
+    },
+    {
+      "code": "force_majeure",
+      "label": "Force majeure",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "73-fn8"
+        }
+      ]
+    },
+    {
+      "code": "other",
+      "label": "Other material change (describe)",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "73-fn8"
+        }
+      ]
+    }
+  ],
+  "materiality_matrix": {
+    "source_status": "platform_default",
+    "note": "The Guideline prescribes no scoring matrix. The levels below are the platform's 5x5 starting point; the rating bands and the materiality thresholds are governed parameters staff edit in the console.",
+    "likelihood_levels": [
+      {
+        "score": 1,
+        "key": "rare",
+        "label": "Rare"
+      },
+      {
+        "score": 2,
+        "key": "unlikely",
+        "label": "Unlikely"
+      },
+      {
+        "score": 3,
+        "key": "possible",
+        "label": "Possible"
+      },
+      {
+        "score": 4,
+        "key": "likely",
+        "label": "Likely"
+      },
+      {
+        "score": 5,
+        "key": "almost_certain",
+        "label": "Almost certain"
+      }
+    ],
+    "impact_levels": [
+      {
+        "score": 1,
+        "key": "insignificant",
+        "label": "Insignificant"
+      },
+      {
+        "score": 2,
+        "key": "minor",
+        "label": "Minor"
+      },
+      {
+        "score": 3,
+        "key": "moderate",
+        "label": "Moderate"
+      },
+      {
+        "score": 4,
+        "key": "major",
+        "label": "Major"
+      },
+      {
+        "score": 5,
+        "key": "severe",
+        "label": "Severe"
+      }
+    ],
+    "rating_bands_param": "icaap_materiality_rating_bands",
+    "material_if": {
+      "min_score_param": "icaap_materiality_material_min_score",
+      "or_min_impact_param": "icaap_materiality_material_min_impact"
+    }
+  },
+  "disclosure": {
+    "citations": [
+      {
+        "doc": "BOG-ICAAP-ED",
+        "ref": "82"
+      }
+    ],
+    "source_status": "interpretation_required",
+    "channel": "institution_website",
+    "trigger": "annual_and_each_update",
+    "content_selection": "bank_selected",
+    "never_public_block_types": [
+      "supervisory_addons"
+    ],
+    "requires_disclosure_approval": true,
+    "note": "¶82 requires the results to be published on the institution's website with each update and submitted to BoG by 31 March; it does not list the content beyond the capital adequacy discussion of risk appetite.",
+    "submit_months_after_fye_param": "icaap_disclosure_submission_months"
+  },
+  "filing": {
+    "return_codes": {
+      "annual": "ICAAP-REPORT",
+      "update": "ICAAP-UPDATE",
+      "disclosure": "ICAAP-DISCLOSURE"
+    },
+    "annexes": [
+      {
+        "return_code": "ICAAP-STRESS-APPENDIX2",
+        "required": true,
+        "citations": [
+          {
+            "doc": "BOG-STRESS-ED",
+            "ref": "67"
+          }
+        ]
+      }
+    ],
+    "attestation": {
+      "source_status": "platform_default",
+      "lines": {
+        "preparer": "Prepared by the officer responsible for the ICAAP:",
+        "approver": "Approved for submission on behalf of Senior Management:",
+        "board": "Approved by the Board of Directors, which reviewed and challenged this ICAAP:"
+      },
+      "statements": {
+        "preparer": "I prepared this Internal Capital Adequacy Assessment Process report. The assessment, the figures it quotes and the documents attached to it are, to the best of my knowledge, complete and accurate as at the assessment date.",
+        "approver": "I approve this Internal Capital Adequacy Assessment Process report for submission on behalf of Senior Management. Senior Management has reviewed the assessment and considers the internal capital held to be adequate for the risks described in it.",
+        "board": "The Board of Directors has reviewed and challenged this Internal Capital Adequacy Assessment Process, approved it, and is responsible for the adequacy of the internal capital it concludes is required."
+      }
+    },
+    "stress_validation": {
+      "horizon_param": "icaap_stress_horizon_years_min",
+      "severe_min_param": "icaap_stress_severe_scenarios_min"
+    },
+    "exposure_draft_line": "This report is prepared against an exposure draft. The regulator may change the text before it is final."
+  },
+  "notes": [
+    {
+      "code": "prescribed_format_encouraged",
+      "text": "The prescribed structure is encouraged, not a substitute for legal compliance; all material information must still be reported.",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "44"
+        }
+      ]
+    },
+    {
+      "code": "supplementary_submissions",
+      "text": "Components may be provided in the report or as supplementary submissions; technical detail is attached where necessary.",
+      "citations": [
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "49"
+        },
+        {
+          "doc": "BOG-ICAAP-ED",
+          "ref": "47"
+        }
+      ]
+    }
+  ]
+}

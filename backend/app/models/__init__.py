@@ -1,3 +1,4 @@
+from app.models.ai import AiCommentarySettings
 from app.models.attestation import (
     AdoptedSignatureAppearance,
     AttestationSignature,
@@ -38,6 +39,11 @@ from app.models.database_connection import DatabaseDirectConnection
 from app.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
 from app.models.entitlements import MarketDataEntitlement
 from app.models.facts import FinancialFactRow
+from app.models.filing_workflow import (
+    FilingWorkflowTemplate,
+    PackageStageDecision,
+    PackageWorkflowStage,
+)
 from app.models.financial import (
     FinancialAccount,
     FinancialBalance,
@@ -50,6 +56,34 @@ from app.models.financial import (
     FinancialReportingPeriod,
     FinancialSourceRow,
     FinancialValidationIssue,
+)
+from app.models.icaap import (
+    IcaapAttachment,
+    IcaapAttachmentWithdrawal,
+    IcaapBlockBinding,
+    IcaapCycle,
+    IcaapCycleStage,
+    IcaapDataBlock,
+    IcaapDisclosure,
+    IcaapSection,
+    IcaapSectionVersion,
+    IcaapStageDecision,
+    IcaapWorkflowTemplate,
+)
+from app.models.icaap_ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
+from app.models.icaap_risk_capital import (
+    BankSupervisoryAddon,
+    IcaapAppetiteMetric,
+    IcaapAuditReview,
+    IcaapCapitalAllocation,
+    IcaapChallenge,
+    IcaapChallengeResponse,
+    IcaapControlExplanation,
+    IcaapPillar2Item,
+    IcaapPillar2ItemRevision,
+    IcaapRequirementReconciliationLine,
+    IcaapResourcesReconciliationLine,
+    IcaapRiskAssessment,
 )
 from app.models.implied_rating import ImpliedRatingRun
 from app.models.ingestion import (
@@ -129,6 +163,8 @@ from app.models.regulatory_reporting import (
     RegulatoryPackage,
     RegulatoryPackageApproval,
     RegulatoryPackageArtifact,
+    RegulatoryPackageAttachment,
+    RegulatoryPackageAttachmentWithdrawal,
     RegulatoryReportingSettings,
     RegulatoryResubmissionRequest,
     RegulatorySubmissionEvent,
@@ -169,12 +205,38 @@ from app.models.user import User
 
 __all__ = [
     "AdoptedSignatureAppearance",
+    "AiCommentarySettings",
     "AttestationSignature",
     "AuthorizationBinding",
     "AuditEvent",
     "Bank",
     "BankFinancialFact",
+    "BankSupervisoryAddon",
     "FinancialFactRow",
+    "IcaapAiSuggestion",
+    "IcaapAiSuggestionDecision",
+    "IcaapAppetiteMetric",
+    "IcaapAttachment",
+    "IcaapAttachmentWithdrawal",
+    "IcaapAuditReview",
+    "IcaapBlockBinding",
+    "IcaapCapitalAllocation",
+    "IcaapChallenge",
+    "IcaapChallengeResponse",
+    "IcaapControlExplanation",
+    "IcaapCycle",
+    "IcaapCycleStage",
+    "IcaapDataBlock",
+    "IcaapDisclosure",
+    "IcaapPillar2Item",
+    "IcaapPillar2ItemRevision",
+    "IcaapRequirementReconciliationLine",
+    "IcaapResourcesReconciliationLine",
+    "IcaapRiskAssessment",
+    "IcaapSection",
+    "IcaapSectionVersion",
+    "IcaapStageDecision",
+    "IcaapWorkflowTemplate",
     "BankLicense",
     "BankNameHistory",
     "BankProduct",
@@ -281,8 +343,13 @@ __all__ = [
     "RegulatoryLineItem",
     "RegulatoryMetricResult",
     "RegulatoryPackage",
+    "FilingWorkflowTemplate",
+    "PackageStageDecision",
+    "PackageWorkflowStage",
     "RegulatoryPackageApproval",
     "RegulatoryPackageArtifact",
+    "RegulatoryPackageAttachment",
+    "RegulatoryPackageAttachmentWithdrawal",
     "RegulatoryReportingSettings",
     "RegulatoryResubmissionRequest",
     "RegulatoryRun",

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 3002",
     "typecheck": "tsc --noEmit",
-    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test .test-out/lib/regulatory-parameters.test.js && rm -rf .test-out"
+    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test .test-out/lib/parameter-shapes.test.js && node --test .test-out/lib/regulatory-parameters.test.js && rm -rf .test-out"
   },
   "dependencies": {
     "lucide-react": "^0.446.0",

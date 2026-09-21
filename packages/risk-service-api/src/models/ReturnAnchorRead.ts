@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ReportingObligationReadPackageStatus } from "./ReportingObligationReadPackageStatus";
-import {
-  ReportingObligationReadPackageStatusFromJSON,
-  ReportingObligationReadPackageStatusFromJSONTyped,
-  ReportingObligationReadPackageStatusToJSON,
-  ReportingObligationReadPackageStatusToJSONTyped,
-} from "./ReportingObligationReadPackageStatus";
 import type { DueTime } from "./DueTime";
 import {
   DueTimeFromJSON,
@@ -39,6 +32,20 @@ import {
   PackageIdToJSON,
   PackageIdToJSONTyped,
 } from "./PackageId";
+import type { ObligationAnnexReadPackageStatus } from "./ObligationAnnexReadPackageStatus";
+import {
+  ObligationAnnexReadPackageStatusFromJSON,
+  ObligationAnnexReadPackageStatusFromJSONTyped,
+  ObligationAnnexReadPackageStatusToJSON,
+  ObligationAnnexReadPackageStatusToJSONTyped,
+} from "./ObligationAnnexReadPackageStatus";
+import type { DueDate } from "./DueDate";
+import {
+  DueDateFromJSON,
+  DueDateFromJSONTyped,
+  DueDateToJSON,
+  DueDateToJSONTyped,
+} from "./DueDate";
 import type { NearestComputedBefore } from "./NearestComputedBefore";
 import {
   NearestComputedBeforeFromJSON,
@@ -79,16 +86,22 @@ export interface ReturnAnchorRead {
   dataStatus: AnchorDataStatus;
   /**
    *
-   * @type {Date}
+   * @type {DueDate}
    * @memberof ReturnAnchorRead
    */
-  dueDate: Date;
+  dueDate?: DueDate;
   /**
    *
    * @type {DueTime}
    * @memberof ReturnAnchorRead
    */
   dueTime?: DueTime;
+  /**
+   *
+   * @type {boolean}
+   * @memberof ReturnAnchorRead
+   */
+  inForce?: boolean;
   /**
    *
    * @type {NearestComputedBefore}
@@ -103,10 +116,10 @@ export interface ReturnAnchorRead {
   packageId?: PackageId;
   /**
    *
-   * @type {ReportingObligationReadPackageStatus}
+   * @type {ObligationAnnexReadPackageStatus}
    * @memberof ReturnAnchorRead
    */
-  packageStatus?: ReportingObligationReadPackageStatus;
+  packageStatus?: ObligationAnnexReadPackageStatus;
   /**
    *
    * @type {PackageVersion}
@@ -135,7 +148,6 @@ export function instanceOfReturnAnchorRead(
 ): value is ReturnAnchorRead {
   if (!("dataStatus" in value) || value["dataStatus"] === undefined)
     return false;
-  if (!("dueDate" in value) || value["dueDate"] === undefined) return false;
   if (!("rag" in value) || value["rag"] === undefined) return false;
   if (!("reportingDate" in value) || value["reportingDate"] === undefined)
     return false;
@@ -156,9 +168,11 @@ export function ReturnAnchorReadFromJSONTyped(
   return {
     ...json,
     dataStatus: AnchorDataStatusFromJSON(json["data_status"]),
-    dueDate: new Date(json["due_date"]),
+    dueDate:
+      json["due_date"] == null ? undefined : DueDateFromJSON(json["due_date"]),
     dueTime:
       json["due_time"] == null ? undefined : DueTimeFromJSON(json["due_time"]),
+    inForce: json["in_force"] == null ? undefined : json["in_force"],
     nearestComputedBefore:
       json["nearest_computed_before"] == null
         ? undefined
@@ -170,7 +184,7 @@ export function ReturnAnchorReadFromJSONTyped(
     packageStatus:
       json["package_status"] == null
         ? undefined
-        : ReportingObligationReadPackageStatusFromJSON(json["package_status"]),
+        : ObligationAnnexReadPackageStatusFromJSON(json["package_status"]),
     packageVersion:
       json["package_version"] == null
         ? undefined
@@ -194,13 +208,14 @@ export function ReturnAnchorReadToJSONTyped(
 
   return {
     data_status: AnchorDataStatusToJSON(value["dataStatus"]),
-    due_date: value["dueDate"].toISOString().substring(0, 10),
+    due_date: DueDateToJSON(value["dueDate"]),
     due_time: DueTimeToJSON(value["dueTime"]),
+    in_force: value["inForce"],
     nearest_computed_before: NearestComputedBeforeToJSON(
       value["nearestComputedBefore"],
     ),
     package_id: PackageIdToJSON(value["packageId"]),
-    package_status: ReportingObligationReadPackageStatusToJSON(
+    package_status: ObligationAnnexReadPackageStatusToJSON(
       value["packageStatus"],
     ),
     package_version: PackageVersionToJSON(value["packageVersion"]),

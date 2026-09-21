@@ -337,6 +337,14 @@ EXPECTED_GOVERNED = {
     "npl_dividend_restriction_pct",
     "restructure_cure_payments",
     "restructure_cure_payments_semi_annual",
+    # ICAAP P0 (regulatory audit B2 / M21, 2026-09-19): the CRD capital buffers
+    # are floors (a board may only hold more); the AT1 / Tier 2 recognition caps
+    # are ceilings (a board may only recognise less).
+    "ccb1_pct",
+    "ccyb_pct",
+    "dsib_buffer_pct",
+    "at1_cap_pct_rwa",
+    "tier2_cap_pct_rwa",
 }
 
 
@@ -354,6 +362,17 @@ def test_every_governed_code_declares_a_valid_direction() -> None:
 def test_tighten_floor_takes_the_higher_value() -> None:
     assert tighten("car_min", Decimal("10"), Decimal("13")) == Decimal("13")
     assert tighten("car_min", Decimal("15"), Decimal("13")) == Decimal("15")
+
+
+def test_capital_buffers_are_floors_and_recognition_caps_are_ceilings() -> None:
+    """A board may hold a larger buffer but never recognise more AT1 / Tier 2."""
+    for code in ("ccb1_pct", "ccyb_pct", "dsib_buffer_pct"):
+        assert direction_for(code) is Direction.FLOOR, code
+        assert tighten(code, Decimal("0"), Decimal("3")) == Decimal("3")
+    for code in ("at1_cap_pct_rwa", "tier2_cap_pct_rwa"):
+        assert direction_for(code) is Direction.CEILING, code
+        assert tighten(code, Decimal("5"), Decimal("1.5")) == Decimal("1.5")
+        assert tighten(code, Decimal("1"), Decimal("1.5")) == Decimal("1")
 
 
 def test_tighten_ceiling_takes_the_lower_value() -> None:

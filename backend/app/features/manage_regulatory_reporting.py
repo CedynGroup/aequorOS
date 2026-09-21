@@ -26,12 +26,24 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
+from app.api.deps import (
+    DbSession,
+    MutationTenant,
+    PackageApprove,
+    PackageEdit,
+    PackageExport,
+    PackageSubmit,
+    PackageValidate,
+    PackageView,
+    Tenant,
+)
 from app.features.ingest_data import IngestionStorage
 from app.schemas.regulatory_reporting import (
     ChannelConfigPut,
     ChannelConfigRead,
     EmailFallbackInstructionsRead,
+    FilingSetEntryRead,
+    FilingSetPreviewRead,
     PackageApprovalDecisionCreate,
     PackageApprovalRequestCreate,
     PackageComparisonRead,
@@ -57,8 +69,12 @@ from app.schemas.regulatory_reporting import (
 )
 from app.schemas.report_comparison import ReportComparisonRead, ReportComparisonRequest
 from app.services import regulatory_reporting, report_comparison
-from app.services.regulatory_reporting import artifact_versions, version_chain
+from app.services.regulatory_reporting import artifact_versions, filing_preview, version_chain
 from app.services.regulatory_reporting import workflow as reporting_workflow
+from app.services.regulatory_reporting.anchors import (
+    DEFAULT_HORIZON_MONTHS,
+    DEFAULT_LOOKBACK_MONTHS,
+)
 from app.storage.client import StorageLocation, StorageNotFoundError
 
 router = APIRouter(tags=["regulatory-reporting"])
@@ -66,6 +82,7 @@ router = APIRouter(tags=["regulatory-reporting"])
 _ARTIFACT_MEDIA_TYPES = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "xlsx_working": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "docx_working": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "csv": "text/csv",
     "pdf": "application/pdf",
 }
@@ -91,11 +108,12 @@ type PackageStatusFilter = Literal[
     response_model=ReportingObligationListRead,
     operation_id="listReportingObligations",
 )
-def list_reporting_obligations(  # noqa: PLR0913 - tenant scope + optional page controls
+def list_reporting_obligations(  # noqa: PLR0913 - tenant scope + window + page controls
     bank_id: str,
     db: DbSession,
     ctx: Tenant,
-    horizon_months: Annotated[int, Query(ge=1, le=24)] = 3,
+    horizon_months: Annotated[int, Query(ge=1, le=24)] = DEFAULT_HORIZON_MONTHS,
+    lookback_months: Annotated[int, Query(ge=1, le=24)] = DEFAULT_LOOKBACK_MONTHS,
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ReportingObligationListRead:
@@ -104,6 +122,7 @@ def list_reporting_obligations(  # noqa: PLR0913 - tenant scope + optional page 
         ctx,
         bank_id,
         horizon_months,
+        lookback_months=lookback_months,
         limit=limit,
         offset=offset,
     )
@@ -114,12 +133,13 @@ def list_reporting_obligations(  # noqa: PLR0913 - tenant scope + optional page 
     response_model=ReturnAnchorListRead,
     operation_id="listReturnAnchors",
 )
-def list_return_anchors(
+def list_return_anchors(  # noqa: PLR0913 - tenant scope + return + both window bounds
     bank_id: str,
     return_code: str,
     db: DbSession,
     ctx: Tenant,
-    horizon_months: Annotated[int, Query(ge=1, le=24)] = 3,
+    horizon_months: Annotated[int, Query(ge=1, le=24)] = DEFAULT_HORIZON_MONTHS,
+    lookback_months: Annotated[int, Query(ge=1, le=24)] = DEFAULT_LOOKBACK_MONTHS,
 ) -> ReturnAnchorListRead:
     """The reporting dates this return reports on, and what exists for each.
 
@@ -127,8 +147,20 @@ def list_return_anchors(
     is the list a preparer picks a reporting date from — not the bank's ingested
     reporting periods, which are a consequence of data arrival rather than a
     filing calendar (``services/regulatory_reporting/anchors.py``).
+
+    ``lookback_months`` is the trailing half of that window and ``horizon_months``
+    the forward half. Elapsed reporting dates are offered because an overdue
+    return is exactly the one still owed to the regulator; each carries its true
+    ``data_status``, and a date with no computed position is listed, never hidden.
     """
-    return regulatory_reporting.list_return_anchors(db, ctx, bank_id, return_code, horizon_months)
+    return regulatory_reporting.list_return_anchors(
+        db,
+        ctx,
+        bank_id,
+        return_code,
+        horizon_months,
+        lookback_months=lookback_months,
+    )
 
 
 @router.get(
@@ -189,9 +221,9 @@ def create_regulatory_package(
     operation_id="getRegulatoryPackage",
 )
 def get_regulatory_package(
-    bank_id: str, package_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, package_id: UUID, db: DbSession, access: PackageView
 ) -> RegulatoryPackageRead:
-    return regulatory_reporting.get_package(db, ctx, bank_id, package_id)
+    return regulatory_reporting.get_package(db, access.ctx, bank_id, package_id)
 
 
 @router.post(
@@ -200,9 +232,9 @@ def get_regulatory_package(
     operation_id="validateRegulatoryPackage",
 )
 def validate_regulatory_package(
-    bank_id: str, package_id: UUID, db: DbSession, ctx: MutationTenant
+    bank_id: str, package_id: UUID, db: DbSession, access: PackageValidate
 ) -> RegulatoryPackageRead:
-    return regulatory_reporting.validate_package(db, ctx, bank_id, package_id)
+    return regulatory_reporting.validate_package(db, access.ctx, bank_id, package_id)
 
 
 @router.post(
@@ -215,9 +247,9 @@ def request_package_approval(
     package_id: UUID,
     payload: PackageApprovalRequestCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: PackageEdit,
 ) -> RegulatoryPackageRead:
-    return regulatory_reporting.request_approval(db, ctx, bank_id, package_id, payload)
+    return regulatory_reporting.request_approval(db, access.ctx, bank_id, package_id, payload)
 
 
 @router.post(
@@ -230,9 +262,9 @@ def decide_package_approval(
     package_id: UUID,
     payload: PackageApprovalDecisionCreate,
     db: DbSession,
-    ctx: ApproverTenant,
+    access: PackageApprove,
 ) -> RegulatoryPackageRead:
-    return regulatory_reporting.decide_approval(db, ctx, bank_id, package_id, payload)
+    return regulatory_reporting.decide_approval(db, access.ctx, bank_id, package_id, payload)
 
 
 @router.post(
@@ -245,23 +277,27 @@ def export_regulatory_package(
     bank_id: str,
     package_id: UUID,
     kind: Annotated[
-        Literal["xlsx", "xlsx_official", "xlsx_working", "csv", "pdf"],
+        Literal["xlsx", "xlsx_official", "xlsx_working", "docx_working", "csv", "pdf"],
         Query(
             description=(
                 "pdf = values-only submission package (the BoG filing format); "
-                "xlsx / xlsx_official = sealed values-only Excel (governance twin of the PDF); "
-                "xlsx_working = ALM/Finance working copy with the template's live formulas "
-                "(official BoG BSD forms only; never filed); csv = generic sections."
+                "xlsx / xlsx_official = sealed values-only Excel (governance twin of the "
+                "PDF, and the copy officers sign); "
+                "xlsx_working = formula copy with the template's live formulas "
+                "(official BoG BSD forms only; filed alongside the sealed copy, never "
+                "signed); "
+                "docx_working = Word working copy of an ICAAP report (never filed); "
+                "csv = generic sections."
             )
         ),
     ],
     db: DbSession,
-    ctx: MutationTenant,
+    access: PackageExport,
 ) -> RegulatoryArtifactRead:
     # "xlsx_official" is the explicit name for the sealed export; it is stored
     # under the historical kind "xlsx" so existing artifacts/signatures keep working.
     resolved: reporting_workflow.ArtifactKind = "xlsx" if kind == "xlsx_official" else kind
-    return reporting_workflow.export_package_artifact(db, ctx, bank_id, package_id, resolved)
+    return reporting_workflow.export_package_artifact(db, access.ctx, bank_id, package_id, resolved)
 
 
 @router.get(
@@ -273,11 +309,13 @@ def download_regulatory_artifact(
     bank_id: str,
     artifact_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
     storage: IngestionStorage,
 ) -> StreamingResponse:
     """Stream one exported artifact from the outputs tier."""
-    artifact, slug = reporting_workflow.prepare_artifact_download(db, ctx, bank_id, artifact_id)
+    artifact, slug = reporting_workflow.prepare_artifact_download(
+        db, access.ctx, bank_id, artifact_id
+    )
     location = StorageLocation(
         institution_slug=slug, tier="outputs", object_path=artifact.object_path
     )
@@ -305,7 +343,7 @@ def list_package_artifact_versions(
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
 ) -> RegulatoryArtifactVersionListRead:
     """Every archived render and signed revision, oldest first.
 
@@ -313,7 +351,7 @@ def list_package_artifact_versions(
     base export. This is the chain: the base, then one revision per officer,
     each naming the signature that pinned it.
     """
-    return artifact_versions.list_versions(db, ctx, bank_id, package_id)
+    return artifact_versions.list_versions(db, access.ctx, bank_id, package_id)
 
 
 @router.get(
@@ -325,7 +363,7 @@ def get_package_version_chain(
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
 ) -> PackageVersionChainRead:
     """The whole supersession chain, each version with what it can still offer.
 
@@ -335,7 +373,7 @@ def get_package_version_chain(
     signatures (withdrawn cycles flagged), both artifact surfaces, and the
     ``has_retrievable_files`` verdict a never-exported version needs.
     """
-    return version_chain.get_version_chain(db, ctx, bank_id, package_id)
+    return version_chain.get_version_chain(db, access.ctx, bank_id, package_id)
 
 
 @router.get(
@@ -348,7 +386,7 @@ def compare_package_versions(
     package_id: UUID,
     against: Annotated[UUID, Query(description="The package to compare against.")],
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
 ) -> PackageComparisonRead:
     """Line-item figures diff: the path package is the base, ``against`` the target.
 
@@ -356,7 +394,7 @@ def compare_package_versions(
     available for every version — including one that was never exported — and
     so the comparison an examiner is shown is the one the platform computed.
     """
-    return version_chain.compare_versions(db, ctx, bank_id, package_id, against)
+    return version_chain.compare_versions(db, access.ctx, bank_id, package_id, against)
 
 
 @router.get(
@@ -391,11 +429,13 @@ def download_regulatory_artifact_version(
     bank_id: str,
     version_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
     storage: IngestionStorage,
 ) -> StreamingResponse:
     """Stream one archived revision, with its checksum re-verified first."""
-    version, payload = artifact_versions.read_version_bytes(db, ctx, bank_id, version_id, storage)
+    version, payload = artifact_versions.read_version_bytes(
+        db, access.ctx, bank_id, version_id, storage
+    )
     filename = PurePosixPath(version.object_path).name
     return StreamingResponse(
         io.BytesIO(payload),
@@ -413,7 +453,7 @@ def download_email_fallback_eml(
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
     storage: IngestionStorage,
 ) -> StreamingResponse:
     """The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).
@@ -428,7 +468,7 @@ def download_email_fallback_eml(
 
     from app.services.ingestion import bank_slug  # noqa: PLC0415
 
-    bundle = reporting_workflow.email_fallback_instructions(db, ctx, bank_id, package_id)
+    bundle = reporting_workflow.email_fallback_instructions(db, access.ctx, bank_id, package_id)
     message = EmailMessage()
     message["Subject"] = bundle.subject
     recipient = bundle.recipient_guidance.downtime_return_address
@@ -436,7 +476,7 @@ def download_email_fallback_eml(
         message["To"] = recipient
     message.set_content(bundle.instructions + "\n\n" + bundle.penalty_reminder)
 
-    bank = reporting_workflow.get_bank_or_404(db, ctx, bank_id)
+    bank = reporting_workflow.get_bank_or_404(db, access.ctx, bank_id)
     slug = bank_slug(db, bank)
     for attachment in bundle.attachments:
         location = StorageLocation(
@@ -481,11 +521,16 @@ def submit_regulatory_package(
     package_id: UUID,
     payload: PackageSubmitCreate,
     db: DbSession,
-    ctx: ApproverTenant,
+    access: PackageSubmit,
 ) -> RegulatoryPackageRead:
     """Submit an approved package via the requested (or registry-default) channel."""
     return reporting_workflow.submit_package_via_channel(
-        db, ctx, bank_id, package_id, channel_override=payload.channel
+        db,
+        access.ctx,
+        bank_id,
+        package_id,
+        channel_override=payload.channel,
+        external_ref=payload.external_ref,
     )
 
 
@@ -498,10 +543,10 @@ def poll_regulatory_submission(
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    ctx: ApproverTenant,
+    access: PackageSubmit,
 ) -> SubmissionPollRead:
     """Poll the latest channel submission; records regulator decisions."""
-    return reporting_workflow.poll_submission(db, ctx, bank_id, package_id)
+    return reporting_workflow.poll_submission(db, access.ctx, bank_id, package_id)
 
 
 @router.post(
@@ -515,10 +560,10 @@ def request_package_resubmission(
     package_id: UUID,
     payload: ResubmissionRequestCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: PackageEdit,
 ) -> ResubmissionRequestRead:
     """File an ORASS-style resubmission request for a submitted/acknowledged return."""
-    return reporting_workflow.request_resubmission(db, ctx, bank_id, package_id, payload)
+    return reporting_workflow.request_resubmission(db, access.ctx, bank_id, package_id, payload)
 
 
 @router.post(
@@ -532,11 +577,17 @@ def decide_package_resubmission(  # noqa: PLR0913
     request_id: UUID,
     payload: ResubmissionDecisionCreate,
     db: DbSession,
-    ctx: ApproverTenant,
+    access: PackageApprove,
 ) -> ResubmissionRequestRead:
     """Record a manual grant/deny (email/manual submissions the regulator decides offline)."""
     return reporting_workflow.decide_resubmission(
-        db, ctx, bank_id, package_id, request_id, decision=payload.decision, note=payload.note
+        db,
+        access.ctx,
+        bank_id,
+        package_id,
+        request_id,
+        decision=payload.decision,
+        note=payload.note,
     )
 
 
@@ -549,9 +600,53 @@ def list_resubmission_requests(
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
 ) -> ResubmissionRequestListRead:
-    return reporting_workflow.list_resubmission_requests(db, ctx, bank_id, package_id)
+    return reporting_workflow.list_resubmission_requests(db, access.ctx, bank_id, package_id)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-packages/{package_id}/filing-set",
+    response_model=FilingSetPreviewRead,
+    operation_id="previewPackageFilingSet",
+)
+def preview_package_filing_set(
+    bank_id: str,
+    package_id: UUID,
+    db: DbSession,
+    access: PackageView,
+) -> FilingSetPreviewRead:
+    """What transmitting this package would actually send.
+
+    Answered by the submission's own resolver in its read-only mode, never by
+    listing the package's artifact rows — those name the UNSIGNED export and
+    omit the format that is minted at submission, so a confirmation built from
+    them would tell an officer they are filing files that are not the ones
+    sent. See ``services/regulatory_reporting/filing_preview.py``.
+    """
+    _ = bank_id
+    assert access.package is not None  # resolved by the dependency
+    preview = filing_preview.build_preview(db, access.ctx, access.bank, access.package)
+    return FilingSetPreviewRead(
+        package_id=package_id,
+        filing_set=[
+            FilingSetEntryRead(
+                kind=entry.kind,  # type: ignore[arg-type]
+                filename=entry.filename,
+                role=entry.role,
+                size_bytes=entry.size_bytes,
+                generated_at_submission=entry.generated_at_submission,
+                signature_count=entry.signature_count,
+            )
+            for entry in preview.filing_set
+        ],
+        satisfied=preview.satisfied,
+        institution_code=preview.institution_code,
+        content_digest=preview.content_digest,
+        submission_revision=preview.submission_revision,
+        is_first_filing=preview.is_first_filing,
+        omissions=preview.omissions,
+    )
 
 
 @router.get(
@@ -563,10 +658,10 @@ def list_package_artifacts(
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
 ) -> RegulatoryArtifactListRead:
     """Persisted artifact list for a package (never session-local)."""
-    artifacts = reporting_workflow.list_package_artifacts(db, ctx, bank_id, package_id)
+    artifacts = reporting_workflow.list_package_artifacts(db, access.ctx, bank_id, package_id)
     return RegulatoryArtifactListRead(
         package_id=package_id,
         artifacts=[RegulatoryArtifactRead.model_validate(artifact) for artifact in artifacts],
@@ -582,10 +677,10 @@ def get_email_fallback_instructions(
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
 ) -> EmailFallbackInstructionsRead:
     """Preview the BG/FMD/2026/07 downtime email bundle without submitting."""
-    return reporting_workflow.email_fallback_instructions(db, ctx, bank_id, package_id)
+    return reporting_workflow.email_fallback_instructions(db, access.ctx, bank_id, package_id)
 
 
 @router.get(
@@ -597,12 +692,12 @@ def list_submission_events(  # noqa: PLR0913
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    access: PackageView,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SubmissionEventListRead:
     return regulatory_reporting.list_submission_events(
-        db, ctx, bank_id, package_id, limit=limit, offset=offset
+        db, access.ctx, bank_id, package_id, limit=limit, offset=offset
     )
 
 

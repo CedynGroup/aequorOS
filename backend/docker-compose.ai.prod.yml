@@ -1,0 +1,71 @@
+# =============================================================================
+# AequorOS AI worker — PRODUCTION compose, deployed as its OWN Coolify app
+# (Coolify: Base Directory /backend, Docker Compose Location
+# /docker-compose.ai.prod.yml).
+#
+# WHY A SEPARATE COOLIFY APP, and not a service in docker-compose.prod.yml:
+#   Coolify writes ONE `.env` per compose app, and every service in that file
+#   loads it. Putting this worker beside risk-api/risk-worker/risk-operator
+#   would therefore place ANTHROPIC_API_KEY in all four containers — including
+#   the public-facing API. Its own app gives it its own env store, so the key
+#   exists in exactly the one process that calls the model. Deploying it is an
+#   explicit operator action, which is the right shape for the only component
+#   that sends tenant data to an external service.
+#
+# The same production rules as docker-compose.prod.yml apply here VERBATIM:
+#   · NO credentials in this file, and NO dollar-brace interpolation anywhere,
+#     comments included — Coolify parses the file and auto-seeds a UI env row
+#     for every variable reference it finds (2026-07-21 incident).
+#   · NO bind mounts: the Docker Compose build pack materialises only this
+#     file on the host; a `- ./x:/y` source does not exist and Docker creates
+#     an empty DIRECTORY in its place, which then blocks any corrected
+#     checkout (2026-07-26, two failed OpenBao deploys).
+#
+# Its Coolify environment holds: ANTHROPIC_API_KEY, DATABASE_URL,
+# WORKER_DATABASE_URL (a BYPASSRLS role — the claim reads across tenants),
+# APP_ENV, LOG_LEVEL, and the AI_* settings. The main app's .env never
+# contains the key.
+#
+# Schema: this app runs NO migration. The main app's risk-migrate owns the
+# schema, so on any release that touches the AI tables, deploy the main app
+# FIRST and this one after.
+#
+# Nothing here can act on its own: AI_COMMENTARY_ENABLED defaults off, a
+# deployed environment additionally needs AI_PRODUCTION_APPROVAL_REF and a
+# matching entry in app/services/ai/approved_configurations.json, and each
+# tenant's Organisation Owner must accept the current consent version. A
+# worker started without those simply cancels the requests it claims.
+#
+# No domain is attached to this app.
+# =============================================================================
+
+services:
+  risk-worker-ai:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    restart: unless-stopped
+    # Must exceed one model call's worst case: the SDK retries timeouts, so a
+    # single generate can occupy this process for
+    # AI_REQUEST_TIMEOUT_SECONDS x (AI_MAX_RETRIES + 1). Keep this in step with
+    # those two settings, or SIGTERM will cut an in-flight request whose row
+    # then waits for the reclaim window instead of finishing.
+    stop_grace_period: 1860s
+    healthcheck:
+      # Two questions in one probe: can this worker claim at all (a role
+      # without BYPASSRLS matches zero rows forever, silently), and has its
+      # poll loop written a heartbeat recently. WORKER_ID is pinned below so
+      # the check reads THIS worker's heartbeat rather than a peer's.
+      test: ["CMD-SHELL", "python -c \"from app.worker import healthcheck; healthcheck()\""]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    env_file:
+      - .env
+    environment:
+      # Literal pins (these override env_file). The lane selection is what
+      # makes this the ONLY process that can claim AI jobs; mixing it with any
+      # other lane is refused at startup.
+      WORKER_JOB_TYPES: "lane:ai"
+      WORKER_ID: "risk-worker-ai"
+      RUN_INPROCESS_WORKER: "0"

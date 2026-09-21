@@ -18,13 +18,13 @@ import {
   PlacementSourceToJSON,
   PlacementSourceToJSONTyped,
 } from "./PlacementSource";
-import type { SignatureFieldPlacement } from "./SignatureFieldPlacement";
+import type { SignatureFieldPlacementRead } from "./SignatureFieldPlacementRead";
 import {
-  SignatureFieldPlacementFromJSON,
-  SignatureFieldPlacementFromJSONTyped,
-  SignatureFieldPlacementToJSON,
-  SignatureFieldPlacementToJSONTyped,
-} from "./SignatureFieldPlacement";
+  SignatureFieldPlacementReadFromJSON,
+  SignatureFieldPlacementReadFromJSONTyped,
+  SignatureFieldPlacementReadToJSON,
+  SignatureFieldPlacementReadToJSONTyped,
+} from "./SignatureFieldPlacementRead";
 import type { PlacementFieldTypeRead } from "./PlacementFieldTypeRead";
 import {
   PlacementFieldTypeReadFromJSON,
@@ -32,6 +32,13 @@ import {
   PlacementFieldTypeReadToJSON,
   PlacementFieldTypeReadToJSONTyped,
 } from "./PlacementFieldTypeRead";
+import type { SigningRole } from "./SigningRole";
+import {
+  SigningRoleFromJSON,
+  SigningRoleFromJSONTyped,
+  SigningRoleToJSON,
+  SigningRoleToJSONTyped,
+} from "./SigningRole";
 
 /**
  * The placements this package's fields will actually be created from.
@@ -59,10 +66,16 @@ export interface ResolvedSignaturePlacementsRead {
   packageId: string;
   /**
    *
-   * @type {Array<SignatureFieldPlacement>}
+   * @type {Array<SigningRole>}
    * @memberof ResolvedSignaturePlacementsRead
    */
-  placements: Array<SignatureFieldPlacement>;
+  placeableRoles?: Array<SigningRole>;
+  /**
+   *
+   * @type {Array<SignatureFieldPlacementRead>}
+   * @memberof ResolvedSignaturePlacementsRead
+   */
+  placements: Array<SignatureFieldPlacementRead>;
   /**
    *
    * @type {string}
@@ -115,8 +128,12 @@ export function ResolvedSignaturePlacementsReadFromJSONTyped(
       PlacementFieldTypeReadFromJSON,
     ),
     packageId: json["package_id"],
+    placeableRoles:
+      json["placeable_roles"] == null
+        ? undefined
+        : (json["placeable_roles"] as Array<any>).map(SigningRoleFromJSON),
     placements: (json["placements"] as Array<any>).map(
-      SignatureFieldPlacementFromJSON,
+      SignatureFieldPlacementReadFromJSON,
     ),
     returnCode: json["return_code"],
     source: PlacementSourceFromJSON(json["source"]),
@@ -143,8 +160,12 @@ export function ResolvedSignaturePlacementsReadToJSONTyped(
       PlacementFieldTypeReadToJSON,
     ),
     package_id: value["packageId"],
+    placeable_roles:
+      value["placeableRoles"] == null
+        ? undefined
+        : (value["placeableRoles"] as Array<any>).map(SigningRoleToJSON),
     placements: (value["placements"] as Array<any>).map(
-      SignatureFieldPlacementToJSON,
+      SignatureFieldPlacementReadToJSON,
     ),
     return_code: value["returnCode"],
     source: PlacementSourceToJSON(value["source"]),

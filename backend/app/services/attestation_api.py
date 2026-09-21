@@ -23,6 +23,7 @@ from app.core.config import get_settings
 from app.models import (
     AdoptedSignatureAppearance,
     AttestationSignature,
+    Bank,
     PackageSignatureRecipient,
     RegulatoryPackage,
     ReturnSignaturePlacement,
@@ -56,6 +57,7 @@ from app.schemas.attestation import (
 )
 from app.services.attestation import (
     appearance,
+    layouts,
     pdf_signing,
     placements,
     routing,
@@ -71,6 +73,7 @@ from app.services.attestation.typed_fonts import available_face_keys
 from app.services.attestation.workflow import AttestationConflict
 from app.services.audit import record_event
 from app.services.banks import resolve_bank_reference
+from app.services.regulatory_reporting.registry import get_definition
 
 if TYPE_CHECKING:
     from pyhanko.sign.timestamps import TimeStamper
@@ -99,7 +102,12 @@ def _validate_role(role: str) -> str:
 
 
 def _ensure_checker_authority(ctx: TenantContext, role: str) -> None:
-    """A checker slot needs the approver role, whatever the route's own gate."""
+    """A checker slot needs the approver role, whatever the route's own gate.
+
+    The SCALAR ladder, which is the right and unchanged answer for every
+    ungated return family. A gated family supersedes it — see
+    :func:`_ensure_certify_authority`.
+    """
     if role in CHECKER_ROLES and not security.has_role(list(ctx.roles), "approver"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -110,9 +118,48 @@ def _ensure_checker_authority(ctx: TenantContext, role: str) -> None:
         )
 
 
+def _ensure_certify_authority(
+    db: Session, ctx: TenantContext, package: RegulatoryPackage, role: str
+) -> None:
+    """Who may certify: the scoped binding for a gated family, else the ladder.
+
+    A scalar role must never satisfy a scoped surface (authorization
+    foundation, AGENTS.md). For an ICAAP package the certifying officer holds
+    an exact CAPITAL/CONFIDENTIAL binding for that institution — EDIT to
+    certify as preparer, APPROVE to certify as approver or for the Board — and
+    a scalar ``approver`` with no binding is refused. Every other family keeps
+    the ladder it has always had, byte for byte.
+    """
+    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+
+    bank = db.get(Bank, package.bank_id)
+    if bank is None:  # pragma: no cover - the package's own FK guarantees it
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    if family_access.require_certify_authority(db, ctx, bank, package, role):
+        return
+    _ensure_checker_authority(ctx, role)
+
+
 def _get_package(
     db: Session, ctx: TenantContext, bank_reference: str, package_id: UUID
 ) -> RegulatoryPackage:
+    """The package, or 404 — including when the caller may not know it exists.
+
+    The family gate lives HERE rather than at each route because this function
+    is the single door onto a package for the whole attestation surface, and a
+    gate applied per route is a gate someone forgets. The security audit found
+    exactly that: org + bank were filtered but the family was not, so a scalar
+    `analyst` holding no binding at all could take an ICAAP package id from the
+    reporting calendar and reach every attestation route but `step-up` and
+    `certify` — and `POST .../attestation/void` returned 200 and really did void
+    a fully certified ICAAP package. Gating the lookup closes the whole class,
+    for the routes that exist today and the ones added later.
+
+    `require_view` is a no-op for an ungated family, so no existing return's
+    behaviour changes.
+    """
+    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+
     bank = resolve_bank_reference(db, ctx, bank_reference)
     package = db.scalar(
         select(RegulatoryPackage).where(
@@ -125,6 +172,7 @@ def _get_package(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory package not found."
         )
+    family_access.require_view(db, ctx, bank, package)
     return package
 
 
@@ -254,8 +302,8 @@ def step_up(  # noqa: PLR0913 - request context is part of the evidence
     """Re-authenticate, then mint a single-use authorisation for these figures."""
     actor = _require_actor(ctx)
     role = _validate_role(payload.signing_role)
-    _ensure_checker_authority(ctx, role)
     package = _get_package(db, ctx, bank_reference, package_id)
+    _ensure_certify_authority(db, ctx, package, role)
 
     policy = workflow.package_policy(db, ctx, package)
     binding = workflow.compute_binding(package)
@@ -264,12 +312,13 @@ def step_up(  # noqa: PLR0913 - request context is part of the evidence
 
     # Guard BEFORE asking the user to re-authenticate: making someone prove
     # presence only to be told they were never eligible is a poor ceremony.
-    workflow.ensure_certifiable(package, policy, role)
+    signatures = workflow.current_signatures(db, ctx, package)
+    workflow.ensure_certifiable(package, policy, role, signatures)
     workflow.ensure_digest_unchanged(package, binding)
     workflow.ensure_maker_checker(
         package,
         policy,
-        workflow.current_signatures(db, ctx, package),
+        signatures,
         role=role,
         user_id=actor,
         signer_id=identity.signer_id,
@@ -316,8 +365,8 @@ def certify(
     payload: CertifyRequest,
 ) -> AttestationStatusRead:
     role = _validate_role(payload.signing_role)
-    _ensure_checker_authority(ctx, role)
     package = _get_package(db, ctx, bank_reference, package_id)
+    _ensure_certify_authority(db, ctx, package, role)
 
     binding = workflow.compute_binding(package)
     # The client tells us which figures it believed it was signing. A stale
@@ -414,7 +463,12 @@ def list_policies(db: Session, ctx: TenantContext) -> PolicyListRead:
         .where(ReturnSigningPolicy.organization_id == ctx.organization_id)
         .order_by(ReturnSigningPolicy.effective_from.desc(), ReturnSigningPolicy.created_at.desc())
     )
-    return PolicyListRead(policies=[_policy_read(row) for row in rows])
+    settings = get_settings()
+    return PolicyListRead(
+        policies=[_policy_read(row) for row in rows],
+        signing_suspended_deployment_wide=not settings.attestation.esign_required,
+        icaap_signing_suspended=not settings.icaap.signing_enabled,
+    )
 
 
 def _policy_read(row: ReturnSigningPolicy) -> PolicyRead:
@@ -430,6 +484,7 @@ def _policy_read(row: ReturnSigningPolicy) -> PolicyRead:
             "require_signature": row.require_signature,
             "require_signed_pdf": row.require_signed_pdf,
             "distinct_signers": row.distinct_signers,
+            "ordered_slots": row.ordered_slots,
             "effective_from": row.effective_from,
             "effective_to": row.effective_to,
             "reason": row.reason,
@@ -454,6 +509,7 @@ def upsert_policy(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="A policy must scope to a return code or a return family.",
         )
+    _require_signable_policy(payload)
     _close_open_policy(db, ctx, payload)
 
     row = ReturnSigningPolicy(
@@ -472,6 +528,7 @@ def upsert_policy(
         updated_by=actor,
         reason=payload.reason,
     )
+    row.ordered_slots = payload.ordered_slots
     db.add(row)
     db.flush()
     record_event(
@@ -489,11 +546,98 @@ def upsert_policy(
             },
             "require_signature": payload.require_signature,
             "require_signed_pdf": payload.require_signed_pdf,
+            "ordered_slots": payload.ordered_slots,
+            "signing_roles": [slot.role for slot in payload.required_signatures],
+            # Recorded explicitly, because it is the one relaxation a reader of
+            # this event most needs to see: an ICAAP policy that drops the Board
+            # signature slot. The Board RESOLUTION attachment is required by the
+            # framework and is untouched by it (D-031, audit M11).
+            "board_signature_relaxed": _board_signature_relaxed(payload),
             "reason": payload.reason,
         },
     )
     db.commit()
     return _policy_read(row)
+
+
+def _policy_artifact_layout(payload: PolicyUpsertRequest) -> str:
+    """The layout the returns this policy scopes to are signed under.
+
+    A code wins over a family, because a code is the more specific scope and a
+    policy may legitimately name both.
+    """
+    if payload.return_code:
+        definition = get_definition(payload.return_code)
+        if definition is not None:
+            return layouts.layout_for_family(definition.family)
+    if payload.return_family:
+        return layouts.layout_for_family(payload.return_family)
+    return "standard"
+
+
+def _board_signature_relaxed(payload: PolicyUpsertRequest) -> bool:
+    roles = {slot.role for slot in payload.required_signatures}
+    return _policy_artifact_layout(payload) == "icaap" and "board" not in roles
+
+
+def _require_signable_policy(payload: PolicyUpsertRequest) -> None:
+    """Refuse a policy the document could not actually satisfy.
+
+    Each of these is a configuration that would be accepted now and fail at
+    certification time, on a filing deadline, with a message about PDF fields
+    that means nothing to the administrator who saved it. Refused at the point of
+    saving instead, where the person can still act on it.
+    """
+    layout = _policy_artifact_layout(payload)
+    carried = layouts.LAYOUT_ROLES[layout]
+    roles = [slot.role for slot in payload.required_signatures]
+
+    if payload.require_signed_pdf:
+        unsupported = sorted({role for role in roles} - set(carried))
+        if unsupported:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error_code": "role_not_on_artifact",
+                    "message": (
+                        f"This policy requires a signed PDF and a signature from "
+                        f"{unsupported}, but the return document carries signature "
+                        f"fields for {sorted(carried)} only. Recording such a signature "
+                        f"would attribute to the artifact something it does not contain."
+                    ),
+                },
+            )
+        for slot in payload.required_signatures:
+            if slot.min_count != 1:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "error_code": "single_signature_per_field",
+                        "message": (
+                            f"The return document has exactly one '{slot.role}' signature "
+                            f"field, so it cannot carry {slot.min_count} of them. A field "
+                            f"signed twice would replace evidence rather than add to it."
+                        ),
+                    },
+                )
+
+    if (
+        payload.require_signed_pdf
+        and "board" in roles
+        and not payload.ordered_slots
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "ordered_slots_required",
+                "message": (
+                    "A signed PDF with a Board signature is signed in order: the Board's "
+                    "field seals every field in the document, so a signature arriving "
+                    "after it would invalidate the Board's own. Set ordered_slots."
+                ),
+            },
+        )
+
 
 
 def _close_open_policy(
@@ -627,7 +771,9 @@ def resolved_placements(
     db: Session, ctx: TenantContext, bank_reference: str, package_id: UUID
 ) -> ResolvedSignaturePlacementsRead:
     package = _get_package(db, ctx, bank_reference, package_id)
-    resolved = placements.resolve(db, ctx, package)
+    layout = layouts.layout_for_family(package.return_family)
+    order = workflow.package_policy(db, ctx, package).field_roles(layout)
+    resolved = placements.resolve(db, ctx, package, signing_order=order)
     return ResolvedSignaturePlacementsRead.model_validate(
         {
             "package_id": package.id,
@@ -637,7 +783,15 @@ def resolved_placements(
                 _placement_read(placement) for placement in resolved.placements
             ],
             "field_types": _field_types_read(),
-            "editable": package.attestation_state == "unsigned",
+            # Two independent reasons a set cannot be moved: the fields are
+            # already part of a certified revision, or this return's attestation
+            # page is one the platform draws and the boxes sit on its own rules.
+            "editable": package.attestation_state == "unsigned" and resolved.editable,
+            # The ceremony, always — not only when the boxes can be dragged.
+            # The workspace labels every box and every rail entry from this, and
+            # a Board signer looking at a report they cannot re-place still has
+            # to see who signs before them.
+            "placeable_roles": list(order),
         }
     )
 
@@ -762,8 +916,8 @@ def certify_and_send(
     """
     actor = _require_actor(ctx)
     role = _validate_role(payload.signing_role)
-    _ensure_checker_authority(ctx, role)
     package = _get_package(db, ctx, bank_reference, package_id)
+    _ensure_certify_authority(db, ctx, package, role)
 
     binding = workflow.compute_binding(package)
     if payload.expected_certification_digest != binding.certification_digest:
@@ -873,6 +1027,7 @@ def awaiting_my_signature(db: Session, ctx: TenantContext) -> AwaitingSignatureL
                     "routing_order": recipient.routing_order,
                     "requested_at": recipient.created_at,
                     "notified_at": recipient.notified_at,
+                    "is_rehearsal": package.is_rehearsal,
                 }
                 for recipient, package in routing.awaiting_signature(db, ctx, actor)
             ]

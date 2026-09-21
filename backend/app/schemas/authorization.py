@@ -29,6 +29,10 @@ GrantableRoleBundle = Literal[
     "auditor",
     "analyst",
     "approver",
+    # The officer who transmits a return to the regulator. Grantable because
+    # transmission authority exists only as an explicit binding: nothing
+    # backfilled it and no scalar role produces it.
+    "validator",
     "account_admin",
 ]
 

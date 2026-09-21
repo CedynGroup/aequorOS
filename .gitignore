@@ -31,6 +31,7 @@ data/
 # Next.js build output (any app)
 .next/
 .next-dev/
+.next-preview/
 
 # --- public-repo hygiene backstop (2026-07) ---
 .claude/
@@ -109,3 +110,6 @@ start.md
 
 # Local Snowflake seed CSVs (25MB) loaded into the warehouse — regenerable, not source.
 data_snowflake/
+
+# ICAAP implementation ledger: local only (agent audit reports name open weaknesses; repo is public).
+/.ai/

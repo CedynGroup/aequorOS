@@ -21,6 +21,7 @@ from app.domain.stress.management_actions import (
     ManagementAction,
     ManagementActionNotComputable,
     ManagementActionPlan,
+    RecognitionCaps,
     apply_management_actions,
     default_action_plan,
     money,
@@ -35,6 +36,10 @@ from tests.domain.stress_fixtures import (
     sample_bank_latest_facts,
     severe_paths,
 )
+
+#: Test data for the governed AT1 / Tier 2 recognition caps (D-024: the engine
+#: takes them as an argument; production resolves them from the control plane).
+_RECOGNITION_CAPS = RecognitionCaps(at1_pct_rwa=Decimal("1.5"), tier2_pct_rwa=Decimal("2"))
 
 _CAR_TARGET = Decimal("13")
 _ONE = Decimal("1")
@@ -62,6 +67,7 @@ def _apply(projection, plan, *, severity: str | None = "severe", paid_up_min=Dec
         capital_params=bog_capital_params(),
         paid_up_min=paid_up_min,
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
     )
 
 

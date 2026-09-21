@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { FamilyRuleVersion } from "./FamilyRuleVersion";
+import {
+  FamilyRuleVersionFromJSON,
+  FamilyRuleVersionFromJSONTyped,
+  FamilyRuleVersionToJSON,
+  FamilyRuleVersionToJSONTyped,
+} from "./FamilyRuleVersion";
 import type { ValidationFindingRead } from "./ValidationFindingRead";
 import {
   ValidationFindingReadFromJSON,
@@ -31,6 +38,12 @@ export interface ValidationReportRead {
    * @memberof ValidationReportRead
    */
   errorCount: number;
+  /**
+   *
+   * @type {FamilyRuleVersion}
+   * @memberof ValidationReportRead
+   */
+  familyRuleVersion?: FamilyRuleVersion;
   /**
    *
    * @type {Array<ValidationFindingRead>}
@@ -103,6 +116,10 @@ export function ValidationReportReadFromJSONTyped(
   return {
     ...json,
     errorCount: json["error_count"],
+    familyRuleVersion:
+      json["family_rule_version"] == null
+        ? undefined
+        : FamilyRuleVersionFromJSON(json["family_rule_version"]),
     findings: (json["findings"] as Array<any>).map(
       ValidationFindingReadFromJSON,
     ),
@@ -128,6 +145,7 @@ export function ValidationReportReadToJSONTyped(
 
   return {
     error_count: value["errorCount"],
+    family_rule_version: FamilyRuleVersionToJSON(value["familyRuleVersion"]),
     findings: (value["findings"] as Array<any>).map(
       ValidationFindingReadToJSON,
     ),

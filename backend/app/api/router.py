@@ -8,11 +8,13 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.database_connections import router as database_direct_connections_router
 from app.features.bulk_update_cases import router as bulk_update_cases_router
 from app.features.examiner_surfaces import router as examiner_router
+from app.features.export_icaap_drafts import router as icaap_draft_exports_router
 from app.features.generate_case_reports import router as case_reports_router
 from app.features.ingest_data import router as ingestion_router
 from app.features.list_case_taxonomy import router as case_taxonomy_router
 from app.features.list_organization_users import router as organization_users_router
 from app.features.list_taxonomy import router as taxonomy_router
+from app.features.manage_ai_settings import router as ai_settings_router
 from app.features.manage_attestation import router as attestation_router
 from app.features.manage_authorization import router as authorization_router
 from app.features.manage_banks import router as banks_router
@@ -24,6 +26,26 @@ from app.features.manage_enterprise_stress import router as enterprise_stress_ro
 from app.features.manage_enterprise_stress_signoff import (
     router as enterprise_stress_signoff_router,
 )
+from app.features.manage_filing_workflow import router as filing_workflow_router
+from app.features.manage_icaap import router as icaap_router
+from app.features.manage_icaap_ai import router as icaap_ai_router
+from app.features.manage_icaap_appetite import router as icaap_appetite_router
+from app.features.manage_icaap_attachments import router as icaap_attachments_router
+from app.features.manage_icaap_blocks import router as icaap_blocks_router
+from app.features.manage_icaap_disclosure import router as icaap_disclosure_router
+from app.features.manage_icaap_filing import router as icaap_filing_router
+from app.features.manage_icaap_pillar2 import router as icaap_pillar2_router
+from app.features.manage_icaap_reconciliation import (
+    router as icaap_reconciliation_router,
+)
+from app.features.manage_icaap_review import router as icaap_review_router
+from app.features.manage_icaap_reviews import router as icaap_reviews_router
+from app.features.manage_icaap_risks import router as icaap_risks_router
+from app.features.manage_icaap_sections import router as icaap_sections_router
+from app.features.manage_icaap_supervisory_addons import (
+    router as icaap_supervisory_addons_router,
+)
+from app.features.manage_icaap_workflow import router as icaap_workflow_router
 from app.features.manage_institution_profile import router as institution_profile_router
 from app.features.manage_integration_keys import router as integration_keys_router
 from app.features.manage_liquidity_cfp import router as liquidity_cfp_router
@@ -35,6 +57,7 @@ from app.features.manage_market_data_connections import router as market_data_co
 from app.features.manage_market_data_overlays import router as market_data_overlays_router
 from app.features.manage_market_data_uploads import router as market_data_uploads_router
 from app.features.manage_notifications import router as notifications_router
+from app.features.manage_package_attachments import router as package_attachments_router
 from app.features.manage_reconciliation import router as reconciliation_router
 from app.features.manage_regulatory_reporting import router as regulatory_reporting_router
 from app.features.manage_scenarios import router as scenarios_router
@@ -87,6 +110,27 @@ v1_router.include_router(liquidity_thresholds_router, dependencies=BANK_ROUTE_DE
 v1_router.include_router(liquidity_cfp_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(credit_params_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(capital_plan_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+# ICAAP rides on the capital module set, so no require_module_access here: that
+# dependency answers 403, and an institution outside the ICAAP regime must see
+# 404. The bank-only guard lives inside the ICAAP dependency itself.
+v1_router.include_router(icaap_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_sections_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_ai_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_blocks_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_attachments_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_risks_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_appetite_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_pillar2_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_reconciliation_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_reviews_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_supervisory_addons_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(ai_settings_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+# ICAAP P3: the review chain, freeze and filing, the bank's own review-chain
+# templates, and the paragraph 82 disclosure.
+v1_router.include_router(icaap_review_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_filing_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_workflow_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(icaap_disclosure_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(examiner_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(stress_scenarios_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(macro_scenarios_router, dependencies=BANK_ROUTE_DEPENDENCIES)
@@ -116,6 +160,8 @@ v1_router.include_router(
     dependencies=(*BANK_ROUTE_DEPENDENCIES, require_module_access("ftp")),
 )
 v1_router.include_router(regulatory_reporting_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(filing_workflow_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+v1_router.include_router(package_attachments_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 # The reconciliation escape valve (audit 2026-08-22 D-20): the fail-closed
 # balance-sheet identity control had no product path to record an approved,
 # bounded exception, so a blocked tenant could only be unblocked by a database
@@ -161,4 +207,9 @@ v1_router.include_router(window_analytics_router, dependencies=BANK_ROUTE_DEPEND
 v1_router.include_router(cashflow_window_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(liquidity_monitoring_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(sdi_diagnostics_router, dependencies=BANK_ROUTE_DEPENDENCIES)
+# ICAAP draft exports. No ``require_module_access``: that dependency answers
+# 403 for an institution class without the module, and the ICAAP surface has to
+# answer 404 for an SDI — the workspace is banks-only and its existence is not
+# advertised. The class check lives inside ``require_icaap_export``.
+v1_router.include_router(icaap_draft_exports_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 api_router.include_router(v1_router)

@@ -7,6 +7,10 @@ license = { file = "../LICENSE" }
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "alembic",
+  # Governed AI drafting (app/services/ai). Imported LAZILY and in exactly one
+  # module (app/services/ai/client.py), so the API, the core worker and the
+  # operator app never load it; tests/architecture pins that.
+  "anthropic",
   "argon2-cffi",
   "boto3",
   "cryptography",
@@ -34,6 +38,11 @@ dependencies = [
   "pyhanko[opentype]",
   "pyhanko-certvalidator",
   "pyjwt[crypto]",
+  # The ICAAP working copy (app/services/icaap/render/docx.py) is an editable
+  # Word document, not a rendering of one: the bank's own reviewers redline it
+  # outside the platform. python-docx (MIT) writes the OOXML package directly;
+  # its own dependencies (lxml, typing-extensions) were already locked.
+  "python-docx",
   "pyyaml",
   "rapidfuzz",
   "reportlab>=4.0,<5.1",  # pinned: deterministic bytes rely on invariant=1 (G12)

@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ReportingObligationReadPackageStatus } from "./ReportingObligationReadPackageStatus";
-import {
-  ReportingObligationReadPackageStatusFromJSON,
-  ReportingObligationReadPackageStatusFromJSONTyped,
-  ReportingObligationReadPackageStatusToJSON,
-  ReportingObligationReadPackageStatusToJSONTyped,
-} from "./ReportingObligationReadPackageStatus";
 import type { DueTime } from "./DueTime";
 import {
   DueTimeFromJSON,
@@ -39,6 +32,13 @@ import {
   ReturnFamilyToJSON,
   ReturnFamilyToJSONTyped,
 } from "./ReturnFamily";
+import type { ObligationAnnexRead } from "./ObligationAnnexRead";
+import {
+  ObligationAnnexReadFromJSON,
+  ObligationAnnexReadFromJSONTyped,
+  ObligationAnnexReadToJSON,
+  ObligationAnnexReadToJSONTyped,
+} from "./ObligationAnnexRead";
 import type { AnchorDataStatus } from "./AnchorDataStatus";
 import {
   AnchorDataStatusFromJSON,
@@ -60,6 +60,13 @@ import {
   PackageIdToJSON,
   PackageIdToJSONTyped,
 } from "./PackageId";
+import type { ObligationAnnexReadPackageStatus } from "./ObligationAnnexReadPackageStatus";
+import {
+  ObligationAnnexReadPackageStatusFromJSON,
+  ObligationAnnexReadPackageStatusFromJSONTyped,
+  ObligationAnnexReadPackageStatusToJSON,
+  ObligationAnnexReadPackageStatusToJSONTyped,
+} from "./ObligationAnnexReadPackageStatus";
 import type { ReturnBasis } from "./ReturnBasis";
 import {
   ReturnBasisFromJSON,
@@ -95,6 +102,12 @@ import {
  * @interface ReportingObligationRead
  */
 export interface ReportingObligationRead {
+  /**
+   *
+   * @type {Array<ObligationAnnexRead>}
+   * @memberof ReportingObligationRead
+   */
+  annexes?: Array<ObligationAnnexRead>;
   /**
    *
    * @type {ReturnBasis}
@@ -145,10 +158,10 @@ export interface ReportingObligationRead {
   packageId: PackageId;
   /**
    *
-   * @type {ReportingObligationReadPackageStatus}
+   * @type {ObligationAnnexReadPackageStatus}
    * @memberof ReportingObligationRead
    */
-  packageStatus: ReportingObligationReadPackageStatus;
+  packageStatus: ObligationAnnexReadPackageStatus;
   /**
    *
    * @type {PackageVersion}
@@ -229,6 +242,10 @@ export function ReportingObligationReadFromJSONTyped(
   }
   return {
     ...json,
+    annexes:
+      json["annexes"] == null
+        ? undefined
+        : (json["annexes"] as Array<any>).map(ObligationAnnexReadFromJSON),
     basis:
       json["basis"] == null ? undefined : ReturnBasisFromJSON(json["basis"]),
     dataStatus:
@@ -242,7 +259,7 @@ export function ReportingObligationReadFromJSONTyped(
     fidelity: FidelityGradeFromJSON(json["fidelity"]),
     frequency: ReturnFrequencyFromJSON(json["frequency"]),
     packageId: PackageIdFromJSON(json["package_id"]),
-    packageStatus: ReportingObligationReadPackageStatusFromJSON(
+    packageStatus: ObligationAnnexReadPackageStatusFromJSON(
       json["package_status"],
     ),
     packageVersion: PackageVersionFromJSON(json["package_version"]),
@@ -269,6 +286,10 @@ export function ReportingObligationReadToJSONTyped(
   }
 
   return {
+    annexes:
+      value["annexes"] == null
+        ? undefined
+        : (value["annexes"] as Array<any>).map(ObligationAnnexReadToJSON),
     basis: ReturnBasisToJSON(value["basis"]),
     data_status: AnchorDataStatusToJSON(value["dataStatus"]),
     default_channel: ChannelCodeToJSON(value["defaultChannel"]),
@@ -277,7 +298,7 @@ export function ReportingObligationReadToJSONTyped(
     fidelity: FidelityGradeToJSON(value["fidelity"]),
     frequency: ReturnFrequencyToJSON(value["frequency"]),
     package_id: PackageIdToJSON(value["packageId"]),
-    package_status: ReportingObligationReadPackageStatusToJSON(
+    package_status: ObligationAnnexReadPackageStatusToJSON(
       value["packageStatus"],
     ),
     package_version: PackageVersionToJSON(value["packageVersion"]),

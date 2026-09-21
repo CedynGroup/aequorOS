@@ -27,8 +27,9 @@ from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services import regulatory_liquidity
 from app.services.regulatory_reporting import generation
+from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.services.regulatory_reporting.exports import export_package
-from app.services.regulatory_reporting.registry import REGISTRY
+from app.services.regulatory_reporting.registry import REGISTRY, get_definition
 from app.services.regulatory_reporting.templates import (
     CURRENCY_UNIT_DIVISOR,
     CURRENCY_UNIT_NOTE,
@@ -245,6 +246,23 @@ def test_xlsx_export_bytes_are_deterministic(
     assert first == second
 
 
+def test_a_word_working_copy_is_refused_rather_than_rendered_as_a_pdf(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    """``docx_working`` is a real artifact kind on the wire (model, DB CHECK and
+    export route) before any return renders one, so the exporter must refuse it
+    BY NAME. The kind dispatch ends in a PDF fallback, so a missing branch would
+    render a PDF, store it under a Word kind and report success."""
+    _ = storage
+    _seed_with_baseline_run(db_session)
+    package = _generate(db_session)
+    with pytest.raises(HTTPException) as excinfo:
+        export_package(db_session, MAKER, package, "docx_working")
+    assert excinfo.value.status_code == 409
+    assert "export_kind_not_supported_for_return" in str(excinfo.value.detail)
+    assert "Word working copy" in str(excinfo.value.detail)
+
+
 def test_sdi_working_xlsx_contains_live_formula_calculations(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
@@ -264,7 +282,19 @@ def test_sdi_working_xlsx_contains_live_formula_calculations(
     assert artifact.kind == "xlsx_working"
     assert artifact.object_path.endswith("SDI-LMT-MONTHLY.working.xlsx")
     calculations = workbook["Working Calculations"]
-    assert "WORKING COPY" in str(calculations["A1"].value)
+    banner = str(calculations["A1"].value)
+    assert "WORKING COPY" in banner
+    # The SDI sheet keeps the plain working-copy wording, and that wording has
+    # to be TRUE. BoG's own formula workbook was relabelled on 2026-09-20 when
+    # it became filable; this one did not become filable, so the claim it makes
+    # about itself is asserted here against the behaviour that decides it —
+    # a label and a filing rule drifting apart is exactly what went wrong.
+    assert "not a filing artifact" in banner
+    definition = get_definition("SDI-LMT-MONTHLY")
+    assert definition is not None
+    assert not reporting_workflow.filing_admits_artifact(
+        "xlsx_working", generator=definition.generator
+    ), "the banner claims it is not filed; the filing rule must agree"
     assert calculations["C13"].data_type == "f"
     assert str(calculations["C13"].value).startswith("=IFERROR(")
     assert calculations["E13"].data_type == "f"
@@ -459,7 +489,13 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
         # W6 remainder: the DBK daily family reconstructs NOP + contingents
         # from the FX engine's baseline run (gap G5).
         "dbk": {"nop_by_currency", "nop_aggregate", "contingents"},
-        "icaap_stress": {"forecast_summary", "forecast_path", "stress_summary"},
+        "icaap_stress": {
+            "forecast_summary",
+            "forecast_path",
+            "stress_summary",
+            # ICAAP P0: the latest reverse-stress run, when one exists.
+            "reverse_stress",
+        },
         # Phase 5: the ICAAP submission IS the BoG Appendix II Tables 1–6, carried
         # from a Board-attested enterprise-stress run (docs/stress.md §1.8, §3.8).
         "icaap_stress_appendix2": {
@@ -473,8 +509,12 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "t3_profit_and_loss",
             "t4_financial_position",
             "t5_rwa",
+            # ICAAP P0: Table 5's per-risk Pillar 2 rows and the Board-attested
+            # narrative (rendered as prose in the PDF).
+            "t5_pillar2",
             "t6_risk_drivers",
             "governance",
+            "stress_narrative",
         },
         # Phase 2 items 12/14: real obligations, unpublished forms — zero
         # sections until the official layouts land.
@@ -546,8 +586,10 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
                 "t3_profit_and_loss",
                 "t4_financial_position",
                 "t5_rwa",
+                "t5_pillar2",
                 "t6_risk_drivers",
                 "governance",
+                "stress_narrative",
             },
             "sdi_irrbb": {
                 "repricing_gap",
@@ -576,6 +618,14 @@ def test_every_registry_entry_has_a_template_with_matching_sections() -> None:
             "due_diligence_checklist",
         },
         "lrt_capital": {"shareholder_register", "capital_summary", "capital_checklist"},
+        # ICAAP P3: the filing family. Its templates declare NO section layouts
+        # because an ICAAP report is a narrative document rendered by its own
+        # renderer (``exports/icaap_pdf.py``), reached before the tabular
+        # resolver runs. An empty set is the honest pairing: the template
+        # references no generator section, so it cannot reference one that does
+        # not exist. See templates.py's ICAAP block for the full reasoning.
+        "icaap_report": set(),
+        "icaap_disclosure": set(),
         "lrt_product": {"products", "product_checklist"},
         # Credit PR-6: the Notice 2025/23 monthly NPL report. Only npl_levels
         # and headline_comparative are unconditional; migration needs a prior

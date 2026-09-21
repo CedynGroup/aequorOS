@@ -18,6 +18,8 @@ from app.models import (
     OperatorAuditLog,
     Organization,
     OrganizationOwnerAssignment,
+    ParamCapitalThreshold,
+    RegulatoryParameter,
     SsoConnection,
     TenantStorage,
     User,
@@ -468,3 +470,51 @@ def test_readiness_refuses_a_tenant_whose_board_register_is_empty(
     assert readiness["status"] == "failed"
     assert "board register is empty" in readiness["detail"]
     assert "no return could ever be generated" in readiness["detail"]
+
+
+def test_the_provisioned_register_carries_no_governed_minimum(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    """Founder directives D-024 / D-042: a governed capital minimum carries no
+    literal and is not written into the new tenant's register; the calculations
+    take the control-plane value (the clamp supplies it when no row exists)."""
+    response = operator_client.post(
+        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["succeeded"] is True, body
+    register = {
+        row.threshold_code
+        for row in operator_db.scalars(
+            select(ParamCapitalThreshold).where(
+                ParamCapitalThreshold.organization_id == body["organization_id"]
+            )
+        ).all()
+    }
+    assert register, "the board register itself is seeded"
+    assert not {"car_min", "cet1_min", "tier1_min", "leverage_min"} & register
+
+
+def test_provisioning_does_not_depend_on_governed_minima(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    """D-042: a jurisdiction with no governed capital minima is still provisioned;
+    the missing value refuses at calculation time (``missing_parameter``), not at
+    onboarding."""
+    for row in operator_db.scalars(
+        select(RegulatoryParameter).where(
+            RegulatoryParameter.param_code.in_(("car_min", "cet1_min", "tier1_min", "leverage_min"))
+        )
+    ).all():
+        operator_db.delete(row)
+    operator_db.commit()
+    response = operator_client.post(
+        "/operator/v1/tenants", json=provision_payload(), headers=operator_headers()
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["succeeded"] is True, body
+    steps = _steps_by_name(body)
+    assert steps["parameters"]["status"] == "succeeded"
+    assert steps["readiness"]["status"] == "succeeded"

@@ -1,0 +1,2251 @@
+{
+  "schema": "aequoros-icaap-framework-v1",
+  "code": "cbk_icaap_gn",
+  "jurisdiction": "KE",
+  "regulator": "CBK",
+  "title": "Central Bank of Kenya Guidance Note on Internal Capital Adequacy Assessment Process (ICAAP), November 2016",
+  "short_title": "CBK ICAAP Guidance Note (Nov 2016)",
+  "version": "2016.11",
+  "status": "final",
+  "effective_from": "2016-11-01",
+  "effective_from_citations": [
+    {
+      "doc": "CBK-ICAAP-GN-2016",
+      "ref": "cover"
+    }
+  ],
+  "first_as_of_date": "2016-12-31",
+  "first_as_of_basis": "inferred",
+  "first_as_of_note": "The Guidance Note carries an issue month (November 2016) and no commencement date; the first annual report is taken to be the one as at 31 December 2016 (¶5(b)).",
+  "institution_classes": [
+    "bank"
+  ],
+  "supersedes": null,
+  "section_key_map": [],
+  "cross_framework_section_map": [
+    {
+      "framework": "bog_icaap",
+      "direction": "from",
+      "map": [
+        {
+          "from": "executive_summary",
+          "to": "executive_summary",
+          "relation": "equivalent"
+        },
+        {
+          "from": "executive_summary",
+          "to": "challenges_further_steps",
+          "relation": "partial"
+        },
+        {
+          "from": "structure_operations",
+          "to": "structure_operations",
+          "relation": "equivalent"
+        },
+        {
+          "from": "governance",
+          "to": "governance_structure",
+          "relation": "equivalent"
+        },
+        {
+          "from": "governance",
+          "to": "design_approval_review_use",
+          "relation": "partial"
+        },
+        {
+          "from": "business_model_strategy",
+          "to": "business_plan_strategy",
+          "relation": "equivalent"
+        },
+        {
+          "from": "risk_management_framework",
+          "to": "governance_structure",
+          "relation": "partial"
+        },
+        {
+          "from": "risk_management_framework",
+          "to": "risk_assessment_capital_adequacy",
+          "relation": "partial"
+        },
+        {
+          "from": "risk_appetite",
+          "to": "risk_appetite_statement",
+          "relation": "equivalent"
+        },
+        {
+          "from": "risk_identification_materiality",
+          "to": "risk_assessment_capital_adequacy",
+          "relation": "merge"
+        },
+        {
+          "from": "pillar2_quantification",
+          "to": "risk_assessment_capital_adequacy",
+          "relation": "merge"
+        },
+        {
+          "from": "pillar2_quantification",
+          "to": "methodology_assumptions",
+          "relation": "partial"
+        },
+        {
+          "from": "stress_testing",
+          "to": "stress_testing",
+          "relation": "equivalent"
+        },
+        {
+          "from": "capital_planning",
+          "to": "capital_planning",
+          "relation": "equivalent"
+        },
+        {
+          "from": "liquidity_planning",
+          "to": null,
+          "relation": "unmapped"
+        },
+        {
+          "from": "capital_allocation_reconciliation",
+          "to": "risk_assessment_capital_adequacy",
+          "relation": "merge"
+        },
+        {
+          "from": "management_actions",
+          "to": "capital_planning",
+          "relation": "partial"
+        },
+        {
+          "from": "internal_audit_review",
+          "to": "design_approval_review_use",
+          "relation": "partial"
+        },
+        {
+          "from": "challenge_adoption",
+          "to": "design_approval_review_use",
+          "relation": "partial"
+        },
+        {
+          "from": "approval_review_use",
+          "to": "design_approval_review_use",
+          "relation": "equivalent"
+        },
+        {
+          "from": "internal_models",
+          "to": "internal_models",
+          "relation": "equivalent"
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "id": "CBK-ICAAP-GN-2016",
+      "title": "Guidance Note on Internal Capital Adequacy Assessment Process (ICAAP)",
+      "short_label": "ICAAP Guidance Note",
+      "issuer": "Central Bank of Kenya",
+      "issued": "2016-11",
+      "status": "final",
+      "url": "https://www.centralbank.go.ke/wp-content/uploads/2016/08/147315124_GUIDANCE-NOTE-ON-INTERNAL-CAPITAL-ADEQUACY-ASSESSMENT-PROCESS.pdf"
+    }
+  ],
+  "related_instruments": [
+    {
+      "id": "CBK-PG-03",
+      "title": "Prudential Guideline on Capital Adequacy (CBK/PG/03)",
+      "issued": null,
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "preface"
+        },
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(i)(f)"
+        }
+      ]
+    },
+    {
+      "id": "CBK-PG-02",
+      "title": "Prudential Guideline on Corporate Governance (CBK/PG/02)",
+      "issued": null,
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(i)(b)"
+        }
+      ]
+    },
+    {
+      "id": "CBK-PG-20",
+      "title": "Prudential Guideline on Stress Testing (CBK/PG/20)",
+      "issued": null,
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(iv)(j)"
+        }
+      ]
+    }
+  ],
+  "deadline": {
+    "as_of": "fy_end",
+    "fy_end_month_day": "12-31",
+    "months_after_fye_param": "icaap_submission_months",
+    "citations": [
+      {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "5(b)"
+      }
+    ]
+  },
+  "document_citations": [
+    {
+      "doc": "CBK-ICAAP-GN-2016",
+      "ref": "5(a)"
+    },
+    {
+      "doc": "CBK-ICAAP-GN-2016",
+      "ref": "AnnexB"
+    }
+  ],
+  "sections": [
+    {
+      "key": "executive_summary",
+      "letter": "a",
+      "order": 1,
+      "title": "Executive Summary",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(a)"
+      },
+      "source_status": "sourced",
+      "guidance": "Summary of the capital planning process, risk exposure and total internal capital (Guidance Note ¶1(a), ¶5(a), ¶5(c)).",
+      "data_blocks": [
+        "capital_position",
+        "capital_plan",
+        "institution_profile"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_001a_adequacy",
+          "text": "Show that total capital is adequate and consistent with the strategy, business plan, risk profile and operating environment on a going-concern basis.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "1(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_position"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_005a_assessment",
+          "text": "Give the CBK what it needs for a complete, documented assessment of the capital planning process, overall risk exposure and total internal capital.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "5(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_005c_current_year",
+          "text": "From the capital reported at the previous year-end, set out the strategy for taking on risk and meeting the related capital needs through the end of the current year.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "5(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "design_approval_review_use",
+      "letter": "b",
+      "order": 2,
+      "title": "Design, Approval, Review, and Use of ICAAP",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(b)"
+      },
+      "source_status": "sourced",
+      "guidance": "How the ICAAP is designed, approved, reviewed, controlled and used (¶2, ¶3, ¶4(i)(c), ¶4(v), ¶4(vi); Annex B §2(a)–(b)).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_002a_documented",
+          "text": "Keep the ICAAP formalised and documented.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_002c_approval",
+          "text": "Subject the ICAAP to internal review and approval by the Board and management.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "workflow:stage_decisions",
+            "workflow:board_signature",
+            "block:workflow_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_002g_integrity",
+          "text": "Protect the integrity of the process through internal controls, independent reviews and audits.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(g)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_002i_presentation",
+          "text": "Present the ICAAP simply and intuitively.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(i)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_003_proportionality",
+          "text": "Show that methods, stress tests, correlation treatment, control organisation and reporting scope are proportionate to the size, nature and complexity of the business.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "3"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4ic_policy_review",
+          "text": "Have the Board review and approve the ICAAP policies at least every {param:icaap_review_max_months} months or when specific events prompt it, keeping them compliant with supervisory requirements.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(i)(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null,
+          "param_refs": [
+            "icaap_review_max_months"
+          ]
+        },
+        {
+          "id": "ke_b2a_preparation",
+          "text": "Describe the process for preparing and updating the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-2(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "workflow:stage_decisions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b2b_review",
+          "text": "Describe the process for reviewing the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-2(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4v_monitoring",
+          "text": "Monitor and report material risks and trends, the sensitivity of key assumptions, capital sufficiency against goals and future capital needs, adjusting the ICAAP as needed.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(v)"
+            },
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(v)(b)"
+            },
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(v)(c)"
+            },
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(v)(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4via_segregation",
+          "text": "Ensure strict segregation of duties, clear authority and a transparent, documented decision-making process.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(vi)(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4vib_internal_audit",
+          "text": "Have internal audit review ICAAP application and adherence to controls, report shortcomings to the Board and senior management, and follow up their resolution.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(vi)(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:audit_review"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4vic_frequency",
+          "text": "Carry out independent reviews and audits at least as often as the governed interval of {param:icaap_independent_review_max_months} months.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(vi)(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null,
+          "param_refs": [
+            "icaap_independent_review_max_months"
+          ]
+        },
+        {
+          "id": "ke_005d_transmission",
+          "text": "Transmit the report formally to the CBK.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "5(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "structure_operations",
+      "letter": "c",
+      "order": 3,
+      "title": "Structure and Operations",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(c)"
+      },
+      "source_status": "sourced",
+      "guidance": "Group structure and where risks sit across operating units and legal entities (¶4(ii)(f); Annex B §3(b)).",
+      "data_blocks": [
+        "institution_profile"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_4iif_consolidated",
+          "text": "In a banking group, implement the ICAAP on a consolidated basis, showing consolidated capital supports parent and subsidiary activities and absorbs their potential losses.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(ii)(f)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "workflow:basis_companion_cycle"
+          ],
+          "waivable": false,
+          "applies_when": "has_subsidiaries"
+        },
+        {
+          "id": "ke_b3b_entity_mapping",
+          "text": "Map risks to the bank's operating units and, for a group, its legal entities.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-3(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:institution_profile"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "governance_structure",
+      "letter": "d",
+      "order": 4,
+      "title": "Governance Structure",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(d)"
+      },
+      "source_status": "sourced",
+      "guidance": "Board and senior management oversight of capital (¶4(i); Annex B §2(c)–(f)).",
+      "data_blocks": [
+        "institution_profile"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_4ia_adequate_capital",
+          "text": "Show the Board and senior management ensure capital supports the bank's risks, allowing it to operate as a going concern and to grow.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(i)(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4ib_policies",
+          "text": "Establish capital planning and management policies in line with the CBK corporate governance guideline.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(i)(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4if_capital_definition",
+          "text": "State the definition of capital used in the ICAAP clearly, apply it consistently and align it with the CBK capital adequacy guideline.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(i)(f)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b2c_board_roles",
+          "text": "Define the roles and functions of the Board and senior management bodies in the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-2(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b2d_function_roles",
+          "text": "Define the roles and functions of corporate functions in the ICAAP, such as internal audit, compliance, planning and risk management.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-2(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b2e_outsourcing",
+          "text": "Describe the organisational and contractual safeguards over any outsourced element of the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-2(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b2f_regulations",
+          "text": "Indicate the internal regulations relevant to the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-2(f)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "business_plan_strategy",
+      "letter": "e",
+      "order": 5,
+      "title": "Summary of business plan and strategy",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(e)"
+      },
+      "source_status": "sourced",
+      "guidance": "Business plan, budgets and how capital goals relate to strategy (¶2(f), ¶4(ii)(c); Annex B §1(a)).",
+      "data_blocks": [
+        "financials",
+        "capital_plan"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_b1a_business_plan",
+          "text": "Describe the business plan and annual budgets, the schedule for reviewing them and the extraordinary events that would trigger a review.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-1(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:financials"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_002f_goals",
+          "text": "Relate the capital adequacy goals to risks, strategic focus and the business plan.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(f)"
+            },
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(ii)(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "risk_appetite_statement",
+      "letter": "f",
+      "order": 6,
+      "title": "Risk Appetite Statement",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(f)"
+      },
+      "source_status": "sourced",
+      "guidance": "The bank's risk appetite statement (Annex B §7(f)); the Guidance Note gives no further detail.",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_b7f_ras",
+          "text": "Set out the risk appetite statement.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-7(f)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_appetite"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "risk_assessment_capital_adequacy",
+      "letter": "g",
+      "order": 7,
+      "title": "Risk Assessment and Capital Adequacy",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(g)"
+      },
+      "source_status": "sourced",
+      "guidance": "Identification and measurement of material risks, internal capital by risk, allocation and reconciliation (¶2(b)–(e), ¶4(ii)(b), ¶4(iii); Annex A; Annex B §3–§5).",
+      "data_blocks": [
+        "pillar1_rwa",
+        "capital_position",
+        "concentration",
+        "irrbb"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_002d_comprehensive",
+          "text": "Identify and measure the risks of the business comprehensively and assess the capital needed to support them.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(d)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_register"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_002e_interactions",
+          "text": "Show interactions between risks under normal and stressed conditions, including external risks from the regulatory, economic and business environment.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iiia_risk_policies",
+          "text": "Keep comprehensive, continually reviewed policies to identify, measure, monitor, control and report risks, considering at least the risks in Annex A.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iii)(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_register"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iiib_measurement",
+          "text": "Use measurement systems rigorous enough to capture the nature and size of each risk and differentiate exposures consistently.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iii)(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iiic_controls",
+          "text": "Ensure controls make risk identification objective and consistent and that all material on- and off-balance-sheet risks are addressed.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iii)(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iiif_qualitative",
+          "text": "Assess hard-to-quantify risks qualitatively with management judgement, recognising the biases and limits of that approach so the impact is not understated.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iii)(f)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iiig_mis",
+          "text": "Maintain the infrastructure and management information systems needed for firm-wide risk oversight.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iii)(g)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iiii_mitigation",
+          "text": "Where risk mitigation is used, understand the risk mitigated and the effect of the mitigation, with policies to control the risks of those techniques.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iii)(i)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iib_uncertainty",
+          "text": "Hold capital for the measured risks plus an additional amount for the uncertainties the ICAAP identifies.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(ii)(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b3a_risk_map",
+          "text": "Map the bank's position against Pillar 1 and Pillar 2 risks.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-3(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar1_rwa",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b3d_mitigants",
+          "text": "For every measurable risk category, describe the main risk control and mitigation instruments.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-3(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b3e_non_measurable",
+          "text": "Describe the systems for controlling and mitigating non-measurable risks.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-3(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b4a_internal_capital",
+          "text": "Quantify internal capital for each risk and in total.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-4(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b4b_allocation",
+          "text": "Describe any method for allocating internal capital to operating units or legal entities.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-4(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b5a_reconciliation",
+          "text": "Reconcile total internal capital with regulatory requirements.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-5(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_position"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b5b_components",
+          "text": "List and define the capital components covering internal capital.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-5(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b5c_eligibility",
+          "text": "State the supervisory eligibility of each component and explain the inclusion of any ineligible component.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-5(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b5d_cost",
+          "text": "Estimate the cost of using capital sources beyond those already used.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-5(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "methodology_assumptions",
+      "letter": "h",
+      "order": 8,
+      "title": "Methodology and Assumptions",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(h)"
+      },
+      "source_status": "sourced",
+      "guidance": "Measurement methods, their validation, limitations and key assumptions (¶2(h), ¶4(iii)(d)–(e),(h); Annex B §3(c)).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_002h_validation",
+          "text": "Validate regularly the methodology, data and systems used to model the probability and consequences of individual risks and their aggregation.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(h)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iiid_analyses",
+          "text": "Support the accuracy and appropriateness of the measurement techniques with detailed analyses.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iii)(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iiie_limitations",
+          "text": "Identify and understand the limitations of the quantification and measurement methods.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iii)(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iiih_third_party",
+          "text": "Validate third-party inputs and tools, such as ratings, risk measures and models, initially and on an ongoing basis.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iii)(h)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b3c_techniques",
+          "text": "Describe the techniques used for risk measurement, internal capital determination and stress testing.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-3(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "stress_testing",
+      "letter": "i",
+      "order": 9,
+      "title": "Stress Testing",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(i)"
+      },
+      "source_status": "sourced",
+      "guidance": "Forward-looking stress testing of capital adequacy (¶4(iv)).",
+      "data_blocks": [
+        "stress_narratives",
+        "reverse_stress",
+        "management_actions"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_4iva_horizon",
+          "text": "Include forward-looking stress test results over at least {param:icaap_stress_horizon_years_min} years, say whether the longer horizon the Guidance Note prefers was used, and base them on plausible adverse circumstances.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null,
+          "param_refs": [
+            "icaap_stress_horizon_years_min"
+          ]
+        },
+        {
+          "id": "ke_4ivbd_methods",
+          "text": "Use sensitivity and scenario analysis to find events or market changes that could seriously affect capital and operations.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(b)"
+            },
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4ivc_forward_view",
+          "text": "Obtain a forward-looking view of capital adequacy from stress tests and scenario analysis.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4ivef_actionable",
+          "text": "Make stress testing part of governance and culture, with results that drive decisions of the Board and senior management, who take part in the programme.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(e)"
+            },
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(f)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:management_actions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4ivg_programme",
+          "text": "Run a programme that supports risk identification and control, complements other tools and improves capital and liquidity management and communication.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(g)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4ivhi_documented",
+          "text": "Govern the programme with written policies and procedures and document its operation.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(h)"
+            },
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(i)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4ivj_cbk_guideline",
+          "text": "Apply the CBK prudential guideline on stress testing.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(iv)(j)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "capital_planning",
+      "letter": "j",
+      "order": 10,
+      "title": "Capital Planning",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(j)"
+      },
+      "source_status": "sourced",
+      "guidance": "The capital plan, targets, horizons and sources of capital (¶2(b), ¶4(i)(d)–(e), ¶4(ii)(a),(d),(e); Annex B §1(b)–(c)).",
+      "data_blocks": [
+        "capital_plan",
+        "capital_position"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_002b_horizon",
+          "text": "Show current and prospective capital for all material risks over a forecast period of at least {param:icaap_capital_planning_horizon_years_min} years, and say whether the longer horizon the Guidance Note prefers was used.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null,
+          "param_refs": [
+            "icaap_capital_planning_horizon_years_min"
+          ]
+        },
+        {
+          "id": "ke_4id_capital_plan",
+          "text": "Maintain a capital plan setting out current and future capital needs, expected capital expenditure, the desired capital level, external sources and required actions.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(i)(d)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4ie_principles",
+          "text": "Set guiding principles for choosing and prioritising capital actions under different scenarios, weighing value added, costs, benefits and market conditions.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(i)(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iia_targets",
+          "text": "Include capital targets and horizons, the planning process and responsibilities, the intent to meet regulatory requirements and a contingency plan for divergences.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(ii)(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iid_strategy",
+          "text": "Set an internal strategy for maintaining capital that reflects growth expectations, future sources and uses of funds and dividend policy.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(ii)(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_4iie_other",
+          "text": "Show how other considerations, such as external rating goals and market image, influenced the amount of capital held.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "4(ii)(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b1b_horizons",
+          "text": "Reconcile the time horizon of the business plan with that of the capital plan.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-1(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b1c_sources",
+          "text": "Describe the sources of Tier 1 and Tier 2 capital.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-1(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_position"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "internal_models",
+      "letter": "k",
+      "order": 11,
+      "title": "Use of Internal Models for Capital Assessment",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(k)"
+      },
+      "source_status": "sourced",
+      "guidance": "Internal models used for capital assessment (Annex B §7(k); ¶2(h)).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_k_models",
+          "text": "Where internal models are used for capital assessment, describe them and show their methodology, data and systems are validated regularly.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-7(k)"
+            },
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "2(h)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:internal_models_inventory"
+          ],
+          "waivable": true,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "challenges_further_steps",
+      "letter": "l",
+      "order": 12,
+      "title": "Challenges and further steps",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexB-7(l)"
+      },
+      "source_status": "sourced",
+      "guidance": "Self-assessment and planned improvements (Annex B §6).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ke_b6a_improvement",
+          "text": "Identify the areas of the ICAAP process that could be improved.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-6(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:challenge_log"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ke_b6b_actions",
+          "text": "Plan the capital or organisational actions that follow.",
+          "citations": [
+            {
+              "doc": "CBK-ICAAP-GN-2016",
+              "ref": "AnnexB-6(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    }
+  ],
+  "table5_rows": [],
+  "table5_citation": null,
+  "risk_categories": [
+    {
+      "key": "credit",
+      "number": 1,
+      "title": "Credit risk (including counterparty risk)",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-a"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "full",
+      "custom": false,
+      "components": [
+        {
+          "key": "credit",
+          "table5_row": null,
+          "p29_class": "pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "market",
+      "number": 2,
+      "title": "Market risks",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-b"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "full",
+      "custom": false,
+      "components": [
+        {
+          "key": "fx",
+          "table5_row": null,
+          "p29_class": "pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "fx_nop_addon",
+            "judgemental"
+          ]
+        },
+        {
+          "key": "other_market",
+          "table5_row": null,
+          "p29_class": "pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "operational",
+      "number": 3,
+      "title": "Operational risk",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-c"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "full",
+      "custom": false,
+      "components": [
+        {
+          "key": "operational",
+          "table5_row": null,
+          "p29_class": "pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "operational_scenario_net_p1",
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "liquidity",
+      "number": 4,
+      "title": "Liquidity risk",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-d"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "liquidity",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "not_capitalised"
+          ]
+        },
+        {
+          "key": "funding_cost",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "concentration",
+      "number": 5,
+      "title": "Concentration risk",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-e"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "credit_concentration",
+          "table5_row": null,
+          "p29_class": "pillar1_not_fully_captured",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "benchmark_mapped",
+            "hhi_proportional_heuristic",
+            "granularity_adjustment",
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "irrbb",
+      "number": 6,
+      "title": "Interest rate risk in the banking book",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-f"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "irrbb",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "irrbb_interim_delta_eve",
+            "irrbb_standardised_framework"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "residual",
+      "number": 7,
+      "title": "Residual risk",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-g"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "residual",
+          "table5_row": null,
+          "p29_class": "pillar1_not_fully_captured",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "securitisation",
+      "number": 8,
+      "title": "Securitization risk",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-h"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "securitisation",
+          "table5_row": null,
+          "p29_class": "pillar1_not_fully_captured",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "business_strategic",
+      "number": 9,
+      "title": "Business and Strategic risk",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-i"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "business_strategic",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "reputational",
+      "number": 10,
+      "title": "Reputational risk",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-j"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "reputational",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "market_liquidity",
+      "number": 11,
+      "title": "Liquidity risks (liquidity profile and market liquidity)",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-k"
+      },
+      "title_status": "partial",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "market_liquidity",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "not_capitalised",
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "compliance_disclosure",
+      "number": 12,
+      "title": "Compliance with minimum standards and disclosure requirements",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-l"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "compliance_disclosure",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "external_factors",
+      "number": 13,
+      "title": "Factors external to the bank",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "AnnexA-m"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "external_factors",
+          "table5_row": null,
+          "p29_class": "external",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "other_material",
+      "number": 14,
+      "title": "Other material risks (Annex A lists some of the risks to consider)",
+      "citation": {
+        "doc": "CBK-ICAAP-GN-2016",
+        "ref": "4(iii)(a)"
+      },
+      "title_status": "platform",
+      "pillar1_coverage": "none",
+      "custom": true,
+      "components": [
+        {
+          "key": "other_material",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    }
+  ],
+  "attachments": [
+    {
+      "kind": "board_approval_evidence",
+      "title": "Evidence of Board and management approval of the ICAAP",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "2(c)"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "design_approval_review_use"
+      ]
+    },
+    {
+      "kind": "independent_review_report",
+      "title": "Independent review or internal audit report on the ICAAP",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(vi)(b)"
+        },
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(vi)(c)"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "design_approval_review_use"
+      ]
+    },
+    {
+      "kind": "capital_management_policy",
+      "title": "Capital planning and management policy",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(i)(b)"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "governance_structure",
+        "capital_planning"
+      ]
+    },
+    {
+      "kind": "manual_table_evidence",
+      "title": "Source evidence for a manually entered table",
+      "citations": [],
+      "gate": "per_block",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ],
+      "applies_when": null,
+      "section_keys": []
+    }
+  ],
+  "stages": [
+    {
+      "seq": 1,
+      "key": "preparation",
+      "title": "Preparation",
+      "decision": "prepare",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "AnnexB-2(a)"
+        }
+      ]
+    },
+    {
+      "seq": 2,
+      "key": "cro_review",
+      "title": "Chief Risk Officer review",
+      "decision": "review",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "AnnexB-2(d)"
+        }
+      ]
+    },
+    {
+      "seq": 3,
+      "key": "ceo_review",
+      "title": "Chief Executive / Managing Director review",
+      "decision": "review",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "2(c)"
+        }
+      ]
+    },
+    {
+      "seq": 4,
+      "key": "brc_review",
+      "title": "Board Risk Committee challenge and approval",
+      "decision": "approve",
+      "default_officer_titles": [],
+      "freeze_on_approve": true,
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "AnnexB-2(b)"
+        },
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(i)(c)"
+        }
+      ]
+    },
+    {
+      "seq": 5,
+      "key": "board_approval",
+      "title": "Board approval (signature on the frozen report)",
+      "decision": "attest",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "2(c)"
+        },
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(i)(c)"
+        }
+      ]
+    }
+  ],
+  "stages_source_status": "platform_default",
+  "material_change_triggers": [
+    {
+      "code": "significant_acquisition",
+      "label": "Significant acquisition opportunity or similar specific event",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(i)(c)"
+        }
+      ]
+    },
+    {
+      "code": "other",
+      "label": "Other event prompting a review (describe)",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(i)(c)"
+        }
+      ]
+    }
+  ],
+  "materiality_matrix": {
+    "source_status": "platform_default",
+    "note": "The CBK Guidance Note prescribes no scoring matrix. This is the platform starting point, adjusted by the bank in P2.",
+    "likelihood_levels": [
+      {
+        "score": 1,
+        "key": "rare",
+        "label": "Rare"
+      },
+      {
+        "score": 2,
+        "key": "unlikely",
+        "label": "Unlikely"
+      },
+      {
+        "score": 3,
+        "key": "possible",
+        "label": "Possible"
+      },
+      {
+        "score": 4,
+        "key": "likely",
+        "label": "Likely"
+      },
+      {
+        "score": 5,
+        "key": "almost_certain",
+        "label": "Almost certain"
+      }
+    ],
+    "impact_levels": [
+      {
+        "score": 1,
+        "key": "insignificant",
+        "label": "Insignificant"
+      },
+      {
+        "score": 2,
+        "key": "minor",
+        "label": "Minor"
+      },
+      {
+        "score": 3,
+        "key": "moderate",
+        "label": "Moderate"
+      },
+      {
+        "score": 4,
+        "key": "major",
+        "label": "Major"
+      },
+      {
+        "score": 5,
+        "key": "severe",
+        "label": "Severe"
+      }
+    ],
+    "material_if": {
+      "min_score_param": "icaap_materiality_material_min_score",
+      "or_min_impact_param": "icaap_materiality_material_min_impact"
+    },
+    "rating_bands_param": "icaap_materiality_rating_bands"
+  },
+  "disclosure": null,
+  "filing_return_code": null,
+  "notes": [
+    {
+      "code": "high_level_minimum",
+      "text": "The Guidance Note sets high-level minimum requirements rather than prescribed methods; banks design the ICAAP to their own needs.",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "1(d)"
+        }
+      ]
+    },
+    {
+      "code": "deadline_equivalence",
+      "text": "The submission date is a fixed calendar day after a 31 December position; the governed months-after-year-end value reproduces it with month-end clamping.",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "5(b)"
+        }
+      ]
+    },
+    {
+      "code": "srep_use",
+      "text": "The CBK uses the results to set the capital adequacy level it requires of the bank and may require improvements to capital and risk processes.",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "5(f)"
+        },
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "1(e)"
+        }
+      ]
+    },
+    {
+      "code": "no_board_resolution_prescribed",
+      "text": "No Board resolution attachment is prescribed; approval evidence is optional.",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "2(c)"
+        }
+      ]
+    },
+    {
+      "code": "no_public_disclosure",
+      "text": "The Guidance Note contains no requirement to publish ICAAP results, so this framework declares no disclosure specification.",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "5(a)"
+        }
+      ]
+    },
+    {
+      "code": "filing_not_registered",
+      "text": "No CBK ICAAP return is registered yet; cycles support drafting, readiness and draft exports, and freeze refuses until a return family for this regulator exists.",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "5(d)"
+        }
+      ]
+    },
+    {
+      "code": "preferred_horizon_not_yet_governed",
+      "text": "The Guidance Note states a minimum capital and stress horizon and a longer horizon it prefers. Only the minimum is a governed parameter today; the preferred horizon is asked for in words until a code is seeded for it, and ships as a new framework version when it is.",
+      "citations": [
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "2(b)"
+        },
+        {
+          "doc": "CBK-ICAAP-GN-2016",
+          "ref": "4(iv)(a)"
+        }
+      ]
+    }
+  ]
+}

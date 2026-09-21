@@ -98,6 +98,11 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "DESK_CAPTURE_ENABLED",
     ):
         monkeypatch.setenv(_scheduling_flag, "0")
+    # Same guard, same reason, for the ICAAP signing switch: it ships OFF, and a
+    # developer who has turned the ICAAP ceremony on locally would otherwise flip
+    # every test that asserts the suspended path. Tests that need the ceremony
+    # set it themselves via monkeypatch.
+    monkeypatch.setenv("ICAAP_SIGNING_ENABLED", "0")
     # A signing secret so the auth layer is exercised in tests (prod sets its own).
     monkeypatch.setenv("AUTH_JWT_SECRET", "test-jwt-signing-secret-not-for-production-00")
     # Dedicated secret for the operator act-as-examiner impersonation token —
@@ -129,6 +134,18 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # exercise the probe locally) would otherwise un-inert the scheduled tick
     # and fail every "inert when disabled" test. Tests that need a flag on set
     # it themselves.
+    # Same .env-leak guard for the AI egress gates. A developer with a real key
+    # and AI_COMMENTARY_ENABLED=1 in .env would otherwise flip every test that
+    # asserts the switched-off path — and an autouse fixture below makes a real
+    # model client unconstructable, so no suite run can ever call out.
+    monkeypatch.setenv("AI_COMMENTARY_ENABLED", "0")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("AI_PRODUCTION_APPROVAL_REF", "")
+    monkeypatch.setenv("AI_MODEL_BACKEND", "anthropic")
+    monkeypatch.setenv("AI_RECORDED_FIXTURE_PATH", "")
+    # The worker lane selection: unset means the core lane, which never claims
+    # AI work. Pinned so a developer's WORKER_JOB_TYPES cannot change it.
+    monkeypatch.setenv("WORKER_JOB_TYPES", "")
     monkeypatch.setenv("OFFICIAL_RUN_ENABLED", "0")
     monkeypatch.setenv("MARKET_DATA_PULL_ENABLED", "0")
     monkeypatch.setenv("TEMENOS_PULL_ENABLED", "0")
@@ -153,6 +170,28 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
     get_engine.cache_clear()
 
+
+
+@pytest.fixture(autouse=True)
+def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test may construct a real model client.
+
+    This is the suite-wide network guard for the one feature that talks to an
+    external service. A test that forgets the ``recorded_model`` fixture fails
+    loudly here rather than silently issuing a paid request from whoever's
+    machine is running it. Tests that need a model use ``use_model(...)``, which
+    is checked before the backend is ever resolved.
+    """
+    from app.services.ai import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
+
+    def _refuse(self: object, *args: object, **kwargs: object) -> None:
+        message = (
+            "A real AnthropicModel was constructed in a test. Use the "
+            "recorded_model fixture or app.services.ai.client.use_model(...)."
+        )
+        raise ai_client.RealModelForbiddenError(message)
+
+    monkeypatch.setattr(ai_client.AnthropicModel, "__init__", _refuse)
 
 @pytest.fixture(autouse=True)
 def fresh_settings_cache() -> Iterator[None]:

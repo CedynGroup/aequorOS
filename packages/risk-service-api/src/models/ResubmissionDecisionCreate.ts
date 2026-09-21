@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Note } from "./Note";
+import type { Note1 } from "./Note1";
 import {
-  NoteFromJSON,
-  NoteFromJSONTyped,
-  NoteToJSON,
-  NoteToJSONTyped,
-} from "./Note";
+  Note1FromJSON,
+  Note1FromJSONTyped,
+  Note1ToJSON,
+  Note1ToJSONTyped,
+} from "./Note1";
 
 /**
  * Manual grant/deny for email/manual-channel submissions.
@@ -33,10 +33,10 @@ export interface ResubmissionDecisionCreate {
   decision: ResubmissionDecisionCreateDecisionEnum;
   /**
    *
-   * @type {Note}
+   * @type {Note1}
    * @memberof ResubmissionDecisionCreate
    */
-  note?: Note;
+  note?: Note1;
 }
 
 /**
@@ -75,7 +75,7 @@ export function ResubmissionDecisionCreateFromJSONTyped(
   return {
     ...json,
     decision: json["decision"],
-    note: json["note"] == null ? undefined : NoteFromJSON(json["note"]),
+    note: json["note"] == null ? undefined : Note1FromJSON(json["note"]),
   };
 }
 
@@ -95,6 +95,6 @@ export function ResubmissionDecisionCreateToJSONTyped(
 
   return {
     decision: value["decision"],
-    note: NoteToJSON(value["note"]),
+    note: Note1ToJSON(value["note"]),
   };
 }

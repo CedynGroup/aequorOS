@@ -16,7 +16,11 @@ import type {
   IrrDashboardRead,
   IrrEarAnalysisRead,
   IrrScenarioBatchCreate,
+  IrrbbSfAttemptsRead,
+  IrrbbSfRead,
+  IrrbbSfRunCreate,
   RegulatoryRunBatchRead,
+  RegulatoryRunRead,
 } from "../models/index";
 import {
   ErrorResponseFromJSON,
@@ -27,8 +31,16 @@ import {
   IrrEarAnalysisReadToJSON,
   IrrScenarioBatchCreateFromJSON,
   IrrScenarioBatchCreateToJSON,
+  IrrbbSfAttemptsReadFromJSON,
+  IrrbbSfAttemptsReadToJSON,
+  IrrbbSfReadFromJSON,
+  IrrbbSfReadToJSON,
+  IrrbbSfRunCreateFromJSON,
+  IrrbbSfRunCreateToJSON,
   RegulatoryRunBatchReadFromJSON,
   RegulatoryRunBatchReadToJSON,
+  RegulatoryRunReadFromJSON,
+  RegulatoryRunReadToJSON,
 } from "../models/index";
 
 export interface ComputeEarAnalysisRequest {
@@ -43,9 +55,24 @@ export interface GetIrrDashboardRequest {
   reportingPeriodId?: string | null;
 }
 
+export interface GetIrrbbStandardisedFrameworkRequest {
+  bankId: string;
+  reportingPeriodId: string;
+}
+
+export interface ListIrrbbStandardisedFrameworkAttemptsRequest {
+  bankId: string;
+  reportingPeriodId: string;
+}
+
 export interface RunAllIrrScenariosRequest {
   bankId: string;
   irrScenarioBatchCreate: IrrScenarioBatchCreate;
+}
+
+export interface RunIrrbbStandardisedFrameworkRequest {
+  bankId: string;
+  irrbbSfRunCreate: IrrbbSfRunCreate;
 }
 
 /**
@@ -196,6 +223,150 @@ export class RegulatoryIrrApi extends runtime.BaseAPI {
   }
 
   /**
+   * The Standardised Framework result for one reporting date.  Denial hides rather than announces: a principal with no IRRBB binding gets the same 404 as a bank that does not exist, so the route cannot be used to enumerate institutions.
+   * Get Irrbb Standardised Framework
+   */
+  async getIrrbbStandardisedFrameworkRaw(
+    requestParameters: GetIrrbbStandardisedFrameworkRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<IrrbbSfRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getIrrbbStandardisedFramework().',
+      );
+    }
+
+    if (requestParameters["reportingPeriodId"] == null) {
+      throw new runtime.RequiredError(
+        "reportingPeriodId",
+        'Required parameter "reportingPeriodId" was null or undefined when calling getIrrbbStandardisedFramework().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["reportingPeriodId"] != null) {
+      queryParameters["reporting_period_id"] =
+        requestParameters["reportingPeriodId"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/irr/standardised-framework`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      IrrbbSfReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The Standardised Framework result for one reporting date.  Denial hides rather than announces: a principal with no IRRBB binding gets the same 404 as a bank that does not exist, so the route cannot be used to enumerate institutions.
+   * Get Irrbb Standardised Framework
+   */
+  async getIrrbbStandardisedFramework(
+    requestParameters: GetIrrbbStandardisedFrameworkRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<IrrbbSfRead> {
+    const response = await this.getIrrbbStandardisedFrameworkRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Was the framework tried at this reporting date, and what happened.  A separate question from the result read, and the only one that can distinguish \"nobody has run it\" from \"we ran it and it refused\" — a refused run is a ``failed`` run and never reaches the result route. An empty history is an ANSWER here, never a 404.  Same authority as the result read (IRRBB, aggregated, view), so it costs no new permission, and denial hides rather than announces for the same reason.
+   * List Irrbb Standardised Framework Attempts
+   */
+  async listIrrbbStandardisedFrameworkAttemptsRaw(
+    requestParameters: ListIrrbbStandardisedFrameworkAttemptsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<IrrbbSfAttemptsRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listIrrbbStandardisedFrameworkAttempts().',
+      );
+    }
+
+    if (requestParameters["reportingPeriodId"] == null) {
+      throw new runtime.RequiredError(
+        "reportingPeriodId",
+        'Required parameter "reportingPeriodId" was null or undefined when calling listIrrbbStandardisedFrameworkAttempts().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    if (requestParameters["reportingPeriodId"] != null) {
+      queryParameters["reporting_period_id"] =
+        requestParameters["reportingPeriodId"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/irr/standardised-framework/attempts`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      IrrbbSfAttemptsReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Was the framework tried at this reporting date, and what happened.  A separate question from the result read, and the only one that can distinguish \"nobody has run it\" from \"we ran it and it refused\" — a refused run is a ``failed`` run and never reaches the result route. An empty history is an ANSWER here, never a 404.  Same authority as the result read (IRRBB, aggregated, view), so it costs no new permission, and denial hides rather than announces for the same reason.
+   * List Irrbb Standardised Framework Attempts
+   */
+  async listIrrbbStandardisedFrameworkAttempts(
+    requestParameters: ListIrrbbStandardisedFrameworkAttemptsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<IrrbbSfAttemptsRead> {
+    const response = await this.listIrrbbStandardisedFrameworkAttemptsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Run All Irr Scenarios
    */
   async runAllIrrScenariosRaw(
@@ -259,6 +430,76 @@ export class RegulatoryIrrApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<RegulatoryRunBatchRead> {
     const response = await this.runAllIrrScenariosRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Mint one immutable Standardised Framework run for a reporting date.  Minting filing evidence is a CONFIDENTIAL run, like every other regulatory run — the aggregated read below is a different authority.
+   * Run Irrbb Standardised Framework
+   */
+  async runIrrbbStandardisedFrameworkRaw(
+    requestParameters: RunIrrbbStandardisedFrameworkRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<RegulatoryRunRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling runIrrbbStandardisedFramework().',
+      );
+    }
+
+    if (requestParameters["irrbbSfRunCreate"] == null) {
+      throw new runtime.RequiredError(
+        "irrbbSfRunCreate",
+        'Required parameter "irrbbSfRunCreate" was null or undefined when calling runIrrbbStandardisedFramework().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/irr/standardised-framework/runs`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: IrrbbSfRunCreateToJSON(requestParameters["irrbbSfRunCreate"]),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      RegulatoryRunReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Mint one immutable Standardised Framework run for a reporting date.  Minting filing evidence is a CONFIDENTIAL run, like every other regulatory run — the aggregated read below is a different authority.
+   * Run Irrbb Standardised Framework
+   */
+  async runIrrbbStandardisedFramework(
+    requestParameters: RunIrrbbStandardisedFrameworkRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<RegulatoryRunRead> {
+    const response = await this.runIrrbbStandardisedFrameworkRaw(
       requestParameters,
       initOverrides,
     );

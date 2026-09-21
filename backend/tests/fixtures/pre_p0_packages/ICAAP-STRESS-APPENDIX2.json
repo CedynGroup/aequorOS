@@ -1,0 +1,1226 @@
+{
+ "baseline_sha256": {
+  "pdf": "a1a87163c23e2dcd0d822e9e57b197db1c5ccfb273177bc8d6d185976f8b37cd",
+  "xlsx": "93819209217b53c4a7f7a9911268207a0141fc9015048c1ba59ddb5deb3796c1",
+  "zip": "8cf3942cc10afb16a098db7e0cfa2bed4b91c54f63c7e8730dc4a5b9272a3d15"
+ },
+ "basis": "solo",
+ "frequency": "annual",
+ "generated_at": "2026-09-19T18:55:01.114285+00:00",
+ "package_id": "01a0bb05-97fa-71e9-a438-88e74ee6ee81",
+ "reporting_date": "2026-03-31",
+ "return_code": "ICAAP-STRESS-APPENDIX2",
+ "return_family": "icaap_stress",
+ "snapshot": {
+  "fidelity": "CONFIRMED",
+  "institution": {
+   "bank_id": "BK-SAMP0001",
+   "basis": "solo",
+   "currency": "GHS",
+   "jurisdiction_code": "GH",
+   "license_type": "universal",
+   "name": "Sample Bank Ltd",
+   "short_name": "Sample Bank"
+  },
+  "metadata": {
+   "basel_table2_included": true,
+   "basis": "solo",
+   "car_target_pct": "13",
+   "enterprise_stress_input_hash": "8511b08f714e2cd028d24b5827d9647c452cd9077426731850588253c562d0ef",
+   "enterprise_stress_run_id": "ac60733e-bab8-4dc1-b27e-5787027bb6e2",
+   "generated_at": "2026-09-19T18:55:01.113202+00:00",
+   "governance": {
+    "assumptions_rationale": "Documented linear elasticities; expert-judgement overlays challenged by the CRO.",
+    "attested_at": "2026-09-19T18:55:01.110480",
+    "attested_by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    "board_challenge": "Challenged the FX severity; retained as plausible.",
+    "credibility_rationale": "The Board reviewed and challenged the framework and results; the assumptions and severity are credible.",
+    "methodology_summary": "Bottom-up credit migration + coherent macro fan-out.",
+    "scenario_narrative": "Enterprise-wide adverse scenario covering credit, liquidity, market and IRRBB across the banking book.",
+    "signoff_id": "049c1cf6-78f1-4957-8656-029e690dbfc7",
+    "status": "attested",
+    "stays_above_all_minima": true,
+    "with_actions_stays_above_all_minima": true
+   },
+   "horizon_years": 3,
+   "paid_up_min": "0.000",
+   "scenario_code": "adverse_2027",
+   "unit": "GHS'000",
+   "with_management_actions": true
+  },
+  "provenance": {
+   "authority": "engine_run",
+   "authority_basis": "Sealed calculation runs are the authority: every figure traces to a RegulatoryRun listed in source_runs by module, run id, value-based input hash and engine version.",
+   "authority_counts": {},
+   "calculation_version": "enterprise-stress-v1.0.0",
+   "declared_methodologies": [],
+   "effective_date": "2026-03-31",
+   "fact_generation": {
+    "as_of_dates": [
+     "2026-03-31"
+    ],
+    "input_hashes": [
+     "8511b08f714e2cd028d24b5827d9647c452cd9077426731850588253c562d0ef"
+    ],
+    "input_schema_versions": [
+     "enterprise-stress-input-v2"
+    ]
+   },
+   "formula_cells_evaluated": null,
+   "formula_evaluator_version": "",
+   "mapping_schema_version": "bog-linemap-v1",
+   "mapping_version": "",
+   "official_workbook": "",
+   "parameter_version": "eb38eea4ab5489bcc2da9458041b7796e09804e2146c59741026779d2bbad289",
+   "policy_resolution": {
+    "base_currency": "GHS",
+    "institution_type": "universal_bank",
+    "jurisdiction_code": "GH",
+    "run_jurisdictions": [],
+    "scenarios": [
+     "adverse_2027"
+    ]
+   },
+   "regulator": "BOG",
+   "return_code": "ICAAP-STRESS-APPENDIX2",
+   "return_family": "icaap_stress",
+   "schema_version": "reporting-provenance-v1",
+   "source_runs": [
+    {
+     "actor_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+     "as_of_date": "2026-03-31",
+     "base_currency": null,
+     "calculation_version": "enterprise-stress-v1.0.0",
+     "computed_at": "2026-09-19T18:55:01.106893",
+     "engine_version": "enterprise-stress-v1.0.0",
+     "filable": true,
+     "input_hash": "8511b08f714e2cd028d24b5827d9647c452cd9077426731850588253c562d0ef",
+     "input_schema_version": "enterprise-stress-input-v2",
+     "jurisdiction_code": null,
+     "missing_provenance_fields": [],
+     "module": "enterprise_stress",
+     "output_schema_version": "enterprise-stress-outcome-v1",
+     "parameter_digest": "eb38eea4ab5489bcc2da9458041b7796e09804e2146c59741026779d2bbad289",
+     "parameter_rows_digest": "d5802bb651c2f54fe01c631435a7251ff06650e486fbf5643eb1c07369ee0146",
+     "provenance_complete": true,
+     "reporting_period_id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+     "run_id": "ac60733e-bab8-4dc1-b27e-5787027bb6e2",
+     "scenario_code": "adverse_2027"
+    }
+   ],
+   "source_runs_rationale": null,
+   "template_hash": "",
+   "template_id": "bog-icaap-stress-appendix2-v1"
+  },
+  "regulator": "BOG",
+  "reporting_date": "2026-03-31",
+  "reporting_period": {
+   "id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+   "label": "2026-03",
+   "period_end": "2026-03-31",
+   "period_start": "2026-03-01"
+  },
+  "return_code": "ICAAP-STRESS-APPENDIX2",
+  "return_family": "icaap_stress",
+  "schema_version": "regulatory-package-v1",
+  "sections": [
+   {
+    "authority": "engine_run",
+    "code": "t1_summary_positions",
+    "optional": false,
+    "rows": [
+     {
+      "car_pct": "15.832363",
+      "cet1": "260000.000",
+      "cet1_ratio_pct": "12.107101",
+      "code": "current",
+      "description": "Current (as-of)",
+      "paid_up": "150000.000",
+      "tier1": "280000.000",
+      "tier1_ratio_pct": "13.038417",
+      "tier2": "60000.000",
+      "total_rwa": "2147500.000",
+      "value": "340000.000"
+     },
+     {
+      "car_pct": "16.089411",
+      "cet1": "287464.850",
+      "cet1_ratio_pct": "12.586619",
+      "code": "base_y1",
+      "description": "Base Case \u2014 Year 1",
+      "paid_up": "150000.000",
+      "tier1": "307464.850",
+      "tier1_ratio_pct": "13.462317",
+      "tier2": "60000.000",
+      "total_rwa": "2283892.500",
+      "value": "367464.850"
+     },
+     {
+      "car_pct": "16.242498",
+      "cet1": "320365.970",
+      "cet1_ratio_pct": "12.996968",
+      "code": "base_y2",
+      "description": "Base Case \u2014 Year 2",
+      "paid_up": "150000.000",
+      "tier1": "340365.970",
+      "tier1_ratio_pct": "13.808351",
+      "tier2": "60000.000",
+      "total_rwa": "2464928.500",
+      "value": "400365.970"
+     },
+     {
+      "car_pct": "16.186407",
+      "cet1": "359790.614",
+      "cet1_ratio_pct": "13.242023",
+      "code": "base_y3",
+      "description": "Base Case \u2014 Year 3",
+      "paid_up": "150000.000",
+      "tier1": "379790.614",
+      "tier1_ratio_pct": "13.978119",
+      "tier2": "60000.000",
+      "total_rwa": "2717036.700",
+      "value": "439790.614"
+     },
+     {
+      "car_pct": "16.186566",
+      "cet1": "278773.248",
+      "cet1_ratio_pct": "12.577252",
+      "code": "stress_y1",
+      "description": "Stress (Adverse) \u2014 Year 1",
+      "paid_up": "150000.000",
+      "tier1": "298773.248",
+      "tier1_ratio_pct": "13.479581",
+      "tier2": "60000.000",
+      "total_rwa": "2216487.656",
+      "value": "358773.248"
+     },
+     {
+      "car_pct": "16.571047",
+      "cet1": "299529.346",
+      "cet1_ratio_pct": "13.078079",
+      "code": "stress_y2",
+      "description": "Stress (Adverse) \u2014 Year 2",
+      "paid_up": "150000.000",
+      "tier1": "319529.346",
+      "tier1_ratio_pct": "13.951321",
+      "tier2": "60000.000",
+      "total_rwa": "2290316.025",
+      "value": "379529.346"
+     },
+     {
+      "car_pct": "16.821368",
+      "cet1": "323458.821",
+      "cet1_ratio_pct": "13.485936",
+      "code": "stress_y3",
+      "description": "Stress (Adverse) \u2014 Year 3",
+      "paid_up": "150000.000",
+      "tier1": "343458.821",
+      "tier1_ratio_pct": "14.319794",
+      "tier2": "60000.000",
+      "total_rwa": "2398489.925",
+      "value": "403458.821"
+     }
+    ],
+    "title": "Appendix II Table 1 \u2014 Summary Results (Capital Positions)",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t1_impact_of_adverse",
+    "optional": false,
+    "rows": [
+     {
+      "code": "y1:gog",
+      "description": "GOG",
+      "value": "0.000",
+      "year": "1"
+     },
+     {
+      "code": "y1:bog",
+      "description": "BOG",
+      "value": "0.000",
+      "year": "1"
+     },
+     {
+      "code": "y1:other_sovereigns_central_banks",
+      "description": "OTHER SOVEREIGNS CENTRAL BANKS",
+      "value": "0.000",
+      "year": "1"
+     },
+     {
+      "code": "y1:public_sector_entities",
+      "description": "PUBLIC SECTOR ENTITIES",
+      "value": "0.000",
+      "year": "1"
+     },
+     {
+      "code": "y1:multilateral_development_banks",
+      "description": "MULTILATERAL DEVELOPMENT BANKS",
+      "value": "0.000",
+      "year": "1"
+     },
+     {
+      "code": "y1:banks",
+      "description": "BANKS",
+      "value": "0.000",
+      "year": "1"
+     },
+     {
+      "code": "y1:other_financial_institutions",
+      "description": "OTHER FINANCIAL INSTITUTIONS",
+      "value": "0.000",
+      "year": "1"
+     },
+     {
+      "code": "y1:corporates",
+      "description": "CORPORATES",
+      "value": "3447.788",
+      "year": "1"
+     },
+     {
+      "code": "y1:retail_sme",
+      "description": "RETAIL SME",
+      "value": "2317.938",
+      "year": "1"
+     },
+     {
+      "code": "y1:past_due",
+      "description": "PAST DUE",
+      "value": "349.438",
+      "year": "1"
+     },
+     {
+      "code": "y1:high_risk",
+      "description": "HIGH RISK",
+      "value": "0.000",
+      "year": "1"
+     },
+     {
+      "code": "y1:other",
+      "description": "OTHER",
+      "value": "364.631",
+      "year": "1"
+     },
+     {
+      "code": "y2:gog",
+      "description": "GOG",
+      "value": "0.000",
+      "year": "2"
+     },
+     {
+      "code": "y2:bog",
+      "description": "BOG",
+      "value": "0.000",
+      "year": "2"
+     },
+     {
+      "code": "y2:other_sovereigns_central_banks",
+      "description": "OTHER SOVEREIGNS CENTRAL BANKS",
+      "value": "0.000",
+      "year": "2"
+     },
+     {
+      "code": "y2:public_sector_entities",
+      "description": "PUBLIC SECTOR ENTITIES",
+      "value": "0.000",
+      "year": "2"
+     },
+     {
+      "code": "y2:multilateral_development_banks",
+      "description": "MULTILATERAL DEVELOPMENT BANKS",
+      "value": "0.000",
+      "year": "2"
+     },
+     {
+      "code": "y2:banks",
+      "description": "BANKS",
+      "value": "0.000",
+      "year": "2"
+     },
+     {
+      "code": "y2:other_financial_institutions",
+      "description": "OTHER FINANCIAL INSTITUTIONS",
+      "value": "0.000",
+      "year": "2"
+     },
+     {
+      "code": "y2:corporates",
+      "description": "CORPORATES",
+      "value": "3544.019",
+      "year": "2"
+     },
+     {
+      "code": "y2:retail_sme",
+      "description": "RETAIL SME",
+      "value": "2382.634",
+      "year": "2"
+     },
+     {
+      "code": "y2:past_due",
+      "description": "PAST DUE",
+      "value": "359.191",
+      "year": "2"
+     },
+     {
+      "code": "y2:high_risk",
+      "description": "HIGH RISK",
+      "value": "0.000",
+      "year": "2"
+     },
+     {
+      "code": "y2:other",
+      "description": "OTHER",
+      "value": "325.920",
+      "year": "2"
+     },
+     {
+      "code": "y3:gog",
+      "description": "GOG",
+      "value": "0.000",
+      "year": "3"
+     },
+     {
+      "code": "y3:bog",
+      "description": "BOG",
+      "value": "0.000",
+      "year": "3"
+     },
+     {
+      "code": "y3:other_sovereigns_central_banks",
+      "description": "OTHER SOVEREIGNS CENTRAL BANKS",
+      "value": "0.000",
+      "year": "3"
+     },
+     {
+      "code": "y3:public_sector_entities",
+      "description": "PUBLIC SECTOR ENTITIES",
+      "value": "0.000",
+      "year": "3"
+     },
+     {
+      "code": "y3:multilateral_development_banks",
+      "description": "MULTILATERAL DEVELOPMENT BANKS",
+      "value": "0.000",
+      "year": "3"
+     },
+     {
+      "code": "y3:banks",
+      "description": "BANKS",
+      "value": "0.000",
+      "year": "3"
+     },
+     {
+      "code": "y3:other_financial_institutions",
+      "description": "OTHER FINANCIAL INSTITUTIONS",
+      "value": "0.000",
+      "year": "3"
+     },
+     {
+      "code": "y3:corporates",
+      "description": "CORPORATES",
+      "value": "3558.194",
+      "year": "3"
+     },
+     {
+      "code": "y3:retail_sme",
+      "description": "RETAIL SME",
+      "value": "2392.164",
+      "year": "3"
+     },
+     {
+      "code": "y3:past_due",
+      "description": "PAST DUE",
+      "value": "360.628",
+      "year": "3"
+     },
+     {
+      "code": "y3:high_risk",
+      "description": "HIGH RISK",
+      "value": "0.000",
+      "year": "3"
+     },
+     {
+      "code": "y3:other",
+      "description": "OTHER",
+      "value": "284.542",
+      "year": "3"
+     }
+    ],
+    "title": "Appendix II Table 1 \u2014 Impact of Adverse (Loss by CRD Exposure Class)",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t1_capital_required",
+    "optional": false,
+    "rows": [
+     {
+      "code": "y1",
+      "description": "Stress (Adverse) \u2014 Year 1",
+      "paid_up_shortfall": "0.000",
+      "value": "0.000"
+     },
+     {
+      "code": "y2",
+      "description": "Stress (Adverse) \u2014 Year 2",
+      "paid_up_shortfall": "0.000",
+      "value": "0.000"
+     },
+     {
+      "code": "y3",
+      "description": "Stress (Adverse) \u2014 Year 3",
+      "paid_up_shortfall": "0.000",
+      "value": "0.000"
+     }
+    ],
+    "title": "Appendix II Table 1 \u2014 Capital Required to Meet Minima",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t1_management_actions",
+    "optional": true,
+    "rows": [
+     {
+      "capital_raised_total": "0.000",
+      "change_in_business_strategy": "0.000",
+      "code": "y1",
+      "description": "Stress (Adverse) \u2014 Year 1",
+      "other": "0.000",
+      "revision_of_dividend_policy": "8045.678",
+      "risk_reduction": "0.000",
+      "rwa_relief_total": "0.000",
+      "sale_of_assets": "0.000",
+      "value": "8045.678"
+     },
+     {
+      "capital_raised_total": "0.000",
+      "change_in_business_strategy": "0.000",
+      "code": "y2",
+      "description": "Stress (Adverse) \u2014 Year 2",
+      "other": "0.000",
+      "revision_of_dividend_policy": "16941.148",
+      "risk_reduction": "0.000",
+      "rwa_relief_total": "0.000",
+      "sale_of_assets": "0.000",
+      "value": "16941.148"
+     },
+     {
+      "capital_raised_total": "0.000",
+      "change_in_business_strategy": "0.000",
+      "code": "y3",
+      "description": "Stress (Adverse) \u2014 Year 3",
+      "other": "0.000",
+      "revision_of_dividend_policy": "27196.638",
+      "risk_reduction": "0.000",
+      "rwa_relief_total": "0.000",
+      "sale_of_assets": "0.000",
+      "value": "27196.638"
+     }
+    ],
+    "title": "Appendix II Table 1 \u2014 Management Actions (with-actions)",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t1_post_capitalisation",
+    "optional": true,
+    "rows": [
+     {
+      "car_pct": "16.549559",
+      "cet1": "286818.925",
+      "cet1_ratio_pct": "12.940245",
+      "code": "post_cap_y1",
+      "description": "Post-capitalisation \u2014 Year 1",
+      "paid_up": "150000.000",
+      "tier1": "306818.925",
+      "tier1_ratio_pct": "13.842573",
+      "tier2": "60000.000",
+      "total_rwa": "2216487.656",
+      "value": "366818.925"
+     },
+     {
+      "car_pct": "17.310733",
+      "cet1": "316470.495",
+      "cet1_ratio_pct": "13.817765",
+      "code": "post_cap_y2",
+      "description": "Post-capitalisation \u2014 Year 2",
+      "paid_up": "150000.000",
+      "tier1": "336470.495",
+      "tier1_ratio_pct": "14.691007",
+      "tier2": "60000.000",
+      "total_rwa": "2290316.025",
+      "value": "396470.495"
+     },
+     {
+      "car_pct": "17.955275",
+      "cet1": "350655.459",
+      "cet1_ratio_pct": "14.619843",
+      "code": "post_cap_y3",
+      "description": "Post-capitalisation \u2014 Year 3",
+      "paid_up": "150000.000",
+      "tier1": "370655.459",
+      "tier1_ratio_pct": "15.453701",
+      "tier2": "60000.000",
+      "total_rwa": "2398489.925",
+      "value": "430655.459"
+     }
+    ],
+    "title": "Appendix II Table 1 \u2014 Post-capitalisation (Stress Case with Actions)",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t1_residual",
+    "optional": true,
+    "rows": [
+     {
+      "code": "y1",
+      "description": "Stress (Adverse) \u2014 Year 1",
+      "value": "0.000"
+     },
+     {
+      "code": "y2",
+      "description": "Stress (Adverse) \u2014 Year 2",
+      "value": "0.000"
+     },
+     {
+      "code": "y3",
+      "description": "Stress (Adverse) \u2014 Year 3",
+      "value": "0.000"
+     }
+    ],
+    "title": "Appendix II Table 1 \u2014 Residual Capital Required After Actions",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t2_capital_projection",
+    "optional": false,
+    "rows": [
+     {
+      "at1_eligible": "20000.000",
+      "cet1_after_deductions": "260000.000",
+      "code": "current",
+      "credit_risk_reserve": null,
+      "description": "Current (as-of)",
+      "gross_cet1": "300000.000",
+      "tier2_eligible": "42950.000",
+      "total_deductions": "40000.000",
+      "total_rwa": "2147500.000",
+      "value": "340000.000"
+     },
+     {
+      "at1_eligible": "20000.000",
+      "cet1_after_deductions": "287464.850",
+      "code": "base_y1",
+      "credit_risk_reserve": null,
+      "description": "Base Case \u2014 Year 1",
+      "gross_cet1": "327464.850",
+      "tier2_eligible": "45677.850",
+      "total_deductions": "40000.000",
+      "total_rwa": "2283892.500",
+      "value": "367464.850"
+     },
+     {
+      "at1_eligible": "20000.000",
+      "cet1_after_deductions": "320365.970",
+      "code": "base_y2",
+      "credit_risk_reserve": null,
+      "description": "Base Case \u2014 Year 2",
+      "gross_cet1": "360365.970",
+      "tier2_eligible": "49298.570",
+      "total_deductions": "40000.000",
+      "total_rwa": "2464928.500",
+      "value": "400365.970"
+     },
+     {
+      "at1_eligible": "20000.000",
+      "cet1_after_deductions": "359790.614",
+      "code": "base_y3",
+      "credit_risk_reserve": null,
+      "description": "Base Case \u2014 Year 3",
+      "gross_cet1": "399790.614",
+      "tier2_eligible": "54340.734",
+      "total_deductions": "40000.000",
+      "total_rwa": "2717036.700",
+      "value": "439790.614"
+     },
+     {
+      "at1_eligible": "20000.000",
+      "cet1_after_deductions": "278773.248",
+      "code": "stress_y1",
+      "credit_risk_reserve": null,
+      "description": "Stress (Adverse) \u2014 Year 1",
+      "gross_cet1": "318773.248",
+      "tier2_eligible": "44329.753",
+      "total_deductions": "40000.000",
+      "total_rwa": "2216487.656",
+      "value": "358773.248"
+     },
+     {
+      "at1_eligible": "20000.000",
+      "cet1_after_deductions": "299529.346",
+      "code": "stress_y2",
+      "credit_risk_reserve": null,
+      "description": "Stress (Adverse) \u2014 Year 2",
+      "gross_cet1": "339529.346",
+      "tier2_eligible": "45806.321",
+      "total_deductions": "40000.000",
+      "total_rwa": "2290316.025",
+      "value": "379529.346"
+     },
+     {
+      "at1_eligible": "20000.000",
+      "cet1_after_deductions": "323458.821",
+      "code": "stress_y3",
+      "credit_risk_reserve": null,
+      "description": "Stress (Adverse) \u2014 Year 3",
+      "gross_cet1": "363458.821",
+      "tier2_eligible": "47969.798",
+      "total_deductions": "40000.000",
+      "total_rwa": "2398489.925",
+      "value": "403458.821"
+     }
+    ],
+    "title": "Appendix II Table 2 \u2014 Regulatory Capital Projection",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t3_profit_and_loss",
+    "optional": false,
+    "rows": [
+     {
+      "adjusted_retained_earnings_for_car": "27464.850",
+      "code": "base_y1",
+      "description": "Base Case \u2014 Year 1",
+      "distributions": "11770.650",
+      "fees_and_commissions": "31572.000",
+      "impairment_losses": "16800.000",
+      "net_interest_income": "106656.000",
+      "operating_expenses": "69114.000",
+      "profit_before_tax": "52314.000",
+      "tax": "13078.500",
+      "value": "39235.500"
+     },
+     {
+      "adjusted_retained_earnings_for_car": "32901.120",
+      "code": "base_y2",
+      "description": "Base Case \u2014 Year 2",
+      "distributions": "14100.480",
+      "fees_and_commissions": "37670.400",
+      "impairment_losses": "20160.000",
+      "net_interest_income": "127987.200",
+      "operating_expenses": "82828.800",
+      "profit_before_tax": "62668.800",
+      "tax": "15667.200",
+      "value": "47001.600"
+     },
+     {
+      "adjusted_retained_earnings_for_car": "39424.644",
+      "code": "base_y3",
+      "description": "Base Case \u2014 Year 3",
+      "distributions": "16896.276",
+      "fees_and_commissions": "44988.480",
+      "impairment_losses": "24192.000",
+      "net_interest_income": "153584.640",
+      "operating_expenses": "99286.560",
+      "profit_before_tax": "75094.560",
+      "tax": "18773.640",
+      "value": "56320.920"
+     },
+     {
+      "adjusted_retained_earnings_for_car": "18773.248",
+      "code": "stress_y1",
+      "description": "Stress (Adverse) \u2014 Year 1",
+      "distributions": "8045.678",
+      "fees_and_commissions": "30178.440",
+      "impairment_losses": "23279.795",
+      "net_interest_income": "90801.810",
+      "operating_expenses": "61941.888",
+      "profit_before_tax": "35758.567",
+      "tax": "8939.642",
+      "value": "26818.925"
+     },
+     {
+      "adjusted_retained_earnings_for_car": "20756.099",
+      "code": "stress_y2",
+      "description": "Stress (Adverse) \u2014 Year 2",
+      "distributions": "8895.471",
+      "fees_and_commissions": "33898.430",
+      "impairment_losses": "26771.764",
+      "net_interest_income": "101976.960",
+      "operating_expenses": "69568.200",
+      "profit_before_tax": "39535.426",
+      "tax": "9883.857",
+      "value": "29651.570"
+     },
+     {
+      "adjusted_retained_earnings_for_car": "23929.475",
+      "code": "stress_y3",
+      "description": "Stress (Adverse) \u2014 Year 3",
+      "distributions": "10255.489",
+      "fees_and_commissions": "38941.689",
+      "impairment_losses": "30787.529",
+      "net_interest_income": "117549.051",
+      "operating_expenses": "80123.259",
+      "profit_before_tax": "45579.952",
+      "tax": "11394.988",
+      "value": "34184.964"
+     }
+    ],
+    "title": "Appendix II Table 3 \u2014 Movement in Profit & Loss",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t4_financial_position",
+    "optional": false,
+    "rows": [
+     {
+      "borrowings": "160000.000",
+      "capital": "340000.000",
+      "cash_and_balances": "290000.000",
+      "code": "current",
+      "description": "Current (as-of)",
+      "loans": "1400000.000",
+      "other_assets": "90000.000",
+      "short_term_investments": "620000.000",
+      "total_deposits": "1900000.000",
+      "total_liabilities": "2060000.000",
+      "value": "2400000.000"
+     },
+     {
+      "borrowings": "214535.150",
+      "capital": "367464.850",
+      "cash_and_balances": "348000.000",
+      "code": "base_y1",
+      "description": "Base Case \u2014 Year 1",
+      "loans": "1680000.000",
+      "other_assets": "90000.000",
+      "short_term_investments": "744000.000",
+      "total_deposits": "2280000.000",
+      "total_liabilities": "2494535.150",
+      "value": "2862000.000"
+     },
+     {
+      "borrowings": "280034.030",
+      "capital": "400365.970",
+      "cash_and_balances": "417600.000",
+      "code": "base_y2",
+      "description": "Base Case \u2014 Year 2",
+      "loans": "2016000.000",
+      "other_assets": "90000.000",
+      "short_term_investments": "892800.000",
+      "total_deposits": "2736000.000",
+      "total_liabilities": "3016034.030",
+      "value": "3416400.000"
+     },
+     {
+      "borrowings": "358689.386",
+      "capital": "439790.614",
+      "cash_and_balances": "501120.000",
+      "code": "base_y3",
+      "description": "Base Case \u2014 Year 3",
+      "loans": "2419200.000",
+      "other_assets": "90000.000",
+      "short_term_investments": "1071360.000",
+      "total_deposits": "3283200.000",
+      "total_liabilities": "3641889.386",
+      "value": "4081680.000"
+     },
+     {
+      "borrowings": "66966.752",
+      "capital": "358773.248",
+      "cash_and_balances": "336400.000",
+      "code": "stress_y1",
+      "description": "Stress (Adverse) \u2014 Year 1",
+      "loans": "1610000.000",
+      "other_assets": "90000.000",
+      "short_term_investments": "593340.000",
+      "total_deposits": "2204000.000",
+      "total_liabilities": "2270966.752",
+      "value": "2629740.000"
+     },
+     {
+      "borrowings": "83829.054",
+      "capital": "379529.346",
+      "cash_and_balances": "390224.000",
+      "code": "stress_y2",
+      "description": "Stress (Adverse) \u2014 Year 2",
+      "loans": "1851500.000",
+      "other_assets": "90000.000",
+      "short_term_investments": "688274.400",
+      "total_deposits": "2556640.000",
+      "total_liabilities": "2640469.054",
+      "value": "3019998.400"
+     },
+     {
+      "borrowings": "101121.923",
+      "capital": "403458.821",
+      "cash_and_balances": "452659.840",
+      "code": "stress_y3",
+      "description": "Stress (Adverse) \u2014 Year 3",
+      "loans": "2129225.000",
+      "other_assets": "90000.000",
+      "short_term_investments": "798398.304",
+      "total_deposits": "2965702.400",
+      "total_liabilities": "3066824.323",
+      "value": "3470283.144"
+     }
+    ],
+    "title": "Appendix II Table 4 \u2014 Statement of Financial Position",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t5_rwa",
+    "optional": false,
+    "rows": [
+     {
+      "code": "current",
+      "credit_rwa": "1402500.000",
+      "description": "Current (as-of)",
+      "market_rwa": "45000.000",
+      "operational_rwa": "700000.000",
+      "pillar1_requirement": "279175.000",
+      "pillar2_total": "0",
+      "total_capital_requirement": "279175.000",
+      "value": "2147500.000"
+     },
+     {
+      "code": "base_y1",
+      "credit_rwa": "1665000.000",
+      "description": "Base Case \u2014 Year 1",
+      "market_rwa": "45000.000",
+      "operational_rwa": "573892.500",
+      "pillar1_requirement": "296906.025",
+      "pillar2_total": "0",
+      "total_capital_requirement": "296906.025",
+      "value": "2283892.500"
+     },
+     {
+      "code": "base_y2",
+      "credit_rwa": "1980000.000",
+      "description": "Base Case \u2014 Year 2",
+      "market_rwa": "45000.000",
+      "operational_rwa": "439928.500",
+      "pillar1_requirement": "320440.705",
+      "pillar2_total": "0",
+      "total_capital_requirement": "320440.705",
+      "value": "2464928.500"
+     },
+     {
+      "code": "base_y3",
+      "credit_rwa": "2358000.000",
+      "description": "Base Case \u2014 Year 3",
+      "market_rwa": "45000.000",
+      "operational_rwa": "314036.700",
+      "pillar1_requirement": "353214.771",
+      "pillar2_total": "0",
+      "total_capital_requirement": "353214.771",
+      "value": "2717036.700"
+     },
+     {
+      "code": "stress_y1",
+      "credit_rwa": "1599375.000",
+      "description": "Stress (Adverse) \u2014 Year 1",
+      "market_rwa": "54000.000",
+      "operational_rwa": "563112.656",
+      "pillar1_requirement": "288143.395",
+      "pillar2_total": "69495.767",
+      "total_capital_requirement": "357639.162",
+      "value": "2216487.656"
+     },
+     {
+      "code": "stress_y2",
+      "credit_rwa": "1825781.250",
+      "description": "Stress (Adverse) \u2014 Year 2",
+      "market_rwa": "54000.000",
+      "operational_rwa": "410534.775",
+      "pillar1_requirement": "297741.083",
+      "pillar2_total": "69495.767",
+      "total_capital_requirement": "367236.850",
+      "value": "2290316.025"
+     },
+     {
+      "code": "stress_y3",
+      "credit_rwa": "2086148.438",
+      "description": "Stress (Adverse) \u2014 Year 3",
+      "market_rwa": "54000.000",
+      "operational_rwa": "258341.487",
+      "pillar1_requirement": "311803.690",
+      "pillar2_total": "69495.767",
+      "total_capital_requirement": "381299.457",
+      "value": "2398489.925"
+     }
+    ],
+    "title": "Appendix II Table 5 \u2014 Evolution of RWA & Capital Requirements",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "t6_risk_drivers",
+    "optional": false,
+    "rows": [
+     {
+      "base_value": "12.500000",
+      "code": "fx_usd_ghs:y1",
+      "description": "FX USD GHS",
+      "stress_value": "15.000000",
+      "value": "15.000000",
+      "year_index": "1"
+     },
+     {
+      "base_value": "12.500000",
+      "code": "fx_usd_ghs:y2",
+      "description": "FX USD GHS",
+      "stress_value": "15.000000",
+      "value": "15.000000",
+      "year_index": "2"
+     },
+     {
+      "base_value": "12.500000",
+      "code": "fx_usd_ghs:y3",
+      "description": "FX USD GHS",
+      "stress_value": "15.000000",
+      "value": "15.000000",
+      "year_index": "3"
+     },
+     {
+      "base_value": "0.050000",
+      "code": "gdp_growth:y1",
+      "description": "GDP GROWTH",
+      "stress_value": "0.000000",
+      "value": "0.000000",
+      "year_index": "1"
+     },
+     {
+      "base_value": "0.050000",
+      "code": "gdp_growth:y2",
+      "description": "GDP GROWTH",
+      "stress_value": "0.000000",
+      "value": "0.000000",
+      "year_index": "2"
+     },
+     {
+      "base_value": "0.050000",
+      "code": "gdp_growth:y3",
+      "description": "GDP GROWTH",
+      "stress_value": "0.000000",
+      "value": "0.000000",
+      "year_index": "3"
+     },
+     {
+      "base_value": "0.220000",
+      "code": "gog_yield:y1",
+      "description": "GOG YIELD",
+      "stress_value": "0.260000",
+      "value": "0.260000",
+      "year_index": "1"
+     },
+     {
+      "base_value": "0.220000",
+      "code": "gog_yield:y2",
+      "description": "GOG YIELD",
+      "stress_value": "0.260000",
+      "value": "0.260000",
+      "year_index": "2"
+     },
+     {
+      "base_value": "0.220000",
+      "code": "gog_yield:y3",
+      "description": "GOG YIELD",
+      "stress_value": "0.260000",
+      "value": "0.260000",
+      "year_index": "3"
+     },
+     {
+      "base_value": "5000.000000",
+      "code": "gse_index:y1",
+      "description": "GSE INDEX",
+      "stress_value": "3500.000000",
+      "value": "3500.000000",
+      "year_index": "1"
+     },
+     {
+      "base_value": "5000.000000",
+      "code": "gse_index:y2",
+      "description": "GSE INDEX",
+      "stress_value": "3500.000000",
+      "value": "3500.000000",
+      "year_index": "2"
+     },
+     {
+      "base_value": "5000.000000",
+      "code": "gse_index:y3",
+      "description": "GSE INDEX",
+      "stress_value": "3500.000000",
+      "value": "3500.000000",
+      "year_index": "3"
+     },
+     {
+      "base_value": "0.150000",
+      "code": "inflation:y1",
+      "description": "INFLATION",
+      "stress_value": "0.210000",
+      "value": "0.210000",
+      "year_index": "1"
+     },
+     {
+      "base_value": "0.150000",
+      "code": "inflation:y2",
+      "description": "INFLATION",
+      "stress_value": "0.210000",
+      "value": "0.210000",
+      "year_index": "2"
+     },
+     {
+      "base_value": "0.150000",
+      "code": "inflation:y3",
+      "description": "INFLATION",
+      "stress_value": "0.210000",
+      "value": "0.210000",
+      "year_index": "3"
+     },
+     {
+      "base_value": "0.200000",
+      "code": "interest_rate:y1",
+      "description": "INTEREST RATE",
+      "stress_value": "0.250000",
+      "value": "0.250000",
+      "year_index": "1"
+     },
+     {
+      "base_value": "0.200000",
+      "code": "interest_rate:y2",
+      "description": "INTEREST RATE",
+      "stress_value": "0.250000",
+      "value": "0.250000",
+      "year_index": "2"
+     },
+     {
+      "base_value": "0.200000",
+      "code": "interest_rate:y3",
+      "description": "INTEREST RATE",
+      "stress_value": "0.250000",
+      "value": "0.250000",
+      "year_index": "3"
+     },
+     {
+      "base_value": "0.060000",
+      "code": "unemployment:y1",
+      "description": "UNEMPLOYMENT",
+      "stress_value": "0.090000",
+      "value": "0.090000",
+      "year_index": "1"
+     },
+     {
+      "base_value": "0.060000",
+      "code": "unemployment:y2",
+      "description": "UNEMPLOYMENT",
+      "stress_value": "0.090000",
+      "value": "0.090000",
+      "year_index": "2"
+     },
+     {
+      "base_value": "0.060000",
+      "code": "unemployment:y3",
+      "description": "UNEMPLOYMENT",
+      "stress_value": "0.090000",
+      "value": "0.090000",
+      "year_index": "3"
+     }
+    ],
+    "title": "Appendix II Table 6 \u2014 Key Risk Drivers & Forecasting Assumptions",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "governance",
+    "optional": false,
+    "rows": [
+     {
+      "code": "enterprise_stress_run_id",
+      "description": "Enterprise-stress run (source)",
+      "value": "ac60733e-bab8-4dc1-b27e-5787027bb6e2"
+     },
+     {
+      "code": "input_hash",
+      "description": "Enterprise-stress input hash",
+      "value": "8511b08f714e2cd028d24b5827d9647c452cd9077426731850588253c562d0ef"
+     },
+     {
+      "code": "signoff_status",
+      "description": "Board attestation status",
+      "value": "attested"
+     },
+     {
+      "code": "attested_by",
+      "description": "Attested by (Board/approver)",
+      "value": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+     },
+     {
+      "code": "stays_above_all_minima",
+      "description": "Stress case stays above all regulatory minima",
+      "value": "Yes"
+     },
+     {
+      "code": "with_actions_stays_above_all_minima",
+      "description": "With management actions, stays above all minima",
+      "value": "Yes"
+     }
+    ],
+    "title": "Governance \u2014 Board Sign-off & Attestation (\u00b620, \u00b657\u201363)",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   }
+  ],
+  "template_id": "bog-icaap-stress-appendix2-v1",
+  "totals": [
+   {
+    "code": "capital_gap",
+    "description": "Capital gap (worst year, pre-management-action)",
+    "value": "0.000"
+   },
+   {
+    "code": "stressed_car_end_pct",
+    "description": "Stressed CAR at end of horizon",
+    "value": "16.821368"
+   }
+  ]
+ },
+ "source_runs": [
+  {
+   "engine_version": "enterprise-stress-v1.0.0",
+   "input_hash": "8511b08f714e2cd028d24b5827d9647c452cd9077426731850588253c562d0ef",
+   "module": "enterprise_stress",
+   "run_id": "ac60733e-bab8-4dc1-b27e-5787027bb6e2"
+  }
+ ],
+ "version": 1
+}

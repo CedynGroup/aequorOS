@@ -10,14 +10,20 @@ NUMBER, never a live formula, and every sheet is protected — the sealed Excel
 twin of the submission PDF, immutable, hashed, maker-checked. The template's
 formula text is preserved on the "Completion notes" sheet for auditability.
 
-``mode="working"`` (artifact kind ``xlsx_working``): the ALM / Finance review
-copy — leaf/input amounts as values, and every formula cell carries the
-template's OWN formula (SUM, Domestic + Foreign → Total, cross-sheet annex
-links) so Excel recalculates when a reviewer challenges an input. Cross-WORKBOOK
-links (BSD8 → [1]BSD2) cannot resolve inside one file and are written as their
-evaluated value with a note. The file is labelled WORKING COPY — FOR INTERNAL
-REVIEW (workbook title, print header on every sheet, Completion notes banner)
-and is never a filing artifact.
+``mode="working"`` (artifact kind ``xlsx_working``): the FORMULA copy — leaf /
+input amounts as values, and every formula cell carries the template's OWN
+formula (SUM, Domestic + Foreign → Total, cross-sheet annex links) so Excel
+recalculates when a reviewer challenges an input. Cross-WORKBOOK links
+(BSD8 → [1]BSD2) cannot resolve inside one file and are written as their
+evaluated value with a note.
+
+Founder decision 2026-09-20: supervisors prefer the Excel form with its
+formulas live, so this copy is FILED — alongside the protected values-only
+workbook, not instead of it. It is never signed, and it says so on its own face
+(workbook title, print header on every sheet, footer, Completion notes banner):
+the protected copy and the submission PDF carry the officers' signatures and
+remain the record of truth. Every label here has to keep that distinction
+legible to a supervisor holding the file on its own.
 """
 
 from __future__ import annotations
@@ -111,7 +117,15 @@ def _previous_reporting_date(reporting_date: str) -> str | None:
         return None
 
 
-WORKING_COPY_BANNER = "WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact"
+#: What the formula copy states about itself, in the three places a reader
+#: meets it first: the workbook title, the print header of every sheet, and the
+#: Completion notes. It is filed, it is not the signed record, and its figures
+#: move when a cell is edited — all three, because a reader who takes this for
+#: the signed return has been misled by the file itself.
+FORMULA_COPY_BANNER = (
+    "FORMULA COPY — filed with the protected values copy · not the signed record · "
+    "figures recalculate"
+)
 
 
 def _is_external_link(formula: str | None) -> bool:
@@ -331,9 +345,10 @@ def _write_sheet(  # noqa: PLR0912, PLR0913, PLR0915
         except ValueError:
             continue
     if mode == "working":
-        ws.oddHeader.center.text = WORKING_COPY_BANNER
+        ws.oddHeader.center.text = FORMULA_COPY_BANNER
         ws.oddFooter.center.text = (
-            f"{result.spec.code} · {bank_name} · {reporting_date} · working copy"
+            f"{result.spec.code} · {bank_name} · {reporting_date} · "
+            "formula copy · not the signed record"
         )
         ws.sheet_properties.tabColor = "FFC000"
     else:
@@ -380,14 +395,16 @@ def _completion_notes(
     ws.append([f"{result.spec.code} — completion notes (AequorOS)"])
     ws["A1"].font = Font(bold=True)
     if mode == "working":
-        ws.append([WORKING_COPY_BANNER])
+        ws.append([FORMULA_COPY_BANNER])
         ws["A2"].font = Font(bold=True, color="C00000")
         ws.append(
             [
-                f"Generated {generated_at.isoformat()} · live template formulas (values for "
-                "inputs; cross-workbook links written as evaluated values) — for ALM/Finance "
-                "review; the sealed official export and the submission PDF are the governed "
-                "artifacts."
+                f"Generated {generated_at.isoformat()} · This workbook carries the official "
+                "template's own formulas (inputs as values; cross-workbook links written as "
+                "evaluated values), so its figures recalculate as soon as a cell is edited. It "
+                "is filed with the regulator alongside the protected values-only workbook, "
+                "which — with the submission PDF — carries the officers' signatures and remains "
+                "the signed record of this return."
             ]
         )
     else:
@@ -468,7 +485,7 @@ def render_form_xlsx(  # noqa: PLR0913
     if include_completion_notes:
         _completion_notes(wb, result, generated_at, mode=mode)
     wb.properties.title = (
-        f"{result.spec.code} — {WORKING_COPY_BANNER}"
+        f"{result.spec.code} — {FORMULA_COPY_BANNER}"
         if mode == "working"
         else f"{result.spec.code} — official sealed export"
     )

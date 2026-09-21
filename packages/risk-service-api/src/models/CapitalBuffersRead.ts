@@ -104,6 +104,12 @@ export interface CapitalBuffersRead {
   leverageMinPct?: CapitalBuffersLeverageMinPct;
   /**
    *
+   * @type {{ [key: string]: string; }}
+   * @memberof CapitalBuffersRead
+   */
+  minimumConfirmationStatus?: { [key: string]: string };
+  /**
+   *
    * @type {CapitalBuffersTier1MinPct}
    * @memberof CapitalBuffersRead
    */
@@ -163,6 +169,10 @@ export function CapitalBuffersReadFromJSONTyped(
       json["leverage_min_pct"] == null
         ? undefined
         : CapitalBuffersLeverageMinPctFromJSON(json["leverage_min_pct"]),
+    minimumConfirmationStatus:
+      json["minimum_confirmation_status"] == null
+        ? undefined
+        : json["minimum_confirmation_status"],
     tier1MinPct:
       json["tier1_min_pct"] == null
         ? undefined
@@ -193,6 +203,7 @@ export function CapitalBuffersReadToJSONTyped(
     leverage_min_pct: CapitalBuffersLeverageMinPctToJSON(
       value["leverageMinPct"],
     ),
+    minimum_confirmation_status: value["minimumConfirmationStatus"],
     tier1_min_pct: CapitalBuffersTier1MinPctToJSON(value["tier1MinPct"]),
   };
 }

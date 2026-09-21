@@ -31,6 +31,14 @@ Flags per user:
 * ``account_plane_only`` — administers the account (Owner / Account Admin) but
                           reads no product: the exact shape that locked the
                           Owner out; ``202609160052`` backfills the read row.
+
+The ``filing`` column answers the filing cutover of 2026-09-20: which
+institutions this user may TRANSMIT a return to the regulator for. It is a
+separate question from product view — the Validator bundle is the only one that
+carries ``submit``, nothing backfilled it, and the ``role`` column beside it is
+the pre-cutover answer (``admin``/``approver`` could file; nobody else could).
+An organization with no filing row after the cutover cannot file until its Org
+Owner grants one; see ``docs/filing_submit_authority_rollout.md``.
 """
 
 from __future__ import annotations
@@ -45,7 +53,7 @@ from uuid import UUID
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.core.authorization import Module
+from app.core.authorization import Module, Permission
 from app.models import AuthorizationBinding, Bank, Organization, User
 from app.services import authorization
 
@@ -72,6 +80,8 @@ class UserAccess:
     active_bindings: int
     account_administer: bool
     institutions: dict[str, list[str]] = field(default_factory=dict)
+    #: Institutions this user may transmit a return to the regulator for.
+    filing_institutions: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
 
 
@@ -128,6 +138,15 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
             for entry in projection.institution_capabilities
         }
         institutions = {bank_id: modules for bank_id, modules in institutions.items() if modules}
+        filing_institutions = sorted(
+            entry.institution_id
+            for entry in projection.institution_capabilities
+            if any(
+                capability.module == Module.REGULATORY.value
+                and capability.permission == Permission.SUBMIT.value
+                for capability in entry.capabilities
+            )
+        )
         flags: list[str] = []
         if binding_count == 0:
             flags.append("no_bindings")
@@ -145,6 +164,7 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                 active_bindings=binding_count,
                 account_administer=account_administer,
                 institutions=institutions,
+                filing_institutions=filing_institutions,
                 flags=flags,
             )
         )
@@ -167,6 +187,7 @@ def render_table(rows: list[UserAccess]) -> str:
         "grants",
         "account",
         "product view",
+        "filing",
         "flags",
     )
     lines: list[tuple[str, ...]] = [header]
@@ -186,6 +207,7 @@ def render_table(rows: list[UserAccess]) -> str:
                 str(row.active_bindings),
                 "administer" if row.account_administer else "-",
                 product,
+                ",".join(row.filing_institutions) or "-",
                 ",".join(row.flags) or "-",
             )
         )
@@ -235,10 +257,20 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     print(render_table(rows))
     flagged = [row for row in rows if row.flags]
+    filers = [row for row in rows if row.filing_institutions]
     print()
     print(
         f"{len(rows)} active human user(s); {len(flagged)} with no product view or no bindings"
         + (" — these people cannot open a module after the cutover." if flagged else ".")
+    )
+    print(
+        f"{len(filers)} can transmit a return to the regulator"
+        + (
+            "."
+            if filers
+            else " — no return can be filed until an Org Owner grants Validator"
+            " authority (docs/filing_submit_authority_rollout.md)."
+        )
     )
     return 0
 

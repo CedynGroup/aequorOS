@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { Reason2 } from "./Reason2";
+import type { Reason1 } from "./Reason1";
 import {
-  Reason2FromJSON,
-  Reason2FromJSONTyped,
-  Reason2ToJSON,
-  Reason2ToJSONTyped,
-} from "./Reason2";
+  Reason1FromJSON,
+  Reason1FromJSONTyped,
+  Reason1ToJSON,
+  Reason1ToJSONTyped,
+} from "./Reason1";
 
 /**
  *
@@ -27,10 +27,10 @@ import {
 export interface PackageApprovalRequestCreate {
   /**
    *
-   * @type {Reason2}
+   * @type {Reason1}
    * @memberof PackageApprovalRequestCreate
    */
-  reason?: Reason2;
+  reason?: Reason1;
 }
 
 /**
@@ -58,7 +58,7 @@ export function PackageApprovalRequestCreateFromJSONTyped(
   return {
     ...json,
     reason:
-      json["reason"] == null ? undefined : Reason2FromJSON(json["reason"]),
+      json["reason"] == null ? undefined : Reason1FromJSON(json["reason"]),
   };
 }
 
@@ -77,6 +77,6 @@ export function PackageApprovalRequestCreateToJSONTyped(
   }
 
   return {
-    reason: Reason2ToJSON(value["reason"]),
+    reason: Reason1ToJSON(value["reason"]),
   };
 }

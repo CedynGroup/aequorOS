@@ -1,3 +1,4 @@
+export * from "./AiSettingsApi";
 export * from "./AssessmentsApi";
 export * from "./AttestationApi";
 export * from "./AuthApi";
@@ -20,6 +21,7 @@ export * from "./FinancialDataApi";
 export * from "./FindingsApi";
 export * from "./ForecastingApi";
 export * from "./HealthApi";
+export * from "./IcaapApi";
 export * from "./ImpliedRatingApi";
 export * from "./IngestionApi";
 export * from "./InstitutionProfileApi";

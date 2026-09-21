@@ -37,6 +37,7 @@ from app.domain.stress.management_actions import (
     ManagementAction,
     ManagementActionError,
     ManagementActionPlan,
+    RecognitionCaps,
     apply_management_actions,
 )
 from app.domain.stress.orchestrator import compose_capital_shocks
@@ -61,6 +62,10 @@ from tests.domain.stress_fixtures import (
     sample_bank_latest_facts,
     severe_paths,
 )
+
+#: Test data for the governed AT1 / Tier 2 recognition caps (D-024: the engine
+#: takes them as an argument; production resolves them from the control plane).
+_RECOGNITION_CAPS = RecognitionCaps(at1_pct_rwa=Decimal("1.5"), tier2_pct_rwa=Decimal("2"))
 
 M = Decimal("1000000")
 
@@ -298,6 +303,7 @@ def test_management_actions_do_not_reimpose_basel_minima_on_an_sdi() -> None:
             capital_params=params,
             paid_up_min=Decimal("0"),
             car_target_pct=Decimal("10"),
+            recognition_caps=_RECOGNITION_CAPS,
         )
 
     # Basel sub-tier and leverage floors set impossibly high: if they are
@@ -366,6 +372,7 @@ def _apply(plan: ManagementActionPlan):
         capital_params=bog_capital_params(),
         paid_up_min=Decimal("0"),
         car_target_pct=Decimal("10"),
+        recognition_caps=_RECOGNITION_CAPS,
     )
 
 
@@ -404,6 +411,7 @@ def test_a_plan_that_erases_the_rwa_denominator_refuses_instead_of_filing_zero()
             capital_params=credit_only,
             paid_up_min=Decimal("0"),
             car_target_pct=Decimal("10"),
+            recognition_caps=_RECOGNITION_CAPS,
         )
     assert exc.value.state is OutcomeState.NOT_COMPUTABLE
     assert exc.value.blocks_filing is True

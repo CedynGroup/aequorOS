@@ -127,15 +127,27 @@ def get_snapshot_for_reporting_date(  # noqa: PLR0913 - lookup keys plus the two
 
 
 def get_package_or_404(
-    db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    package_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> RegulatoryPackage:
-    package = db.scalar(
-        select(RegulatoryPackage).where(
-            RegulatoryPackage.id == package_id,
-            RegulatoryPackage.organization_id == ctx.organization_id,
-            RegulatoryPackage.bank_id == bank_id,
-        )
+    """One package of this tenant's institution, or 404.
+
+    ``for_update`` takes the row lock a chain decision is taken under: the
+    maker-checker answer the authorization evaluator gave was computed when the
+    request arrived, and two officers can decide between then and the write.
+    """
+    statement = select(RegulatoryPackage).where(
+        RegulatoryPackage.id == package_id,
+        RegulatoryPackage.organization_id == ctx.organization_id,
+        RegulatoryPackage.bank_id == bank_id,
     )
+    if for_update:
+        statement = statement.with_for_update()
+    package = db.scalar(statement)
     if package is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory package not found."
@@ -150,7 +162,15 @@ def validation_passed(package: RegulatoryPackage) -> bool | None:
     return bool(report.get("passed"))
 
 
-def read_summary(package: RegulatoryPackage) -> RegulatoryPackageSummaryRead:
+def read_summary(
+    package: RegulatoryPackage, *, stage_title: str | None = None
+) -> RegulatoryPackageSummaryRead:
+    """The package as a queue row.
+
+    ``stage_title`` is passed in rather than looked up here: a list endpoint
+    resolves every row's title in ONE query (see ``packages.list_packages``),
+    and doing it per row would fan a queue out into a query per package.
+    """
     return RegulatoryPackageSummaryRead(
         id=package.id,
         bank_id=package.bank_id,
@@ -170,6 +190,10 @@ def read_summary(package: RegulatoryPackage) -> RegulatoryPackageSummaryRead:
         submission_revision=package.submission_revision,
         snapshot_sha256=package.snapshot_sha256,
         regulator_comments=package.regulator_comments,
+        is_rehearsal=package.is_rehearsal,
+        current_stage_seq=package.current_stage_seq,
+        current_stage_title=stage_title,
+        workflow_round=package.workflow_round,
         created_at=package.created_at,
         updated_at=package.updated_at,
     )

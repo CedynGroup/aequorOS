@@ -535,3 +535,103 @@ def test_a_withdrawal_at_another_date_leaves_the_run_alone(db_session: Session) 
     run.inputs = {**run.inputs, "as_of_date": other_period.period_end.isoformat()}
     db_session.flush()
     assert withdrawal_impact.run_evidence(db_session, run).status is EvidenceStatus.CURRENT
+
+
+# ---------------------------------------------------------------------------
+# BOTH mint sites (D-069; architecture audit M1)
+# ---------------------------------------------------------------------------
+#
+# P3 added a SECOND place a ``RegulatoryPackage`` comes into existence:
+# ``generate_frozen_package``, which mints from a snapshot a family froze
+# itself. D-069 caught the reporting-period and reconciliation gates going
+# missing at that seam; this one went missing with them and was not noticed.
+#
+# An ICAAP filing genuinely binds engine runs — every live data block's run plus
+# every annex package's ``source_runs`` — so a cycle could be SEALED, its
+# package minted and its stage decision written on evidence that had been
+# withdrawn under two-officer approval. The ICAAP-side substitute is partial by
+# construction: ``domain/icaap/readiness.py`` makes a withdrawn source blocking
+# only for a block the PROSE references, and never looks at annexes at all.
+#
+# The gate therefore lives at the mint, not in ``freeze_cycle``: the next
+# freeze-minted family inherits it instead of having to remember it. These two
+# tests are written against ``generate_frozen_package`` for the same reason —
+# they hold for every such family, not only for ICAAP.
+
+
+def _frozen_build(run: RegulatoryRun | None):  # noqa: ANN202 - a test-local closure
+    from app.services.regulatory_reporting import generation  # noqa: PLC0415
+
+    def _build() -> generation.FrozenSnapshot:
+        return generation.FrozenSnapshot(
+            snapshot={
+                "schema_version": "regulatory-snapshot-v1",
+                "return_code": "ICAAP-REPORT",
+                "institution": {},
+                "sections": [],
+                "totals": [],
+                "metadata": {},
+            },
+            source_runs=(
+                [] if run is None else [generation.source_run_entry(run)]  # type: ignore[attr-defined]
+            ),
+        )
+
+    return _build
+
+
+def _mint_frozen(db_session: Session, run: RegulatoryRun | None):  # noqa: ANN202
+    from app.services.regulatory_reporting import generation  # noqa: PLC0415
+
+    return generation.generate_frozen_package(
+        db_session,
+        _ctx(),
+        _bank(db_session),
+        return_code="ICAAP-REPORT",
+        reporting_date=FIXTURE_AS_OF,
+        build=_frozen_build(run),
+        basis="solo",
+        notes="Frozen from a workspace cycle.",
+        commit=False,
+    )
+
+
+def test_the_frozen_mint_site_refuses_an_orphaned_source_run(db_session: Session) -> None:
+    """A family that freezes its own snapshot cannot seal it on withdrawn data."""
+    _seed_book(db_session)
+    _seed_duplicate_second_source(db_session)
+    run = _seal_run(db_session, module="capital")
+    _withdraw(db_session)
+    db_session.info.pop("withdrawal_impact.register", None)
+
+    with pytest.raises(WithdrawnEvidenceError) as refusal:
+        _mint_frozen(db_session, run)
+
+    assert refusal.value.status_code == 409
+    detail = refusal.value.details[0]
+    assert detail.state is OutcomeState.DATA_QUALITY_BLOCK
+    assert detail.blocks_filing is True
+
+    # A refusal at the mint leaves NOTHING behind — the gate runs before the
+    # snapshot is enriched, before supersession and before the row is flushed.
+    db_session.rollback()
+    assert (
+        db_session.scalars(
+            select(RegulatoryPackage).where(RegulatoryPackage.return_code == "ICAAP-REPORT")
+        ).all()
+        == []
+    )
+
+
+def test_the_frozen_mint_site_mints_when_the_evidence_still_stands(
+    db_session: Session,
+) -> None:
+    """Non-vacuity: the refusal above is the withdrawal, not the fixture."""
+    _seed_book(db_session)
+    _seed_duplicate_second_source(db_session)
+    run = _seal_run(db_session, module="capital")
+
+    package = _mint_frozen(db_session, run)
+
+    assert package.return_code == "ICAAP-REPORT"
+    assert [entry["run_id"] for entry in package.source_runs] == [str(run.id)]

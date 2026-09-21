@@ -434,6 +434,12 @@ export type EnterpriseOutcome = {
     stressed_nop_pct_tier1: string;
     shock_pct: string;
     stressed_within_aggregate_limit: boolean;
+    // The Pillar 2 FX add-on behind Appendix II Table 5's `country_and_fx`, and
+    // the two figures it is built from (D-038). Optional: runs sealed before
+    // 2026-09-20 carry none of them.
+    revaluation_loss?: string;
+    pillar1_fx_capital?: string;
+    pillar2_addon?: string;
   };
   concentration?: Record<string, unknown>;
   operational?: Record<string, unknown>;

@@ -789,7 +789,71 @@ def test_server_returns_warn_and_block_sod_decisions(grant_client: TestClient) -
         "maker_checker_runtime_condition_required"
     )
 
+    # Order matters: the owner exception is taken LAST. Granting the owner an
+    # operational binding invalidates their own sessions in the same
+    # transaction — the authorisation-version bump this codebase relies on — so
+    # any request made with the same headers afterwards is correctly a 401.
+    # A DELEGATED account administrator still cannot: they are not the
+    # accountable principal and cannot self-authorise the exception. A fresh
+    # identity, because GRANTEE already carries operational bundles from the
+    # cases above and would be refused by the mirror rule instead.
+    delegate = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+    account_scope = authorization.BindingScope(
+        institution_scope=InstitutionScope.ORGANIZATION,
+        institution_id=None,
+        module_scope=ModuleScope.ACCOUNT,
+        sensitivity_scope=SensitivityScope.ALL,
+    )
+    with _session() as db:
+        db.add(
+            User(
+                id=delegate,
+                organization_id=ORG_1,
+                email="delegated.admin@example.test",
+                display_name="Delegated Admin",
+                role="viewer",
+            )
+        )
+        db.commit()
+        grant_administration.create_scoped_grant(
+            db,
+            organization_id=ORG_1,
+            principal_user_id=delegate,
+            role_bundle=RoleBundle.ACCOUNT_ADMIN,
+            scope=account_scope,
+            actor_user_id=USER_1,
+            reason="Delegated account administration",
+            expected_authority_sentence=grant_administration.scoped_authority_sentence(
+                db,
+                organization_id=ORG_1,
+                principal_user_id=delegate,
+                role_bundle=RoleBundle.ACCOUNT_ADMIN,
+                scope=account_scope,
+            ),
+        )
+        db.commit()
+
     blocked = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client,
+            principal_user_id=delegate,
+            reason="Account administrator requests operational authority",
+        ),
+    )
+    assert blocked.status_code == 409, blocked.text
+    decision = blocked.json()["error"]["details"]["sod_decision"]
+    assert decision["outcome"] == "block"
+    assert decision["findings"][0]["code"] == ("c9_account_administration_operational_conflict")
+
+    # The OWNER may accept the C9 exception for themselves (founder decision
+    # 2026-09-20). It is recorded, not waived: the finding still comes back, so
+    # an examiner reads an accepted risk rather than an absent control. The
+    # reasoning behind C9 is unchanged — see check_sod_policy — and this
+    # returns to a block once the per-object condition can catch it at action
+    # time.
+    owner_exception = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
         json=_reviewed_payload(
@@ -798,10 +862,72 @@ def test_server_returns_warn_and_block_sod_decisions(grant_client: TestClient) -
             reason="Owner requests operational authority",
         ),
     )
+    assert owner_exception.status_code == 201, owner_exception.text
+    owner_decision = owner_exception.json()["sod_decision"]
+    assert owner_decision["outcome"] == "warn"
+    assert owner_decision["findings"][0]["code"] == "c9_owner_operational_exception"
+
+
+def test_approving_and_filing_cannot_land_on_one_identity(grant_client: TestClient) -> None:
+    """The assignment-time half of the filing split (2026-09-20).
+
+    Approving a return and transmitting it to the regulator are now two
+    permissions, but two permissions on one person is one person filing their
+    own approval. The per-object condition that would catch that at action time
+    belongs to the stage engine and does not exist yet
+    (docs/filing_workflow_redesign.md §3.3 layer 3), so the separation is
+    enforced where it currently can be: the grant is refused, in both
+    directions, and the refusal is a BLOCK rather than a warning.
+
+    It is also scope-independent, unlike the Analyst/Approver warning above:
+    one Validator grant files every return family, so an approval grant on any
+    module overlaps it.
+    """
+    approver = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client, role="approver", reason="Independent checker duties"
+        ),
+    )
+    assert approver.status_code == 201, approver.text
+
+    blocked = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client,
+            role="validator",
+            module="reg",
+            sensitivity="restricted",
+            reason="Also files the returns",
+        ),
+    )
     assert blocked.status_code == 409, blocked.text
     decision = blocked.json()["error"]["details"]["sod_decision"]
     assert decision["outcome"] == "block"
-    assert decision["findings"][0]["code"] == ("c9_account_administration_operational_conflict")
+    assert decision["findings"][0]["code"] == "approval_and_transmission_separation_required"
+
+
+def test_a_validator_grant_is_accepted_for_an_identity_that_does_not_approve(
+    grant_client: TestClient,
+) -> None:
+    """The authority has to be grantable, or no return could ever be filed."""
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client,
+            role="validator",
+            module="reg",
+            sensitivity="restricted",
+            reason="Files this institution's returns to the regulator",
+        ),
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["sod_decision"]["outcome"] == "allow"
+    assert created.json()["binding"]["role_bundle"] == "validator"
+    assert "Validator" in created.json()["binding"]["authority_sentence"]
 
 
 def test_sso_approval_activates_identity_only_with_a_complete_grant(

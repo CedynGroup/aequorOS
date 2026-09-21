@@ -22,6 +22,7 @@ export const RegulatoryModule = {
   Optimizer: "optimizer",
   Whatif: "whatif",
   Irr: "irr",
+  IrrSf: "irr_sf",
   Fx: "fx",
   Ftp: "ftp",
   ReverseStress: "reverse_stress",

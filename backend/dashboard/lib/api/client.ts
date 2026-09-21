@@ -23,6 +23,7 @@ import {
   CapitalPlanApi,
   Configuration,
   ForecastingApi,
+  IcaapApi,
   InstitutionProfileApi,
   JobsApi,
   LiveEngineApi,
@@ -104,6 +105,45 @@ export const configuration = new Configuration({
   ],
 });
 
+/**
+ * Bind a generated API client's methods to it, so a method may be passed
+ * around as a plain function reference.
+ *
+ * WHY THIS EXISTS. Every generated operation is written
+ * `async foo(p) { const r = await this.fooRaw(p); … }`, so it depends on its
+ * receiver. A hook that takes the operation as an argument —
+ *     useQuery({ queryFn: () => fetcher({ bankId, cycleId }) })
+ *     useIcaapRisks(bankId, cycleId) // …, icaapApi.listIcaapRisks, …
+ * — hands over a BARE reference, `this` is undefined, and the call throws
+ * `TypeError: Cannot read properties of undefined (reading 'listIcaapRisksRaw')`
+ * before a request is ever made. `apiCall` then classifies that as a transport
+ * failure, so the screen reads "Could not reach the risk service. Check that
+ * the backend is running." — a sentence that sends a preparer to look at a
+ * backend that is running perfectly.
+ *
+ * Found in a browser, on the ICAAP review tab, where three panels reported a
+ * dead backend against endpoints that each answered 200 to curl. A type check
+ * cannot catch it (the reference has the right type) and a hook-stubbing test
+ * cannot either (it replaces the very call that breaks).
+ *
+ * The proxy binds lazily and caches, so `api.foo(p)` costs the same as before
+ * and `const f = api.foo; f(p)` now works too.
+ */
+function autobound<T extends object>(api: T): T {
+  const bound = new Map<PropertyKey, unknown>();
+  return new Proxy(api, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function") return value;
+      const cached = bound.get(property);
+      if (cached) return cached;
+      const fn = (value as (...args: unknown[]) => unknown).bind(target);
+      bound.set(property, fn);
+      return fn;
+    },
+  });
+}
+
 export const authApi = new AuthApi(configuration);
 export const authorizationApi = new AuthorizationApi(configuration);
 export const attestationApi = new AttestationApi(configuration);
@@ -112,7 +152,11 @@ export const behavioralModelsApi = new BehavioralModelsApi(configuration);
 export const regulatoryLiquidityApi = new RegulatoryLiquidityApi(configuration);
 export const regulatoryCapitalApi = new RegulatoryCapitalApi(configuration);
 export const capitalPlanApi = new CapitalPlanApi(configuration);
-export const regulatoryIrrApi = new RegulatoryIrrApi(configuration);
+export const icaapApi = autobound(new IcaapApi(configuration));
+// Autobound because the IRRBB Standardised Framework hooks pass its operations
+// as bare function references (`useSfQuery(…, regulatoryIrrApi.getIrrbbStandardisedFramework)`),
+// which is exactly the shape that lost `this` on the ICAAP tabs — see `autobound`.
+export const regulatoryIrrApi = autobound(new RegulatoryIrrApi(configuration));
 export const regulatoryFxApi = new RegulatoryFxApi(configuration);
 export const regulatoryFtpApi = new RegulatoryFtpApi(configuration);
 export const forecastingApi = new ForecastingApi(configuration);
@@ -122,7 +166,9 @@ export const liveEngineApi = new LiveEngineApi(configuration);
 export const jobsApi = new JobsApi(configuration);
 export const marketDataApi = new MarketDataApi(configuration);
 export const temenosApi = new TemenosApi(configuration);
-export const regulatoryReportingApi = new RegulatoryReportingApi(configuration);
+export const regulatoryReportingApi = autobound(
+  new RegulatoryReportingApi(configuration),
+);
 export const institutionProfileApi = new InstitutionProfileApi(configuration);
 export const organizationApi = new OrganizationApi(configuration);
 export const notificationsApi = new NotificationsApi(configuration);

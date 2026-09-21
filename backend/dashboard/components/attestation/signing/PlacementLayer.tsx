@@ -24,7 +24,10 @@
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { AlertTriangle, GripVertical, X } from 'lucide-react';
-import type { AdoptedSignatureRead, SignatureFieldPlacement } from '@aequoros/risk-service-api';
+import type {
+  AdoptedSignatureRead,
+  SignatureFieldPlacementRead,
+} from '@aequoros/risk-service-api';
 import {
   clampRect,
   fieldTypeOf,
@@ -41,7 +44,7 @@ import { DEFAULT_TYPED_FONT, TYPED_FONT_STYLES } from './fonts';
 export interface FieldSlot {
   /** Index into the workspace's placement list — the box's identity. */
   index: number;
-  placement: SignatureFieldPlacement;
+  placement: SignatureFieldPlacementRead;
   /** "Preparer — Ama Mensah" as the box labels itself on the page. */
   ownerLabel: string;
   /** The caller's own field: it carries their adopted mark and is theirs to move. */

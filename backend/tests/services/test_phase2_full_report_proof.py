@@ -70,6 +70,17 @@ CLASS_GATED = {
     code for code, definition in REGISTRY.items() if "bank" not in definition.institution_classes
 }
 
+# The ICAAP FILING family (ICAAP P3). Its packages exist because a workspace
+# cycle was reviewed and frozen, which is what binds the filed document to the
+# review that approved it, so the generic mint site refuses them at ANY date.
+# Derived from the registry rather than listed, so a future freeze-only return
+# is covered the day it is added instead of silently dropping out of the proof.
+FREEZE_GATED = {
+    code
+    for code, definition in REGISTRY.items()
+    if definition.family in generation.FREEZE_ONLY_FAMILIES
+}
+
 
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> InMemoryStorageClient:
@@ -92,7 +103,7 @@ def _period_id(db: Session) -> UUID:
     return period_id
 
 
-def test_every_registered_return_generates_and_exports_end_to_end(
+def test_every_registered_return_generates_and_exports_end_to_end(  # noqa: PLR0915 - one proof, every return
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
     materialize_canonical_test_book(db_session)
@@ -198,6 +209,13 @@ def test_every_registered_return_generates_and_exports_end_to_end(
                 excinfo.value.detail["error_code"] == "no_attested_stress_run"  # type: ignore[index]
             ), code
             continue
+        if code in FREEZE_GATED:
+            with pytest.raises(HTTPException) as excinfo:
+                generation.generate_package(db_session, MAKER, SAMPLE_BANK_ID, payload)
+            assert (
+                excinfo.value.detail["error_code"] == "icaap_generated_by_freeze"  # type: ignore[index]
+            ), code
+            continue
         if code in CLASS_GATED:
             with pytest.raises(HTTPException) as excinfo:
                 generation.generate_package(db_session, MAKER, SAMPLE_BANK_ID, payload)
@@ -222,8 +240,14 @@ def test_every_registered_return_generates_and_exports_end_to_end(
     # Every registered return generates, except the gated ones that refuse by design
     # (LAS-QUARTERLY: template pending; ICAAP-STRESS-APPENDIX2: no attested stress run).
     assert len(generated) == (
-        len(REGISTRY) - len(TEMPLATE_GATED) - len(STRESS_RUN_GATED) - len(CLASS_GATED)
+        len(REGISTRY)
+        - len(TEMPLATE_GATED)
+        - len(STRESS_RUN_GATED)
+        - len(CLASS_GATED)
+        - len(FREEZE_GATED)
     )
+    # The freeze-only returns are proven to refuse, not quietly skipped.
+    assert FREEZE_GATED, "no freeze-only return in the registry — has the family regressed?"
     # The class-scoped returns are proven to refuse, not quietly skipped.
     assert CLASS_GATED, "no class-scoped return in the registry — has the axis regressed?"
     # Phase 2 signature checks. LMT tool sections are data-gated (they render

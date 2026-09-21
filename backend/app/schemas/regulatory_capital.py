@@ -136,6 +136,14 @@ class CapitalBuffersRead(ClosedModel):
     cet1_min_pct: Decimal | None = Field(default=None, title="Capital Buffers Cet1 Min Pct")
     tier1_min_pct: Decimal | None = Field(default=None, title="Capital Buffers Tier1 Min Pct")
     leverage_min_pct: Decimal | None = Field(default=None, title="Capital Buffers Leverage Min Pct")
+    #: The ``confirmation_status`` ('confirmed' | 'pending') of the governed
+    #: control-plane row behind each minimum, keyed by parameter code (``car_min``,
+    #: ``cet1_min``, ``tier1_min``, ``leverage_min``); a code with no governed row
+    #: is absent. ``pending`` is informational — the minimum above still applies —
+    #: and a consumer labels it "pending confirmation" (founder directive D-024).
+    minimum_confirmation_status: dict[str, str] = Field(
+        default_factory=dict, title="Capital Buffers Minimum Confirmation Status"
+    )
 
 
 class CapitalDashboardRead(ClosedModel):

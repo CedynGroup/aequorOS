@@ -16,6 +16,7 @@ from app.domain.stress.management_actions import (
     ActionTrigger,
     ManagementAction,
     ManagementActionPlan,
+    RecognitionCaps,
     apply_management_actions,
 )
 from app.domain.stress.projection import (
@@ -30,6 +31,10 @@ from tests.domain.stress_fixtures import (
     sample_bank_latest_facts,
     severe_paths,
 )
+
+#: Test data for the governed AT1 / Tier 2 recognition caps (D-024: the engine
+#: takes them as an argument; production resolves them from the control plane).
+_RECOGNITION_CAPS = RecognitionCaps(at1_pct_rwa=Decimal("1.5"), tier2_pct_rwa=Decimal("2"))
 
 #: The CAR floor these hand-verified tables are measured against. It used to be
 #: an implicit ``DEFAULT_CAR_TARGET_PCT`` inside ``appendix_ii``; that literal is
@@ -59,6 +64,7 @@ def test_tables_have_the_prescribed_shape() -> None:
         severe_paths(),
         currency="GHS",
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
         paid_up_min=Decimal("400000000"),
     )
     # current + base Y1-3 + stress Y1-3.
@@ -82,7 +88,11 @@ def test_tables_have_the_prescribed_shape() -> None:
 def test_table2_cet1_build_ties_to_the_engine_components() -> None:
     projection = _projection(severe_paths())
     tables = build_appendix_ii(
-        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
     )
     current = tables.table2_capital.rows[0]  # as-of
     cet1 = current.cet1
@@ -103,7 +113,11 @@ def test_table5_pillar1_rwa_ties_to_table1_stressed_rwa() -> None:
     """The one hard directive invariant: T5 stressed Pillar-1 RWA == T1 stressed RWA."""
     projection = _projection(severe_paths())
     tables = build_appendix_ii(
-        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
     )
     t5 = {row.label: row.total_pillar1_rwa for row in tables.table5_rwa.rows}
     for snapshot in tables.table1_summary.post_adverse:
@@ -120,7 +134,11 @@ def test_table5_pillar1_rwa_ties_to_table1_stressed_rwa() -> None:
 def test_table1_impact_allocates_the_full_adverse_loss() -> None:
     projection = _projection(severe_paths())
     tables = build_appendix_ii(
-        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
     )
     for (year, losses), base_year, stress_year in zip(
         tables.table1_summary.impact_of_adverse,
@@ -145,6 +163,7 @@ def test_table1_capital_gap_reflects_the_paid_up_shortfall() -> None:
         severe_paths(),
         currency="GHS",
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
         paid_up_min=Decimal("400000000"),
     )
     # 400,000 floor − 150,000 paid-up = 250,000 (GHS'000) shortfall, and the CAR
@@ -157,7 +176,11 @@ def test_table1_capital_gap_reflects_the_paid_up_shortfall() -> None:
 def test_management_action_blocks_are_explicit_placeholders() -> None:
     projection = _projection(severe_paths())
     tables = build_appendix_ii(
-        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
     )
     # A run that models NO plan leaves the Phase 3 blocks explicitly None (not a
     # fabricated zero) — the pre-management-action projection stands alone.
@@ -176,6 +199,7 @@ def _management_result(
         capital_params=bog_capital_params(),
         paid_up_min=paid_up_min,
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
     )
 
 
@@ -209,6 +233,7 @@ def test_table1_management_actions_block_reports_a_capital_raise() -> None:
         severe_paths(),
         currency="GHS",
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
         paid_up_min=Decimal("400000000"),
         management_actions=result,
     )
@@ -257,6 +282,7 @@ def test_table1_rwa_relief_is_reported_as_a_capital_equivalent() -> None:
         severe_paths(),
         currency="GHS",
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
         management_actions=result,
     )
     row1 = tables.table1_summary.management_actions.rows[0]  # type: ignore[union-attr]
@@ -291,6 +317,7 @@ def test_table1_residual_after_actions_is_zero_when_restored() -> None:
         severe_paths(),
         currency="GHS",
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
         paid_up_min=Decimal("400000000"),
         management_actions=result,
     )
@@ -327,6 +354,7 @@ def test_serialized_management_blocks_are_json_safe() -> None:
         severe_paths(),
         currency="GHS",
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
         paid_up_min=Decimal("400000000"),
         management_actions=result,
     )
@@ -352,7 +380,11 @@ def test_table6_carries_base_and_stress_driver_paths() -> None:
 def test_table3_opening_retained_starts_from_as_of() -> None:
     projection = _projection(severe_paths())
     tables = build_appendix_ii(
-        projection, severe_paths(), currency="GHS", car_target_pct=_CAR_TARGET
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
     )
     base_y1 = next(row for row in tables.table3_profit_and_loss.rows if row.label == "base_y1")
     # As-of retained earnings 95,000 (GHS'000).
@@ -372,6 +404,7 @@ def test_bottom_up_decomposition_overlay_drives_table1_impact() -> None:
         severe_paths(),
         currency="GHS",
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
         exposure_class_losses=losses,
     )
     year1 = next(item for item in tables.table1_summary.impact_of_adverse if item[0] == 1)
@@ -396,6 +429,7 @@ def test_pillar2_overlay_populates_table5_stress_rows_and_keeps_the_tie() -> Non
         severe_paths(),
         currency="GHS",
         car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
         pillar2_by_stress_year=overlay,
     )
     stress_row = next(row for row in tables.table5_rwa.rows if row.label == "stress_y1")
@@ -416,7 +450,13 @@ def test_pillar2_overlay_populates_table5_stress_rows_and_keeps_the_tie() -> Non
 
 def test_serialized_tables_are_json_safe_and_unit_tagged() -> None:
     projection = _projection(base_paths())
-    tables = build_appendix_ii(projection, base_paths(), currency="GHS", car_target_pct=_CAR_TARGET)
+    tables = build_appendix_ii(
+        projection,
+        base_paths(),
+        currency="GHS",
+        car_target_pct=_CAR_TARGET,
+        recognition_caps=_RECOGNITION_CAPS,
+    )
     serialized = tables.serialize()
     assert serialized["unit"] == "GHS'000"
     # Round-trips through JSON without error.

@@ -1149,7 +1149,10 @@ export class MarketDataApi extends runtime.BaseAPI {
     }
 
     if (requestParameters["asOfDate"] != null) {
-      formParams.append("as_of_date", requestParameters["asOfDate"] as any);
+      formParams.append(
+        "as_of_date",
+        requestParameters["asOfDate"].toISOString().substring(0, 10),
+      );
     }
 
     if (requestParameters["file"] != null) {

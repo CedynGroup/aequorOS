@@ -36,6 +36,20 @@ simplified ``risk_weight_<bucket>`` weights from the control plane instead.
 Every value here is a STARTING board position, effective-dated and revisable in
 the tenant's own settings. None of it is presented as a regulator's number, and
 none of it silently overrides the control plane.
+
+Governed minima are never seeded (founder directives D-024 / D-042)
+------------------------------------------------------------------
+The capital minima with a regulatory counterpart in the control plane —
+``CONTROL_PLANE_REGISTER_CODES``: ``car_min``, ``cet1_min``, ``tier1_min``,
+``leverage_min`` for a bank — have NO default here and are NOT written into a
+new register at all. The tighten-only clamp (``regulatory_parameters.
+clamp_overrides``) supplies the governed value whenever the register carries no
+row, so a value staff raise or lower in the operator console reaches every such
+tenant without a code change, and a board row, where the institution adds one,
+stands only when it is stricter. When the control plane has no value, nothing is
+invented: the calculation refuses with ``missing_parameter``. Registers written
+before 2026-09-19 keep the rows they were seeded with (no data migration); those
+rows act as the board's own values and are edited in the dashboard registers.
 """
 
 from __future__ import annotations
@@ -49,12 +63,17 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    Bank,
     ParamCapitalThreshold,
     ParamLcrRunoffRate,
     ParamNsfrWeight,
     ParamRiskWeight,
     ParamStressShock,
 )
+from app.services import regulatory_parameters
+
+#: Re-exported: the governed capital minima a register is never seeded with.
+CONTROL_PLANE_REGISTER_CODES = regulatory_parameters.CONTROL_PLANE_REGISTER_CODES
 
 #: Every tenant parameter table the calculation engines read. A tenant with zero
 #: rows across all of them cannot produce a single successful run.
@@ -129,15 +148,15 @@ BANK_FTP_THRESHOLDS: dict[str, str] = {
 }
 
 BANK_CAPITAL_THRESHOLDS: dict[str, str] = {
-    # Capital — the BoG CRD floors the institution monitors itself against. The
-    # binding regulatory values live in the control plane and are time-varying;
-    # these are the board's own monitoring levels.
-    "car_min": "10",
+    # Capital — the board's own monitoring levels. The regulatory minima
+    # (``CONTROL_PLANE_REGISTER_CODES``) are NOT here and are never seeded: the
+    # clamp supplies the governed value when the register has no row (D-042).
+    # Until 2026-09-19 this map carried ``car_min`` 10, ``cet1_min`` 6.5,
+    # ``tier1_min`` 8 and a ``leverage_min`` that read 3 until regulatory audit
+    # B2 — second copies of governed numbers that could only drift from the
+    # console.
     "car_early_warning": "10.5",
     "car_critical": "9",
-    "cet1_min": "6.5",
-    "tier1_min": "8",
-    "leverage_min": "3",
     "rwa_multiplier": "1250",
     "tier2_gp_cap_pct_credit_rwa": "1.25",
     "bia_alpha_pct": "15",
@@ -272,13 +291,11 @@ def _base_curve_rows(base_curve: dict[str, str] | None) -> dict[str, str]:
     return dict(base_curve or {})
 
 
-def seed_tenant_register(  # noqa: PLR0913 - tenant keys, regime, approver and
+def seed_tenant_register(  # noqa: PLR0913 - the institution, approver, dates and
     # the optional market curve; every one is required to write a governed row
     db: Session,
     *,
-    organization_id: str,
-    jurisdiction_code: str,
-    institution_class: str,
+    bank: Bank,
     approved_by: str,
     approved_at: datetime,
     base_curve: dict[str, str] | None = None,
@@ -288,12 +305,22 @@ def seed_tenant_register(  # noqa: PLR0913 - tenant keys, regime, approver and
     Only tables that are EMPTY for this organization are written, so re-running
     after a board has revised its own limits never overwrites them.
 
+    The organization, jurisdiction and licence class are the ``bank``'s own
+    (resolved fail-closed through the policy chain). The governed capital
+    minima are not written (D-042): the clamp supplies them from the control
+    plane at calculation time, so seeding never depends on — and never fails
+    for want of — a governed value.
+
     ``approved_by`` is recorded on every row and is NOT decorative: these tables
     are maker-checker governed (``approved_by``/``approval_timestamp`` are NOT
     NULL by schema), so a seeded starting position must name the operator who
     stood it up, exactly as a later board revision names its approver. It is
     never anonymous and never back-dated.
     """
+    scope = regulatory_parameters.policy_scope(db, bank, as_of=approved_at.date())
+    organization_id = bank.organization_id
+    jurisdiction_code = scope.jurisdiction_code
+    institution_class = scope.institution_class
     created: dict[str, int] = {}
     skipped: dict[str, int] = {}
 

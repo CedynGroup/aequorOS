@@ -88,6 +88,13 @@ services:
       start_period: 60s
     env_file:
       - .env
+    environment:
+      # Literal pin: this worker runs the CORE lane only. It is also the
+      # default, and it is pinned anyway so the one process that must never
+      # hold a model credential says so in the file a reader opens first.
+      # The AI lane is a SEPARATE Coolify app (docker-compose.ai.prod.yml).
+      WORKER_JOB_TYPES: "lane:core"
+      WORKER_ID: "risk-worker"
 
   # Staff control plane (operator API): the app behind console.aequoros.com.
   # Same image, third entrypoint (api/worker/operator). Attach a dedicated

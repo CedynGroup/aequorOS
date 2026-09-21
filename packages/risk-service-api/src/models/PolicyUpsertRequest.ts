@@ -92,6 +92,12 @@ export interface PolicyUpsertRequest {
   effectiveTo?: EffectiveTo;
   /**
    *
+   * @type {boolean}
+   * @memberof PolicyUpsertRequest
+   */
+  orderedSlots?: boolean;
+  /**
+   *
    * @type {string}
    * @memberof PolicyUpsertRequest
    */
@@ -174,6 +180,8 @@ export function PolicyUpsertRequestFromJSONTyped(
       json["effective_to"] == null
         ? undefined
         : EffectiveToFromJSON(json["effective_to"]),
+    orderedSlots:
+      json["ordered_slots"] == null ? undefined : json["ordered_slots"],
     reason: json["reason"],
     requireSignature:
       json["require_signature"] == null ? undefined : json["require_signature"],
@@ -217,6 +225,7 @@ export function PolicyUpsertRequestToJSONTyped(
     distinct_signers: value["distinctSigners"],
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),
     effective_to: EffectiveToToJSON(value["effectiveTo"]),
+    ordered_slots: value["orderedSlots"],
     reason: value["reason"],
     require_signature: value["requireSignature"],
     require_signed_pdf: value["requireSignedPdf"],

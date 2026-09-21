@@ -1,22 +1,30 @@
 """PAdES signing of the return artifact (docs/attestation_esignature.md §3.2).
 
-Two signatures, one document, two revisions:
+Two signatures, one document, two revisions — or three, for a return whose bank
+has turned the Board slot on (D-043):
 
-1. :func:`prepare_signature_fields` adds the empty named fields
-   ``Sig_Preparer`` and ``Sig_Approver`` to the pages and boxes the caller
-   places them at, on the already-rendered return PDF — plus a text form field
-   per placed ``name``/``title``/``initials``/``date_signed`` box (see "Typed
-   fields" below).
+1. :func:`prepare_signature_fields` adds the empty named fields of the ceremony
+   — ``Sig_Preparer``, ``Sig_Approver`` and, where the signing order includes it,
+   ``Sig_Board`` — to the pages and boxes the caller places them at, on the
+   already-rendered return PDF, plus a text form field per placed
+   ``name``/``title``/``initials``/``date_signed`` box (see "Typed fields" below).
 2. :func:`sign_as_preparer` fills ``Sig_Preparer`` with a **certification
    (DocMDP) signature** at permission level 2 (``MDPPerm.FILL_FORMS``) — "form
    filling and signing permitted, nothing else". Every later change to the file
    is therefore measurable against a declared policy instead of being merely
    invisible.
-3. :func:`sign_as_approver` fills ``Sig_Approver`` as a standard approval
-   signature in an **incremental update**, so the preparer's byte range is
-   untouched and both signatures verify independently. The field carries a
-   ``/Lock`` (FieldMDP, ``/Action /All``) so all form fields seal once the
-   approver has signed.
+3. :func:`sign_as_approver` — and then :func:`sign_as_board`, when the ceremony
+   has one — fills its field as a standard approval signature in an **incremental
+   update**, so every earlier byte range is untouched and each signature verifies
+   independently.
+
+**The lock chain.** Each signature field carries a ``/Lock`` (FieldMDP) installed
+at preparation, and they form a chain over the signing order: the LAST signer
+locks ``/Action /All`` — every form field seals once they have signed — and each
+earlier signer locks everything EXCEPT the fields of the roles that follow it.
+The order is therefore part of the document's structure rather than a workflow
+preference; :func:`prepare_signature_fields` says why, and
+``attestation.layouts`` owns the orders themselves.
 
 **Typed fields (BSD3's "name / designation / signature / date").** A regulator's
 attestation block asks for four things per officer, not one, so a signing role
@@ -25,13 +33,14 @@ and any number of ``name``, ``title``, ``initials`` and ``date_signed`` boxes,
 each created here as an AcroForm **text** field. Text fields, not drawn content,
 because the approver's values are only known when the approver signs, and by then
 the preparer's certification permits nothing except *filling form fields*: drawing
-onto the page would be a structural change and would convict the document. Both
-roles' fields are therefore created in step 1, before any signature exists, and
+onto the page would be a structural change and would convict the document. Every
+role's fields are therefore created in step 1, before any signature exists, and
 each role's own values are filled in the same incremental update as that role's
 signature — which also keeps the filled values inside the revision that signature
 covers. ``Sig_Preparer`` carries a FieldMDP ``/Exclude`` lock naming exactly the
-approver's fields, so after certification the preparer's own printed name, title
-and date can no longer be rewritten while the approver's can still be filled.
+LATER signers' fields, so after certification the preparer's own printed name,
+title and date can no longer be rewritten while the approver's (and the Board's,
+where there is one) can still be filled.
 
 That layering is the whole mechanism behind the question "how would we know if
 the figures changed between the two signatures". A tamper cannot hide: editing
@@ -110,7 +119,7 @@ from __future__ import annotations
 import binascii
 import io
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from math import ceil
 from typing import Final, Protocol
@@ -124,6 +133,7 @@ from pyhanko.sign import fields, signers
 from pyhanko.sign.timestamps import TimeStamper
 from pyhanko_certvalidator import ValidationContext
 
+from app.services.attestation import layouts
 from app.services.attestation.typed_fonts import (
     TYPED_FACES,
     TypedFace,
@@ -131,11 +141,16 @@ from app.services.attestation.typed_fonts import (
 )
 from app.services.public_ids import SIGNER_ID_LENGTH, SIGNER_PUBLIC_ID_PREFIX
 
-#: The two field names are part of the filed artifact's structure: a verifier
-#: (and a BoG examiner's PDF reader) resolves a signature by field name, so
-#: renaming either one would orphan every historical signature.
+#: The field names are part of the filed artifact's structure: a verifier (and a
+#: BoG examiner's PDF reader) resolves a signature by field name, so renaming one
+#: would orphan every historical signature.
 PREPARER_FIELD_NAME: Final = "Sig_Preparer"
 APPROVER_FIELD_NAME: Final = "Sig_Approver"
+#: Only the ICAAP layout draws a third block, and only when the bank has turned
+#: the Board slot on (D-043 — the slot ships disabled, because nothing in the
+#: recovered BoG text requires the Board to e-sign the filed PDF). The name is as
+#: fixed as the other two the moment one document carries it.
+BOARD_FIELD_NAME: Final = "Sig_Board"
 
 #: Page 1 (0-based) of every rendered return: ``render_pdf`` builds the cover
 #: page and then opens the attestation block with a ``PageBreak``
@@ -263,13 +278,23 @@ class PdfSigningError(RuntimeError):
     """
 
 
-#: Which document field each signing role fills. Only these two roles have a
-#: field on the artifact; ``artifact_signing.FIELD_SIGNING_ROLES`` refuses a
-#: policy that asks for any other signature ON the PDF rather than recording one
-#: that the document does not contain.
+#: Which document field each signing role fills — a VOCABULARY, not the required
+#: set. It used to be both, and that conflation is what made a third signature
+#: impossible: "which roles can have a field" and "which roles must have one on
+#: THIS return" are different questions, and only the second one varies.
+#:
+#: The required set is the ``signing_order`` a document is prepared with
+#: (``attestation.layouts``), which is fixed when the preparer certifies, because
+#: a field's ``/Lock`` cannot be edited afterwards. A role absent from that order
+#: gets no field, and a placement naming it is refused by
+#: :func:`_validate_placements` in the same words as before.
+#: ``artifact_signing.field_signing_roles`` still refuses a policy that asks for
+#: a signature the document cannot carry, rather than recording one it does not
+#: contain.
 ROLE_FIELD_NAMES: Final[dict[str, str]] = {
     "preparer": PREPARER_FIELD_NAME,
     "approver": APPROVER_FIELD_NAME,
+    "board": BOARD_FIELD_NAME,
 }
 
 #: The kinds of box an operator can place. ``signature`` is the PDF signature
@@ -477,8 +502,20 @@ class FieldPlacement:
 #: files' worth of arithmetic about one layout, and the failure mode when they
 #: drift is a filed return whose signature stamp sits beside its line rather than
 #: on it.
-_SIGNING_RULE_Y: Final[dict[str, int]] = {"preparer": 672, "approver": 580}
-#: field type → (left edge, width, height above the rule).
+#: Per layout, because the two attestation pages are drawn by different code.
+#: ``standard`` is ``exports/pdf.py._signing_block``'s two ruled blocks — the
+#: numbers below are that layout's, read back, and are asserted against the
+#: RENDERED page rather than trusted. ``icaap`` is the filing report's own
+#: attestation page, which has room for three blocks at the same 92 pt pitch;
+#: its renderer draws its rules at :func:`signing_rule_y` so the two files have
+#: ONE set of numbers between them and cannot drift.
+_SIGNING_RULE_Y_BY_LAYOUT: Final[dict[str, dict[str, int]]] = {
+    "standard": {"preparer": 672, "approver": 580},
+    "icaap": {"preparer": 390, "approver": 298, "board": 206},
+}
+_SIGNING_RULE_Y: Final[dict[str, int]] = _SIGNING_RULE_Y_BY_LAYOUT["standard"]
+#: field type → (left edge, width, height above the rule). Shared by both
+#: layouts: a signing block asks for the same four things wherever it is drawn.
 _SIGNING_CELLS: Final[dict[str, tuple[int, int, int]]] = {
     "name": (51, 120, 16),
     "title": (179, 120, 16),
@@ -487,17 +524,70 @@ _SIGNING_CELLS: Final[dict[str, tuple[int, int, int]]] = {
 }
 
 
-def _signing_cell(signing_role: str, field_type: str) -> tuple[int, int, int, int]:
+def signing_rule_y(layout: str = "standard") -> Mapping[str, int]:
+    """Where each role's signing block sits on the attestation page of ``layout``.
+
+    Exported so the renderer that DRAWS the rules and the module that places
+    fields on them read the same numbers. A signature stamp beside its line
+    rather than on it is the failure this prevents, and it is invisible until
+    somebody prints a filed return.
+    """
+    try:
+        return _SIGNING_RULE_Y_BY_LAYOUT[layout]
+    except KeyError as exc:
+        raise PdfSigningError(
+            f"Unknown artifact layout {layout!r}; the layouts a return is rendered "
+            f"and signed under are {sorted(_SIGNING_RULE_Y_BY_LAYOUT)}."
+        ) from exc
+
+
+def _signing_cell(
+    signing_role: str, field_type: str, *, layout: str = "standard"
+) -> tuple[int, int, int, int]:
     """The box for one labelled cell of one role's signing block."""
     left, width, height = _SIGNING_CELLS[field_type]
-    bottom = _SIGNING_RULE_Y[signing_role]
+    rules = signing_rule_y(layout)
+    try:
+        bottom = rules[signing_role]
+    except KeyError as exc:
+        raise PdfSigningError(
+            f"The {layout!r} attestation page has no signing block for "
+            f"{signing_role!r}; it rules blocks for {sorted(rules)}."
+        ) from exc
     return (left, bottom, left + width, bottom + height)
 
 
-#: The two signature stamps on their own, exported because they are the boxes a
+#: The signature stamps on their own, exported because they are the boxes a
 #: caller most often needs to reason about.
 PREPARER_BOX: Final[tuple[int, int, int, int]] = _signing_cell("preparer", SIGNATURE_FIELD_TYPE)
 APPROVER_BOX: Final[tuple[int, int, int, int]] = _signing_cell("approver", SIGNATURE_FIELD_TYPE)
+BOARD_BOX: Final[tuple[int, int, int, int]] = _signing_cell(
+    "board", SIGNATURE_FIELD_TYPE, layout="icaap"
+)
+
+
+def default_placements(
+    signing_order: Sequence[str] = layouts.STANDARD_SIGNING_ORDER,
+    *,
+    layout: str = "standard",
+) -> tuple[FieldPlacement, ...]:
+    """The four labelled cells of every block this ceremony needs, in order.
+
+    ``default_placements()`` is :data:`DEFAULT_PLACEMENTS` — element for element,
+    which the structure pin asserts. The arguments exist so the ICAAP layout can
+    ask for three blocks on its own page without a second copy of the arithmetic.
+    """
+    return tuple(
+        FieldPlacement(
+            signing_role=role,
+            page_index=ATTESTATION_PAGE_INDEX,
+            box=_signing_cell(role, field_type, layout=layout),
+            field_type=field_type,
+        )
+        for role in signing_order
+        for field_type in _SIGNING_CELLS
+    )
+
 
 #: The default for a return nobody has placed fields on: an API-driven
 #: certification, or an institution that never opens the workspace.
@@ -508,16 +598,7 @@ APPROVER_BOX: Final[tuple[int, int, int, int]] = _signing_cell("approver", SIGNA
 #: The template now rules the four cells it asks for
 #: (``exports/pdf.py._signing_block``) and the default fills all four per role.
 #: The founder should not have to nudge a box on a return we designed.
-DEFAULT_PLACEMENTS: Final[tuple[FieldPlacement, ...]] = tuple(
-    FieldPlacement(
-        signing_role=role,
-        page_index=ATTESTATION_PAGE_INDEX,
-        box=_signing_cell(role, field_type),
-        field_type=field_type,
-    )
-    for role in _SIGNING_RULE_Y
-    for field_type in _SIGNING_CELLS
-)
+DEFAULT_PLACEMENTS: Final[tuple[FieldPlacement, ...]] = default_placements()
 
 
 @dataclass(frozen=True)
@@ -1147,26 +1228,89 @@ def _stamp_style(
 # --- field preparation ------------------------------------------------------
 
 
+def _validate_signing_order(signing_order: Sequence[str]) -> tuple[str, ...]:
+    """Refuse a ceremony the lock chain could not express.
+
+    The order is not a preference. Every ``/Lock`` is written in this revision,
+    and editing one later is the structural change the preparer's certification
+    exists to convict — so the whole ceremony has to be decided here, and each
+    rule below is a property the chain depends on:
+
+    * non-empty, because somebody has to sign;
+    * the preparer first, because only a certification signature may be the
+      document's first signature and the preparer is the certifier;
+    * no role twice, because one AcroForm field cannot be signed twice;
+    * only roles the artifact has a field name for;
+    * strictly increasing canonical rank, so "last" means the same thing to the
+      lock chain, the workflow guard and the person reading the page. A policy
+      that listed the Board before the approver would otherwise install an
+      ``/All`` lock the approver's own signature then violates.
+    """
+    order = tuple(signing_order)
+    if not order:
+        raise PdfSigningError(
+            "A signing order must name at least one signing role; the document's field "
+            "locks are written from it and cannot be added later."
+        )
+    if order[0] != "preparer":
+        raise PdfSigningError(
+            f"The preparer must sign first — the certification (DocMDP) signature has to "
+            f"be the document's first signature — but the signing order starts with "
+            f"{order[0]!r}."
+        )
+    if len(set(order)) != len(order):
+        raise PdfSigningError(
+            f"The signing order {list(order)} names a role twice; each role has exactly "
+            f"one signature field on the document."
+        )
+    unknown = [role for role in order if role not in ROLE_FIELD_NAMES]
+    if unknown:
+        raise PdfSigningError(
+            f"Signing role {unknown[0]!r} has no field on the return artifact; only "
+            f"{sorted(ROLE_FIELD_NAMES)} can be placed on the document."
+        )
+    ranks = [layouts.SIGNING_ORDER.index(role) for role in order]
+    if ranks != sorted(ranks):
+        raise PdfSigningError(
+            f"The signing order {list(order)} is not in canonical order "
+            f"{list(layouts.SIGNING_ORDER)}. Later signers seal earlier ones' fields, so "
+            f"reordering the ceremony would make an earlier signature invalid."
+        )
+    return order
+
+
 def prepare_signature_fields(
-    pdf_bytes: bytes, *, placements: Sequence[FieldPlacement]
+    pdf_bytes: bytes,
+    *,
+    placements: Sequence[FieldPlacement],
+    signing_order: Sequence[str] = layouts.STANDARD_SIGNING_ORDER,
 ) -> bytes:
     """Add every empty field — signature and text — where ``placements`` puts it.
 
     Every field is created up front, before ANY signature exists, because the
     preparer's DocMDP policy only permits *filling* form fields: a field added
     after certification would itself be a structural change and would show up as
-    tampering. That is why the preparer places the approver's boxes too, and why
-    the approver cannot move them afterwards — an inherent consequence of
-    certifying at ``MDPPerm.FILL_FORMS``, not a product decision. The two
-    ``/Lock`` policies are installed here for the same reason:
+    tampering. That is why the preparer places every later signer's boxes too,
+    and why they cannot move them afterwards — an inherent consequence of
+    certifying at ``MDPPerm.FILL_FORMS``, not a product decision.
 
-    * ``Sig_Approver`` locks ``/All`` — once the approver has signed, no form
-      field in the document may change again (§3.2 "Field locking").
-    * ``Sig_Preparer`` locks everything EXCEPT the approver's own fields, so the
-      preparer's printed name, designation and date are sealed by their own
-      certification while the approver's are still fillable. Without it, filling
+    The ``/Lock`` policies are installed here for the same reason, as a chain
+    over ``signing_order`` (``r0 … rn``, ``r0`` the preparer):
+
+    * the FINAL signer locks ``/All`` — once they have signed, no form field in
+      the document may change again (§3.2 "Field locking");
+    * every earlier signer locks everything EXCEPT the fields of the roles that
+      follow it, so its own printed name, designation and date are sealed by its
+      own signature while later signers' remain fillable. Without it, filling
       form fields — which the DocMDP level permits by construction — would be
-      enough to rewrite what the preparer's block says about them.
+      enough to rewrite what an earlier block says about its officer.
+
+    For the standard two-signer ceremony that is exactly the old rule:
+    ``Sig_Preparer`` excludes the approver's four fields, ``Sig_Approver`` locks
+    ``/All``. For a three-signer ICAAP ceremony the ``/All`` lock MOVES to the
+    Board and the approver takes an ``/Exclude`` over the Board's fields —
+    which is the part that had to be proved by execution rather than by reading
+    (``tests/services/test_attestation_three_signer_chain.py``).
 
     Returns the original bytes plus one incremental update; the input is left
     intact as a prefix.
@@ -1178,7 +1322,8 @@ def prepare_signature_fields(
             "be added: adding a field is a structural change and would invalidate the "
             "existing certification. Prepare fields on the unsigned archived artifact."
         )
-    resolved = _validate_placements(reader, placements)
+    order = _validate_signing_order(signing_order)
+    resolved = _validate_placements(reader, placements, signing_order=order)
     existing = {name for name, _, _ in fields.enumerate_sig_fields(reader)}
     clashes = existing & {placement.field_name for placement in resolved}
     if clashes:
@@ -1187,11 +1332,18 @@ def prepare_signature_fields(
             f"Field preparation runs exactly once, on the archived unsigned artifact."
         )
 
-    approver_fields = [
-        placement.field_name
-        for placement in resolved
-        if placement.signing_role == "approver"
-    ]
+    # Placement order, not sorted: the exclusion list is written into the filed
+    # document, and the two-signer chain's list has always been the approver's
+    # four fields in the order they were placed.
+    rank = layouts.rank(order)
+    later_fields = {
+        role: [
+            placement.field_name
+            for placement in resolved
+            if rank[placement.signing_role] > rank[role]
+        ]
+        for role in order
+    }
     writer = IncrementalPdfFileWriter(io.BytesIO(pdf_bytes))
     # Signature fields FIRST, in two passes, and not merely by convention: the
     # return PDF is rendered by reportlab and carries no AcroForm at all, and
@@ -1202,7 +1354,7 @@ def prepare_signature_fields(
     for placement in resolved:
         if placement.field_type != SIGNATURE_FIELD_TYPE:
             continue
-        is_approver = placement.field_name == APPROVER_FIELD_NAME
+        signs_last = placement.signing_role == order[-1]
         fields.append_signature_field(
             writer,
             fields.SigFieldSpec(
@@ -1212,9 +1364,10 @@ def prepare_signature_fields(
                 readable_field_name=label_for_role(placement.signing_role),
                 field_mdp_spec=(
                     fields.FieldMDPSpec(fields.FieldMDPAction.ALL)
-                    if is_approver
+                    if signs_last
                     else fields.FieldMDPSpec(
-                        fields.FieldMDPAction.EXCLUDE, fields=approver_fields
+                        fields.FieldMDPAction.EXCLUDE,
+                        fields=later_fields[placement.signing_role],
                     )
                 ),
             ),
@@ -1228,7 +1381,10 @@ def prepare_signature_fields(
 
 
 def _validate_placements(
-    reader: PdfFileReader, placements: Sequence[FieldPlacement]
+    reader: PdfFileReader,
+    placements: Sequence[FieldPlacement],
+    *,
+    signing_order: Sequence[str] = layouts.STANDARD_SIGNING_ORDER,
 ) -> tuple[FieldPlacement, ...]:
     """Refuse a placement set that cannot produce a usable signed document.
 
@@ -1243,9 +1399,10 @@ def _validate_placements(
     What is NOT their call is a field that cannot be drawn, so the checks that
     remain are the ones an operator cannot see for themselves:
 
-    * every named role must have a signature field on the artifact, and both of
-      them must be placed — an approver whose field was never created can never
-      sign, because the certification forbids adding one later;
+    * every role in the ceremony must have a signature field placed, and no role
+      outside it may — an approver whose field was never created can never sign,
+      because the certification forbids adding one later, and a Board box on a
+      two-signer return would create a field nobody is entitled to fill;
     * no two placements may resolve to the same field name, since one AcroForm
       field cannot be in two places;
     * the page must exist;
@@ -1269,7 +1426,18 @@ def _validate_placements(
             "Two signature placements name the same signing role; each role has exactly "
             "one signature field on the document."
         )
-    missing = set(ROLE_FIELD_NAMES) - set(signature_roles)
+    # Checked against the ORDER, not against ROLE_FIELD_NAMES, which is now the
+    # vocabulary of field names rather than the required set. Same wording as
+    # `FieldPlacement.field_name`'s own refusal: an operator who placed a box for
+    # a role this return does not sign should read the sentence they have always
+    # read, whether the role is unknown everywhere or merely unknown here.
+    outside = sorted({placement.signing_role for placement in resolved} - set(signing_order))
+    if outside:
+        raise PdfSigningError(
+            f"Signing role {outside[0]!r} has no field on the return artifact; only "
+            f"{sorted(signing_order)} can be placed on the document."
+        )
+    missing = set(signing_order) - set(signature_roles)
     if missing:
         raise PdfSigningError(
             f"No signature placement was given for {sorted(missing)}. Every signature "
@@ -1730,15 +1898,22 @@ class PadesProfile:
 
 @dataclass(frozen=True)
 class _FieldRole:
-    """Which field is being filled, and whether filling it certifies the document."""
+    """Which field is being filled, and whether filling it certifies the document.
+
+    ``requires_signed`` names fields that must already carry a ``/V`` before this
+    one may be signed. Empty for the two roles that existed before the Board, so
+    neither of their paths grows a check they never had.
+    """
 
     signing_role: str
     field_name: str
     certify: bool
+    requires_signed: tuple[str, ...] = ()
 
 
 _PREPARER_ROLE: Final = _FieldRole("preparer", PREPARER_FIELD_NAME, certify=True)
 _APPROVER_ROLE: Final = _FieldRole("approver", APPROVER_FIELD_NAME, certify=False)
+_BOARD_ROLE: Final = _FieldRole("board", BOARD_FIELD_NAME, certify=False)
 
 
 def sign_as_preparer(
@@ -1776,6 +1951,51 @@ def sign_as_approver(
     return _sign(pdf_bytes, _APPROVER_ROLE, signer=signer, appearance=appearance, profile=profile)
 
 
+def sign_as_board(
+    pdf_bytes: bytes,
+    *,
+    signer: signers.Signer,
+    appearance: SignatureAppearance,
+    profile: PadesProfile,
+    prior_fields: Sequence[str],
+) -> bytes:
+    """Approve into ``Sig_Board`` as the LAST incremental update.
+
+    ``prior_fields`` are the signature fields of every role that signs before the
+    Board, and they must all already be signed. This is the bytes-layer limb of
+    the three refusals on signing out of order (P3-DESIGN §1.5): the workflow
+    guard refuses first and the dialog is disabled before that, but the property
+    is not a rule anyone chose — the Board's field carries the ``/All`` lock, so
+    a signature arriving after it would be sealed by it and the Board's own
+    signature would report illegal modifications.
+
+    Refusing here rather than letting the document convict itself matters because
+    the conviction is silent: a PDF with a broken lock chain opens normally, shows
+    three stamps, and only fails in a verifier the bank may not run before filing.
+    """
+    return _sign(
+        pdf_bytes,
+        replace(_BOARD_ROLE, requires_signed=tuple(prior_fields)),
+        signer=signer,
+        appearance=appearance,
+        profile=profile,
+    )
+
+
+def _require_already_signed(reader: PdfFileReader, field_names: Sequence[str]) -> None:
+    """Refuse until every named signature field carries a value."""
+    signed = {
+        name for name, value, _ in fields.enumerate_sig_fields(reader) if value is not None
+    }
+    missing = [name for name in field_names if name not in signed]
+    if missing:
+        raise PdfSigningError(
+            f"The Board signs last, over the document management approved: {missing} "
+            f"must be signed first. The Board's field seals every form field in the "
+            f"document, so a signature arriving after it would invalidate the Board's own."
+        )
+
+
 def _sign(
     pdf_bytes: bytes,
     role: _FieldRole,
@@ -1786,6 +2006,8 @@ def _sign(
 ) -> bytes:
     profile.require_deliverable(appearance)
     reader = PdfFileReader(io.BytesIO(pdf_bytes))
+    if role.requires_signed:
+        _require_already_signed(reader, role.requires_signed)
     box_width, box_height = _require_empty_field(reader, role.field_name)
     if role.certify and reader.embedded_signatures:
         raise PdfSigningError(
@@ -1877,6 +2099,8 @@ __all__ = [
     "APPROVER_BOX",
     "APPROVER_FIELD_NAME",
     "ATTESTATION_PAGE_INDEX",
+    "BOARD_BOX",
+    "BOARD_FIELD_NAME",
     "DEFAULT_PLACEMENTS",
     "DETAIL_MIN_HEIGHT",
     "DETAIL_MIN_WIDTH",
@@ -1895,10 +2119,13 @@ __all__ = [
     "PdfSigningError",
     "SignatureAppearance",
     "SignatureRecordLike",
+    "default_placements",
     "label_for_role",
     "min_box_size",
+    "signing_rule_y",
     "too_small_detail",
     "prepare_signature_fields",
     "sign_as_approver",
+    "sign_as_board",
     "sign_as_preparer",
 ]

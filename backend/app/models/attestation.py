@@ -275,6 +275,18 @@ class ReturnSigningPolicy(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     distinct_signers: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=sql_text("true"), nullable=False
     )
+    #: Whether the slots must be signed in their canonical order (preparer,
+    #: then approver, then Board). Added 2026-09-19 (migration 202609190058) for
+    #: the three-signature ICAAP chain: each signature's field lock leaves only
+    #: the LATER signers' fields fillable, so a Board signature taken before the
+    #: approver's would invalidate the approver's when it arrived. Ordering is
+    #: therefore a property of the document, not a preference — and it is forced
+    #: whenever the artifact carries more than two signature fields, whatever
+    #: this column says. Existing rows are ``false``, which is exactly today's
+    #: behaviour for every two-signer return.
+    ordered_slots: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sql_text("false"), nullable=False
+    )
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     updated_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)

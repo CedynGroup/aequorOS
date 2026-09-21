@@ -77,6 +77,12 @@ export interface ReportingObligationListRead {
   limit: number;
   /**
    *
+   * @type {number}
+   * @memberof ReportingObligationListRead
+   */
+  lookbackMonths: number;
+  /**
+   *
    * @type {Array<ReportingObligationRead>}
    * @memberof ReportingObligationListRead
    */
@@ -113,6 +119,8 @@ export function instanceOfReportingObligationListRead(
   if (!("horizonMonths" in value) || value["horizonMonths"] === undefined)
     return false;
   if (!("limit" in value) || value["limit"] === undefined) return false;
+  if (!("lookbackMonths" in value) || value["lookbackMonths"] === undefined)
+    return false;
   if (!("obligations" in value) || value["obligations"] === undefined)
     return false;
   if (!("offset" in value) || value["offset"] === undefined) return false;
@@ -145,6 +153,7 @@ export function ReportingObligationListReadFromJSONTyped(
     hasMore: json["has_more"],
     horizonMonths: json["horizon_months"],
     limit: json["limit"],
+    lookbackMonths: json["lookback_months"],
     obligations: (json["obligations"] as Array<any>).map(
       ReportingObligationReadFromJSON,
     ),
@@ -175,6 +184,7 @@ export function ReportingObligationListReadToJSONTyped(
     has_more: value["hasMore"],
     horizon_months: value["horizonMonths"],
     limit: value["limit"],
+    lookback_months: value["lookbackMonths"],
     obligations: (value["obligations"] as Array<any>).map(
       ReportingObligationReadToJSON,
     ),

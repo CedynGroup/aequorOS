@@ -6,7 +6,6 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
 from sqlalchemy import create_engine, delete, event, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -692,7 +691,7 @@ def test_liquidity_review_cannot_overwrite_concurrent_supersession(
 
     monkeypatch.setattr(liquidity, "lock_finding_publication", observed_lock)
 
-    def review() -> Response:
+    def review():
         return db_client.post(
             f"/api/v1/cases/{case.id}/liquidity/findings/{finding_id}/review",
             headers=headers(),
@@ -755,7 +754,7 @@ def test_liquidity_review_cannot_commit_after_concurrent_scenario_archive(
         f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers()
     ).json()["findings"][0]["id"]
 
-    def review() -> Response:
+    def review():
         return db_client.post(
             f"/api/v1/cases/{case.id}/liquidity/findings/{finding_id}/review",
             headers=headers(),

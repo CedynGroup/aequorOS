@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import BankReportingPeriod, Notification, User
+from app.models import BankReportingPeriod, Notification, RegulatoryPackage, User
 from app.schemas.notifications import NotificationRead
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import (
@@ -21,6 +21,7 @@ from app.services import notifications, regulatory_liquidity, reporting_deadline
 from app.services.regulatory_reporting import generation, validation, workflow
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.factories.attestation import relax_signing
+from tests.factories.filing_chain import complete_chain
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -61,6 +62,12 @@ def _ensure_role_users(db: Session, organization_id: str) -> None:
                 )
             )
     db.commit()
+
+
+def _package_row(db: Session, package_id: UUID) -> RegulatoryPackage:
+    row = db.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == package_id))
+    assert row is not None
+    return row
 
 
 def _notification_rows(db: Session, type_: str) -> list[Notification]:
@@ -261,6 +268,11 @@ def _drive_to_submitted(db: Session) -> UUID:
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
+    # The Validator's stage is what makes a return filable; this suite is about
+    # notifications, so it walks that stage rather than asserting the old
+    # two-step status.
+    complete_chain(db, _package_row(db, package.id))
+    db.commit()
     workflow.submit_package(
         db,
         MAKER,
@@ -447,6 +459,8 @@ def test_deadline_scan_flags_pending_orass_reupload_daily(db_session: Session) -
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
+    complete_chain(db_session, _package_row(db_session, package.id))
+    db_session.commit()
     # BG/FMD/2026/07 downtime email submission: deemed complete only after the
     # ORASS re-upload, so the scan must chase it daily.
     workflow.submit_package(

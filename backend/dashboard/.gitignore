@@ -16,6 +16,7 @@ e2e/.tmp/
 .next-e2e/
 .next-outage/
 .next-build/
+.next-preview/
 
 # fail-closed test build (pnpm test)
 /.test-out/

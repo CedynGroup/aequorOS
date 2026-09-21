@@ -10,5 +10,10 @@
     "outDir": ".test-out",
     "types": ["node"]
   },
-  "include": ["lib/regulatory-parameters.ts", "lib/regulatory-parameters.test.ts"]
+  "include": [
+    "lib/parameter-shapes.ts",
+    "lib/parameter-shapes.test.ts",
+    "lib/regulatory-parameters.ts",
+    "lib/regulatory-parameters.test.ts"
+  ]
 }

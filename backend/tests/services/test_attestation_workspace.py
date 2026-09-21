@@ -64,6 +64,7 @@ from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
 from app.services.attestation.signers import get_raw_signer
 from app.services.attestation.workflow import AttestationConflict
+from app.services.filing_workflow import chain as filing_chain
 from app.services.regulatory_reporting import generation, validation
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from tests.fixtures.canonical_bank_fixture import (
@@ -725,6 +726,58 @@ def test_a_rejected_nominee_takes_the_certification_with_it(db_session: Session)
 # together, and the bare decision is refused while a signature is owed.
 
 
+def assert_approved_and_awaiting_release(db: Session, package: RegulatoryPackage) -> None:
+    """The Approver's act is recorded, and the return has NOT moved.
+
+    Approving and handing on became two acts on 2026-09-20 (founder decision):
+    the approval is written, and the return stays with the approver until they
+    send it on. Read-only and idempotent, so a suite may assert this state
+    again after an attempted replay without performing anything.
+    """
+    db.refresh(package)
+    chain_read = filing_chain.read_chain(db, MAKER, package)
+    assert chain_read.awaiting_hand_off is True
+    assert chain_read.current_stage_key == "approval"
+    assert chain_read.complete is False
+    with pytest.raises(HTTPException):
+        reporting_workflow.ensure_transition_allowed(package, "submitted")
+
+
+def assert_with_the_validator(db: Session, package: RegulatoryPackage) -> None:
+    """The return sits with the Validator, with nothing decided there yet.
+
+    Since the filing review chain landed
+    (``docs/filing_workflow_redesign.md`` §3, §6 steps 3-4) an Approver's
+    approval — whether it arrives as a bare decision or as their signature over
+    the frozen figures — is not authority to file. These suites used to assert
+    ``status == "approved"`` at this point, which was the conflation the
+    redesign removes written down as an expectation. What is asserted instead
+    is stronger: the return is with a named next officer, the chain is not
+    complete, and the move to the regulator is refused. Read-only.
+    """
+    db.refresh(package)
+    assert package.status == "pending_approval"
+    chain_read = filing_chain.read_chain(db, MAKER, package)
+    assert chain_read.current_stage_key == "validation"
+    assert chain_read.complete is False
+    assert chain_read.awaiting_hand_off is False
+    with pytest.raises(HTTPException):
+        reporting_workflow.ensure_transition_allowed(package, "submitted")
+
+
+def assert_handed_to_the_validator(db: Session, package: RegulatoryPackage) -> None:
+    """The whole of the Approver's turn: approve, then release — and land.
+
+    The two acts in sequence, because most suites care that the pair works and
+    not about the state between them. A suite that needs the state between them
+    (a replay, a refusal) calls the two halves itself.
+    """
+    assert_approved_and_awaiting_release(db, package)
+    filing_chain.hand_off(db, MAKER, package)
+    db.commit()
+    assert_with_the_validator(db, package)
+
+
 def _approvals(db: Session, package: RegulatoryPackage) -> list[RegulatoryPackageApproval]:
     return list(
         db.scalars(
@@ -754,7 +807,7 @@ def test_the_approver_signature_and_the_approval_decision_are_one_act(
     db_session.refresh(package)
 
     assert package.attestation_state == "fully_certified"
-    assert package.status == "approved"
+    assert_handed_to_the_validator(db_session, package)
     decisions = _approvals(db_session, package)
     assert [row.action for row in decisions] == ["approved"]
     assert decisions[0].actor_user_id == APPROVER_USER_ID
@@ -868,7 +921,10 @@ def test_a_bare_approval_still_works_where_signing_is_relaxed(db_session: Sessio
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
-    assert decided.status == "approved"
+    # Relaxing SIGNING does not shorten the review chain: the bare decision is
+    # the Approver's stage, and the Validator's is still ahead of it.
+    assert decided.status == "pending_approval"
+    assert_handed_to_the_validator(db_session, package)
 
 
 def test_the_esign_kill_switch_routes_a_mandatory_return_through_bare_approval(
@@ -891,11 +947,15 @@ def test_the_esign_kill_switch_routes_a_mandatory_return_through_bare_approval(
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
-    assert decided.status == "approved"
+    assert decided.status == "pending_approval"
+    assert_handed_to_the_validator(db_session, package)
 
     status_read = attestation_api.attestation_status(
         db_session, MAKER, SAMPLE_BANK_ID, package.id
     )
+    # The ATTESTATION gate is satisfied — no signature is outstanding. What is
+    # outstanding is the Validator's stage, which this surface does not speak
+    # for; the chain read does.
     assert status_read.can_submit is True
     assert status_read.policy.require_signature is False
     assert status_read.policy.source == "esign_disabled"
@@ -932,7 +992,8 @@ def test_flag_off_mid_ceremony_takes_the_bare_path_and_refuses_more_signing(
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
-    assert decided.status == "approved"
+    assert decided.status == "pending_approval"
+    assert_handed_to_the_validator(db_session, package)
     workflow.ensure_submittable(db_session, MAKER, package)  # no raise
     assert _signature_count(db_session) == 1
 

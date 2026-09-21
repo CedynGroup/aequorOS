@@ -17,7 +17,13 @@ import type {
   PackageStatus,
   ResubmissionStatus,
 } from '@aequoros/risk-service-api';
+import { FlaskConical } from 'lucide-react';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
+import {
+  REHEARSAL_BODY,
+  REHEARSAL_HEADLINE,
+  REHEARSAL_SHORT,
+} from '@/components/icaap/p3/labels';
 import { apiBaseUrl } from '@/lib/api/client';
 import { getAccessToken } from '@/lib/api/token';
 
@@ -30,6 +36,9 @@ export const FAMILY_LABELS: Record<string, string> = {
   capital: 'Capital',
   irrbb: 'IRRBB',
   fx: 'FX',
+  // The ICAAP report itself, minted by freezing an ICAAP cycle. Distinct from
+  // `icaap_stress`, which is the stress annexes that accompany it.
+  icaap: 'ICAAP',
   icaap_stress: 'ICAAP & Stress',
   large_exposures: 'Large Exposures',
   corporate: 'Corporate (LRT)',
@@ -59,7 +68,12 @@ const PACKAGE_STATUS_TONES: Record<PackageStatus, StatusTone> = {
 export const PACKAGE_STATUS_LABELS: Record<PackageStatus, string> = {
   draft: 'Draft',
   generated: 'Generated',
-  validated: 'Validated',
+  // NOT "Validated". `validated` is the rules engine reporting that the return
+  // has no errors — a machine result, not an officer's decision — and a bank
+  // reading it as "the Validator signed off" is the misreading this whole
+  // redesign is correcting (docs/filing_workflow_redesign.md §3.1). The word
+  // now belongs to the Validator, the officer who files the return.
+  validated: 'Checks passed',
   pending_approval: 'Pending approval',
   approved: 'Approved',
   submitted: 'Submitted',
@@ -74,6 +88,54 @@ export function PackageStatusPill({ status }: { status: PackageStatus }) {
     <StatusPill tone={PACKAGE_STATUS_TONES[status] ?? 'pending'}>
       {PACKAGE_STATUS_LABELS[status] ?? status}
     </StatusPill>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// A practice run is never a filing (D-068 / D-080)
+// ---------------------------------------------------------------------------
+
+/**
+ * A rehearsal package runs the full lifecycle — it freezes, it is signed, a
+ * submission is recorded against it — and it therefore appears on these
+ * generic surfaces beside real filings, carrying the same return code, the
+ * same reporting date and the same status pill.
+ *
+ * Five mechanisms stop a rehearsal reaching a regulator (the marker on the
+ * package, three database constraints, the non-transmitting channel rule and
+ * the calendar's own exclusion). None of them stops a PERSON mistaking one for
+ * a filing, and on a queue row that mistake is an approver certifying what
+ * they believe is this year's return. Saying so IS the control.
+ *
+ * The words are the ICAAP workspace's own (`components/icaap/p3/labels.ts`) —
+ * one vocabulary for one thing, never a second one invented here.
+ */
+export function RehearsalPill({ className = '' }: { className?: string }) {
+  return (
+    <span
+      title={REHEARSAL_HEADLINE}
+      data-testid="rehearsal-pill"
+      className={`inline-flex items-center gap-1 rounded border border-warning/30 bg-warning-light px-2 py-0.5 text-caption font-medium uppercase tracking-wider text-warning ${className}`}
+    >
+      <FlaskConical size={11} aria-hidden />
+      {REHEARSAL_SHORT}
+    </span>
+  );
+}
+
+/** The whole sentence, for a surface where somebody is about to act. */
+export function RehearsalNotice({ detail }: { detail?: string }) {
+  return (
+    <p
+      data-testid="rehearsal-notice"
+      className="flex items-start gap-2 rounded border border-warning/30 bg-warning-light/40 px-3 py-2 text-caption leading-relaxed text-navy/80"
+    >
+      <FlaskConical size={13} className="mt-0.5 shrink-0" aria-hidden />
+      <span>
+        <strong className="font-medium">{REHEARSAL_HEADLINE}.</strong>{' '}
+        {detail ?? REHEARSAL_BODY}
+      </span>
+    </p>
   );
 }
 
@@ -207,6 +269,7 @@ export const TEMPLATE_SECTIONS: Record<string, string[]> = {
     '5-Year Forecast Summary',
     'Projected Balance-Sheet Path',
     'Stress Scenario Outcomes',
+    'Reverse Stress Test Summary',
   ],
 };
 

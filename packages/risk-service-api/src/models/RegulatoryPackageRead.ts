@@ -18,6 +18,20 @@ import {
   RegulatorCommentsToJSON,
   RegulatorCommentsToJSONTyped,
 } from "./RegulatorComments";
+import type { CurrentStageTitle } from "./CurrentStageTitle";
+import {
+  CurrentStageTitleFromJSON,
+  CurrentStageTitleFromJSONTyped,
+  CurrentStageTitleToJSON,
+  CurrentStageTitleToJSONTyped,
+} from "./CurrentStageTitle";
+import type { CurrentStageSeq } from "./CurrentStageSeq";
+import {
+  CurrentStageSeqFromJSON,
+  CurrentStageSeqFromJSONTyped,
+  CurrentStageSeqToJSON,
+  CurrentStageSeqToJSONTyped,
+} from "./CurrentStageSeq";
 import type { SubmissionRevision } from "./SubmissionRevision";
 import {
   SubmissionRevisionFromJSON,
@@ -148,6 +162,18 @@ export interface RegulatoryPackageRead {
   createdAt: Date;
   /**
    *
+   * @type {CurrentStageSeq}
+   * @memberof RegulatoryPackageRead
+   */
+  currentStageSeq?: CurrentStageSeq;
+  /**
+   *
+   * @type {CurrentStageTitle}
+   * @memberof RegulatoryPackageRead
+   */
+  currentStageTitle?: CurrentStageTitle;
+  /**
+   *
    * @type {Array<DeclaredMethodologyRead>}
    * @memberof RegulatoryPackageRead
    */
@@ -176,6 +202,12 @@ export interface RegulatoryPackageRead {
    * @memberof RegulatoryPackageRead
    */
   id: string;
+  /**
+   *
+   * @type {boolean}
+   * @memberof RegulatoryPackageRead
+   */
+  isRehearsal?: boolean;
   /**
    *
    * @type {Notes}
@@ -266,6 +298,12 @@ export interface RegulatoryPackageRead {
    * @memberof RegulatoryPackageRead
    */
   version: number;
+  /**
+   *
+   * @type {number}
+   * @memberof RegulatoryPackageRead
+   */
+  workflowRound?: number;
 }
 
 /**
@@ -341,6 +379,14 @@ export function RegulatoryPackageReadFromJSONTyped(
     bankId: json["bank_id"],
     basis: ReturnBasisFromJSON(json["basis"]),
     createdAt: new Date(json["created_at"]),
+    currentStageSeq:
+      json["current_stage_seq"] == null
+        ? undefined
+        : CurrentStageSeqFromJSON(json["current_stage_seq"]),
+    currentStageTitle:
+      json["current_stage_title"] == null
+        ? undefined
+        : CurrentStageTitleFromJSON(json["current_stage_title"]),
     declaredMethodologies:
       json["declared_methodologies"] == null
         ? undefined
@@ -351,6 +397,8 @@ export function RegulatoryPackageReadFromJSONTyped(
     generatedAt: new Date(json["generated_at"]),
     generatedBy: json["generated_by"],
     id: json["id"],
+    isRehearsal:
+      json["is_rehearsal"] == null ? undefined : json["is_rehearsal"],
     notes: NotesFromJSON(json["notes"]),
     regulatorComments: RegulatorCommentsFromJSON(json["regulator_comments"]),
     reportingDate: new Date(json["reporting_date"]),
@@ -370,6 +418,8 @@ export function RegulatoryPackageReadFromJSONTyped(
       json["validation_report"],
     ),
     version: json["version"],
+    workflowRound:
+      json["workflow_round"] == null ? undefined : json["workflow_round"],
   };
 }
 
@@ -393,6 +443,8 @@ export function RegulatoryPackageReadToJSONTyped(
     bank_id: value["bankId"],
     basis: ReturnBasisToJSON(value["basis"]),
     created_at: value["createdAt"].toISOString(),
+    current_stage_seq: CurrentStageSeqToJSON(value["currentStageSeq"]),
+    current_stage_title: CurrentStageTitleToJSON(value["currentStageTitle"]),
     declared_methodologies:
       value["declaredMethodologies"] == null
         ? undefined
@@ -403,6 +455,7 @@ export function RegulatoryPackageReadToJSONTyped(
     generated_at: value["generatedAt"].toISOString(),
     generated_by: value["generatedBy"],
     id: value["id"],
+    is_rehearsal: value["isRehearsal"],
     notes: NotesToJSON(value["notes"]),
     regulator_comments: RegulatorCommentsToJSON(value["regulatorComments"]),
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
@@ -422,5 +475,6 @@ export function RegulatoryPackageReadToJSONTyped(
       value["validationReport"],
     ),
     version: value["version"],
+    workflow_round: value["workflowRound"],
   };
 }

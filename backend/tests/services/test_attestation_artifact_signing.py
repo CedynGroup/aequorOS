@@ -52,13 +52,19 @@ from app.models import (
     SignerKey,
     User,
 )
+from app.schemas.filing_workflow import PackageStageDecisionCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.schemas.regulatory_reporting import RegulatoryPackageCreate
+from app.schemas.regulatory_reporting import (
+    PackageApprovalDecisionCreate,
+    PackageApprovalRequestCreate,
+    RegulatoryPackageCreate,
+)
 from app.services import regulatory_liquidity
 from app.services.attestation import pdf_signing, placements, signing, stepup, workflow
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
 from app.services.attestation.signers import get_raw_signer
+from app.services.filing_workflow import chain as filing_chain
 from app.services.regulatory_reporting import artifact_versions, generation, validation
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.storage.client import StorageLocation
@@ -73,6 +79,10 @@ from tests.storage.inmemory import InMemoryStorageClient
 MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 CHECKER_USER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 CHECKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=CHECKER_USER_ID)
+#: The third officer of the filing chain. The Approver's signature approves the
+#: figures; only the Validator's stage releases the return to the regulator.
+VALIDATOR_USER_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+VALIDATOR = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=VALIDATOR_USER_ID)
 REPORTING_DATE = date(2026, 3, 31)
 VAULT_KEY = "test-vault-master-key-not-for-production-0002"
 
@@ -127,6 +137,16 @@ def _seed(db: Session, *, require_signed_pdf: bool = True, roles: Any = None) ->
                 email="artifact.approver@example.test",
                 display_name="Ama Mensah",
                 job_title="Chief Financial Officer",
+            )
+        )
+        db.commit()
+    if db.scalar(select(User.id).where(User.id == VALIDATOR_USER_ID)) is None:
+        db.add(
+            User(
+                id=VALIDATOR_USER_ID,
+                organization_id=DEMO_ORG_ID,
+                email="artifact.validator@example.test",
+                display_name="Yaw Boateng",
             )
         )
         db.commit()
@@ -233,6 +253,59 @@ def _fully_certify(db: Session, package: RegulatoryPackage) -> list[AttestationS
     db.refresh(package)
     assert package.attestation_state == "fully_certified"
     return [preparer, approver]
+
+
+def _walk_the_chain(db: Session, package: RegulatoryPackage) -> None:
+    """Preparer -> Approver -> Validator, with no signature in sight."""
+    reporting_workflow.request_approval(
+        db, MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate()
+    )
+    reporting_workflow.decide_approval(
+        db,
+        CHECKER,
+        SAMPLE_BANK_ID,
+        package.id,
+        PackageApprovalDecisionCreate(action="approved"),
+    )
+    _approver_sends_on(db, package)
+    _validator_releases(db, package)
+
+
+def _approver_sends_on(db: Session, package: RegulatoryPackage) -> None:
+    """The Approver's second act.
+
+    Approving and releasing are two acts (founder decision 2026-09-20): the
+    approval — bare decision or signature — leaves the return with the
+    Approver until they send it on. Explicit here exactly as it is on screen.
+    """
+    filing_chain.hand_off(db, CHECKER, package)
+    db.commit()
+
+
+def _validator_releases(db: Session, package: RegulatoryPackage) -> None:
+    """The Validator's stage, which is what makes a return filable.
+
+    Since the filing review chain landed
+    (``docs/filing_workflow_redesign.md`` §3) the Approver's signature approves
+    and does not release: the return goes to the Validator, and only the
+    Validator's decision completes the chain. This suite is about ARTIFACTS, so
+    it walks that stage rather than asserting the old two-step status.
+    """
+    db.refresh(package)
+    state = filing_chain.load_state(db, VALIDATOR, package)
+    filing_chain.decide(
+        db,
+        VALIDATOR,
+        package,
+        PackageStageDecisionCreate(
+            decision="approved",
+            round=package.workflow_round,
+            review_digest=state.review_digest,
+        ),
+    )
+    db.commit()
+    db.refresh(package)
+    assert package.status == "approved"
 
 
 # --- reading the result back ------------------------------------------------
@@ -887,8 +960,8 @@ def test_submission_files_the_signed_document_alongside_the_template(
     """
     package = _seed(db_session)
     _preparer, approver = _fully_certify(db_session, package)
-    db_session.refresh(package)
-    assert package.status == "approved"
+    _approver_sends_on(db_session, package)
+    _validator_releases(db_session, package)
 
     reporting_workflow.submit_package_via_channel(
         db_session, CHECKER, SAMPLE_BANK_ID, package.id, channel_override="orass_sandbox"
@@ -910,7 +983,10 @@ def test_submission_files_the_signed_document_alongside_the_template(
     assert filed["pdf"]["signed"] is True
     # The template format is attached, not dropped for the signed document.
     assert filed["xlsx"]["signed"] is False
-    assert detail["auto_exported_kinds"] == ["xlsx"]
+    # The PDF already existed — it is the signed document. What the filing set
+    # was missing is minted at submission: the official layout and the
+    # machine-readable sections.
+    assert detail["auto_exported_kinds"] == ["xlsx", "csv"]
 
 
 def test_an_uncertified_package_files_the_canonical_export(
@@ -919,14 +995,24 @@ def test_an_uncertified_package_files_the_canonical_export(
     """The control case: nothing about the unsigned path moved.
 
     A return whose policy requires no signature still files the artifacts it
-    always did, and still auto-exports the template format when it has none.
+    always did, and still auto-exports what the filing set is missing.
+
+    The set is the FULL pack since 2026-09-20 (founder decision: banks must
+    receive the live-formula workbook alongside the record), so an unsigned
+    return files the official layout, the PDF record and the machine-readable
+    sections. LCR-NSFR is not a BoG-template return, so it produces no
+    ``xlsx_working`` — the absence is the rule working, not a gap.
     """
     package = _seed(db_session, require_signed_pdf=False)
     policy = db_session.scalar(select(ReturnSigningPolicy))
     assert policy is not None
     policy.require_signature = False
-    package.status = "approved"
     db_session.commit()
+    # No signature is required, but the review chain still runs: the Preparer
+    # sends, the Approver approves, the Validator releases. Setting the status
+    # to "approved" by hand used to be enough; the chain is the source of truth
+    # now, and the filing gate reads it.
+    _walk_the_chain(db_session, package)
 
     reporting_workflow.submit_package_via_channel(
         db_session, CHECKER, SAMPLE_BANK_ID, package.id, channel_override="orass_sandbox"
@@ -936,9 +1022,11 @@ def test_an_uncertified_package_files_the_canonical_export(
     )
     detail = events.events[0].detail
     assert "signed_artifact_version_id" not in detail
-    assert detail["auto_exported_kinds"] == ["xlsx"]
-    assert [entry["kind"] for entry in detail["filed_artifacts"]] == ["xlsx"]
-    assert detail["filed_artifacts"][0]["signed"] is False
+    assert detail["auto_exported_kinds"] == ["xlsx", "pdf", "csv"]
+    # The filed set leads with the record of truth, then the official layout,
+    # then the data — the order an examiner reads them in.
+    assert [entry["kind"] for entry in detail["filed_artifacts"]] == ["pdf", "xlsx", "csv"]
+    assert all(entry["signed"] is False for entry in detail["filed_artifacts"])
 
 
 def _corrupt(

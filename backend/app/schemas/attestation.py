@@ -70,6 +70,11 @@ class SigningPolicyRead(ClosedModel):
     require_signature: bool
     require_signed_pdf: bool
     distinct_signers: bool
+    #: Signatures must arrive in canonical order (preparer → approver → board).
+    #: Forced, whatever the row says, once the artifact carries more than two
+    #: signature fields: there each signer's field lock seals the ones before it,
+    #: so an out-of-order signature invalidates an earlier one.
+    ordered_slots: bool = False
     required_attachments: list[str]
     required_signatures: list[SignatureSlotRead]
 
@@ -99,6 +104,14 @@ class CertificationPreviewRead(ClosedModel):
     statement: str
     policy: SigningPolicyRead
     outstanding: list[OutstandingSlotRead]
+    #: The roles that must sign before this one can, and have not. Non-empty means
+    #: the dialog shows why the action is unavailable instead of letting the
+    #: officer re-authenticate into a 409.
+    blocked_by: list[SigningRole] = Field(default_factory=list)
+    #: The ceremony this return's document is signed by, in order — which is what
+    #: the artifact's field locks were built for and cannot be changed after the
+    #: preparer certifies.
+    signing_order: list[SigningRole] = Field(default_factory=list)
     frozen_certification_digest: str | None
     matches_frozen: bool
 
@@ -233,6 +246,10 @@ class PolicyUpsertRequest(ClosedModel):
     require_signature: bool = True
     require_signed_pdf: bool = False
     distinct_signers: bool = True
+    #: Require the signatures in canonical order (preparer → approver → board).
+    #: Mandatory for a signed PDF with a Board slot, and additive so every policy
+    #: written before it existed still means what it meant.
+    ordered_slots: bool = False
     effective_from: date
     effective_to: date | None = None
     reason: str = Field(min_length=1, max_length=500)
@@ -252,6 +269,7 @@ class PolicyRead(ClosedModel):
     require_signature: bool
     require_signed_pdf: bool
     distinct_signers: bool
+    ordered_slots: bool = False
     effective_from: date
     effective_to: date | None
     reason: str
@@ -260,7 +278,21 @@ class PolicyRead(ClosedModel):
 
 
 class PolicyListRead(ClosedModel):
+    """The configured policies, and the deployment switches that outrank them.
+
+    The switches ride on the LIST because a row and the switch that suspends it
+    are one answer to one question — "what is in force?" — and a settings screen
+    that showed the rows without them would state a requirement the platform is
+    not applying.
+    """
+
     policies: list[PolicyRead]
+    #: ``ATTESTATION_ESIGN_REQUIRED=0``: no return in this deployment demands a
+    #: signature, whatever these rows say. Rows are dormant, not deleted.
+    signing_suspended_deployment_wide: bool = False
+    #: ``ICAAP_SIGNING_ENABLED=NO`` (the default): the same, for the ICAAP
+    #: family alone. Every other family is unaffected.
+    icaap_signing_suspended: bool = False
 
 
 class SignatureFieldPlacement(ClosedModel):
@@ -279,6 +311,30 @@ class SignatureFieldPlacement(ClosedModel):
     """
 
     signing_role: PlaceableRole
+    field_type: PlacementFieldType = "signature"
+    field_index: int = Field(default=1, ge=1)
+    page_index: int = Field(ge=0)
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+
+
+class SignatureFieldPlacementRead(ClosedModel):
+    """One placed box as the SERVER reports it. Identical to the write model in
+    every field but one: ``signing_role`` is the full :data:`SigningRole`.
+
+    The split exists because the two directions are genuinely asymmetric. A
+    client may only place ``preparer`` and ``approver`` — those are the boxes a
+    person drags onto a return, and a board placement must stay a 422 at the
+    contract boundary rather than a 409 later — but the SERVER draws the ICAAP
+    attestation page itself, and a bank that has turned the Board slot on has a
+    ``Sig_Board`` box on it. Reading that back through the narrow model would
+    fail response validation, so the one surface that makes the Board slot
+    usable would break the moment it was used.
+    """
+
+    signing_role: SigningRole
     field_type: PlacementFieldType = "signature"
     field_index: int = Field(default=1, ge=1)
     page_index: int = Field(ge=0)
@@ -337,13 +393,22 @@ class ResolvedSignaturePlacementsRead(ClosedModel):
     package_id: UUID
     return_code: str
     source: PlacementSource
-    placements: list[SignatureFieldPlacement]
+    placements: list[SignatureFieldPlacementRead]
     #: Every placeable kind with its own floor. Replaces the single 185×61 that
     #: applied to signature fields regardless of what they had to print.
     field_types: list[PlacementFieldTypeRead]
-    #: False once a signature exists: the fields are part of the certified
-    #: revision and the DocMDP policy forbids adding or moving one afterwards.
+    #: False once a signature exists — the fields are part of the certified
+    #: revision and the DocMDP policy forbids adding or moving one afterwards —
+    #: and false for a return whose attestation page the platform draws itself,
+    #: where the boxes are ruled and there is nothing to accommodate.
     editable: bool
+    #: The roles this return's document actually signs, IN ORDER — the ceremony
+    #: the policy in force resolved to, which is what the workspace labels its
+    #: boxes and its recipient rail from. Always populated, including for a
+    #: layout the platform draws itself: ``editable`` alone says whether the
+    #: boxes may be MOVED, and a signer looking at a three-signer ICAAP report
+    #: must still be shown all three officers.
+    placeable_roles: list[SigningRole] = Field(default_factory=list)
 
 
 class PackageSignaturePlacementRequest(ClosedModel):
@@ -432,6 +497,11 @@ class AwaitingSignatureRead(ClosedModel):
     routing_order: int
     requested_at: datetime
     notified_at: datetime | None
+    #: A rehearsal runs the full lifecycle, signature included, into a package
+    #: that can never be filed (D-068). A signer asked to sign one must be told
+    #: which it is BEFORE they sign — this queue was the last surface that could
+    #: not say (security audit S-6).
+    is_rehearsal: bool = False
 
 
 class AwaitingSignatureListRead(ClosedModel):

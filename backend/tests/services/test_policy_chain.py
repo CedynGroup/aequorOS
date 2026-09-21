@@ -274,27 +274,97 @@ def test_clamp_overrides_leaves_stricter_board_values_alone(db_session: Session)
 def test_clamp_overrides_does_not_invent_a_floor_for_an_unseeded_code(
     db_session: Session,
 ) -> None:
-    """``cet1_min``/``tier1_min``/``leverage_min``/``lcr_min``/``nsfr_min`` are
-    governed but have NO seeded control-plane value. They must pass through
-    unchanged — a regulatory number is never invented to create a constraint."""
+    """``lcr_min``/``nsfr_min`` are governed but have NO seeded control-plane
+    value (BoG publishes no LCR/NSFR requirement). They must pass through
+    unchanged — a regulatory number is never invented to create a constraint.
+
+    Until 2026-09-19 this test also listed ``cet1_min``/``tier1_min``/
+    ``leverage_min`` — which was the defect (regulatory audit B2): the CRD sets
+    all three, and an unseeded floor let a board register weaken them. They are
+    now seeded for banks; see the test below.
+    """
     bank = _bank(db_session)
     unseeded = {
-        "cet1_min": Decimal("0.5"),
-        "tier1_min": Decimal("0.5"),
-        "leverage_min": Decimal("0.5"),
         "lcr_min": Decimal("0.5"),
         "nsfr_min": Decimal("0.5"),
     }
     report = rp.clamp_overrides(db_session, bank, unseeded, as_of=AS_OF)
-    assert report.values == unseeded
+    assert {code: report.values[code] for code in unseeded} == unseeded
     assert report.any_clamped is False
+    # D-042: the governed capital minima this register has no row for are
+    # supplied from the control plane — the seeded values, never invented ones.
+    assert {k: v for k, v in report.values.items() if k not in unseeded} == {
+        code: rp.control_values(db_session, bank, [code], as_of=AS_OF)[code]
+        for code in rp.CONTROL_PLANE_REGISTER_CODES["bank"]
+    }
     assert rp.control_values(db_session, bank, unseeded, as_of=AS_OF) == dict.fromkeys(unseeded)
+
+
+def test_crd_capital_floors_are_governed_for_a_bank(db_session: Session) -> None:
+    """B2: the CRD tier floors, buffers and recognition caps resolve for a bank,
+    and a board register may only tighten them — a 3% leverage floor (the old
+    register default) is raised to the CRD's 6%."""
+    bank = _bank(db_session)
+    values = rp.control_values(
+        db_session,
+        bank,
+        [
+            "cet1_min",
+            "tier1_min",
+            "leverage_min",
+            "ccb1_pct",
+            "ccyb_pct",
+            "dsib_buffer_pct",
+            "at1_cap_pct_rwa",
+            "tier2_cap_pct_rwa",
+        ],
+        as_of=AS_OF,
+    )
+    assert values == {
+        "cet1_min": Decimal("6.5"),
+        "tier1_min": Decimal("8"),
+        "leverage_min": Decimal("6"),
+        "ccb1_pct": Decimal("3"),
+        "ccyb_pct": Decimal("0"),
+        "dsib_buffer_pct": Decimal("0"),
+        "at1_cap_pct_rwa": Decimal("1.5"),
+        "tier2_cap_pct_rwa": Decimal("2"),
+    }
+    report = rp.clamp_overrides(
+        db_session,
+        bank,
+        {
+            "leverage_min": Decimal("3"),
+            "cet1_min": Decimal("5"),
+            "tier1_min": Decimal("9"),
+            "at1_cap_pct_rwa": Decimal("4"),
+        },
+        as_of=AS_OF,
+    )
+    assert report.values["leverage_min"] == Decimal("6")
+    assert report.values["cet1_min"] == Decimal("6.5")
+    assert report.values["tier1_min"] == Decimal("9")  # stricter board value stands
+    assert report.values["at1_cap_pct_rwa"] == Decimal("1.5")
+    assert set(report.codes_clamped()) == {"leverage_min", "cet1_min", "at1_cap_pct_rwa"}
+    leverage = rp.resolve(db_session, bank, "leverage_min", as_of=AS_OF)
+    assert "¶88–90" in leverage.source_citation
+    assert leverage.confirmation_status == "confirmed"
+
+
+def test_crd_capital_floors_are_not_imposed_on_an_sdi(db_session: Session) -> None:
+    """The s.29 regime has no Basel sub-tier or leverage floor: nothing is seeded
+    for an SDI, so its register passes through untouched."""
+    bank = _bank(db_session, institution_type="savings_and_loans")
+    values = rp.control_values(
+        db_session, bank, ["cet1_min", "tier1_min", "leverage_min"], as_of=AS_OF
+    )
+    assert values == {"cet1_min": None, "tier1_min": None, "leverage_min": None}
 
 
 def test_control_values_reports_seeded_and_unseeded_side_by_side(db_session: Session) -> None:
     bank = _bank(db_session)
-    values = rp.control_values(db_session, bank, ["car_min", "cet1_min"], as_of=AS_OF)
-    assert values == {"car_min": Decimal("13"), "cet1_min": None}
+    values = rp.control_values(db_session, bank, ["car_min", "lcr_min"], as_of=AS_OF)
+    assert values == {"car_min": Decimal("13"), "lcr_min": None}
 
 
 def test_effective_dating_supersedes_a_generation(db_session: Session) -> None:

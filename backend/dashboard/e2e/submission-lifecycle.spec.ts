@@ -4,9 +4,15 @@
  * These prove the dashboard is really wired to the backend end to end —
  * authenticated navigation, the returns workspace driving generation against
  * the live API, and the role gates. The exhaustive lifecycle state machine
- * (validate → approve → submit → acknowledge/reject/decline, resubmission,
+ * (checks → approve → file → acknowledge/reject/decline, corrections,
  * revisions) is covered by the backend test suites; here we confirm the UI
  * surfaces reach those endpoints under real per-role sessions.
+ *
+ * The workspace no longer draws a six-status stepper. Statuses are not people,
+ * and one of them was labelled "Validated", which a bank reads as "the Validator
+ * signed off" when it means the rules engine found no errors. What replaced it
+ * is the chain: who holds the return, and what has been decided on it
+ * (docs/filing_workflow_redesign.md §4b.4).
  */
 
 import { test, expect } from "@playwright/test";
@@ -34,33 +40,33 @@ test.describe("submission pipeline", () => {
         page.getByRole("heading", { name: /returns workspace/i }),
       ).toBeVisible();
 
-      // Generate a package against the live backend, then confirm the lifecycle
-      // stepper advances to "Generated" — the UI round-tripped createRegulatoryPackage.
+      // Generate a package against the live backend — the UI round-tripped
+      // createRegulatoryPackage, and the checks ran with it.
       const generate = page
-        .getByRole("button", { name: /generate package|regenerate/i })
+        .getByRole("button", { name: /generate the return|^regenerate$/i })
         .first();
       await expect(generate).toBeVisible({ timeout: 5_000 });
       await generate.click();
-      await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
+      await expect(page.getByText("Checks passed").first()).toBeVisible({
+        timeout: 60_000,
+      });
 
-      // The stepper shows states REACHED, not activities in progress. The state a
-      // package is in must read as achieved, with the highlight on what has NOT
-      // happened yet — otherwise resting in a state is indistinguishable from
-      // being stuck in it. Reported from the live app on 2026-07-25: an approved,
-      // fully-certified return looked stuck because "Approved" rendered as the
-      // current step, next to a step then labelled "Approval".
-      const stepper = page.getByLabel("Package lifecycle").first();
-      await expect(stepper).toBeVisible();
-      // The waiting stage says it is waiting, and cannot be mistaken for the
-      // decided one.
-      await expect(stepper.getByText("Awaiting approval")).toBeVisible();
-      await expect(
-        stepper.getByText("Approved", { exact: true }),
-      ).toBeVisible();
+      // The chain names PEOPLE, in order, and says who holds the return now.
+      // A status is not a person, which is what the old stepper kept implying.
+      const chain = page.getByTestId("filing-chain");
+      await expect(chain).toBeVisible();
+      await expect(chain.getByText("Preparer", { exact: true })).toBeVisible();
+      await expect(chain.getByText("Approver", { exact: true })).toBeVisible();
+      await expect(chain.getByText("Validator", { exact: true })).toBeVisible();
+      await expect(chain).toContainText(/with the preparer/i);
 
-      // Validate is now offered — the workspace reflects backend state transitions.
+      // And nothing anywhere calls the machine check a person's decision.
+      await expect(page.getByText(/\bValidated\b/)).toHaveCount(0);
       await expect(
-        page.getByRole("button", { name: /validate/i }).first(),
+        page.getByRole("button", { name: /^validate$/i }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: "Re-run checks" }),
       ).toBeVisible();
     },
   );
@@ -109,11 +115,13 @@ test.describe("submission pipeline", () => {
       // Generate at least one package first so history is non-empty.
       await page.goto(RETURNS);
       const generate = page
-        .getByRole("button", { name: /generate package|regenerate/i })
+        .getByRole("button", { name: /generate the return|^regenerate$/i })
         .first();
       await expect(generate).toBeVisible({ timeout: 5_000 });
       await generate.click();
-      await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
+      await expect(page.getByText("Checks passed").first()).toBeVisible({
+        timeout: 60_000,
+      });
 
       await page.goto("/submissions/history");
       await expect(page).toHaveURL(/\/submissions\/history/);
@@ -129,17 +137,20 @@ test.describe("submission pipeline", () => {
       await page.goto(RETURNS);
       for (let i = 0; i < 2; i += 1) {
         const generate = page
-          .getByRole("button", { name: /generate package|regenerate/i })
+          .getByRole("button", { name: /generate the return|^regenerate$/i })
           .first();
         await expect(generate).toBeVisible({ timeout: 5_000 });
         await generate.click();
-        await expect(page.getByText(/\bGenerated\b/).first()).toBeVisible();
+        await expect(page.getByText("Checks passed").first()).toBeVisible({
+          timeout: 60_000,
+        });
       }
 
-      const card = page.locator("section", {
-        has: page.getByRole("heading", { name: "Prior versions" }),
-      });
+      // Earlier versions are one collapsed row now: provenance, not a card
+      // competing with the figures an officer is about to attest to.
+      const card = page.getByTestId("versions-row");
       await expect(card).toBeVisible();
+      await card.getByRole("button").first().click();
 
       // The row is a disclosure, not a dead line of text.
       const row = card.locator("li").first();
@@ -176,7 +187,7 @@ test.describe("submission pipeline", () => {
     // Viewer reaches the workspace (read) but generation is refused (403);
     // the error surfaces rather than a package appearing.
     const gen = viewerPage
-      .getByRole("button", { name: /generate package/i })
+      .getByRole("button", { name: /generate the return/i })
       .first();
     if (await gen.isVisible().catch(() => false)) {
       await gen.click();

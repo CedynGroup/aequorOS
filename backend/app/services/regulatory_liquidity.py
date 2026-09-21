@@ -125,6 +125,7 @@ INPUT_SCHEMA_VERSION = "bank-facts-v3"
 OUTPUT_SCHEMA_VERSION = "liquidity-metrics-v1"
 MODULE_LIQUIDITY = "liquidity"
 MODULE_IRR = "irr"
+MODULE_IRR_SF = "irr_sf"
 MODULE_FX = "fx"
 MODULE_FTP = "ftp"
 
@@ -144,6 +145,13 @@ _REGULATORY_RUN_AUTHORIZATION = {
     MODULE_IRR: _RegulatoryRunAuthorizationPolicy(
         Module.IRRBB,
         "irrbb",
+    ),
+    # The Standardised Framework answers to the same module authority as the
+    # rest of IRRBB, so a binding that hides IRRBB hides it too — listing it
+    # here is what makes the generic run list and run detail routes filter it.
+    MODULE_IRR_SF: _RegulatoryRunAuthorizationPolicy(
+        Module.IRRBB,
+        "irrbb_sf",
     ),
     MODULE_FTP: _RegulatoryRunAuthorizationPolicy(Module.FTP, "ftp"),
 }
@@ -1295,7 +1303,13 @@ def _prefetch_dashboard_batch(
             db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, dates
         ),
         governed=regulatory_parameters.PrefetchedParameterResolver.load(
-            db, bank, as_of_dates=dates
+            # Calculation plane: this engine's run is sealed with
+            # ``consume_parameter_provenance``, so its reads ARE that run's
+            # governed-row provenance.
+            db,
+            bank,
+            as_of_dates=dates,
+            record=True,
         ),
     )
 

@@ -39,6 +39,11 @@ import {
   visibleGrantFragments,
   type GrantDraft,
 } from "@/lib/api/grants";
+import {
+  grantShortfall,
+  overlappingGrantNotice,
+} from "@/lib/api/grantRequirements";
+import { sodFindings, sodRemedy, type SodFinding } from "@/lib/api/sodDecision";
 
 const MEMBERS_KEY = ORGANIZATION_MEMBERS_QUERY_KEY;
 const REQUESTS_KEY = ["settings", "sso-access-requests"];
@@ -494,6 +499,7 @@ function GrantComposer({
     sentence: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sodBlocks, setSodBlocks] = useState<readonly SodFinding[]>([]);
   const previewKeyRef = useRef("");
   const name = memberName(member);
   const isPendingApproval = member.accessRequestState === "approval_needed";
@@ -520,6 +526,8 @@ function GrantComposer({
   previewKeyRef.current = previewKey;
   const previewSentence =
     previewResult?.key === previewKey ? previewResult.sentence : null;
+  const shortfall = grantShortfall(scope);
+  const overlap = overlappingGrantNotice(scope, member.grants);
 
   const { mutate: previewAuthority } = useMutation({
     mutationFn: () =>
@@ -580,8 +588,15 @@ function GrantComposer({
       setStep("done");
       onSaved();
     },
-    onError: async (failure) =>
-      setError((await normalizeApiError(failure)).message),
+    onError: async (failure) => {
+      const normalized = await normalizeApiError(failure);
+      setError(normalized.message);
+      // The refusal already names the rule that fired; only the generic
+      // sentence was ever shown. Without the finding an Org Owner re-composes
+      // the same grant with different scopes, which cannot help when the
+      // conflict is about the identity rather than the scope.
+      setSodBlocks(sodFindings(normalized.details));
+    },
   });
 
   const updateRole = (roleBundle: GrantDraft["roleBundle"]) => {
@@ -747,6 +762,33 @@ function GrantComposer({
               {error}
             </p>
           )}
+          {/* A sentence can read perfectly and authorise nothing: scopes are
+              matched exactly, so "Approver · Confidential" is inert. The
+              composer's own default sensitivity is `confidential`, which makes
+              this the likely path rather than an unlikely one. Said here, at
+              the moment of the choice — not later, as a 403 on the grantee's
+              screen blaming a scalar role. A warning, never a block: a narrower
+              grant may be exactly what is intended. */}
+          {overlap && (
+            <p
+              data-testid="grant-overlap"
+              className="rounded-md border border-action/25 bg-action-light/40 px-4 py-3 text-caption leading-relaxed text-navy/85"
+            >
+              <span className="font-medium text-navy">
+                This does not widen an existing grant.
+              </span>{" "}
+              {overlap}
+            </p>
+          )}
+          {shortfall && (
+            <p
+              data-testid="grant-shortfall"
+              className="rounded-md border border-warning/30 bg-warning-light/50 px-4 py-3 text-caption leading-relaxed text-navy/85"
+            >
+              <span className="font-medium text-navy">Check this scope.</span>{" "}
+              {shortfall}
+            </p>
+          )}
           {previewSentence && <SentencePreview sentence={previewSentence} />}
           <div className="flex justify-end gap-3">
             <button
@@ -780,12 +822,24 @@ function GrantComposer({
             <p className="mt-1 text-body text-navy">{draft.reason}</p>
           </div>
           {error && (
-            <p
+            <div
               role="alert"
               className="rounded-md bg-critical-light px-4 py-3 text-caption text-critical"
             >
-              {error}
-            </p>
+              <p>{error}</p>
+              {sodBlocks.length > 0 && (
+                <ul className="mt-2 list-disc space-y-1 pl-4">
+                  {sodBlocks.map((finding) => (
+                    <li key={finding.code || finding.message}>
+                      {finding.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {sodRemedy(sodBlocks) && (
+                <p className="mt-2 leading-relaxed">{sodRemedy(sodBlocks)}</p>
+              )}
+            </div>
           )}
           <div className="flex justify-end gap-3">
             <button

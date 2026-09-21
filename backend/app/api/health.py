@@ -11,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import logger
 from app.db.session import get_engine, get_worker_sessionmaker, worker_visibility
 from app.schemas.health import ComponentHealth, HealthResponse, ReadinessResponse
+from app.services import job_queue
 from app.storage.factory import get_storage_client
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -53,6 +54,9 @@ _OK = ComponentHealth(status="ok")
 _WORKER_READY = "Background worker can claim jobs."
 _WORKER_BLIND = "Background worker cannot claim jobs."
 _WORKER_STARVED = "Queued jobs are not being drained; the worker process may not be running."
+_AI_OFF = "AI drafting is switched off on this deployment."
+_AI_STARVED = "AI drafting requests are waiting; the AI worker may not be running."
+_AI_READY = "AI drafting requests are being drained."
 _STORAGE_READY = "Object storage is reachable."
 
 
@@ -110,12 +114,18 @@ def _overdue_job_count(stale_after_seconds: float) -> int | None:
         if engine.dialect.name != "postgresql":
             return None
         with Session(engine) as session:
+            # The AI lane is excluded: those jobs are claimed by a SEPARATE
+            # deployment, so counting them here would report the core worker as
+            # starved whenever the optional AI app is simply not deployed.
+            # ``_ai_health`` reports that backlog separately, and never 503s.
+            ai_types = job_queue.job_types_in_lane("ai")
             return session.execute(
                 text(
                     "SELECT count(*) FROM jobs WHERE status = 'queued' "
-                    "AND run_after < now() - make_interval(secs => :stale_after)"
+                    "AND run_after < now() - make_interval(secs => :stale_after) "
+                    "AND job_type <> ALL(:ai_types)"
                 ),
-                {"stale_after": stale_after_seconds},
+                {"stale_after": stale_after_seconds, "ai_types": list(ai_types)},
             ).scalar_one()
     except SQLAlchemyError:
         return None
@@ -200,6 +210,47 @@ def _signing_health(settings: Settings) -> ComponentHealth:
     return ComponentHealth(status="skipped", detail="Signing is not required in this environment.")
 
 
+def _ai_overdue_count(stale_after_seconds: float) -> int | None:
+    """Queued AI jobs past their window — the AI worker's own backlog."""
+    try:
+        engine = get_worker_sessionmaker().kw["bind"]
+        if engine.dialect.name != "postgresql":
+            return None
+        with Session(engine) as session:
+            return session.execute(
+                text(
+                    "SELECT count(*) FROM jobs WHERE status = 'queued' "
+                    "AND job_type = ANY(:ai_types) "
+                    "AND run_after < now() - make_interval(secs => :stale_after)"
+                ),
+                {
+                    "ai_types": list(job_queue.job_types_in_lane("ai")),
+                    "stale_after": stale_after_seconds,
+                },
+            ).scalar_one()
+    except SQLAlchemyError:
+        return None
+
+
+def _ai_health(settings: Settings) -> ComponentHealth:
+    """Whether AI drafting requests are being drained. NEVER raises 503.
+
+    AI drafting is optional and runs in a separate deployment. A platform whose
+    AI worker is not deployed — the normal state until the production gate is
+    passed — must not report itself unready, and a queued draft must never take
+    a bank's regulatory reporting down. The worst this says is "degraded".
+    """
+    if not settings.ai.commentary_enabled:
+        return ComponentHealth(status="skipped", detail=_AI_OFF)
+    overdue = _ai_overdue_count(settings.ai.stale_after_seconds)
+    if overdue:
+        logger.bind(overdue_ai_jobs=overdue).warning(
+            "Readiness: AI drafting requests are waiting; the AI worker may not be running."
+        )
+        return ComponentHealth(status="degraded", detail=_AI_STARVED)
+    return ComponentHealth(status="ok", detail=_AI_READY)
+
+
 @router.get("/ready", response_model=ReadinessResponse)
 def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResponse:
     checks: dict[str, ComponentHealth] = {}
@@ -210,6 +261,7 @@ def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResp
         checks["database"] = ComponentHealth(status="skipped", detail="DATABASE_URL is unset.")
         checks["storage"] = _storage_health(settings)
         checks["worker"] = ComponentHealth(status="skipped", detail="DATABASE_URL is unset.")
+        checks["ai"] = ComponentHealth(status="skipped", detail="DATABASE_URL is unset.")
         checks["signing"] = _signing_health(settings)
         return _respond(settings, checks)
 
@@ -222,6 +274,7 @@ def ready(settings: Annotated[Settings, Depends(get_settings)]) -> ReadinessResp
     checks["database"] = _OK
     checks["storage"] = _storage_health(settings)
     checks["worker"] = _worker_health(settings)
+    checks["ai"] = _ai_health(settings)
     checks["signing"] = _signing_health(settings)
     return _respond(settings, checks)
 

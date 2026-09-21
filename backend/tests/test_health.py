@@ -247,7 +247,7 @@ def test_ready_reports_each_subsystem_separately(db_client: TestClient) -> None:
     """
     body = db_client.get("/api/health/ready").json()
 
-    assert set(body["checks"]) == {"database", "storage", "worker", "signing"}
+    assert set(body["checks"]) == {"database", "storage", "worker", "ai", "signing"}
     assert body["checks"]["database"]["status"] == "ok"
     assert "storage" not in body.get("database", {})
 
@@ -315,6 +315,10 @@ def test_ready_discloses_no_deployment_topology_to_an_unauthenticated_caller(
         "database": {"status": "ok", "detail": None},
         "storage": {"status": "ok", "detail": "Object storage is reachable."},
         "worker": {"status": "ok", "detail": "Background worker can claim jobs."},
+        # The AI lane is a SEPARATE deployment, so its check says only whether
+        # drafting requests are being drained — never which app runs them, and
+        # never whether a model credential exists.
+        "ai": {"status": "skipped", "detail": "AI drafting is switched off on this deployment."},
         "signing": {
             "status": "skipped",
             "detail": "Signing is not required in this environment.",
@@ -576,3 +580,29 @@ def test_ready_health_requires_storage_when_database_is_configured(
             "request_id": "ready-request",
         },
     }
+
+
+@requires_committing_db
+def test_a_missing_ai_worker_never_makes_the_platform_unready(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AI drafting is optional and runs in a SEPARATE deployment.
+
+    The normal state until the production gate is passed is "the AI app is not
+    deployed at all". A queued draft must never take a bank's regulatory
+    reporting down, so the worst this check may ever say is ``degraded`` — it
+    has no path to a 503.
+    """
+    monkeypatch.setenv("AI_COMMENTARY_ENABLED", "1")
+    get_settings.cache_clear()
+    monkeypatch.setattr(health, "_ai_overdue_count", lambda _stale: 25)
+
+    response = db_client.get("/api/health/ready")
+
+    assert response.status_code == 200
+    checks = response.json()["checks"]
+    assert checks["ai"]["status"] == "degraded"
+    # The COUNT stays internal: queue depth on an unauthenticated endpoint is
+    # live operational state.
+    assert "25" not in response.text

@@ -10,6 +10,16 @@ import DataTable, { type Column } from '@/components/ui/DataTable';
 import { labelize } from '@/lib/api/values';
 import { regShort } from '@/lib/format';
 
+/**
+ * The key a changed line is marked by: the section's code and the line's code.
+ * Built from the SERVER's comparison of two versions — an approver re-reading a
+ * return after a send-back is told what moved, and the platform has to be able
+ * to stand behind that claim, so it is never diffed in the browser.
+ */
+export function snapshotLineKey(sectionCode: string, lineCode: string): string {
+  return `${sectionCode}::${lineCode}`;
+}
+
 type SnapshotRow = Record<string, unknown>;
 
 type SnapshotSection = {
@@ -117,16 +127,34 @@ function extraKeys(rows: SnapshotRow[]): string[] {
   return keys;
 }
 
-function sectionColumns(rows: SnapshotRow[]): Column<SnapshotRow>[] {
+function sectionColumns(
+  rows: SnapshotRow[],
+  sectionCode: string,
+  changedLineKeys: ReadonlySet<string> | undefined
+): Column<SnapshotRow>[] {
   const columns: Column<SnapshotRow>[] = [
     {
       key: 'code',
       header: 'Row',
-      render: (row) => (
-        <span className="font-mono text-caption text-slate whitespace-nowrap">
-          {String(row.code ?? '')}
-        </span>
-      ),
+      render: (row) => {
+        const changed =
+          changedLineKeys?.has(snapshotLineKey(sectionCode, String(row.code ?? ''))) ??
+          false;
+        return (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            {changed && (
+              <span
+                title="This figure changed since the version that was sent back"
+                className="inline-block h-1.5 w-1.5 rounded-full bg-action"
+                aria-label="Changed since the last round"
+              />
+            )}
+            <span className="font-mono text-caption text-slate">
+              {String(row.code ?? '')}
+            </span>
+          </span>
+        );
+      },
     },
     {
       key: 'description',
@@ -179,13 +207,31 @@ function unitPreamble(sections: SnapshotSection[]): string {
   return `Values are in the return's own reporting unit. This generator does not declare a per-section unit, so none is shown here — confirm the unit against the exported artifact before certifying. ${negatives}`;
 }
 
-export default function SnapshotPreview({ snapshot }: { snapshot: Snapshot }) {
+export default function SnapshotPreview({
+  snapshot,
+  changedLineKeys,
+  changedNote,
+}: {
+  snapshot: Snapshot;
+  /** Lines the server's comparison says moved since a named earlier version. */
+  changedLineKeys?: ReadonlySet<string>;
+  /** One line saying what the marks mean — required when marks are shown. */
+  changedNote?: string;
+}) {
   const sections = snapshot.sections ?? [];
   const totals = snapshot.totals ?? [];
+  const marking = Boolean(changedLineKeys && changedLineKeys.size > 0);
 
   return (
     <div className="space-y-5">
       <p className="text-caption text-slate">{unitPreamble(sections)}</p>
+
+      {marking && changedNote && (
+        <p className="flex items-center gap-2 rounded border border-action/25 bg-action-light/40 px-3 py-2 text-caption text-navy/85">
+          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-action" aria-hidden />
+          {changedNote}
+        </p>
+      )}
 
       {/* Three across, not four. A package total is a full GHS amount —
           1,961,000,000 is thirteen mono glyphs — and in a quarter of this card
@@ -194,14 +240,14 @@ export default function SnapshotPreview({ snapshot }: { snapshot: Snapshot }) {
           and the value wraps instead of truncating; the label still truncates
           but now carries its full text as a tooltip. */}
       {totals.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3">
           {totals.map((total, i) => (
             <div
               key={String(total.code ?? i)}
               className="rounded border border-border-light bg-surface px-3 py-2.5 min-w-0"
             >
               <p
-                className="text-micro font-medium text-slate uppercase tracking-wider truncate"
+                className="text-micro font-medium text-slate uppercase tracking-wider leading-snug"
                 title={String(total.description ?? total.code ?? 'Total')}
               >
                 {String(total.description ?? total.code ?? 'Total')}
@@ -249,9 +295,15 @@ export default function SnapshotPreview({ snapshot }: { snapshot: Snapshot }) {
               </span>
             </div>
             <DataTable
-              columns={sectionColumns(rows)}
+              columns={sectionColumns(
+                rows,
+                String(section.code ?? ''),
+                changedLineKeys
+              )}
               rows={withTotal}
               density="compact"
+              stickyFirstColumn
+              scrollLabel={String(section.title ?? section.code ?? 'Section')}
               totalsRowMatcher={(row) => Boolean(row.__isTotal)}
             />
           </div>

@@ -36,6 +36,15 @@ from app.services.regulatory_reporting.workflow import has_pending_orass_reuploa
 
 DEADLINE_SCAN = "reporting_deadline_scan"
 _HORIZON_MONTHS = 2
+# The notifier's trailing window is deliberately its own, and NOT the picker's.
+# The Returns picker reaches back two quarters so a bank in arrears can still
+# select every date it owes (``regulatory_reporting.anchors``); this scan
+# announces deadlines as they cross, once per day per obligation, so sharing
+# that window would re-announce the whole historical backlog every morning —
+# one critical notification per elapsed anchor per return per day, which is
+# noise rather than news. Two months mirrors the horizon above and preserves
+# the trailing coverage the weekly returns had before the window was widened.
+_LOOKBACK_MONTHS = 2
 # Tightest first: one scan emits at most the closest applicable threshold.
 _DUE_SOON_THRESHOLDS = (1, 3, 7)
 
@@ -50,7 +59,12 @@ def scan_reporting_deadlines(
     emitted = 0
     for bank in banks:
         obligations = calendar.list_obligations(
-            db, ctx, bank.id, _HORIZON_MONTHS, as_of=today
+            db,
+            ctx,
+            bank.id,
+            _HORIZON_MONTHS,
+            lookback_months=_LOOKBACK_MONTHS,
+            as_of=today,
         ).obligations
         for obligation in obligations:
             emitted += _scan_obligation(db, ctx, bank, obligation, today)

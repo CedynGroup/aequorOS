@@ -469,6 +469,14 @@ PARAMETER_DIRECTION: dict[str, str] = {
     "cet1_min": Direction.FLOOR.value,
     "tier1_min": Direction.FLOOR.value,
     "leverage_min": Direction.FLOOR.value,
+    # capital buffers (a board may only hold MORE) and the AT1 / Tier 2
+    # recognition caps (a board may only recognise LESS — a lower cap is the
+    # stricter reading, so ceiling). Governed since 2026-09-19 (B2 / M21).
+    "ccb1_pct": Direction.FLOOR.value,
+    "ccyb_pct": Direction.FLOOR.value,
+    "dsib_buffer_pct": Direction.FLOOR.value,
+    "at1_cap_pct_rwa": Direction.CEILING.value,
+    "tier2_cap_pct_rwa": Direction.CEILING.value,
     # liquidity minima
     "lcr_min": Direction.FLOOR.value,
     "nsfr_min": Direction.FLOOR.value,

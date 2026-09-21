@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -28,11 +29,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.models import (
     AuditEvent,
+    Bank,
     RegulatoryPackage,
     RegulatoryRun,
 )
 from app.schemas.examiner import (
     ExaminerDocumentationRead,
+    ExaminerIcaapCycleRead,
     ExaminerPackageRead,
     ExaminerRunRead,
     ExaminerRunsRead,
@@ -43,6 +46,7 @@ from app.services.liquidity_ewi import (
     _get_bank_or_404,  # noqa: PLC2701 - shared tenant guards, one definition
     _get_period_or_404,  # noqa: PLC2701
 )
+from app.services.regulatory_reporting import family_access
 
 
 def _canonical_hash(snapshot: dict[str, Any]) -> str:
@@ -157,6 +161,11 @@ def documentation_package(
         )
         .order_by(RegulatoryPackage.return_code, RegulatoryPackage.version.desc())
     ).all()
+    # A package of a GATED family is served to an impersonated examiner (a
+    # supervisor may read what was filed) but hidden from a tenant principal
+    # without the binding — the same decision the package routes make, taken
+    # through the same authority so the two cannot disagree.
+    hidden = family_access.hidden_families(db, ctx, bank)
     package_reads = [
         ExaminerPackageRead(
             package_id=row.id,
@@ -167,6 +176,7 @@ def documentation_package(
             content_digest=row.content_digest,
         )
         for row in packages
+        if row.return_family not in hidden
     ]
 
     audit_count = (
@@ -177,6 +187,7 @@ def documentation_package(
         )
         or 0
     )
+    icaap_cycles = _examiner_icaap_cycles(db, ctx, bank, period.period_end, hidden=hidden)
     cfp = get_cfp(db, ctx, bank_id)
     # Register reads are import-light here: the examiner package cites their
     # dedicated endpoints rather than duplicating every row inline.
@@ -199,5 +210,59 @@ def documentation_package(
             f"/api/v1/banks/{bank.id}/crm-haircuts",
             f"/api/v1/banks/{bank.id}/liquidity/ewis",
             f"/api/v1/banks/{bank.id}/capital-plan",
+            *(
+                [f"/api/v1/banks/{bank.id}/icaap/cycles"]
+                if icaap_cycles
+                else []
+            ),
         ],
+        icaap_cycles=icaap_cycles,
     )
+
+
+def _examiner_icaap_cycles(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    period_end: date,
+    *,
+    hidden: frozenset[str],
+) -> list[ExaminerIcaapCycleRead]:
+    """The ICAAP cycles for this reporting date that a supervisor may read.
+
+    Frozen and later only — the same rule ``icaap.guards.get_cycle_or_404``
+    applies to every other examiner ICAAP read, resolved from that module so
+    there is one definition of "what a supervisor may see" rather than two.
+    """
+    from app.models.icaap import IcaapCycle  # noqa: PLC0415 - avoid an import cycle
+    from app.services.icaap.guards import EXAMINER_VISIBLE_STATUSES  # noqa: PLC0415
+
+    if "icaap" in hidden:
+        return []
+    rows = db.scalars(
+        select(IcaapCycle)
+        .where(
+            IcaapCycle.organization_id == ctx.organization_id,
+            IcaapCycle.bank_id == bank.id,
+            IcaapCycle.as_of_date == period_end,
+            IcaapCycle.status.in_(sorted(EXAMINER_VISIBLE_STATUSES)),
+        )
+        .order_by(IcaapCycle.as_of_date.desc(), IcaapCycle.created_at.desc())
+    ).all()
+    return [
+        ExaminerIcaapCycleRead(
+            cycle_id=row.id,
+            cycle_kind=row.cycle_kind,
+            basis=row.basis,
+            status=row.status,
+            round=getattr(row, "review_round", 1) or 1,
+            package_id=getattr(row, "package_id", None),
+            framework_code=row.framework_code,
+            framework_version=row.framework_version,
+            framework_digest=row.framework_sha256,
+            frozen_at=row.frozen_at,
+            board_approved_at=getattr(row, "board_approved_at", None),
+            submitted_at=getattr(row, "submitted_at", None),
+        )
+        for row in rows
+    ]

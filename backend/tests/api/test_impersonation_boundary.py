@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import datetime as dt
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -45,7 +45,7 @@ from app.core.config import get_settings
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.integrations.storage.base import StoredObjectHead
-from app.models import Bank, User
+from app.models import Bank, RegulatoryPackage, User
 from app.services import authorization
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.factories import CaseFactory, DocumentFactory
@@ -53,6 +53,7 @@ from tests.api.helpers import ORG_1, USER_1, headers
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 _UNSAFE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
+_SUBMISSION_BANK_ID = "BK-IMPBND01"
 
 # Every unsafe-method route that still resolves only the read-only ``Tenant``
 # context, with the reason each is tolerated. The sweep asserts the read-guarded
@@ -208,26 +209,127 @@ def test_the_fourteen_audited_routes_now_carry_a_role_gate(client: TestClient) -
         assert guards[entry], f"{entry} is still behind the read-only Tenant guard"
 
 
-def test_account_admin_cannot_use_approver_gated_regulatory_submission(
+def _submission_fixture() -> UUID:
+    """One bank and one ordinary (ungated) package, for the submission gate."""
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        if session.get(Bank, _SUBMISSION_BANK_ID) is None:
+            session.add(
+                Bank(
+                    id=_SUBMISSION_BANK_ID,
+                    organization_id=ORG_1,
+                    name="Submission Boundary Bank",
+                    short_name="Submission",
+                    currency="GHS",
+                    jurisdiction_code="GH",
+                    license_type="universal",
+                    institution_type=FALLBACK_TYPE_CODE,
+                )
+            )
+            session.commit()
+        package = RegulatoryPackage(
+            organization_id=ORG_1,
+            bank_id=_SUBMISSION_BANK_ID,
+            return_family="liquidity",
+            return_code="LCR-NSFR",
+            reporting_date=dt.date(2026, 3, 31),
+            frequency="monthly",
+            basis="solo",
+            status="approved",
+            version=1,
+            snapshot={"sections": []},
+            source_runs=[],
+            generated_by=uuid4(),
+            generated_at=utc_now(),
+        )
+        session.add(package)
+        session.commit()
+        return package.id
+    finally:
+        session.close()
+
+
+def _grant_institution_coverage(bundle: RoleBundle, module: ModuleScope) -> int:
+    """One institution-scoped binding on the submission bank; returns the new authv."""
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=bundle,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                _SUBMISSION_BANK_ID,
+                module,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
+            reason="exercise the submission gate's coverage/authority split",
+        )
+        user = session.get(User, USER_1)
+        assert user is not None
+        session.refresh(user)
+        return user.authorization_version
+    finally:
+        session.close()
+
+
+def test_account_admin_cannot_use_the_regulatory_submission_route(
     db_client: TestClient,
 ) -> None:
     """The legacy admin split must remove operational superuser authority.
 
-    The bank must exist in the caller's organization because tenant-bank
-    resolution precedes the role dependency; the regulatory package still need
-    not exist, because the role dependency runs before the workflow lookup,
-    proving an account-only administrator cannot reach the submission service
-    through the real regulatory route.
+    REWRITTEN 2026-09-20. This test used to assert 403 on a package that does
+    not exist, and its docstring said why: "the role dependency runs before the
+    workflow lookup". That was true while submit was gated by the scalar
+    ``ApproverTenant``, and it is the contract the filing cutover removed —
+    transmission is now a scoped authority, so the route resolves the resource
+    first like every other binding-enforced package route.
+
+    The refusal therefore has two shapes, and both are asserted here because
+    asserting one is how the distinction drifts back (D-073, and the same rule
+    AGENTS.md states for bank detail/period/fact routes):
+
+    * **a package the route cannot resolve for this caller -> 404**, and it is
+      404 whether the package is absent or the caller has no coverage of the
+      institution. Nothing about what exists is confirmed before authority is.
+      (The coverage half of that rule is binding-derived only for a GATED
+      family, and is pinned where it lives:
+      ``test_package_authorization.py::test_a_gated_family_still_hides_before_it_refuses``.)
+    * **a resolvable package, the action's authority missing -> 403**, naming
+      what is missing. The caller's own institution is not a secret from them.
+      An account administrator is never told to go and get the ``analyst`` role,
+      because no scalar role supplies filing authority any more.
+
+    The bank is materialised BEFORE the first call (#208): tenant-bank
+    resolution precedes every authority dependency, so without it the 404 would
+    be about the institution and would prove nothing about the package.
     """
 
-    _materialize_sample_bank()
-    response = db_client.post(
-        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{uuid4()}/submit",
+    package_id = _submission_fixture()
+    absent = db_client.post(
+        f"/api/v1/banks/{_SUBMISSION_BANK_ID}/regulatory-packages/{uuid4()}/submit",
         headers=headers(roles=("account_admin",)),
         json={"channel": "email"},
     )
-    assert response.status_code == 403
-    assert "analyst" in response.json()["error"]["message"]
+    assert absent.status_code == 404, absent.text
+
+    # A package that does resolve, and coverage of its institution — from a
+    # bundle that carries `view` over the filing scope but not `submit`.
+    authv = _grant_institution_coverage(RoleBundle.VIEWER, ModuleScope.REGULATORY)
+    refused = db_client.post(
+        f"/api/v1/banks/{_SUBMISSION_BANK_ID}/regulatory-packages/{package_id}/submit",
+        headers=headers(roles=("account_admin",), authorization_version=authv),
+        json={"channel": "email"},
+    )
+    assert refused.status_code == 403, refused.text
+    message = refused.json()["error"]["message"]
+    assert "Validator" in message
+    assert "analyst" not in message
 
 
 def test_account_admin_is_limited_to_account_administration(db_client: TestClient) -> None:
@@ -652,3 +754,162 @@ def test_bank_regulatory_plane_is_unchanged_by_the_boundary_guard(
     for hdrs in read_only_principals:
         listing = db_client.get("/api/v1/banks", headers=hdrs)
         assert listing.status_code == 200, listing.text
+
+
+# --- 4. the ICAAP examiner branch ---------------------------------------------
+def test_impersonated_examiner_reads_only_frozen_icaap_cycles(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A supervisor reads what a Board approved, not a bank's working draft.
+
+    The ICAAP workspace before a freeze is text nobody has signed and figures
+    nobody has reviewed. Its own dependency admits an impersonated examiner —
+    the only place in the product that bypasses the binding evaluator — so the
+    limit has to be pinned here: cycles that were frozen, and nothing else.
+    """
+    get_settings.cache_clear()
+
+    # Imported here rather than at module scope: this suite walks the whole
+    # route table, and importing the ICAAP models at import time would register
+    # them before the other cases build their app.
+    from app.domain.icaap.frameworks import registry  # noqa: PLC0415
+    from app.models import RegulatoryPackage  # noqa: PLC0415
+    from app.models.icaap import IcaapCycle  # noqa: PLC0415
+    from tests.fixtures.canonical_bank_fixture import (  # noqa: PLC0415
+        SAMPLE_BANK_ID,
+        materialize_canonical_test_book,
+    )
+
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        materialize_canonical_test_book(session)
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ANALYST,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.CAPITAL,
+                SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
+            reason="Create a draft ICAAP for the examiner boundary test.",
+        )
+        session.commit()
+        user = session.get(User, USER_1)
+        assert user is not None
+        session.refresh(user)
+        analyst = headers(roles=("analyst",), authorization_version=user.authorization_version)
+    finally:
+        session.close()
+
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/icaap"
+    created = db_client.post(
+        f"{base}/cycles",
+        json={
+            "fiscal_year": 2025,
+            "cycle_kind": "rehearsal",
+            "basis": "solo",
+            "framework_code": "bog_icaap",
+            "framework_version": "2026.02-ed.1",
+            "reason": "Dry run",
+        },
+        headers=analyst,
+    )
+    assert created.status_code == 201, created.text
+    cycle_id = created.json()["id"]
+
+    examiner = _impersonation_headers()
+    listing = db_client.get(f"{base}/cycles", headers=examiner)
+    assert listing.status_code == 200
+    assert listing.json()["cycles"] == [], "a draft ICAAP is not a supervisor's to read"
+
+    for path in (
+        f"{base}/cycles/{cycle_id}",
+        f"{base}/cycles/{cycle_id}/sections",
+        f"{base}/cycles/{cycle_id}/sections/executive_summary",
+        f"{base}/cycles/{cycle_id}/readiness",
+        f"{base}/cycles/{cycle_id}/blocks",
+        f"{base}/cycles/{cycle_id}/attachments",
+    ):
+        response = db_client.get(path, headers=examiner)
+        assert response.status_code == 404, f"{path}: {response.text}"
+
+    # A frozen cycle IS a supervisor's to read. A rehearsal can never be sealed
+    # (it is a dry run), so the frozen row is written directly here, with the
+    # package row its foreign key requires.
+    frozen_id = uuid4()
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        package = RegulatoryPackage(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            return_family="icaap_stress",
+            return_code="ICAAP-STRESS",
+            reporting_date=dt.date(2025, 12, 31),
+            frequency="annual",
+            basis="solo",
+            status="generated",
+            version=1,
+            snapshot={},
+            generated_by=USER_1,
+        )
+        session.add(package)
+        session.flush()
+        session.add(
+            IcaapCycle(
+                id=frozen_id,
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                fiscal_year=2025,
+                as_of_date=dt.date(2025, 12, 31),
+                cycle_kind="annual",
+                basis="solo",
+                title="ICAAP FY2025 (Solo)",
+                framework_code="bog_icaap",
+                framework_version="2026.02-ed.1",
+                framework_sha256=registry.get("bog_icaap", "2026.02-ed.1").digest,
+                status="frozen",
+                due_date=dt.date(2026, 3, 31),
+                due_date_basis="framework",
+                package_id=package.id,
+                frozen_at=utc_now(),
+                created_by=USER_1,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    listed = db_client.get(f"{base}/cycles", headers=examiner)
+    assert listed.status_code == 200
+    assert [entry["id"] for entry in listed.json()["cycles"]] == [str(frozen_id)]
+    detail = db_client.get(f"{base}/cycles/{frozen_id}", headers=examiner)
+    assert detail.status_code == 200
+    # ...and the draft alongside it is still invisible.
+    assert db_client.get(f"{base}/cycles/{cycle_id}", headers=examiner).status_code == 404
+
+
+def test_an_impersonated_examiner_can_never_write_to_the_icaap_workspace(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    get_settings.cache_clear()
+    base = "/api/v1/banks/BK-SAMP0001/icaap"
+    cycle = uuid4()
+    unsafe = (
+        ("POST", f"{base}/cycles"),
+        ("PATCH", f"{base}/cycles/{cycle}"),
+        ("POST", f"{base}/cycles/{cycle}/archive"),
+        ("POST", f"{base}/cycles/{cycle}/rebase"),
+        ("PUT", f"{base}/cycles/{cycle}/sections/executive_summary/working"),
+        ("POST", f"{base}/cycles/{cycle}/sections/executive_summary/versions"),
+        ("POST", f"{base}/cycles/{cycle}/blocks"),
+    )
+    for method, path in unsafe:
+        response = _call(db_client, method, path, _impersonation_headers())
+        assert response.status_code == 403, f"{method} {path}: {response.text}"

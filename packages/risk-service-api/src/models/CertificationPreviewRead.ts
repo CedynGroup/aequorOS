@@ -46,6 +46,13 @@ import {
   RegisterStateDigestToJSON,
   RegisterStateDigestToJSONTyped,
 } from "./RegisterStateDigest";
+import type { SigningRole } from "./SigningRole";
+import {
+  SigningRoleFromJSON,
+  SigningRoleFromJSONTyped,
+  SigningRoleToJSON,
+  SigningRoleToJSONTyped,
+} from "./SigningRole";
 import type { OutstandingSlotRead } from "./OutstandingSlotRead";
 import {
   OutstandingSlotReadFromJSON,
@@ -81,6 +88,12 @@ export interface CertificationPreviewRead {
    * @memberof CertificationPreviewRead
    */
   bindingClass: BindingClass;
+  /**
+   *
+   * @type {Array<SigningRole>}
+   * @memberof CertificationPreviewRead
+   */
+  blockedBy?: Array<SigningRole>;
   /**
    *
    * @type {string}
@@ -147,6 +160,12 @@ export interface CertificationPreviewRead {
    * @memberof CertificationPreviewRead
    */
   signedSourceRuns: Array<{ [key: string]: any }>;
+  /**
+   *
+   * @type {Array<SigningRole>}
+   * @memberof CertificationPreviewRead
+   */
+  signingOrder?: Array<SigningRole>;
   /**
    *
    * @type {string}
@@ -217,6 +236,10 @@ export function CertificationPreviewReadFromJSONTyped(
     attestationState: AttestationStateFromJSON(json["attestation_state"]),
     basis: json["basis"],
     bindingClass: BindingClassFromJSON(json["binding_class"]),
+    blockedBy:
+      json["blocked_by"] == null
+        ? undefined
+        : (json["blocked_by"] as Array<any>).map(SigningRoleFromJSON),
     certificationDigest: json["certification_digest"],
     contentDigest: json["content_digest"],
     frozenCertificationDigest: FrozenCertificationDigestFromJSON(
@@ -234,6 +257,10 @@ export function CertificationPreviewReadFromJSONTyped(
     reportingDate: new Date(json["reporting_date"]),
     returnCode: json["return_code"],
     signedSourceRuns: json["signed_source_runs"],
+    signingOrder:
+      json["signing_order"] == null
+        ? undefined
+        : (json["signing_order"] as Array<any>).map(SigningRoleFromJSON),
     statement: json["statement"],
   };
 }
@@ -256,6 +283,10 @@ export function CertificationPreviewReadToJSONTyped(
     attestation_state: AttestationStateToJSON(value["attestationState"]),
     basis: value["basis"],
     binding_class: BindingClassToJSON(value["bindingClass"]),
+    blocked_by:
+      value["blockedBy"] == null
+        ? undefined
+        : (value["blockedBy"] as Array<any>).map(SigningRoleToJSON),
     certification_digest: value["certificationDigest"],
     content_digest: value["contentDigest"],
     frozen_certification_digest: FrozenCertificationDigestToJSON(
@@ -273,6 +304,10 @@ export function CertificationPreviewReadToJSONTyped(
     reporting_date: value["reportingDate"].toISOString().substring(0, 10),
     return_code: value["returnCode"],
     signed_source_runs: value["signedSourceRuns"],
+    signing_order:
+      value["signingOrder"] == null
+        ? undefined
+        : (value["signingOrder"] as Array<any>).map(SigningRoleToJSON),
     statement: value["statement"],
   };
 }

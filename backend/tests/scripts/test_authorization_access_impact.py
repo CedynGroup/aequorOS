@@ -131,8 +131,63 @@ def test_report_flags_users_the_dashboard_would_show_nothing(db_session: Session
     # The scalar role is reported for context only; it never produces access.
     assert nobody_row.scalar_role == "viewer"
 
+    # Nobody in this fixture can file: the Validator bundle is the only carrier
+    # of `submit`, and no migration or scalar role produces it.
+    assert all(row.filing_institutions == [] for row in rows.values())
+
     table = render_table(list(rows.values()))
     assert "account_plane_only" in table
     assert f"{BANK}: all" in table
     assert f"{BANK}: liq" in table
     assert "no_bindings,no_product_view" in table
+
+
+def test_the_report_names_who_may_transmit_a_return(db_session: Session) -> None:
+    """The filing cutover's gate: the `filing` column is the after-picture.
+
+    Before 2026-09-20 the answer was "every scalar admin or approver", which is
+    the `role` column beside it. After, it is exactly the holders of a
+    Regulatory Reporting `submit` binding — and an Approver, however complete
+    the grant, is not one of them.
+    """
+    db_session.add(Organization(id=ORG, name="Filing impact"))
+    db_session.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Impact Bank",
+            short_name="Impact",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    approver = _user(db_session, "checker@impact.example", role="approver")
+    validator = _user(db_session, "filer@impact.example")
+    db_session.commit()
+
+    _grant(
+        db_session,
+        approver,
+        RoleBundle.APPROVER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db_session,
+        validator,
+        RoleBundle.VALIDATOR,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+    assert rows["checker@impact.example"].filing_institutions == []
+    assert rows["filer@impact.example"].filing_institutions == [BANK]
+    assert BANK in render_table(list(rows.values()))

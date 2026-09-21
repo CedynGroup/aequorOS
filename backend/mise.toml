@@ -33,6 +33,10 @@ RUN_INPROCESS_WORKER=0 uv run fastapi dev app/main.py --host "${HOST:-127.0.0.1}
 description = "Run the live-engine background worker (claim → dispatch → retry)"
 run = "uv run python -m app.worker"
 
+[tasks."risk-service:worker-ai"]
+description = "Run the AI worker (the ai lane only — the one process with the model key)"
+run = "WORKER_JOB_TYPES=lane:ai RUN_INPROCESS_WORKER=0 uv run python -m app.worker"
+
 [tasks."risk-service:test"]
 description = "Run pytest"
 run = "uv run pytest"

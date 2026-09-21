@@ -20,17 +20,34 @@ import {
 } from "./PolicyRead";
 
 /**
+ * The configured policies, and the deployment switches that outrank them.
  *
+ * The switches ride on the LIST because a row and the switch that suspends it
+ * are one answer to one question — "what is in force?" — and a settings screen
+ * that showed the rows without them would state a requirement the platform is
+ * not applying.
  * @export
  * @interface PolicyListRead
  */
 export interface PolicyListRead {
   /**
    *
+   * @type {boolean}
+   * @memberof PolicyListRead
+   */
+  icaapSigningSuspended?: boolean;
+  /**
+   *
    * @type {Array<PolicyRead>}
    * @memberof PolicyListRead
    */
   policies: Array<PolicyRead>;
+  /**
+   *
+   * @type {boolean}
+   * @memberof PolicyListRead
+   */
+  signingSuspendedDeploymentWide?: boolean;
 }
 
 /**
@@ -56,7 +73,15 @@ export function PolicyListReadFromJSONTyped(
   }
   return {
     ...json,
+    icaapSigningSuspended:
+      json["icaap_signing_suspended"] == null
+        ? undefined
+        : json["icaap_signing_suspended"],
     policies: (json["policies"] as Array<any>).map(PolicyReadFromJSON),
+    signingSuspendedDeploymentWide:
+      json["signing_suspended_deployment_wide"] == null
+        ? undefined
+        : json["signing_suspended_deployment_wide"],
   };
 }
 
@@ -73,6 +98,8 @@ export function PolicyListReadToJSONTyped(
   }
 
   return {
+    icaap_signing_suspended: value["icaapSigningSuspended"],
     policies: (value["policies"] as Array<any>).map(PolicyReadToJSON),
+    signing_suspended_deployment_wide: value["signingSuspendedDeploymentWide"],
   };
 }

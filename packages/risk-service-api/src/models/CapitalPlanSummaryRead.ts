@@ -32,6 +32,13 @@ import {
   CapitalPlanSummaryReadLatestIlaapToJSON,
   CapitalPlanSummaryReadLatestIlaapToJSONTyped,
 } from "./CapitalPlanSummaryReadLatestIlaap";
+import type { CapitalPlanSummaryReadProjectionUnavailable } from "./CapitalPlanSummaryReadProjectionUnavailable";
+import {
+  CapitalPlanSummaryReadProjectionUnavailableFromJSON,
+  CapitalPlanSummaryReadProjectionUnavailableFromJSONTyped,
+  CapitalPlanSummaryReadProjectionUnavailableToJSON,
+  CapitalPlanSummaryReadProjectionUnavailableToJSONTyped,
+} from "./CapitalPlanSummaryReadProjectionUnavailable";
 
 /**
  *
@@ -63,6 +70,12 @@ export interface CapitalPlanSummaryRead {
    * @memberof CapitalPlanSummaryRead
    */
   projection?: CapitalPlanSummaryReadProjection;
+  /**
+   *
+   * @type {CapitalPlanSummaryReadProjectionUnavailable}
+   * @memberof CapitalPlanSummaryRead
+   */
+  projectionUnavailable?: CapitalPlanSummaryReadProjectionUnavailable;
 }
 
 /**
@@ -105,6 +118,12 @@ export function CapitalPlanSummaryReadFromJSONTyped(
       json["projection"] == null
         ? undefined
         : CapitalPlanSummaryReadProjectionFromJSON(json["projection"]),
+    projectionUnavailable:
+      json["projection_unavailable"] == null
+        ? undefined
+        : CapitalPlanSummaryReadProjectionUnavailableFromJSON(
+            json["projection_unavailable"],
+          ),
   };
 }
 
@@ -127,5 +146,8 @@ export function CapitalPlanSummaryReadToJSONTyped(
     current: CapitalPlanSummaryReadApprovedToJSON(value["current"]),
     latest_ilaap: CapitalPlanSummaryReadLatestIlaapToJSON(value["latestIlaap"]),
     projection: CapitalPlanSummaryReadProjectionToJSON(value["projection"]),
+    projection_unavailable: CapitalPlanSummaryReadProjectionUnavailableToJSON(
+      value["projectionUnavailable"],
+    ),
   };
 }

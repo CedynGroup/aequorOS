@@ -472,6 +472,204 @@ class DatabaseDirectSettings(BaseSettings):
     )
 
 
+class IcaapSettings(BaseSettings):
+    """ICAAP workspace settings.
+
+    There is no on/off switch. ICAAP is part of the product for every bank
+    tenant, and eligibility is decided by the things that genuinely decide it:
+    the institution's licence class (``require_bank_class``) and the caller's
+    capital/confidential authority. A deployment flag would have been a fourth
+    answer to a question those two already answer.
+
+    ``ICAAP_FRAMEWORKS_ENABLED`` is the per-framework switch: a comma-separated
+    list of framework codes a tenant may pin. Reference frameworks can ship as
+    data before the platform can file to that regulator.
+
+    ``ICAAP_SIGNING_ENABLED`` is NOT that fourth answer either: it gates the
+    SIGNING CEREMONY on the ICAAP report, never the workspace. See the field.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    max_attachment_bytes: int = Field(default=25_000_000, alias="ICAAP_MAX_ATTACHMENT_BYTES")
+    frameworks_enabled: str = Field(default="bog_icaap", alias="ICAAP_FRAMEWORKS_ENABLED")
+    #: Whether the ICAAP report is signed at all. ``YES``/``NO`` (``1``/``0``
+    #: and ``true``/``false`` are the same switch — Pydantic parses any of them).
+    #:
+    #: The founder's instruction: the ICAAP signing ceremony — Board slot
+    #: included — is controlled from the environment the way the prudential
+    #: returns' ceremony is controlled by ``ATTESTATION_SIGNING_ENABLED``, so it
+    #: can be switched back on if a Board requires it after onboarding. It ships
+    #: **NO** because no rule in the recovered BoG text requires the Board (or
+    #: anyone) to e-sign the filed ICAAP PDF (D-043), and Board approval is
+    #: evidenced regardless by the in-platform BRC/Board decisions, the challenge
+    #: log and the mandatory board-resolution attachment.
+    #:
+    #: NO does not delete anything. It is applied AFTER policy resolution
+    #: (``attestation.policy._apply_icaap_signing_switch``), so a configured
+    #: ``ReturnSigningPolicy`` row for the ICAAP family goes DORMANT — the ICAAP
+    #: return takes the bare maker-checker approval path — and flipping the
+    #: switch to YES restores that row unchanged. It is scoped to the ``icaap``
+    #: return family alone: no other family's signing is affected, which is
+    #: exactly the difference between this and the deployment-wide
+    #: ``ATTESTATION_ESIGN_REQUIRED`` kill-switch.
+    #:
+    #: This is NOT ``ICAAP_ENABLED``: D-046 removed the ICAAP availability flag
+    #: on the founder's instruction and it is not coming back under another name.
+    signing_enabled: bool = Field(default=False, alias="ICAAP_SIGNING_ENABLED")
+    #: An ADDITIONAL directory of framework JSON, for tests and rehearsals only.
+    #:
+    #: It exists because 15 of the 17 Ghana sections are still
+    #: ``pending_primary_text`` (D-006), so a non-rehearsal freeze cannot
+    #: succeed against the real instrument and the filing path would otherwise
+    #: have no end-to-end proof at all. A framework published this way is
+    #: indistinguishable from a real one once loaded, which is exactly why a
+    #: deployed environment must never load one: a bank could file a report
+    #: whose checklist came from a file nobody reviewed.
+    #:
+    #: The refusal is an ALLOW-LIST (``local``/``test``), not "not production" —
+    #: staging runs the same containers on a host somebody else can reach.
+    extra_frameworks_dir: str | None = Field(default=None, alias="ICAAP_EXTRA_FRAMEWORKS_DIR")
+
+    @property
+    def enabled_framework_codes(self) -> frozenset[str]:
+        return frozenset(
+            code.strip() for code in self.frameworks_enabled.split(",") if code.strip()
+        )
+
+    @field_validator("extra_frameworks_dir", mode="before")
+    @classmethod
+    def _empty_means_unset(cls, value: str | None) -> str | None:
+        if value is not None and not str(value).strip():
+            return None
+        return value
+
+    def extra_framework_roots(self, app_env: str) -> tuple[Path, ...]:
+        """The extra roots this environment may load, refusing a deployed one.
+
+        Raises rather than ignoring: a deployment that set the variable meant
+        to load something, and silently loading nothing would be a framework
+        that is present in the config and absent from the product.
+        """
+        if not self.extra_frameworks_dir:
+            return ()
+        if not is_undeployed_environment(app_env):
+            msg = (
+                "ICAAP_EXTRA_FRAMEWORKS_DIR loads ICAAP frameworks that no reviewer has "
+                f"approved and is refused in the '{app_env}' environment. Publish the "
+                "framework under app/domain/icaap/frameworks/ instead."
+            )
+            raise ValueError(msg)
+        return tuple(
+            Path(entry.strip()).expanduser()
+            for entry in self.extra_frameworks_dir.split(",")
+            if entry.strip()
+        )
+
+
+class AiSettings(BaseSettings):
+    """Governed AI drafting and commentary (app/services/ai).
+
+    This is the ONLY part of the platform that sends tenant data to an external
+    service, so the switches here are egress gates, not feature flags — they are
+    unrelated to ICAAP availability, which D-046 settled as "always on".
+
+    ``AI_COMMENTARY_ENABLED`` is the deployment kill-switch, off by default, and
+    it is checked at BOTH enqueue and run: a request can sit in the queue across
+    a toggle change, and a job that started before someone pulled the switch must
+    not be the one call that still goes out. With the recommended topology (D-026)
+    the API and the AI worker read it from different env stores, so either one off
+    stops model calls.
+
+    ``AI_PRODUCTION_APPROVAL_REF`` plus the committed
+    ``app/services/ai/approved_configurations.json`` are what make "not yet
+    approved for production" enforceable in code rather than by memory: in any
+    DEPLOYED environment a request is refused unless the ref is set AND the exact
+    (feature, prompt version, model, effort, environment) tuple has been reviewed
+    into that file. Changing the prompt, the model or the effort silently falls
+    out of approval, which is the intended behaviour.
+
+    Every number the AI path uses lives here (D-024). Logic reads
+    ``get_settings().ai.*``; no module under ``app/domain/ai`` or
+    ``app/services/ai`` may contain a numeric tunable.
+
+    The API KEY is deliberately NOT here — see
+    ``app.services.ai.client.AiCredentialSettings``, which is instantiated only
+    inside the model client so the API, the core worker and the operator process
+    never parse the key into memory even if it were present in their env.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    commentary_enabled: bool = Field(default=False, alias="AI_COMMENTARY_ENABLED")
+    model: str = Field(default="claude-opus-5", alias="AI_MODEL")
+    effort: Literal["low", "medium", "high", "xhigh", "max"] = Field(
+        default="high", alias="AI_EFFORT"
+    )
+    #: Thinking is ON by default on Opus 5 and ``max_tokens`` caps thinking PLUS
+    #: response, so this must leave room for both. Kept under the SDK's
+    #: non-streaming comfort limit; a larger draft needs streaming, not a bigger
+    #: number here.
+    max_output_tokens: int = Field(default=16_000, alias="AI_MAX_OUTPUT_TOKENS")
+    request_timeout_seconds: float = Field(default=600.0, alias="AI_REQUEST_TIMEOUT_SECONDS")
+    max_retries: int = Field(default=2, alias="AI_MAX_RETRIES")
+    #: ``default`` opts into server-side refusal fallbacks; ``off`` pins the
+    #: request to one model, which counsel may require.
+    fallbacks: Literal["default", "off"] = Field(default="default", alias="AI_FALLBACKS")
+    prompt_cache_ttl: Literal["5m", "1h"] = Field(default="5m", alias="AI_PROMPT_CACHE_TTL")
+    stale_margin_seconds: float = Field(default=120.0, alias="AI_STALE_MARGIN_SECONDS")
+    #: One attempt: the SDK already retries timeouts and 5xx, and a job-level
+    #: retry of an API outcome would double-spend and duplicate a sealed row.
+    job_max_attempts: int = Field(default=1, alias="AI_JOB_MAX_ATTEMPTS")
+    queue_expiry_seconds: int = Field(default=3600, alias="AI_QUEUE_EXPIRY_SECONDS")
+    enqueue_debounce_seconds: int = Field(default=30, alias="AI_ENQUEUE_DEBOUNCE_SECONDS")
+    daily_requests_per_org: int = Field(default=200, alias="AI_DAILY_REQUESTS_PER_ORG")
+    daily_requests_per_user: int = Field(default=40, alias="AI_DAILY_REQUESTS_PER_USER")
+    daily_output_tokens_per_org: int = Field(
+        default=2_000_000, alias="AI_DAILY_OUTPUT_TOKENS_PER_ORG"
+    )
+    max_facts_per_sheet: int = Field(default=120, alias="AI_MAX_FACTS_PER_SHEET")
+    max_paragraphs: int = Field(default=12, alias="AI_MAX_PARAGRAPHS")
+    max_paragraph_chars: int = Field(default=2000, alias="AI_MAX_PARAGRAPH_CHARS")
+    max_open_questions: int = Field(default=8, alias="AI_MAX_OPEN_QUESTIONS")
+    max_manual_label_chars: int = Field(default=80, alias="AI_MAX_MANUAL_LABEL_CHARS")
+    #: A single-token deny term shorter than this is dropped. A two-letter bank
+    #: short name as a deny term would reject every draft containing that letter
+    #: pair; a common-word short name ("Access", "First") costs some good drafts
+    #: either way, which is why this is tunable rather than fixed.
+    min_deny_term_chars: int = Field(default=4, alias="AI_MIN_DENY_TERM_CHARS")
+    #: Served to the dashboard as ``poll_after_seconds`` so no interval literal
+    #: lives in the browser bundle.
+    client_poll_seconds: int = Field(default=5, alias="AI_CLIENT_POLL_SECONDS")
+    consent_version: str = Field(default="ai-consent-2026-09-v1", alias="AI_CONSENT_VERSION")
+    production_approval_ref: str | None = Field(
+        default=None, alias="AI_PRODUCTION_APPROVAL_REF"
+    )
+    #: ``recorded`` replays fixtures and is REFUSED outside local/test.
+    model_backend: Literal["anthropic", "recorded"] = Field(
+        default="anthropic", alias="AI_MODEL_BACKEND"
+    )
+    recorded_fixture_path: str | None = Field(default=None, alias="AI_RECORDED_FIXTURE_PATH")
+
+    @field_validator("production_approval_ref", "recorded_fixture_path", mode="before")
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @property
+    def stale_after_seconds(self) -> float:
+        """The reclaim window for an AI job.
+
+        The SDK retries timeouts, so one ``generate`` can legitimately occupy a
+        worker for ``timeout x (retries + 1)``. A reclaim window shorter than
+        that reclaims a live job and runs it twice — the ``etl_dedup`` lesson,
+        applied before it can happen rather than after.
+        """
+        return self.request_timeout_seconds * (self.max_retries + 1) + self.stale_margin_seconds
+
+
 class DeskSettings(BaseSettings):
     """Market research desk scheduling settings (app/services/market_desk).
 
@@ -565,8 +763,17 @@ class WorkerSettings(BaseSettings):
     # the worker falls back to DATABASE_URL (correct for SQLite tests and any
     # deployment whose main role already bypasses RLS).
     worker_database_url: str | None = Field(default=None, alias="WORKER_DATABASE_URL")
+    # Which job types THIS worker process claims and reaps. Unset means "every
+    # type in the default (core) lane" — the AI lane is never in the default,
+    # so adding an AI job type to HANDLERS cannot make the core worker, or the
+    # API's in-process thread, claim work that needs the model key.
+    #
+    # Tokens are comma-separated job types or ``lane:<name>``. Parsing and
+    # validation live in ``app.worker.resolve_job_types`` because config must
+    # not import the worker.
+    worker_job_types: str | None = Field(default=None, alias="WORKER_JOB_TYPES")
 
-    @field_validator("worker_database_url", "worker_id", mode="before")
+    @field_validator("worker_database_url", "worker_id", "worker_job_types", mode="before")
     @classmethod
     def empty_means_unconfigured(cls, value: str | None) -> str | None:
         """WORKER_DATABASE_URL="" falls back to DATABASE_URL (same rule as
@@ -651,6 +858,8 @@ class Settings(BaseSettings):
     temenos: TemenosSettings = Field(default_factory=TemenosSettings)
     database_direct: DatabaseDirectSettings = Field(default_factory=DatabaseDirectSettings)
     desk: DeskSettings = Field(default_factory=DeskSettings)
+    icaap: IcaapSettings = Field(default_factory=IcaapSettings)
+    ai: AiSettings = Field(default_factory=AiSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     smtp: SmtpSettings = Field(default_factory=SmtpSettings)
     attestation: AttestationSettings = Field(default_factory=AttestationSettings)

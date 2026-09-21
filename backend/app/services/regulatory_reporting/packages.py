@@ -9,13 +9,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import RegulatoryPackage
+from app.models import PackageWorkflowStage, RegulatoryPackage
 from app.schemas.regulatory_reporting import (
     RegulatoryPackageListRead,
     RegulatoryPackageRead,
     ReturnTemplateListRead,
     ReturnTemplateRead,
 )
+from app.services.regulatory_reporting import family_access
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
     get_package_or_404,
@@ -46,6 +47,13 @@ def list_packages(  # noqa: PLR0913
         RegulatoryPackage.organization_id == ctx.organization_id,
         RegulatoryPackage.bank_id == bank.id,
     )
+    # A package of a GATED family that this principal may not see is not merely
+    # unopenable — it must not appear in the list at all, because a row showing
+    # "ICAAP-REPORT, FY2026, submitted" is itself the disclosure. Applied as one
+    # NOT-IN over the query rather than per row (ICAAP P3 §4.2).
+    hidden = family_access.hidden_families(db, ctx, bank)
+    if hidden:
+        conditions += (RegulatoryPackage.return_family.notin_(sorted(hidden)),)
     if return_code is not None:
         conditions += (RegulatoryPackage.return_code == return_code,)
     if return_family is not None:
@@ -76,9 +84,31 @@ def list_packages(  # noqa: PLR0913
             .offset(offset)
         )
     )
+    # One query for every row's stage title. The chain is per-bank DATA — a
+    # bank may call stage 3 "Validator" or "Compliance Sign-off" — so the title
+    # is read, never inferred from the sequence number.
+    waiting = {row.id: row.current_stage_seq for row in rows if row.current_stage_seq}
+    titles: dict[UUID, str] = {}
+    if waiting:
+        stage_rows = db.execute(
+            select(
+                PackageWorkflowStage.package_id,
+                PackageWorkflowStage.seq,
+                PackageWorkflowStage.title,
+            ).where(
+                PackageWorkflowStage.organization_id == ctx.organization_id,
+                PackageWorkflowStage.package_id.in_(waiting.keys()),
+            )
+        ).all()
+        titles = {
+            package_id: title
+            for package_id, seq, title in stage_rows
+            if waiting.get(package_id) == seq
+        }
+
     return RegulatoryPackageListRead(
         bank_id=bank.id,
-        packages=[read_summary(row) for row in rows],
+        packages=[read_summary(row, stage_title=titles.get(row.id)) for row in rows],
         total=total,
         limit=limit,
         offset=offset,

@@ -84,6 +84,24 @@ export default defineConfig({
         SIGNING_BACKEND: "software",
         SIGNING_SOFTWARE_KEY_DIR: `${E2E_TMP}/signing-keys`,
         RUN_INPROCESS_WORKER: "0",
+        // ICAAP has no on/off flag (D-046): the gates are institution class
+        // and Capital/confidential authority, which `icaap-sdi.spec.ts` and
+        // `icaap-workspace.spec.ts` cover from both sides.
+        //
+        // These two ARE needed, and only here. 15 of the 17 Ghana sections are
+        // still awaiting the regulator's published text (D-006), so a real
+        // filing cannot be frozen against that instrument and the filing
+        // journey would have nothing to exercise. The test instrument is a
+        // fully-sourced framework that exists for exactly this, and the
+        // settings validator REFUSES the extra directory outside `local`/
+        // `test`, so it cannot reach a deployment.
+        ICAAP_EXTRA_FRAMEWORKS_DIR: "tests/fixtures/icaap/frameworks",
+        ICAAP_FRAMEWORKS_ENABLED: "bog_icaap,test_icaap",
+        // Pinned to the product default for the same reason as
+        // ATTESTATION_ESIGN_REQUIRED above: a developer who has switched the
+        // ICAAP ceremony on locally must not change what these journeys see.
+        // A journey that exercises the ICAAP ceremony sets it to 1 itself.
+        ICAAP_SIGNING_ENABLED: "0",
         AUTH_JWT_SECRET: "e2e-backend-jwt-secret-not-production-000",
         IMPERSONATION_JWT_SECRET: "e2e-impersonation-secret-not-production-000",
         SSO_INTERNAL_KEY: "",

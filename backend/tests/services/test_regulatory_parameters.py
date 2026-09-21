@@ -164,6 +164,7 @@ def test_a_later_generation_supersedes_the_seed(db_session: Session) -> None:
         db_session,
         sdi,
         as_of_dates=[date(2026, 6, 30), date(2027, 6, 30)],
+        record=True,
     )
     assert prefetched.resolve("car_min", as_of=date(2026, 6, 30)).decimal == Decimal("10")
     assert prefetched.resolve("car_min", as_of=date(2027, 6, 30)).decimal == Decimal("12")

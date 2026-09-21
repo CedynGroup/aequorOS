@@ -1455,6 +1455,34 @@ def _parameter_scope() -> dict[str, Any]:
     }
 
 
+def set_board_threshold(session: Session, code: str, value: str | None) -> None:
+    """Set, add, or (``None``) remove the Sample Bank's OWN board value for ``code``.
+
+    The register carries no row for a governed capital minimum (founder
+    directive D-042 — the clamp supplies the control-plane value), so a test
+    about a board value states it explicitly rather than inheriting one.
+    """
+    rows = session.scalars(
+        select(ParamCapitalThreshold).where(
+            ParamCapitalThreshold.organization_id == DEMO_ORG_ID,
+            ParamCapitalThreshold.threshold_code == code,
+        )
+    ).all()
+    if value is None:
+        for row in rows:
+            session.delete(row)
+    elif rows:
+        for row in rows:
+            row.value_pct = Decimal(value)
+    else:
+        session.add(
+            ParamCapitalThreshold(
+                threshold_code=code, value_pct=Decimal(value), **_parameter_scope()
+            )
+        )
+    session.flush()
+
+
 def _seed_parameters(session: Session) -> int:
     scope = _parameter_scope()
     rows: list[Base] = []

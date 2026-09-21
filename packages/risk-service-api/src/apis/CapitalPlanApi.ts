@@ -137,6 +137,7 @@ export class CapitalPlanApi extends runtime.BaseAPI {
   }
 
   /**
+   * The plan document, its approval state, the projection and the ILAAP evidence.  A projection that cannot be measured (no resolvable capital minimum, unresolved licence type or jurisdiction) is NOT an error: the summary is returned with ``projection: null`` and ``projection_unavailable`` stating why, so the plan itself stays readable.
    * Get Capital Plan
    */
   async getCapitalPlanRaw(
@@ -181,6 +182,7 @@ export class CapitalPlanApi extends runtime.BaseAPI {
   }
 
   /**
+   * The plan document, its approval state, the projection and the ILAAP evidence.  A projection that cannot be measured (no resolvable capital minimum, unresolved licence type or jurisdiction) is NOT an error: the summary is returned with ``projection: null`` and ``projection_unavailable`` stating why, so the plan itself stays readable.
    * Get Capital Plan
    */
   async getCapitalPlan(

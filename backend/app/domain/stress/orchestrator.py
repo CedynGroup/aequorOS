@@ -64,6 +64,16 @@ from app.domain.fx.engine import (
     compute_nop,
     run_fx_scenarios,
 )
+
+# D-038: the Pillar 2 FX add-on has ONE definition, and it lives in the ICAAP
+# Pillar 2 domain. The stress overlay's Table 5 ``country_and_fx`` and the ICAAP
+# register therefore appear in the same filed document computed by the same
+# function. Both modules are pure ``app/domain`` code, so this import crosses no
+# boundary. Before 2026-09-20 the overlay restated ``Tier 1 × max(ΔNOP%, 0)``,
+# the change in a RATIO, which ``icaap/pillar2/fx.py`` itself records as "not a
+# loss (audit M8)" — see that module's docstring for why.
+from app.domain.icaap.pillar2 import fx as icaap_fx
+from app.domain.icaap.units import pillar1_capital
 from app.domain.irr.engine import (
     SHOCK_PARALLEL_BP,
     GapResult,
@@ -539,6 +549,16 @@ class FxOutcome:
     stressed_nop_pct_tier1: Decimal
     shock_pct: Decimal
     stressed_within_aggregate_limit: bool
+    #: The scenario's FX revaluation LOSS, from ``icaap.pillar2.fx`` — the worse
+    #: of the directions the scenario shocks, with no cross-currency offset.
+    revaluation_loss: Decimal = _ZERO
+    #: The Pillar 1 charge the FX position already carries (market RWA × the
+    #: governed minimum ratio); the Pillar 2 add-on is only the excess.
+    pillar1_fx_capital: Decimal = _ZERO
+    #: Table 5's ``country_and_fx``: ``max(0, revaluation loss − Pillar 1)``.
+    #: Zero is an ASSESSED nil (a book that gains under this scenario), never
+    #: "not modelled" — the outcome being present is what says it was assessed.
+    pillar2_addon: Decimal = _ZERO
 
 
 @dataclass(frozen=True)
@@ -621,7 +641,10 @@ def run_enterprise_stress(inputs: EnterpriseStressInputs) -> EnterpriseStressOut
     # verdict the s.29/LMTD regime excludes (QA audit 2026-08-20 P0-1).
     liquidity = _run_liquidity(inputs) if inputs.basel_liquidity else None
     irr = _run_irr(inputs) if inputs.irr is not None else None
-    fx = _run_fx(inputs) if inputs.fx is not None else None
+    # The FX Pillar 2 add-on nets the Pillar 1 charge the position already
+    # carries, so it needs the BASELINE market RWA (the as-of book), not the
+    # stressed one: the add-on answers "over and above Pillar 1 as it stands".
+    fx = _run_fx(inputs, baseline_capital.rwa.market_rwa) if inputs.fx is not None else None
     coupling = (
         _couple(
             capital,
@@ -767,7 +790,7 @@ def _run_irr(inputs: EnterpriseStressInputs) -> IrrOutcome:
     )
 
 
-def _run_fx(inputs: EnterpriseStressInputs) -> FxOutcome:
+def _run_fx(inputs: EnterpriseStressInputs, market_rwa: Decimal) -> FxOutcome:
     assert inputs.fx is not None
     fx = inputs.fx
     shocks = translate(inputs.scenario_paths, "fx", inputs.overrides)
@@ -783,11 +806,48 @@ def _run_fx(inputs: EnterpriseStressInputs) -> FxOutcome:
         fx.aggregate_limit_pct,
     )
     stressed = scenarios[0]
+    addon = fx_pillar2_addon(fx.positions, shock_pct, market_rwa, inputs.capital_params)
     return FxOutcome(
         base_nop_pct_tier1=base_nop.nop_pct_tier1,
         stressed_nop_pct_tier1=stressed.nop_pct_tier1,
         shock_pct=shock_pct,
         stressed_within_aggregate_limit=stressed.within_aggregate_limit,
+        revaluation_loss=addon.loss.worst_loss,
+        pillar1_fx_capital=addon.pillar1_fx_capital,
+        pillar2_addon=addon.addon,
+    )
+
+
+def fx_pillar2_addon(
+    positions: Sequence[FxPosition],
+    shock_pct: Decimal,
+    market_rwa: Decimal,
+    capital_params: CapitalParams,
+) -> icaap_fx.FxAddOn:
+    """Table 5's FX Pillar 2 charge, from the ONE shared definition (D-038).
+
+    The scenario shocks in one direction only — ``ghs_usd_shock_pct`` is a cedi
+    DEPRECIATION, so a short foreign-currency book loses and a long one gains —
+    which is what ``FxShockSet.single_direction`` exists for. The ICAAP register
+    runs the same function over the governed two-way shock table; the two
+    figures now differ only where their SHOCKS differ, which is a calibration
+    question a preparer can answer, not a definitional one the platform
+    invented.
+
+    A NEGATIVE shock is a cedi appreciation and is shocked the other way. The
+    shipped translation mapping floors ``ghs_usd_shock_pct`` at zero, so only a
+    bank-supplied override can reach that arm today; it is handled rather than
+    silently treated as a depreciation.
+    """
+    direction = icaap_fx.DEPRECIATION if shock_pct >= _ZERO else icaap_fx.APPRECIATION
+    magnitude = abs(shock_pct)
+    return icaap_fx.fx_revaluation_addon(
+        [
+            icaap_fx.CurrencyPosition(currency=position.currency, net=position.net_ghs)
+            for position in positions
+        ],
+        icaap_fx.FxShockSet.single_direction(direction, magnitude),
+        pillar1_capital(market_rwa, capital_params.car_min_pct),
     )
 
 
@@ -940,6 +1000,12 @@ def _serialize_outcome(outcome: EnterpriseStressOutcome) -> dict[str, object]:
             "stressed_nop_pct_tier1": str(outcome.fx.stressed_nop_pct_tier1),
             "shock_pct": str(outcome.fx.shock_pct),
             "stressed_within_aggregate_limit": outcome.fx.stressed_within_aggregate_limit,
+            # The Pillar 2 add-on and the two figures it is built from, so the
+            # filed run evidences Table 5's ``country_and_fx`` rather than
+            # leaving the reader to re-derive it (D-038).
+            "revaluation_loss": str(outcome.fx.revaluation_loss),
+            "pillar1_fx_capital": str(outcome.fx.pillar1_fx_capital),
+            "pillar2_addon": str(outcome.fx.pillar2_addon),
         }
     if outcome.bottom_up_credit is not None:
         result["bottom_up_credit"] = outcome.bottom_up_credit.serialize()

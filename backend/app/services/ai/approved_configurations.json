@@ -1,0 +1,5 @@
+{
+  "schema": "ai-approved-configurations-v1",
+  "_note": "Intentionally EMPTY. Every entry is a reviewed commit that cites the offline eval report digest, the thresholds it met, the approver and the date. Until an entry exists for a (feature, prompt_version, model, effort, app_env) tuple, requests in that DEPLOYED environment are refused with configuration_not_approved. Local and test environments are unaffected. Adding an entry is the last step of the production gate described in .ai/icaap/agent-reports/P4.md, after the data-protection opinion, the provider terms, the tenant consent text and the eval sign-off.",
+  "configurations": []
+}

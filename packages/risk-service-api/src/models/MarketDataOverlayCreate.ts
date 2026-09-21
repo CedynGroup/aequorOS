@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { Note1 } from "./Note1";
+import {
+  Note1FromJSON,
+  Note1FromJSONTyped,
+  Note1ToJSON,
+  Note1ToJSONTyped,
+} from "./Note1";
 import type { OverlayCreateEffectiveTo } from "./OverlayCreateEffectiveTo";
 import {
   OverlayCreateEffectiveToFromJSON,
@@ -25,13 +32,6 @@ import {
   OverlayCreateTenorMonthsToJSON,
   OverlayCreateTenorMonthsToJSONTyped,
 } from "./OverlayCreateTenorMonths";
-import type { Note } from "./Note";
-import {
-  NoteFromJSON,
-  NoteFromJSONTyped,
-  NoteToJSON,
-  NoteToJSONTyped,
-} from "./Note";
 import type { Value } from "./Value";
 import {
   ValueFromJSON,
@@ -98,10 +98,10 @@ export interface MarketDataOverlayCreate {
   effectiveTo?: OverlayCreateEffectiveTo;
   /**
    *
-   * @type {Note}
+   * @type {Note1}
    * @memberof MarketDataOverlayCreate
    */
-  note?: Note;
+  note?: Note1;
   /**
    *
    * @type {Supersedes}
@@ -202,7 +202,7 @@ export function MarketDataOverlayCreateFromJSONTyped(
       json["effective_to"] == null
         ? undefined
         : OverlayCreateEffectiveToFromJSON(json["effective_to"]),
-    note: json["note"] == null ? undefined : NoteFromJSON(json["note"]),
+    note: json["note"] == null ? undefined : Note1FromJSON(json["note"]),
     supersedes:
       json["supersedes"] == null
         ? undefined
@@ -236,7 +236,7 @@ export function MarketDataOverlayCreateToJSONTyped(
     component_tag: value["componentTag"],
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),
     effective_to: OverlayCreateEffectiveToToJSON(value["effectiveTo"]),
-    note: NoteToJSON(value["note"]),
+    note: Note1ToJSON(value["note"]),
     supersedes: SupersedesToJSON(value["supersedes"]),
     tenor_months: OverlayCreateTenorMonthsToJSON(value["tenorMonths"]),
     value: ValueToJSON(value["value"]),

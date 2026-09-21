@@ -13,6 +13,7 @@ fixture, the jurisdictions seed) are listed in CLAUDE.md and excluded here.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -56,7 +57,34 @@ _CURRENCY_NEUTRAL_MODULES = (
     "app/services/regulatory_parameters.py",
     "app/services/institution_types.py",
     "app/domain/policy/resolver.py",
+    # ICAAP (2026-09-19): the workspace narrates figures for a Board and a
+    # supervisor, so its copy must name neither a currency nor a country.
+    "app/services/icaap/blocks.py",
+    "app/services/icaap/cycles.py",
+    "app/services/icaap/readiness.py",
+    "app/services/icaap/sections.py",
+    "app/services/icaap/attachments.py",
+    # IRRBB Standardised Framework (P5, 2026-09-19): it narrates a change in
+    # economic value and an outlier verdict for a supervisor, so its copy must
+    # name neither a currency nor a country. Joined the guard with the module.
+    "app/services/regulatory_irr_sf.py",
 )
+
+#: Constructs that may name a currency, exempted BY NAME rather than by file.
+#:
+#: The IRRBB framework prescribes a different shock size per currency and prints
+#: them as a table whose row keys are ISO codes. A currency code used as a DATA
+#: KEY is not a claim that a bank reports in that currency — the same reading
+#: AGENTS.md gives a ``bog_``-prefixed identifier. Dropping the keys would
+#: destroy the regulator's own table.
+#:
+#: The exemption is per-CONSTANT and located by AST, so every other line in the
+#: same file is still scanned. A blanket file exemption here would retire the
+#: guard on the module that seeds every governed value in the platform, which is
+#: the last place to go blind.
+_CURRENCY_KEYED_CONSTRUCTS: dict[str, tuple[str, ...]] = {
+    "app/services/regulatory_parameters.py": ("_SF_SHOCKS_BY_CURRENCY",),
+}
 
 # Modules that must never SUBSTITUTE a country identity when one is missing.
 # This is a different defect from naming a currency in narrative: ``(bank.currency
@@ -99,6 +127,36 @@ def _narrative_currency_literals(source: str) -> list[str]:
     return hits
 
 
+def _without_exempt_constructs(source: str, module_path: str) -> str:
+    """Blank the lines of each exempted module-level constant, and only those."""
+    names = _CURRENCY_KEYED_CONSTRUCTS.get(module_path, ())
+    if not names:
+        return source
+    lines = source.splitlines()
+    tree = ast.parse(source)
+    found: set[str] = set()
+    for node in tree.body:
+        targets = (
+            [node.target]
+            if isinstance(node, ast.AnnAssign)
+            else list(node.targets)
+            if isinstance(node, ast.Assign)
+            else []
+        )
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id in names:
+                found.add(target.id)
+                end = node.end_lineno or node.lineno
+                for number in range(node.lineno, end + 1):
+                    lines[number - 1] = ""
+    missing = set(names) - found
+    assert not missing, (
+        f"{module_path} no longer defines {sorted(missing)}; an exemption that "
+        "outlives its construct silently widens the guard's blind spot"
+    )
+    return "\n".join(lines)
+
+
 @pytest.mark.parametrize("module_path", _CURRENCY_NEUTRAL_MODULES)
 def test_calculation_modules_name_no_currency(module_path: str) -> None:
     """A Nigerian bank must never read "GHS" in its own LCR narrative.
@@ -108,6 +166,7 @@ def test_calculation_modules_name_no_currency(module_path: str) -> None:
     wrong unit for every bank outside Ghana.
     """
     source = (_BACKEND_ROOT / module_path).read_text(encoding="utf-8")
+    source = _without_exempt_constructs(source, module_path)
     # Strip docstrings before scanning: they carry worked examples on purpose.
     without_docstrings = re.sub(r'"""(?:.|\n)*?"""', "", source)
     leaks = _narrative_currency_literals(without_docstrings)
@@ -115,6 +174,25 @@ def test_calculation_modules_name_no_currency(module_path: str) -> None:
         f"{module_path} names a currency in bank-facing text. Resolve it from "
         f"the bank via jurisdictions.base_currency instead:\n  " + "\n  ".join(leaks)
     )
+
+
+def test_the_shock_table_exemption_does_not_blanket_its_file() -> None:
+    """The narrow exemption must stay narrow.
+
+    Exempting the whole of ``regulatory_parameters.py`` would retire this guard
+    on the module that seeds every governed value in the platform. So: a
+    currency literal introduced ANYWHERE else in that file must still be a
+    failure, and this proves the scanner still sees it.
+    """
+    module_path = "app/services/regulatory_parameters.py"
+    source = (_BACKEND_ROOT / module_path).read_text(encoding="utf-8")
+
+    scanned = _without_exempt_constructs(source, module_path)
+    assert _narrative_currency_literals(scanned) == []
+
+    # A leak outside the exempted constant is still caught.
+    leaked = scanned + '\nNOT_A_KEY = "reported in GHS"\n'
+    assert _narrative_currency_literals(leaked) != []
 
 
 def test_no_module_substitutes_a_country_identity() -> None:
@@ -249,3 +327,67 @@ def test_base_currency_normalises() -> None:
         institution_type="universal_bank",
     )
     assert base_currency(bank) == "NGN"
+
+
+#: Modules that still carry a LOWERCASE currency literal, which the guard above
+#: cannot see because its match is case-sensitive.
+#:
+#: These are not narrative leaks. Every one is `RegulatoryMetricResult.unit`,
+#: whose CHECK constrains the column to ('pct', 'ghs', 'years') — so `"ghs"` is
+#: a load-bearing wire and DB value, the same shape as the `bog_*` fact
+#: categories AGENTS.md says must not be renamed.
+#:
+#: It is still a real defect: a Nigerian bank's EVE is stored with unit `ghs`.
+#: Fixing it means widening the CHECK, migrating every stored metric row and
+#: updating every consumer — a platform-wide change, not one a single phase can
+#: land. Until then this ceiling makes the debt BOUNDED: the set may shrink,
+#: never grow. A new module reaching for `"ghs"` fails here.
+_LOWERCASE_CURRENCY_UNIT_MODULES = frozenset(
+    {
+        "app/services/regulatory_capital.py",
+        "app/services/regulatory_liquidity.py",
+        "app/services/regulatory_fx.py",
+        "app/services/regulatory_irr.py",
+        "app/services/regulatory_credit.py",
+        "app/services/liquidity_ewi.py",
+        "app/services/regulatory_irr_sf.py",
+    }
+)
+
+
+def test_the_lowercase_currency_unit_debt_never_grows() -> None:
+    """The case-sensitivity hole in the guard above, held to a shrinking ceiling.
+
+    Resolved against ``_BACKEND_ROOT`` like every other path in this file. Until
+    2026-09-20 it used a RELATIVE ``Path(module_path)`` with a
+    ``if not path.exists(): continue`` skip, so the whole scan depended on the
+    process CWD: run from ``backend/`` it worked, run from the repository root
+    every path missed and the ceiling saw nothing (architecture audit L1).
+    """
+    offenders: set[str] = set()
+    for module_path in _CURRENCY_NEUTRAL_MODULES:
+        path = _BACKEND_ROOT / module_path
+        assert path.is_file(), (
+            f"{module_path} is enrolled in the currency-neutrality ceiling but does "
+            "not exist. A silent skip here is how the ceiling stops scanning."
+        )
+        source = _without_exempt_constructs(path.read_text(encoding="utf-8"), module_path)
+        for line in source.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            for code in _CURRENCY_CODES:
+                pattern = rf'["\'][^"\']*\b{code}\b[^"\']*["\']'
+                if re.search(pattern, line, re.IGNORECASE) and not re.search(pattern, line):
+                    offenders.add(module_path)
+    new = offenders - _LOWERCASE_CURRENCY_UNIT_MODULES
+    assert not new, (
+        "These modules newly name a currency in lowercase, which the case-sensitive "
+        "guard above cannot see. Resolve the value from the bank rather than adding "
+        "to the ceiling:\n  " + "\n  ".join(sorted(new))
+    )
+    stale = _LOWERCASE_CURRENCY_UNIT_MODULES - offenders
+    assert not stale, (
+        "These modules no longer carry a lowercase currency literal. Remove them "
+        "from the ceiling so it keeps shrinking:\n  " + "\n  ".join(sorted(stale))
+    )

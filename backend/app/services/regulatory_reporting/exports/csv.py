@@ -43,7 +43,20 @@ def _metadata_rows(rendered: RenderedReturn) -> list[list[str]]:
     rows.extend([label, value] for label, value in rendered.metadata_pairs)
     rows.extend(["attestation", line] for line in rendered.attestation_lines)
     rows.extend(["template_note", note] for note in rendered.template.notes)
+    rows.extend(["report_note", note] for note in rendered.report_notes)
     return rows
+
+
+#: Leading characters a spreadsheet treats as the start of a formula.
+_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _inert(value: str) -> str:
+    """A narrative text cell made inert for spreadsheet import (a leading
+    apostrophe), so text a user typed can never execute when the CSV is opened
+    in a spreadsheet. Applied to prose sections only: every other text cell is a
+    platform-generated code or label, and machine consumers key on it."""
+    return f"'{value}" if value.startswith(_FORMULA_TRIGGERS) else value
 
 
 def _section_rows(section: RenderedSection) -> list[list[str]]:
@@ -55,8 +68,14 @@ def _section_rows(section: RenderedSection) -> list[list[str]]:
         *[["#note", note] for note in section.layout.notes],
         [column.header for column in section.layout.columns],
     ]
+    prose = section.layout.presentation == "prose"
     for rendered_row in section.rows:
-        rows.append([machine_cell(cell) for cell in rendered_row.cells])
+        rows.append(
+            [
+                _inert(machine_cell(cell)) if prose and cell.kind == "text" else machine_cell(cell)
+                for cell in rendered_row.cells
+            ]
+        )
     if section.total_row is not None:
         rows.append([machine_cell(cell) for cell in section.total_row.cells])
     return rows

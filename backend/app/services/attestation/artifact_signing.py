@@ -55,7 +55,7 @@ from app.models import (
     RegulatoryPackage,
     SignerKey,
 )
-from app.services.attestation import pdf_signing, placements, signers
+from app.services.attestation import layouts, pdf_signing, placements, signers
 from app.services.attestation.workflow import AttestationConflict
 from app.services.audit import record_event
 from app.services.ingestion import bank_slug
@@ -76,14 +76,25 @@ ARTIFACT_KIND: Final = "pdf"
 
 WRITTEN_BY: Final = "attestation_signing"
 
-#: The roles that have a field on the artifact — derived from ``pdf_signing``'s own
-#: role→field map rather than restated, so the two can never disagree about which
-#: signatures the document can carry. Those field names are part of the filed
-#: document's structure. A policy demanding a board or witness signature ON THE
-#: PDF is therefore a configuration we cannot honour — and one we must refuse out
+#: The roles that have a field on a STANDARD return's artifact — every return
+#: except the ICAAP filing report, whose attestation page this platform draws and
+#: which can therefore carry a third block. Those field names are part of the
+#: filed document's structure, so a policy demanding a signature the artifact has
+#: no field for is a configuration we cannot honour — and one we must refuse out
 #: loud, because the alternative is recording a board signature that exists only
 #: in the database.
-FIELD_SIGNING_ROLES: Final[frozenset[str]] = frozenset(pdf_signing.ROLE_FIELD_NAMES)
+FIELD_SIGNING_ROLES: Final[frozenset[str]] = frozenset(layouts.STANDARD_SIGNING_ORDER)
+
+
+def field_signing_roles(return_family: str) -> frozenset[str]:
+    """Which signatures this family's artifact can physically carry.
+
+    Whether a role is REQUIRED is the signing policy's answer; this is only
+    whether the document could hold the signature at all.
+    """
+    return frozenset(
+        layouts.LAYOUT_ROLES[layouts.layout_for_family(return_family)]
+    )
 
 
 def signer_unavailable(message: str) -> HTTPException:
@@ -112,6 +123,7 @@ def sign_package_pdf(  # noqa: PLR0913 - one act, and every input is distinct
     timestamper: TimeStamper | None = None,
     storage: StorageClient | None = None,
     settings: Settings | None = None,
+    signing_order: Sequence[str] | None = None,
 ) -> RegulatoryArtifactVersion:
     """Sign the return document for one officer and archive the result.
 
@@ -123,21 +135,37 @@ def sign_package_pdf(  # noqa: PLR0913 - one act, and every input is distinct
     ``pdf_signer`` is an injection seam: production leaves it ``None`` and the
     bridge is built from the enrolled key's custody backend.
     """
-    if role not in FIELD_SIGNING_ROLES:
+    allowed = field_signing_roles(package.return_family)
+    if role not in allowed:
         raise AttestationConflict(
             "signed_pdf_role_unsupported",
             f"The signing policy requires a signed PDF and a '{role}' signature, but the "
-            f"return artifact carries fields for {sorted(FIELD_SIGNING_ROLES)} only. "
+            f"return artifact carries fields for {sorted(allowed)} only. "
             "Recording that signature without placing it on the document would attribute "
             "to the artifact something it does not contain — relax require_signed_pdf for "
             "this return, or drop the role from the policy.",
+        )
+    # The ceremony this document's fields were (or will be) created for. Omitted,
+    # it is the two-signer order every return has always used — never the
+    # layout's maximum, because a role the caller did not ask for would put an
+    # unfillable field on a filed document.
+    order = tuple(signing_order) if signing_order is not None else tuple(
+        layouts.STANDARD_SIGNING_ORDER
+    )
+    if role not in order:
+        raise AttestationConflict(
+            "signed_pdf_role_unsupported",
+            f"This return is signed by {list(order)}, so there is no '{role}' field on "
+            f"its document. The signing order is fixed when the preparer certifies — a "
+            f"field cannot be added afterwards — so the policy and the artifact have to "
+            f"agree before certification, not after.",
         )
     resolved = settings if settings is not None else get_settings()
     client = storage if storage is not None else get_storage_client()
     slug = bank_slug(db, get_bank_or_404(db, ctx, package.bank_id))
 
     base = (
-        _unsigned_base(db, ctx, package, client, slug)
+        _unsigned_base(db, ctx, package, client, slug, signing_order=order)
         if role == "preparer"
         else _previous_revision(db, ctx, package, signatures, client, slug)
     )
@@ -154,14 +182,21 @@ def sign_package_pdf(  # noqa: PLR0913 - one act, and every input is distinct
                 settings=resolved,
             ) as built:
                 payload = _apply(base, role=role, signer=built, appearance=appearance,
-                                 profile=profile)
+                                 profile=profile, signing_order=order)
         except signers.SignerBackendError as exc:
             raise signer_unavailable(
                 f"The return PDF could not be signed with the key enrolled for "
                 f"{key.signer_id}: {exc}"
             ) from exc
     else:
-        payload = _apply(base, role=role, signer=signer, appearance=appearance, profile=profile)
+        payload = _apply(
+            base,
+            role=role,
+            signer=signer,
+            appearance=appearance,
+            profile=profile,
+            signing_order=order,
+        )
 
     revision = sum(1 for signature in signatures if signature.artifact_version_id) + 1
     version = _archive(
@@ -194,12 +229,14 @@ def sign_package_pdf(  # noqa: PLR0913 - one act, and every input is distinct
 # --- the bytes --------------------------------------------------------------
 
 
-def _unsigned_base(
+def _unsigned_base(  # noqa: PLR0913 - the export scope plus the ceremony
     db: Session,
     ctx: TenantContext,
     package: RegulatoryPackage,
     client: StorageClient,
     slug: str,
+    *,
+    signing_order: Sequence[str],
 ) -> bytes:
     """Export the return once, archive it, read it back, and add the fields.
 
@@ -210,16 +247,21 @@ def _unsigned_base(
     came from. ``export_package_version`` is the single renderer and the single
     archiver; from here the bytes are only ever appended to.
 
-    Both fields are created here, in the preparer's own step, from the placements
-    resolved for this package. There is no later opportunity: the preparer's
-    signature certifies the document at ``MDPPerm.FILL_FORMS``, so a field added
-    afterwards would itself be tampering.
+    EVERY signer's fields are created here, in the preparer's own step, from the
+    placements resolved for this package and for the ceremony ``signing_order``
+    names. There is no later opportunity: the preparer's signature certifies the
+    document at ``MDPPerm.FILL_FORMS``, so a field added afterwards would itself
+    be tampering — and the same is true of the ``/Lock`` chain those fields carry,
+    which is why the whole signing order has to be known at this moment rather
+    than when each officer takes their turn.
     """
     _artifact, version = export_package_version(db, ctx, package, ARTIFACT_KIND)
     base = _read(client, slug, version)
-    resolved = placements.resolve(db, ctx, package)
+    resolved = placements.resolve(db, ctx, package, signing_order=signing_order)
     try:
-        return pdf_signing.prepare_signature_fields(base, placements=resolved.placements)
+        return pdf_signing.prepare_signature_fields(
+            base, placements=resolved.placements, signing_order=signing_order
+        )
     except pdf_signing.PdfSigningError as exc:
         raise AttestationConflict("signed_pdf_failed", str(exc)) from exc
 
@@ -362,21 +404,49 @@ def _field_name(role: str) -> str:
     return pdf_signing.ROLE_FIELD_NAMES[role]
 
 
-def _apply(
+def _apply(  # noqa: PLR0913 - the bytes, the officer, and the ceremony
     base: bytes,
     *,
     role: str,
     signer: Signer,
     appearance: pdf_signing.SignatureAppearance,
     profile: pdf_signing.PadesProfile,
+    signing_order: Sequence[str],
 ) -> bytes:
-    sign = (
-        pdf_signing.sign_as_preparer if role == "preparer" else pdf_signing.sign_as_approver
-    )
+    """Route one role to its signing function.
+
+    An explicit mapping rather than "preparer, else approver": that fallback was
+    correct only while two roles existed, and would have sent a Board signature
+    into ``Sig_Approver`` — a signature recorded in the wrong officer's field,
+    which is worse than a refusal by some distance.
+    """
     try:
-        return sign(base, signer=signer, appearance=appearance, profile=profile)
+        if role == "preparer":
+            return pdf_signing.sign_as_preparer(
+                base, signer=signer, appearance=appearance, profile=profile
+            )
+        if role == "approver":
+            return pdf_signing.sign_as_approver(
+                base, signer=signer, appearance=appearance, profile=profile
+            )
+        if role == "board":
+            order = tuple(signing_order)
+            return pdf_signing.sign_as_board(
+                base,
+                signer=signer,
+                appearance=appearance,
+                profile=profile,
+                prior_fields=[
+                    pdf_signing.ROLE_FIELD_NAMES[earlier]
+                    for earlier in order[: order.index("board")]
+                ],
+            )
     except pdf_signing.PdfSigningError as exc:
         raise AttestationConflict("signed_pdf_failed", str(exc)) from exc
+    raise AttestationConflict(
+        "signed_pdf_role_unsupported",
+        f"There is no way to place a '{role}' signature on a return document.",
+    )
 
 
 def _profile(
@@ -447,6 +517,7 @@ def _validation_context(roots: Sequence[bytes]) -> ValidationContext:
 __all__ = [
     "ARTIFACT_KIND",
     "FIELD_SIGNING_ROLES",
+    "field_signing_roles",
     "sign_package_pdf",
     "signer_unavailable",
 ]

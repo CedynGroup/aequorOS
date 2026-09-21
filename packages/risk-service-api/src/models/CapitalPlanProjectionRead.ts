@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { CapitalFloorRead } from "./CapitalFloorRead";
+import {
+  CapitalFloorReadFromJSON,
+  CapitalFloorReadFromJSONTyped,
+  CapitalFloorReadToJSON,
+  CapitalFloorReadToJSONTyped,
+} from "./CapitalFloorRead";
 import type { CapitalPlanProjectionScenario } from "./CapitalPlanProjectionScenario";
 import {
   CapitalPlanProjectionScenarioFromJSON,
@@ -18,13 +25,49 @@ import {
   CapitalPlanProjectionScenarioToJSON,
   CapitalPlanProjectionScenarioToJSONTyped,
 } from "./CapitalPlanProjectionScenario";
+import type { CapitalPlanProjectionReadCet1Min } from "./CapitalPlanProjectionReadCet1Min";
+import {
+  CapitalPlanProjectionReadCet1MinFromJSON,
+  CapitalPlanProjectionReadCet1MinFromJSONTyped,
+  CapitalPlanProjectionReadCet1MinToJSON,
+  CapitalPlanProjectionReadCet1MinToJSONTyped,
+} from "./CapitalPlanProjectionReadCet1Min";
 
 /**
  * Assembled at read time from stored forecast runs — never stale.
+ *
+ * Only the regulatory 5-year forecast runs are projected (the ICAAP horizon;
+ * desk runs at other horizons never displace it), all from one reporting
+ * period whose end is ``as_of_date``. Minima resolve at that date, not at the
+ * date the page happens to be read.
  * @export
  * @interface CapitalPlanProjectionRead
  */
 export interface CapitalPlanProjectionRead {
+  /**
+   *
+   * @type {Date}
+   * @memberof CapitalPlanProjectionRead
+   */
+  asOfDate: Date;
+  /**
+   *
+   * @type {boolean}
+   * @memberof CapitalPlanProjectionRead
+   */
+  baselRatiosApplicable?: boolean;
+  /**
+   *
+   * @type {CapitalPlanProjectionReadCet1Min}
+   * @memberof CapitalPlanProjectionRead
+   */
+  cet1Min?: CapitalPlanProjectionReadCet1Min;
+  /**
+   *
+   * @type {CapitalFloorRead}
+   * @memberof CapitalPlanProjectionRead
+   */
+  pillar1Min: CapitalFloorRead;
   /**
    *
    * @type {string}
@@ -45,10 +88,22 @@ export interface CapitalPlanProjectionRead {
   scenarios: Array<CapitalPlanProjectionScenario>;
   /**
    *
+   * @type {CapitalPlanProjectionReadCet1Min}
+   * @memberof CapitalPlanProjectionRead
+   */
+  tier1Min?: CapitalPlanProjectionReadCet1Min;
+  /**
+   *
    * @type {string}
    * @memberof CapitalPlanProjectionRead
    */
   totalRequirementPct: string;
+  /**
+   *
+   * @type {boolean}
+   * @memberof CapitalPlanProjectionRead
+   */
+  yearEndAligned: boolean;
 }
 
 /**
@@ -57,6 +112,9 @@ export interface CapitalPlanProjectionRead {
 export function instanceOfCapitalPlanProjectionRead(
   value: object,
 ): value is CapitalPlanProjectionRead {
+  if (!("asOfDate" in value) || value["asOfDate"] === undefined) return false;
+  if (!("pillar1Min" in value) || value["pillar1Min"] === undefined)
+    return false;
   if (!("pillar1MinPct" in value) || value["pillar1MinPct"] === undefined)
     return false;
   if (!("pillar2AddonPct" in value) || value["pillar2AddonPct"] === undefined)
@@ -66,6 +124,8 @@ export function instanceOfCapitalPlanProjectionRead(
     !("totalRequirementPct" in value) ||
     value["totalRequirementPct"] === undefined
   )
+    return false;
+  if (!("yearEndAligned" in value) || value["yearEndAligned"] === undefined)
     return false;
   return true;
 }
@@ -85,12 +145,27 @@ export function CapitalPlanProjectionReadFromJSONTyped(
   }
   return {
     ...json,
+    asOfDate: new Date(json["as_of_date"]),
+    baselRatiosApplicable:
+      json["basel_ratios_applicable"] == null
+        ? undefined
+        : json["basel_ratios_applicable"],
+    cet1Min:
+      json["cet1_min"] == null
+        ? undefined
+        : CapitalPlanProjectionReadCet1MinFromJSON(json["cet1_min"]),
+    pillar1Min: CapitalFloorReadFromJSON(json["pillar1_min"]),
     pillar1MinPct: json["pillar1_min_pct"],
     pillar2AddonPct: json["pillar2_addon_pct"],
     scenarios: (json["scenarios"] as Array<any>).map(
       CapitalPlanProjectionScenarioFromJSON,
     ),
+    tier1Min:
+      json["tier1_min"] == null
+        ? undefined
+        : CapitalPlanProjectionReadCet1MinFromJSON(json["tier1_min"]),
     totalRequirementPct: json["total_requirement_pct"],
+    yearEndAligned: json["year_end_aligned"],
   };
 }
 
@@ -109,11 +184,17 @@ export function CapitalPlanProjectionReadToJSONTyped(
   }
 
   return {
+    as_of_date: value["asOfDate"].toISOString().substring(0, 10),
+    basel_ratios_applicable: value["baselRatiosApplicable"],
+    cet1_min: CapitalPlanProjectionReadCet1MinToJSON(value["cet1Min"]),
+    pillar1_min: CapitalFloorReadToJSON(value["pillar1Min"]),
     pillar1_min_pct: value["pillar1MinPct"],
     pillar2_addon_pct: value["pillar2AddonPct"],
     scenarios: (value["scenarios"] as Array<any>).map(
       CapitalPlanProjectionScenarioToJSON,
     ),
+    tier1_min: CapitalPlanProjectionReadCet1MinToJSON(value["tier1Min"]),
     total_requirement_pct: value["totalRequirementPct"],
+    year_end_aligned: value["yearEndAligned"],
   };
 }

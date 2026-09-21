@@ -31,6 +31,7 @@ from typing import Any, Literal
 
 from fastapi import HTTPException, status
 
+from app.domain.policy import Direction, direction_for
 from app.services.regulatory_reporting.registry import FidelityGrade
 
 type ColumnKind = Literal["text", "ghs", "pct", "number", "bool", "auto"]
@@ -71,16 +72,31 @@ class ColumnSpec:
     ``kind='auto'`` resolves per row from the row's own ``unit`` field
     (``ghs`` → thousands-scaled amount, ``pct`` → percentage) — used for
     summary sections that mix amounts and ratios.
+
+    ``null_label`` is what an ABSENT value prints as. Left ``None`` a missing
+    value renders blank, which is right for a line the directive leaves open.
+    Where blank would be read as "nothing to report" — a Pillar 2 risk the
+    institution has not modelled — the column names the absence instead
+    ("Not modelled"), so it can never be mistaken for a zero requirement.
     """
 
     key: str
     header: str
     kind: ColumnKind = "text"
+    null_label: str | None = None
+
+
+type SectionPresentation = Literal["table", "prose"]
 
 
 @dataclass(frozen=True)
 class SectionLayout:
-    """How one snapshot section renders as a sheet/table."""
+    """How one snapshot section renders as a sheet/table.
+
+    ``presentation='prose'`` marks a narrative section — rows of (label, text)
+    — which the PDF sets as headed paragraphs rather than a grid (the sheet
+    and CSV renderings are unchanged: one row per narrative element).
+    """
 
     section_code: str
     layout_id: str
@@ -90,6 +106,7 @@ class SectionLayout:
     source_citation: str
     notes: tuple[str, ...] = ()
     optional: bool = False
+    presentation: SectionPresentation = "table"
 
 
 @dataclass(frozen=True)
@@ -183,6 +200,18 @@ _LE_CRM_NOTE = (
 _ICAAP_CITATION = (
     "ICAAP Guideline — Feb 2026, ¶49 prescribed 17-section format, ¶72 submission "
     "no later than three months after year-end"
+)
+
+#: The CRD recognition caps on AT1 / Tier 2, worded without their values: the
+#: values are governed parameters (founder directive D-024; applied in Appendix
+#: II Table 2 from ``at1_cap_pct_rwa`` / ``tier2_cap_pct_rwa``).
+_AT1_CAP_NOTE = (
+    "The CRD caps the Additional Tier 1 capital that counts towards regulatory capital at "
+    "a percentage of RWA (governed parameter at1_cap_pct_rwa; CRD 2018 ¶71–91, CONFIRMED)."
+)
+_TIER2_CAP_NOTE = (
+    "The CRD caps the Tier 2 capital that counts towards regulatory capital at a "
+    "percentage of RWA (governed parameter tier2_cap_pct_rwa; CRD 2018 ¶71–91, CONFIRMED)."
 )
 
 _T_MINUS_1_NOTE = (
@@ -887,7 +916,7 @@ _BSD2_TEMPLATE = ReturnTemplate(
             columns=(_CODE, _ITEM, _AMOUNT),
             fidelity="REPRESENTATIVE",
             source_citation=_CRD_CITATION,
-            notes=("CRD caps AT1 at 1.5% of RWA (CRD 2018 ¶71–91, CONFIRMED).",),
+            notes=(_AT1_CAP_NOTE,),
             optional=True,
         ),
         SectionLayout(
@@ -897,7 +926,7 @@ _BSD2_TEMPLATE = ReturnTemplate(
             columns=(_CODE, _ITEM, _AMOUNT),
             fidelity="REPRESENTATIVE",
             source_citation=_CRD_CITATION,
-            notes=("CRD caps Tier 2 at 2% of RWA (CRD 2018 ¶71–91, CONFIRMED).",),
+            notes=(_TIER2_CAP_NOTE,),
             optional=True,
         ),
         SectionLayout(
@@ -959,8 +988,14 @@ _BSD2_TEMPLATE = ReturnTemplate(
             ),
             fidelity="REPRESENTATIVE",
             source_citation=(
-                "Minimum ratios per CRD 2018 ¶71–91 summary table (CONFIRMED): CET1 6.5%, "
-                "CAR 10%, CAR + conservation buffer 13%, leverage ratio 6% (Tier 1)"
+                "Minimum ratios per CRD 2018 ¶71–91 summary table (CONFIRMED) — CET1, "
+                "Tier 1, CAR including the capital conservation buffer, and the Tier 1 "
+                "leverage ratio. The minimum shown is the one the capital run applied at "
+                "the reporting date. For capital runs computed from 19 September 2026 the "
+                "CET1, Tier 1 and leverage minima, like the CAR, are governed floors that a "
+                "board value may only tighten; a run computed before that date governed the "
+                "CAR only, so its CET1, Tier 1 and leverage minima are the institution's own "
+                "register values"
             ),
         ),
         _HEADLINE_COMPARATIVE,
@@ -1013,16 +1048,23 @@ _IRRBB_TEMPLATE = ReturnTemplate(
                 "(ΔEVE/ΔNII, T and T−1, plus Tier 1 Capital) is CONFIRMED"
             ),
             notes=(
-                "Engine shocks are the six Basel scenarios at ±200 bp; the Guideline "
-                "prescribes GHS ±450 bp parallel (short 500 / long 300, Appendix II–III "
-                "Tables 5–6, CONFIRMED). Prescribed-shock alignment is pending; results "
-                "are labelled by their actual scenario codes, not renamed.",
-                "BoG ±450 bp parallel ΔEVE rows (eve_up_450_ghs / eve_down_450_ghs) "
-                "render ONLY when the IRR run metrics actually carry them. The BoG "
-                "GHS calibration is stored as effective-dated param_stress_shock rows "
-                "(module 'irr', parallel_up_450 / parallel_down_450), but the engine "
-                "computes the fixed Basel scenario set today — engine-side ±450 "
-                "computation is a documented gap, and no ±450 value is ever fabricated.",
+                "The six Basel scenarios (±200 bp parallel, short ±250 bp, steepener, "
+                "flattener) are always computed. The Guideline prescribes GHS ±450 bp "
+                "parallel (short 500 / long 300, Appendix II–III Tables 5–6, CONFIRMED); "
+                "the ±450 bp parallel ΔEVE is computed and shown ONLY when the active "
+                "parameter set carries that calibration (effective-dated param_stress_shock "
+                "rows, module 'irr', parallel_up_450 / parallel_down_450). The prescribed "
+                "short 500 / long 300 shocks are not computed. Results are labelled by their "
+                "actual scenario codes, not renamed, and no value is ever fabricated.",
+                "The ±450 bp rows are informational: the outlier column is evaluated over "
+                "the six Basel scenarios only, on the absolute ΔEVE (so an EVE gain can also "
+                "flag). The Guideline's outlier test — the worst EVE loss including ±450 bp, "
+                "against 15% of Tier 1 — is not yet what this column shows.",
+                "Method limits: the engine slots positions into 9 repricing buckets with "
+                "annual compounding on a single projection curve (discounting on the "
+                "published OIS curve where one is available); the Standardised Framework's 19 "
+                "buckets, continuous discounting, per-currency shocks, non-maturity deposit "
+                "caps and prepayment / early-redemption adjustments are not implemented.",
                 _T_MINUS_1_NOTE,
             ),
         ),
@@ -1037,10 +1079,10 @@ _IRRBB_TEMPLATE = ReturnTemplate(
                 "forward-looking rolling 12-month period (Table 8 definitions, CONFIRMED)"
             ),
             notes=(
-                "Earnings at risk is computed at the Basel ±200 bp parallel shocks; "
-                "BoG ±450 bp EaR rows (ear_up_450_ghs / ear_down_450_ghs) render only "
-                "when a run's metrics carry them (engine-side computation pending — "
-                "documented gap, never fabricated).",
+                "Earnings at risk is computed at the Basel ±200 bp parallel shocks. The "
+                "±450 bp parallel EaR rows (ear_up_450_ghs / ear_down_450_ghs) are computed "
+                "and shown when the active parameter set carries that calibration; "
+                "otherwise they are absent, never fabricated.",
             ),
         ),
         SectionLayout(
@@ -1281,6 +1323,21 @@ _DBK_DAILY_TEMPLATE = ReturnTemplate(
     ),
 )
 
+#: The reverse-stress frontier grid, shared by the Board/ALCO stress pack and the
+#: ICAAP data companion: both re-tabulate the SAME stored reverse-stress run
+#: through ``generation._stress_frontier_rows``, so they print one layout.
+_REVERSE_STRESS_FRONTIER_COLUMNS: tuple[ColumnSpec, ...] = (
+    _CODE,
+    _ITEM,
+    ColumnSpec("value", "Severity Multiplier (x)", "number"),
+    ColumnSpec("breached", "Breached", "text"),
+    ColumnSpec("floor_pct", "Floor (%)", "pct"),
+    ColumnSpec("ratio_at_breach_pct", "Ratio at Breach (%)", "pct"),
+    # The humanised scenario name; the machine ``scenario_code`` stays in the
+    # row for downstream consumers (P0 fix round, regulatory audit P0R-11).
+    ColumnSpec("scenario", "Scenario Scaled", "text"),
+)
+
 _ICAAP_STRESS_TEMPLATE = ReturnTemplate(
     template_id="bog-icaap-stress-v1",
     return_code="ICAAP-STRESS",
@@ -1348,6 +1405,29 @@ _ICAAP_STRESS_TEMPLATE = ReturnTemplate(
             ),
             optional=True,
         ),
+        SectionLayout(
+            section_code="reverse_stress",
+            layout_id="icaap_reverse_stress_representative",
+            sheet_title="Reverse Stress Test Summary",
+            columns=_REVERSE_STRESS_FRONTIER_COLUMNS,
+            fidelity="REPRESENTATIVE",
+            source_citation=(
+                "Stress Testing Guideline (Feb 2026) ¶36 — reverse stress testing explores "
+                "scenarios that could lead to insolvency or illiquidity. This summary uses "
+                "a proxy for that point: the severity at which a scaled scenario first "
+                "breaches a regulatory floor. It is the latest stored reverse-stress run for "
+                "the reporting period (severity multiplier bisected over the liquidity and "
+                "capital engines), re-tabulated, never recomputed"
+            ),
+            notes=(
+                "Each axis states the severity multiplier of the scaled scenario at which "
+                "the governed floor is first breached, or that no breach occurs up to the "
+                "maximum multiplier tested. The run is bound in the package's source runs.",
+                "The results are before management actions; the with-actions view required "
+                "by ¶67(f) is not modelled for the reverse stress test.",
+            ),
+            optional=True,
+        ),
     ),
     notes=(
         "Stress Testing Guideline Appendix II Tables 1–6 are published CONFIRMED "
@@ -1379,6 +1459,90 @@ _A2_APPENDIX2_CITATION = (
 
 def _a2_num(key: str, header: str) -> ColumnSpec:
     return ColumnSpec(key, header, "number")
+
+
+#: What an unassessed Pillar 2 risk prints as — never a zero requirement.
+_NOT_MODELLED = "Not modelled"
+#: What an empty narrative element prints as.
+NOT_STATED = "Not stated"
+#: What a Table 6 driver the scenario does not supply prints as.
+NOT_PROVIDED = "Not provided"
+#: Public alias of the "not modelled" label, for generators that describe it.
+NOT_MODELLED = _NOT_MODELLED
+
+#: BoG Appendix II Table 5 "Pillar 2 Risks" rows, in the directive's order
+#: (CONFIRMED: Stress Testing Guideline exposure draft, Feb 2026, Table 5 — read
+#: from the local copy of the directive): the snapshot field each row lands in,
+#: the key the enterprise-stress run's serialized ``Pillar2Requirement`` carries
+#: it under, and the directive's printed name. The generator and this template
+#: read the one tuple, so the grid can never name a field the snapshot lacks.
+APPENDIX2_PILLAR2_RISKS: tuple[tuple[str, str, str], ...] = (
+    ("pillar2_credit_concentration", "credit_concentration", "Credit Concentration"),
+    ("pillar2_irrbb", "irrbb", "IRRBB"),
+    ("pillar2_sovereign", "sovereign", "Sovereign"),
+    ("pillar2_country_and_fx", "country_and_fx", "Country and FX"),
+    ("pillar2_reputational", "reputational", "Reputational"),
+    ("pillar2_others", "other", "Others"),
+)
+
+# --- BoG printed labels for Appendix II line items (regulatory audit M10) ------
+# A CONFIRMED-fidelity return used to print the engine's keys upper-cased —
+# "GOG", "RETAIL SME", "FX USD GHS" — where the directive prints its own words.
+# These are the directive's labels, transcribed from the Stress Testing
+# Guideline exposure draft (Feb 2026), Appendix II Table 1 ("Losses arising from
+# adverse scenario", exposure classes per CRD Part 2) and Table 6 ("Key Risk
+# Drivers and Forecasting Assumptions"). Ghana-factual text is correct HERE: this
+# is the BoG Appendix II artifact, registered for GH only (AGENTS.md exceptions).
+APPENDIX2_EXPOSURE_CLASS_LABELS: dict[str, str] = {
+    "gog": "Government of Ghana",
+    "bog": "Bank of Ghana",
+    "other_sovereigns_central_banks": "Other Sovereigns and Central Banks",
+    "public_sector_entities": "Public sector entities",
+    "multilateral_development_banks": "Multilateral Development Banks",
+    "banks": "Banks",
+    "other_financial_institutions": "Other Financial Sector and Regulated Institutions",
+    "corporates": "Corporates",
+    "retail_sme": "Retail Lending (including SMEs)",
+    "past_due": "Past due exposures",
+    "high_risk": "High risk exposures",
+    "other": "Other exposures",
+}
+APPENDIX2_RISK_DRIVER_LABELS: dict[str, str] = {
+    "gog_yield": "Average yield on Government of Ghana securities",
+    "gdp_growth": "GDP Growth Rate",
+    "interest_rate": "Interest Rates",
+    "unemployment": "Unemployment Rate",
+    "fx_usd_ghs": "FX rates (USD to GH Cedi)",
+    "fx_gbp_ghs": "FX rates (GBP to GH Cedi)",
+    "fx_eur_ghs": "FX rates (EUR to GH Cedi)",
+    "inflation": "Inflation Rates",
+    # The directive's printed row. The scenario authors the index LEVEL; the
+    # generator prints the year-on-year change derived from consecutive levels
+    # (``generation._APPENDIX2_YOY_DRIVERS``), never the level under this label.
+    "gse_index": "Year-on-Year Changes in Stock Market Valuation (GSE Index)",
+    "fiscal_deficit": "Fiscal deficit",
+    # Drivers outside the printed rows fall under the directive's
+    # "Others (please specify)".
+    "policy_rate": "Others: Monetary Policy Rate",
+    "cocoa_price": "Others: Cocoa price",
+    "gold_price": "Others: Gold price",
+}
+
+
+def _humanized(key: str) -> str:
+    return key.replace("_", " ").strip().capitalize()
+
+
+def appendix2_exposure_class_label(exposure_class: str) -> str:
+    """The directive's printed label for a CRD exposure-class key."""
+    label = APPENDIX2_EXPOSURE_CLASS_LABELS.get(exposure_class)
+    return label if label is not None else f"Other exposures: {_humanized(exposure_class)}"
+
+
+def appendix2_risk_driver_label(variable: str) -> str:
+    """The directive's printed label for a Table 6 risk-driver key."""
+    label = APPENDIX2_RISK_DRIVER_LABELS.get(variable)
+    return label if label is not None else f"Others: {_humanized(variable)}"
 
 
 _A2_POSITION_COLUMNS: tuple[ColumnSpec, ...] = (
@@ -1428,7 +1592,9 @@ _ICAAP_STRESS_APPENDIX2_TEMPLATE = ReturnTemplate(
             fidelity="CONFIRMED",
             source_citation=(
                 f"{_A2_APPENDIX2_CITATION} — Table 1 'Impact of Adverse' losses by CRD "
-                "exposure class (¶67(g) vulnerability granularity)"
+                "exposure class (CRD Part 2), allocated by credit-RWA share where "
+                "exposure-level data is absent. The ¶67(g) currency / business-line / "
+                "sector / borrower-group vulnerability analysis is not provided here"
             ),
         ),
         SectionLayout(
@@ -1438,13 +1604,18 @@ _ICAAP_STRESS_APPENDIX2_TEMPLATE = ReturnTemplate(
             columns=(
                 ColumnSpec("code", "Key", "text"),
                 _A2_PERIOD,
-                _a2_num("value", "To Meet 13% CAR"),
-                _a2_num("paid_up_shortfall", "To Meet Paid-up Min"),
+                _a2_num("value", "Capital Required to Meet the Minimum Total Regulatory Capital"),
+                _a2_num(
+                    "paid_up_shortfall",
+                    "Capital Required to Meet the Minimum Unimpaired Paid-up Capital",
+                ),
             ),
             fidelity="CONFIRMED",
             source_citation=(
-                f"{_A2_APPENDIX2_CITATION} — Table 1 capital required to meet the 13% CAR "
-                "and paid-up minima (¶77)"
+                f"{_A2_APPENDIX2_CITATION} — Table 1 capital required to meet the minimum "
+                "total regulatory capital ratio and the minimum unimpaired paid-up capital "
+                "(¶77); the minima applied, and their governed source, are stated in the "
+                "report notes"
             ),
         ),
         SectionLayout(
@@ -1515,8 +1686,9 @@ _ICAAP_STRESS_APPENDIX2_TEMPLATE = ReturnTemplate(
             ),
             fidelity="CONFIRMED",
             source_citation=(
-                f"{_A2_APPENDIX2_CITATION} — Table 2 CET1/AT1/Tier2 build with the 1.5%/2% "
-                "of RWA caps and deductions (Current + Base + Stress, 3-year)"
+                f"{_A2_APPENDIX2_CITATION} — Table 2 CET1/AT1/Tier2 build with the AT1 and "
+                "Tier 2 recognition caps (governed percentages of RWA, stated in the report "
+                "notes) and deductions (Current + Base + Stress, 3-year)"
             ),
         ),
         SectionLayout(
@@ -1572,19 +1744,74 @@ _ICAAP_STRESS_APPENDIX2_TEMPLATE = ReturnTemplate(
             columns=(
                 _A2_CODE,
                 _A2_PERIOD,
-                _a2_num("value", "Total Pillar-1 RWA"),
-                _a2_num("credit_rwa", "Credit RWA"),
-                _a2_num("operational_rwa", "Operational RWA"),
-                _a2_num("market_rwa", "Market RWA"),
-                _a2_num("pillar1_requirement", "Pillar-1 Requirement (13%)"),
-                _a2_num("pillar2_total", "Pillar-2 Add-ons"),
-                _a2_num("total_capital_requirement", "Total Capital Requirement"),
+                _a2_num("credit_rwa", "RWA for Credit Risk"),
+                _a2_num("operational_rwa", "RWA for Operational Risk"),
+                _a2_num("market_rwa", "RWA for Market Risk"),
+                _a2_num("value", "Total Pillar 1 RWA"),
+                _a2_num("pillar1_requirement", "Pillar 1 Capital Requirements"),
+                ColumnSpec(
+                    "pillar2_total",
+                    "Total Pillar 2 Capital Requirements",
+                    "number",
+                    null_label=_NOT_MODELLED,
+                ),
+                _a2_num(
+                    "total_capital_requirement",
+                    "Total Capital Requirements (Pillar 1 and Pillar 2)",
+                ),
             ),
             fidelity="CONFIRMED",
             source_citation=(
-                f"{_A2_APPENDIX2_CITATION} — Table 5 RWA by Pillar-1 type + Pillar-2 "
-                "add-ons; stressed Total Pillar-1 RWA equals Table 1's stressed RWA"
+                f"{_A2_APPENDIX2_CITATION} — Table 5 RWA by Pillar 1 risk type, Pillar 1 "
+                "capital requirements at the minimum total capital ratio applied (report "
+                "notes), Pillar 2 total; stressed Total Pillar 1 RWA equals Table 1's "
+                "stressed RWA"
             ),
+            notes=(
+                "Where Pillar 2 is 'Not modelled' for a column, no Pillar 2 amount is "
+                "recorded for it, so its Total Capital Requirements figure is the Pillar 1 "
+                "requirement alone and understates the requirement by the unassessed Pillar "
+                "2 risks. The per-risk breakdown follows in 'Table 5 — Pillar 2 Capital "
+                "Requirements by Risk'.",
+            ),
+        ),
+        SectionLayout(
+            section_code="t5_pillar2",
+            layout_id="appendix2_table5_pillar2",
+            sheet_title="Table 5 — Pillar 2 Capital Requirements by Risk",
+            columns=(
+                _A2_CODE,
+                _A2_PERIOD,
+                *(
+                    ColumnSpec(field, header, "number", null_label=_NOT_MODELLED)
+                    for field, _run_key, header in APPENDIX2_PILLAR2_RISKS
+                ),
+                ColumnSpec(
+                    "pillar2_total",
+                    "Total Pillar 2 Capital Requirements",
+                    "number",
+                    null_label=_NOT_MODELLED,
+                ),
+                ColumnSpec("pillar2_coverage", "Pillar 2 Coverage", "text"),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — Table 5 'Pillar 2 Risks' rows (Credit "
+                "Concentration, IRRBB, Sovereign, Country and FX, Reputational, Others) and "
+                "'Total Pillar 2 Capital Requirements', transposed: one row per column of "
+                "the directive's table"
+            ),
+            notes=(
+                "'Not modelled' means no Pillar 2 amount is recorded for that risk in that "
+                "column — it is never a zero requirement. A risk that was assessed at nil "
+                "prints 0.00 (assessed: nil). The total is the sum of the recorded risks "
+                "only, so a row marked 'Partial' excludes the risks it names.",
+                "The stress-case amounts are the enterprise-stress run's own Pillar 2 "
+                "overlay, held across the horizon; the Current and Base Case columns carry "
+                "no Pillar 2 assessment until the institution's baseline Pillar 2 "
+                "assessment is recorded.",
+            ),
+            optional=True,
         ),
         SectionLayout(
             section_code="t6_risk_drivers",
@@ -1593,13 +1820,20 @@ _ICAAP_STRESS_APPENDIX2_TEMPLATE = ReturnTemplate(
             columns=(
                 ColumnSpec("description", "Risk Driver", "text"),
                 ColumnSpec("year_index", "Projection Year", "text"),
-                _a2_num("base_value", "Base"),
-                _a2_num("stress_value", "Stress"),
+                ColumnSpec("base_value", "Base", "number", null_label=NOT_PROVIDED),
+                ColumnSpec("stress_value", "Stress", "number", null_label=NOT_PROVIDED),
             ),
             fidelity="CONFIRMED",
             source_citation=(
                 f"{_A2_APPENDIX2_CITATION} — Table 6 GoG yield, GDP, rates, unemployment, "
                 "FX, inflation, GSE index, fiscal deficit (Base + Stress, per year)"
+            ),
+            notes=(
+                "Rates and growth are fractions (0.05 = 5%); FX rates are levels. The GSE "
+                "row is the year-on-year change in the index level, as a fraction, computed "
+                "from consecutive projected levels; where the previous level is not in the "
+                "scenario (year 1) it prints 'Not provided' — an index level is never shown "
+                "under that label.",
             ),
         ),
         SectionLayout(
@@ -1617,6 +1851,34 @@ _ICAAP_STRESS_APPENDIX2_TEMPLATE = ReturnTemplate(
                 "has reviewed and challenged the framework and results; the source run is "
                 "Board-attested before this submission is generated"
             ),
+        ),
+        SectionLayout(
+            section_code="stress_narrative",
+            layout_id="appendix2_stress_narrative",
+            sheet_title="Stress Test Narrative (Board-attested)",
+            columns=(
+                ColumnSpec("code", "Key", "text"),
+                ColumnSpec("description", "Element", "text"),
+                ColumnSpec("value", "Statement", "text", null_label=NOT_STATED),
+            ),
+            fidelity="CONFIRMED",
+            source_citation=(
+                "Stress Testing Guideline (Feb 2026) ¶67(a) — risks, exposures and entities "
+                "covered; ¶67(b) — macroeconomic conditions and justification of the "
+                "assumptions; ¶67(c) and ¶45 — methodologies used and expert-judgement "
+                "overlays; ¶20 — the Board's challenge and its rationale for its assessment "
+                "of the credibility of the framework and results. Taken from the "
+                "Board-attested sign-off"
+            ),
+            notes=(
+                "Each statement is the text recorded on the attested sign-off. 'Not stated' "
+                "means the sign-off records nothing for that element.",
+                "Characters this document's standard font cannot print (for example the "
+                "cedi sign) are shown as '?'. The signed package snapshot, the XLSX and the "
+                "CSV hold the exact text.",
+            ),
+            optional=True,
+            presentation="prose",
         ),
     ),
     notes=(
@@ -1642,6 +1904,9 @@ _SDI_STRESS_SECTION_CODES = frozenset(
         "t5_rwa",
         "t6_risk_drivers",
         "governance",
+        # The Board's attested narrative applies to the proportionate SDI packet
+        # exactly as to the bank submission (¶20, ¶67(a)–(c)).
+        "stress_narrative",
     }
 )
 
@@ -1681,8 +1946,19 @@ def _sdi_stress_section(section: SectionLayout) -> SectionLayout:
             ),
         )
     if section.section_code == "t5_rwa":
+        # D-020: SDIs are outside the ICAAP Guideline and have no Pillar 2 regime,
+        # so the packet carries no Pillar 2 column, note or cross-reference, and
+        # the sheet is not presented as the directive's Pillar 1 + Pillar 2 table.
         return replace(
             section,
+            sheet_title="Evolution of RWA & Capital Requirement",
+            source_citation=(
+                f"{_A2_APPENDIX2_CITATION} — risk-weighted assets and the capital "
+                "requirement at the governed minimum capital adequacy ratio, in the "
+                "Appendix II period layout (Current + Base + Stress); the Act 930 s.29 "
+                "regime has no separate capital add-on"
+            ),
+            notes=(),
             columns=(
                 _A2_CODE,
                 _A2_PERIOD,
@@ -1690,8 +1966,10 @@ def _sdi_stress_section(section: SectionLayout) -> SectionLayout:
                 _a2_num("credit_rwa", "Credit RWA"),
                 _a2_num("operational_rwa", "Operational RWA (if governed)"),
                 _a2_num("market_rwa", "Market RWA (if governed)"),
+                # Without a Pillar 2 regime the requirement IS the requirement at
+                # the governed CAR; a separate "total" column would carry any
+                # engine-side add-on under a name the SDI regime does not have.
                 _a2_num("pillar1_requirement", "Capital Requirement at Governed CAR"),
-                _a2_num("total_capital_requirement", "Total Capital Requirement"),
             ),
         )
     return section
@@ -1937,15 +2215,7 @@ _STRESS_PACK_TEMPLATE = ReturnTemplate(
             section_code="reverse_stress_frontier",
             layout_id="stress_reverse_frontier_representative",
             sheet_title="Reverse-Stress Frontier",
-            columns=(
-                _CODE,
-                _ITEM,
-                ColumnSpec("value", "Severity Multiplier (x)", "number"),
-                ColumnSpec("breached", "Breached", "text"),
-                ColumnSpec("floor_pct", "Floor (%)", "pct"),
-                ColumnSpec("ratio_at_breach_pct", "Ratio at Breach (%)", "pct"),
-                ColumnSpec("scenario_code", "Scenario Scaled", "text"),
-            ),
+            columns=_REVERSE_STRESS_FRONTIER_COLUMNS,
             fidelity="REPRESENTATIVE",
             source_citation=(
                 f"{_STRESS_PACK_CITATION} — frontier from the latest stored "
@@ -2414,6 +2684,82 @@ _LRT_PRODUCT_TEMPLATE = ReturnTemplate(
     notes=(_LRT_DRAFT_NOTE, _LRT_MASTER_DATA_NOTE),
 )
 
+# ---------------------------------------------------------------------------
+# The ICAAP FILING family (ICAAP P3)
+# ---------------------------------------------------------------------------
+#
+# These three templates carry NO section layouts, and that is a statement, not
+# an omission. Every other template here describes how a TABULAR snapshot
+# renders into sheets of rows and columns. An ICAAP report is not that: it is a
+# narrative document assembled from the frozen workspace snapshot, and it is
+# rendered by its own renderer (``exports/icaap_pdf.py``), which the export
+# dispatch reaches BEFORE ``build_rendered_return`` is ever called. Inventing
+# row/column layouts here would produce a second, divergent description of a
+# document this module does not render — the drift the template/registry parity
+# test exists to prevent.
+#
+# What the templates DO carry is what the registry pairing needs and what the
+# filing document quotes: the return's own title, its fidelity grade, its
+# citation and its attestation lines.
+
+_ICAAP_FILING_CITATION = (
+    "BoG Guideline on Internal Capital Adequacy Assessment Process (Exposure Draft, "
+    "February 2026) ¶49 (report structure), ¶71 (Board resolutions and senior "
+    "management reports accompany the submission), ¶72 (annual), ¶74 (update on "
+    "material change), ¶82 (public disclosure). No reporting template is published "
+    "with the Guideline: the document's structure is the Guideline's own prose."
+)
+_ICAAP_DOCUMENT_NOTE = (
+    "The ICAAP report is a narrative document rendered from the frozen cycle "
+    "snapshot, not a tabular return. It declares no section layouts here because "
+    "nothing in this module renders it; the signed PDF is the filing."
+)
+
+
+def _icaap_filing_template(
+    template_id: str, return_code: str, title: str, *, fidelity: FidelityGrade
+) -> ReturnTemplate:
+    """One ICAAP filing template. Built by a factory so the three cannot drift.
+
+    Each return gets its OWN ``template_id``. The design sketched ICAAP-UPDATE
+    sharing ICAAP-REPORT's id, which the registry/template parity assertion
+    (``template.return_code == definition.code``) forbids — rightly: a template
+    states which return's document it describes, and a ¶74 update is a different
+    filing with a different title on its cover. They share this factory, which is
+    the part that genuinely must not diverge.
+    """
+    return ReturnTemplate(
+        template_id=template_id,
+        return_code=return_code,
+        title=title,
+        fidelity=fidelity,
+        source_citation=_ICAAP_FILING_CITATION,
+        attestation_lines=BOARD_ATTESTATION_LINES,
+        sections=(),
+        notes=(_ICAAP_DOCUMENT_NOTE,),
+    )
+
+
+_ICAAP_REPORT_TEMPLATE = _icaap_filing_template(
+    "bog-icaap-report-v1",
+    "ICAAP-REPORT",
+    "Internal Capital Adequacy Assessment Process (ICAAP) Report",
+    fidelity="PARTIAL",
+)
+_ICAAP_UPDATE_TEMPLATE = _icaap_filing_template(
+    "bog-icaap-update-v1",
+    "ICAAP-UPDATE",
+    "ICAAP Update (material change)",
+    fidelity="PARTIAL",
+)
+_ICAAP_DISCLOSURE_TEMPLATE = _icaap_filing_template(
+    "bog-icaap-disclosure-v1",
+    "ICAAP-DISCLOSURE",
+    "ICAAP Public Disclosure",
+    fidelity="REPRESENTATIVE",
+)
+
+
 TEMPLATES: dict[str, ReturnTemplate] = {
     template.template_id: template
     for template in (
@@ -2429,6 +2775,9 @@ TEMPLATES: dict[str, ReturnTemplate] = {
         _SDI_LE_TEMPLATE,
         _ICAAP_STRESS_TEMPLATE,
         _ICAAP_STRESS_APPENDIX2_TEMPLATE,
+        _ICAAP_REPORT_TEMPLATE,
+        _ICAAP_UPDATE_TEMPLATE,
+        _ICAAP_DISCLOSURE_TEMPLATE,
         _SDI_STRESS_TEMPLATE,
         _STRESS_PACK_TEMPLATE,
         _NPL_MONTHLY_TEMPLATE,
@@ -2457,6 +2806,64 @@ TEMPLATES.update(_bog_templates())
 
 def get_template(template_id: str) -> ReturnTemplate | None:
     return TEMPLATES.get(template_id)
+
+
+# ---------------------------------------------------------------------------
+# Template revisions (decision D-021) — a package renders with the text it was
+# generated under
+# ---------------------------------------------------------------------------
+
+#: The current text revision of every template whose wording ICAAP P0 changed.
+#: ``generation`` stamps it on each new snapshot as ``metadata.template_revision``;
+#: a snapshot without the stamp was generated before P0 and renders with the
+#: frozen text in ``templates_legacy`` — so re-exporting it gives the bytes it
+#: always gave, signed or not. A future wording change to one of these templates
+#: bumps its number here, freezes the outgoing text the same way, and extends
+#: :func:`template_for_snapshot` to select it for the older stamp.
+TEMPLATE_REVISIONS: dict[str, int] = {
+    "bog-bsd2-capital-v1": 2,
+    "bog-irrbb-pilot-v1": 2,
+    "bog-sdi-irrbb-quarterly-v1": 2,
+    "bog-icaap-stress-appendix2-v1": 2,
+    "bog-sdi-stress-annual-v1": 2,
+    "aeq-stress-pack-v1": 2,
+}
+
+#: Templates whose neutral headers state the minima only through the snapshot's
+#: ``metadata.parameter_provenance``: without it they cannot say which minimum a
+#: capital-requirement line was measured against, so such a snapshot renders
+#: with the frozen text, which states it in the header.
+_PROVENANCE_BOUND_TEMPLATES = frozenset(
+    {"bog-icaap-stress-appendix2-v1", "bog-sdi-stress-annual-v1"}
+)
+
+
+def template_for_snapshot(template: ReturnTemplate, snapshot: dict[str, Any]) -> ReturnTemplate:
+    """The template text ``snapshot`` renders with (D-021).
+
+    Current text for a snapshot stamped with the template's current revision;
+    the frozen pre-P0 text for an unstamped one (every package generated before
+    P0), and — for the Appendix II templates — for one carrying no governed-
+    minimum provenance.
+    """
+    if template.template_id not in TEMPLATE_REVISIONS:
+        return template
+    from app.services.regulatory_reporting.templates_legacy import (  # noqa: PLC0415
+        LEGACY_TEMPLATES,
+    )
+
+    legacy = LEGACY_TEMPLATES.get(template.template_id)
+    if legacy is None:
+        return template
+    metadata = snapshot.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    if metadata.get("template_revision") is None:
+        return legacy
+    if template.template_id in _PROVENANCE_BOUND_TEMPLATES and not isinstance(
+        metadata.get("parameter_provenance"), list
+    ):
+        return legacy
+    return template
 
 
 # ---------------------------------------------------------------------------
@@ -2497,6 +2904,12 @@ class RenderedReturn:
     provenance_runs: tuple[tuple[str, str, str, str], ...]
     provenance_lines: tuple[str, ...]
     attestation_lines: tuple[str, ...] = field(default=STANDARD_ATTESTATION_LINES)
+    #: Package-specific statements read from the SNAPSHOT (not the template):
+    #: the governed minima the figures were measured against, with their source,
+    #: and explicit notes on what this package omits. Empty for every snapshot
+    #: generated before they existed, so an older package renders exactly as it
+    #: did.
+    report_notes: tuple[str, ...] = ()
 
 
 def _missing_section_error(template_id: str, section_code: str) -> HTTPException:
@@ -2531,6 +2944,8 @@ def _resolve_cell(column: ColumnSpec, row: dict[str, Any], section_code: str) ->
     if kind == "auto":
         kind = "pct" if row.get("unit") == "pct" else "ghs"
     if raw is None:
+        if column.null_label is not None:
+            return RenderedCell(kind="text", value=column.null_label)
         return RenderedCell(kind=kind, value=None)
     if kind == "bool":
         return RenderedCell(kind="bool", value=bool(raw))
@@ -2740,7 +3155,14 @@ def build_rendered_return(
 
     Raises 409 (``snapshot_section_missing``) when a required section is
     absent — the snapshot is immutable, so the caller must regenerate.
+
+    The template text is the one the snapshot was generated under
+    (:func:`template_for_snapshot`); a pre-P0 snapshot renders exactly as it did
+    before P0, report notes included (there were none).
     """
+    requested = template
+    template = template_for_snapshot(template, snapshot)
+    frozen = template is not requested
     sections_by_code = {section.get("code"): section for section in snapshot.get("sections", [])}
     rendered_sections: list[RenderedSection] = []
     for layout in template.sections:
@@ -2816,14 +3238,179 @@ def build_rendered_return(
         provenance_runs=provenance_runs,
         provenance_lines=provenance_lines,
         attestation_lines=template.attestation_lines,
+        report_notes=() if frozen else report_notes(snapshot),
     )
 
 
+def _unit_suffix(value: str, unit: str) -> str:
+    """``13`` + ``percent`` → ``13%``; any other unit is spelled out
+    (``ghs_millions`` → ``400 GHS millions``) — derived from the unit code the
+    control plane stores, never from a currency literal."""
+    if unit == "percent":
+        return f"{value}%"
+    head, _, tail = unit.partition("_")
+    if tail and len(head) == _ISO_CURRENCY_LENGTH and head.isalpha():
+        return f"{value} {head.upper()} {tail.replace('_', ' ')}"
+    return f"{value} {unit.replace('_', ' ')}".strip()
+
+
+_ISO_CURRENCY_LENGTH = 3
+
+
+def _display_number(raw: Any) -> str:
+    try:
+        number = Decimal(str(raw))
+    except InvalidOperation:
+        return str(raw)
+    if number == number.to_integral_value():
+        number = number.quantize(Decimal(1))
+    else:
+        number = number.normalize()
+    return f"{number:,}"
+
+
+_CLASS_SCOPE_LABELS: dict[str, str] = {
+    "bank": "banks",
+    "sdi": "specialised deposit-taking institutions",
+}
+
+
+def _scope_phrase(governed: dict[str, Any]) -> str:
+    """Who a governed row applies to, in words ("banks, GH") — not the resolver's
+    scope keys (regulatory audit P0R-12)."""
+    scope_type = str(governed.get("scope_type") or "")
+    key = str(governed.get("scope_key") or "")
+    if scope_type == "institution_class":
+        who = _CLASS_SCOPE_LABELS.get(key, key.replace("_", " "))
+    else:
+        who = f"{key.replace('_', ' ')} licences"
+    jurisdiction = str(governed.get("jurisdiction_code") or "").strip()
+    return f"applies to {who}, {jurisdiction}" if jurisdiction else f"applies to {who}"
+
+
+_BASIS_SENTENCES: dict[str, str] = {
+    "stricter_than_governed": (
+        " The applied value is stricter than the governed minimum (the institution's own "
+        "target or board register)."
+    ),
+    "weaker_than_governed": (
+        " The applied value is LOWER than the governed minimum, so the figures measured "
+        "against it understate the requirement."
+    ),
+}
+
+#: The same statements for a governed CEILING (a recognition cap), where the
+#: stricter value is the lower one.
+_CEILING_BASIS_SENTENCES: dict[str, str] = {
+    "stricter_than_governed": (
+        " The applied value is stricter (lower) than the governed maximum (the "
+        "institution's own board register)."
+    ),
+    "weaker_than_governed": (
+        " The applied value is HIGHER than the governed maximum, so the capital it "
+        "recognises is overstated."
+    ),
+}
+
+#: How a governed row's confirmation status is printed. ``pending`` is
+#: informational — the value is applied — but a reader must see that it awaits
+#: confirmation (founder directive D-024).
+_CONFIRMATION_LABELS: dict[str, str] = {
+    "confirmed": "confirmed",
+    "pending": "pending confirmation",
+}
+
+
+def confirmation_label(status: object) -> str:
+    """``pending`` → "pending confirmation"; ``confirmed`` stays "confirmed"."""
+    text = str(status or "").strip()
+    return _CONFIRMATION_LABELS.get(text, text.replace("_", " "))
+
+
+def _parameter_note(entry: dict[str, Any]) -> str | None:
+    """One governed-minimum statement, e.g.
+
+    "Minimum total capital ratio applied: 13%. Governed parameter car_min = 13%
+    (BoG Capital Requirements Directive 2018 ¶71 (10%) + ¶75 CCB1 (3%);
+    confirmed; applies to banks, GH; platform parameter record dated 2020-01-01,
+    not a regulatory commencement date)."
+
+    The record date is the platform seed's, not the instrument's history
+    (deviation DV-005), and says so; the minimum's regulatory dating is resolved
+    per year only from P2.
+    """
+    label = str(entry.get("label") or entry.get("param_code") or "").strip()
+    applied = entry.get("applied_value")
+    if not label or applied is None:
+        return None
+    applied_unit = str(entry.get("applied_unit") or "")
+    sentence = f"{label} applied: {_unit_suffix(_display_number(applied), applied_unit)}"
+    governed = entry.get("governed")
+    if isinstance(governed, dict) and governed.get("value") is not None:
+        status = str(governed.get("confirmation_status") or "")
+        if status == "pending" and entry.get("basis") == "governed":
+            sentence += f" ({confirmation_label(status)})"
+        sentence += "."
+        value = _unit_suffix(_display_number(governed["value"]), str(governed.get("unit") or ""))
+        sentence += (
+            f" Governed parameter {governed.get('param_code', '')} = {value}"
+            f" ({governed.get('source_citation', '')}; "
+            f"{confirmation_label(status)}; {_scope_phrase(governed)}; "
+            f"platform parameter record dated {governed.get('effective_from', '')}, "
+            "not a regulatory commencement date)."
+        )
+        sentences = (
+            _CEILING_BASIS_SENTENCES
+            if direction_for(str(entry.get("param_code") or "")) is Direction.CEILING
+            else _BASIS_SENTENCES
+        )
+        sentence += sentences.get(str(entry.get("basis") or ""), "")
+    else:
+        sentence += (
+            ". The source run does not record which governed regulatory parameter row "
+            "supplied this minimum."
+        )
+    return " ".join(sentence.split())
+
+
+def report_notes(snapshot: dict[str, Any]) -> tuple[str, ...]:
+    """The package-specific notes a filed artifact prints, from the snapshot.
+
+    ``metadata.parameter_provenance`` (a list, so its order survives any JSON
+    store) states each governed minimum a figure was measured against — the
+    value applied and the control-plane row that supplied it — which is how a
+    header can stay neutral ("Capital required to meet the minimum CAR") while
+    the page still says which minimum, from which instrument, was in force.
+    ``metadata.report_notes`` carries plain statements a generator makes about
+    its own package (e.g. what it omitted and why).
+    """
+    metadata = snapshot.get("metadata")
+    if not isinstance(metadata, dict):
+        return ()
+    lines: list[str] = []
+    provenance = metadata.get("parameter_provenance")
+    if isinstance(provenance, list):
+        for entry in provenance:
+            if isinstance(entry, dict) and (note := _parameter_note(entry)):
+                lines.append(note)
+    notes = metadata.get("report_notes")
+    if isinstance(notes, list):
+        lines.extend(str(note).strip() for note in notes if str(note).strip())
+    return tuple(lines)
+
+
 __all__ = [
+    "APPENDIX2_EXPOSURE_CLASS_LABELS",
+    "APPENDIX2_PILLAR2_RISKS",
+    "APPENDIX2_RISK_DRIVER_LABELS",
     "CONSOLIDATED_BASIS",
     "CURRENCY_UNIT_DIVISOR",
     "CURRENCY_UNIT_NOTE",
+    "NOT_MODELLED",
+    "NOT_PROVIDED",
+    "NOT_STATED",
     "SOLO_BASIS",
+    "TEMPLATE_REVISIONS",
     "TEMPLATES",
     "ColumnSpec",
     "RenderedCell",
@@ -2832,9 +3419,13 @@ __all__ = [
     "RenderedSection",
     "ReturnTemplate",
     "SectionLayout",
+    "appendix2_exposure_class_label",
+    "appendix2_risk_driver_label",
     "build_rendered_return",
     "format_cell",
     "get_template",
     "machine_cell",
+    "report_notes",
     "resolve_basis_label",
+    "template_for_snapshot",
 ]

@@ -18,6 +18,7 @@ from app.models import (
     RegulatorySubmissionEvent,
     User,
 )
+from app.schemas.filing_workflow import PackageStageDecisionCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import (
     PackageApprovalDecisionCreate,
@@ -25,6 +26,7 @@ from app.schemas.regulatory_reporting import (
     RegulatoryPackageCreate,
 )
 from app.services import regulatory_liquidity
+from app.services.filing_workflow import chain as filing_chain
 from app.services.regulatory_reporting import calendar, generation, validation, workflow
 from app.services.regulatory_reporting.channels import (
     ACT_930_PENALTY_REMINDER,
@@ -47,6 +49,15 @@ MAKER = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
 CHECKER = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+)
+#: The third officer. Since the filing review chain landed
+#: (``docs/filing_workflow_redesign.md`` §3) the Approver's approval advances
+#: the chain and is not authority to file; the Validator's stage decision is
+#: what makes a return filable. This suite is about CHANNELS, so it walks that
+#: stage in the seed rather than asserting the old two-step status.
+VALIDATOR = TenantContext(
+    organization_id=DEMO_ORG_ID,
+    actor_user_id=UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
 )
 REPORTING_DATE = date(2026, 3, 31)
 
@@ -259,16 +270,20 @@ def _seed_approved_package(db: Session) -> RegulatoryPackage:
     # The gate itself is proved in tests/services/test_attestation_spine.py and
     # in the Playwright lifecycle journey.
     relax_signing(db, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
-    if db.scalar(select(User.id).where(User.id == CHECKER.actor_user_id)) is None:
-        db.add(
-            User(
-                id=CHECKER.actor_user_id,
-                organization_id=DEMO_ORG_ID,
-                email="demo.checker@example.test",
-                display_name="Demo Checker",
+    for ctx, email, name in (
+        (CHECKER, "demo.checker@example.test", "Demo Checker"),
+        (VALIDATOR, "demo.validator@example.test", "Demo Validator"),
+    ):
+        if db.scalar(select(User.id).where(User.id == ctx.actor_user_id)) is None:
+            db.add(
+                User(
+                    id=ctx.actor_user_id,
+                    organization_id=DEMO_ORG_ID,
+                    email=email,
+                    display_name=name,
+                )
             )
-        )
-        db.commit()
+            db.commit()
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,
@@ -301,9 +316,31 @@ def _seed_approved_package(db: Session) -> RegulatoryPackage:
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
-    assert approved.status == "approved"
+    # The Approver hands the return to the Validator; it is not filable yet.
+    assert approved.status == "pending_approval"
     row = db.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == package.id))
     assert row is not None
+    # Approving and handing on are TWO acts (founder decision 2026-09-20), so
+    # reaching a filable package takes both at each stage. The approver's
+    # hand-off puts the return with the Validator; the Validator's completes
+    # the chain. These tests then exercise the channel directly.
+    filing_chain.hand_off(db, CHECKER, row)
+    db.commit()
+    db.refresh(row)
+
+    state = filing_chain.load_state(db, VALIDATOR, row)
+    filing_chain.decide(
+        db,
+        VALIDATOR,
+        row,
+        PackageStageDecisionCreate(
+            decision="approved", round=row.workflow_round, review_digest=state.review_digest
+        ),
+    )
+    filing_chain.hand_off(db, VALIDATOR, row)
+    db.commit()
+    db.refresh(row)
+    assert row.status == "approved"
     return row
 
 
@@ -328,7 +365,7 @@ def _set_channel_config(db: Session, channel: str, config: dict[str, Any]) -> No
     db.commit()
 
 
-def test_submit_auto_exports_xlsx_when_no_artifacts(
+def test_submit_mints_the_full_filing_pack_when_no_artifacts(
     db_session: Session, exporter_calls: list[str]
 ) -> None:
     package = _seed_approved_package(db_session)
@@ -336,7 +373,13 @@ def test_submit_auto_exports_xlsx_when_no_artifacts(
         db_session, MAKER, SAMPLE_BANK_ID, package.id, channel_override="orass_sandbox"
     )
     assert submitted.status == "submitted"
-    assert exporter_calls == ["xlsx"]
+    # The FULL pack, not just the required format (founder decision
+    # 2026-09-20): a supervisor receives the same set every time, rather than
+    # whatever the preparer happened to export plus one minted format. This
+    # return renders no live-formula workbook — neither an official regulator
+    # template nor an AequorOS calculation sheet — so nothing is minted for
+    # that kind and nothing is withheld either.
+    assert exporter_calls == ["xlsx", "pdf", "csv"]
 
     events = workflow.list_submission_events(db_session, MAKER, SAMPLE_BANK_ID, package.id)
     assert events.total == 1
@@ -347,14 +390,14 @@ def test_submit_auto_exports_xlsx_when_no_artifacts(
     assert event.external_ref == "LCRN00001"
     assert event.detail["sandbox"] is True
     assert event.detail["note"] == SANDBOX_NOTE
-    assert event.detail["auto_exported_kinds"] == ["xlsx"]
+    assert event.detail["auto_exported_kinds"] == ["xlsx", "pdf", "csv"]
 
-    # A second submit must not double-export: artifacts already exist.
+    # A second submit must not re-export: the pack already exists.
     with pytest.raises(HTTPException):
         workflow.submit_package_via_channel(
             db_session, MAKER, SAMPLE_BANK_ID, package.id, channel_override="orass_sandbox"
         )
-    assert exporter_calls == ["xlsx"]
+    assert exporter_calls == ["xlsx", "pdf", "csv"]
 
 
 def test_submit_then_poll_acknowledges(db_session: Session, exporter_calls: list[str]) -> None:
