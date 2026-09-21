@@ -85,7 +85,7 @@ def auth(db_client: TestClient) -> dict[str, str]:
         period = session.scalar(
             select(BankReportingPeriod.id).where(
                 BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
-                BankReportingPeriod.period_end == AS_OF,
+                BankReportingPeriod.period_end == date.fromisoformat(AS_OF),
             )
         )
         assert period is not None
