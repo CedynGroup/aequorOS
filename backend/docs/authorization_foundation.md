@@ -20,8 +20,8 @@ The policy vocabulary lives only in `backend/app/core/authorization.py`:
 - permissions: `view`, `create`, `edit`, `run`, `review`, `approve`,
   `configure`, `export`, `validate`, `sign_off`, `submit`, `administer`, and
   `ingest`;
-- concrete resource modules: LIQ, CAP, IRRBB, FX, FTP, FCST, BEH, DATA, REG,
-  Risk, Markets, Credit, Institution, Account, and Audit;
+- concrete resource modules and binding scopes: the executable
+  [`Module` and `ModuleScope`](../app/core/authorization.py) definitions;
 - sensitivities: `published`, `aggregated`, `confidential`, and `restricted`;
 - static bundles and their exact granted actions: the executable
   [`RoleBundle` and `ROLE_PERMISSIONS`](../app/core/authorization.py) definitions.
@@ -528,8 +528,8 @@ design it implements is [filing_workflow_redesign.md](filing_workflow_redesign.m
 grantable, institution-scoped module dimensions with no consuming surface yet.
 Credit analytics still enforces through Risk & Limits and institution master
 data through Account until their own cutovers land (enforcement matrix PRs 20
-and 21), so a binding on either module confers nothing today: the evaluator
-projects it per institution like every other product module, the Members
+and 21), so a binding on either module does not authorize those surfaces today.
+The evaluator projects it per institution like every other product module, the Members
 composer offers it, the authority sentence names it ("Credit", "Institution
 Profile"), and the dashboard maps it to no navigation. No bundle changed and no
 binding was created. Migration `202609200066` widens

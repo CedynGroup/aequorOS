@@ -245,7 +245,7 @@ const CAPABILITY_MODULES = {
   risk: ["command_center", "risk", "alerts", "credit", "positions"],
   markets: ["markets"],
   // Grantable vocabulary whose consuming surfaces still enforce through the
-  // Risk & Limits and Account capabilities above; a Credit or Institution
+  // existing Risk & Limits and Account gates; a Credit or Institution
   // binding opens nothing until those surfaces cut over to it.
   credit: [],
   institution: [],
