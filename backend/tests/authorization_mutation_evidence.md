@@ -110,8 +110,9 @@ Catalogued with seeded fixtures: `filing_workflow_template`
 and the attachment list/upload routes reference only `package_id` and joined the
 census through the existing `package` kind. Every ICAAP route carrying an object
 identifier (86 routes) is listed one by one in `ICAAP_DEFERRED`, folded into
-`KNOWN_UNCOVERED`, under the captain's 2026-09-20 deferral of ICAAP; each entry
-must be deleted and its kind seeded when ICAAP is picked up.
+`KNOWN_UNCOVERED`, under the captain's 2026-09-20 deferral of ICAAP. The ongoing
+[catalogue and deferral contract](../docs/authorization_foundation.md#executable-verification)
+owns the requirements for extending coverage.
 
 Guard result: **3 passed** (~24s). `test_every_object_reference_is_catalogued`
 resolved the census on the live route table; the two companion checks confirmed
