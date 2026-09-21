@@ -193,6 +193,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   is BLOCKED at assignment until the stage engine's per-object condition lands. Contract:
   `backend/docs/filing_submit_authority_rollout.md`; design + remaining steps 2-5:
   `backend/docs/filing_workflow_redesign.md`.
+  **Every new `RoleBundle` or `ModuleScope` value needs a CHECK-widening migration**
+  (`202609200065` bundles, `202609200066` modules are the shapes): the model derives
+  `ck_authorization_bindings_*` from the enum, so the hermetic `create_all` schema always
+  accepts the value while a migrated database refuses it as a 500 on grant. Only
+  `tests/db/test_bindings_constraint_migrations.py` (Postgres) catches the gap.
 - **Every route that accepts an object id must be in the IDOR census (2026-09-20).**
   Follow [the authorization verification contract](backend/docs/authorization_foundation.md#executable-verification)
   for catalogue entries, exclusions, defect quarantine, and ICAAP deferral.
