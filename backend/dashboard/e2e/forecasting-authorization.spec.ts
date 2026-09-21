@@ -8,6 +8,9 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const FORECASTING_ROUTE = /\/banks\/[^/]+\/(?:forecast|reverse-stress)(?:\/|$)/;
 const RUN_REASON = /Requires Forecasting · Confidential · Run/i;
 const CONFIDENTIAL_VIEW_REASON = /Requires Forecasting · Confidential · View/i;
+// `next dev` compiles each route on its first visit; the first assertion
+// after a navigation waits for that rather than for the product.
+const FIRST_PAINT = { timeout: 60_000 };
 
 type Capability = { module: string; sensitivity: string; permission: string };
 
@@ -73,7 +76,9 @@ test.describe("unbound Forecasting user", () => {
       "/forecasting/optimizer",
     ]) {
       await page.goto(deepLink);
-      await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+      await expect(page.getByText(/404|not found/i).first()).toBeVisible(
+        FIRST_PAINT,
+      );
     }
     await expect(
       page.getByRole("link", { name: "Forecasting", exact: true }),
@@ -117,7 +122,7 @@ test.describe("Forecasting reader without run permission", () => {
     await page.goto("/forecasting");
     await expect(
       page.getByRole("heading", { name: "Balance Sheet Forecast" }),
-    ).toBeVisible();
+    ).toBeVisible(FIRST_PAINT);
     await expectDisabledWithReason(page, "Run forecast", RUN_REASON);
     if (evidenceDir) {
       await page.screenshot({
@@ -129,18 +134,18 @@ test.describe("Forecasting reader without run permission", () => {
     await page.goto("/forecasting/reverse-stress");
     await expect(
       page.getByRole("heading", { name: "Reverse Stress Testing" }),
-    ).toBeVisible();
+    ).toBeVisible(FIRST_PAINT);
     await expectDisabledWithReason(page, "Run reverse stress", RUN_REASON);
 
     await page.goto("/forecasting/optimizer");
     await expect(
       page.getByRole("heading", { name: "Strategy Optimizer" }),
-    ).toBeVisible();
+    ).toBeVisible(FIRST_PAINT);
     await expectDisabledWithReason(page, "Run optimizer", RUN_REASON);
 
     await page.goto("/forecasting/whatif");
     const whatIfRun = page.getByRole("button", { name: /^(Run|Re-run) / });
-    await expect(whatIfRun.first()).toBeVisible();
+    await expect(whatIfRun.first()).toBeVisible(FIRST_PAINT);
     await expect(whatIfRun.first()).toBeDisabled();
     await whatIfRun.first().locator("..").focus();
     await expect(whatIfRun.first().locator("..")).toHaveAccessibleDescription(
@@ -185,7 +190,7 @@ test.describe("Forecasting aggregated-only reader", () => {
     await page.goto("/forecasting");
     await expect(
       page.getByRole("heading", { name: "Balance Sheet Forecast" }),
-    ).toBeVisible();
+    ).toBeVisible(FIRST_PAINT);
     for (const tab of [
       "NII Forecast",
       "Scenarios",
@@ -207,7 +212,9 @@ test.describe("Forecasting aggregated-only reader", () => {
     ).not.toHaveAttribute("aria-disabled", "true");
 
     await page.goto("/forecasting/reverse-stress");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    await expect(page.getByText(/404|not found/i).first()).toBeVisible(
+      FIRST_PAINT,
+    );
     expect(detailRequests).toEqual([]);
 
     if (evidenceDir) {
