@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, MarketsConfidentialView, MarketsRun
 from app.schemas.implied_rating import (
     ImpliedRatingRunCreate,
     ImpliedRatingRunListRead,
@@ -29,13 +29,13 @@ def run_implied_bank_rating(
     bank_id: str,
     payload: ImpliedRatingRunCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    access: MarketsRun,
 ) -> ImpliedRatingRunRead:
     return _read(
         implied_rating.run(
             db,
-            ctx,
-            bank_id,
+            access.ctx,
+            access.bank.id,
             payload.reporting_period_id,
             support_uplift_notches=payload.support_uplift_notches,
         )
@@ -48,11 +48,11 @@ def run_implied_bank_rating(
     operation_id="listImpliedBankRatingRuns",
 )
 def list_implied_bank_rating_runs(
-    bank_id: str, db: DbSession, ctx: Tenant
+    bank_id: str, db: DbSession, access: MarketsConfidentialView
 ) -> ImpliedRatingRunListRead:
     return ImpliedRatingRunListRead(
-        bank_id=bank_id,
-        runs=[_read(row) for row in implied_rating.list_runs(db, ctx, bank_id)],
+        bank_id=access.bank.id,
+        runs=[_read(row) for row in implied_rating.list_runs(db, access.ctx, access.bank.id)],
     )
 
 
@@ -62,6 +62,6 @@ def list_implied_bank_rating_runs(
     operation_id="getImpliedBankRatingRun",
 )
 def get_implied_bank_rating_run(
-    bank_id: str, run_id: UUID, db: DbSession, ctx: Tenant
+    bank_id: str, run_id: UUID, db: DbSession, access: MarketsConfidentialView
 ) -> ImpliedRatingRunRead:
-    return _read(implied_rating.get_run(db, ctx, bank_id, run_id))
+    return _read(implied_rating.get_run(db, access.ctx, access.bank.id, run_id))

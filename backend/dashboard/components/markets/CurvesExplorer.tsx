@@ -43,6 +43,7 @@ import { fmtPct } from "@/lib/format";
 import { tenorLabel } from "./CurveBoard";
 import MethodologyDrawer from "./MethodologyDrawer";
 import AttributionChip from "./AttributionChip";
+import PermissionAction from "./PermissionAction";
 import { CurveTypeBadge, MonoChip, SyntheticProxyBadge } from "./chips";
 
 /** Prefer a forward curve as the default focus, else the first published curve. */
@@ -62,6 +63,7 @@ export default function CurvesExplorer({
   onSelectCurve,
   onOpenForward,
   onEditOverlays,
+  editOverlaysReason,
 }: {
   curves: YieldCurveViewRead[];
   asOfDate: Date;
@@ -70,6 +72,8 @@ export default function CurvesExplorer({
   onSelectCurve: (curveName: string) => void;
   onOpenForward: (curveName: string) => void;
   onEditOverlays: (curveName: string) => void;
+  /** The grant the user lacks for the spread editor; the control stays visible. */
+  editOverlaysReason?: string;
 }) {
   const [view, setView] = useState<"official" | "adjusted">("official");
   const [methodologyOpen, setMethodologyOpen] = useState(false);
@@ -223,8 +227,8 @@ export default function CurvesExplorer({
             Forecast grid
             <ArrowRight size={13} aria-hidden />
           </button>
-          <button
-            type="button"
+          <PermissionAction
+            reason={editOverlaysReason}
             onClick={() => onEditOverlays(selectedCurve.curveName)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-caption font-medium text-action border border-action/30 rounded hover:bg-action-light whitespace-nowrap"
           >
@@ -232,7 +236,7 @@ export default function CurvesExplorer({
             {selectedCurve.overlayComponents.length > 0
               ? `Edit spreads (${selectedCurve.overlayComponents.length})`
               : "Edit spreads"}
-          </button>
+          </PermissionAction>
         </div>
       </div>
 

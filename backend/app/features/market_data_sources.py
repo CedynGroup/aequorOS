@@ -3,12 +3,14 @@
 Under ``/banks/{bank_id}/market-data``:
 
 - ``GET/PUT /source-preferences`` — read / upsert the per-category base-plane
-  + overlay selection (defaults synthesised when no row; PUT is analyst-gated
-  and audited).
+  + overlay selection (defaults synthesised when no row; PUT keeps the legacy
+  analyst gate until configuration authority lands, and is audited).
 - ``GET /planes`` — the same scope resolved under each base plane, side by
   side, so the bank sees what each choice would feed the engines.
 - ``GET /curves/{curve_name}/forward-grid`` — the published forward grid for a
   desk curve (FC-5/G1).
+
+Every read requires an exact MARKETS/published view binding on the bank.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, MarketsPublishedView, MutationTenant
 from app.schemas.market_data_sources import (
     ForwardGridRead,
     PlanesRead,
@@ -38,9 +40,9 @@ router = APIRouter(tags=["market-data-sources"])
 def get_source_preferences(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: MarketsPublishedView,
 ) -> SourcePreferencesRead:
-    return market_data_sources.get_preference(db, ctx, bank_id)
+    return market_data_sources.get_preference(db, access.ctx, access.bank.id)
 
 
 @router.put(
@@ -65,12 +67,14 @@ def update_source_preferences(
 def get_market_data_planes(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: MarketsPublishedView,
     category: Annotated[str, Query()],
     as_of: Annotated[date | None, Query()] = None,
 ) -> PlanesRead:
     resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
-    return market_data_sources.resolve_planes(db, ctx, bank_id, category, resolved_as_of)
+    return market_data_sources.resolve_planes(
+        db, access.ctx, access.bank.id, category, resolved_as_of
+    )
 
 
 @router.get(
@@ -82,11 +86,11 @@ def get_forward_grid(  # noqa: PLR0913 - route path, session, tenant, and option
     bank_id: str,
     curve_name: str,
     db: DbSession,
-    ctx: Tenant,
+    access: MarketsPublishedView,
     as_of: Annotated[date | None, Query()] = None,
     frequency: Annotated[str | None, Query()] = None,
 ) -> ForwardGridRead:
     resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
     return market_data_sources.get_forward_grid(
-        db, ctx, bank_id, curve_name, resolved_as_of, frequency=frequency
+        db, access.ctx, access.bank.id, curve_name, resolved_as_of, frequency=frequency
     )

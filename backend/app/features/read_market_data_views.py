@@ -12,13 +12,11 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession, Tenant, TenantContext
+from app.api.deps import DbSession, MarketsPublishedView
 from app.db.base import utc_now
-from app.models import Bank, MarketDataOverlay
+from app.models import MarketDataOverlay
 from app.schemas.market_data_views import (
     CurveOverlayComponentRead,
     FxRateHistoryPointRead,
@@ -47,13 +45,13 @@ FX_HISTORY_POINTS = 30
 def get_market_data_views(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: MarketsPublishedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> MarketDataViewsRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = access.bank
     now = utc_now()
     effective_as_of = as_of if as_of is not None else now.date()
-    org = ctx.organization_id
+    org = access.ctx.organization_id
 
     # Every current-generation curve, one per (currency, curve_name) — the
     # zero / forward / discounting families are served side by side instead
@@ -204,12 +202,3 @@ def _attribution_read(attribution: market_data.SourceAttribution) -> MarketDataA
         stale=attribution.stale,
         age_seconds=attribution.age_seconds,
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank

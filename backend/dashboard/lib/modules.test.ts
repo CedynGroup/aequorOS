@@ -43,6 +43,7 @@ const resolved = (
     "ftp",
     "forecasting",
     "behavioral",
+    "markets",
   ]),
   modules: new Set([
     "command_center",
@@ -60,6 +61,7 @@ const resolved = (
     "ftp",
     "forecasting",
     "behavioral",
+    "markets",
   ]),
   organizationModules: new Set(["settings"]),
   hasInstitutionAuthority: true,
@@ -85,6 +87,12 @@ const resolved = (
   forecastingRun: true,
   behavioralAggregatedView: true,
   behavioralRun: true,
+  marketsPublishedView: true,
+  marketsConfidentialView: true,
+  marketsRestrictedView: true,
+  marketsUpload: true,
+  marketsOverlayCreate: true,
+  marketsOverlayEdit: true,
   ...capabilities,
   isResolved: true,
 });
@@ -370,6 +378,31 @@ for (const href of [
 const behavioralReader = resolved(true, true, { behavioralRun: false });
 assert.equal(isHrefVisible("/behavioral/nmd-duration", behavioralReader), true);
 assert.equal(isPathVisible("/behavioral/liquidity", behavioralReader), true);
+// Markets enters on the published tier; a confidential-only grant (ratings,
+// overlays) does not open the hub, and the reason names the published view.
+const deniedMarkets = resolved(true, true, {
+  marketsPublishedView: false,
+  marketsConfidentialView: true,
+});
+assert.equal(isHrefVisible("/markets", deniedMarkets), false);
+assert.equal(isPathVisible("/markets", deniedMarkets), false);
+assert.deepEqual(hrefAccess("/markets", deniedMarkets), {
+  state: "disabled",
+  reason:
+    "Requires Markets · Published · View. Ask your organization owner or admin to grant it.",
+});
+const publishedMarketsOnly = resolved(true, true, {
+  marketsConfidentialView: false,
+  marketsRestrictedView: false,
+  marketsUpload: false,
+  marketsOverlayCreate: false,
+  marketsOverlayEdit: false,
+});
+assert.equal(isHrefVisible("/markets", publishedMarketsOnly), true);
+assert.equal(isPathVisible("/markets?tab=curves", publishedMarketsOnly), true);
+assert.deepEqual(hrefAccess("/markets", publishedMarketsOnly), {
+  state: "enabled",
+});
 
 const ownerOnly: ModuleScope = {
   modules: new Set(),
