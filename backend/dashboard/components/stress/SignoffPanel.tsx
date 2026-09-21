@@ -103,11 +103,17 @@ function CreateForm({ bankId, runId }: { bankId: string | undefined; runId: stri
       />
       <Field
         label="Assumptions rationale"
-        hint="¶67(d), ¶45: methodologies and justification of expert-judgement overlays."
+        hint="¶67(b), ¶45: justification of the assumptions and of expert-judgement overlays."
         value={rationale}
         onChange={setRationale}
       />
-      <Field label="Methodology summary (optional)" value={methodology} onChange={setMethodology} rows={2} />
+      <Field
+        label="Methodology summary (optional)"
+        hint="¶67(c): the methodologies used, including any material changes from the previous exercise."
+        value={methodology}
+        onChange={setMethodology}
+        rows={2}
+      />
       <input
         className={inputCls}
         placeholder="Reason (audit)"

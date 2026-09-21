@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -53,7 +54,7 @@ from app.services.regulatory_reporting.bog_forms.render import render_form_xlsx
 from app.services.regulatory_reporting.bog_forms.render_pdf import render_form_pdf
 from app.services.regulatory_reporting.common import get_bank_or_404
 from app.services.regulatory_reporting.exports.csv import render_csv
-from app.services.regulatory_reporting.exports.pdf import render_pdf
+from app.services.regulatory_reporting.exports.pdf import AttestedOfficer, render_pdf
 from app.services.regulatory_reporting.exports.xlsx import render_xlsx
 from app.services.regulatory_reporting.generation import snapshot_content_hash
 from app.services.regulatory_reporting.registry import get_definition
@@ -64,7 +65,7 @@ from app.services.regulatory_reporting.templates import (
 from app.storage.client import ObjectMetadata, StorageLocation
 from app.storage.factory import get_storage_client
 
-type ExportKind = Literal["xlsx", "csv", "pdf", "xlsx_working"]
+type ExportKind = Literal["xlsx", "csv", "pdf", "xlsx_working", "docx_working"]
 
 
 def render_bog_form_xlsx(
@@ -77,9 +78,10 @@ def render_bog_form_xlsx(
 ) -> bytes:
     """Template-faithful workbook for an official BoG return, from the snapshot.
 
-    ``mode="official"`` → the sealed values-only artifact (kind ``xlsx``);
-    ``mode="working"`` → the ALM/Finance copy with the template's live formulas
-    (kind ``xlsx_working``, never filed).
+    ``mode="official"`` → the sealed values-only artifact (kind ``xlsx``), the
+    copy officers certify; ``mode="working"`` → the formula copy with the
+    template's live formulas (kind ``xlsx_working``), filed alongside it since
+    2026-09-20 and never signed.
     """
     spec = form_spec(code)
     result = FormResult.from_snapshot(spec, snapshot)
@@ -94,13 +96,15 @@ def render_bog_form_xlsx(
     )
 
 
-def render_bog_form_pdf(
+def render_bog_form_pdf(  # noqa: PLR0913 - the attestation record is two named parts
     code: str,
     snapshot: dict,
     bank: Bank,
     generated_at: datetime,
     *,
     package_line: str = "",
+    signing_required: bool = True,
+    officers: Sequence[AttestedOfficer] = (),
 ) -> bytes:
     """The official BoG return as a PDF — the artifact the institution files.
 
@@ -118,6 +122,8 @@ def render_bog_form_pdf(
         reporting_date=str(snapshot.get("reporting_date", "")),
         generated_at=generated_at,
         package_line=package_line,
+        signing_required=signing_required,
+        officers=officers,
     )
 
 
@@ -127,6 +133,7 @@ WRITTEN_BY = "regulatory_reporting"
 _CONTENT_TYPES = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "xlsx_working": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "zip": "application/zip",
     "csv": "text/csv",
     "pdf": "application/pdf",
@@ -266,6 +273,54 @@ def export_package(
     return artifact
 
 
+def _attestation_record(
+    db: Session, ctx: TenantContext, package: RegulatoryPackage
+) -> tuple[bool, list[AttestedOfficer]]:
+    """Whether this return is signed, and who handled it if it is not.
+
+    ONE resolution for both PDF writers — the generic return and the official
+    BoG form. They print the same attestation block in two layouts, so a second
+    copy of this would let the two documents disagree about who prepared a
+    return, which is precisely the kind of divergence a filed artifact must
+    never carry.
+
+    When signing is required the officers are irrelevant: the ceremony fills
+    the signature fields and the block is its own record.
+    """
+    from app.services.attestation import policy as attestation_policy  # noqa: PLC0415
+    from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415
+
+    signing_policy = attestation_policy.resolve_policy(
+        db,
+        ctx,
+        bank_id=package.bank_id,
+        return_code=package.return_code,
+        return_family=package.return_family,
+        basis=package.basis,
+        as_at=package.reporting_date,
+    )
+    if signing_policy.require_signature:
+        return True, []
+
+    # Who actually handled it, from the chain's own decisions — the same record
+    # the workspace shows, so the filed document and the screen cannot disagree.
+    state = filing_chain.load_state(db, ctx, package)
+    titles = {stage.seq: stage.title for stage in state.stages}
+    officers = [
+        AttestedOfficer(
+            stage=titles.get(decision.stage_seq, f"Stage {decision.stage_seq}"),
+            name=decision.decided_by_name,
+            title=decision.officer_title,
+            at=decision.created_at.strftime("%d %b %Y %H:%M UTC"),
+        )
+        for decision in state.decisions
+        # A send-back is a decision, but not an attestation: the officers of
+        # record are those who moved the return forward.
+        if decision.decision != "returned"
+    ]
+    return False, officers
+
+
 def export_package_version(
     db: Session,
     ctx: TenantContext,
@@ -285,6 +340,19 @@ def export_package_version(
     _verify_snapshot_seal(package, snapshot)
     _refuse_if_signed(db, ctx, package, kind)
     bank = get_bank_or_404(db, ctx, package.bank_id)
+    _ensure_kind_supported(definition, kind)
+
+    # The family seam, BEFORE the tabular render. A family whose document is
+    # not a grid of rows and columns renders it itself and then falls into the
+    # SAME storage / version / artifact code below, so an ICAAP PDF is stored,
+    # versioned, hashed and signed exactly like every other return's. The seal
+    # and the signed-bytes refusal above still run first.
+    family_payload = _family_render(db, ctx, package, kind, bank)
+    if family_payload is not None:
+        payload, extension, file_stem = family_payload
+        return _store_export(
+            db, ctx, package, bank, kind, payload, extension, file_stem, snapshot
+        )
 
     rendered = build_rendered_return(
         template,
@@ -296,9 +364,12 @@ def export_package_version(
 
     extension = kind
     if kind == "xlsx_working":
-        # Official BSD forms preserve the regulator's own workbook formulas.
-        # SDI packets use a separately-labelled working calculation sheet whose
-        # formula plan is explicit and derived from the sealed snapshot.
+        # Official BSD forms preserve the regulator's own workbook formulas —
+        # since 2026-09-20 that copy is filed WITH the protected values-only
+        # workbook, and is labelled accordingly. SDI packets use a separately
+        # labelled working calculation sheet whose formula plan is explicit and
+        # derived from the sealed snapshot; it is NOT filed, and keeps the
+        # plain working-copy label that says so.
         if is_bog_official_template(definition.template_id):
             payload = render_bog_form_xlsx(
                 definition.code, snapshot, bank, package.generated_at, mode="working"
@@ -322,6 +393,23 @@ def export_package_version(
                 },
             )
         extension = "xlsx"
+    elif kind == "docx_working":
+        # The Word working copy of an ICAAP report. The kind is admitted by the
+        # model, the DB CHECK and the export route so the wire contract is
+        # coherent, but NO registered return renders one yet. Refusing by name
+        # is the only honest answer: falling through to the generic branch
+        # below would render a PDF and store it under a Word kind, which reads
+        # downstream as a successful export of a document that does not exist.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "export_kind_not_supported_for_return",
+                "message": (
+                    f"'{package.return_code}' does not declare a Word working copy. "
+                    "Use 'pdf' for the filing document."
+                ),
+            },
+        )
     elif kind == "xlsx" and is_bog_official_template(definition.template_id):
         # Official BoG BSD form: rebuild the OFFICIAL workbook from the committed
         # layout with the immutable snapshot's cell values (values-only, sealed).
@@ -333,22 +421,92 @@ def export_package_version(
     elif kind == "pdf" and is_bog_official_template(definition.template_id):
         # Official BoG BSD form: the filing artifact is the FORM, drawn on the
         # official grid — never the generic line/cell/status listing.
+        signing_required, officers = _attestation_record(db, ctx, package)
         payload = render_bog_form_pdf(
             definition.code,
             snapshot,
             bank,
             package.generated_at,
             package_line=f"{package.id} (version {package.version})",
+            signing_required=signing_required,
+            officers=officers,
         )
     else:
+        signing_required, officers = _attestation_record(db, ctx, package)
         payload = render_pdf(
-            rendered, sandbox_watermark=definition.default_channel == "orass_sandbox"
+            rendered,
+            sandbox_watermark=definition.default_channel == "orass_sandbox",
+            signing_required=signing_required,
+            officers=officers,
         )
 
-    slug = bank_slug(db, bank)
     file_stem = (
         f"{package.return_code}.working" if kind == "xlsx_working" else package.return_code
     )
+    return _store_export(
+        db, ctx, package, bank, kind, payload, extension, file_stem, snapshot
+    )
+
+
+#: Export kinds a family admits, where the answer is narrower than "any kind".
+#: An ICAAP filing is a document: the signed PDF is what is filed and the Word
+#: copy is the internal review draft. A spreadsheet of an ICAAP does not exist,
+#: and rendering the generic tabular exporter over a narrative snapshot would
+#: produce an empty workbook that reads as a successful export.
+FAMILY_EXPORT_KINDS: dict[str, frozenset[str]] = {
+    "icaap": frozenset({"pdf", "docx_working"}),
+}
+
+
+def _ensure_kind_supported(definition, kind: ExportKind) -> None:
+    allowed = FAMILY_EXPORT_KINDS.get(definition.family)
+    if allowed is None or kind in allowed:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error_code": "export_kind_not_supported_for_return",
+            "message": (
+                f"'{definition.code}' is a document, not a workbook: it exports as "
+                f"{', '.join(sorted(allowed))}."
+            ),
+            "allowed_kinds": sorted(allowed),
+        },
+    )
+
+
+def _family_render(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    kind: ExportKind,
+    bank: Bank,
+) -> tuple[bytes, str, str] | None:
+    """``(payload, extension, file_stem)`` from the family's own renderer, or None."""
+    from app.services.regulatory_reporting import family_hooks  # noqa: PLC0415 - lazy seam
+
+    hooks = family_hooks.for_package(package)
+    if hooks is None:
+        return None
+    try:
+        return hooks.export(db, ctx, package, kind, bank)
+    except NotImplementedError:
+        return None
+
+
+def _store_export(  # noqa: PLR0913 - one storage write is its named parts
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    bank: Bank,
+    kind: ExportKind,
+    payload: bytes,
+    extension: str,
+    file_stem: str,
+    snapshot: dict,
+) -> tuple[RegulatoryPackageArtifact, RegulatoryArtifactVersion]:
+    """Write the bytes, append the immutable version row, upsert the artifact."""
+    slug = bank_slug(db, bank)
     object_path = (
         f"bog_returns/{package.reporting_date.isoformat()}/{package.id}/{file_stem}.{extension}"
     )

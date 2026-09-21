@@ -63,6 +63,8 @@ from tests.services.test_attestation_workspace import (
     _certify,
     _seed,
     _signature_count,
+    assert_handed_to_the_validator,
+    assert_with_the_validator,
 )
 
 #: The analyst has no ``approver`` platform role — the identity the entitlement
@@ -274,11 +276,13 @@ def test_a_distinct_authorised_approver_releases_the_package(db_session: Session
     db_session.refresh(package)
 
     assert package.attestation_state == "fully_certified"
-    assert package.status == "approved"
+    assert_handed_to_the_validator(db_session, package)
     decisions = _approvals(db_session, package)
     assert [(row.action, row.actor_user_id) for row in decisions] == [
         ("approved", APPROVER_USER_ID)
     ]
+    # Every signature the policy demanded exists. The ATTESTATION gate is
+    # satisfied; what is outstanding is the Validator's stage, not a signature.
     workflow.ensure_submittable(db_session, MAKER, package)  # no raise
 
 
@@ -472,7 +476,8 @@ def test_the_esign_kill_switch_suspends_signing_but_never_maker_checker(
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
-    assert decided.status == "approved"
+    assert decided.status == "pending_approval"
+    assert_handed_to_the_validator(db_session, package)
     approvals = _approvals(db_session, package)
     assert approvals[-1].actor_user_id == APPROVER_USER_ID
     get_settings.cache_clear()
@@ -561,8 +566,7 @@ def test_a_replayed_or_repeated_approval_does_not_bypass_separation(
     _certify(db_session, MAKER, package, role="preparer")
     db_session.refresh(package)
     _certify(db_session, APPROVER, package, role="approver")
-    db_session.refresh(package)
-    assert package.status == "approved"
+    assert_handed_to_the_validator(db_session, package)
     approvals_after_first = _approvals(db_session, package)
     assert len(approvals_after_first) == 1
 
@@ -590,8 +594,8 @@ def test_a_replayed_or_repeated_approval_does_not_bypass_separation(
     assert bare.value.status_code == 409
     db_session.rollback()
 
-    db_session.refresh(package)
-    assert package.status == "approved"
+    # Unchanged by all three: still with the Validator, still one approval.
+    assert_with_the_validator(db_session, package)
     assert len(_approvals(db_session, package)) == 1
 
 
@@ -712,10 +716,11 @@ def test_a_signature_relaxed_return_still_completes_its_bare_approval(
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
-    assert decided.status == "approved"
-    db_session.refresh(package)
+    assert decided.status == "pending_approval"
+    # The kill switch suspends SIGNING. It does not shorten the review chain, so
+    # the return still goes to the Validator before it goes to the regulator.
+    assert_handed_to_the_validator(db_session, package)
     workflow.ensure_submittable(db_session, MAKER, package)  # no raise
-    reporting_workflow.ensure_transition_allowed(package, "submitted")  # no raise
     # No signature was demanded and none was invented.
     assert _signature_count(db_session) == 0
 
@@ -751,7 +756,7 @@ def test_a_witness_slot_signing_last_still_releases_the_package(
     db_session.refresh(package)
 
     assert package.attestation_state == "fully_certified"
-    assert package.status == "approved"
+    assert_handed_to_the_validator(db_session, package)
     # The decision is attributed to the CHECKER, never to the witness who
     # happened to sign last.
     decisions = _approvals(db_session, package)

@@ -160,6 +160,12 @@ _INSTITUTION_MODULES = tuple(module for module in Module if module not in _ORGAN
 _REQUIRED_RUNTIME_CONDITIONS: dict[Permission, tuple[ConditionKind, ...]] = {
     Permission.APPROVE: (ConditionKind.MAKER_CHECKER,),
     Permission.SIGN_OFF: (ConditionKind.MAKER_CHECKER, ConditionKind.STEP_UP),
+    # Filing to the regulator is four-eyes by construction: the caller must
+    # supply the maker/checker verdict or the evaluation denies. A future route
+    # that grants SUBMIT without establishing who prepared the return is refused
+    # rather than allowed — the seam this whole permission exists to defend
+    # (docs/filing_workflow_redesign.md §3.3).
+    Permission.SUBMIT: (ConditionKind.MAKER_CHECKER,),
 }
 
 

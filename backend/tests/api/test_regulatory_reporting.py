@@ -28,6 +28,14 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.core.config import get_settings
 from app.models import (
     Bank,
@@ -38,6 +46,7 @@ from app.models import (
     RegulatoryRun,
     User,
 )
+from app.services import authorization
 from app.services.ingestion import bank_slug
 from app.services.regulatory_reporting import workflow as reporting_workflow
 from app.services.regulatory_reporting.bog_forms.catalog import (
@@ -66,6 +75,7 @@ RETURN_CODE = "LCR-NSFR"
 # every real position just to be refused).
 OTHER_RETURN_CODE = "LRT-OUTLET"
 CHECKER_EMAIL = "real-suite.checker@samplebank.test"
+VALIDATOR_EMAIL = "real-suite.validator@samplebank.test"
 FOUR_DP = Decimal("0.0001")
 # Periodic registry entries expand into calendar obligations; the event-driven
 # ones (corporate LRT packs, the Board/ALCO stress pack) never do.
@@ -225,6 +235,65 @@ def _checker(session: Session) -> UUID:
 
 def _checker_headers(checker_id: UUID, roles: tuple[str, ...] = ("admin",)) -> dict[str, str]:
     return real_headers(user_id=checker_id, roles=roles, email=CHECKER_EMAIL)
+
+
+def _validator(session: Session) -> tuple[UUID, int]:
+    """A THIRD active identity: the officer who transmits, and only that.
+
+    Until 2026-09-20 the submit route required ``Permission.APPROVE`` — the same
+    permission the approval decision required — so the preparer's admin token
+    and the checker's approval authority both reached the regulator. Filing now
+    requires one explicit Regulatory Reporting / restricted ``submit`` binding
+    (the Validator bundle), which nothing backfills and no scalar role supplies,
+    so these journeys need a real grant. Returns the id and the authorization
+    version the grant advanced the user to; the row and the binding live only
+    inside the rolled-back transaction.
+    """
+    session.info["organization_id"] = REAL_ORG_ID
+    user = session.scalar(
+        select(User).where(User.organization_id == REAL_ORG_ID, User.email == VALIDATOR_EMAIL)
+    )
+    if user is None:
+        user = User(
+            id=uuid4(),
+            organization_id=REAL_ORG_ID,
+            email=VALIDATOR_EMAIL,
+            display_name="Real-suite Validator",
+            role="viewer",
+        )
+        session.add(user)
+        session.flush()
+        authorization.create_role_binding(
+            session,
+            organization_id=REAL_ORG_ID,
+            principal_user_id=user.id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VALIDATOR,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                REAL_BANK_ID,
+                ModuleScope.REGULATORY,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "real-data-suite"),
+            reason="the officer who files these returns to the regulator",
+            commit=False,
+        )
+    session.commit()
+    session.refresh(user)
+    return user.id, user.authorization_version
+
+
+def _validator_headers(validator: tuple[UUID, int]) -> dict[str, str]:
+    """A Validator session. The scalar role is ``viewer`` on purpose: the
+    binding is the whole authority, and a scalar role must never supply it."""
+    user_id, authv = validator
+    return real_headers(
+        user_id=user_id,
+        roles=("viewer",),
+        email=VALIDATOR_EMAIL,
+        authorization_version=authv,
+    )
 
 
 def _relax_signing(client: TestClient, return_code: str = RETURN_CODE) -> None:
@@ -620,7 +689,7 @@ def test_rejected_approval_returns_package_to_generated(
 
 
 def test_submit_and_poll_gate_on_approval_and_events_start_empty(
-    real_client: TestClient,
+    real_client: TestClient, real_session: Session
 ) -> None:
     period = _working_period(real_client)
     # Signing is required for every return by default, and this journey is not
@@ -630,14 +699,18 @@ def test_submit_and_poll_gate_on_approval_and_events_start_empty(
     _baseline_run(real_client, period["id"])
     package = _generated(real_client, period["period_end"])
     base = f"{PACKAGES}/{package['id']}"
+    validator = _validator_headers(_validator(real_session))
 
-    # A merely-generated package cannot reach a channel (maker-checker first).
-    submit = real_client.post(f"{base}/submit", headers=real_headers(), json={"channel": "email"})
-    assert submit.status_code == 409
+    # A merely-generated package cannot reach a channel — asked by the one
+    # officer who could otherwise file it, so the refusal is the LIFECYCLE's
+    # and not a missing authority. (Before 2026-09-20 this was asked with the
+    # preparer's own admin token, which is exactly the hole that closed.)
+    submit = real_client.post(f"{base}/submit", headers=validator, json={"channel": "email"})
+    assert submit.status_code == 409, submit.text
     assert "generated" in submit.json()["error"]["message"]
 
-    poll = real_client.post(f"{base}/poll", headers=real_headers())
-    assert poll.status_code == 409
+    poll = real_client.post(f"{base}/poll", headers=validator)
+    assert poll.status_code == 409, poll.text
     assert "submitted" in poll.json()["error"]["message"]
 
     events = real_client.get(f"{base}/submission-events", headers=real_headers())
@@ -1219,10 +1292,14 @@ def test_submit_default_channel_auto_exports_then_poll_acknowledges(
     package = _generated(real_client, period["period_end"])
     base = f"{PACKAGES}/{package['id']}"
     _approve_package(real_client, real_session, package["id"])
+    # Three officers, three authorities: the admin prepared, the checker
+    # approved, and only the Validator's REG/restricted ``submit`` binding
+    # reaches the regulator.
+    validator = _validator_headers(_validator(real_session))
 
     # No channel in the payload -> the registry default for the return
     # (orass_sandbox); no artifacts yet -> the workflow auto-exports xlsx first.
-    submitted = real_client.post(f"{base}/submit", headers=real_headers(), json={})
+    submitted = real_client.post(f"{base}/submit", headers=validator, json={})
     assert submitted.status_code == 200, submitted.text
     assert submitted.json()["status"] == "submitted"
 
@@ -1238,7 +1315,7 @@ def test_submit_default_channel_auto_exports_then_poll_acknowledges(
     assert "not publicly documented" in event["detail"]["note"]
     assert event["detail"]["auto_exported_kinds"] == ["xlsx"]
 
-    polled = real_client.post(f"{base}/poll", headers=real_headers())
+    polled = real_client.post(f"{base}/poll", headers=validator)
     assert polled.status_code == 200, polled.text
     body = polled.json()
     assert body["poll_status"] == "acknowledged"
@@ -1263,6 +1340,10 @@ def test_downtime_then_email_fallback_then_orass_reupload(
     package = _generated(real_client, period["period_end"])
     base = f"{PACKAGES}/{package['id']}"
     _approve_package(real_client, real_session, package["id"])
+    # Every channel act below — including the downtime email and the ORASS
+    # re-upload that completes the obligation — is a transmission, so all of
+    # them belong to the Validator.
+    validator = _validator_headers(_validator(real_session))
 
     # The operator can preview the guided email bundle at any time.
     instructions = real_client.get(f"{base}/email-fallback-instructions", headers=real_headers())
@@ -1277,7 +1358,7 @@ def test_downtime_then_email_fallback_then_orass_reupload(
     # ORASS is down -> structured 409 directing to the email fallback.
     _pin_sandbox(real_client, {"downtime": True})
     downtime = real_client.post(
-        f"{base}/submit", headers=real_headers(), json={"channel": "orass_sandbox"}
+        f"{base}/submit", headers=validator, json={"channel": "orass_sandbox"}
     )
     assert downtime.status_code == 409, downtime.text
     details = downtime.json()["error"]["details"]
@@ -1286,7 +1367,7 @@ def test_downtime_then_email_fallback_then_orass_reupload(
     assert details["fallback"]["endpoint"].endswith(f"{package['id']}/submit")
 
     # Email fallback submits but does NOT complete the obligation.
-    emailed = real_client.post(f"{base}/submit", headers=real_headers(), json={"channel": "email"})
+    emailed = real_client.post(f"{base}/submit", headers=validator, json={"channel": "email"})
     assert emailed.status_code == 200, emailed.text
     assert emailed.json()["status"] == "submitted"
     events = real_client.get(f"{base}/submission-events", headers=real_headers()).json()
@@ -1298,7 +1379,7 @@ def test_downtime_then_email_fallback_then_orass_reupload(
     # ORASS restored -> re-upload (submitted -> submitted) clears the flag.
     _pin_sandbox(real_client)
     reuploaded = real_client.post(
-        f"{base}/submit", headers=real_headers(), json={"channel": "orass_sandbox"}
+        f"{base}/submit", headers=validator, json={"channel": "orass_sandbox"}
     )
     assert reuploaded.status_code == 200, reuploaded.text
     assert reuploaded.json()["status"] == "submitted"
@@ -1309,12 +1390,12 @@ def test_downtime_then_email_fallback_then_orass_reupload(
     assert orass_event["detail"]["reupload_of"] == email_event["external_ref"]
 
     # After the re-upload the normal acknowledgement flow applies.
-    polled = real_client.post(f"{base}/poll", headers=real_headers())
+    polled = real_client.post(f"{base}/poll", headers=validator)
     assert polled.status_code == 200
     assert polled.json()["poll_status"] == "acknowledged"
 
     # A completed package cannot be submitted again.
-    again = real_client.post(f"{base}/submit", headers=real_headers(), json={"channel": "email"})
+    again = real_client.post(f"{base}/submit", headers=validator, json={"channel": "email"})
     assert again.status_code == 409
 
 
@@ -1352,12 +1433,24 @@ def test_email_fallback_eml_downloads_as_rfc822_with_attachments(
 # --- roles + settings ---------------------------------------------------------
 
 
-def test_control_actions_require_approver_role(
+def test_control_actions_separate_preparation_approval_and_transmission(
     real_client: TestClient, real_session: Session
 ) -> None:
-    """W2 role gates: analysts prepare (generate/validate/export), but approval
-    decisions, channel submissions, polls, and resubmission decisions need the
-    ``approver`` role — the AequorOS mirror of ORASS's Principal-only submit."""
+    """Three authorities, three officers — the split rewritten on 2026-09-20.
+
+    This test used to be named ``..._require_approver_role`` and asserted that
+    "approval decisions, channel submissions, polls, and resubmission decisions
+    need the ``approver`` role". That sentence WAS the defect: one authority both
+    approved a return and transmitted it to the Bank of Ghana, and on an ungated
+    family a scalar role was enough for either. It now asserts the rule the bank
+    actually runs (docs/filing_workflow_redesign.md §1 finding 3):
+
+    * analysts prepare (generate / validate / request approval);
+    * the approver decides, and that is ALL the approver may do — approval
+      authority, however complete, is refused at the channel;
+    * only a Validator binding reaches the regulator, and no scalar role
+      substitutes for it.
+    """
     period = _working_period(real_client)
     # Role gates are the subject; the signing gate is not. Without this the
     # approver's decision would be refused for want of a signature and the 403/200
@@ -1373,7 +1466,7 @@ def test_control_actions_require_approver_role(
     # Analysts CAN prepare.
     assert real_client.post(f"{base}/validate", headers=analyst).status_code == 200
     assert real_client.post(f"{base}/request-approval", headers=analyst, json={}).status_code == 200
-    # Analysts CANNOT decide, submit, poll, or decide resubmissions.
+    # Analysts CANNOT decide, submit, or poll.
     decided = real_client.post(
         f"{base}/decide-approval", headers=analyst, json={"action": "approved"}
     )
@@ -1388,6 +1481,19 @@ def test_control_actions_require_approver_role(
     )
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "approved"
+
+    # ...and having approved it, cannot file it. Not the scalar ``approver``
+    # role, and not an approval binding either: transmission is its own verb.
+    filed = real_client.post(f"{base}/submit", headers=approver, json={"channel": "email"})
+    assert filed.status_code == 403, filed.text
+    assert "Validator" in filed.json()["error"]["message"]
+    assert real_client.post(f"{base}/poll", headers=approver).status_code == 403
+
+    # The Validator, holding no scalar role above ``viewer``, does.
+    validator = _validator_headers(_validator(real_session))
+    transmitted = real_client.post(f"{base}/submit", headers=validator, json={"channel": "email"})
+    assert transmitted.status_code == 200, transmitted.text
+    assert transmitted.json()["status"] == "submitted"
 
 
 def test_viewer_is_read_only_across_the_hub(real_client: TestClient) -> None:

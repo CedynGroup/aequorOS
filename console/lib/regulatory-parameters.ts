@@ -26,6 +26,7 @@
  */
 
 import type { RegulatoryParameter } from './api';
+import { isStructural, shapeFor, validateShape, type ShapeError } from './parameter-shapes';
 
 // ---------------------------------------------------------------------------
 // Display vocabulary — production copy, never a raw enum token
@@ -326,11 +327,103 @@ export interface ProposeForm {
   param_code: string;
   jurisdiction_code: string;
   value_numeric: string;
+  /**
+   * The structured value, as JSON TEXT exactly as the operator typed it.
+   *
+   * It is kept as text rather than a parsed object for the same reason a
+   * decimal is kept as a string: what the operator wrote is what is checked and
+   * what is sent, and a round trip through a JS object would silently reformat
+   * (or, for a big number, reround) a governed table. Empty means "this code is
+   * a scalar" — see `valueMode`.
+   */
+  value_json: string;
   unit: string;
   source_citation: string;
   confirmation_status: RegulatoryParameter['confirmation_status'];
   effective_from: string;
   change_rationale: string;
+}
+
+/** Which arm of the value a code uses. A code carries exactly one. */
+export type ValueMode = 'scalar' | 'structural';
+
+/**
+ * Which editor this parameter code needs.
+ *
+ * A REGISTERED code answers from its declared shape (D-037), so a band table
+ * cannot be typed into a number field or vice versa. An unregistered code has
+ * no declared shape, so the operator chooses — `fallback` carries what they
+ * last chose, and defaults to the scalar field the console has always shown.
+ */
+export function valueMode(paramCode: string, fallback: ValueMode = 'scalar'): ValueMode {
+  const shape = shapeFor(paramCode);
+  if (shape === null) return fallback;
+  return shape.kind === 'structural' ? 'structural' : 'scalar';
+}
+
+/** The declared form's name (`band_table`, `shock_table`, …), or null. */
+export function shapeName(paramCode: string): string | null {
+  return shapeFor(paramCode)?.name ?? null;
+}
+
+export { isStructural };
+
+/** A parsed structured value, or the reason it could not be parsed. */
+export type ParsedStructuredValue =
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; message: string };
+
+/**
+ * Parse the structured-value text.
+ *
+ * A JSON body that is not an OBJECT is refused here rather than at the server,
+ * because the wire type is a mapping: a bare array or string would be rejected
+ * with a schema error that says nothing about what the operator did wrong.
+ */
+export function parseStructuredValue(raw: string): ParsedStructuredValue {
+  const text = raw.trim();
+  if (text === '') return { ok: false, message: 'Required.' };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    return {
+      ok: false,
+      message: `Not valid JSON — ${error instanceof Error ? error.message : 'could not be parsed'}.`,
+    };
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return {
+      ok: false,
+      message: 'Must be a JSON object, for example { "schema": "…", … }.',
+    };
+  }
+  return { ok: true, value: parsed as Record<string, unknown> };
+}
+
+/** Pretty-print the structured value, leaving unparseable text untouched. */
+export function formatStructuredValue(raw: string): string {
+  const parsed = parseStructuredValue(raw);
+  return parsed.ok ? JSON.stringify(parsed.value, null, 2) : raw;
+}
+
+/**
+ * The client-side shape check, against the same registry the operator API uses.
+ *
+ * Advisory, exactly like `approvalEligibility`: the server validates at propose
+ * AND at approve, and its answer is the one that governs. This only moves the
+ * message next to the field.
+ */
+export function checkShape(form: ProposeForm): ShapeError | null {
+  const code = form.param_code.trim();
+  if (code === '') return null;
+  const structural = valueMode(code) === 'structural';
+  if (!structural) {
+    return validateShape(code, form.value_numeric.trim(), null);
+  }
+  const parsed = parseStructuredValue(form.value_json);
+  if (!parsed.ok) return { path: 'value_json', message: parsed.message };
+  return validateShape(code, null, parsed.value);
 }
 
 export type ProposeFormErrors = Partial<Record<keyof ProposeForm, string>>;
@@ -342,7 +435,17 @@ export type ProposeFormErrors = Partial<Record<keyof ProposeForm, string>>;
  * message next to the field instead of as a 422; the schema remains the
  * authority.
  */
-export function validateProposal(form: ProposeForm, todayIso: string): ProposeFormErrors {
+export function validateProposal(
+  form: ProposeForm,
+  todayIso: string,
+  /**
+   * Which arm the operator is filling in. It only matters for an UNREGISTERED
+   * code, where there is no declared shape to decide: a registered code's shape
+   * always wins, so a band table can never be validated as a number because the
+   * form happened to be in the other mode.
+   */
+  mode?: ValueMode,
+): ProposeFormErrors {
   const errs: ProposeFormErrors = {};
 
   if (!form.scope_key.trim()) errs.scope_key = 'Required.';
@@ -358,12 +461,36 @@ export function validateProposal(form: ProposeForm, todayIso: string): ProposeFo
     errs.jurisdiction_code = 'Use 8 characters or fewer.';
   }
 
-  const value = form.value_numeric.trim();
-  if (!value) errs.value_numeric = 'Required.';
-  else if (!isDecimalValue(value)) {
-    errs.value_numeric =
-      'Enter digits with an optional decimal point. Symbols, negative numbers, ' +
-      'and scientific notation are not accepted.';
+  // A code carries EITHER a number or a structured body, never both. Which one
+  // is decided by the code's declared shape when it has one (D-037), so a band
+  // table cannot be typed into the number field and be silently accepted.
+  const chosen: ValueMode =
+    mode ?? (form.value_json.trim() ? 'structural' : 'scalar');
+  const structural = valueMode(form.param_code.trim(), chosen) === 'structural';
+  if (structural) {
+    const parsed = parseStructuredValue(form.value_json);
+    if (!parsed.ok) {
+      errs.value_json = parsed.message;
+    } else {
+      const shapeError = validateShape(form.param_code.trim(), null, parsed.value);
+      if (shapeError) {
+        errs.value_json =
+          shapeError.path === 'value_json'
+            ? shapeError.message
+            : `${shapeError.path}: ${shapeError.message}`;
+      }
+    }
+  } else {
+    const value = form.value_numeric.trim();
+    if (!value) errs.value_numeric = 'Required.';
+    else if (!isDecimalValue(value)) {
+      errs.value_numeric =
+        'Enter digits with an optional decimal point. Symbols, negative numbers, ' +
+        'and scientific notation are not accepted.';
+    } else {
+      const shapeError = validateShape(form.param_code.trim(), value, null);
+      if (shapeError) errs.value_numeric = shapeError.message;
+    }
   }
 
   if (!form.unit.trim()) errs.unit = 'Required — state what the number is measured in.';

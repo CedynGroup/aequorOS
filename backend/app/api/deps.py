@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
@@ -24,7 +24,7 @@ from app.core.observability import authorization_denied, cross_tenant_attempt
 from app.db.session import get_sessionmaker
 from app.integrations.storage.base import ObjectStorage
 from app.integrations.storage.s3 import get_object_storage
-from app.models import Bank, Organization, User
+from app.models import Bank, Organization, RegulatoryPackage, User
 
 # Declares a `bearerAuth` (HTTP bearer) security scheme in OpenAPI; auto_error=False so
 # we raise our own 401 (with WWW-Authenticate) instead of FastAPI's default 403.
@@ -295,9 +295,32 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
         "require_capital_plan_write",
         "require_capital_plan_approve",
         "require_ilaap_refresh",
+        "require_icaap_create",
+        "require_icaap_edit",
+        "require_icaap_pillar2_approve",
+        "require_icaap_addon_approve",
+        "require_icaap_audit_review",
+        "require_icaap_capital_plan_propose",
+        # P3 filing plane: a stage decision, a freeze, a post-freeze send-back,
+        # a review-chain approval and a ¶82 disclosure approval are all writes.
+        "require_icaap_stage_decision",
+        "require_icaap_freeze",
+        "require_icaap_review",
+        "require_icaap_workflow_approve",
+        "require_icaap_disclosure_approve",
+        "require_icaap_ai_draft",
+        "require_ai_settings_administration",
         "require_fx_run",
         "require_grant_administration",
         "get_scoped_mutation_tenant_context",
+        "require_package_validate",
+        "require_package_edit",
+        "require_package_export",
+        "require_package_approve",
+        "require_package_submit",
+        # The filing review chain: a stage decision is a write, whichever
+        # authority the stage names.
+        "require_package_stage_decision",
         "require_role_admin",
         "require_role_approver",
         "require_role_analyst",
@@ -537,14 +560,43 @@ def _require_organization_account_permission(
     surface: str,
     detail: str,
 ) -> TenantContext:
+    from app.core.authorization import Module, Sensitivity  # noqa: PLC0415
+
+    return _require_organization_permission(
+        db,
+        ctx,
+        module=Module.ACCOUNT,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=permission,
+        surface=surface,
+        detail=detail,
+    )
+
+
+def _require_organization_permission(  # noqa: PLR0913 - the complete policy tuple is explicit
+    db: Session,
+    ctx: TenantContext,
+    *,
+    module: Module,
+    sensitivity: Sensitivity,
+    permission: str,
+    surface: str,
+    detail: str,
+    conditions: tuple[ConditionCheck, ...] = (),
+) -> TenantContext:
+    """Require one complete ORGANIZATION-wide binding on a module.
+
+    The same shape as the institution check, for authority that is not about
+    one bank: internal audit is an organisation function, and an auditor who
+    had to hold a per-institution Capital grant to record a review would be
+    holding the authority they are supposed to be independent of.
+    """
     from app.core.authorization import (  # noqa: PLC0415 - avoid deps/service cycle
         InstitutionScope,
-        Module,
         Permission,
         PrincipalLocator,
         PrincipalType,
         ResourceLocator,
-        Sensitivity,
     )
     from app.services import authorization as authorization_service  # noqa: PLC0415
 
@@ -553,8 +605,8 @@ def _require_organization_account_permission(
         ctx.organization_id,
         InstitutionScope.ORGANIZATION,
         None,
-        Module.ACCOUNT,
-        Sensitivity.RESTRICTED,
+        module,
+        sensitivity,
     )
     if ctx.actor_user_id is None or ctx.authorization_version is None:
         authorization_denied(
@@ -583,6 +635,7 @@ def _require_organization_account_permission(
             principal,
             required_permission,
             resource,
+            conditions=conditions,
         )
     except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
         authorization_service.record_binding_evaluation_failure(
@@ -1003,6 +1056,441 @@ def require_capital_run(
     )
 
 
+@dataclass(frozen=True)
+class IcaapAccess:
+    """A resolved ICAAP principal: the tenant, the institution, and how it got in."""
+
+    ctx: TenantContext
+    bank: Bank
+    #: True only on the impersonated-examiner read branch, which reads no
+    #: binding and is limited to cycles that have been frozen.
+    examiner: bool = False
+
+
+_ICAAP_DETAIL = "ICAAP access requires an active scoped binding."
+
+
+def _require_icaap_access(  # noqa: PLR0913 - the complete policy tuple is explicit
+    request: Request,
+    db: Session,
+    ctx: TenantContext,
+    *,
+    permission: Permission,
+    surface: str,
+    allow_examiner: bool = False,
+    conditions: tuple[ConditionCheck, ...] = (),
+) -> IcaapAccess:
+    """Institution, then licence class, then authority.
+
+    The order is the policy. A bank outside the ICAAP regime answers 404 rather
+    than 403 — even when the caller holds a perfectly good capital binding —
+    because the surface does not exist for that licence class. Only after that
+    does a missing binding become 403, because the caller's own institution
+    existing is not a secret from them.
+    """
+    from app.services.icaap import guards  # noqa: PLC0415 - avoid deps/service cycle
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    if bank is None:
+        cross_tenant_attempt(
+            reason="bank_not_visible_to_tenant",
+            organization_id=ctx.organization_id,
+            bank_id=bank_id,
+            module=Module.CAPITAL.value,
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    guards.require_bank_class(db, bank)
+    if ctx.impersonation_context is not None:
+        if not allow_examiner:
+            authorization_denied(
+                reason="impersonation_read_only_mutation",
+                organization_id=ctx.organization_id,
+                bank_id=bank.id,
+                module=Module.CAPITAL.value,
+                permission=permission.value,
+                surface=surface,
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_ICAAP_DETAIL)
+        guards.require_examiner(ctx)
+        return IcaapAccess(ctx=ctx, bank=bank, examiner=True)
+    access = _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=permission,
+        surface=surface,
+        detail=_ICAAP_DETAIL,
+        conditions=conditions,
+    )
+    return IcaapAccess(ctx=access.ctx, bank=access.bank)
+
+
+def require_icaap_view(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    return _require_icaap_access(
+        request, db, ctx, permission=Permission.VIEW, surface="icaap_view", allow_examiner=True
+    )
+
+
+def require_icaap_create(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    return _require_icaap_access(
+        request, db, ctx, permission=Permission.CREATE, surface="icaap_create"
+    )
+
+
+def require_icaap_edit(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    return _require_icaap_access(request, db, ctx, permission=Permission.EDIT, surface="icaap_edit")
+
+
+def require_icaap_export(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    return _require_icaap_access(
+        request, db, ctx, permission=Permission.EXPORT, surface="icaap_export"
+    )
+
+
+def require_ai_settings_administration(
+    ctx: Annotated[TenantContext, Depends(get_current_principal)],
+    db: DbSession,
+) -> TenantContext:
+    """Consenting to send a tenant's data to an external service is the Owner's.
+
+    Deliberately the SAME authority as grant administration, not scoped Account
+    administration: an account administrator configures account surfaces, but
+    deciding that this organisation's figures may leave the platform is the one
+    decision its Owner makes personally.
+    """
+    return require_grant_administration(ctx, db)
+
+
+def require_icaap_ai_draft(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Requesting or deciding an AI draft: ICAAP EDIT, plus the egress gates.
+
+    The deployment gate runs FIRST and answers 404, before any tenant lookup: a
+    platform with AI switched off should not have an AI surface that answers
+    differently depending on who asks. The tenant gates answer 403 with their
+    code, because a tenant CAN act on "your Owner has not switched this on".
+    """
+    from app.services.ai import gates as ai_gates  # noqa: PLC0415 - avoid deps/service cycle
+
+    if not ai_gates.deployment_gate().allowed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    access = _require_icaap_access(
+        request, db, ctx, permission=Permission.EDIT, surface="icaap_ai_draft"
+    )
+    from app.services.icaap import ai_prompt  # noqa: PLC0415 - avoid deps/service cycle
+
+    decision = ai_gates.evaluate(
+        db,
+        ctx.organization_id,
+        "icaap_drafting",
+        phase="enqueue",
+        prompt_version=ai_prompt.PROMPT_VERSION,
+    )
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_code": decision.code, "message": decision.message},
+        )
+    return access
+
+
+def _icaap_path_uuid(request: Request, name: str) -> UUID | None:
+    raw = request.path_params.get(name)
+    if raw is None:
+        return None
+    try:
+        return UUID(str(raw))
+    except ValueError:
+        return None
+
+
+def require_icaap_pillar2_approve(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Approving a Pillar 2 figure: CAP approve, and not its own author.
+
+    The maker-checker condition resolves the author of the revision BEING
+    approved, so the refusal is an authorization decision with a trace rather
+    than a check buried in the service. The service re-checks it as well,
+    because two requests can race between the two.
+    """
+    from app.services.icaap import pillar2  # noqa: PLC0415 - avoid deps/service cycle
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    cycle_id = _icaap_path_uuid(request, "cycle_id")
+    item_id = _icaap_path_uuid(request, "item_id")
+    conditions: tuple[ConditionCheck, ...] = ()
+    if bank is not None and cycle_id is not None and item_id is not None:
+        conditions = pillar2.approval_conditions(db, ctx, bank, cycle_id, item_id)
+    return _require_icaap_access(
+        request,
+        db,
+        ctx,
+        permission=Permission.APPROVE,
+        surface="icaap_pillar2_approve",
+        conditions=conditions,
+    )
+
+
+def require_icaap_addon_approve(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Confirming or withdrawing a supervisory add-on: CAP approve, four eyes.
+
+    The database also refuses ``confirmed_by = created_by``; this is the layer
+    that answers with an authorization decision instead of a constraint error.
+    """
+    from app.services.icaap import supervisory_addons  # noqa: PLC0415
+
+    addon_id = _icaap_path_uuid(request, "addon_id")
+    conditions: tuple[ConditionCheck, ...] = ()
+    if addon_id is not None:
+        conditions = supervisory_addons.confirmation_conditions(db, ctx, addon_id)
+    return _require_icaap_access(
+        request,
+        db,
+        ctx,
+        permission=Permission.APPROVE,
+        surface="icaap_addon_approve",
+        conditions=conditions,
+    )
+
+
+def require_icaap_audit_review(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Recording the INDEPENDENT review: ICAAP visibility plus an Audit grant.
+
+    Two separate decisions, in this order. First the caller must be able to see
+    this ICAAP at all (CAP/confidential VIEW, and never as an impersonated
+    examiner — a supervisor does not record a bank's internal audit). Then they
+    must hold an ORGANISATION-wide Audit grant, with the maker-checker condition
+    that they are not a participant of this cycle. Requiring Capital EDIT
+    instead would mean the reviewer held the authority they are reviewing.
+    """
+    from app.core.authorization import ConditionKind  # noqa: PLC0415
+    from app.models.icaap import IcaapCycle  # noqa: PLC0415
+    from app.services.icaap import audit_reviews  # noqa: PLC0415
+
+    access = _require_icaap_access(
+        request, db, ctx, permission=Permission.VIEW, surface="icaap_audit_review_view"
+    )
+    cycle_id = _icaap_path_uuid(request, "cycle_id")
+    # A cycle that does not exist must not turn a MISSING AUDIT GRANT into a
+    # 404: the caller is told they lack the authority, and the handler reports
+    # the missing cycle afterwards.
+    cycle = (
+        None
+        if cycle_id is None
+        else db.scalar(
+            select(IcaapCycle).where(
+                IcaapCycle.id == cycle_id,
+                IcaapCycle.organization_id == ctx.organization_id,
+                IcaapCycle.bank_id == access.bank.id,
+            )
+        )
+    )
+    independent = cycle is None or audit_reviews.independence_conditions_passed(
+        db, access, cycle, ctx.actor_user_id
+    )
+    _require_organization_permission(
+        db,
+        ctx,
+        module=Module.AUDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.CREATE.value,
+        surface="icaap_audit_review",
+        detail=(
+            "Recording an independent review requires an organisation-wide Audit "
+            "grant held by somebody who did not prepare this ICAAP."
+        ),
+        conditions=(
+            ConditionCheck(
+                kind=ConditionKind.MAKER_CHECKER,
+                passed=independent,
+                reason=(
+                    "reviewer did not prepare this ICAAP"
+                    if independent
+                    else "a preparer of this ICAAP cannot record its independent review"
+                ),
+            ),
+        ),
+    )
+    return access
+
+
+def require_icaap_capital_plan_propose(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Proposing a capital-plan update: ICAAP edit AND the plan's own authority.
+
+    The proposal writes a capital-plan DRAFT, so it must carry the same
+    authority a person needs to write one directly — CREATE for a new version,
+    EDIT for an existing draft. Without this an ICAAP editor could author a
+    capital plan they are not entitled to author.
+    """
+    from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
+
+    access = _require_icaap_access(
+        request, db, ctx, permission=Permission.EDIT, surface="icaap_capital_plan_propose"
+    )
+    _require_institution_permission(
+        db,
+        ctx,
+        access.bank,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=capital_plan.required_draft_permission(db, ctx, access.bank),
+        surface="capital_plan_draft",
+        detail="Changing a capital plan requires an active scoped binding.",
+    )
+    return access
+
+
+# --- P3 filing plane -------------------------------------------------------
+# Each of these resolves the OBJECT before it evaluates authority, because the
+# answer depends on the object: who already reviewed this round, who proposed
+# this chain, who chose what to publish. The condition reaches the evaluator as
+# a ``MAKER_CHECKER`` check, so the refusal lands in the binding trace with its
+# reason instead of being a check buried in a service; the service re-checks it
+# under the row lock, because two requests can race between the two.
+
+
+def require_icaap_stage_decision(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Deciding a review or approval stage: CAP/confidential, and four eyes.
+
+    The PERMISSION depends on the stage: a review stage takes REVIEW, an
+    approval stage takes APPROVE. An approver bundle carries both, a reviewer
+    bundle only the first, so a reviewer cannot sign off the stage that makes
+    the report ready to freeze.
+    """
+    from app.services.icaap import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    cycle_id = _icaap_path_uuid(request, "cycle_id")
+    raw_seq = request.path_params.get("seq")
+    try:
+        stage_seq = int(str(raw_seq))
+    except (TypeError, ValueError):
+        stage_seq = None
+    conditions: tuple[ConditionCheck, ...] = ()
+    permission = Permission.APPROVE
+    if bank is not None and cycle_id is not None and stage_seq is not None:
+        conditions = icaap_workflow.stage_authority(db, ctx, bank, cycle_id, stage_seq)
+        permission = icaap_workflow.stage_permission(db, ctx, bank, cycle_id, stage_seq)
+    return _require_icaap_access(
+        request,
+        db,
+        ctx,
+        permission=permission,
+        surface="icaap_stage_decision",
+        conditions=conditions,
+    )
+
+
+def require_icaap_freeze(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Freezing: CAP/confidential EDIT, and NOT by anyone who reviewed it (D-030)."""
+    from app.services.icaap import workflow as icaap_workflow  # noqa: PLC0415 - avoid a cycle
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    cycle_id = _icaap_path_uuid(request, "cycle_id")
+    conditions: tuple[ConditionCheck, ...] = ()
+    if bank is not None and cycle_id is not None:
+        conditions = icaap_workflow.freeze_authority(db, ctx, bank, cycle_id)
+    return _require_icaap_access(
+        request, db, ctx, permission=Permission.EDIT, surface="icaap_freeze", conditions=conditions
+    )
+
+
+def require_icaap_review(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Sending a frozen ICAAP back: CAP/confidential REVIEW, and NOT by its freezer.
+
+    The mirror of :func:`require_icaap_freeze`'s D-030 condition. Freezing seals
+    the filing; sending it back voids the signatures on the filing that was
+    sealed. One officer may not hold both halves — which is why this carried no
+    ``conditions`` at all until 2026-09-20 and was the least guarded of the
+    ICAAP decision dependencies while being the most destructive (audit F1).
+    """
+    from app.services.icaap import post_freeze  # noqa: PLC0415 - avoid a cycle
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    cycle_id = _icaap_path_uuid(request, "cycle_id")
+    conditions: tuple[ConditionCheck, ...] = ()
+    if bank is not None and cycle_id is not None:
+        conditions = post_freeze.return_authority(db, ctx, bank, cycle_id)
+    return _require_icaap_access(
+        request,
+        db,
+        ctx,
+        permission=Permission.REVIEW,
+        surface="icaap_review",
+        conditions=conditions,
+    )
+
+
+def require_icaap_workflow_approve(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Approving the bank's own review chain: APPROVE, and not its proposer."""
+    from app.services.icaap import workflow_templates  # noqa: PLC0415 - avoid a cycle
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    template_id = _icaap_path_uuid(request, "template_id")
+    conditions: tuple[ConditionCheck, ...] = ()
+    if bank is not None:
+        conditions = workflow_templates.approval_conditions(
+            db, IcaapAccess(ctx=ctx, bank=bank), template_id
+        )  # pyright: ignore[reportAssignmentType]
+    return _require_icaap_access(
+        request,
+        db,
+        ctx,
+        permission=Permission.APPROVE,
+        surface="icaap_workflow_approve",
+        conditions=conditions,
+    )
+
+
+def require_icaap_disclosure_approve(request: Request, db: DbSession, ctx: Tenant) -> IcaapAccess:
+    """Approving what the bank publishes of its ICAAP: APPROVE, and four eyes."""
+    from app.services.icaap import disclosure as icaap_disclosure  # noqa: PLC0415 - avoid a cycle
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    bank_id = normalize_public_id(str(request.path_params.get("bank_id", "")))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    cycle_id = _icaap_path_uuid(request, "cycle_id")
+    conditions: tuple[ConditionCheck, ...] = ()
+    if bank is not None:
+        conditions = icaap_disclosure.approval_conditions(
+            db, IcaapAccess(ctx=ctx, bank=bank), cycle_id
+        )  # pyright: ignore[reportAssignmentType]
+    return _require_icaap_access(
+        request,
+        db,
+        ctx,
+        permission=Permission.APPROVE,
+        surface="icaap_disclosure_approve",
+        conditions=conditions,
+    )
+
+
 def require_fx_aggregated_view(
     db: DbSession,
     ctx: Tenant,
@@ -1173,6 +1661,434 @@ def get_approver_tenant_context(
     return principal
 
 
+# ---------------------------------------------------------------------------
+# Regulatory package routes: family-dispatching authorization (ICAAP P3, C-4)
+# ---------------------------------------------------------------------------
+#
+# Every package route has always declared a SCALAR dependency: ``Tenant`` to
+# read, ``MutationTenant`` to write, ``ApproverTenant`` to approve. That is the
+# right answer for a prudential return and the wrong one for an ICAAP, which is
+# the bank's own assessment of its capital adequacy and its Board's challenge of
+# it.
+#
+# These dependencies keep BOTH answers, chosen by the package's family:
+#
+# * ungated family -> the route's existing scalar dependency, called verbatim.
+#   Nothing about a BSD or liquidity return changes.
+# * gated family   -> a human principal with an exact institution-scoped binding
+#   (``family_access``), evaluated on the route's own permission. A missing VIEW
+#   answers 404 because the existence of an ICAAP for a date is itself
+#   disclosure; a held VIEW with a missing action permission answers 403.
+#
+# The scalar check runs FIRST when the package is not found, so a viewer hitting
+# a mutation route with an unknown id still gets today's 403 rather than a 404
+# that would tell them the id is unknown.
+
+
+@dataclass(frozen=True)
+class PackageAccess:
+    """A resolved regulatory-package principal, and how it got in."""
+
+    ctx: TenantContext
+    bank: Bank
+    package: RegulatoryPackage
+    #: True when the family's scoped gate decided this, rather than the ladder.
+    gated: bool = False
+    #: True only on the impersonated-examiner read branch.
+    examiner: bool = False
+
+
+_PACKAGE_DETAIL = "This return requires an active scoped binding for the institution."
+type _ScalarGate = Literal["tenant", "mutation", "approver", "scoped"]
+
+
+def _resolve_package_from_path(
+    request: Request, db: Session, ctx: TenantContext
+) -> tuple[Bank | None, RegulatoryPackage | None]:
+    """The bank and package a package-scoped route names, by whichever key it uses."""
+    from app.models import RegulatoryArtifactVersion, RegulatoryPackageArtifact  # noqa: PLC0415
+    from app.services.public_ids import normalize_public_id  # noqa: PLC0415
+
+    params = request.path_params
+    raw_bank = params.get("bank_id") or params.get("bank_reference") or ""
+    bank_id = normalize_public_id(str(raw_bank))
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
+    )
+    if bank is None:
+        return None, None
+    package_id = _icaap_path_uuid(request, "package_id")
+    if package_id is None:
+        artifact_id = _icaap_path_uuid(request, "artifact_id")
+        if artifact_id is not None:
+            package_id = db.scalar(
+                select(RegulatoryPackageArtifact.package_id).where(
+                    RegulatoryPackageArtifact.id == artifact_id,
+                    RegulatoryPackageArtifact.organization_id == ctx.organization_id,
+                )
+            )
+    if package_id is None:
+        version_id = _icaap_path_uuid(request, "version_id")
+        if version_id is not None:
+            package_id = db.scalar(
+                select(RegulatoryArtifactVersion.package_id).where(
+                    RegulatoryArtifactVersion.id == version_id,
+                    RegulatoryArtifactVersion.organization_id == ctx.organization_id,
+                )
+            )
+    if package_id is None:
+        return bank, None
+    package = db.scalar(
+        select(RegulatoryPackage).where(
+            RegulatoryPackage.id == package_id,
+            RegulatoryPackage.organization_id == ctx.organization_id,
+            RegulatoryPackage.bank_id == bank.id,
+        )
+    )
+    return bank, package
+
+
+def _apply_scalar_gate(ctx: TenantContext, gate: _ScalarGate) -> TenantContext:
+    """The route's pre-existing dependency, called verbatim.
+
+    ``"scoped"`` is not a scalar ladder step at all: it is the interactive-human
+    boundary every binding-enforced surface shares, and it checks no role. It is
+    named here so a package route can declare that its authority is the stored
+    binding and nothing else.
+    """
+    if gate == "tenant":
+        return get_tenant_context(ctx)
+    if gate == "mutation":
+        return get_mutation_tenant_context(ctx)
+    if gate == "scoped":
+        return get_scoped_mutation_tenant_context(ctx)
+    return get_approver_tenant_context(get_mutation_tenant_context(ctx))
+
+
+def _chain_authority_access(  # noqa: PLR0913 - the complete policy tuple is explicit
+    *,
+    request_gate: _ScalarGate,
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    package: RegulatoryPackage,
+    permission: Permission,
+    surface: str,
+    conditions: tuple[ConditionCheck, ...],
+) -> PackageAccess | None:
+    """A review-chain decision, authorised by the STORED BINDING first.
+
+    Returns ``None`` to mean "fall through to the route's own dependency,
+    unchanged" — which is what makes this a widening rather than a cutover.
+
+    Until 2026-09-20 this act dispatched on the family and, for an ungated one —
+    every BSD, liquidity, capital and FX return, i.e. every return a bank
+    actually files — consulted only the scalar ladder. An Org Owner's Approver
+    grant therefore did nothing, while the dashboard, which projects the control
+    from that same grant, offered the button. Fail-open screen over a
+    fail-closed server.
+    """
+    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+
+    near_miss: tuple[str, str] | None = None
+    try:
+        scoped = get_scoped_mutation_tenant_context(ctx)
+        verdict = family_access.chain_decision_verdict(
+            db, scoped, bank, package, permission, surface=surface, conditions=conditions
+        )
+    except HTTPException:
+        # The scoped boundary refused (impersonation, a stale ``authv``). That is
+        # not a reason to refuse a caller the old ladder admits, so fall through
+        # rather than turning a widening into a narrowing.
+        return None
+    if verdict.allowed:
+        return PackageAccess(ctx=scoped, bank=bank, package=package, gated=True)
+    near_miss = verdict.near_miss
+    if near_miss is None:
+        return None
+    # The caller HOLDS a grant for this institution that missed on exactly one
+    # scope dimension. Falling through silently would refuse them with the
+    # scalar ladder's sentence — "requires the 'analyst' role or higher" — which
+    # is about a role they will never hold and sends them to the wrong person.
+    # It cost a live debugging round. The ladder is still tried first, in case it
+    # admits them anyway; only when it also refuses is its reason replaced by the
+    # one they can act on.
+    try:
+        return PackageAccess(
+            ctx=_apply_scalar_gate(ctx, request_gate), bank=bank, package=package, gated=False
+        )
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_403_FORBIDDEN:
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=family_access.near_miss_detail(bank, near_miss),
+        ) from exc
+
+
+def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is explicit
+    request: Request,
+    db: Session,
+    ctx: TenantContext,
+    *,
+    gate: _ScalarGate,
+    permission: Permission,
+    surface: str,
+    conditions: tuple[ConditionCheck, ...] = (),
+    authority: Literal["family", "transmission", "chain"] = "family",
+) -> PackageAccess:
+    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+
+    bank, package = _resolve_package_from_path(request, db, ctx)
+    if package is None or bank is None:
+        # The scalar check first, THEN not-found: a viewer must not learn from a
+        # 404 that they got past the write gate.
+        _apply_scalar_gate(ctx, gate)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory package not found."
+        )
+    if authority == "chain":
+        chained = _chain_authority_access(
+            request_gate=gate,
+            db=db,
+            ctx=ctx,
+            bank=bank,
+            package=package,
+            permission=permission,
+            surface=surface,
+            conditions=conditions,
+        )
+        if chained is not None:
+            return chained
+    if authority == "transmission":
+        # Filing does not dispatch on family. Every return reaches the regulator
+        # through one authority, so there is no ungated branch to fall through.
+        scoped = _apply_scalar_gate(ctx, "scoped")
+        family_access.require_transmission_authority(
+            db, scoped, bank, package, permission, surface=surface, conditions=conditions
+        )
+        return PackageAccess(ctx=scoped, bank=bank, package=package, gated=True)
+    if family_access.gate_for(package.return_family) is None:
+        return PackageAccess(
+            ctx=_apply_scalar_gate(ctx, gate), bank=bank, package=package, gated=False
+        )
+    if gate == "tenant":
+        family_access.require_view(db, ctx, bank, package)
+        if ctx.impersonation_context is not None:
+            return PackageAccess(ctx=ctx, bank=bank, package=package, gated=True, examiner=True)
+        family_access.require_permission(
+            db, ctx, bank, package, permission, surface=surface, conditions=conditions
+        )
+        return PackageAccess(ctx=ctx, bank=bank, package=package, gated=True)
+    # A mutation on a gated family is a scoped human act. No impersonation, an
+    # interactive principal with a current ``authv`` — and NO scalar role check,
+    # because a scalar role must never satisfy a scoped surface.
+    scoped = get_scoped_mutation_tenant_context(ctx)
+    family_access.require_permission(
+        db, scoped, bank, package, permission, surface=surface, conditions=conditions
+    )
+    return PackageAccess(ctx=scoped, bank=bank, package=package, gated=True)
+
+
+def require_package_view(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
+    return _require_package_access(
+        request, db, ctx, gate="tenant", permission=Permission.VIEW, surface="package_view"
+    )
+
+
+def require_package_validate(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
+    return _require_package_access(
+        request,
+        db,
+        ctx,
+        gate="mutation",
+        permission=Permission.VALIDATE,
+        surface="package_validate",
+    )
+
+
+def require_package_edit(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
+    return _require_package_access(
+        request, db, ctx, gate="mutation", permission=Permission.EDIT, surface="package_edit"
+    )
+
+
+def require_package_export(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
+    return _require_package_access(
+        request, db, ctx, gate="mutation", permission=Permission.EXPORT, surface="package_export"
+    )
+
+
+def require_package_approve(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
+    """Approve-class package actions: APPROVE, and never the package's own maker.
+
+    The stored binding is consulted first (``authority="chain"``) and the scalar
+    ladder remains behind it, so an Org Owner's Approver grant now actually
+    approves — on a BSD or liquidity return as much as on an ICAAP — while no
+    existing approver loses the route. This and
+    :func:`require_package_stage_decision` take the SAME path on purpose: they
+    write the same chain decision, and two authorities for one act is the seam
+    this codebase keeps losing gates at (D-069).
+    """
+    return _require_package_access(
+        request,
+        db,
+        ctx,
+        gate="approver",
+        permission=Permission.APPROVE,
+        surface="package_approve",
+        conditions=_package_maker_checker_conditions(request, db, ctx),
+        authority="chain",
+    )
+
+
+def require_package_submit(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
+    """Transmission to the regulator: ``SUBMIT``, held by the Validator alone.
+
+    This dependency used to require ``Permission.APPROVE`` — the same permission
+    as :func:`require_package_approve` — so one authority both approved a return
+    and filed it to the Bank of Ghana, and on an ungated family the scalar
+    ``approver`` role was enough on its own. The bank's process has a separate
+    Validator who is the only officer that transmits
+    (``docs/filing_workflow_redesign.md`` §1 finding 3, §6 step 1).
+
+    Every return family now takes the same scoped path: an interactive human,
+    then one complete active binding carrying ``SUBMIT`` over Regulatory
+    Reporting / restricted for this exact institution. No scalar role satisfies
+    it, and the officer who generated the return still cannot release it.
+    """
+    return _require_package_access(
+        request,
+        db,
+        ctx,
+        gate="scoped",
+        permission=Permission.SUBMIT,
+        surface="package_submit",
+        conditions=_package_transmission_conditions(request, db, ctx),
+        authority="transmission",
+    )
+
+
+def require_package_stage_decision(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
+    """Deciding a stage of the filing chain: the authority the STAGE names.
+
+    This is what makes Preparer, Approver and Validator three AUTHORITIES
+    rather than three labels. The permission comes from the stage the return is
+    actually waiting at (``filing_workflow.chain.stage_permission``): the
+    transmitting stage takes ``SUBMIT``, a review stage ``REVIEW``, an approval
+    stage ``APPROVE``. The ``validator`` bundle carries ``submit`` and
+    deliberately not ``approve``, and the approver bundle the reverse, so
+    neither can take the other's stage — and the stage engine never has to know
+    a role string.
+
+    The separation of duties (whoever prepared this round cannot approve it,
+    whoever approved cannot validate it) rides as a MAKER_CHECKER condition so
+    the refusal lands in the binding trace. The service re-checks it under the
+    row lock, because two officers can decide between the two.
+
+    Both branches consult the STORED BINDING. The transmitting stage consults it
+    alone (step 1's cutover); the approve/review stages consult it first and keep
+    the scalar ladder behind it, so an Org Owner's Approver grant authorises the
+    decision on every family while no existing approver loses the route.
+    """
+    from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
+
+    _bank, package = _resolve_package_from_path(request, db, ctx)
+    stage = None if package is None else filing_chain.stage_for_decision(db, ctx, package)
+    permission = filing_chain.stage_permission(stage)
+    conditions = filing_chain.stage_authority(db, ctx, package)
+    if permission is Permission.SUBMIT:
+        return _require_package_access(
+            request,
+            db,
+            ctx,
+            gate="scoped",
+            permission=Permission.SUBMIT,
+            surface="package_stage_transmit_decision",
+            conditions=conditions,
+            authority="transmission",
+        )
+    return _require_package_access(
+        request,
+        db,
+        ctx,
+        gate="approver",
+        permission=permission,
+        surface="package_stage_decision",
+        conditions=conditions,
+        authority="chain",
+    )
+
+
+def _package_transmission_conditions(
+    request: Request, db: Session, ctx: TenantContext
+) -> tuple[ConditionCheck, ...]:
+    """Four eyes on the regulator's copy, for EVERY family.
+
+    ``Permission.SUBMIT`` declares this condition required
+    (``services/authorization._REQUIRED_RUNTIME_CONDITIONS``), so an evaluation
+    that does not receive it denies. The officer who generated the return is not
+    the officer who files it — on a BSD return as much as on an ICAAP, which is
+    why this builder does not dispatch on the family the way the approve-side
+    one does.
+    """
+    from app.core.authorization import ConditionKind  # noqa: PLC0415
+
+    _bank, package = _resolve_package_from_path(request, db, ctx)
+    distinct = (
+        package is not None
+        and ctx.actor_user_id is not None
+        and package.generated_by != ctx.actor_user_id
+    )
+    return (
+        ConditionCheck(
+            kind=ConditionKind.MAKER_CHECKER,
+            passed=distinct,
+            reason=(
+                "the officer filing this return is not the officer who generated it"
+                if distinct
+                else "the officer who generated this return cannot also file it"
+            ),
+        ),
+    )
+
+
+def _package_maker_checker_conditions(
+    request: Request, db: Session, ctx: TenantContext
+) -> tuple[ConditionCheck, ...]:
+    """Four eyes on an approval, for EVERY family: the officer who generated the
+    return cannot release it.
+
+    Recorded as an authorization CONDITION rather than buried in a service, so
+    the refusal carries a trace an examiner can read. The services re-check it —
+    two requests can race between the decision and the write.
+
+    This used to dispatch on the family and return NOTHING for an ungated one.
+    ``Permission.APPROVE`` declares ``MAKER_CHECKER`` required, so an empty tuple
+    denies: the binding branch could therefore never open on a BSD, liquidity,
+    capital or FX return, which is every return a bank actually files. Four eyes
+    on an approval is four eyes whatever the return is — the same reasoning as
+    ``_package_transmission_conditions``, which has never dispatched on family.
+    """
+    from app.core.authorization import ConditionKind  # noqa: PLC0415
+
+    _bank, package = _resolve_package_from_path(request, db, ctx)
+    if package is None or ctx.actor_user_id is None:
+        return ()
+    distinct = package.generated_by != ctx.actor_user_id
+    return (
+        ConditionCheck(
+            kind=ConditionKind.MAKER_CHECKER,
+            passed=distinct,
+            reason=(
+                "the officer releasing this return is not the officer who generated it"
+                if distinct
+                else "the officer who generated this return cannot also release it"
+            ),
+        ),
+    )
+
+
 Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
 MutationTenant = Annotated[TenantContext, Depends(get_mutation_tenant_context)]
 ScopedMutationTenant = Annotated[TenantContext, Depends(get_scoped_mutation_tenant_context)]
@@ -1192,6 +2108,21 @@ CapitalRestrictedView = Annotated[
     InstitutionPermissionAccess, Depends(require_capital_restricted_view)
 ]
 CapitalRun = Annotated[InstitutionPermissionAccess, Depends(require_capital_run)]
+IcaapView = Annotated[IcaapAccess, Depends(require_icaap_view)]
+IcaapCreate = Annotated[IcaapAccess, Depends(require_icaap_create)]
+IcaapEdit = Annotated[IcaapAccess, Depends(require_icaap_edit)]
+IcaapExport = Annotated[IcaapAccess, Depends(require_icaap_export)]
+IcaapAiDraft = Annotated[IcaapAccess, Depends(require_icaap_ai_draft)]
+AiSettingsAdminTenant = Annotated[TenantContext, Depends(require_ai_settings_administration)]
+IcaapPillar2Approve = Annotated[IcaapAccess, Depends(require_icaap_pillar2_approve)]
+IcaapAddonApprove = Annotated[IcaapAccess, Depends(require_icaap_addon_approve)]
+IcaapAuditReview = Annotated[IcaapAccess, Depends(require_icaap_audit_review)]
+IcaapCapitalPlanPropose = Annotated[IcaapAccess, Depends(require_icaap_capital_plan_propose)]
+IcaapStageDecide = Annotated[IcaapAccess, Depends(require_icaap_stage_decision)]
+IcaapFreeze = Annotated[IcaapAccess, Depends(require_icaap_freeze)]
+IcaapReview = Annotated[IcaapAccess, Depends(require_icaap_review)]
+IcaapWorkflowApprove = Annotated[IcaapAccess, Depends(require_icaap_workflow_approve)]
+IcaapDisclosureApprove = Annotated[IcaapAccess, Depends(require_icaap_disclosure_approve)]
 FxAggregatedView = Annotated[InstitutionPermissionAccess, Depends(require_fx_aggregated_view)]
 FxRun = Annotated[InstitutionPermissionAccess, Depends(require_fx_run)]
 CapitalPlanWrite = Annotated[InstitutionPermissionAccess, Depends(require_capital_plan_write)]
@@ -1205,6 +2136,13 @@ LiquidityAggregatedResource = Annotated[
 LiquidityConfidentialResource = Annotated[
     LiquidityMonitoringAccess, Depends(require_liquidity_confidential_view)
 ]
+PackageView = Annotated[PackageAccess, Depends(require_package_view)]
+PackageValidate = Annotated[PackageAccess, Depends(require_package_validate)]
+PackageEdit = Annotated[PackageAccess, Depends(require_package_edit)]
+PackageExport = Annotated[PackageAccess, Depends(require_package_export)]
+PackageApprove = Annotated[PackageAccess, Depends(require_package_approve)]
+PackageSubmit = Annotated[PackageAccess, Depends(require_package_submit)]
+PackageStageDecide = Annotated[PackageAccess, Depends(require_package_stage_decision)]
 Storage = Annotated[ObjectStorage, Depends(get_object_storage)]
 
 

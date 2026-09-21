@@ -16,6 +16,7 @@ from uuid import UUID
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -77,14 +78,33 @@ RETURN_FAMILIES = (
     # The credit / NPL family (Notice BG/GOV/SEC/2025/23; credit PR-6,
     # migration 202609010050).
     "credit",
+    # The ICAAP FILING family (ICAAP P3, migration 202609190058): the annual
+    # report, its ¶74 updates and the ¶82 disclosure. Distinct from
+    # "icaap_stress", which is the Appendix II stress annex that rides inside
+    # it — same subject, different filing role, and the family is what the
+    # package-route authorization and the frozen-package gate key on.
+    "icaap",
 )
 RETURN_FREQUENCIES = ("weekly", "monthly", "quarterly", "semiannual", "annual", "daily")
 RETURN_BASES = ("solo", "consolidated")
 # "xlsx" is the OFFICIAL (sealed, values-only) Excel export — the audit twin of
-# the submission PDF; "xlsx_working" (2026-08-16, migration 202608160015) is the
-# ALM/Finance WORKING copy of an official BoG BSD form with the template's live
-# formulas — never a filing artifact, never signed. See bog_forms/render.py.
-ARTIFACT_KINDS = ("xlsx", "csv", "pdf", "xlsx_working")
+# the submission PDF, and the copy officers certify; "xlsx_working" (2026-08-16,
+# migration 202608160015) is the recalculable copy. On an official BoG BSD form
+# it is the FORMULA copy carrying the template's own live formulas, and since
+# 2026-09-20 it is filed alongside the protected copy (still never signed); on
+# an SDI packet it is an AequorOS calculation sheet and is not filed. The rule
+# is workflow.filing_admits_artifact. See bog_forms/render.py.
+# "docx_working" (2026-09-19, migration 202609190058) is the Word working copy
+# of an ICAAP report, which an officer marks up: never signed, and never filed.
+ARTIFACT_KINDS = ("xlsx", "csv", "pdf", "xlsx_working", "docx_working")
+#: Where an attachment is required, and by whom. ``freeze`` documents must be on
+#: the cycle before the report is sealed (they are part of what was approved);
+#: ``submission`` documents accompany the filing itself (the Board resolution);
+#: ``optional`` is supporting evidence.
+PACKAGE_ATTACHMENT_GATES = ("freeze", "submission", "optional")
+#: How the attachment reached the package: uploaded against it, or copied by
+#: reference from the ICAAP cycle at freeze.
+PACKAGE_ATTACHMENT_SOURCES = ("package_upload", "icaap_cycle")
 # "orass_api" is the production machine-to-machine channel (Vizor API Service
 # wire contract configured per bank once BoG/Regnology onboarding completes);
 # "orass_sandbox" remains the labeled simulator for pre-onboarding use.
@@ -124,6 +144,25 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             name="ck_regulatory_packages_basis",
         ),
         CheckConstraint("version >= 1", name="ck_regulatory_packages_version"),
+        # --- rehearsal (D-029, ruled by D-068) -------------------------------
+        # A rehearsal runs the full lifecycle so a bank can dry-run freeze,
+        # signature and submission. These are what stop it ever being mistaken
+        # for, or becoming, a filing. The two invariants a row-level CHECK
+        # cannot express — a real package must not supersede a rehearsal, and a
+        # rehearsal must not reach a transmitting channel — are enforced in the
+        # services and pinned by tests; migration 202609190062 says so in full.
+        CheckConstraint(
+            "NOT is_rehearsal OR return_family = 'icaap'",
+            name="ck_regulatory_packages_rehearsal_is_icaap",
+        ),
+        CheckConstraint(
+            "NOT is_rehearsal OR status NOT IN ('acknowledged', 'rejected', 'declined')",
+            name="ck_regulatory_packages_rehearsal_never_acknowledged",
+        ),
+        CheckConstraint(
+            "NOT is_rehearsal OR supersedes_id IS NULL",
+            name="ck_regulatory_packages_rehearsal_supersedes_nothing",
+        ),
         ForeignKeyConstraint(
             ["bank_id", "organization_id"],
             ["banks.id", "banks.organization_id"],
@@ -146,7 +185,10 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "status",
         ),
         # Solo and consolidated packages keep independent current versions for
-        # the same return and reporting date.
+        # the same return and reporting date — and so does a REHEARSAL, which is
+        # a third chain (D-029 / D-068). Without ``is_rehearsal`` in this key, a
+        # bank that dry-ran a fiscal year could not then file it: the real
+        # package would collide with the rehearsal on a duplicate key.
         Index(
             "uq_regulatory_packages_current",
             "organization_id",
@@ -154,6 +196,7 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "return_code",
             "reporting_date",
             "basis",
+            "is_rehearsal",
             unique=True,
             postgresql_where=sql_text("status != 'superseded'"),
             sqlite_where=sql_text("status != 'superseded'"),
@@ -171,6 +214,12 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: A DRY RUN, not a filing (D-029 / D-068). Stated on the row rather than
+    #: derived from the snapshot's nested cycle block, so a surface that forgets
+    #: to exclude rehearsals is a visible bug instead of an invisible one.
+    is_rehearsal: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sql_text("false"), nullable=False
+    )
     supersedes_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
@@ -179,6 +228,27 @@ class RegulatoryPackage(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
         JSON, default=list, server_default=sql_text("'[]'"), nullable=False
     )
     validation_report: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    #: Did the MACHINE checks pass? This is the attribute that replaced the
+    #: ``validated`` status as the authority on machine validation
+    #: (``docs/filing_workflow_redesign.md`` §3.1). Validation is a rules-engine
+    #: result, not a person and not a step somebody takes: it GATES ENTRY to the
+    #: review chain. The status ``validated`` survives as a projection of
+    #: "checks passed and nobody has been asked to review it yet", so existing
+    #: sealed rows keep the value they were sealed with — but every gate reads
+    #: this column, and no gate reads that status.
+    checks_passed: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sql_text("false"), nullable=False
+    )
+    #: Where the review chain is. ``NULL`` means no chain has been pinned — a
+    #: package still in preparation, or one that reached a terminal state before
+    #: the chain existed. ``pending_approval`` / ``approved`` are projections of
+    #: this, not the other way round.
+    current_stage_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The review round. A send-back increments it, so round 2 is legible as
+    #: round 2 rather than as round 1 with different content.
+    workflow_round: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=sql_text("1"), nullable=False
+    )
     generated_by: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -257,6 +327,125 @@ class RegulatoryPackageArtifact(UuidV7PrimaryKeyMixin, Base):
     object_path: Mapped[str] = mapped_column(String(512), nullable=False)
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class RegulatoryPackageAttachment(UuidV7PrimaryKeyMixin, Base):
+    """A document filed WITH a return — a Board resolution, minutes, a letter.
+
+    Generic across families, not ICAAP-only: a signing policy has always been
+    able to name ``required_attachments``, and until now nothing could satisfy
+    it, so the requirement silently passed. The row is UNALTERABLE — the same
+    tier as ``regulatory_artifact_versions`` — because "which document did we
+    file" must survive anybody's later tidying; withdrawing one is a separate
+    event (:class:`RegulatoryPackageAttachmentWithdrawal`), never an edit.
+
+    The object itself is not copied when it comes from an ICAAP cycle: the
+    cycle's upload table is unalterable too, so the bytes at ``object_path``
+    cannot change, and ``sha256`` proves it.
+    """
+
+    __tablename__ = "regulatory_package_attachments"
+    __table_args__ = (
+        CheckConstraint("byte_size > 0", name="ck_regulatory_package_attachments_size"),
+        CheckConstraint("length(sha256) = 64", name="ck_regulatory_package_attachments_sha"),
+        CheckConstraint("storage_tier = 'outputs'", name="ck_regulatory_package_attachments_tier"),
+        CheckConstraint(
+            f"source IN ({_values(PACKAGE_ATTACHMENT_SOURCES)})",
+            name="ck_regulatory_package_attachments_source",
+        ),
+        CheckConstraint(
+            f"gate IN ({_values(PACKAGE_ATTACHMENT_GATES)})",
+            name="ck_regulatory_package_attachments_gate",
+        ),
+        # A cycle-sourced row must name the cycle upload it came from, and an
+        # uploaded one must not pretend to.
+        CheckConstraint(
+            "(source = 'icaap_cycle') = (source_attachment_id IS NOT NULL)",
+            name="ck_regulatory_package_attachments_origin",
+        ),
+        ForeignKeyConstraint(
+            ["package_id", "organization_id"],
+            ["regulatory_packages.id", "regulatory_packages.organization_id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(["bank_id", "organization_id"], ["banks.id", "banks.organization_id"]),
+        UniqueConstraint("id", "organization_id", name="uq_regulatory_package_attachments_id_org"),
+        Index(
+            "ix_regulatory_package_attachments_org_package_kind",
+            "organization_id",
+            "package_id",
+            "kind",
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    #: The package version this document was attached to, carried so a
+    #: superseding regeneration's manifest cannot be confused with this one's.
+    package_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: Sniffed from the bytes, never taken from the client's Content-Type.
+    media_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_tier: Mapped[str] = mapped_column(String(16), nullable=False)
+    object_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    storage_version_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: ``icaap_attachments.id`` for a cycle-sourced document. A VALUE COPY with
+    #: deliberately no foreign key: the filing manifest must not become
+    #: undeletable-cycle pressure, and the sha256 is the real binding.
+    source_attachment_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    gate: Mapped[str] = mapped_column(String(12), nullable=False)
+    #: ``metadata`` is reserved by SQLAlchemy's declarative base. Holds the
+    #: kind's own required facts — a Board resolution's date and reference.
+    attributes: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+    attached_by: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class RegulatoryPackageAttachmentWithdrawal(UuidV7PrimaryKeyMixin, Base):
+    """Withdrawing a filed document is an event, not an edit to the upload."""
+
+    __tablename__ = "regulatory_package_attachment_withdrawals"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["attachment_id", "organization_id"],
+            [
+                "regulatory_package_attachments.id",
+                "regulatory_package_attachments.organization_id",
+            ],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["package_id", "organization_id"],
+            ["regulatory_packages.id", "regulatory_packages.organization_id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "attachment_id", name="uq_regulatory_package_attachment_withdrawals_attachment"
+        ),
+        UniqueConstraint(
+            "id", "organization_id", name="uq_regulatory_package_attachment_withdrawals_id_org"
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    package_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    attachment_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    withdrawn_by: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )

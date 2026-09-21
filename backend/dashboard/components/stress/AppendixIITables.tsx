@@ -46,6 +46,9 @@ type LineDef<T> = {
   kind?: 'ghs' | 'pct';
   bold?: boolean;
   indent?: boolean;
+  /** What an absent value reads as. Default "—"; a Pillar 2 risk the
+   *  institution has not assessed reads "Not modelled", never a zero. */
+  nullLabel?: string;
 };
 
 /** Transpose column-oriented snapshots into a line-item × period matrix. */
@@ -65,7 +68,11 @@ function MatrixTable<T extends { label: string }>({
     bold: ln.bold,
     indent: ln.indent,
     kind: ln.kind,
-    cells: cols.map((c) => (ln.kind === 'pct' ? pct(ln.get(c)) : ghs(ln.get(c)))),
+    cells: cols.map((c) => {
+      const value = ln.get(c);
+      if (value == null && ln.nullLabel) return ln.nullLabel;
+      return ln.kind === 'pct' ? pct(value) : ghs(value);
+    }),
   }));
   const columns: Column<RowT>[] = [
     {
@@ -243,19 +250,44 @@ function Table4({ rows, bounded = true }: { rows: Table4Row[]; bounded?: boolean
   return <MatrixTable cols={rows} lines={lines} bounded={bounded} />;
 }
 
+const NOT_MODELLED = 'Not modelled';
+
+/** The six Pillar 2 risks of the directive's Table 5, in its order. */
+const PILLAR2_RISKS: { label: string; key: keyof Omit<Table5Row['pillar2'], 'total'> }[] = [
+  { label: 'Pillar 2: credit concentration', key: 'credit_concentration' },
+  { label: 'Pillar 2: IRRBB', key: 'irrbb' },
+  { label: 'Pillar 2: sovereign', key: 'sovereign' },
+  { label: 'Pillar 2: country and FX', key: 'country_and_fx' },
+  { label: 'Pillar 2: reputational', key: 'reputational' },
+  { label: 'Pillar 2: others', key: 'other' },
+];
+
+/** The run sums only the modelled risks, so a column with none modelled
+ *  carries a total of 0 — which would read as a zero requirement. A total over
+ *  nothing is itself not modelled. */
+function pillar2Total(row: Table5Row): string | null {
+  return PILLAR2_RISKS.every(({ key }) => row.pillar2[key] == null) ? null : row.pillar2.total;
+}
+
 function Table5({ rows, bounded = true }: { rows: Table5Row[]; bounded?: boolean }) {
   const lines: LineDef<Table5Row>[] = [
     { label: 'Credit RWA', get: (r) => r.credit_rwa, indent: true },
     { label: 'Operational RWA', get: (r) => r.operational_rwa, indent: true },
     { label: 'Market RWA', get: (r) => r.market_rwa, indent: true },
     { label: 'Total Pillar-1 RWA', get: (r) => r.total_pillar1_rwa, bold: true },
-    { label: 'Pillar-1 requirement', get: (r) => r.pillar1_requirement },
-    { label: 'Pillar-2: credit concentration', get: (r) => r.pillar2.credit_concentration, indent: true },
-    { label: 'Pillar-2: IRRBB', get: (r) => r.pillar2.irrbb, indent: true },
-    { label: 'Pillar-2: country & FX', get: (r) => r.pillar2.country_and_fx, indent: true },
-    { label: 'Pillar-2: other', get: (r) => r.pillar2.other, indent: true },
-    { label: 'Pillar-2 total', get: (r) => r.pillar2.total },
-    { label: 'Total capital requirement', get: (r) => r.total_capital_requirement, bold: true },
+    { label: 'Pillar 1 capital requirement', get: (r) => r.pillar1_requirement },
+    ...PILLAR2_RISKS.map(({ label, key }) => ({
+      label,
+      get: (r: Table5Row) => r.pillar2[key],
+      indent: true,
+      nullLabel: NOT_MODELLED,
+    })),
+    { label: 'Total Pillar 2 capital requirements', get: pillar2Total, nullLabel: NOT_MODELLED },
+    {
+      label: 'Total capital requirements (Pillar 1 and Pillar 2)',
+      get: (r) => r.total_capital_requirement,
+      bold: true,
+    },
   ];
   return <MatrixTable cols={rows} lines={lines} bounded={bounded} />;
 }

@@ -143,6 +143,19 @@ def build_email_bundle(
             f"sha256 {entry['checksum_sha256']})"
             for entry in attachments
         )
+        # A downtime email is read by a person, and one of these attachments
+        # recalculates. Say which, here, where the officer sending it looks —
+        # the workbook says it on its own face, and this says it again.
+        from app.services.regulatory_reporting.workflow import (  # noqa: PLC0415 - import cycle
+            FILABLE_WORKING_ARTIFACT_KINDS,
+        )
+
+        if any(entry["kind"] in FILABLE_WORKING_ARTIFACT_KINDS for entry in attachments):
+            lines.append(
+                "   Note: the formula copy (kind xlsx_working) carries the template's live "
+                "formulas and is filed alongside the protected workbook. It is NOT the signed "
+                "record — the signed document is the one the officers certified."
+            )
     else:
         lines.append("   - No artifacts exported yet; export the package (xlsx/csv/pdf) first.")
     lines.extend(

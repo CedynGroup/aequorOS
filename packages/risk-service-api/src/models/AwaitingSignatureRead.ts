@@ -59,6 +59,12 @@ export interface AwaitingSignatureRead {
   basis: string;
   /**
    *
+   * @type {boolean}
+   * @memberof AwaitingSignatureRead
+   */
+  isRehearsal?: boolean;
+  /**
+   *
    * @type {NotifiedAt}
    * @memberof AwaitingSignatureRead
    */
@@ -161,6 +167,8 @@ export function AwaitingSignatureReadFromJSONTyped(
     attestationState: AttestationStateFromJSON(json["attestation_state"]),
     bankId: json["bank_id"],
     basis: json["basis"],
+    isRehearsal:
+      json["is_rehearsal"] == null ? undefined : json["is_rehearsal"],
     notifiedAt: NotifiedAtFromJSON(json["notified_at"]),
     packageId: json["package_id"],
     packageStatus: json["package_status"],
@@ -189,6 +197,7 @@ export function AwaitingSignatureReadToJSONTyped(
     attestation_state: AttestationStateToJSON(value["attestationState"]),
     bank_id: value["bankId"],
     basis: value["basis"],
+    is_rehearsal: value["isRehearsal"],
     notified_at: NotifiedAtToJSON(value["notifiedAt"]),
     package_id: value["packageId"],
     package_status: value["packageStatus"],

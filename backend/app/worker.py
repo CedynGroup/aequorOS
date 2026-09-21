@@ -38,6 +38,7 @@ from app.services import (
     scheduler,
     temenos_jobs,
 )
+from app.services.icaap import ai_jobs as icaap_ai_jobs
 from app.services.market_desk import capture_job as desk_capture_job
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,60 @@ HANDLERS: dict[str, Handler] = {
     "notification_email_mirror": notification_email_mirror.run_notification_email_mirror,
     "database_direct_health": database_direct_jobs.run_database_direct_health,
     "desk_capture": desk_capture_job.run_desk_capture,
+    "icaap_ai_draft": icaap_ai_jobs.run_icaap_ai_draft,
 }
+
+
+class WorkerConfigurationError(ValueError):
+    """WORKER_JOB_TYPES names something this worker cannot run."""
+
+
+def resolve_job_types(raw: str | None) -> tuple[str, ...]:
+    """Which job types THIS process claims and reaps.
+
+    ``None`` means every handler in the DEFAULT lane, which never contains an
+    AI type. That default is the safety property: adding ``icaap_ai_draft`` to
+    ``HANDLERS`` — which the parity test requires — must not make the core
+    worker, or the API's in-process thread, claim work that needs an external
+    model credential. Opting in is explicit and per-process.
+
+    Tokens are comma-separated job types or ``lane:<name>``. A selection that
+    mixes the ``ai`` lane with anything else is refused: the process holding the
+    model key runs nothing else, so a compromise of one handler cannot reach it.
+    """
+    if raw is None or not raw.strip():
+        return tuple(
+            job_type
+            for job_type in HANDLERS
+            if job_queue.lane_of(job_type) == job_queue.DEFAULT_LANE
+        )
+    selected: list[str] = []
+    for token in (part.strip() for part in raw.split(",")):
+        if not token:
+            continue
+        if token.startswith("lane:"):
+            lane = token[len("lane:") :]
+            in_lane = tuple(
+                job_type for job_type in HANDLERS if job_queue.lane_of(job_type) == lane
+            )
+            if not in_lane:
+                message = f"WORKER_JOB_TYPES names an unknown or empty lane: {lane!r}"
+                raise WorkerConfigurationError(message)
+            selected.extend(in_lane)
+        elif token in HANDLERS:
+            selected.append(token)
+        else:
+            message = f"WORKER_JOB_TYPES names an unknown job type: {token!r}"
+            raise WorkerConfigurationError(message)
+    unique = tuple(dict.fromkeys(selected))
+    lanes = {job_queue.lane_of(job_type) for job_type in unique}
+    if "ai" in lanes and len(lanes) > 1:
+        message = (
+            "WORKER_JOB_TYPES mixes the ai lane with another lane; the process "
+            "that holds the model credential must run nothing else."
+        )
+        raise WorkerConfigurationError(message)
+    return unique
 
 
 def _new_session(organization_id=None) -> Session:
@@ -123,7 +177,7 @@ def run_once(
     worker_id: str | None = None,
 ) -> bool:
     """Claim and dispatch a single job. Returns True if one was processed."""
-    job_types = job_types or tuple(HANDLERS)
+    job_types = job_types or resolve_job_types(None)
     worker_id = worker_id or _runtime_identity()
     with _new_session() as claim_session:
         job = job_queue.claim_next(claim_session, utc_now(), job_types, claimed_by=worker_id)
@@ -154,11 +208,13 @@ def run_once(
     return True
 
 
-def _reap_stale(stale_after: timedelta) -> None:
+def _reap_stale(stale_after: timedelta, job_types: tuple[str, ...] | None = None) -> None:
     """Requeue jobs orphaned in ``running`` by a dead worker. Never raises."""
     try:
         with _new_session() as session:
-            reclaimed = job_queue.reclaim_stale(session, utc_now(), stale_after=stale_after)
+            reclaimed = job_queue.reclaim_stale(
+                session, utc_now(), stale_after=stale_after, job_types=job_types
+            )
         if reclaimed:
             logger.warning("Reclaimed %d stale running job(s)", reclaimed)
     except Exception:  # noqa: BLE001 - the reaper must never kill the loop
@@ -183,7 +239,7 @@ def run_worker(
     )
     stale_after = timedelta(seconds=settings.worker.worker_stale_job_seconds)
     reap_interval = max(stale_after.total_seconds() / 2, poll_interval)
-    job_types = job_types or tuple(HANDLERS)
+    job_types = job_types or resolve_job_types(None)
     worker_id = _runtime_identity()
     _heartbeat_safely(worker_id)
     # Seed when ANY scheduled feature is on — gating this on official runs
@@ -195,7 +251,7 @@ def run_worker(
                 scheduler.seed_ticks(session)
         except Exception:  # noqa: BLE001 - seeding is best-effort at startup
             logger.exception("Failed to seed scheduler ticks")
-    _reap_stale(stale_after)  # clear orphans left by a prior crashed worker
+    _reap_stale(stale_after, job_types)  # clear orphans left by a prior crashed worker
     next_reap = time.monotonic() + reap_interval
     logger.info(
         "Live-engine worker started (job_types=%s, stale_after=%ss)",
@@ -212,7 +268,7 @@ def run_worker(
         else:
             _heartbeat_safely(worker_id, worked=worked)
         if time.monotonic() >= next_reap:
-            _reap_stale(stale_after)
+            _reap_stale(stale_after, job_types)
             next_reap = time.monotonic() + reap_interval
         if not worked:
             time.sleep(poll_interval)
@@ -231,7 +287,15 @@ def start_inprocess_worker() -> threading.Thread | None:
     if not settings.worker.run_inprocess_worker:
         return None
     assert_worker_database_access()
-    thread = threading.Thread(target=run_worker, name="live-engine-worker", daemon=True)
+    # The core lane EXPLICITLY, never WORKER_JOB_TYPES: the API process must not
+    # claim AI work whatever its environment says, because that is the process a
+    # bank's users reach and the one that must never hold a model credential.
+    thread = threading.Thread(
+        target=run_worker,
+        kwargs={"job_types": resolve_job_types(None)},
+        name="live-engine-worker",
+        daemon=True,
+    )
     thread.start()
     logger.info("In-process live-engine worker thread started")
     return thread
@@ -251,9 +315,16 @@ def healthcheck() -> None:
     settings = get_settings()
     stale_after = timedelta(seconds=settings.worker.worker_stale_job_seconds)
     with _new_session() as session:
-        latest = session.query(func.max(WorkerHeartbeat.last_seen_at)).scalar()
+        query = session.query(func.max(WorkerHeartbeat.last_seen_at))
+        # Filter to THIS worker's own heartbeat when it has a pinned identity.
+        # Without it a dedicated container (the AI worker) reports healthy on the
+        # strength of the core worker's heartbeat — a probe that can never fail
+        # is not a probe. Unpinned local workers keep the legacy fleet-wide max.
+        if settings.worker.worker_id is not None:
+            query = query.filter(WorkerHeartbeat.worker_id == settings.worker.worker_id)
+        latest = query.scalar()
     if latest is None:
-        msg = "No worker heartbeat has ever been recorded."
+        msg = "No heartbeat has been recorded for this worker."
         raise RuntimeError(msg)
     age = utc_now() - latest
     if age > stale_after:
@@ -264,10 +335,29 @@ def healthcheck() -> None:
         raise RuntimeError(msg)
 
 
+def _warn_if_ai_unconfigured(settings) -> None:  # pragma: no cover - process entrypoint
+    """WARN, never refuse.
+
+    An AI worker that refused to boot when the feature was switched off would
+    crash-loop every deployment that has the container but not the flag — the
+    e-signature lesson, where a boot refusal locked out the person who could fix
+    it. A log line is enough: its jobs simply cancel at the run gate.
+    """
+    from app.services.ai import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
+
+    if not settings.ai.commentary_enabled:
+        logger.warning("AI worker started with AI_COMMENTARY_ENABLED off; requests will cancel.")
+    elif not ai_client.backend_configured(settings):
+        logger.warning("AI worker started without a usable model backend; requests will cancel.")
+
+
 def main() -> None:  # pragma: no cover - process entrypoint
     settings = get_settings()
     configure_logging(settings.logging.log_level)
-    run_worker()
+    job_types = resolve_job_types(settings.worker.worker_job_types)
+    if any(job_queue.lane_of(job_type) == "ai" for job_type in job_types):
+        _warn_if_ai_unconfigured(settings)
+    run_worker(job_types=job_types)
 
 
 if __name__ == "__main__":  # pragma: no cover - process entrypoint

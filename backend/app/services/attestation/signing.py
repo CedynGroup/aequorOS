@@ -34,7 +34,14 @@ from app.models import (
     SignerKey,
 )
 from app.services import filing_reconciliation
-from app.services.attestation import appearance, digests, routing, stepup, workflow
+from app.services.attestation import (
+    appearance,
+    digests,
+    layouts,
+    routing,
+    stepup,
+    workflow,
+)
 from app.services.attestation.identity import require_signer_identity, resolve_signer_display
 from app.services.attestation.policy import SigningPolicy
 from app.services.attestation.workflow import AttestationConflict
@@ -105,7 +112,29 @@ class SigningBackends:
     pdf_timestamper: TimeStamper | None = None
 
 
-def statement_for(role: str) -> str:
+def statement_for(role: str, package: RegulatoryPackage | None = None) -> str:
+    """The sentence this officer is attesting to.
+
+    The platform's own wording by default. A return FAMILY may supply its own —
+    the ICAAP filing statements are part of the framework the cycle was frozen
+    under, so they are the regulator-aligned text that was in force when the
+    document was sealed, not whatever this deployment ships today. The family
+    answers from the FROZEN snapshot; ``None`` from the hook means "the
+    platform's wording", which is every other return.
+    """
+    if package is not None:
+        from app.services.regulatory_reporting import (  # noqa: PLC0415 - breaks a cycle
+            family_hooks,
+        )
+
+        hooks = family_hooks.for_package(package)
+        family_statement = (
+            getattr(hooks, "certification_statement", None) if hooks is not None else None
+        )
+        if family_statement is not None:
+            supplied = family_statement(package, role)
+            if supplied:
+                return str(supplied)
     return STATEMENTS.get(role, APPROVER_STATEMENT)
 
 
@@ -139,6 +168,20 @@ def preview_certification(
     policy = workflow.package_policy(db, ctx, package)
     binding = workflow.compute_binding(package)
     signatures = workflow.current_signatures(db, ctx, package)
+    layout = layouts.layout_for_family(package.return_family)
+    order = policy.field_roles(layout)
+    signed = {signature.signing_role for signature in signatures}
+    # Refusal layer 2 of 3 (P3-DESIGN §1.5): the dialog disables the action and
+    # says who is outstanding, so nobody re-authenticates only to be refused.
+    blocked_by = (
+        [
+            earlier
+            for earlier in order[: order.index(role)]
+            if earlier not in signed
+        ]
+        if policy.enforces_order(layout) and role in order
+        else []
+    )
     return {
         "package_id": str(package.id),
         "return_code": package.return_code,
@@ -150,11 +193,13 @@ def preview_certification(
         "content_digest": binding.content_digest,
         "register_state_digest": binding.register_state_digest,
         "signed_source_runs": binding.source_runs,
-        "statement": statement_for(role),
+        "statement": statement_for(role, package),
         "policy": policy.as_dict(),
         "outstanding": [
             {"role": r, "count": c} for r, c in workflow.outstanding_slots(policy, signatures)
         ],
+        "blocked_by": blocked_by,
+        "signing_order": list(order),
         "frozen_certification_digest": package.certification_digest,
         "matches_frozen": (
             package.certification_digest is None
@@ -248,6 +293,11 @@ def _signed_document(  # noqa: PLR0913 - the ceremony's full identity context
         signatures=signatures,
         pdf_signer=backends.pdf_signer,
         timestamper=backends.pdf_timestamper,
+        # The ceremony the document's fields are created for. Resolved from the
+        # POLICY, not from the layout's maximum: a Board field on a return whose
+        # bank never enabled the slot could never be filled, and a field cannot
+        # be removed once the preparer has certified.
+        signing_order=policy.field_roles(layouts.layout_for_family(package.return_family)),
     )
     return version.id
 
@@ -306,7 +356,7 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
     binding = workflow.compute_binding(package)
     signatures = workflow.current_signatures(db, ctx, package)
 
-    workflow.ensure_certifiable(package, policy, role)
+    workflow.ensure_certifiable(package, policy, role, signatures)
     workflow.ensure_digest_unchanged(package, binding)
     workflow.ensure_maker_checker(
         package,
@@ -355,7 +405,7 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
         signer_id=identity.signer_id,
         signing_role=role,
         officer_title=job_title,
-        statement=statement_for(role),
+        statement=statement_for(role, package),
         declared_at=declared_at.isoformat(),
     )
     payload_digest = digests.digest_of(payload)
@@ -404,7 +454,7 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
         snapshot_sha256=package.snapshot_sha256,
         register_state_digest=binding.register_state_digest,
         signed_source_runs=binding.source_runs,
-        statement=statement_for(role),
+        statement=statement_for(role, package),
         attestation_payload=payload,
         payload_digest=payload_digest,
         signature_method=(

@@ -324,9 +324,46 @@ def map_value_schema(prop: dict[str, Any], components: dict[str, Any]) -> dict[s
     return additional if isinstance(additional, dict) else None
 
 
+def operation_request_properties(
+    document: dict[str, Any], components: dict[str, Any]
+) -> dict[str, dict[str, dict[str, Any]]]:
+    """Generated request-interface name -> its property name -> that property's schema.
+
+    `typescript-fetch` flattens an operation's parameters and its form body into one
+    `<OperationId>Request` interface inside `src/apis/*.ts`, so an alias generated for a
+    form field (a `Decimal`, which Pydantic types as `number | string`) never reaches
+    `src/models/`. Those interfaces are the second place an alias can be used.
+    """
+    interfaces: dict[str, dict[str, dict[str, Any]]] = {}
+    for operations in document.get("paths", {}).values():
+        for operation in operations.values():
+            if not isinstance(operation, dict) or "operationId" not in operation:
+                continue
+            operation_id = operation["operationId"]
+            interface = f"{operation_id[:1].upper()}{operation_id[1:]}Request"
+            properties: dict[str, dict[str, Any]] = {
+                property_name(parameter["name"]): parameter["schema"]
+                for parameter in operation.get("parameters", [])
+                if "schema" in parameter
+            }
+            for content in operation.get("requestBody", {}).get("content", {}).values():
+                body = content.get("schema", {})
+                if "$ref" not in body:
+                    continue
+                body_schema = components.get(body["$ref"].rsplit("/", 1)[-1], {})
+                for name, value in body_schema.get("properties", {}).items():
+                    properties.setdefault(property_name(name), value)
+            interfaces[interface] = properties
+    return interfaces
+
+
 def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
     document = json.loads(schema_path.read_text(encoding="utf-8"))
     components = document["components"]["schemas"]
+    api_dir = package_root / "src" / "apis"
+    api_text = {path.stem: path.read_text(encoding="utf-8") for path in api_dir.glob("*.ts")}
+    request_properties = operation_request_properties(document, components)
+    interface_pattern = re.compile(r"^export interface (\w+) \{$([\s\S]*?)^\}$", re.MULTILINE)
     model_dir = package_root / "src" / "models"
     model_text = {path.stem: path.read_text(encoding="utf-8") for path in model_dir.glob("*.ts")}
     empty_models = {
@@ -386,6 +423,19 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
                         f"Could not resolve {consumer_component}.{generated_name} for {alias}"
                     )
                 schemas.append(candidates[0])
+        for text in api_text.values():
+            for interface_match in interface_pattern.finditer(text):
+                properties = request_properties.get(interface_match.group(1))
+                if properties is None:
+                    continue
+                for match in property_pattern.finditer(interface_match.group(2)):
+                    generated_name = match.group(1)
+                    if generated_name not in properties:
+                        raise ValueError(
+                            f"Could not resolve {interface_match.group(1)}.{generated_name} "
+                            f"for {alias}"
+                        )
+                    schemas.append(properties[generated_name])
         if not schemas:
             raise ValueError(f"Could not find a schema use for generated alias {alias}")
         types = {schema_type(schema, components) for schema in schemas}
@@ -440,6 +490,98 @@ def patch_closed_models(package_root: Path, schema_path: Path) -> None:
             model_path.write_text(patched, encoding="utf-8")
 
 
+def _call_span(text: str, start: int) -> tuple[int, int]:
+    """The span of the `formParams.append(...)` call beginning at ``start``.
+
+    Parenthesis-balanced rather than regex-matched, because the generated call
+    nests `new Blob([JSON.stringify(...)], {...})` several levels deep.
+    """
+    depth = 0
+    index = text.index("(", start)
+    for position in range(index, len(text)):
+        if text[position] == "(":
+            depth += 1
+        elif text[position] == ")":
+            depth -= 1
+            if depth == 0:
+                end = position + 1
+                return start, end + 1 if text[end : end + 1] == ";" else end
+    raise ValueError("Unbalanced formParams.append(")
+
+
+def _form_field_value(generated_name: str, schema: dict[str, Any]) -> str | None:
+    """The correct multipart value expression, or None to leave it alone.
+
+    `multipart/form-data` carries TEXT. The generator gets two field kinds
+    wrong, and both reach the wire as something FastAPI cannot parse:
+
+    * a `Decimal`, which Pydantic types `number | string`. The generator treats
+      the union as a model and emits
+      `new Blob([JSON.stringify(SomeUnrelatedModelToJSON(value))])` — a JSON
+      part, which FastAPI reads as an upload rather than a `Form()` field, and
+      whose converter throws on a plain string.
+    * a `date` / `date-time`, appended as a `Date`, which `FormData` stringifies
+      to "Sat Sep 19 2026 …" rather than ISO-8601.
+    """
+    accessor = f'requestParameters["{generated_name}"]'
+    variants = schema.get("anyOf", [schema])
+    formats = {variant.get("format") for variant in variants}
+    types = {variant.get("type") for variant in variants}
+    if "binary" in formats:
+        return None
+    if "date" in formats:
+        return f"{accessor}.toISOString().substring(0, 10)"
+    if "date-time" in formats:
+        return f"{accessor}.toISOString()"
+    # Only a numeric field is mis-serialised. A string, boolean or nullable
+    # string already reaches the wire correctly, so it is left untouched — the
+    # narrower this patch is, the less of the generator it can break.
+    if types & {"number", "integer"}:
+        return f"String({accessor})"
+    return None
+
+
+def patch_multipart_form_params(package_root: Path, schema_path: Path) -> None:
+    """Send multipart form fields as the text a form body actually carries."""
+    document = json.loads(schema_path.read_text(encoding="utf-8"))
+    components = document["components"]["schemas"]
+    multipart: dict[str, dict[str, dict[str, Any]]] = {}
+    for operations in document.get("paths", {}).values():
+        for operation in operations.values():
+            if not isinstance(operation, dict) or "operationId" not in operation:
+                continue
+            content = operation.get("requestBody", {}).get("content", {})
+            body = content.get("multipart/form-data", {}).get("schema", {})
+            if "$ref" not in body:
+                continue
+            body_schema = components.get(body["$ref"].rsplit("/", 1)[-1], {})
+            multipart[operation["operationId"]] = body_schema.get("properties", {})
+
+    for api_path in (package_root / "src" / "apis").glob("*.ts"):
+        text = api_path.read_text(encoding="utf-8")
+        original = text
+        for operation_id, properties in multipart.items():
+            if f"async {operation_id}Raw(" not in text:
+                continue
+            for wire_name, schema in properties.items():
+                generated_name = property_name(wire_name)
+                value = _form_field_value(generated_name, schema)
+                if value is None:
+                    continue
+                # The patch runs BEFORE prettier, so this matches the generator's
+                # own output (single quotes, one line) rather than the formatted
+                # form a reader of the committed client sees.
+                marker = re.search(
+                    rf"formParams\.append\(\s*['\"]{re.escape(wire_name)}['\"]\s*,", text
+                )
+                if marker is None:
+                    raise ValueError(f"No multipart append for {operation_id}.{wire_name}")
+                start, end = _call_span(text, marker.start())
+                text = f'{text[:start]}formParams.append("{wire_name}", {value});{text[end:]}'
+        if text != original:
+            api_path.write_text(text, encoding="utf-8")
+
+
 def remove_lint_suppression_headers(package_root: Path) -> None:
     suppression_header = "/* tslint:disable */\n/* eslint-disable */\n"
     for source_path in (package_root / "src").rglob("*.ts"):
@@ -455,6 +597,7 @@ def patch_generated_source(package_root: Path, schema_path: Path) -> None:
     patch_payload(package_root)
     patch_primitive_aliases(package_root, schema_path)
     patch_closed_models(package_root, schema_path)
+    patch_multipart_form_params(package_root, schema_path)
 
 
 def main() -> int:

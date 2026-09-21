@@ -314,7 +314,8 @@ deliberately capped to avoid role explosion.
 | **Viewer**                        | `viewer`                  | Read-only within scope                       | `*:view` (scoped)                                                     | any mutation                                    |
 | **Auditor**                       | _(new; a Viewer variant)_ | Read-only **+ audit-log read**, whole tenant | `*:view`, `audit:read`                                                | any mutation, any approve                       |
 | **Analyst** (Preparer / maker)    | `analyst`                 | Core treasury/ALM work                       | `{module}:view                                                        | create                                          | edit                               | run`, `export` (scoped) | approve/sign-off/submit **their own** object |
-| **Approver** (Reviewer / checker) | `approver`                | Four-eyes approval                           | `{module}:review                                                      | approve`, `reg:sign_off`, `reg:submit` (scoped) | edit the object they are approving |
+| **Approver** (Reviewer / checker) | `approver`                | Four-eyes approval                           | `{module}:review                                                      | approve`, `reg:sign_off` (scoped) — **not** `reg:submit`, see ⁴ | edit the object they are approving, transmit it to the regulator |
+| **Validator** (Filing officer)    | _(new 2026-09-20)_        | Transmits the return to the regulator        | `reg:view`, `reg:submit` (scoped)                                     | approve, prepare or re-run checks on what they file |
 | **Org Admin**                     | _(split out of `admin`)_  | Account administration only                  | `users:*`, `roles:*`, `sso:*`, `scim:*`, `org:settings`, `audit:read` | operational `run/approve/submit` (SoD C9)       |
 | **Org Owner**                     | _(top of `admin`)_        | Bank's account owner                         | Org Admin **+** `billing:*`, `org:transfer`, `org:delete`             | cross-tenant anything                           |
 | **Billing Manager**               | _(new, optional)_         | Subscription & seats                         | `billing:*`                                                           | domain data                                     |
@@ -435,7 +436,7 @@ platform:flags     platform:billing     platform:audit   platform:staff
 | `{m}:export`                                    |   —³   |    ●    |    ●    |    ●     |     —     |     —     |
 | `reg:validate`                                  |   —    |    —    |    ●    |    ●     |     —     |     —     |
 | `reg:sign_off`                                  |   —    |    —    |    —    |    ●⁴    |     —     |     —     |
-| `reg:submit`                                    |   —    |    —    |   ●⁴    |    ●⁴    |     —     |     —     |
+| `reg:submit`                                    |   —    |    —    |    —    |    —⁴    |     —     |     —     |
 | `pack:contribute`                               |   —    |    —    |   ●⁵    |    —     |     —     |     —     |
 | `pack:signoff_section`                          |   —    |    —    |    —    |    ●⁵    |     —     |     —     |
 | `pack:compile` / `publish` / `committee:record` |   —    |    —    |   ●⁵    |    —     |     —     |     —     |
@@ -450,6 +451,7 @@ with ownership; an Org Admin still receives it only as a separate grant.
 ² `configure` is granted per-preset (FTP owner, ALM assumptions, Risk limits) — not to every Analyst/Approver.
 ³ Board/Exec "Viewer" gets published-dashboard view only; raw `export` is off by default.
 ⁴ `sign_off` / `submit` are **preset add-ons** (CFO, MD, Head of Reg), not blanket to every Approver — and are **SoD-gated** (§7.4).
+**As built 2026-09-20:** v1 has no mutable permission catalogue and no per-user add-ons — bundles are code — so `reg:submit` could not be an add-on ON the Approver bundle without giving it to every Approver, which is the segregation-of-duties hole it was already producing. It is therefore its own bundle, **Validator** (`view` + `submit`, never `approve`), over `reg`/`restricted` for an exact institution. Do not put `submit` back into the Approver row of these tables or of `ROLE_PERMISSIONS`; C4 and C6 below are exactly why. `sign_off` remains reserved and unbundled. Contract: `backend/docs/filing_submit_authority_rollout.md`.
 ⁵ `pack:*` / `committee:*` are **preset add-ons** (§5 #17–19 + unit heads), section-scoped (§7.3): a Credit contributor holds `pack:contribute` on the credit section only; `compile`/`publish`/`committee:record` belong to the ALCO Secretary preset (#17).
 
 ### 7.3 Scoping dimensions

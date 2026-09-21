@@ -20,6 +20,7 @@ return must never show a fabricated zero, and a blank box already means exactly
 from __future__ import annotations
 
 import io
+from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -40,14 +41,22 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.services.regulatory_reporting.exports.pdf import AttestedOfficer
+
 from .engine import FormResult, scale_for_export
 from .layout import SheetLayout
 from .render import (
-    WORKING_COPY_BANNER,
     _date_overrides,
     _header_text,
     _previous_reporting_date,
 )
+
+#: ``mode="working"`` here renders a DRAFT PDF. It is not an artifact kind, it
+#: is never stored and never filed, so it keeps the plain working-copy notice.
+#: The xlsx formula copy's label changed on 2026-09-20 because that copy is now
+#: filed alongside the protected workbook; this one is not, and borrowing its
+#: wording would tell a reader this draft goes to the regulator.
+WORKING_COPY_BANNER = "WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact"
 
 _NAVY = colors.HexColor("#1F3864")
 _GRID_GREY = colors.HexColor("#BFBFBF")
@@ -374,7 +383,26 @@ def _cover(  # noqa: PLR0913
     ]
 
 
-def _attestation() -> list[Any]:
+def _attestation(
+    *,
+    signing_required: bool = True,
+    officers: Sequence[AttestedOfficer] = (),
+) -> list[Any]:
+    """BoG's attestation block, in whichever of its two forms applies.
+
+    Same rule as the generic return PDF (``exports/pdf.py::_attestation``): the
+    empty Name/Designation/Signature/Date grid is for a ceremony to fill, and
+    on an installation that never collects one it is four blank lines asking a
+    supervisor for signatures that are never coming. The chain knows who
+    prepared, reviewed and released the return, so the block states that
+    instead.
+
+    The signing-on grid is untouched — its geometry is what the e-signature
+    field placement lands on.
+    """
+    if not signing_required:
+        return _officers_of_record(officers)
+
     rows = [
         [Paragraph("<b>Prepared by</b>", _CELL), "", "", ""],
         [
@@ -422,6 +450,78 @@ def _attestation() -> list[Any]:
     ]
 
 
+#: Which officer fills which row. The first two are BoG's own wording; the
+#: third was added when the filing chain gained a Validator, so the officer who
+#: releases a return appears on the document they released.
+_RECORD_ROWS: tuple[tuple[str, str], ...] = (
+    ("Preparer", "Prepared by"),
+    ("Approver", "Reviewed and approved by"),
+    ("Validator", "Released for filing by"),
+)
+
+
+def _officers_of_record(officers: Sequence[AttestedOfficer]) -> list[Any]:
+    """BoG's attestation grid with the Signature column removed and values in.
+
+    The SAME table — header row, column labels, one block per officer — minus
+    the one column an installation without e-signature can never fill. Not a
+    different layout: a supervisor should recognise the form either way.
+    """
+    by_stage = {officer.stage: officer for officer in officers}
+    rows: list[list[Any]] = []
+    for stage, prompt in _RECORD_ROWS:
+        officer = by_stage.get(stage)
+        if officer is None:
+            continue
+        rows.append([Paragraph(f"<b>{prompt}</b>", _CELL), "", ""])
+        rows.append(
+            [
+                Paragraph("Name", _CELL),
+                Paragraph("Designation", _CELL),
+                Paragraph("Date", _CELL),
+            ]
+        )
+        rows.append(
+            [
+                Paragraph(officer.name, _CELL),
+                Paragraph(officer.title or "—", _CELL),
+                Paragraph(officer.at, _CELL),
+            ]
+        )
+    if not rows:
+        rows = [[Paragraph("No officer decisions are recorded.", _CELL), "", ""]]
+
+    table = Table(rows, colWidths=[60 * mm, 60 * mm, 40 * mm], rowHeights=None)
+    style: list[Any] = [
+        ("GRID", (0, 0), (-1, -1), 0.3, _GRID_GREY),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]
+    for index in range(0, len(rows), 3):
+        style.append(("SPAN", (0, index), (-1, index)))
+        style.append(("BACKGROUND", (0, index), (-1, index), _HEADER_FILL))
+        if index + 1 < len(rows):
+            style.append(("BACKGROUND", (0, index + 1), (-1, index + 1), _HEADER_FILL))
+    table.setStyle(TableStyle(style))
+    return [
+        Paragraph("<b>Attestation</b>", _NOTE),
+        Spacer(0, 3 * mm),
+        table,
+        Spacer(0, 4 * mm),
+        Paragraph(
+            "We attest that this return is complete and accurate to the best of our "
+            "knowledge (Act 930 s.93(3) applies to inaccurate or incomplete submissions).",
+            _NOTE,
+        ),
+        Spacer(0, 3 * mm),
+        Paragraph(
+            "Electronic signature is not enabled for this institution, so this "
+            "return carries no officer signature. The officers above are the "
+            "record of who prepared, reviewed and released it.",
+            _NOTE,
+        ),
+    ]
+
+
 # NOTE: there is deliberately no completion appendix here. The PDF IS the return
 # the institution files — spreadsheet cell references ("B23"), internal line ids
 # and resolver names ("bsd1.daily", "not yet mapped") are machinery, and a filed
@@ -439,6 +539,8 @@ def render_form_pdf(  # noqa: PLR0913
     generated_at: datetime,
     package_line: str = "",
     mode: str = "official",
+    signing_required: bool = True,
+    officers: Sequence[AttestedOfficer] = (),
 ) -> bytes:
     """The official BoG form as a PDF — the artifact the institution files."""
     if mode not in ("official", "working"):
@@ -467,7 +569,11 @@ def render_form_pdf(  # noqa: PLR0913
         generated_at=generated_at,
         package_line=package_line,
     )
-    story += [Spacer(0, 8 * mm), *_attestation(), PageBreak()]
+    story += [
+        Spacer(0, 8 * mm),
+        *_attestation(signing_required=signing_required, officers=officers),
+        PageBreak(),
+    ]
     for sheet_layout in layouts:
         section = _sheet_story(
             sheet_layout,

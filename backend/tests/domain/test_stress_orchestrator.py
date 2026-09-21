@@ -10,9 +10,13 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 
+import pytest
+
 from app.domain.capital.ecl import EclAssumption, EclExposure
 from app.domain.fx.engine import FxPosition
+from app.domain.icaap.pillar2 import fx as icaap_fx
 from app.domain.irr.engine import IrrPosition
+from app.domain.stress import orchestrator
 from app.domain.stress.concentration import ConcentrationExposure, ConcentrationInputs
 from app.domain.stress.contingent_leverage import (
     ContingentLeverageInputs,
@@ -25,6 +29,7 @@ from app.domain.stress.orchestrator import (
     FxStressInputs,
     IrrStressInputs,
     compose_capital_shocks,
+    fx_pillar2_addon,
     run_enterprise_stress,
 )
 from app.domain.stress.translation import MacroPathPoint
@@ -407,3 +412,121 @@ def _fx_positions() -> tuple[FxPosition, ...]:
             net_derivatives_ccy=Decimal("0"),
         ),
     )
+
+
+# --- D-038: ONE FX Pillar 2 definition, shared with the ICAAP register --------
+#
+# The overlay that feeds Appendix II Table 5 used to restate
+# ``Tier 1 × max(stressed NOP% − base NOP%, 0)`` — the change in a RATIO, which
+# ``app/domain/icaap/pillar2/fx.py`` records as "not a loss (audit M8)". A
+# single filed ICAAP therefore carried two different definitions of the FX
+# add-on and the source-consistency control compared them against each other
+# (audit W3). These tests pin the extraction three ways: the value, the SIGN
+# behaviour the old formula got wrong, and that the function really is shared.
+
+_FX_TIER1 = Decimal("300000000")
+
+
+def _fx_run(positions, paths=None):
+    return run_enterprise_stress(
+        _inputs(
+            paths or severe_paths(),
+            fx=FxStressInputs(
+                positions=positions,
+                tier1=_FX_TIER1,
+                single_limit_pct=Decimal("10"),
+                aggregate_limit_pct=Decimal("20"),
+            ),
+        )
+    )
+
+
+def _short_usd() -> tuple[FxPosition, ...]:
+    return (
+        FxPosition(
+            currency="USD",
+            net_ghs=Decimal("-40000000"),
+            spot_ghs=Decimal("12.5"),
+            net_ccy=Decimal("-3200000"),
+            assets_ccy=Decimal("1800000"),
+            liabilities_ccy=Decimal("5000000"),
+            net_derivatives_ccy=Decimal("0"),
+        ),
+    )
+
+
+def test_a_long_book_that_gains_as_the_cedi_falls_carries_no_fx_addon() -> None:
+    """The case the retired formula got backwards.
+
+    A 20% cedi depreciation makes a LONG foreign-currency book worth more, so
+    there is no loss to hold capital against. The retired formula charged
+    ``Tier 1 × ΔNOP%`` = GHS 8,000,001 anyway, purely because the position grew
+    against an unchanged Tier 1.
+    """
+    outcome = _fx_run(_fx_positions())
+    assert outcome.fx is not None
+    retired_formula = _FX_TIER1 * (
+        outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1
+    ) / Decimal("100")
+    assert retired_formula == Decimal("8000001.000000")
+    assert outcome.fx.revaluation_loss == Decimal("0.0000")
+    assert outcome.fx.pillar2_addon == Decimal("0.0000")
+
+
+def test_a_short_book_loses_and_the_addon_is_the_loss_net_of_pillar_one() -> None:
+    """40m short, a 20% depreciation ⇒ an 8m loss, of which Pillar 1 holds 4.5m."""
+    outcome = _fx_run(_short_usd())
+    assert outcome.fx is not None
+    assert outcome.fx.shock_pct == Decimal("20.00")
+    # 40,000,000 short × 20%.
+    assert outcome.fx.revaluation_loss == Decimal("8000000.0000")
+    # market RWA 45,000,000 × the fixture's 10% CAR minimum.
+    assert outcome.capital.baseline.rwa.market_rwa == Decimal("45000000.0000")
+    assert outcome.fx.pillar1_fx_capital == Decimal("4500000.0000")
+    assert outcome.fx.pillar2_addon == Decimal("3500000.0000")
+
+
+def test_the_addon_is_produced_by_the_icaap_function_itself(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sharing proved by behaviour, not by grep: replace the ICAAP function and
+    the stress overlay's figure follows it."""
+    sentinel = icaap_fx.FxAddOn(
+        loss=icaap_fx.RevaluationLoss(
+            by_currency={},
+            depreciation_loss=Decimal("7"),
+            appreciation_loss=None,
+            worst_direction=icaap_fx.DEPRECIATION,
+            worst_loss=Decimal("7"),
+        ),
+        pillar1_fx_capital=Decimal("3"),
+        addon=Decimal("4"),
+    )
+    monkeypatch.setattr(
+        orchestrator.icaap_fx, "fx_revaluation_addon", lambda *_args, **_kwargs: sentinel
+    )
+
+    outcome = _fx_run(_short_usd())
+
+    assert outcome.fx is not None
+    assert outcome.fx.pillar2_addon == Decimal("4")
+    assert outcome.fx.revaluation_loss == Decimal("7")
+    assert outcome.fx.pillar1_fx_capital == Decimal("3")
+
+
+def test_a_cedi_appreciation_override_is_shocked_the_other_way() -> None:
+    """The shipped mapping floors ``ghs_usd_shock_pct`` at zero, so the stress
+    framework can only model a depreciation today; the shared helper still
+    handles the other sign rather than reading an appreciation as a fall."""
+    appreciation = fx_pillar2_addon(
+        _fx_positions(),  # 40m LONG USD
+        Decimal("-10"),
+        Decimal("45000000"),
+        bog_capital_params(),
+    )
+    # A long book loses when the cedi strengthens: 40m × 10% = 4m, inside the
+    # 4.5m Pillar 1 charge, so no add-on — but the loss is measured, not zero.
+    assert appreciation.loss.worst_direction == "appreciation"
+    assert appreciation.loss.worst_loss == Decimal("4000000.0000")
+    assert appreciation.pillar1_fx_capital == Decimal("4500000.0000")
+    assert appreciation.addon == Decimal("0.0000")

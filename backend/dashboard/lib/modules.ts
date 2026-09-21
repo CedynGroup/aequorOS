@@ -48,6 +48,10 @@ const ROUTE_MODULES: ReadonlyArray<readonly [string, ModuleKey]> = [
   ["/liquidity", "liquidity"],
   ["/fx", "fx"],
   ["/basel", "capital"],
+  // The ICAAP workspace is a capital-module surface with its own URL, like
+  // `/basel`. An UNMAPPED route is never hidden, so this entry is what makes
+  // every scope rule below reach `/icaap` at all.
+  ["/icaap", "capital"],
   ["/credit", "credit"],
   ["/ftp", "ftp"],
   ["/forecasting", "forecasting"],
@@ -97,6 +101,15 @@ const SDI_HIDDEN_SUBROUTES: readonly string[] = [
   "/basel/structure",
   "/basel/stress",
   "/basel/planning",
+  // The ICAAP is a Pillar 2 obligation on banks. An SDI has no Pillar 2 regime
+  // under the BoG framework (DV-006), and the backend 404s every ICAAP route
+  // for an SDI tenant — the nav must not offer a door that is walled up.
+  "/icaap",
+  // The IRRBB standardised framework is calibrated and governed for banks: its
+  // whole parameter set is seeded for the bank institution class, so an SDI
+  // tenant has no governed value for any of it and the framework would refuse
+  // every run. Same rule as the ICAAP above — do not offer a walled-up door.
+  "/irr/standardised",
 ];
 
 const SDI_ONLY_SUBROUTES: readonly string[] = [
@@ -149,6 +162,26 @@ export type ModuleScope = {
   capitalRestrictedView?: boolean;
   /** Exact CAP/confidential run authority. */
   capitalRun?: boolean;
+  /** Exact CAP/confidential create authority (new ICAAP cycles). */
+  capitalCreate?: boolean;
+  /** Exact CAP/confidential edit authority (sections, blocks, attachments). */
+  capitalEdit?: boolean;
+  /** Exact CAP/confidential export authority (draft PDF / Word). */
+  capitalExport?: boolean;
+  /**
+   * Exact CAP/confidential APPROVE authority — the checker half of the ICAAP
+   * Pillar 2 maker-checker. A UI hint only: the service re-decides every
+   * approval, and additionally refuses an approver who authored the revision.
+   */
+  capitalApprove?: boolean;
+  /**
+   * Exact AUDIT/confidential create authority, at the ORGANIZATION level —
+   * whether this user may record an ICAAP independent review at all. Holding it
+   * is still not sufficient: the service refuses a reviewer who participated in
+   * preparing the cycle (`reviewer_not_independent`), which is a fact about the
+   * cycle that no capability can express.
+   */
+  auditCreate?: boolean;
   /** Exact FX/aggregated view authority for `/fx` dashboards; scenarios use confidential. */
   fxAggregatedView?: boolean;
   /** Exact FX/confidential view authority for run and analysis detail. */
@@ -269,6 +302,36 @@ export function hasEffectiveCapability(
   );
 }
 
+/**
+ * The same read, INCLUDING the capabilities whose final answer needs the object
+ * in hand — `approve`, `sign_off` and `submit`, which the evaluator projects
+ * with `requires_contextual_authorization` because the server re-decides them
+ * against the record being acted on (it refuses the officer who prepared the
+ * very return they are trying to approve or file).
+ *
+ * Use it ONLY to decide whether to OFFER a control, never to claim the act will
+ * succeed: the offer is structural eligibility, the outcome is the server's.
+ * `hasEffectiveCapability` drops these deliberately and must stay the helper for
+ * navigation and for anything that reads as authority — which is why this one is
+ * named for what it is. A maker-checker control hidden from everyone is how the
+ * ICAAP approve-and-sign affordance became unreachable for every holder of a
+ * correct Capital binding: the only helper available excluded exactly the
+ * permission the control is about.
+ */
+export function hasStructuralCapability(
+  capabilities: readonly EffectiveCapabilityRead[],
+  module: EffectiveCapabilityRead["module"],
+  sensitivity: EffectiveCapabilityRead["sensitivity"],
+  permission: EffectiveCapabilityRead["permission"],
+): boolean {
+  return capabilities.some(
+    (capability) =>
+      capability.module === module &&
+      capability.sensitivity === sensitivity &&
+      capability.permission === permission,
+  );
+}
+
 function subrouteHidden(path: string, scope: ModuleScope): boolean {
   if (!scope.isResolved) {
     return [...SDI_HIDDEN_SUBROUTES, ...SDI_ONLY_SUBROUTES].some(
@@ -281,6 +344,10 @@ function subrouteHidden(path: string, scope: ModuleScope): boolean {
     );
   }
   return SDI_ONLY_SUBROUTES.some((r) => path === r || path.startsWith(`${r}/`));
+}
+
+function isIcaapPath(path: string): boolean {
+  return path === "/icaap" || path.startsWith("/icaap/");
 }
 
 function bindingControlledSubrouteHidden(
@@ -313,6 +380,16 @@ function bindingControlledSubrouteHidden(
   }
   if (
     (path === "/basel/planning" || path.startsWith("/basel/planning/")) &&
+    scope.capitalConfidentialView !== true
+  ) {
+    return true;
+  }
+  // ICAAP is confidential capital work, and that authority is the whole gate
+  // (D-046: the workspace has no deployment flag). "Not yet resolved" is
+  // `undefined`, which hides it, so the nav never offers a link before the
+  // projection says the caller can follow it.
+  if (
+    (path === "/icaap" || path.startsWith("/icaap/")) &&
     scope.capitalConfidentialView !== true
   ) {
     return true;
@@ -533,6 +610,13 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
   // Capital is a core module but its Basel and SDI tabs are not interchangeable.
   if (subrouteHidden(path, scope)) return { state: "hidden" };
   if (isPersonalSettingsPath(path)) return { state: "enabled" };
+  // ICAAP is decided BEFORE the baseline-only permission sentences. It is
+  // gated by a deployment flag as well as by CAP/confidential view, so there
+  // is no grant a user could be told to ask for — and on an unflagged
+  // deployment the surface must not be named in the nav at all.
+  if (isIcaapPath(path) && bindingControlledSubrouteHidden(path, scope)) {
+    return { state: "hidden" };
+  }
   const moduleKey = moduleForPath(path);
   if (moduleKey) {
     if (isBaselineOnlyScope(scope)) {
@@ -672,6 +756,7 @@ const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/fx/limits",
   "/fx/scenarios",
   "/fx/var",
+  "/icaap",
   "/institution",
   "/institution/history",
   "/institution/outlets",
@@ -683,6 +768,7 @@ const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/irr/limits",
   "/irr/scenarios",
   "/irr/sensitivity",
+  "/irr/standardised",
   "/liquidity",
   "/liquidity/buffer",
   "/liquidity/cfp",

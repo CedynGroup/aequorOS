@@ -12,8 +12,13 @@ from app.schemas.regulatory_irr import (
     IrrEarAnalysisRead,
     IrrScenarioBatchCreate,
 )
-from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
-from app.services import regulatory_irr, scoped_authorization
+from app.schemas.regulatory_irr_sf import (
+    IrrbbSfAttemptsRead,
+    IrrbbSfRead,
+    IrrbbSfRunCreate,
+)
+from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead, RegulatoryRunRead
+from app.services import regulatory_irr, regulatory_irr_sf, scoped_authorization
 
 router = APIRouter(tags=["regulatory-irr"])
 
@@ -103,6 +108,115 @@ def get_irr_dashboard(
         denial_detail="IRRBB access requires an active scoped binding.",
     )
     return regulatory_irr.get_irr_dashboard(
+        db,
+        ctx,
+        bank.id,
+        reporting_period_id,
+        resolved_bank=bank,
+    )
+
+
+@router.post(
+    "/banks/{bank_id}/irr/standardised-framework/runs",
+    response_model=RegulatoryRunRead,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="runIrrbbStandardisedFramework",
+)
+def run_irrbb_standardised_framework(
+    bank_id: str,
+    payload: IrrbbSfRunCreate,
+    db: DbSession,
+    ctx: ScopedMutationTenant,
+) -> RegulatoryRunRead:
+    """Mint one immutable Standardised Framework run for a reporting date.
+
+    Minting filing evidence is a CONFIDENTIAL run, like every other regulatory
+    run — the aggregated read below is a different authority.
+    """
+    scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.RUN,
+        module=Module.IRRBB,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="irrbb_sf_run",
+        denial_detail="Running the IRRBB Standardised Framework requires an active "
+        "scoped binding.",
+    )
+    return regulatory_irr_sf.run_standardised_framework(db, ctx, bank_id, payload)
+
+
+@router.get(
+    "/banks/{bank_id}/irr/standardised-framework",
+    response_model=IrrbbSfRead,
+    operation_id="getIrrbbStandardisedFramework",
+)
+def get_irrbb_standardised_framework(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+    reporting_period_id: Annotated[UUID, Query()],
+) -> IrrbbSfRead:
+    """The Standardised Framework result for one reporting date.
+
+    Denial hides rather than announces: a principal with no IRRBB binding gets
+    the same 404 as a bank that does not exist, so the route cannot be used to
+    enumerate institutions.
+    """
+    bank = scoped_authorization.require_bank_permission_prefetched(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.IRRBB,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="irrbb_sf_view",
+        denial_status=status.HTTP_404_NOT_FOUND,
+        denial_detail="Bank not found.",
+    )
+    return regulatory_irr_sf.get_standardised_framework(
+        db,
+        ctx,
+        bank.id,
+        reporting_period_id,
+        resolved_bank=bank,
+    )
+
+
+@router.get(
+    "/banks/{bank_id}/irr/standardised-framework/attempts",
+    response_model=IrrbbSfAttemptsRead,
+    operation_id="listIrrbbStandardisedFrameworkAttempts",
+)
+def list_irrbb_standardised_framework_attempts(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+    reporting_period_id: Annotated[UUID, Query()],
+) -> IrrbbSfAttemptsRead:
+    """Was the framework tried at this reporting date, and what happened.
+
+    A separate question from the result read, and the only one that can
+    distinguish "nobody has run it" from "we ran it and it refused" — a refused
+    run is a ``failed`` run and never reaches the result route. An empty
+    history is an ANSWER here, never a 404.
+
+    Same authority as the result read (IRRBB, aggregated, view), so it costs no
+    new permission, and denial hides rather than announces for the same reason.
+    """
+    bank = scoped_authorization.require_bank_permission_prefetched(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.IRRBB,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="irrbb_sf_attempts",
+        denial_status=status.HTTP_404_NOT_FOUND,
+        denial_detail="Bank not found.",
+    )
+    return regulatory_irr_sf.get_standardised_framework_attempts(
         db,
         ctx,
         bank.id,

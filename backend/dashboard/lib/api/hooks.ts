@@ -2438,6 +2438,116 @@ export function useDecidePackageApproval(bankId: string | undefined) {
   });
 }
 
+/**
+ * The filing chain for one package: its stages, where it is, and every
+ * decision taken. The AUTHORITY on which officer the return is waiting for —
+ * the legacy `status` cannot tell an Approver stage from a Validator stage,
+ * because both read `pending_approval`.
+ */
+export function usePackageFilingChain(
+  bankId: string | undefined,
+  packageId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: ["rr-filing-chain", bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.getPackageFilingChain({
+          bankId: bankId!,
+          packageId: packageId!,
+        }),
+      ),
+    enabled: Boolean(bankId && packageId),
+  });
+}
+
+/** What transmitting this package would actually send — the submission's own set. */
+export function usePackageFilingSet(
+  bankId: string | undefined,
+  packageId: string | null | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["rr-filing-set", bankId, packageId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.previewPackageFilingSet({
+          bankId: bankId!,
+          packageId: packageId!,
+        }),
+      ),
+    enabled: Boolean(bankId && packageId) && enabled,
+  });
+}
+
+/**
+ * Pass an approved return to the next stage — or file it, when that stage is
+ * the transmitting one. The SECOND of the chain's two acts.
+ */
+export function useHandOffPackageFilingStage(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ packageId }: { packageId: string }) =>
+      apiCall(() =>
+        regulatoryReportingApi.handOffPackageFilingStage({
+          bankId: bankId!,
+          packageId,
+        }),
+      ),
+    onSuccess: (_chain, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-filing-chain", bankId, variables.packageId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["rr-packages"] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-package", bankId] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-events", bankId] });
+    },
+  });
+}
+
+/** Decide the stage the return is actually waiting at. */
+export function useDecidePackageFilingStage(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      decision,
+      round,
+      reviewDigest,
+      comment,
+      returnToSeq,
+    }: {
+      packageId: string;
+      decision: "approved" | "returned";
+      round: number;
+      reviewDigest: string;
+      comment?: string;
+      returnToSeq?: number;
+    }) =>
+      apiCall(() =>
+        regulatoryReportingApi.decidePackageFilingStage({
+          bankId: bankId!,
+          packageId,
+          packageStageDecisionCreate: {
+            decision,
+            round,
+            reviewDigest,
+            comment: comment ?? null,
+            returnToSeq: returnToSeq ?? null,
+          },
+        }),
+      ),
+    onSuccess: (_chain, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-filing-chain", bankId, variables.packageId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["rr-packages"] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-package", bankId] });
+      void queryClient.invalidateQueries({ queryKey: ["rr-events", bankId] });
+    },
+  });
+}
+
 /** Persisted artifact list for one package (survives reloads — API-backed). */
 export function usePackageArtifacts(
   bankId: string | undefined,
@@ -2784,20 +2894,27 @@ export function useEmailFallbackInstructions(
  * consequence of when data arrived, and selecting from them made every weekly
  * BoG deadline invisible unless a month happened to end on that Friday.
  * Each anchor carries whether a position has been computed for it.
+ *
+ * `lookbackMonths` reaches back over the reporting dates the bank already
+ * owes; `horizonMonths` forward over the ones coming up. Both are left
+ * undefined by default so the backend's window stays the single authority on
+ * how wide it is — pass one only to widen a particular screen.
  */
 export function useReturnAnchors(
   bankId: string | undefined,
   returnCode: string | undefined,
-  horizonMonths = 3,
+  horizonMonths?: number,
+  lookbackMonths?: number,
 ) {
   return useQuery({
-    queryKey: ["rr-anchors", bankId, returnCode, horizonMonths],
+    queryKey: ["rr-anchors", bankId, returnCode, horizonMonths, lookbackMonths],
     queryFn: () =>
       apiCall(() =>
         regulatoryReportingApi.listReturnAnchors({
           bankId: bankId!,
           returnCode: returnCode!,
           horizonMonths,
+          lookbackMonths,
         }),
       ),
     enabled: Boolean(bankId && returnCode),

@@ -11,6 +11,34 @@
  */
 
 import { mapValues } from "../runtime";
+import type { Tier1HeadroomPp } from "./Tier1HeadroomPp";
+import {
+  Tier1HeadroomPpFromJSON,
+  Tier1HeadroomPpFromJSONTyped,
+  Tier1HeadroomPpToJSON,
+  Tier1HeadroomPpToJSONTyped,
+} from "./Tier1HeadroomPp";
+import type { TotalRequirementPct } from "./TotalRequirementPct";
+import {
+  TotalRequirementPctFromJSON,
+  TotalRequirementPctFromJSONTyped,
+  TotalRequirementPctToJSON,
+  TotalRequirementPctToJSONTyped,
+} from "./TotalRequirementPct";
+import type { Cet1Pct } from "./Cet1Pct";
+import {
+  Cet1PctFromJSON,
+  Cet1PctFromJSONTyped,
+  Cet1PctToJSON,
+  Cet1PctToJSONTyped,
+} from "./Cet1Pct";
+import type { Cet1HeadroomPp } from "./Cet1HeadroomPp";
+import {
+  Cet1HeadroomPpFromJSON,
+  Cet1HeadroomPpFromJSONTyped,
+  Cet1HeadroomPpToJSON,
+  Cet1HeadroomPpToJSONTyped,
+} from "./Cet1HeadroomPp";
 import type { HeadroomPp } from "./HeadroomPp";
 import {
   HeadroomPpFromJSON,
@@ -18,6 +46,20 @@ import {
   HeadroomPpToJSON,
   HeadroomPpToJSONTyped,
 } from "./HeadroomPp";
+import type { Tier1Pct } from "./Tier1Pct";
+import {
+  Tier1PctFromJSON,
+  Tier1PctFromJSONTyped,
+  Tier1PctToJSON,
+  Tier1PctToJSONTyped,
+} from "./Tier1Pct";
+import type { Cet1MinPct } from "./Cet1MinPct";
+import {
+  Cet1MinPctFromJSON,
+  Cet1MinPctFromJSONTyped,
+  Cet1MinPctToJSON,
+  Cet1MinPctToJSONTyped,
+} from "./Cet1MinPct";
 import type { CarPct } from "./CarPct";
 import {
   CarPctFromJSON,
@@ -25,9 +67,35 @@ import {
   CarPctToJSON,
   CarPctToJSONTyped,
 } from "./CarPct";
+import type { PeriodEnd } from "./PeriodEnd";
+import {
+  PeriodEndFromJSON,
+  PeriodEndFromJSONTyped,
+  PeriodEndToJSON,
+  PeriodEndToJSONTyped,
+} from "./PeriodEnd";
+import type { Pillar1MinPct } from "./Pillar1MinPct";
+import {
+  Pillar1MinPctFromJSON,
+  Pillar1MinPctFromJSONTyped,
+  Pillar1MinPctToJSON,
+  Pillar1MinPctToJSONTyped,
+} from "./Pillar1MinPct";
+import type { Tier1MinPct } from "./Tier1MinPct";
+import {
+  Tier1MinPctFromJSON,
+  Tier1MinPctFromJSONTyped,
+  Tier1MinPctToJSON,
+  Tier1MinPctToJSONTyped,
+} from "./Tier1MinPct";
 
 /**
+ * One projected year-end. ``year`` 0 is the as-of starting position.
  *
+ * Ratios are ``None`` when the forecast run does not carry them ("not
+ * projected"), never ``0``. Headroom is measured against the governed,
+ * clamped minimum for that ratio (total capital: the Pillar 1 minimum plus the
+ * plan's Pillar 2 add-ons).
  * @export
  * @interface CapitalPlanProjectionYear
  */
@@ -40,16 +108,70 @@ export interface CapitalPlanProjectionYear {
   carPct?: CarPct;
   /**
    *
+   * @type {Cet1HeadroomPp}
+   * @memberof CapitalPlanProjectionYear
+   */
+  cet1HeadroomPp?: Cet1HeadroomPp;
+  /**
+   *
+   * @type {Cet1MinPct}
+   * @memberof CapitalPlanProjectionYear
+   */
+  cet1MinPct?: Cet1MinPct;
+  /**
+   *
+   * @type {Cet1Pct}
+   * @memberof CapitalPlanProjectionYear
+   */
+  cet1Pct?: Cet1Pct;
+  /**
+   *
    * @type {HeadroomPp}
    * @memberof CapitalPlanProjectionYear
    */
   headroomPp?: HeadroomPp;
   /**
    *
+   * @type {PeriodEnd}
+   * @memberof CapitalPlanProjectionYear
+   */
+  periodEnd?: PeriodEnd;
+  /**
+   *
    * @type {string}
    * @memberof CapitalPlanProjectionYear
    */
   periodLabel: string;
+  /**
+   *
+   * @type {Pillar1MinPct}
+   * @memberof CapitalPlanProjectionYear
+   */
+  pillar1MinPct?: Pillar1MinPct;
+  /**
+   *
+   * @type {Tier1HeadroomPp}
+   * @memberof CapitalPlanProjectionYear
+   */
+  tier1HeadroomPp?: Tier1HeadroomPp;
+  /**
+   *
+   * @type {Tier1MinPct}
+   * @memberof CapitalPlanProjectionYear
+   */
+  tier1MinPct?: Tier1MinPct;
+  /**
+   *
+   * @type {Tier1Pct}
+   * @memberof CapitalPlanProjectionYear
+   */
+  tier1Pct?: Tier1Pct;
+  /**
+   *
+   * @type {TotalRequirementPct}
+   * @memberof CapitalPlanProjectionYear
+   */
+  totalRequirementPct?: TotalRequirementPct;
   /**
    *
    * @type {number}
@@ -87,11 +209,45 @@ export function CapitalPlanProjectionYearFromJSONTyped(
     ...json,
     carPct:
       json["car_pct"] == null ? undefined : CarPctFromJSON(json["car_pct"]),
+    cet1HeadroomPp:
+      json["cet1_headroom_pp"] == null
+        ? undefined
+        : Cet1HeadroomPpFromJSON(json["cet1_headroom_pp"]),
+    cet1MinPct:
+      json["cet1_min_pct"] == null
+        ? undefined
+        : Cet1MinPctFromJSON(json["cet1_min_pct"]),
+    cet1Pct:
+      json["cet1_pct"] == null ? undefined : Cet1PctFromJSON(json["cet1_pct"]),
     headroomPp:
       json["headroom_pp"] == null
         ? undefined
         : HeadroomPpFromJSON(json["headroom_pp"]),
+    periodEnd:
+      json["period_end"] == null
+        ? undefined
+        : PeriodEndFromJSON(json["period_end"]),
     periodLabel: json["period_label"],
+    pillar1MinPct:
+      json["pillar1_min_pct"] == null
+        ? undefined
+        : Pillar1MinPctFromJSON(json["pillar1_min_pct"]),
+    tier1HeadroomPp:
+      json["tier1_headroom_pp"] == null
+        ? undefined
+        : Tier1HeadroomPpFromJSON(json["tier1_headroom_pp"]),
+    tier1MinPct:
+      json["tier1_min_pct"] == null
+        ? undefined
+        : Tier1MinPctFromJSON(json["tier1_min_pct"]),
+    tier1Pct:
+      json["tier1_pct"] == null
+        ? undefined
+        : Tier1PctFromJSON(json["tier1_pct"]),
+    totalRequirementPct:
+      json["total_requirement_pct"] == null
+        ? undefined
+        : TotalRequirementPctFromJSON(json["total_requirement_pct"]),
     year: json["year"],
   };
 }
@@ -112,8 +268,19 @@ export function CapitalPlanProjectionYearToJSONTyped(
 
   return {
     car_pct: CarPctToJSON(value["carPct"]),
+    cet1_headroom_pp: Cet1HeadroomPpToJSON(value["cet1HeadroomPp"]),
+    cet1_min_pct: Cet1MinPctToJSON(value["cet1MinPct"]),
+    cet1_pct: Cet1PctToJSON(value["cet1Pct"]),
     headroom_pp: HeadroomPpToJSON(value["headroomPp"]),
+    period_end: PeriodEndToJSON(value["periodEnd"]),
     period_label: value["periodLabel"],
+    pillar1_min_pct: Pillar1MinPctToJSON(value["pillar1MinPct"]),
+    tier1_headroom_pp: Tier1HeadroomPpToJSON(value["tier1HeadroomPp"]),
+    tier1_min_pct: Tier1MinPctToJSON(value["tier1MinPct"]),
+    tier1_pct: Tier1PctToJSON(value["tier1Pct"]),
+    total_requirement_pct: TotalRequirementPctToJSON(
+      value["totalRequirementPct"],
+    ),
     year: value["year"],
   };
 }

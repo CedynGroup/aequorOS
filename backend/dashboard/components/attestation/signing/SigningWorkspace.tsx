@@ -32,8 +32,12 @@
  * document is what those figures look like printed; the digest is what is
  * cryptographically bound.
  *
- * Two roles sign here — the ones `pdf_signing.ROLE_FIELD_NAMES` gives a field
- * to. `board` and `witness` have no field on a return, so they keep the dialog.
+ * WHO SIGNS IS THE SERVER'S ANSWER, not a constant here. The placements read
+ * carries the ceremony the policy in force resolved to for this package, so an
+ * ICAAP report whose bank has turned the Board slot on shows three officers on
+ * the rail and three owned boxes on the page. `witness` never has a field, and
+ * `board` has one only on the ICAAP layout; a role with no field on THIS
+ * return's artifact keeps the dialog.
  *
  * For a CHECKER this is the whole of their act, and it has two exits. Approving
  * and signing are one press (`attestation_api.certify_and_send` writes the
@@ -60,6 +64,7 @@ import type {
   PlacementFieldType,
   ResolvedSignaturePlacementsRead,
   SignatureFieldPlacement,
+  SignatureFieldPlacementRead,
   SignatureRead,
   SigningRole,
 } from "@aequoros/risk-service-api";
@@ -123,11 +128,22 @@ import FieldPalette, {
 import AdoptSignaturePanel from "./AdoptSignaturePanel";
 import RecipientPicker, { type Nomination } from "./RecipientPicker";
 
-/** The roles the return artifact actually has a field for. */
-const PLACEABLE_ROLES = ["preparer", "approver"] as const;
+/**
+ * The ceremony a return whose page comes from the regulator's own workbook is
+ * signed by. Every return but the ICAAP report, today — and the fallback the
+ * workspace uses until the server has answered.
+ *
+ * It is NOT the list this screen labels its boxes from: that is
+ * `ResolvedSignaturePlacementsRead.placeableRoles`, the ceremony the policy in
+ * force resolved to for THIS package, which is three roles on an ICAAP report
+ * whose bank has turned the Board slot on. Hard-coding two here meant a Board
+ * box drawn on the page with no owner, no name and no tint.
+ */
+const DOCUMENT_SIGNING_ROLES: readonly SigningRole[] = ["preparer", "approver"];
 
+/** Whether this role has a signature field on a standard return's artifact. */
 export function isPlaceableRole(role: SigningRole): boolean {
-  return (PLACEABLE_ROLES as readonly string[]).includes(role);
+  return (DOCUMENT_SIGNING_ROLES as readonly string[]).includes(role);
 }
 
 const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 2];
@@ -136,6 +152,7 @@ const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 2];
 const RECIPIENT_TONES: Record<string, string> = {
   preparer: "border-action bg-action/10",
   approver: "border-slate bg-slate/10",
+  board: "border-teal bg-teal/10",
 };
 
 export default function SigningWorkspace({
@@ -177,8 +194,15 @@ export default function SigningWorkspace({
   const sendBack = useSendBackForCorrections(bankId);
   const canAdministerGrants = useGrantAdministrationAccess();
 
+  /**
+   * The boxes on the page. The READ shape, because the server reports the
+   * ceremony this package actually has — which is three roles on an ICAAP
+   * report whose bank has enabled the Board slot, and only two of those are
+   * ever placeable by hand. Narrowed back to the write shape at the one point
+   * it is sent (`placementPayload`).
+   */
   const [placements, setPlacements] = useState<
-    SignatureFieldPlacement[] | null
+    SignatureFieldPlacementRead[] | null
   >(null);
   const [nominations, setNominations] = useState<Nomination[]>([]);
   const [activeRole, setActiveRole] = useState<string>(signingRole);
@@ -207,6 +231,16 @@ export default function SigningWorkspace({
     [resolved],
   );
   const editable = resolved?.editable ?? false;
+  /**
+   * Who signs this document, in order, as the server resolved it from the
+   * policy in force. Three roles on an ICAAP report whose bank has enabled the
+   * Board slot; two everywhere else. The fallback is the standard ceremony,
+   * which is what the page shows for the instant before the query answers.
+   */
+  const documentRoles: readonly SigningRole[] =
+    resolved && resolved.placeableRoles && resolved.placeableRoles.length > 0
+      ? resolved.placeableRoles
+      : DOCUMENT_SIGNING_ROLES;
 
   // Seed ONLY from a layout somebody saved. The platform default is two boxes in
   // a clear band near the attestation block, not on its ruled lines — seeding
@@ -311,7 +345,7 @@ export default function SigningWorkspace({
       ]),
     );
     const users = usersQuery.data?.users ?? [];
-    return PLACEABLE_ROLES.map((role) => {
+    return documentRoles.map((role) => {
       const signature = signed.get(role);
       const recipient = routed.get(role);
       const picked = users.find((user) => user.id === nominated.get(role));
@@ -346,7 +380,14 @@ export default function SigningWorkspace({
         tone: RECIPIENT_TONES[role] ?? "border-slate bg-slate/10",
       };
     });
-  }, [status, nominations, usersQuery.data, signingRole, identityQuery.data]);
+  }, [
+    status,
+    nominations,
+    usersQuery.data,
+    signingRole,
+    identityQuery.data,
+    documentRoles,
+  ]);
 
   const slots: FieldSlot[] = useMemo(() => {
     const signedRoles = new Set(
@@ -432,7 +473,7 @@ export default function SigningWorkspace({
   // certifying with nothing placed would silently fall back to the platform
   // default layout — the guess this screen exists to replace.
   const unplaced = editable
-    ? PLACEABLE_ROLES.filter(
+    ? documentRoles.filter(
         (role) => !signatureRolesPlaced(placements ?? []).has(role),
       )
     : [];
@@ -451,8 +492,26 @@ export default function SigningWorkspace({
           ? "A reason is recorded against the placement and the routing. Say why in a line."
           : null;
 
-  /** The placement to send: only when it is still ours to set. */
-  const placementPayload = editable ? (placements ?? []) : [];
+  /**
+   * The placement to send: only when it is still ours to set, and only the
+   * boxes a client may place. The narrowing is not a formality — the set is
+   * editable exactly where the ceremony is the standard two roles, so a box
+   * that fails this guard is one the server would refuse anyway, and dropping
+   * it here keeps the request honest rather than arguing with the contract.
+   */
+  const placementPayload: SignatureFieldPlacement[] = editable
+    ? (placements ?? []).flatMap((placement) =>
+        isPlaceableRole(placement.signingRole)
+          ? [
+              {
+                ...placement,
+                signingRole:
+                  placement.signingRole as SignatureFieldPlacement["signingRole"],
+              },
+            ]
+          : [],
+      )
+    : [];
 
   /** Both exits end the same way: nothing held locally, the caller re-reads. */
   const finish = () => {
@@ -521,7 +580,7 @@ export default function SigningWorkspace({
       if (editable && placements) {
         await savePlacements.mutateAsync({
           packageId,
-          placements,
+          placements: placementPayload,
           reason:
             reason.trim() ||
             "Placement saved before single sign-on re-authentication.",
@@ -538,13 +597,13 @@ export default function SigningWorkspace({
    * a chore, and a chore is where a field ends up in the wrong place.
    */
   const onSaveTemplate = () => {
-    if (!resolved || !placements?.length) return;
+    if (!resolved || placementPayload.length === 0) return;
     setTemplateSaved(false);
     void saveTemplate
       .mutateAsync({
         bankId,
         returnCode: resolved.returnCode,
-        placements,
+        placements: placementPayload,
         reason: `Signature field layout saved from the ${resolved.returnCode} signing workspace.`,
       })
       .then(() => setTemplateSaved(true))

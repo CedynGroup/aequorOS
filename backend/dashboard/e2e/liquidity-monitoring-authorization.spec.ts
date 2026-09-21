@@ -21,9 +21,21 @@ test.describe("unbound Liquidity Monitoring user", () => {
     });
     await page.goto("/");
     await expect(
-      page.getByText("No authorized institutions", { exact: true }),
+      page.getByText("No authorized institutions yet", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("navigation")).toHaveCount(0);
+    // See capital-authorization: entries may be listed, but every one must be
+    // disabled and unfollowable.
+    // Since #201 the shell LISTS the modules a baseline member cannot reach,
+    // as `role="link"` spans carrying `aria-disabled="true"` and no href, each
+    // explaining why it is blocked. Counting landmarks or roles therefore says
+    // nothing about authority. What must hold is that no MODULE is followable:
+    // the only enabled entry is the member's own settings, which
+    // `lib/modules.test.ts` pins as deliberately reachable.
+    const followable = page.locator(
+      'nav [role="link"]:not([aria-disabled="true"]), nav a[href]',
+    );
+    await expect(followable).toHaveCount(1);
+    await expect(followable.first()).toHaveAttribute("href", "/settings");
 
     await page.goto("/liquidity");
     await expect(
@@ -31,7 +43,14 @@ test.describe("unbound Liquidity Monitoring user", () => {
     ).toHaveCount(0);
 
     await page.goto("/liquidity/monitoring");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
+    // A baseline member deep-linking to a module they cannot reach is shown
+    // the empty-state panel explaining why, not a 404 — deliberate since
+    // #198/#201 and pinned by `hubRedirectFor` in lib/modules.test.ts. The
+    // security property is unchanged and still asserted below: the module is
+    // unreachable and no request for its data is made.
+    await expect(
+      page.getByText(/404|not found|No authorized institutions yet/i).first(),
+    ).toBeVisible();
     expect(productRequests).toEqual([]);
     if (evidenceDir) {
       await page.screenshot({

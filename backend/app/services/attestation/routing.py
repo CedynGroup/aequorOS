@@ -30,7 +30,7 @@ Two consequences worth stating plainly:
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -300,6 +300,49 @@ def _describe(counts: dict[str, int]) -> str:
     return ", ".join(f"{role} ×{count}" for role, count in sorted(counts.items())) or "none"
 
 
+def _ensure_nominee_may_sign(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    user: User,
+    signing_role: str,
+) -> None:
+    """Can this nominee actually fill this slot?
+
+    Two answers, chosen by the return's FAMILY, and the choice is the same one
+    the certification gate makes — routing a return to someone who could never
+    sign it must be refused at nomination time, not discovered at the ceremony.
+
+    * a GATED family (ICAAP) evaluates the nominee's own scoped binding, because
+      a scalar role must never satisfy a scoped surface;
+    * every other family keeps the scalar ladder it has always had.
+    """
+    from app.models import Bank  # noqa: PLC0415
+    from app.services.regulatory_reporting import family_access  # noqa: PLC0415
+
+    bank = db.get(Bank, package.bank_id)
+    if bank is not None:
+        nominee_ctx = replace(ctx, actor_user_id=user.id, roles=(user.role,))
+        allowed = family_access.nominee_may_sign(
+            db, ctx, bank, package, nominee_ctx, signing_role
+        )
+        if allowed is not None:
+            if not allowed:
+                raise AttestationConflict(
+                    "recipient_role_insufficient",
+                    f"{user.display_name or user.email} does not hold the authority this "
+                    f"return requires to provide the '{signing_role}' signature.",
+                )
+            return
+    if signing_role in CHECKER_ROLES and not security.has_role([user.role], "approver"):
+        raise AttestationConflict(
+            "recipient_role_insufficient",
+            f"{user.display_name or user.email} holds the '{user.role}' role, which cannot "
+            f"provide the '{signing_role}' signature — maker-checker cannot be "
+            "satisfied by a preparer.",
+        )
+
+
 def _nominate(  # noqa: PLR0913 - one nominee against the full policy context
     db: Session,
     ctx: TenantContext,
@@ -340,15 +383,7 @@ def _nominate(  # noqa: PLR0913 - one nominee against the full policy context
             f"The policy in force has no '{nomination.signing_role}' slot "
             f"(it requires: {roles}).",
         )
-    if nomination.signing_role in CHECKER_ROLES and not security.has_role(
-        [user.role], "approver"
-    ):
-        raise AttestationConflict(
-            "recipient_role_insufficient",
-            f"{user.display_name or user.email} holds the '{user.role}' role, which cannot "
-            f"provide the '{nomination.signing_role}' signature — maker-checker cannot be "
-            f"satisfied by a preparer.",
-        )
+    _ensure_nominee_may_sign(db, ctx, package, user, nomination.signing_role)
 
     identity = ensure_signer_identity(db, ctx, nomination.user_id)
     # The single source of truth for "may this person fill this slot": officer

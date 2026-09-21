@@ -10,6 +10,12 @@ cadence. These tests pin the corrected direction:
 and the two properties that follow from it: an anchor exists whether or not the
 bank has data for it, and a return is never assembled from a book as of some
 other date.
+
+Founder review 2026-09-19 added the third: the offered span is a WINDOW that
+runs both ways. Offering only one elapsed period end left a bank whose newest
+book was a quarter old unable to select any date it had figures for — an
+overdue return is exactly the one still owed — so ``lookback_months`` mirrors
+``horizon_months`` and both resolve through one :class:`AnchorWindow`.
 """
 
 from __future__ import annotations
@@ -27,8 +33,11 @@ from app.models import Bank, BankReportingPeriod
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
 from app.services.regulatory_reporting import calendar, generation
 from app.services.regulatory_reporting.anchors import (
+    DEFAULT_LOOKBACK_MONTHS,
     anchor_dates,
+    anchor_window,
     horizon_end_for,
+    lookback_start_for,
     snapshot_coverage,
 )
 from app.services.regulatory_reporting.common import get_snapshot_for_reporting_date
@@ -59,10 +68,10 @@ def _bank(db: Session) -> Bank:
 
 def test_anchors_are_a_pure_function_of_the_return_definition() -> None:
     """No database, no tenant, no ingestion — the same dates for every bank."""
-    horizon = horizon_end_for(AS_OF, 3)
+    window = anchor_window(AS_OF, horizon_months=3)
     for definition in REGISTRY.values():
-        first = anchor_dates(definition, AS_OF, horizon)
-        assert first == anchor_dates(definition, AS_OF, horizon)
+        first = anchor_dates(definition, window)
+        assert first == anchor_dates(definition, window)
         if definition.event_driven:
             # An event-driven pack has no periodic cycle; expanding its nominal
             # frequency would fabricate obligations that do not exist.
@@ -84,7 +93,7 @@ def test_weekly_anchors_are_friday_closes_not_month_ends() -> None:
     definition = get_definition("BSD1")
     assert definition is not None and definition.frequency == "weekly"
 
-    anchors = anchor_dates(definition, AS_OF, horizon_end_for(AS_OF, 3))
+    anchors = anchor_dates(definition, anchor_window(AS_OF, horizon_months=3))
     assert len(anchors) > 8, "a trailing window plus the horizon's Fridays"
     assert {anchor.weekday() for anchor in anchors} == {FRIDAY}
     # Consecutive Fridays — no gaps where a month simply did not end on one.
@@ -96,18 +105,191 @@ def test_daily_anchors_are_business_days_and_stay_bounded() -> None:
     definition = get_definition("DBK-DAILY")
     assert definition is not None and definition.frequency == "daily"
     for horizon_months in (3, 24):
-        anchors = anchor_dates(definition, AS_OF, horizon_end_for(AS_OF, horizon_months))
+        anchors = anchor_dates(definition, anchor_window(AS_OF, horizon_months=horizon_months))
         # The daily window is a trailing window, independent of the horizon.
         assert len(anchors) == 5
         assert all(anchor.weekday() < FRIDAY + 1 for anchor in anchors)
+    # And independent of the lookback too: daily anchors are dense, so the
+    # cadence keeps a count cap on top of the shared window.
+    for lookback_months in (1, 24):
+        capped = anchor_dates(definition, anchor_window(AS_OF, lookback_months=lookback_months))
+        assert len(capped) == 5
 
 
 def test_monthly_anchors_are_month_ends() -> None:
     definition = get_definition("BSD2")
     assert definition is not None and definition.frequency == "monthly"
-    anchors = anchor_dates(definition, AS_OF, horizon_end_for(AS_OF, 3))
+    anchors = anchor_dates(definition, anchor_window(AS_OF, horizon_months=3))
     assert date(2026, 4, 30) in anchors
     assert all((anchor + timedelta(days=1)).day == 1 for anchor in anchors)
+
+
+# ---------------------------------------------------------------------------
+# The window runs both ways (founder review 2026-09-19)
+# ---------------------------------------------------------------------------
+#
+# The reported defect: on 19 September 2026 a tenant whose newest computed
+# position was 30 June 2026 could not generate a monthly return. The picker
+# offered 31 August onward — five dates, every one ``awaiting_data`` — because
+# the period-end path returned exactly ONE elapsed anchor. 30 June, the date
+# with a snapshot, was not in the list at all.
+
+#: The founder's date, and the last reporting date their tenant had figures for.
+FOUNDER_AS_OF = date(2026, 9, 19)
+FOUNDER_LAST_COMPUTED = date(2026, 6, 30)
+
+
+def test_monthly_window_offers_the_elapsed_date_the_bank_can_actually_file() -> None:
+    """The defect, as a pure function: a quarter-old book must stay selectable."""
+    definition = get_definition("BSD2")
+    assert definition is not None and definition.frequency == "monthly"
+
+    anchors = anchor_dates(definition, anchor_window(FOUNDER_AS_OF))
+    assert FOUNDER_LAST_COMPUTED in anchors, (
+        "the one date this tenant has figures for must be offered"
+    )
+    # Every elapsed month end back to the lookback start, not just the newest.
+    assert [anchor for anchor in anchors if anchor < FOUNDER_AS_OF] == [
+        date(2026, 3, 31),
+        date(2026, 4, 30),
+        date(2026, 5, 31),
+        date(2026, 6, 30),
+        date(2026, 7, 31),
+        date(2026, 8, 31),
+    ]
+
+
+def test_quarterly_window_covers_a_bank_two_quarters_behind() -> None:
+    """The default lookback is chosen for exactly this: both open quarter ends."""
+    definition = get_definition("LAS-QUARTERLY")
+    assert definition is not None and definition.frequency == "quarterly"
+
+    anchors = anchor_dates(definition, anchor_window(FOUNDER_AS_OF))
+    elapsed = [anchor for anchor in anchors if anchor < FOUNDER_AS_OF]
+    assert elapsed == [date(2026, 3, 31), date(2026, 6, 30)]
+
+
+def test_lookback_bounds_the_elapsed_half_and_nothing_else() -> None:
+    """Widening the lookback adds elapsed dates only; the horizon is untouched."""
+    definition = get_definition("BSD2")
+    assert definition is not None
+
+    narrow = anchor_dates(definition, anchor_window(FOUNDER_AS_OF, lookback_months=1))
+    wide = anchor_dates(definition, anchor_window(FOUNDER_AS_OF, lookback_months=12))
+    assert set(narrow) < set(wide)
+    upcoming = [anchor for anchor in narrow if anchor >= FOUNDER_AS_OF]
+    assert upcoming == [anchor for anchor in wide if anchor >= FOUNDER_AS_OF]
+    # No anchor predates the window's own start.
+    assert min(wide) >= lookback_start_for(FOUNDER_AS_OF, 12)
+
+
+def test_horizon_behaviour_is_unchanged() -> None:
+    """The forward half is still exactly the period ends up to the horizon end."""
+    definition = get_definition("BSD2")
+    assert definition is not None
+
+    for horizon_months in (1, 3, 12):
+        window_end = horizon_end_for(FOUNDER_AS_OF, horizon_months)
+        window = anchor_window(FOUNDER_AS_OF, horizon_months=horizon_months)
+        anchors = anchor_dates(definition, window)
+        upcoming = [anchor for anchor in anchors if anchor >= FOUNDER_AS_OF]
+        assert upcoming[0] == date(2026, 9, 30)
+        assert max(upcoming) == window_end
+        assert all((anchor + timedelta(days=1)).day == 1 for anchor in upcoming)
+        # Widening the horizon never drops an elapsed date.
+        elapsed = [anchor for anchor in anchors if anchor < FOUNDER_AS_OF]
+        assert elapsed == [
+            anchor
+            for anchor in anchor_dates(definition, anchor_window(FOUNDER_AS_OF))
+            if anchor < FOUNDER_AS_OF
+        ]
+
+
+def test_weekly_and_period_end_share_one_window() -> None:
+    """One window concept, not two — both cadences obey the same two bounds."""
+    window = anchor_window(FOUNDER_AS_OF)
+    for code in ("BSD1", "BSD2"):
+        definition = get_definition(code)
+        assert definition is not None
+        anchors = anchor_dates(definition, window)
+        assert anchors, code
+        assert min(anchors) >= window.start, code
+        assert max(anchors) <= window.end, code
+        assert any(anchor < window.as_of for anchor in anchors), code
+        assert any(anchor >= window.as_of for anchor in anchors), code
+
+
+def test_a_long_cadence_keeps_its_most_recent_elapsed_anchor() -> None:
+    """A cadence longer than the lookback must not lose the date it owes.
+
+    An annual return's only elapsed anchor can be eleven months old. Dropping it
+    because the window is shorter than the cycle would hide an obligation rather
+    than bound a list — so the floor that predates this change is kept.
+    """
+    definition = get_definition("ICAAP-STRESS")
+    assert definition is not None and definition.frequency == "annual"
+
+    anchors = anchor_dates(definition, anchor_window(FOUNDER_AS_OF, lookback_months=1))
+    assert date(2025, 12, 31) in anchors
+    assert date(2025, 12, 31) < lookback_start_for(FOUNDER_AS_OF, 1)
+
+
+def test_monthly_return_offers_an_elapsed_date_with_its_real_data_status(
+    db_session: Session,
+) -> None:
+    """End to end: the elapsed date is offered AND marked ``computed``.
+
+    The seeded book ends 31 March 2026, so an ``as_of`` three months later is
+    the founder's situation exactly. Before the window ran both ways the only
+    elapsed date offered was 31 May — ``awaiting_data`` — and the return could
+    not be generated at all.
+    """
+    materialize_canonical_test_book(db_session)
+    as_of = date(2026, 6, 19)
+    last_computed = date(2026, 3, 31)
+
+    result = calendar.list_return_anchors(
+        db_session, MAKER, SAMPLE_BANK_ID, "BSD2", horizon_months=3, as_of=as_of
+    )
+    assert result.lookback_months == DEFAULT_LOOKBACK_MONTHS
+    by_date = {anchor.reporting_date: anchor for anchor in result.anchors}
+    assert last_computed in by_date, "the only filable date must be offered"
+    assert by_date[last_computed].data_status == "computed"
+    # Data status is reported, never used as a filter: the elapsed months with
+    # no book are listed too, because BoG's deadline ran for them regardless.
+    assert by_date[date(2026, 5, 31)].data_status == "awaiting_data"
+
+
+def test_weekly_return_offers_an_elapsed_close_with_its_real_data_status(
+    db_session: Session,
+) -> None:
+    """The same, for the weekly cadence: 31 October 2025 is a Friday close AND a
+    month end, so the seeded monthly book covers it. It sits twelve weeks before
+    the ``as_of`` below — outside the eight-week trailing window this module
+    shipped with, inside the shared one."""
+    materialize_canonical_test_book(db_session)
+    as_of = date(2026, 1, 27)
+    computed_close = date(2025, 10, 31)
+    assert computed_close.weekday() == FRIDAY
+
+    result = calendar.list_return_anchors(
+        db_session, MAKER, SAMPLE_BANK_ID, "BSD1", horizon_months=3, as_of=as_of
+    )
+    by_date = {anchor.reporting_date: anchor for anchor in result.anchors}
+    assert computed_close in by_date
+    assert by_date[computed_close].data_status == "computed"
+    assert (as_of - computed_close).days > 8 * 7, "outside the old trailing window"
+
+
+def test_an_overdue_elapsed_anchor_is_graded_overdue(db_session: Session) -> None:
+    """The reason elapsed anchors belong in the list, stated as a grade."""
+    materialize_canonical_test_book(db_session)
+    result = calendar.list_return_anchors(
+        db_session, MAKER, SAMPLE_BANK_ID, "BSD2", horizon_months=3, as_of=date(2026, 6, 19)
+    )
+    overdue = [anchor for anchor in result.anchors if anchor.rag == "overdue"]
+    assert overdue, "a return the bank still owes is exactly what a picker must offer"
+    assert all(anchor.package_id is None for anchor in overdue)
 
 
 # ---------------------------------------------------------------------------

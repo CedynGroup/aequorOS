@@ -31,15 +31,18 @@ class RegulatoryRun(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     ``module`` selects the engine: ``liquidity``, ``capital``, ``forecast``
     (5-year balance-sheet projection), ``optimizer`` (constrained strategic
     search), ``whatif`` (single-shock forecast comparison), ``irr`` (interest
-    rate risk in the banking book), ``fx`` (foreign-exchange risk), or ``ftp``
-    (funds transfer pricing).
+    rate risk in the banking book), ``irr_sf`` (the IRRBB Standardised
+    Framework, a separate measurement rather than a scenario of ``irr`` —
+    P5-DESIGN §1.1), ``fx`` (foreign-exchange risk), or ``ftp`` (funds transfer
+    pricing).
     """
 
     __tablename__ = "regulatory_runs"
     __table_args__ = (
         CheckConstraint(
             "module IN ('liquidity', 'capital', 'forecast', 'optimizer', 'whatif', "
-            "'irr', 'fx', 'ftp', 'reverse_stress', 'enterprise_stress', 'credit')",
+            "'irr', 'irr_sf', 'fx', 'ftp', 'reverse_stress', 'enterprise_stress', "
+            "'credit')",
             name="ck_regulatory_runs_module",
         ),
         CheckConstraint(
@@ -148,7 +151,8 @@ class RegulatoryLineItem(UuidV4PrimaryKeyMixin, Base):
         CheckConstraint(
             "section IN ('hqla', 'outflow', 'inflow', 'asf', 'rsf', 'credit_rwa', "
             "'market_rwa', 'operational_rwa', 'capital_component', 'ratio', "
-            "'irr_gap', 'irr_eve', 'irr_ear', 'fx_position', 'fx_var', 'fx_hedge', "
+            "'irr_gap', 'irr_eve', 'irr_ear', 'irr_sf_ladder', 'irr_sf_eve', "
+            "'irr_sf_nii', 'fx_position', 'fx_var', 'fx_hedge', "
             "'ftp_curve', 'ftp_product', 'ftp_branch')",
             name="ck_regulatory_line_items_section",
         ),

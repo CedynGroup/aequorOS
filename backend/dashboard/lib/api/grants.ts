@@ -21,6 +21,13 @@ export const ROLE_OPTIONS = [
   ["auditor", "Auditor"],
   ["analyst", "Analyst"],
   ["approver", "Approver"],
+  // The only bundle that transmits to the regulator. It carries VIEW and
+  // SUBMIT and deliberately NOT approve: before 2026-09-20 approving and
+  // filing shared one permission, so whoever approved a return could also send
+  // it to the regulator alone. Granting one identity both Approver and
+  // Validator reinstates that, and the server's assignment-time SoD decision
+  // blocks it until the stage engine's per-object condition lands.
+  ["validator", "Validator"],
   ["account_admin", "Organization Administrator"],
 ] as const;
 

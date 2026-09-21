@@ -153,10 +153,18 @@ def test_obligation_query_shape_is_constant_as_horizon_grows(
 
     assert len(long.obligations) > len(short.obligations)
     # Both horizons share the same fixed package and event query budget.
+    #
+    # The ceiling moved 9 -> 11 when the calendar began resolving
+    # `family_access.hidden_families` (security audit S-2: it was handing an
+    # ICAAP package's id and status to a principal with no binding). That costs
+    # an institution-class lookup and one binding evaluation, both ONCE per
+    # request — which is why the invariant this test exists for, `short == long`
+    # below, is unchanged. Raise this only for another per-request cost, never
+    # for one that grows with the window.
     for statements in (short_sql, long_sql):
         assert len(_table_selects(statements, "regulatory_packages")) == 1
         assert len(_table_selects(statements, "regulatory_submission_events")) == 1
-        assert len(statements) <= 9
+        assert len(statements) <= 11
     assert len(short_sql) == len(long_sql)
 
     short_anchors, short_anchor_sql = _measure(

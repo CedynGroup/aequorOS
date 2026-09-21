@@ -224,6 +224,14 @@ class _ActiveCapitalParams:
     # resolved for an SDI and None for a bank. It is the ONE authority for which risk
     # classes an SDI charges for; this module consumes it and never restates it.
     rwa_scope: sdi_capital.SdiRwaScope | None = None
+    # The governed row's confirmation status behind each capital minimum, for the
+    # dashboard's "pending confirmation" label (D-024). Informational only: no
+    # calculation reads it.
+    minimum_confirmation: dict[str, str] = dataclass_field(default_factory=dict)
+
+
+#: The capital minima whose governed confirmation status the dashboard shows.
+_MINIMUM_CODES = ("car_min", "cet1_min", "tier1_min", "leverage_min")
 
 
 @dataclass(frozen=True)
@@ -1087,6 +1095,39 @@ def _sections_from_run(db: Session, run: RegulatoryRun) -> dict[str, list[Capita
     return sections
 
 
+@dataclass(frozen=True)
+class OfficialCapitalPosition:
+    """The sealed baseline capital run for one reporting period.
+
+    The public seam ICAAP binds its capital figures to. Deliberately NOT
+    ``get_capital_dashboard``: that appends a ``live`` block, and the live plane
+    is recomputed continuously by the worker. A report a Board approves must
+    quote a run that was computed once and can be pointed at afterwards.
+    """
+
+    run: RegulatoryRun
+    metrics: CapitalMetricsRead
+    sections: dict[str, list[CapitalLineRead]]
+
+
+def official_capital_position(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> OfficialCapitalPosition | None:
+    """The latest succeeded baseline capital run for ``period``, or None.
+
+    None is not an error: it means the engine has not been run for that exact
+    year end yet. The caller says so rather than substituting anything.
+    """
+    run = _latest_succeeded_baseline_run(db, ctx, bank, period.id)
+    if run is None:
+        return None
+    return OfficialCapitalPosition(
+        run=run,
+        metrics=_metrics_from_run(db, run),
+        sections=_sections_from_run(db, run),
+    )
+
+
 def _sections_from_engine(
     rwa: RwaResult, ratios: CapitalRatiosResult
 ) -> dict[str, list[CapitalLineRead]]:
@@ -1199,6 +1240,11 @@ def _buffers_or_409(active: _ActiveCapitalParams, current_car: Decimal) -> Capit
         cet1_min_pct=_sub_tier("cet1_min"),
         tier1_min_pct=_sub_tier("tier1_min"),
         leverage_min_pct=_sub_tier("leverage_min"),
+        minimum_confirmation_status={
+            code: status
+            for code, status in active.minimum_confirmation.items()
+            if code == "car_min" or basel_applicable
+        },
     )
 
 
@@ -1296,7 +1342,13 @@ def _prefetch_dashboard_batch(
             db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, dates
         ),
         governed=regulatory_parameters.PrefetchedParameterResolver.load(
-            db, bank, as_of_dates=dates
+            # Calculation plane: this engine's run is sealed with
+            # ``consume_parameter_provenance``, so its reads ARE that run's
+            # governed-row provenance.
+            db,
+            bank,
+            as_of_dates=dates,
+            record=True,
         ),
     )
 
@@ -1325,6 +1377,11 @@ def _active_params_from_batch(
         if institution_class == "sdi"
         else None
     )
+    minimum_confirmation = {
+        code: governed.confirmation_status
+        for code in _MINIMUM_CODES
+        if (governed := batch.governed.try_resolve(code, as_of=as_of)) is not None
+    }
     return _ActiveCapitalParams(
         risk_weights={row.risk_weight_code: Decimal(str(row.weight_pct)) for row in weight_rows},
         thresholds=thresholds,
@@ -1341,6 +1398,7 @@ def _active_params_from_batch(
         institution_class=institution_class,
         car_min_fallback=car_min_param.value if car_min_param is not None else None,
         rwa_scope=rwa_scope,
+        minimum_confirmation=minimum_confirmation,
     )
 
 
@@ -1793,6 +1851,11 @@ def _load_active_params(
     rwa_scope = (
         sdi_capital.resolve_rwa_scope(db, bank, as_of) if institution_class == "sdi" else None
     )
+    minimum_confirmation = {
+        code: governed.confirmation_status
+        for code in _MINIMUM_CODES
+        if (governed := regulatory_parameters.try_resolve(db, bank, code, as_of=as_of)) is not None
+    }
     return _ActiveCapitalParams(
         risk_weights={row.risk_weight_code: Decimal(str(row.weight_pct)) for row in weight_rows},
         thresholds=thresholds,
@@ -1809,6 +1872,7 @@ def _load_active_params(
         institution_class=institution_class,
         car_min_fallback=car_min_param.value if car_min_param is not None else None,
         rwa_scope=rwa_scope,
+        minimum_confirmation=minimum_confirmation,
     )
 
 

@@ -1,0 +1,3106 @@
+{
+  "schema": "aequoros-icaap-framework-v1",
+  "code": "cbn_srp_icaap",
+  "jurisdiction": "NG",
+  "regulator": "CBN",
+  "title": "Central Bank of Nigeria Revised Guidelines on Supervisory Review Process of ICAAP (SRP/ICAAP), September 2021",
+  "short_title": "CBN SRP/ICAAP Guidelines (Sep 2021)",
+  "version": "2021.09",
+  "status": "final",
+  "effective_from": "2021-09-01",
+  "effective_from_citations": [
+    {
+      "doc": "CBN-SRP-ICAAP-2021",
+      "ref": "cover"
+    }
+  ],
+  "first_as_of_date": "2021-12-31",
+  "first_as_of_basis": "inferred",
+  "first_as_of_note": "The Guidelines carry an issue month (September 2021) but no stated commencement date; the first annual report is taken to be the one as at 31 December 2021 (¶51 reports as at 31 December). Confirm with the CBN before relying on pre-2022 cycles.",
+  "institution_classes": [
+    "bank"
+  ],
+  "supersedes": null,
+  "section_key_map": [],
+  "cross_framework_section_map": [
+    {
+      "framework": "bog_icaap",
+      "direction": "from",
+      "map": [
+        {
+          "from": "executive_summary",
+          "to": "executive_summary",
+          "relation": "equivalent"
+        },
+        {
+          "from": "executive_summary",
+          "to": "icaap_summary",
+          "relation": "partial"
+        },
+        {
+          "from": "executive_summary",
+          "to": "challenges_further_steps",
+          "relation": "partial"
+        },
+        {
+          "from": "structure_operations",
+          "to": "structure_operations",
+          "relation": "equivalent"
+        },
+        {
+          "from": "governance",
+          "to": "governance_structure",
+          "relation": "equivalent"
+        },
+        {
+          "from": "business_model_strategy",
+          "to": "structure_operations",
+          "relation": "partial"
+        },
+        {
+          "from": "risk_management_framework",
+          "to": "governance_structure",
+          "relation": "partial"
+        },
+        {
+          "from": "risk_appetite",
+          "to": "risk_appetite_framework",
+          "relation": "equivalent"
+        },
+        {
+          "from": "risk_identification_materiality",
+          "to": "risk_identification_materiality",
+          "relation": "equivalent"
+        },
+        {
+          "from": "pillar2_quantification",
+          "to": "risk_assessment_capital_adequacy",
+          "relation": "equivalent"
+        },
+        {
+          "from": "stress_testing",
+          "to": "stress_testing",
+          "relation": "equivalent"
+        },
+        {
+          "from": "capital_planning",
+          "to": "capital_planning",
+          "relation": "equivalent"
+        },
+        {
+          "from": "liquidity_planning",
+          "to": "approval_review_use",
+          "relation": "partial"
+        },
+        {
+          "from": "capital_allocation_reconciliation",
+          "to": "capital_allocation_reconciliation",
+          "relation": "equivalent"
+        },
+        {
+          "from": "management_actions",
+          "to": "stress_testing",
+          "relation": "partial"
+        },
+        {
+          "from": "management_actions",
+          "to": "governance_structure",
+          "relation": "partial"
+        },
+        {
+          "from": "internal_audit_review",
+          "to": "internal_audit_review",
+          "relation": "equivalent"
+        },
+        {
+          "from": "challenge_adoption",
+          "to": "approval_review_use",
+          "relation": "partial"
+        },
+        {
+          "from": "approval_review_use",
+          "to": "approval_review_use",
+          "relation": "equivalent"
+        },
+        {
+          "from": "internal_models",
+          "to": "internal_models",
+          "relation": "equivalent"
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "id": "CBN-SRP-ICAAP-2021",
+      "title": "Revised Guidelines on Supervisory Review Process of Internal Capital Adequacy Assessment Process (SRP/ICAAP)",
+      "short_label": "SRP/ICAAP Guidelines",
+      "issuer": "Central Bank of Nigeria",
+      "issued": "2021-09",
+      "status": "final",
+      "url": "https://policyvault.africa/wp-content/uploads/2024/09/NGA2288.pdf"
+    }
+  ],
+  "related_instruments": [
+    {
+      "id": "CBN-STRESS-TESTING",
+      "title": "CBN Guidelines on Stress Testing for the Nigerian Banks",
+      "issued": null,
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "37"
+        }
+      ]
+    },
+    {
+      "id": "CBN-SIF",
+      "title": "CBN Supervisory Intervention Framework",
+      "issued": null,
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "63"
+        },
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "71(g)"
+        }
+      ]
+    },
+    {
+      "id": "CBN-CAPITAL-ADDON",
+      "title": "CBN Capital Add-on Framework",
+      "issued": null,
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "63"
+        }
+      ]
+    },
+    {
+      "id": "CBN-DSIB",
+      "title": "Framework for Regulation and Supervision of Domestic Systemically Important Banks",
+      "issued": null,
+      "status": "final",
+      "named_by": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "66"
+        }
+      ]
+    }
+  ],
+  "deadline": {
+    "as_of": "fy_end",
+    "fy_end_month_day": "12-31",
+    "months_after_fye_param": "icaap_submission_months",
+    "citations": [
+      {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "51"
+      }
+    ]
+  },
+  "document_citations": [
+    {
+      "doc": "CBN-SRP-ICAAP-2021",
+      "ref": "49"
+    },
+    {
+      "doc": "CBN-SRP-ICAAP-2021",
+      "ref": "50"
+    },
+    {
+      "doc": "CBN-SRP-ICAAP-2021",
+      "ref": "AnnexB"
+    }
+  ],
+  "sections": [
+    {
+      "key": "executive_summary",
+      "letter": "a",
+      "order": 1,
+      "title": "Executive Summary",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(a)"
+      },
+      "source_status": "sourced",
+      "guidance": "Summary of the ICAAP report: key features, risk exposures and the capital judged adequate (CBN SRP/ICAAP ¶10, ¶4).",
+      "data_blocks": [
+        "capital_position",
+        "capital_plan",
+        "institution_profile"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_010_key_features",
+          "text": "Summarise the key features of the ICAAP, the material risk exposures and the level of capital the bank considers adequate to support them.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "10"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_position",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_004_forward_assessment",
+          "text": "State the outcome of the independent, complete and forward-looking assessment of the risks the bank is exposed to.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "4(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_004_internal_capital",
+          "text": "State the internal capital requirement and explain how it reflects the risk profile, business strategy and risk acceptance level.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "4(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_006_going_concern",
+          "text": "Show that capital levels are adequate and consistent with the strategy, business plan, risk profile and operating environment on a going-concern basis.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "6"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "structure_operations",
+      "letter": "b",
+      "order": 2,
+      "title": "Structure and Operations",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(b)"
+      },
+      "source_status": "sourced",
+      "guidance": "Legal and operational structure, business model and where risks arise within the bank and group (¶17, ¶21; Annex B §4).",
+      "data_blocks": [
+        "institution_profile",
+        "financials"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_017_solo_consolidated",
+          "text": "Prepare the ICAAP at both solo and consolidated level where the bank has subsidiaries.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "17"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "workflow:basis_companion_cycle"
+          ],
+          "waivable": false,
+          "applies_when": "has_subsidiaries"
+        },
+        {
+          "id": "ng_021_risk_sources",
+          "text": "Identify where risks arise across operating units, the enterprise, the group and external counterparties, so that entity-level capital covers the risks each significant legal entity faces.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "21"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b4a_business_model",
+          "text": "Describe the current business model: core business lines, markets, geographies, subsidiaries and products.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-4(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:institution_profile"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b4b_drivers",
+          "text": "Describe the main income and cost drivers, allocated to core business lines, markets, geographies and subsidiaries.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-4(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:financials"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b4c_planned_changes",
+          "text": "Describe the changes the bank plans to make to its business model and underlying activities.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-4(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b4d_strategy_link",
+          "text": "Explain how the business strategy and the ICAAP are linked.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-4(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "governance_structure",
+      "letter": "c",
+      "order": 3,
+      "title": "Governance Structure",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(c)"
+      },
+      "source_status": "sourced",
+      "guidance": "Board and senior management responsibilities, organisation and controls around the ICAAP (¶7, ¶9, ¶40–42; Annex B §3).",
+      "data_blocks": [
+        "institution_profile",
+        "management_actions"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_009_board_ownership",
+          "text": "Show that the Board owns the ICAAP: its design and organisation in line with risk appetite, its implementation and annual update, and the internal capital calculation.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "9"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_007_framework",
+          "text": "Describe the governance, organisational framework, lines of responsibility and internal controls on which the ICAAP relies.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "7"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_040_board_understanding",
+          "text": "Show that the Board maintains an appropriate level and quality of capital and understands the nature and materiality of the bank's risks.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "40"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_041_board_framework",
+          "text": "Describe the Board framework for assessing risks, relating risk to capital and monitoring compliance with internal policies and regulatory capital limits.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "41"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "fn2"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_042_oversight",
+          "text": "Show that the Board approved the risk appetite and capital management frameworks and oversees how senior management discharges its ICAAP responsibilities.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "42"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b3a_preparation",
+          "text": "Describe the process for preparing and updating the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-3(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "workflow:stage_decisions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b3b_review",
+          "text": "Describe the process for reviewing the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-3(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b3c_board_roles",
+          "text": "Define the roles and functions of the Board and senior management bodies in the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-3(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b3d_function_roles",
+          "text": "Define the roles and functions of corporate functions in the ICAAP, such as internal audit, compliance and risk management.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-3(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b3e_outsourcing",
+          "text": "Describe the organisational and contractual safeguards over any outsourced element of the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-3(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b3f_policies",
+          "text": "Describe the internal policies and procedures relevant to the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-3(f)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b3g_minutes",
+          "text": "Provide minutes of Board and relevant committee meetings evidencing implementation of the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-3(g)"
+            }
+          ],
+          "evidence": [
+            "attachment:board_committee_minutes"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b3h_discussion",
+          "text": "Evidence discussion of changes in the risk and capital situation and limit breaches, including decisions on management actions or explicit decisions not to act.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-3(h)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:management_actions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b3i_capital_decisions",
+          "text": "Record decisions on management actions related to internal capital estimates, their aggregation and their comparison with available internal capital, now and forward-looking.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-3(i)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "risk_appetite_framework",
+      "letter": "d",
+      "order": 4,
+      "title": "Risk Appetite Framework",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(d)"
+      },
+      "source_status": "sourced",
+      "guidance": "The Board-approved risk appetite framework and its use (¶42; Annex B §5).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_b5a_ras_copy",
+          "text": "Provide a copy of the Board-approved risk appetite statement.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-5(a)"
+            }
+          ],
+          "evidence": [
+            "attachment:board_approved_ras"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b5b_alignment",
+          "text": "Describe how the strategy and business model align with the risk appetite framework.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-5(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b5c_governance",
+          "text": "Describe the process, governance arrangements and Board and senior management roles for designing and implementing the risk appetite framework.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-5(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b5d_limits",
+          "text": "Describe appetite and tolerance levels, thresholds and limits for the material risks, their time horizons and how they are reviewed and updated.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-5(d)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_appetite"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b5e_group_limits",
+          "text": "Describe the limit allocation framework within the banking group.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-5(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": "has_subsidiaries"
+        },
+        {
+          "id": "ng_b5f_integration",
+          "text": "Describe how the risk appetite framework is integrated into and used in risk and overall management.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-5(f)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "risk_identification_materiality",
+      "letter": "e",
+      "order": 5,
+      "title": "Risk Identification and Materiality Assessment",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(e)"
+      },
+      "source_status": "sourced",
+      "guidance": "How risks are identified, defined and assessed for materiality (¶19–27; Annex B §6).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_019_identify",
+          "text": "Identify the risks the bank is exposed to independently, considering its operations and the markets in which it operates.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "19"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_020_annex_a",
+          "text": "Consider at least every risk listed in Annex A, treating the list as non-exhaustive.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "20"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexA-note"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_register"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_022_basis",
+          "text": "Base risk identification and materiality on a comprehensive assessment of existing and potential risk factors, including the external environment.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "22"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_023_process",
+          "text": "Define the risk identification process, its review frequency and the departments responsible.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "23"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_024_participation",
+          "text": "Show that all relevant departments take part, with an anchor function (normally risk) coordinating, collating and communicating the risks identified.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "24"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_025_materiality_criteria",
+          "text": "Identify all risks, material or not, and state the materiality criteria with their quantitative and qualitative thresholds.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "25"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:risk_register"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_026_definitions",
+          "text": "Give internal definitions of the risks the bank is exposed to.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "26"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_027_ongoing_review",
+          "text": "Review materiality continuously in the light of market conditions, counterparty information and possible impact on earnings, capital and reputation.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "27"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6a_approach",
+          "text": "Describe the approach to identifying risks, the risks identified within each category and the approach to assessing materiality.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6b_horizon",
+          "text": "Describe the ICAAP time horizon(s), explaining any differences across risk categories and subsidiaries.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6c_categories",
+          "text": "Describe the risk categories and sub-categories covered, with their definitions.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6d_ras_differences",
+          "text": "Explain any difference between the risks covered by the ICAAP and those covered by the risk appetite framework.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6e_group_deviations",
+          "text": "Describe deviations in the ICAAP process and key assumptions across the group and its subsidiaries.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": "has_subsidiaries"
+        },
+        {
+          "id": "ng_b6f_mitigants",
+          "text": "For every measurable risk category, describe the main risk control and mitigation instruments.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6(f)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6g_non_measurable",
+          "text": "Describe the systems for controlling and mitigating non-measurable risks.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6(g)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "risk_assessment_capital_adequacy",
+      "letter": "f",
+      "order": 6,
+      "title": "Risk Assessment and Capital Adequacy",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(f)"
+      },
+      "source_status": "sourced",
+      "guidance": "Quantification of Pillar 2 capital and the assessment of capital adequacy (¶12–13, ¶28–35; Annex B §7).",
+      "data_blocks": [
+        "pillar1_rwa",
+        "capital_position",
+        "concentration",
+        "irrbb"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_012_all_risks",
+          "text": "Assess every risk the bank is or may be exposed to, including risks not captured by Pillar 1.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "12"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_013_quant_or_control",
+          "text": "For risks other than credit, market and operational, state which are quantified for internal capital and which are addressed by controls and mitigation.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "13"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_028_measurement",
+          "text": "Describe the risk measurement and modelling that produce loss and resource estimates, and the reporting to the Board and senior management.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "28"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_029_processes",
+          "text": "Show the policies and processes that identify, measure and report material risks and relate capital adequacy to risk and to strategy.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "29"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_030_quantify",
+          "text": "Quantify every material risk with methods suited to the bank's organisation and operations.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "30"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_031_pillar1_start",
+          "text": "Use the Pillar 1 methods as the starting point for credit, counterparty, market and operational risk.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "31"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar1_rwa"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_033_factors",
+          "text": "Relate capital to risk considering peer and regulatory ratio comparisons, severe adverse events and planned changes to the business.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "33"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_035_cbn_pillar2",
+          "text": "Apply the CBN guidelines on individual Pillar 2 risks when assessing and quantifying them.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "35"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "5.5"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b7a_methods",
+          "text": "Describe the quantification methods and models for every risk category, with their metrics, assumptions and parameters.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-7(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b7b_challenge",
+          "text": "Describe the quality of internal challenge of the internal capital estimates.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-7(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b7c_reasonable",
+          "text": "Demonstrate that the internal capital estimates are reasonable for the bank's risk profile.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-7(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b7d_data",
+          "text": "Describe the data used, including subsidiary scope and the length of the time series.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-7(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b7e_vs_car",
+          "text": "Describe the main differences between the ICAAP methods and those used for the minimum capital adequacy ratio.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-7(e)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar1_rwa"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b7f_results",
+          "text": "Report the internal capital estimate for every material risk category, risk by risk.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-7(f)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b7g_zero_capital",
+          "text": "Where a risk is material but attracts zero capital, demonstrate the basis for that judgement.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-7(g)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "stress_testing",
+      "letter": "g",
+      "order": 7,
+      "title": "Stress Testing",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(g)"
+      },
+      "source_status": "sourced",
+      "guidance": "Stress testing of internal capital and the management actions it triggers (¶36–39, ¶55(c); Annex B §9).",
+      "data_blocks": [
+        "stress_narratives",
+        "reverse_stress",
+        "management_actions",
+        "capital_plan"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_036_stress",
+          "text": "Stress test the risk mitigation and control systems and the adequacy of internal capital.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "36"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_037_cbn_guidelines",
+          "text": "Apply the CBN stress testing guidelines and assess the relevance of the CBN scenarios and suggested risk drivers to the bank's own drivers.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "37"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_038_actions",
+          "text": "Articulate realistic management actions for when a severe but plausible scenario takes capital adequacy below the regulatory threshold or below the internal target.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "38"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:management_actions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_039_feasibility",
+          "text": "Show management actions are feasible in adverse conditions, considering reputation, preconditions such as covenants and legal constraints, and the effect on the business model.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "39(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_039_impact_evidence",
+          "text": "Quantify the impact of management actions on projected metrics by scenario and evidence similar actions taken in the past, for example through Board minutes.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "39(d)"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "39(e)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:management_actions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_055c_examiner_view",
+          "text": "Show that scenario choice and severity reflect the examiners' view of the bank's risk profile.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "55(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b9a_scenarios",
+          "text": "Describe the adverse scenarios, their assumptions and key macroeconomic variables.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-9(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b9b_reverse",
+          "text": "Describe how reverse stress tests were used to calibrate scenario severity.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-9(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:reverse_stress"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b9c_governance",
+          "text": "Describe the governance of the end-to-end stress testing process and its data infrastructure.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-9(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b9d_decisions",
+          "text": "Explain the role of stress test outputs in management decision-making.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-9(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b9e_assumptions",
+          "text": "Describe key scenario assumptions, including management actions, balance-sheet assumptions, reference dates and horizons.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-9(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b9f_outcomes",
+          "text": "Report the quantitative outcomes and their impact on profit and loss, internal and regulatory capital, prudential ratios and liquidity.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-9(f)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:stress_narratives"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b9g_relevance",
+          "text": "Explain how the outcomes relate to the business model, strategy, material risks and group entities in scope.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-9(g)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "capital_planning",
+      "letter": "h",
+      "order": 8,
+      "title": "Capital Planning",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(h)"
+      },
+      "source_status": "sourced",
+      "guidance": "Strategy, forecasting horizon and the capital plan (¶44; Annex B §2 and the capital-planning item printed as §6 on p. 20).",
+      "data_blocks": [
+        "capital_plan",
+        "capital_position"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_b2a_business_plan",
+          "text": "Describe the business plan and annual budgets, the schedule for reviewing them and the extraordinary events that would trigger a review.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-2(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b2b_horizons",
+          "text": "Reconcile the time horizon of the business plan with that of the capital plan.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-2(b)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b2c_sources",
+          "text": "Describe ordinary and extraordinary sources of capital.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-2(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6p20a_planning",
+          "text": "Describe capital planning, including the dimensions considered, time horizons, capital instruments and capital measures.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6p20(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6p20b_assumptions",
+          "text": "Describe the main assumptions underlying the capital plan.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6p20(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6p20c_conclusions",
+          "text": "Describe the current conclusions of capital planning, such as planned issuances, dividend policy and planned balance-sheet changes.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6p20(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6p20d_policy",
+          "text": "Provide the documented capital policy and show that capital planning covers every material risk type.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6p20(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b6p20e_preservation",
+          "text": "Describe the management framework for preserving capital.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-6p20(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_044_targets",
+          "text": "Monitor actual performance against approved capital targets that are commensurate with the risk profile and control environment.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "44"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "fn3"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_plan"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "capital_allocation_reconciliation",
+      "letter": "i",
+      "order": 9,
+      "title": "Capital Allocation and Reconciliation of Internal Capital",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(i)"
+      },
+      "source_status": "sourced",
+      "guidance": "Allocation of internal capital and its reconciliation with regulatory requirements and capital (¶34; Annex B §8).",
+      "data_blocks": [
+        "capital_position"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_034_reconciliation",
+          "text": "Reconcile total internal capital with eligible regulatory capital and explain any instrument included that is not eligible as regulatory capital.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "34"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_position"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b8a_allocation_method",
+          "text": "Describe the method and assumptions for allocating internal capital to operating units, subsidiaries, business segments and products.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-8(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b8b_monitoring",
+          "text": "Describe how internal capital estimates are monitored against allocated capital, including escalation.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-8(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b8c_available",
+          "text": "State the internal capital available to date, broken down by capital element.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-8(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:capital_position"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b8d_allocated",
+          "text": "State the internal capital actually allocated to risks, subsidiaries and core business lines.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-8(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b8e_usage",
+          "text": "Compare actual internal capital usage with allocations and explain any case close to or above the allocation.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-8(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b8f_reg_reconciliation",
+          "text": "Reconcile total internal capital with regulatory requirements.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-8(f)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b8g_components",
+          "text": "List and define the capital components covering internal capital.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-8(g)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b8h_eligibility",
+          "text": "State the supervisory eligibility of each component and explain the inclusion of any ineligible component.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-8(h)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "internal_audit_review",
+      "letter": "j",
+      "order": 10,
+      "title": "Internal Audit and Review of ICAAP",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(j)"
+      },
+      "source_status": "sourced",
+      "guidance": "Independent internal review and audit of the ICAAP (¶8, ¶44–48; Annex B §10).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_008_independent_review",
+          "text": "Subject the ICAAP to independent internal review.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "8"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:audit_review"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_044_controls",
+          "text": "Maintain internal controls, independent reviews and audits over the adequacy, effectiveness and reliability of the ICAAP and the capital planning process.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "44"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_046_review_scope",
+          "text": "Review periodically the ICAAP's appropriateness, large exposures and concentrations, data accuracy, scenario validity and stress testing assumptions.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "46"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_047_frequency",
+          "text": "Carry out independent reviews and audits at least as often as the governed interval of {param:icaap_independent_review_max_months} months.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "47"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null,
+          "param_refs": [
+            "icaap_independent_review_max_months"
+          ]
+        },
+        {
+          "id": "ng_048_review_areas",
+          "text": "Cover in the periodic review the risk appetite and capital planning, third-party inputs and models, concentration methods, data completeness, scenarios and stress and capital assumptions.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "48"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b10a_scope",
+          "text": "Describe the scope and frequency of the internal audit review of the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-10(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b10b_independence",
+          "text": "Describe the resourcing and independence of the internal audit function.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-10(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b10c_tracking",
+          "text": "Describe how open audit issues are tracked and how management action is verified before closure.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-10(c)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b10d_methods_review",
+          "text": "Describe the approach to reviewing methods, techniques, assumptions and information sources used in the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-10(d)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b10e_validation",
+          "text": "Report the outcome of independent validation of risk measurement models.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-10(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "approval_review_use",
+      "letter": "k",
+      "order": 11,
+      "title": "Approval, Review, and Use of ICAAP",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(k)"
+      },
+      "source_status": "sourced",
+      "guidance": "Approval, submission, updating and use of the ICAAP, including its interaction with supervision, the ILAAP and the RRP (¶11, ¶43, ¶50–56; Annex B §12).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_011_rules",
+          "text": "Show that the capital process is formalised and documented, subject to internal review and approval by Board and management, and proportionate to the business.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "11(a)"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "11(b)"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "11(c)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "workflow:stage_decisions"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_050_submission",
+          "text": "Submit the report with the relevant Board resolutions and senior management reports containing their comments on the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "50"
+            }
+          ],
+          "evidence": [
+            "attachment:board_resolution",
+            "attachment:senior_management_report"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_052_update",
+          "text": "Update and document the ICAAP for material changes in strategy or macroeconomic conditions, and at least once every {param:icaap_review_max_months} months.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "52"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null,
+          "param_refs": [
+            "icaap_review_max_months"
+          ]
+        },
+        {
+          "id": "ng_053_on_request",
+          "text": "Where the CBN requires an updated ICAAP, prepare it in response to that request.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "53"
+            }
+          ],
+          "evidence": [
+            "attachment:regulator_request_letter"
+          ],
+          "waivable": false,
+          "applies_when": "cycle_kind:regulator_request"
+        },
+        {
+          "id": "ng_054_rbs",
+          "text": "Articulate how examiners' risk-based supervision assessment of inherent risk, risk management quality, direction and net risk is reflected in the ICAAP.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "54"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_055ab_findings",
+          "text": "Take into account the examiners' findings from the most recent risk-based examination and demonstrate compliance with their recommendations.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "55(a)"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "55(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_056_ilaap_rrp",
+          "text": "Show consistency between the ICAAP, the ILAAP and the recovery and resolution plan in assumptions, early-warning indicators, triggers, escalation and management actions.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "56"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "56(a)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_043_monitoring",
+          "text": "Monitor and report material risks and their effect on capital, the sensitivity of key assumptions, capital sufficiency and future capital requirements.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "43"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b12a_documented",
+          "text": "Document the decisions approved by senior management.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-12(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "workflow:stage_decisions",
+            "block:workflow_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b12b_criteria",
+          "text": "Record the criteria behind key capital decisions: the risk appetite statement, capital allocation, capital adequacy under stress and risk-adjusted performance.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-12(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "challenges_further_steps",
+      "letter": "l",
+      "order": 12,
+      "title": "Challenges and Further Steps",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(l)"
+      },
+      "source_status": "sourced",
+      "guidance": "Self-assessment, deficiencies and planned improvements (¶10; Annex B §11).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_010_self_assessment",
+          "text": "Give a self-assessment of the ICAAP, including areas for improvement, deficiencies in the process and the corrective measures to be taken.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "10"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b11a_improvement",
+          "text": "Identify the areas of the ICAAP that need improvement.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-11(a)"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:challenge_log"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_b11b_actions",
+          "text": "Set out the planned capital or organisational actions.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-11(b)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "icaap_summary",
+      "letter": "m",
+      "order": 13,
+      "title": "Summary of Internal Capital Adequacy Assessment Process",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(m)"
+      },
+      "source_status": "sourced",
+      "guidance": "Summary of the ICAAP process as a whole, its features and proportionality (¶3–4, ¶14–16, ¶18).",
+      "data_blocks": [
+        "capital_position"
+      ],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_018_features",
+          "text": "Summarise how the ICAAP covers Board and senior management oversight, policies and limits, capital assessment and planning, risk assessment, stress testing, monitoring and internal control review.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "18"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:pillar2_summary"
+          ],
+          "waivable": false,
+          "applies_when": null
+        },
+        {
+          "id": "ng_014_proportionality",
+          "text": "Explain why the approach chosen is proportionate to the size, nature, scale and complexity of the bank's activities.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "14"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "15"
+            },
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "16"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": false,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "internal_models",
+      "letter": "n",
+      "order": 14,
+      "title": "Use of Internal Models for Capital Assessment",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexB-1(n)"
+      },
+      "source_status": "sourced",
+      "guidance": "Internal models used to assess capital (¶32; Annex B §7(e), §10(e)).",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "ng_032_models",
+          "text": "Where internal models quantify Pillar 2 capital, demonstrate they are appropriate for the bank's risks and exposures and subject to rigorous ongoing validation.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "32"
+            }
+          ],
+          "evidence": [
+            "narrative",
+            "block:internal_models_inventory"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "ng_n_model_differences",
+          "text": "Explain how internal model outputs differ from the regulatory minimum capital measures.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-7(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        },
+        {
+          "id": "ng_n_model_validation",
+          "text": "Report the outcome of the independent validation of the models used.",
+          "citations": [
+            {
+              "doc": "CBN-SRP-ICAAP-2021",
+              "ref": "AnnexB-10(e)"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        }
+      ]
+    }
+  ],
+  "table5_rows": [],
+  "table5_citation": null,
+  "risk_categories": [
+    {
+      "key": "credit",
+      "number": 1,
+      "title": "Credit risk (including counterparty risk)",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-1(a)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "full",
+      "custom": false,
+      "components": [
+        {
+          "key": "credit",
+          "table5_row": null,
+          "p29_class": "pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "market",
+      "number": 2,
+      "title": "Market risk",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-1(b)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "full",
+      "custom": false,
+      "components": [
+        {
+          "key": "fx",
+          "table5_row": null,
+          "p29_class": "pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "fx_nop_addon",
+            "judgemental"
+          ]
+        },
+        {
+          "key": "other_market",
+          "table5_row": null,
+          "p29_class": "pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "operational",
+      "number": 3,
+      "title": "Operational risk",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-1(c)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "full",
+      "custom": false,
+      "components": [
+        {
+          "key": "operational",
+          "table5_row": null,
+          "p29_class": "pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "operational_scenario_net_p1",
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "concentration",
+      "number": 4,
+      "title": "Concentration risk",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-2(a)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "credit_concentration",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "benchmark_mapped",
+            "hhi_proportional_heuristic",
+            "granularity_adjustment",
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "irrbb",
+      "number": 5,
+      "title": "Interest rate risk in the banking book",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-2(b)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "irrbb",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "irrbb_interim_delta_eve",
+            "irrbb_standardised_framework"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "business_strategic",
+      "number": 6,
+      "title": "Business and Strategic risk",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-2(c)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "business_strategic",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "reputational",
+      "number": 7,
+      "title": "Reputational risk",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-2(d)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "reputational",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "country_transfer",
+      "number": 8,
+      "title": "Country and Transfer risk",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-2(e)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "country_transfer",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "model",
+      "number": 9,
+      "title": "Model risk",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-2(f)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "model",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "environmental_social",
+      "number": 10,
+      "title": "Environmental and Social risk (E&S)",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-2(g)"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "none",
+      "custom": false,
+      "components": [
+        {
+          "key": "environmental_social",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "sourced",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    },
+    {
+      "key": "other_material",
+      "number": 11,
+      "title": "Other material risks (the Annex A list is not exhaustive)",
+      "citation": {
+        "doc": "CBN-SRP-ICAAP-2021",
+        "ref": "AnnexA-note"
+      },
+      "title_status": "platform",
+      "pillar1_coverage": "none",
+      "custom": true,
+      "components": [
+        {
+          "key": "other_material",
+          "table5_row": null,
+          "p29_class": "outside_pillar1",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "judgemental"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    }
+  ],
+  "attachments": [
+    {
+      "kind": "senior_management_report",
+      "title": "Senior management reports with their comments on the ICAAP",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "50"
+        }
+      ],
+      "gate": "freeze",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "approval_review_use"
+      ]
+    },
+    {
+      "kind": "board_resolution",
+      "title": "Board resolutions on the ICAAP",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "50"
+        }
+      ],
+      "gate": "submission",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "approval_review_use"
+      ]
+    },
+    {
+      "kind": "board_committee_minutes",
+      "title": "Minutes of Board and committee meetings evidencing implementation of the ICAAP",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB-3(g)"
+        }
+      ],
+      "gate": "freeze",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "governance_structure"
+      ]
+    },
+    {
+      "kind": "board_approved_ras",
+      "title": "Board-approved risk appetite statement",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB-5(a)"
+        }
+      ],
+      "gate": "freeze",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "risk_appetite_framework"
+      ]
+    },
+    {
+      "kind": "management_action_evidence",
+      "title": "Evidence of management actions taken in similar past circumstances",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "39(e)"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "stress_testing"
+      ]
+    },
+    {
+      "kind": "parent_support_evidence",
+      "title": "Evidence of parental support",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "60"
+        },
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "61"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf"
+      ],
+      "applies_when": "group_member",
+      "section_keys": [
+        "structure_operations"
+      ]
+    },
+    {
+      "kind": "technical_annex",
+      "title": "Supplementary submission (methodologies, models, supporting documents)",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB"
+        },
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "51"
+        }
+      ],
+      "gate": "optional",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": true,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ],
+      "applies_when": null,
+      "section_keys": []
+    },
+    {
+      "kind": "regulator_request_letter",
+      "title": "CBN request for an updated ICAAP",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "53"
+        }
+      ],
+      "gate": "freeze",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf"
+      ],
+      "applies_when": "cycle_kind:regulator_request",
+      "section_keys": []
+    },
+    {
+      "kind": "manual_table_evidence",
+      "title": "Source evidence for a manually entered table",
+      "citations": [],
+      "gate": "per_block",
+      "min_count": 0,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ],
+      "applies_when": null,
+      "section_keys": []
+    }
+  ],
+  "stages": [
+    {
+      "seq": 1,
+      "key": "preparation",
+      "title": "Preparation",
+      "decision": "prepare",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB-3(a)"
+        }
+      ]
+    },
+    {
+      "seq": 2,
+      "key": "cro_review",
+      "title": "Chief Risk Officer review",
+      "decision": "review",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "24"
+        },
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB-3(d)"
+        }
+      ]
+    },
+    {
+      "seq": 3,
+      "key": "md_review",
+      "title": "Managing Director / Chief Executive review",
+      "decision": "review",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "11(b)"
+        },
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "50"
+        }
+      ]
+    },
+    {
+      "seq": 4,
+      "key": "brc_review",
+      "title": "Board Risk Committee challenge and approval",
+      "decision": "approve",
+      "default_officer_titles": [],
+      "freeze_on_approve": true,
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB-3(g)"
+        },
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB-7(b)"
+        }
+      ]
+    },
+    {
+      "seq": 5,
+      "key": "board_approval",
+      "title": "Board approval (signature on the frozen report)",
+      "decision": "attest",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "9"
+        },
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "50"
+        }
+      ]
+    }
+  ],
+  "stages_source_status": "platform_default",
+  "material_change_triggers": [
+    {
+      "code": "business_strategy_change",
+      "label": "Material change in business strategy",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "52"
+        }
+      ]
+    },
+    {
+      "code": "macroeconomic_change",
+      "label": "Material change in macroeconomic conditions",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "52"
+        }
+      ]
+    },
+    {
+      "code": "risk_profile_change",
+      "label": "Significant change in risk profile",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "53"
+        }
+      ]
+    },
+    {
+      "code": "other",
+      "label": "Other material change (describe)",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "52"
+        }
+      ]
+    }
+  ],
+  "materiality_matrix": {
+    "source_status": "platform_default",
+    "note": "The CBN Guideline prescribes no scoring matrix; banks must state their own materiality criteria and thresholds (¶25). This is the platform starting point, adjusted by the bank in P2.",
+    "likelihood_levels": [
+      {
+        "score": 1,
+        "key": "rare",
+        "label": "Rare"
+      },
+      {
+        "score": 2,
+        "key": "unlikely",
+        "label": "Unlikely"
+      },
+      {
+        "score": 3,
+        "key": "possible",
+        "label": "Possible"
+      },
+      {
+        "score": 4,
+        "key": "likely",
+        "label": "Likely"
+      },
+      {
+        "score": 5,
+        "key": "almost_certain",
+        "label": "Almost certain"
+      }
+    ],
+    "impact_levels": [
+      {
+        "score": 1,
+        "key": "insignificant",
+        "label": "Insignificant"
+      },
+      {
+        "score": 2,
+        "key": "minor",
+        "label": "Minor"
+      },
+      {
+        "score": 3,
+        "key": "moderate",
+        "label": "Moderate"
+      },
+      {
+        "score": 4,
+        "key": "major",
+        "label": "Major"
+      },
+      {
+        "score": 5,
+        "key": "severe",
+        "label": "Severe"
+      }
+    ],
+    "material_if": {
+      "min_score_param": "icaap_materiality_material_min_score",
+      "or_min_impact_param": "icaap_materiality_material_min_impact"
+    },
+    "rating_bands_param": "icaap_materiality_rating_bands"
+  },
+  "disclosure": null,
+  "filing_return_code": null,
+  "notes": [
+    {
+      "code": "supplementary_submission",
+      "text": "Minimum report content may be provided in the ICAAP report itself or as a supplementary submission.",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB"
+        }
+      ]
+    },
+    {
+      "code": "annex_b_numbering",
+      "text": "Annex B prints the heading number 6 twice: Risk Identification and Materiality Assessment (p. 19) and Capital planning (p. 20). Citations to the second use the ref AnnexB-6p20.",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB-6p20(a)"
+        },
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "AnnexB-6(a)"
+        }
+      ]
+    },
+    {
+      "code": "pillar2_addon_by_cbn",
+      "text": "The CBN challenges the bank's Pillar 2 estimate and may impose a higher Pillar 2 requirement; supervisory add-ons are recorded separately from the bank's own estimate.",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "63"
+        },
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "5.5"
+        }
+      ]
+    },
+    {
+      "code": "no_public_disclosure",
+      "text": "The Guidelines contain no requirement to publish ICAAP results, so this framework declares no disclosure specification.",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "49"
+        }
+      ]
+    },
+    {
+      "code": "filing_not_registered",
+      "text": "No CBN ICAAP return is registered yet; cycles support drafting, readiness and draft exports, and freeze refuses until a return family for this regulator exists.",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "51"
+        }
+      ]
+    },
+    {
+      "code": "liquidity_separate",
+      "text": "Liquidity is assessed in the separate ILAAP; the ICAAP must show consistency with the ILAAP and the recovery plan.",
+      "citations": [
+        {
+          "doc": "CBN-SRP-ICAAP-2021",
+          "ref": "56"
+        }
+      ]
+    }
+  ]
+}

@@ -41,7 +41,9 @@ from app.services.regulatory_reporting.channels.errors import (
     ChannelPreconditionError,
 )
 from app.services.regulatory_reporting.channels.orass_api import OrassApiChannel
+from app.services.regulatory_reporting.common import read_package
 from tests.factories.attestation import relax_signing
+from tests.factories.filing_chain import complete_chain
 from tests.factories.outbound import stub_dns, stub_public_dns
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -124,13 +126,22 @@ def _approved_package(db: Session, monkeypatch: pytest.MonkeyPatch):
     workflow.request_approval(
         db, MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate(reason=None)
     )
-    return workflow.decide_approval(
+    workflow.decide_approval(
         db,
         CHECKER,
         SAMPLE_BANK_ID,
         package.id,
         PackageApprovalDecisionCreate(action="approved", reason=None),
     )
+    # The Approver's decision hands the return to the Validator; the Validator's
+    # completes the chain and is what makes it filable. This suite is about
+    # ORASS fidelity, so it walks that stage rather than asserting the old
+    # two-step status.
+    row = db.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == package.id))
+    assert row is not None
+    complete_chain(db, row)
+    db.commit()
+    return read_package(db, row)
 
 
 def _configure_sandbox(db: Session, **config) -> None:
@@ -243,6 +254,10 @@ def test_acknowledged_package_requires_granted_resubmission_to_regenerate(
         v2.id,
         PackageApprovalDecisionCreate(action="approved", reason=None),
     )
+    v2_row = db_session.scalar(select(RegulatoryPackage).where(RegulatoryPackage.id == v2.id))
+    assert v2_row is not None
+    complete_chain(db_session, v2_row)
+    db_session.commit()
     submitted = workflow.submit_package_via_channel(
         db_session, MAKER, SAMPLE_BANK_ID, v2.id, channel_override="orass_sandbox"
     )

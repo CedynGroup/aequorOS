@@ -62,6 +62,11 @@ description = "Run the risk service live-engine background worker"
 dir = "backend"
 run = "mise run risk-service:worker"
 
+[tasks."risk-service:worker-ai"]
+description = "Run the risk service AI worker (ai lane only)"
+dir = "backend"
+run = "mise run risk-service:worker-ai"
+
 [tasks."risk-service:test"]
 description = "Run risk service pytest"
 dir = "backend"

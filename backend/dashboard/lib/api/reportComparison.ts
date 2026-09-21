@@ -30,7 +30,7 @@ import { getAccessToken, setAccessToken } from './token';
 // Contract types — camelCase app models.
 // ---------------------------------------------------------------------------
 
-export type ComparisonMode = 'version' | 'period';
+export type ComparisonMode = 'version' | 'period' | 'return';
 export type ComparisonModule =
   | 'liquidity'
   | 'capital'

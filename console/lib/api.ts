@@ -62,13 +62,55 @@ export class ApiError extends Error {
   code: string;
   /** HTTP status; 0 when the request never reached the server. */
   status: number;
+  /**
+   * The envelope's `error.details`, when the backend sent a structured refusal.
+   *
+   * It is what carries a typed refusal's own fields, and without it a shape
+   * failure is unreadable: the handler puts the HTTP phrase in `error.message`
+   * ("Unprocessable Content") and the sentence that names the offending path in
+   * `details.message`. `shapeErrorOf` below reads that one case.
+   */
+  details: unknown;
 
-  constructor(code: string, message: string, status: number) {
+  constructor(code: string, message: string, status: number, details?: unknown) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
+    this.details = details;
   }
+}
+
+/** A `parameter_shape_invalid` refusal, as the operator API sends it (D-037). */
+export interface ParameterShapeRefusal {
+  error_code: "parameter_shape_invalid";
+  param_code: string;
+  /** e.g. `value_json.bands[2].lower` — the exact part that is wrong. */
+  path: string;
+  message: string;
+}
+
+/**
+ * The shape refusal inside an error, or null.
+ *
+ * Returns null for every other failure, so a caller that renders this cannot
+ * accidentally present an authorization or conflict error as a shape problem.
+ */
+export function shapeErrorOf(err: unknown): ParameterShapeRefusal | null {
+  if (!(err instanceof ApiError)) return null;
+  const details = err.details;
+  if (typeof details !== "object" || details === null) return null;
+  const body = details as Record<string, unknown>;
+  if (body.error_code !== "parameter_shape_invalid") return null;
+  if (typeof body.path !== "string" || typeof body.message !== "string") {
+    return null;
+  }
+  return {
+    error_code: "parameter_shape_invalid",
+    param_code: typeof body.param_code === "string" ? body.param_code : "",
+    path: body.path,
+    message: body.message,
+  };
 }
 
 export function toApiError(err: unknown): ApiError {
@@ -690,6 +732,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   if (!res.ok) {
     let code = `http_${res.status}`;
     let message = res.statusText || `HTTP ${res.status}`;
+    let details: unknown;
     try {
       const body: unknown = await res.json();
       if (
@@ -699,15 +742,32 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
         body.error &&
         typeof body.error === "object"
       ) {
-        const env = body.error as { code?: unknown; message?: unknown };
+        const env = body.error as {
+          code?: unknown;
+          message?: unknown;
+          details?: unknown;
+        };
         if (typeof env.code === "string" && env.code) code = env.code;
         if (typeof env.message === "string" && env.message)
           message = env.message;
+        details = env.details;
+        // A typed refusal (a dict `detail` on the backend) puts the HTTP phrase
+        // in `message` and the sentence a human needs in `details`. Prefer the
+        // latter: "Unprocessable Content" tells an operator nothing.
+        if (typeof details === "object" && details !== null) {
+          const inner = details as Record<string, unknown>;
+          if (typeof inner.error_code === "string" && inner.error_code) {
+            code = inner.error_code;
+          }
+          if (typeof inner.message === "string" && inner.message) {
+            message = inner.message;
+          }
+        }
       }
     } catch {
       // non-JSON error body — keep the http_<status> fallback
     }
-    throw new ApiError(code, message, res.status);
+    throw new ApiError(code, message, res.status, details);
   }
 
   return (await res.json()) as T;
@@ -1812,8 +1872,20 @@ export interface RegulatoryParameterProposeRequest {
    * 2026-08-20 §6). Always send the record's own jurisdiction.
    */
   jurisdiction_code: string;
-  /** Sent as a string to preserve decimal precision (the backend coerces to Decimal). */
-  value_numeric: string;
+  /**
+   * Sent as a string to preserve decimal precision (the backend coerces to
+   * Decimal). OMITTED for a table-valued parameter: the backend refuses a row
+   * that carries both arms, and a registered structural code refuses a number.
+   */
+  value_numeric?: string | null;
+  /**
+   * The structured value, for a table-valued parameter (D-037): a band table,
+   * the FX shock table, the operational severity map, the sovereign haircut
+   * grid, the materiality score bands. Its form is checked against
+   * `lib/parameter-shapes.ts` here and against
+   * `app/domain/policy/parameter_shapes.py` at BOTH propose and approve.
+   */
+  value_json?: Record<string, unknown> | null;
   unit: string;
   source_citation: string;
   confirmation_status: "confirmed" | "pending";
@@ -2494,6 +2566,7 @@ async function consoleJson<T>(path: string, init?: RequestInit): Promise<T> {
     // (e.g. the login 401's deliberately generic text) when present.
     let code = `http_${res.status}`;
     let message = res.statusText || `HTTP ${res.status}`;
+    let details: unknown;
     try {
       const body: unknown = await res.json();
       if (
@@ -2503,15 +2576,32 @@ async function consoleJson<T>(path: string, init?: RequestInit): Promise<T> {
         body.error &&
         typeof body.error === "object"
       ) {
-        const env = body.error as { code?: unknown; message?: unknown };
+        const env = body.error as {
+          code?: unknown;
+          message?: unknown;
+          details?: unknown;
+        };
         if (typeof env.code === "string" && env.code) code = env.code;
         if (typeof env.message === "string" && env.message)
           message = env.message;
+        details = env.details;
+        // A typed refusal (a dict `detail` on the backend) puts the HTTP phrase
+        // in `message` and the sentence a human needs in `details`. Prefer the
+        // latter: "Unprocessable Content" tells an operator nothing.
+        if (typeof details === "object" && details !== null) {
+          const inner = details as Record<string, unknown>;
+          if (typeof inner.error_code === "string" && inner.error_code) {
+            code = inner.error_code;
+          }
+          if (typeof inner.message === "string" && inner.message) {
+            message = inner.message;
+          }
+        }
       }
     } catch {
       // non-JSON error body — keep the http_<status> fallback
     }
-    throw new ApiError(code, message, res.status);
+    throw new ApiError(code, message, res.status, details);
   }
   return (await res.json()) as T;
 }

@@ -40,6 +40,23 @@ So the direction of the dependency is inverted here and stays inverted:
 The anchor exists whether or not the bank has data for it. Whether the bank
 CAN file it is a separate, honestly-reported fact — see :class:`AnchorCoverage`
 and ``common.get_snapshot_for_reporting_date``.
+
+The window runs BOTH ways (founder review, 2026-09-19)
+------------------------------------------------------
+The first cut of this module offered a forward horizon plus exactly ONE elapsed
+period end. That is the wrong shape for the same reason ingestion-derived dates
+were: an OVERDUE return for an elapsed period is precisely the one the bank
+still owes the regulator, and a bank whose last book is a quarter old could not
+select any date it had figures for. On 2026-09-19 a tenant whose newest computed
+position was 30 June 2026 was offered 31 August 2026 onward for a monthly
+return — five dates, every one ``awaiting_data`` — and 30 June, which had a
+snapshot, was not in the list at all. The return could not be generated.
+
+So the offered span is one bounded WINDOW (:class:`AnchorWindow`), used by every
+cadence: a trailing ``lookback_months`` of elapsed anchors and a forward
+``horizon_months`` of upcoming ones. Widening the window changes nothing about
+where a reporting date comes from — it is still ``ReturnDefinition`` and the BoG
+cadence conventions, still no tenant data, still no ingestion.
 """
 
 from __future__ import annotations
@@ -59,33 +76,100 @@ from app.services.regulatory_reporting.registry import ReturnDefinition
 #: land on month ends and are enumerated by their own rules below).
 _FREQUENCY_MONTHS = {"monthly": 1, "quarterly": 3, "semiannual": 6, "annual": 12}
 
-#: Daily obligations enumerate only the most recent business days — a full year
-#: of daily rows would swamp the calendar — and the window ends at ``as_of``.
-DAILY_WINDOW_BUSINESS_DAYS = 5
+#: How far FORWARD the offered window reaches by default. A quarter of upcoming
+#: obligations is enough to plan against; nothing forward can be filed yet.
+DEFAULT_HORIZON_MONTHS = 3
 
-#: Weekly obligations show a bounded trailing window plus the horizon's anchors.
-WEEKLY_TRAILING_WEEKS = 8
+#: How far BACK the offered window reaches by default — two quarters.
+#:
+#: The number has to answer one question: how far behind can a bank be and still
+#: be handed every date it owes? Two quarters covers a bank one or two quarters
+#: in arrears on the cadences that carry the BSD family — six elapsed month ends
+#: for a monthly return, both open quarter ends for a quarterly one — which is
+#: the realistic worst case for a catch-up filing run. It is deliberately NOT a
+#: statute of limitations: a return older than the window is still owed, and the
+#: floor below keeps the most recent elapsed anchor of the long cadences
+#: (semi-annual, annual) selectable however old it is. Callers may widen it to
+#: 24 months. It is jurisdiction-neutral: months of the return's own cadence,
+#: with no BoG-specific count anywhere in it.
+DEFAULT_LOOKBACK_MONTHS = 6
+
+#: Daily obligations enumerate only the most recent business days — one lookback
+#: month is already ~22 of them and two quarters ~130, which is a picker nobody
+#: can read. The shared window still bounds how far back they may reach; this
+#: bounds how many are listed. The daily window ends at ``as_of``.
+DAILY_WINDOW_BUSINESS_DAYS = 5
 
 
 def month_end(year: int, month: int) -> date:
     return date(year, month, monthrange(year, month)[1])
 
 
-def _daily_anchors(as_of: date) -> list[date]:
-    """The most recent ``DAILY_WINDOW_BUSINESS_DAYS`` business days ending on or
-    before ``as_of`` (weekends skipped), oldest first."""
+@dataclass(frozen=True)
+class AnchorWindow:
+    """The bounded span of reporting dates a return offers, for ONE ``as_of``.
+
+    One window concept for every cadence, so the daily, weekly and period-end
+    paths cannot drift into three different notions of "recent": ``start`` is
+    the oldest ELAPSED anchor offered, ``end`` the newest upcoming one, and
+    ``as_of`` the dividing line between the two (it is also what decides which
+    anchors are already owed).
+    """
+
+    as_of: date
+    start: date
+    end: date
+
+
+def horizon_end_for(as_of: date, horizon_months: int) -> date:
+    """The month end ``horizon_months`` after ``as_of``'s month."""
+    total = as_of.year * 12 + (as_of.month - 1) + horizon_months
+    return month_end(total // 12, total % 12 + 1)
+
+
+def lookback_start_for(as_of: date, lookback_months: int) -> date:
+    """The first day of the month ``lookback_months`` before ``as_of``'s month.
+
+    The mirror of :func:`horizon_end_for`: the horizon runs to a month END so
+    the last upcoming period end falls inside it whole, and the lookback runs
+    from a month START so the first elapsed one does.
+    """
+    total = as_of.year * 12 + (as_of.month - 1) - lookback_months
+    return date(total // 12, total % 12 + 1, 1)
+
+
+def anchor_window(
+    as_of: date,
+    *,
+    lookback_months: int = DEFAULT_LOOKBACK_MONTHS,
+    horizon_months: int = DEFAULT_HORIZON_MONTHS,
+) -> AnchorWindow:
+    """The window of reporting dates offered at ``as_of``."""
+    return AnchorWindow(
+        as_of=as_of,
+        start=lookback_start_for(as_of, lookback_months),
+        end=horizon_end_for(as_of, horizon_months),
+    )
+
+
+def _daily_anchors(window: AnchorWindow) -> list[date]:
+    """The most recent business days inside ``window``, oldest first.
+
+    Capped at :data:`DAILY_WINDOW_BUSINESS_DAYS` because daily anchors are dense
+    (see that constant). The window's start still bounds the walk, so the cap is
+    a ceiling on the count and never a reason to reach outside the window.
+    """
     dates: list[date] = []
-    cursor = as_of
-    while len(dates) < DAILY_WINDOW_BUSINESS_DAYS:
+    cursor = window.as_of
+    while len(dates) < DAILY_WINDOW_BUSINESS_DAYS and cursor >= window.start:
         if cursor.weekday() < 5:  # noqa: PLR2004 — Mon..Fri
             dates.append(cursor)
         cursor -= timedelta(days=1)
     return sorted(dates)
 
 
-def _weekly_anchors(as_of: date, horizon_end: date) -> list[date]:
-    """The last ``WEEKLY_TRAILING_WEEKS`` weekly anchors before ``as_of`` plus
-    every anchor up to ``horizon_end`` (Friday close by default).
+def _weekly_anchors(window: AnchorWindow) -> list[date]:
+    """Every weekly anchor inside ``window`` (Friday close by default).
 
     The BoG Guide fixes the weekly cadence and the time limit, not the weekday;
     ``WEEKLY_ANCHOR_WEEKDAY`` carries the platform's documented convention.
@@ -94,32 +178,45 @@ def _weekly_anchors(as_of: date, horizon_end: date) -> list[date]:
         WEEKLY_ANCHOR_WEEKDAY,
     )
 
-    delta = (as_of.weekday() - WEEKLY_ANCHOR_WEEKDAY) % 7
-    last_anchor = as_of - timedelta(days=delta)
-    dates = [last_anchor - timedelta(weeks=week) for week in range(WEEKLY_TRAILING_WEEKS, 0, -1)]
-    cursor = last_anchor
-    while cursor <= horizon_end:
+    delta = (window.as_of.weekday() - WEEKLY_ANCHOR_WEEKDAY) % 7
+    # The most recent anchor on or before ``as_of`` — the weekly close the bank
+    # already owes. Always offered, the same floor the period-end path applies.
+    last_elapsed = window.as_of - timedelta(days=delta)
+    dates = [last_elapsed]
+    cursor = last_elapsed - timedelta(weeks=1)
+    while cursor >= window.start:
+        dates.append(cursor)
+        cursor -= timedelta(weeks=1)
+    cursor = last_elapsed + timedelta(weeks=1)
+    while cursor <= window.end:
         dates.append(cursor)
         cursor += timedelta(weeks=1)
-    return dates
+    return sorted(dates)
 
 
-def _period_end_anchors(definition: ReturnDefinition, as_of: date, horizon_end: date) -> list[date]:
-    """The most recent elapsed period end plus every period end in the horizon."""
+def _period_end_anchors(definition: ReturnDefinition, window: AnchorWindow) -> list[date]:
+    """Every period end inside ``window``, plus the most recent elapsed one."""
     step = _FREQUENCY_MONTHS[definition.frequency]
     months = tuple(month for month in range(1, 13) if month % step == 0)
     candidates = [
         month_end(year, month)
-        for year in range(as_of.year - 2, horizon_end.year + 1)
+        for year in range(window.start.year - 2, window.end.year + 1)
         for month in months
     ]
-    elapsed = [candidate for candidate in candidates if candidate < as_of]
-    upcoming = [candidate for candidate in candidates if as_of <= candidate <= horizon_end]
-    return ([elapsed[-1]] if elapsed else []) + upcoming
+    offered = {candidate for candidate in candidates if window.start <= candidate <= window.end}
+    # Floor: the most recent ELAPSED period end is always offered, however far
+    # outside the window it falls. An annual return's only elapsed anchor is up
+    # to twelve months old and is still the one the bank owes; dropping it
+    # because the lookback is shorter than the cadence would hide an obligation
+    # rather than bound a list. This is the pre-2026-09-19 behaviour, kept.
+    elapsed = [candidate for candidate in candidates if candidate < window.as_of]
+    if elapsed:
+        offered.add(elapsed[-1])
+    return sorted(offered)
 
 
-def anchor_dates(definition: ReturnDefinition, as_of: date, horizon_end: date) -> list[date]:
-    """Every reporting date this return reports on, oldest first.
+def anchor_dates(definition: ReturnDefinition, window: AnchorWindow) -> list[date]:
+    """Every reporting date this return reports on inside ``window``, oldest first.
 
     Purely a function of the registry entry and the calendar — no database, no
     tenant, no ingestion. Event-driven returns (the LRT corporate packs) have no
@@ -129,16 +226,10 @@ def anchor_dates(definition: ReturnDefinition, as_of: date, horizon_end: date) -
     if definition.event_driven:
         return []
     if definition.frequency == "daily":
-        return _daily_anchors(as_of)
+        return _daily_anchors(window)
     if definition.frequency == "weekly":
-        return _weekly_anchors(as_of, horizon_end)
-    return _period_end_anchors(definition, as_of, horizon_end)
-
-
-def horizon_end_for(as_of: date, horizon_months: int) -> date:
-    """The month end ``horizon_months`` after ``as_of``'s month."""
-    total = as_of.year * 12 + (as_of.month - 1) + horizon_months
-    return month_end(total // 12, total % 12 + 1)
+        return _weekly_anchors(window)
+    return _period_end_anchors(definition, window)
 
 
 # ---------------------------------------------------------------------------

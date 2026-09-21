@@ -31,8 +31,9 @@ table structure exactly and never re-derives a ratio the engine already owns.
 - *Raising capital* — a one-off issuance adds a permanent stock to the chosen
   CRD tier (CET1/AT1/Tier2) from its effective year onward; an equity issuance
   (CET1) also lifts paid-up capital. AT1/Tier2 additions are recognised only up
-  to the CRD caps (1.5% / 2.0% of post-action RWA), never below the pre-action
-  recognised amount.
+  to the CRD recognition caps (a percent of post-action RWA, the governed
+  ``at1_cap_pct_rwa`` / ``tier2_cap_pct_rwa`` the caller passes as
+  :class:`RecognitionCaps`), never below the pre-action recognised amount.
 - *Dividend/distribution reduction* — preserves a fraction of each stress year's
   planned distribution as retained earnings, which **accumulates** into CET1 from
   the effective year onward.
@@ -80,12 +81,35 @@ _HUNDRED = Decimal("100")
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 
-# CRD recognition caps for the ADDED capital (mirror Appendix II Table 2): AT1 is
-# eligible up to 1.5% of RWA, Tier 2 up to 2% of RWA. Kept here rather than
-# imported from ``appendix_ii`` so this pure module has no reverse dependency on
-# the table builder (which itself consumes this module's result).
-AT1_CAP_PCT_RWA = Decimal("1.5")
-TIER2_CAP_PCT_RWA = Decimal("2")
+
+
+@dataclass(frozen=True)
+class RecognitionCaps:
+    """The CRD recognition ceilings on Additional Tier 1 and Tier 2 capital, each a
+    percent of RWA (mirror Appendix II Table 2).
+
+    Governed data, never a literal (founder directive D-024; regulatory audit
+    M21): the caller resolves ``at1_cap_pct_rwa`` / ``tier2_cap_pct_rwa`` from
+    the regulatory-parameter control plane and passes them in. Defined here
+    rather than in ``appendix_ii`` so this pure module keeps no reverse
+    dependency on the table builder (which consumes this module's result).
+    ``None`` in place of a ``RecognitionCaps`` means no cap resolved for the
+    institution; an action that would add AT1 or Tier 2 capital then refuses
+    rather than recognising it against an assumed cap.
+    """
+
+    at1_pct_rwa: Decimal
+    tier2_pct_rwa: Decimal
+
+    def as_parameters(self) -> dict[str, str]:
+        """The governed codes and values, JSON-ready, for a run's inputs."""
+        return {
+            "at1_cap_pct_rwa": str(self.at1_pct_rwa),
+            "tier2_cap_pct_rwa": str(self.tier2_pct_rwa),
+        }
+
+
+RECOGNITION_CAP_CODES: tuple[str, str] = ("at1_cap_pct_rwa", "tier2_cap_pct_rwa")
 
 # --- Vocabularies -----------------------------------------------------------
 
@@ -522,19 +546,48 @@ def _no_denominator(
     )
 
 
-def _position(year: ProjectedYear, bucket: _YearBucket) -> _Position:
+def _recognised_additions(
+    year: ProjectedYear, bucket: _YearBucket, rwa: Decimal, caps: RecognitionCaps | None
+) -> tuple[Decimal, Decimal]:
+    """Post-action AT1 and Tier 2: pre-action stock plus the additions the
+    governed recognition caps admit, never below the pre-action amount."""
+    ratios = year.ratios
+    if caps is None:
+        if bucket.cr_at1 > _ZERO or bucket.cr_tier2 > _ZERO:
+            raise ManagementActionNotComputable(
+                "recognition_cap_unresolved",
+                outcome(
+                    OutcomeState.MISSING_REQUIRED_INPUT,
+                    metric_id="management_actions.post_action_position",
+                    reason=(
+                        f"The plan adds Additional Tier 1 or Tier 2 capital in year "
+                        f"{year.year}, but no recognition cap for those tiers is "
+                        "configured for this institution, so the amount that counts as "
+                        "capital cannot be established."
+                    ),
+                    items=tuple(f"param:{code}" for code in RECOGNITION_CAP_CODES),
+                    context={"projection_year": year.year},
+                ),
+            )
+        # No addition: the capped expression below reduces to the stock itself.
+        return money(ratios.at1_capital), money(ratios.tier2_capital)
+    at1_cap = rwa * caps.at1_pct_rwa / _HUNDRED
+    at1 = money(max(ratios.at1_capital, min(ratios.at1_capital + bucket.cr_at1, at1_cap)))
+    tier2_cap = rwa * caps.tier2_pct_rwa / _HUNDRED
+    tier2 = money(
+        max(ratios.tier2_capital, min(ratios.tier2_capital + bucket.cr_tier2, tier2_cap))
+    )
+    return at1, tier2
+
+
+def _position(year: ProjectedYear, bucket: _YearBucket, caps: RecognitionCaps | None) -> _Position:
     ratios = year.ratios
     non_credit_rwa = year.rwa.market_rwa + year.rwa.operational_rwa
     credit_post = max(year.rwa.credit_rwa - bucket.rwa_reduction, _ZERO)
     rwa = money(non_credit_rwa + credit_post)
 
     cet1 = money(ratios.cet1_capital + bucket.cet1_add)
-    at1_cap = rwa * AT1_CAP_PCT_RWA / _HUNDRED
-    at1 = money(max(ratios.at1_capital, min(ratios.at1_capital + bucket.cr_at1, at1_cap)))
-    tier2_cap = rwa * TIER2_CAP_PCT_RWA / _HUNDRED
-    tier2 = money(
-        max(ratios.tier2_capital, min(ratios.tier2_capital + bucket.cr_tier2, tier2_cap))
-    )
+    at1, tier2 = _recognised_additions(year, bucket, rwa, caps)
     tier1 = money(cet1 + at1)
     total = money(tier1 + tier2)
     leverage_exposure = money(max(ratios.leverage_exposure - bucket.lev_reduction, _ZERO))
@@ -666,12 +719,16 @@ def apply_management_actions(  # noqa: PLR0913 - names the full overlay input se
     capital_params: CapitalParams,
     paid_up_min: Decimal,
     car_target_pct: Decimal,
+    recognition_caps: RecognitionCaps | None,
 ) -> ManagementActionsResult:
     """Overlay a governed plan on the stress leg → the WITH-actions projection.
 
     Produces the post-management-action position for every stress year (the
     Appendix II "Post-capitalisation" block), the per-year Table 1 action
     aggregates, and the residual capital still required after actions (¶77).
+
+    ``recognition_caps`` is REQUIRED (no default): the governed AT1 / Tier 2
+    recognition ceilings, or ``None`` where no tiered-capital regime applies.
     """
     stress_years = projection.stress
     horizon = projection.horizon_years
@@ -742,7 +799,13 @@ def apply_management_actions(  # noqa: PLR0913 - names the full overlay input se
     # --- Pass 2: size fill_residual raises against the post-fixed residual. ----
     for action, _factor in fill_actions:
         stock = _size_fill_residual(
-            action, stress_years, buckets, capital_params, car_target_pct, paid_up_min
+            action,
+            stress_years,
+            buckets,
+            capital_params,
+            car_target_pct,
+            paid_up_min,
+            recognition_caps,
         )
         _apply_capital_stock(action, stock, buckets, horizon)
         for index, item in enumerate(resolved):
@@ -757,7 +820,7 @@ def apply_management_actions(  # noqa: PLR0913 - names the full overlay input se
     binding: set[str] = set()
     for year in stress_years:
         bucket = buckets[year.year]
-        pos = _position(year, bucket)
+        pos = _position(year, bucket, recognition_caps)
         minima = _minima(pos, capital_params, paid_up_min)
         residual = _residual_after(pos, capital_params, car_target_pct, paid_up_min)
         worst_residual = max(worst_residual, residual)
@@ -1023,13 +1086,14 @@ def _size_fill_residual(  # noqa: PLR0913 - names the full sizing input set
     params: CapitalParams,
     car_target_pct: Decimal,
     paid_up_min: Decimal,
+    recognition_caps: RecognitionCaps | None,
 ) -> Decimal:
     """Size a fill_residual CET1 raise to the worst post-fixed residual it spans."""
     worst = _ZERO
     for year in stress_years:
         if year.year < action.effective_year:
             continue
-        pos = _position(year, buckets[year.year])
+        pos = _position(year, buckets[year.year], recognition_caps)
         need = _cet1_injection_to_clear(
             pos, params, car_target_pct, paid_up_min, action.counts_as_paid_up
         )

@@ -1086,6 +1086,7 @@ _PARAMS_CONTROL = "app.services.regulatory_parameters:resolve"
 _CAPITAL_VERSION = "regulatory-capital-v2.0.0"
 _LIQ_VERSION = "regulatory-liquidity-v2.0.0"
 _IRR_VERSION = "regulatory-irr-v1.0.0"
+_IRR_SF_VERSION = "regulatory-irr-sf-v1.0.0"
 _FX_VERSION = "regulatory-fx-v1.0.0"
 
 #: Not the pending-verification sentinel: a stated negative. The Capital
@@ -1237,6 +1238,85 @@ def _irr(
         # 2026 - is an exposure draft: posted 19 February 2026, effective
         # 1 January 2027 at P9, comment window closed 30 June 2026 with no final
         # version published (docs/bog_parameter_sources.md).
+        instrument_in_force=False,
+        notes=notes,
+    )
+
+
+def _irr_sf(metric_id: str, *, engine: str, notes: str = "") -> MetricAuthority:
+    """One Standardised Framework figure.
+
+    A SIBLING of :func:`_irr`, not a variant of it. The two measure the same
+    risk under different methodologies — nineteen buckets against nine, six
+    prescribed shapes against the platform's Basel six, an outlier test on
+    losses only — so they file different figures and must carry different
+    authorities. Folding them together would let a reader think a ``_sf_``
+    figure rests on the run the legacy entries describe.
+
+    Its calibration comes from the CONTROL PLANE rather than the tenant's board
+    register (D-024), which is the other reason the two entries differ: the
+    policy resolver is not the same one.
+
+    No ``reporting_mappings`` and not FILED: no BoG return is generated from
+    these runs yet. An ``IRRBB-SF-QUARTERLY`` return is the natural next step,
+    and claiming one that does not exist is exactly what
+    ``_dangling_reporting_references`` catches.
+    """
+    return MetricAuthority(
+        metric_id=metric_id,
+        metric_family=MetricFamily.IRRBB,
+        institution_class=InstitutionClass.BANK,
+        jurisdiction=_GH,
+        regulator=_BOG,
+        regime=Regime.CRD_BASEL,
+        methodology_id="irrbb_standardised_framework",
+        return_family="irrbb",
+        effective_from=_EPOCH,
+        canonical_inputs=(
+            "canonical:position_snapshot",
+            "canonical:yield_curve",
+            "canonical:fx_rate",
+            "reference:behavioral_assumptions",
+            "run:capital.tier1_capital",
+        ),
+        policy_resolver=_PARAMS_CONTROL,
+        calculation_engine=engine,
+        calculation_version=_IRR_SF_VERSION,
+        parameter_set=("RegulatoryParameter",),
+        authoritative_run_type="irr_sf",
+        reporting_mappings=(),
+        line_item_codes=(),
+        expected_tolerance=Decimal("0"),
+        forbidden_alternative_sources=_FORBID_CASE_PLANE + _FORBID_CLIENT,
+        # SUPERVISORY_MONITORING, not FILED, and that is the honest state today:
+        # no return generates from an ``irr_sf`` run. The framework's filing
+        # route is the ICAAP Pillar 2 capital amount, and that binding is not
+        # built. Designating these FILED would assert a submission path that
+        # does not exist — which is exactly what
+        # ``test_filed_metrics_declare_a_reporting_mapping`` caught, because a
+        # FILED entry with no ``reporting_mappings`` names no return code or
+        # template cell for a supervisor to check the figure against.
+        #
+        # WHEN THAT CHANGES: whoever binds the Standardised Framework to the
+        # ICAAP Pillar 2 item (or lands an IRRBB-SF-QUARTERLY return) flips this
+        # to FILED, adds the return code to ``reporting_mappings``, and MUST put
+        # this methodology back into BOTH acknowledgement registers in
+        # ``tests/domain/authority/test_registry_completeness`` — the sentinel
+        # register, because the calibration tables are unverified, and the
+        # draft-instrument register, because the guideline has not commenced.
+        # Those two rules only bite on FILED entries, so they go quiet here and
+        # would come back silently wrong.
+        advisory_designation=AdvisoryDesignation.SUPERVISORY_MONITORING,
+        authority_reference=(
+            "BoG Guideline on the Management and Measurement of Interest Rate Risk in "
+            "the Banking Book, 2026, Appendices I-IV (Standardised Framework) "
+            f"({EXTERNAL_REGULATORY_VERIFICATION_REQUIRED} for the prescribed shock, "
+            "bucket and behavioural tables)"
+        ),
+        # Same instrument as the legacy IRRBB entries above: posted 19 February
+        # 2026, effective 1 January 2027, comment window closed 30 June 2026
+        # with no final version published. Every governed row the framework
+        # reads is seeded 'pending' for the same reason.
         instrument_in_force=False,
         notes=notes,
     )
@@ -2072,6 +2152,36 @@ REGISTRY.register_all(
 
 REGISTRY.register_all(
     [
+        _irr_sf(
+            "sf_eve_risk_measure",
+            engine="app.domain.irr.standardised:run",
+            notes=(
+                "The Standardised Framework's change in economic value: the largest "
+                "LOSS across the governed outlier scenario set, aggregated across "
+                "material currencies with gains contributing zero. Distinct from "
+                "worst_eve_change_pct_tier1, which is the legacy engine's absolute "
+                "worst move over the platform's Basel six."
+            ),
+        ),
+        _irr_sf(
+            "sf_eve_risk_measure_pct_tier1",
+            engine="app.domain.irr.standardised:run",
+            notes=(
+                "The same measure as a percentage of Tier 1 capital, against the "
+                "governed outlier threshold. The denominator is the SAME Tier 1 the "
+                "legacy IRRBB module uses, reached through one public seam so the two "
+                "cannot disagree."
+            ),
+        ),
+        _irr_sf(
+            "sf_max_delta_nii",
+            engine="app.domain.irr.standardised:run",
+            notes=(
+                "The worst earnings loss over the governed horizon, loss-positive, "
+                "from the repricing-gap approximation the framework's disclosure "
+                "table asks for."
+            ),
+        ),
         _irr(
             "eve_base_ghs",
             engine="app.domain.irr.engine:compute_eve",

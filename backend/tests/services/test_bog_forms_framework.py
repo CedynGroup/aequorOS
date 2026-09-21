@@ -52,6 +52,7 @@ from app.services.regulatory_reporting.bog_forms.registry_entries import (
     template_id_for,
 )
 from app.services.regulatory_reporting.bog_forms.render import (
+    FORMULA_COPY_BANNER,
     _date_overrides,
     _header_text,
     official_width,
@@ -454,18 +455,41 @@ def test_working_copy_keeps_the_templates_own_formulas_live(
                 f"{code}/{sheet.name}!{cell.ref}: input cell became a formula"
             )
     assert live > 0
-    assert working.properties.title is not None and "WORKING COPY" in working.properties.title
-    assert "WORKING COPY" in str(working["Completion notes"]["A2"].value)
+    # The label is production copy a Head of Finance reads, and it is the only
+    # thing standing between the formula copy and being mistaken for the signed
+    # return now that BOTH are filed (founder decision 2026-09-20). It must say
+    # all three things, and must not say the old "not the filed document".
+    title = working.properties.title
+    assert title is not None and FORMULA_COPY_BANNER in title
+    notes_banner = str(working["Completion notes"]["A2"].value)
+    assert notes_banner == FORMULA_COPY_BANNER
+    for claim in ("FORMULA COPY", "not the signed record", "figures recalculate"):
+        assert claim in FORMULA_COPY_BANNER, claim
+    for retired in ("WORKING COPY", "not a filing artifact", "not the filed document"):
+        assert retired not in title, retired
+        assert retired not in notes_banner, retired
+    explanation = str(working["Completion notes"]["A3"].value)
+    assert "recalculate" in explanation
+    assert "filed with the regulator alongside the protected values-only workbook" in explanation
+    assert "signed record of this return" in explanation
     if code == "BSD8":
         assert external >= 1  # the [1]BSD2 link
 
 
-def test_working_copy_is_a_distinct_artifact_kind_and_never_filed(
+def test_working_copy_is_a_distinct_artifact_kind_and_is_filed_with_the_sealed_copy(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch, storage_engine: InMemoryStorageClient
 ) -> None:
     """The three artifacts of one sealed run through the REAL export endpoint:
-    pdf (submission), xlsx / xlsx_official (sealed twin), xlsx_working (ALM copy)
-    — and the working copy is excluded from what a submission would file."""
+    pdf (submission), xlsx / xlsx_official (sealed twin), xlsx_working (formula
+    copy) — and, since the founder's decision of 2026-09-20, BOTH Excel copies
+    are in what a submission files.
+
+    This test asserted the opposite until that decision. It is rewritten rather
+    than deleted because the property it guards is still load-bearing: the
+    filing set must be decided by a NAMED opt-in, so the ICAAP Word draft — and
+    any working kind added later — stays out unless someone says otherwise in
+    writing.
+    """
     assert "xlsx_working" in ARTIFACT_KINDS
     _materialize(db_client)
     reporting_date = _latest_period_end(db_client)
@@ -489,9 +513,33 @@ def test_working_copy_is_a_distinct_artifact_kind_and_never_filed(
     }
     assert set(artifacts) == {"pdf", "xlsx", "xlsx_working"}
     assert artifacts["xlsx_working"]["object_path"].endswith("BSD2.working.xlsx")
-    # what a filing would carry: the working copy is filtered out of every filing
+    # What a filing carries. The filter was a literal
+    # `artifact.kind != "xlsx_working"`, then `not in WORKING_ARTIFACT_KINDS`;
+    # it is now the two-axis `filing_admits_artifact(kind, generator=...)`,
+    # deny-by-default on both. The direction of the guarantee is unchanged: a
+    # working kind nobody named is excluded, and now a generator nobody named
+    # is too. What changed is that `xlsx_working` on `bog_form` has been named.
+    assert "xlsx_working" in reporting_workflow.WORKING_ARTIFACT_KINDS
+    assert "xlsx_working" in reporting_workflow.FILABLE_WORKING_ARTIFACT_KINDS
+    assert "xlsx_working" not in reporting_workflow.UNFILABLE_WORKING_ARTIFACT_KINDS
+    assert "docx_working" in reporting_workflow.UNFILABLE_WORKING_ARTIFACT_KINDS
+    definition = REGISTRY["BSD2"]
+    assert definition.generator == "bog_form"
+    assert reporting_workflow.filing_admits_artifact(
+        "xlsx_working", generator=definition.generator
+    )
     source = inspect.getsource(reporting_workflow)
-    assert 'artifact.kind != "xlsx_working"' in source
+    assert "filing_admits_artifact(artifact.kind, generator=generator)" in source
+    assert "artifact.kind not in WORKING_ARTIFACT_KINDS" not in source
+    assert "artifact.kind not in UNFILABLE_WORKING_ARTIFACT_KINDS" not in source
+
+    # ...and the endpoint's own listing leads with the submission document and
+    # keeps both workbooks ahead of any CSV.
+    listed = [
+        a["kind"]
+        for a in db_client.get(f"{base}/artifacts", headers=headers()).json()["artifacts"]
+    ]
+    assert listed == ["pdf", "xlsx", "xlsx_working"]
 
 
 def _pdf_text(payload: bytes) -> str:

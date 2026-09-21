@@ -47,8 +47,8 @@ the SDI set by treating a bank/BSD form as a substitute.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
@@ -174,6 +174,39 @@ class EligibilityDecision:
         }
 
 
+def _effective_date_detail(
+    definition: ReturnDefinition,
+    when: date,
+    *,
+    effective: date | None,
+    effective_ok: bool,
+    missing_parameter: str | None,
+) -> str:
+    """The sentence the ``effective_date`` dimension reports."""
+    if missing_parameter is not None:
+        return (
+            f"missing_parameter {missing_parameter}: return '{definition.code}' takes effect on "
+            "a date the regulator sets, which is a governed value that has not been configured "
+            "for this institution. The date is never substituted or assumed."
+        )
+    if effective is None:
+        return (
+            f"No effective date is established for this return in the registry "
+            f"({NOT_ESTABLISHED}); it is treated as in force."
+        )
+    if effective_ok:
+        source = (
+            f" (governed value '{definition.effective_from_parameter}')"
+            if definition.effective_from is None and definition.effective_from_parameter
+            else ""
+        )
+        return f"In force since {effective.isoformat()}{source}."
+    return (
+        f"Return '{definition.code}' takes effect on {effective.isoformat()}, "
+        f"after {when.isoformat()}."
+    )
+
+
 def _frequency_criterion(
     definition: ReturnDefinition, reporting_date: date
 ) -> EligibilityCriterion:
@@ -263,6 +296,17 @@ class InstitutionEligibility:
     #: would make every return ineligible for a mis-registered jurisdiction.
     regulator: str | None
     as_of: date
+    #: Governed effective dates, pre-resolved once per request for every
+    #: definition that names an ``effective_from_parameter`` (founder directive
+    #: D-024: a date BoG sets is a governed row, not a literal). A code present
+    #: with a ``None`` value is DECLARED BUT UNRESOLVABLE, which fails closed;
+    #: a code absent from the map was never resolved for this institution.
+    governed_effective_dates: Mapping[str, date | None] = field(default_factory=dict)
+    #: The request-scoped parameter resolver the governed dates above came from,
+    #: carried so a caller that needs MORE governed values for the same
+    #: institution and date (the calendar's deadlines) reuses one scope
+    #: resolution and one row load instead of paying for a second.
+    parameter_resolver: Any | None = None
 
     # -- the single decision function -------------------------------------
 
@@ -276,8 +320,8 @@ class InstitutionEligibility:
         jurisdictions = definition.jurisdictions
         jurisdiction_ok = not jurisdictions or self.jurisdiction_code in jurisdictions
         regulator_ok = _regulator_matches(definition.regulator, self.regulator)
-        effective = definition.effective_from
-        effective_ok = effective is None or when >= effective
+        effective, missing_parameter = self._effective_date(definition)
+        effective_ok = missing_parameter is None and (effective is None or when >= effective)
         criteria = (
             EligibilityCriterion(
                 "registered",
@@ -331,16 +375,12 @@ class InstitutionEligibility:
             EligibilityCriterion(
                 "effective_date",
                 effective_ok,
-                (
-                    f"No effective date is established for this return in the registry "
-                    f"({NOT_ESTABLISHED}); it is treated as in force."
-                    if effective is None
-                    else (
-                        f"In force since {effective.isoformat()}."
-                        if effective_ok
-                        else f"Return '{definition.code}' takes effect on "
-                        f"{effective.isoformat()}, after {when.isoformat()}."
-                    )
+                _effective_date_detail(
+                    definition,
+                    when,
+                    effective=effective,
+                    effective_ok=effective_ok,
+                    missing_parameter=missing_parameter,
                 ),
             ),
         )
@@ -379,24 +419,85 @@ class InstitutionEligibility:
             and _regulator_matches(definition.regulator, self.regulator)
         )
 
-    def require(self, definition: ReturnDefinition, *, reporting_date: date) -> EligibilityDecision:
+    def _effective_date(
+        self, definition: ReturnDefinition
+    ) -> tuple[date | None, str | None]:
+        """``(effective_from, missing_parameter_code)`` for one definition.
+
+        The registry's own literal wins where it has one. Otherwise a named
+        ``effective_from_parameter`` is read from the pre-resolved governed
+        values — and an unresolvable one is reported as MISSING rather than
+        substituted, because inventing the date a directive takes effect is
+        exactly the class of number D-024 forbids the platform to hold.
+        """
+        if definition.effective_from is not None:
+            return definition.effective_from, None
+        code = definition.effective_from_parameter
+        if not code:
+            return None, None
+        if code not in self.governed_effective_dates:
+            return None, code
+        resolved = self.governed_effective_dates[code]
+        return (resolved, None) if resolved is not None else (None, code)
+
+    def require(
+        self,
+        definition: ReturnDefinition,
+        *,
+        reporting_date: date,
+        ignore: Collection[str] = (),
+    ) -> EligibilityDecision:
         """Gate a mutation. Raises 403 with every failed dimension named.
 
         This is what makes an ineligible return structurally impossible to
         generate: the package-mint site cannot reach the generator without
         passing through here.
+
+        ``ignore`` names blocking dimensions this CALLER does not gate on, and
+        exists for exactly one caller: the ICAAP freeze
+        (``generation.generate_frozen_package``) passes ``{"effective_date"}``
+        so a bank can rehearse a filing before the return is in force. That is
+        the registry's own stated rule — "blocking generation on [commencement
+        dates] would stop a bank preparing and dry-running a return before its
+        first live filing" — made explicit at the one site that needs it rather
+        than weakened for everybody. The generic package-mint site passes
+        nothing and is unchanged.
         """
         decision = self.decide(definition, reporting_date=reporting_date)
-        if decision.eligible:
+        ignored = frozenset(ignore)
+        failures = tuple(
+            criterion.detail
+            for criterion in decision.criteria
+            if criterion.code in BLOCKING_CRITERIA
+            and criterion.code not in ignored
+            and not criterion.satisfied
+        )
+        if not failures:
             return decision
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error_code": "return_not_eligible",
-                "message": " ".join(decision.blocking_reasons),
+                "message": " ".join(failures),
                 "decision": decision.to_dict(),
             },
         )
+
+    def effective_from(self, definition: ReturnDefinition) -> date | None:
+        """The resolved first in-force date, or ``None`` when none is established.
+
+        The calendar reads this to decide which anchors are real obligations.
+        An unresolvable governed parameter answers ``None`` here and the
+        ``effective_date`` criterion refuses separately, so a caller cannot
+        mistake "not established" for "resolved as unrestricted".
+        """
+        effective, _missing = self._effective_date(definition)
+        return effective
+
+    def missing_effective_parameter(self, definition: ReturnDefinition) -> str | None:
+        """The governed code this return's effective date needs and lacks."""
+        _effective, missing = self._effective_date(definition)
+        return missing
 
     # -- honest reporting of an empty set ---------------------------------
 
@@ -443,13 +544,92 @@ def resolve_eligibility(
     """
     _ = ctx
     jurisdiction_row = get_jurisdiction(db, bank)
+    when = as_of or date.today()
+    resolver = parameter_resolver(db, bank, as_of=when)
     return InstitutionEligibility(
         bank_id=str(bank.id),
         institution_class=resolve_institution_class(db, bank),
         jurisdiction_code=resolve_jurisdiction_code(bank),
         regulator=(regulator_short(db, bank) if jurisdiction_row is not None else None),
-        as_of=as_of or date.today(),
+        as_of=when,
+        governed_effective_dates={
+            code: _effective_date_value(resolver.try_resolve(code, as_of=when))
+            for code in governed_effective_parameter_codes()
+        },
+        parameter_resolver=resolver,
     )
+
+
+def governed_effective_parameter_codes(
+    *, definitions: Iterable[ReturnDefinition] | None = None
+) -> tuple[str, ...]:
+    """Every distinct ``effective_from_parameter`` in the registry, sorted."""
+    pool = definitions if definitions is not None else REGISTRY.values()
+    return tuple(
+        sorted({d.effective_from_parameter for d in pool if d.effective_from_parameter})
+    )
+
+
+def resolve_governed_effective_dates(
+    db: Session, bank: Bank, *, as_of: date
+) -> dict[str, date | None]:
+    """Read every governed first-in-force date once, for this institution.
+
+    One pass over the DISTINCT parameter codes rather than one lookup per
+    definition. An unresolvable or malformed value maps to ``None``, which the
+    decision reports as ``missing_parameter`` — it is never coerced to a date.
+    """
+
+    codes = governed_effective_parameter_codes()
+    if not codes:
+        return {}
+    resolver = parameter_resolver(db, bank, as_of=as_of)
+    return {
+        code: _effective_date_value(resolver.try_resolve(code, as_of=as_of)) for code in codes
+    }
+
+
+def parameter_resolver(db: Session, bank: Bank, *, as_of: date) -> Any:
+    """ONE scope resolution and ONE row load for every governed value needed.
+
+    Built here because the reporting calendar's query budget is FIXED and must
+    not grow with the registry
+    (``test_regulatory_reporting_calendar_query_shape``): a ``try_resolve`` per
+    code would re-resolve the policy scope each time. The resolver is carried on
+    :class:`InstitutionEligibility` so the calendar's deadline lookups share it.
+
+    **``record=False`` is the plane boundary, not an optimisation.** This
+    resolver answers a DISPATCH question — "which returns exist for this
+    institution, and when are they due" — by scanning EVERY registered
+    definition's ``effective_from_parameter`` across EVERY family. It seals no
+    ``RegulatoryRun``, so its reads are not any run's governed-row provenance.
+    Recording them put whatever the scan happened to resolve into the session
+    ledger that the next engine run drains, which is how an ICAAP commencement
+    date moved an already-filed LIQUIDITY package's ``content_digest``. Reading
+    without recording makes that structurally impossible for every registry
+    entry, including ones not yet written.
+    """
+    from app.services import regulatory_parameters  # noqa: PLC0415 - avoid an import cycle
+
+    return regulatory_parameters.PrefetchedParameterResolver.load(
+        db, bank, as_of_dates=(as_of,), record=False
+    )
+
+
+def _effective_date_value(row: Any) -> date | None:
+    """The ISO date inside a governed structural value, or ``None``."""
+    if row is None:
+        return None
+    body = getattr(row, "value_json", None)
+    if not isinstance(body, dict):
+        return None
+    raw = body.get("date")
+    if not isinstance(raw, str):
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
 
 
 def registry_class_coverage(

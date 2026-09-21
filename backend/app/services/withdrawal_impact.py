@@ -18,11 +18,16 @@ The three surfaces that consume it
   (``GET /banks/{id}/regulatory-runs`` and ``.../{run_id}``, whichever module
   produced the run), so an ``evidence`` block on those two functions is an
   ``evidence`` block on every run any API surface returns.
-* **The package mint site.** ``regulatory_reporting.generation._generate_package``
-  is the only place a ``RegulatoryPackage`` comes into existence; refusing there
-  makes a return built on withdrawn evidence structurally impossible rather than
+* **The package mint sites — BOTH of them.** A ``RegulatoryPackage`` comes into
+  existence in two places: ``generation._generate_package`` (the generic mint)
+  and ``generation.generate_frozen_package`` (a family that froze its own
+  snapshot — the ICAAP report and its ¶82 disclosure today, and whatever
+  freeze-minted family comes next). Each runs this gate over its own lineage, so
+  a return built on withdrawn evidence is structurally impossible rather than
   merely discouraged — the same reasoning that puts the eligibility and
-  balance-identity gates on that line.
+  balance-identity gates on those lines. The second site was added without the
+  gate and ran without it until 2026-09-20; D-069 is the rule that a filing path
+  must not lose its gates at a seam.
 * **Every post-mint filing act.** ``filing_reconciliation.assert_package_reconciled``
   is the single funnel through which approval, certification, signing and
   transmission re-ask "is this package still fit to file?". A withdrawal

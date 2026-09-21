@@ -11,6 +11,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.domain.stress.appendix_ii import build_appendix_ii
+from app.domain.stress.management_actions import RecognitionCaps
 from app.domain.stress.orchestrator import (
     EnterpriseStressInputs,
     run_enterprise_stress,
@@ -30,6 +31,10 @@ from tests.domain.stress_fixtures import (
     sample_bank_latest_facts,
     severe_paths,
 )
+
+#: Test data for the governed AT1 / Tier 2 recognition caps (D-024: the engine
+#: takes them as an argument; production resolves them from the control plane).
+_RECOGNITION_CAPS = RecognitionCaps(at1_pct_rwa=Decimal("1.5"), tier2_pct_rwa=Decimal("2"))
 
 
 def _minima(*, basel_applicable: bool) -> MinimaCheck:
@@ -98,6 +103,7 @@ def test_sdi_appendix_ii_omits_the_basel_table2_capital_build() -> None:
         severe_paths(),
         currency="GHS",
         car_target_pct=_SDI_CAR_MIN_PCT,
+        recognition_caps=_RECOGNITION_CAPS,
         basel_applicable=False,
     )
     # Table 2 (Basel CET1/AT1/Tier2 build) is excluded for an SDI ...
@@ -107,7 +113,11 @@ def test_sdi_appendix_ii_omits_the_basel_table2_capital_build() -> None:
     assert sdi_tables.table5_rwa is not None
 
     bank_tables = build_appendix_ii(
-        projection, severe_paths(), currency="GHS", car_target_pct=_BANK_CAR_MIN_PCT
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_BANK_CAR_MIN_PCT,
+        recognition_caps=_RECOGNITION_CAPS,
     )
     assert len(bank_tables.table2_capital.rows) > 0
 
@@ -128,10 +138,15 @@ def test_the_capital_requirement_is_measured_against_the_institutions_own_floor(
         severe_paths(),
         currency="GHS",
         car_target_pct=_SDI_CAR_MIN_PCT,
+        recognition_caps=_RECOGNITION_CAPS,
         basel_applicable=False,
     )
     bank = build_appendix_ii(
-        projection, severe_paths(), currency="GHS", car_target_pct=_BANK_CAR_MIN_PCT
+        projection,
+        severe_paths(),
+        currency="GHS",
+        car_target_pct=_BANK_CAR_MIN_PCT,
+        recognition_caps=_RECOGNITION_CAPS,
     )
 
     assert sdi.table1_summary.car_target_pct == _SDI_CAR_MIN_PCT

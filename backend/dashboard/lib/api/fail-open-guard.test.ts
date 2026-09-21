@@ -83,9 +83,39 @@ const SCANNED_DIRS = [
   'components/institution',
   'components/markets',
   'components/positions',
+  // The ICAAP workspace publishes the institution's own capital assessment:
+  // every figure it shows is a regulatory one, and the block cards decide what
+  // a preparer believes about staleness. `lib/api/icaap.ts` is listed as a file
+  // because the hooks and the display types live there.
+  'components/icaap',
   'app/(app)',
 ];
-const SCANNED_FILES: string[] = [];
+const SCANNED_FILES: string[] = [
+  'lib/api/icaap.ts',
+  // P2's risk & capital hooks and the declared contract types. Same reason
+  // as P1's: the display types and every figure's nullability live there, so
+  // a `?? 0` introduced on the transport would never be seen by a scan of
+  // `components/` alone.
+  'lib/api/icaapRiskCapital.ts',
+  // The adapter itself. It is where the fail-closed rules live — an absent
+  // figure stays absent, an unknown verdict is never a pass — so a `?? 0`
+  // introduced HERE would reach every P2 screen at once.
+  'lib/api/icaapRiskCapitalNormalize.ts',
+  'lib/icaap/appetite.ts',
+  // P3's filing adapter. Same reason again: the fail-closed rules for "can
+  // this be filed", "may this officer decide" and "is this document attached"
+  // all live here, so a `?? true` introduced HERE would offer a filing button
+  // on every ICAAP screen at once.
+  'lib/api/icaapFilingNormalize.ts',
+  'lib/api/icaapFiling.ts',
+  // The IRRBB standardised framework's adapter and hooks. Same reason a third
+  // time: every figure on that screen arrives as text or null and is decided
+  // here, so a `?? 0` introduced HERE would turn an unmeasured economic-value
+  // loss into a measured zero on every panel at once — and zero is a real,
+  // excellent answer for that figure.
+  'lib/api/irrbbSfNormalize.ts',
+  'lib/api/irrbbSf.ts',
+];
 
 type Rule = {
   id: string;
@@ -272,7 +302,7 @@ for (const file of files) {
 // The guard must actually be looking at something. The floor is raised with
 // every widening so a directory silently dropping out of the scan fails here
 // rather than quietly shrinking the covered surface.
-assert.ok(files.length >= 210, `expected to scan the regulatory UI, found ${files.length} files`);
+assert.ok(files.length >= 300, `expected to scan the regulatory UI, found ${files.length} files`);
 
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL ${failure}`);

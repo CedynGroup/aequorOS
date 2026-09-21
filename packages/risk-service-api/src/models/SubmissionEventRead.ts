@@ -11,13 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ExternalRef } from "./ExternalRef";
+import type { ExternalRef1 } from "./ExternalRef1";
 import {
-  ExternalRefFromJSON,
-  ExternalRefFromJSONTyped,
-  ExternalRefToJSON,
-  ExternalRefToJSONTyped,
-} from "./ExternalRef";
+  ExternalRef1FromJSON,
+  ExternalRef1FromJSONTyped,
+  ExternalRef1ToJSON,
+  ExternalRef1ToJSONTyped,
+} from "./ExternalRef1";
 import type { SubmissionEventType } from "./SubmissionEventType";
 import {
   SubmissionEventTypeFromJSON,
@@ -59,10 +59,10 @@ export interface SubmissionEventRead {
   event: SubmissionEventType;
   /**
    *
-   * @type {ExternalRef}
+   * @type {ExternalRef1}
    * @memberof SubmissionEventRead
    */
-  externalRef: ExternalRef;
+  externalRef: ExternalRef1;
   /**
    *
    * @type {string}
@@ -117,7 +117,7 @@ export function SubmissionEventReadFromJSONTyped(
     channel: ChannelCodeFromJSON(json["channel"]),
     detail: json["detail"],
     event: SubmissionEventTypeFromJSON(json["event"]),
-    externalRef: ExternalRefFromJSON(json["external_ref"]),
+    externalRef: ExternalRef1FromJSON(json["external_ref"]),
     id: json["id"],
     occurredAt: new Date(json["occurred_at"]),
     packageId: json["package_id"],
@@ -140,7 +140,7 @@ export function SubmissionEventReadToJSONTyped(
     channel: ChannelCodeToJSON(value["channel"]),
     detail: value["detail"],
     event: SubmissionEventTypeToJSON(value["event"]),
-    external_ref: ExternalRefToJSON(value["externalRef"]),
+    external_ref: ExternalRef1ToJSON(value["externalRef"]),
     id: value["id"],
     occurred_at: value["occurredAt"].toISOString(),
     package_id: value["packageId"],

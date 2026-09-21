@@ -18,13 +18,18 @@ import {
   approvalEligibility,
   buildChains,
   chainKey,
+  checkShape,
   confirmationLabel,
   displayValue,
+  formatStructuredValue,
   isDecimalValue,
   isProposalValid,
   lifecycleOf,
+  parseStructuredValue,
   scopeTypeLabel,
+  shapeName,
   validateProposal,
+  valueMode,
   type ProposeForm,
 } from './regulatory-parameters';
 
@@ -62,6 +67,7 @@ function form(overrides: Partial<ProposeForm> = {}): ProposeForm {
     param_code: 'car_min',
     jurisdiction_code: 'GH',
     value_numeric: '13',
+    value_json: '',
     unit: 'pct',
     source_citation: 'Cited authority',
     confirmation_status: 'pending',
@@ -328,4 +334,158 @@ test('field lengths match the backend column limits', () => {
   assert.ok(validateProposal(form({ unit: 'x'.repeat(25) }), TODAY).unit);
   assert.ok(validateProposal(form({ source_citation: 'x'.repeat(241) }), TODAY).source_citation);
   assert.ok(validateProposal(form({ change_rationale: 'x'.repeat(501) }), TODAY).change_rationale);
+});
+
+// ---------------------------------------------------------------------------
+// Structured (table-valued) parameters — D-037
+//
+// The console can now write the tables the ICAAP Pillar 2 engine reads. These
+// pin the three ways that could go wrong at the FORM level: a code being edited
+// in the wrong arm, malformed JSON reaching the server, and a well-formed body
+// that is the wrong shape for its code. `parameter-shapes.test.ts` pins the
+// shape rules themselves.
+// ---------------------------------------------------------------------------
+
+const BAND_TABLE = JSON.stringify({
+  schema: 'icaap-band-table-v1',
+  metric: 'hhi',
+  dimension: 'single_name',
+  scale: 'unit_interval',
+  mode: 'step',
+  basis: 'pct_total_rwa',
+  bands: [
+    { lower: 0, upper: '0.1', addon: 0 },
+    { lower: '0.1', upper: null, addon: '1.5' },
+  ],
+});
+
+function tableForm(overrides: Partial<ProposeForm> = {}): ProposeForm {
+  return form({
+    param_code: 'ccr_name_bands_hhi',
+    value_numeric: '',
+    value_json: BAND_TABLE,
+    unit: 'pct_rwa',
+    ...overrides,
+  });
+}
+
+test('a registered code decides its own arm — the operator cannot pick the wrong one', () => {
+  assert.equal(valueMode('ccr_name_bands_hhi'), 'structural');
+  assert.equal(valueMode('car_min', 'structural'), 'structural');
+  assert.equal(valueMode('icaap_submission_months', 'structural'), 'scalar');
+  assert.equal(shapeName('ccr_name_bands_hhi'), 'band_table');
+  assert.equal(shapeName('car_min'), null);
+});
+
+test('a valid table proposal validates', () => {
+  assert.equal(isProposalValid(validateProposal(tableForm(), TODAY)), true);
+  assert.equal(checkShape(tableForm()), null);
+});
+
+test('malformed JSON is refused before it reaches the server', () => {
+  const errs = validateProposal(tableForm({ value_json: '{ "schema": ' }), TODAY);
+  assert.ok(errs.value_json);
+  assert.match(errs.value_json, /not valid json/i);
+});
+
+test('a JSON value that is not an object is refused with a usable message', () => {
+  for (const raw of ['[1, 2]', '"a string"', '42', 'null']) {
+    const errs = validateProposal(tableForm({ value_json: raw }), TODAY);
+    assert.ok(errs.value_json, raw);
+    assert.match(errs.value_json, /object/i);
+  }
+});
+
+test('an empty structured value is required, not silently sent as nothing', () => {
+  const errs = validateProposal(tableForm({ value_json: '' }), TODAY);
+  assert.equal(errs.value_json, 'Required.');
+});
+
+test('a well-formed body of the WRONG shape is refused, naming the path', () => {
+  const wrongDimension = JSON.stringify({
+    schema: 'icaap-band-table-v1',
+    metric: 'hhi',
+    dimension: 'sector',
+    scale: 'unit_interval',
+    mode: 'step',
+    basis: 'pct_total_rwa',
+    bands: [{ lower: 0, upper: null, addon: 0 }],
+  });
+  const errs = validateProposal(tableForm({ value_json: wrongDimension }), TODAY);
+  assert.ok(errs.value_json);
+  assert.match(errs.value_json, /value_json\.dimension/);
+});
+
+test('a gap in a band table is refused at the form, not just at the server', () => {
+  const gapped = JSON.stringify({
+    schema: 'icaap-band-table-v1',
+    metric: 'hhi',
+    dimension: 'single_name',
+    scale: 'unit_interval',
+    mode: 'step',
+    basis: 'pct_total_rwa',
+    bands: [
+      { lower: 0, upper: '0.1', addon: 0 },
+      { lower: '0.2', upper: null, addon: '1' },
+    ],
+  });
+  const errs = validateProposal(tableForm({ value_json: gapped }), TODAY);
+  assert.ok(errs.value_json);
+  assert.match(errs.value_json, /value_json\.bands\[1\]\.lower/);
+});
+
+test('a structural code does not ask for a number, and a scalar code does', () => {
+  // The old form would have demanded value_numeric for every code, making a
+  // table impossible to propose at all.
+  const table = validateProposal(tableForm(), TODAY);
+  assert.equal(table.value_numeric, undefined);
+
+  const scalar = validateProposal(
+    form({ param_code: 'icaap_submission_months', value_numeric: '', unit: 'months' }),
+    TODAY,
+  );
+  assert.ok(scalar.value_numeric);
+});
+
+test('a scalar outside its declared range is caught at the form', () => {
+  const errs = validateProposal(
+    form({
+      param_code: 'icaap_pillar2_source_tolerance_pct',
+      value_numeric: '140',
+      unit: 'pct',
+    }),
+    TODAY,
+  );
+  assert.ok(errs.value_numeric);
+  assert.match(errs.value_numeric, /percentage between 0 and 100/);
+});
+
+test('an unregistered code keeps working exactly as before', () => {
+  assert.equal(isProposalValid(validateProposal(form(), TODAY)), true);
+  assert.equal(valueMode('car_min'), 'scalar');
+});
+
+test('an unregistered code may be proposed as a table when the operator says so', () => {
+  const errs = validateProposal(
+    form({ param_code: 'sdi_rwa_composition', value_numeric: '', value_json: '{"a": 1}' }),
+    TODAY,
+    'structural',
+  );
+  assert.equal(errs.value_json, undefined);
+  assert.equal(errs.value_numeric, undefined);
+});
+
+test('tidying the JSON never changes what it means, and never corrupts bad input', () => {
+  const tidied = formatStructuredValue(BAND_TABLE);
+  assert.deepEqual(JSON.parse(tidied), JSON.parse(BAND_TABLE));
+  assert.ok(tidied.includes('\n'), 'a tidied body is pretty-printed');
+  // Unparseable text is handed back untouched, so nothing the operator typed
+  // is silently thrown away while they are mid-edit.
+  assert.equal(formatStructuredValue('{ "a": '), '{ "a": ');
+});
+
+test('parsing reports the reason, so the operator is not left guessing', () => {
+  const parsed = parseStructuredValue('{ "a": }');
+  assert.equal(parsed.ok, false);
+  if (!parsed.ok) assert.ok(parsed.message.length > 0);
 });

@@ -23,6 +23,10 @@ type ReturnFamily = Literal[
     "bsd",
     "sdi",
     "credit",
+    # The ICAAP filing family: the annual report, its paragraph 74 updates and
+    # the paragraph 82 disclosure. "icaap_stress" stays what it is - the
+    # Appendix II stress annex filed inside the report.
+    "icaap",
 ]
 type ReturnFrequency = Literal["weekly", "monthly", "quarterly", "semiannual", "annual", "daily"]
 type ReturnBasis = Literal["solo", "consolidated"]
@@ -38,7 +42,7 @@ type PackageStatus = Literal[
     "declined",
     "superseded",
 ]
-type ArtifactKind = Literal["xlsx", "csv", "pdf", "xlsx_working"]
+type ArtifactKind = Literal["xlsx", "csv", "pdf", "xlsx_working", "docx_working"]
 type ChannelCode = Literal["orass_api", "orass_sandbox", "email", "manual"]
 type SubmissionEventType = Literal[
     "submitted", "status_poll", "acknowledged", "rejected", "declined"
@@ -88,6 +92,11 @@ class ValidationReportRead(ClosedModel):
     warning_count: int
     info_count: int
     findings: list[ValidationFindingRead]
+    #: The version of the return FAMILY's own ruleset, present only when a
+    #: family hook contributed findings. Separate from ``rule_version`` so a
+    #: change to one family's rules does not re-date every other return's
+    #: report.
+    family_rule_version: str | None = None
 
 
 class PackageApprovalRead(ClosedModel):
@@ -123,6 +132,25 @@ class RegulatoryPackageSummaryRead(ClosedModel):
     submission_revision: str | None
     snapshot_sha256: str | None
     regulator_comments: str | None
+    #: A rehearsal package runs the full lifecycle but can never be filed
+    #: (D-068). Every surface that can show a package must be able to say so —
+    #: without this on the read model, the generic reporting workspace could not
+    #: tell a rehearsal from a filing, which is the one confusion the whole
+    #: rehearsal design exists to prevent.
+    is_rehearsal: bool = False
+    #: WHICH officer the return is waiting for. ``status`` cannot answer this:
+    #: an Approver stage and a Validator stage both read ``pending_approval``,
+    #: so a queue that labelled rows from the status alone called a return
+    #: "Pending approval" while it sat with the Validator. ``None`` before a
+    #: chain is pinned, and the title is the bank's own word for the stage —
+    #: chains are per-bank data, so it is never inferred from the sequence.
+    current_stage_seq: int | None = None
+    current_stage_title: str | None = None
+    #: Which round of review this return is in. Round 2 means it has been sent
+    #: back at least once — the difference between a return nobody has looked
+    #: at and one an officer returned for correction, which the lifecycle
+    #: status cannot express because both read "generated".
+    workflow_round: int = 1
     created_at: datetime
     updated_at: datetime
 
@@ -214,6 +242,21 @@ class SubmissionEventListRead(ClosedModel):
     has_more: bool
 
 
+class ObligationAnnexRead(ClosedModel):
+    """A return that is filed INSIDE another one's submission (D-011).
+
+    Shown under its parent obligation rather than as a row of its own, because
+    it is not a separate thing the bank owes the regulator.
+    """
+
+    return_code: str
+    title: str
+    filing_role: Literal["annex", "companion"]
+    package_id: UUID | None = None
+    package_status: PackageStatus | None = None
+    package_version: int | None = None
+
+
 class ReportingObligationRead(ClosedModel):
     return_code: str
     return_family: ReturnFamily
@@ -222,6 +265,11 @@ class ReportingObligationRead(ClosedModel):
     fidelity: FidelityGrade
     default_channel: ChannelCode
     reporting_date: date
+    #: An OBLIGATION always has a due date. When a return's deadline is a
+    #: governed value nobody has configured, the obligation is omitted from the
+    #: calendar and the parameter is named in ``coverage_note`` — a deadline is
+    #: never substituted or assumed (D-024), and a row with no due date would
+    #: be an obligation with no deadline, which is not a thing.
     due_date: date
     # Cut-off time-of-day on the due date (e.g. daily DBK "10:00"); None for
     # returns whose deadline is a calendar day only.
@@ -238,6 +286,9 @@ class ReportingObligationRead(ClosedModel):
     # either way the obligation is real and the deadline still runs.
     data_status: AnchorDataStatus = "awaiting_data"
     rag: ObligationRag
+    #: Returns carried inside this one's submission. Empty for every return
+    #: that has none, which is every return but the ICAAP report.
+    annexes: list[ObligationAnnexRead] = Field(default_factory=list)
 
 
 class ReportingObligationSummaryRead(ClosedModel):
@@ -253,6 +304,9 @@ class ReportingObligationListRead(ClosedModel):
     bank_id: str
     as_of: date
     horizon_months: int
+    # How far back the elapsed half of the window reaches. Echoed so a screen
+    # can say what span it is showing rather than implying the list is complete.
+    lookback_months: int
     obligations: list[ReportingObligationRead]
     summary: ReportingObligationSummaryRead
     total: int = Field(ge=0)
@@ -276,7 +330,9 @@ class ReturnAnchorRead(ClosedModel):
     """
 
     reporting_date: date
-    due_date: date
+    #: Absent when the return's deadline is a governed value that has not been
+    #: configured. A deadline is NEVER substituted or assumed (D-024).
+    due_date: date | None = None
     due_time: str | None = None
     data_status: AnchorDataStatus
     # The most recent computed position BEFORE this anchor, when this anchor has
@@ -287,6 +343,12 @@ class ReturnAnchorRead(ClosedModel):
     package_status: PackageStatus | None = None
     package_version: int | None = None
     rag: ObligationRag
+    #: Whether a filing OBLIGATION exists on this date. False for an anchor
+    #: that precedes the return's first in-force date: the date is offered so a
+    #: bank can prepare and dry-run before its first live filing (which is the
+    #: registry's own stated rule), but nothing is owed and no deadline runs, so
+    #: ``rag`` is not a compliance signal for it.
+    in_force: bool = True
 
 
 class ReturnAnchorListRead(ClosedModel):
@@ -295,11 +357,23 @@ class ReturnAnchorListRead(ClosedModel):
     frequency: ReturnFrequency
     as_of: date
     horizon_months: int
+    # The trailing half of the same window — how far back the elapsed reporting
+    # dates reach. An overdue return is the one the bank still owes, so the
+    # picker offers it; see ``regulatory_reporting.anchors``.
+    lookback_months: int
     anchors: list[ReturnAnchorRead]
     # Set when the institution may not file this return at all (class,
     # jurisdiction, regulator, or a not-yet-commenced instrument), in the words
     # the eligibility authority uses everywhere else. ``anchors`` is empty then.
     ineligible_reason: str | None = None
+    #: The date this return comes into force, where one is established — the
+    #: registry's own literal or the governed parameter that carries it. Anchors
+    #: earlier than this are listed with ``in_force=False`` rather than omitted.
+    effective_from: date | None = None
+    #: Set when the return's due dates come from a governed parameter that is
+    #: not configured. The anchors are still listed (they are the regulator's
+    #: dates); their ``due_date`` is absent rather than invented.
+    deadline_note: str | None = None
 
 
 class ReturnTemplateRead(ClosedModel):
@@ -367,6 +441,64 @@ class PackageSubmitCreate(ClosedModel):
     """Channel selection for submitRegulatoryPackage; omitted -> registry default."""
 
     channel: ChannelCode | None = None
+    #: The regulator-side reference for a MANUAL submission - the portal
+    #: receipt number, or the URL a paragraph 82 disclosure was published at.
+    #: The platform cannot mint it, so a return whose registry entry declares
+    #: ``requires_external_ref`` refuses submission without it.
+    external_ref: str | None = Field(default=None, min_length=1, max_length=500)
+
+
+type AttachmentGate = Literal["freeze", "submission", "optional"]
+type AttachmentSource = Literal["package_upload", "icaap_cycle"]
+
+
+class PackageAttachmentRead(ClosedModel):
+    """One document filed WITH a return."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: UUID
+    package_id: UUID
+    package_version: int
+    kind: str
+    title: str
+    original_filename: str
+    media_type: str
+    byte_size: int
+    sha256: str
+    source: AttachmentSource
+    gate: AttachmentGate
+    attributes: dict[str, Any] = Field(default_factory=dict)
+    attached_by: UUID
+    created_at: datetime
+    withdrawn: bool = False
+    withdrawn_at: datetime | None = None
+    withdrawal_reason: str | None = None
+
+
+class PackageAttachmentRequirementRead(ClosedModel):
+    """One document this return needs, and whether it has it yet."""
+
+    kind: str
+    title: str
+    gate: AttachmentGate
+    #: Where the requirement comes from: the return family's own framework, or
+    #: the institution's signing policy. A family requirement is NOT relaxable
+    #: by dropping a signature slot.
+    origin: Literal["family", "signing_policy"]
+    required_count: int
+    active_count: int
+    satisfied: bool
+
+
+class PackageAttachmentListRead(ClosedModel):
+    package_id: UUID
+    attachments: list[PackageAttachmentRead]
+    requirements: list[PackageAttachmentRequirementRead]
+
+
+class PackageAttachmentWithdraw(ClosedModel):
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class RegulatoryArtifactRead(ClosedModel):
@@ -379,6 +511,50 @@ class RegulatoryArtifactRead(ClosedModel):
     checksum_sha256: str
     size_bytes: int
     created_at: datetime
+
+
+class FilingSetEntryRead(ClosedModel):
+    """One file the submission would send, as the submission itself resolves it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: ArtifactKind
+    filename: str
+    role: Literal["signed_record", "official_copy", "formula_copy", "data"]
+    #: ``None`` when the file does not exist yet and is exported at submission.
+    size_bytes: int | None
+    generated_at_submission: bool
+    #: Signatures carried by this file; ``None`` where signing does not apply.
+    signature_count: int | None
+
+
+class FilingSetPreviewRead(ClosedModel):
+    """What a submission WOULD send, and the gates that already hold.
+
+    Read-only: the route mints nothing and transitions nothing. It exists so the
+    transmit confirmation can state the filing set the SUBMISSION resolves —
+    which is not the package's artifact rows, because the signed revision
+    replaces the unsigned export and a missing filing format is minted on the
+    way out.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    package_id: UUID
+    filing_set: list[FilingSetEntryRead]
+    satisfied: list[str]
+    institution_code: str | None
+    content_digest: str | None
+    #: The revision this submission WOULD stamp ("1.0", "1.1", ...). Computed
+    #: the same way the submission computes it; the stored
+    #: ``submission_revision`` is null until a package has actually been filed,
+    #: so a confirmation cannot read it from there.
+    submission_revision: str
+    is_first_filing: bool
+    #: Why the set is not larger, when the reason is a RULE rather than work
+    #: not yet done. A one-file filing can be entirely correct; an officer
+    #: cannot tell that by counting files.
+    omissions: list[str]
 
 
 class SubmissionPollRead(ClosedModel):

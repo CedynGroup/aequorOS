@@ -77,6 +77,7 @@ _ROLE_LABELS = {
     RoleBundle.AUDITOR: "Auditor",
     RoleBundle.ANALYST: "Analyst",
     RoleBundle.APPROVER: "Approver",
+    RoleBundle.VALIDATOR: "Validator",
     RoleBundle.ACCOUNT_ADMIN: "Organization Administrator",
     RoleBundle.ORG_OWNER: "Organization Owner",
     RoleBundle.INTEGRATION_WRITER: "Integration Writer",
@@ -107,7 +108,9 @@ _SENSITIVITY_LABELS = {
     SensitivityScope.RESTRICTED: "Restricted",
 }
 
-_OPERATIONAL_WRITE_BUNDLES = frozenset({RoleBundle.ANALYST, RoleBundle.APPROVER})
+_OPERATIONAL_WRITE_BUNDLES = frozenset(
+    {RoleBundle.ANALYST, RoleBundle.APPROVER, RoleBundle.VALIDATOR}
+)
 _ACCOUNT_ADMIN_BUNDLES = frozenset({RoleBundle.ACCOUNT_ADMIN, RoleBundle.ORG_OWNER})
 
 
@@ -134,6 +137,17 @@ def _scope_overlaps(left: AuthorizationBinding, right: authorization.BindingScop
     return institution_overlaps and module_overlaps and sensitivity_overlaps
 
 
+#: Findings that refuse the grant outright. Everything else is a warning that
+#: the Owner may proceed past, because a non-bypassable runtime condition
+#: already catches it per object.
+_BLOCKING_SOD_CODES = frozenset(
+    {
+        "c9_account_administration_operational_conflict",
+        "approval_and_transmission_separation_required",
+    }
+)
+
+
 def check_sod_policy(
     db: Session,
     *,
@@ -150,6 +164,10 @@ def check_sod_policy(
     Analyst/Approver pair is allowed because the engine deliberately unions
     bindings, but it is warned: maker-checker remains a non-bypassable
     per-object condition at action time.
+
+    Approver alongside Validator is the second hard block. There is no runtime
+    condition yet that stops one identity approving a return and then filing it,
+    so the separation is enforced where it currently can be — at assignment.
     """
 
     rows = list(
@@ -165,13 +183,46 @@ def check_sod_policy(
     existing_bundles = {RoleBundle(row.role_bundle) for row in active}
     findings: list[SodFinding] = []
 
-    if role_bundle in _OPERATIONAL_WRITE_BUNDLES and existing_bundles & _ACCOUNT_ADMIN_BUNDLES:
+    held_account_admin = existing_bundles & _ACCOUNT_ADMIN_BUNDLES
+    if role_bundle in _OPERATIONAL_WRITE_BUNDLES and held_account_admin:
+        # The Owner may accept this exception for themselves; a delegated
+        # account administrator may not (founder decision, 2026-09-20).
+        #
+        # C9 exists because whoever decides who may file must not also file.
+        # That reasoning is unchanged and the finding is still raised — what
+        # changed is who may proceed over it. An Org Owner is the named,
+        # accountable principal for the tenant, and in a small institution is
+        # often genuinely the same person as the treasurer; a delegated
+        # ACCOUNT_ADMIN is not accountable in that way and cannot
+        # self-authorise an exception, so that case stays a hard block.
+        #
+        # This is a DOCUMENTED exception, not a removal: the finding is
+        # returned, the grant still demands a reason, and the mutation audits
+        # the complete sentence, scope, reason and actors — so an examiner
+        # reads an accepted, justified risk rather than an absent control.
+        # Restore it to a block, for the Owner too, once the stage engine's
+        # per-object condition can catch this at action time
+        # (docs/filing_workflow_redesign.md §3.3 layer 3).
+        owner_only = held_account_admin == {RoleBundle.ORG_OWNER}
         findings.append(
             SodFinding(
-                code="c9_account_administration_operational_conflict",
+                code=(
+                    "c9_owner_operational_exception"
+                    if owner_only
+                    else "c9_account_administration_operational_conflict"
+                ),
                 message=(
-                    "Account administration and operational maker/checker authority "
-                    "must remain separated for one identity."
+                    (
+                        "This identity owns the organization and will also hold "
+                        "operational authority, so the same person decides who may "
+                        "file returns and files them. Recorded as an accepted "
+                        "exception."
+                    )
+                    if owner_only
+                    else (
+                        "Account administration and operational maker/checker "
+                        "authority must remain separated for one identity."
+                    )
                 ),
             )
         )
@@ -182,6 +233,32 @@ def check_sod_policy(
                 message=(
                     "Account administration and operational maker/checker authority "
                     "must remain separated for one identity."
+                ),
+            )
+        )
+
+    # Approving a return and transmitting it to the regulator must not land on
+    # one identity. Unlike the Analyst/Approver pair below this is NOT scope
+    # sensitive: transmission authority is a single Regulatory Reporting grant
+    # that files every family, so an approval grant on any module overlaps it.
+    # It is also a BLOCK rather than a warn, because the per-object condition
+    # that would catch it at action time does not exist yet — the stage engine
+    # owns it (docs/filing_workflow_redesign.md §3.3 layer 3). Relax this to a
+    # warn only when that condition is live, never to make an assignment pass.
+    filing_counterpart = (
+        RoleBundle.VALIDATOR
+        if role_bundle is RoleBundle.APPROVER
+        else RoleBundle.APPROVER
+        if role_bundle is RoleBundle.VALIDATOR
+        else None
+    )
+    if filing_counterpart is not None and filing_counterpart in existing_bundles:
+        findings.append(
+            SodFinding(
+                code="approval_and_transmission_separation_required",
+                message=(
+                    "Approving a return and transmitting it to the regulator must "
+                    "remain separated for one identity."
                 ),
             )
         )
@@ -206,7 +283,7 @@ def check_sod_policy(
             )
         )
 
-    blocked = any(finding.code.startswith("c9_") for finding in findings)
+    blocked = any(finding.code in _BLOCKING_SOD_CODES for finding in findings)
     if blocked:
         return SodDecision(SodOutcome.BLOCK, tuple(findings))
     if findings:

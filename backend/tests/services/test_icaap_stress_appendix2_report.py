@@ -11,11 +11,16 @@ modelled an approved management-actions plan (¶67(f)).
 
 from __future__ import annotations
 
+import copy
 import io
+import re
+import zipfile
 from datetime import date
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+import pdfplumber
 import pytest
 from fastapi import HTTPException
 from openpyxl import load_workbook
@@ -23,7 +28,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.models import Bank, BankReportingPeriod, RegulatoryPackage, User
+from app.models import (
+    Bank,
+    BankReportingPeriod,
+    EnterpriseStressSignoff,
+    RegulatoryPackage,
+    User,
+)
 from app.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.schemas.enterprise_stress_signoff import (
     StressSignoffAttestation,
@@ -43,9 +54,16 @@ from app.services import (
     macro_scenarios,
     management_action_plans,
 )
+from app.services.attestation import digests
 from app.services.attestation import workflow as attestation
 from app.services.regulatory_reporting import generation
 from app.services.regulatory_reporting.exports import export_package
+from app.services.regulatory_reporting.registry import REGISTRY
+from app.services.regulatory_reporting.templates import (
+    APPENDIX2_EXPOSURE_CLASS_LABELS,
+    build_rendered_return,
+    get_template,
+)
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -195,7 +213,13 @@ def _approved_plan(db: Session, code: str = "recovery_2027") -> UUID:
     return created.id
 
 
-def _run_enterprise_stress(db: Session, scenario_id: UUID, plan_id: UUID | None = None) -> UUID:
+def _run_enterprise_stress(
+    db: Session,
+    scenario_id: UUID,
+    plan_id: UUID | None = None,
+    *,
+    car_target_pct: Decimal | None = None,
+) -> UUID:
     read = enterprise_stress.run_enterprise_stress_test(
         db,
         MAKER,
@@ -204,24 +228,72 @@ def _run_enterprise_stress(db: Session, scenario_id: UUID, plan_id: UUID | None 
             scenario_id=scenario_id,
             reporting_period_id=_period_id(db),
             management_action_plan_id=plan_id,
+            car_target_pct=car_target_pct,
             reason="Annual ICAAP stress test.",
         ),
     )
     return read.run_id
 
 
-def _attested_signoff(db: Session, run_id: UUID) -> UUID:
+SCENARIO_NARRATIVE = (
+    "Enterprise-wide adverse scenario covering credit, liquidity, market and IRRBB "
+    "across the banking book."
+)
+ASSUMPTIONS_RATIONALE = (
+    "Documented linear elasticities; expert-judgement overlays challenged by the CRO."
+)
+METHODOLOGY_SUMMARY = "Bottom-up credit migration + coherent macro fan-out."
+BOARD_CHALLENGE = "Challenged the FX severity; retained as plausible."
+CREDIBILITY_RATIONALE = (
+    "The Board reviewed and challenged the framework and results; the assumptions and "
+    "severity are credible."
+)
+
+
+_CONTROL_CHARACTER = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _attested_signoff(  # noqa: PLR0913 - one keyword per narrative element
+    db: Session,
+    run_id: UUID,
+    *,
+    scenario_narrative: str = SCENARIO_NARRATIVE,
+    assumptions_rationale: str = ASSUMPTIONS_RATIONALE,
+    methodology_summary: str | None = METHODOLOGY_SUMMARY,
+    board_challenge: str | None = BOARD_CHALLENGE,
+    credibility_rationale: str = CREDIBILITY_RATIONALE,
+    checker: TenantContext = CHECKER,
+) -> UUID:
+    """A Board-attested sign-off over ``run_id`` carrying these narratives.
+
+    The sign-off schemas refuse control characters (ICAAP P0 fix round), so a
+    narrative that carries one can only exist as a row stored BEFORE that
+    validation — which is exactly what the export-robustness tests need. Such a
+    value is written onto the row directly after the validated lifecycle has
+    run, with a plain placeholder going through the API schemas.
+    """
+    raw = {
+        "scenario_narrative": scenario_narrative,
+        "assumptions_rationale": assumptions_rationale,
+        "methodology_summary": methodology_summary,
+        "board_challenge": board_challenge,
+        "credibility_rationale": credibility_rationale,
+    }
+    legacy = {
+        key: value
+        for key, value in raw.items()
+        if value is not None and _CONTROL_CHARACTER.search(value)
+    }
+    clean = {key: ("Placeholder." if key in legacy else value) for key, value in raw.items()}
     signoff = enterprise_stress_signoff.create_signoff(
         db,
         MAKER,
         SAMPLE_BANK_ID,
         StressSignoffCreate(
             run_id=run_id,
-            scenario_narrative="Enterprise-wide adverse scenario covering credit, "
-            "liquidity, market and IRRBB across the banking book.",
-            assumptions_rationale="Documented linear elasticities; expert-judgement "
-            "overlays challenged by the CRO.",
-            methodology_summary="Bottom-up credit migration + coherent macro fan-out.",
+            scenario_narrative=clean["scenario_narrative"],  # type: ignore[arg-type]
+            assumptions_rationale=clean["assumptions_rationale"],  # type: ignore[arg-type]
+            methodology_summary=clean["methodology_summary"],
             reason="Prepare the stress-run sign-off.",
         ),
     )
@@ -230,16 +302,21 @@ def _attested_signoff(db: Session, run_id: UUID) -> UUID:
     )
     enterprise_stress_signoff.attest_signoff(
         db,
-        CHECKER,
+        checker,
         SAMPLE_BANK_ID,
         signoff.id,
         StressSignoffAttestation(
-            credibility_rationale="The Board reviewed and challenged the framework and "
-            "results; the assumptions and severity are credible.",
-            board_challenge="Challenged the FX severity; retained as plausible.",
+            credibility_rationale=clean["credibility_rationale"],  # type: ignore[arg-type]
+            board_challenge=clean["board_challenge"],
             reason="Board attestation.",
         ),
     )
+    if legacy:
+        row = db.get(EnterpriseStressSignoff, signoff.id)
+        assert row is not None
+        for key, value in legacy.items():
+            setattr(row, key, value)
+        db.commit()
     return signoff.id
 
 
@@ -497,3 +574,413 @@ def test_maker_cannot_attest_own_signoff(db_session: Session) -> None:
             ),
         )
     assert dup.value.detail["error_code"] == "signoff_exists"  # type: ignore[index]
+
+
+# --- ICAAP P0 (2026-09-19): Table 5 Pillar 2, governed minima, narrative, labels ----
+
+
+def _stored_bytes(db: Session, storage: InMemoryStorageClient, object_path: str) -> bytes:
+    slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
+    assert slug
+    for obj in storage.list(slug, "outputs"):
+        if obj.location.object_path == object_path:
+            _, stream = storage.read(obj.location)
+            return stream.read()
+    raise AssertionError(f"no stored object at {object_path}")
+
+
+def _pdf_text(payload: bytes) -> str:
+    with pdfplumber.open(io.BytesIO(payload)) as document:
+        text = "\n".join(page.extract_text() or "" for page in document.pages)
+    # Wrapped lines rejoin with a space so a sentence can be matched whole.
+    return " ".join(text.split())
+
+
+def _findings(snapshot: dict[str, Any], rule: str) -> list[dict[str, Any]]:
+    return [
+        entry
+        for entry in snapshot["metadata"].get("generation_findings", [])
+        if entry.get("rule") == rule
+    ]
+
+
+PILLAR2_FIELDS = (
+    "pillar2_credit_concentration",
+    "pillar2_irrbb",
+    "pillar2_sovereign",
+    "pillar2_country_and_fx",
+    "pillar2_reputational",
+    "pillar2_others",
+)
+
+
+def test_table5_carries_every_bog_pillar2_row_and_never_a_zero_for_an_unassessed_risk(
+    db_session: Session,
+) -> None:
+    package = _prepare(db_session)
+    snapshot = package.snapshot
+    pillar2 = _section(snapshot, "t5_pillar2")
+    assert pillar2 is not None
+    rows = {row["code"]: row for row in pillar2["rows"]}
+    assert list(rows) == [
+        "current",
+        "base_y1",
+        "base_y2",
+        "base_y3",
+        "stress_y1",
+        "stress_y2",
+        "stress_y3",
+    ]
+    for code, row in rows.items():
+        # Every BoG Table 5 Pillar 2 row is present as a field on every column.
+        assert set(PILLAR2_FIELDS) <= set(row), code
+        values = [row[field] for field in PILLAR2_FIELDS]
+        if code == "current" or code.startswith("base_y"):
+            # B3: the Current and Base columns carry no Pillar 2 assessment yet —
+            # "not modelled", never the 0.000 a summed-over-nothing total printed.
+            assert values == [None] * 6, code
+            assert row["pillar2_total"] is None
+            assert row["pillar2_coverage"] == "Not modelled"
+        else:
+            modelled = [Decimal(value) for value in values if value is not None]
+            if modelled:
+                assert Decimal(row["pillar2_total"]) == sum(modelled, Decimal("0"))
+                if len(modelled) < len(values):
+                    assert row["pillar2_coverage"].startswith("Partial — excludes ")
+            else:
+                assert row["pillar2_total"] is None
+    rwa_rows = {row["code"]: row for row in _section(snapshot, "t5_rwa")["rows"]}  # type: ignore[index]
+    assert rwa_rows["current"]["pillar2_total"] is None
+    assert rwa_rows["base_y1"]["pillar2_total"] is None
+    # The understatement is declared, not hidden.
+    (warning,) = _findings(snapshot, "appendix2_pillar2_coverage")
+    assert warning["severity"] == "WARNING"
+    assert "Current (as-of)" in warning["detail"]
+
+
+def test_table5_prints_not_modelled_and_the_bog_pillar2_labels(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    package = _prepare(db_session)
+    pdf = export_package(db_session, MAKER, package, "pdf")
+    text = _pdf_text(_stored_bytes(db_session, storage, pdf.object_path))
+    assert "Table 5 — Pillar 2 Capital Requirements by Risk" in text
+    for label in (
+        "Credit Concentration",
+        "IRRBB",
+        "Sovereign",
+        "Country and FX",
+        "Reputational",
+        "Others",
+        "Total Pillar 2 Capital Requirements",
+    ):
+        assert label in text, label
+    assert "Not modelled" in text
+
+    xlsx = export_package(db_session, MAKER, package, "xlsx")
+    workbook = load_workbook(io.BytesIO(_stored_bytes(db_session, storage, xlsx.object_path)))
+    sheet = next(workbook[name] for name in workbook.sheetnames if "Pillar 2" in name)
+    values = [cell.value for row in sheet.iter_rows() for cell in row]
+    assert "Not modelled" in values
+
+
+def test_the_car_minimum_is_stamped_with_its_governed_provenance(db_session: Session) -> None:
+    package = _prepare(db_session)
+    metadata = package.snapshot["metadata"]
+    provenance = {entry["param_code"]: entry for entry in metadata["parameter_provenance"]}
+    car = provenance["car_min"]
+    assert Decimal(car["applied_value"]) == Decimal(metadata["car_target_pct"])
+    assert Decimal(car["applied_value"]) == Decimal("13")
+    assert car["basis"] == "governed"
+    governed = car["governed"]
+    assert governed["param_code"] == "car_min"
+    assert Decimal(governed["value"]) == Decimal("13")
+    assert governed["scope_type"] == "institution_class"
+    assert governed["scope_key"] == "bank"
+    assert "¶71" in governed["source_citation"]
+    assert governed["confirmation_status"] == "confirmed"
+    assert governed["effective_from"]
+    assert "paid_up_min" in provenance
+
+    rendered = build_rendered_return(
+        get_template("bog-icaap-stress-appendix2-v1"),  # type: ignore[arg-type]
+        package.snapshot,
+        package.source_runs,
+        package_id=str(package.id),
+        package_version=package.version,
+    )
+    car_note = next(
+        note
+        for note in rendered.report_notes
+        if note.startswith("Minimum total capital ratio applied")
+    )
+    assert car_note.startswith("Minimum total capital ratio applied: 13%.")
+    assert "Governed parameter car_min = 13%" in car_note
+    # The seed row's date is the platform record's, never presented as the
+    # instrument's commencement date (DV-005), and the scope is in words.
+    assert "platform parameter record dated" in car_note
+    assert "not a regulatory commencement date" in car_note
+    assert "applies to banks, GH" in car_note
+    assert "effective from" not in car_note
+    assert "institution_class" not in car_note
+
+
+def test_an_internal_target_above_the_floor_is_declared_stricter(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    _seed_checker(db_session)
+    scenario_id = _approved_scenario(db_session)
+    run_id = _run_enterprise_stress(db_session, scenario_id, car_target_pct=Decimal("15"))
+    _attested_signoff(db_session, run_id)
+    package = _generate(db_session)
+    car = next(
+        entry
+        for entry in package.snapshot["metadata"]["parameter_provenance"]
+        if entry["param_code"] == "car_min"
+    )
+    assert Decimal(car["applied_value"]) == Decimal("15")
+    assert car["basis"] == "stricter_than_governed"
+    assert Decimal(car["governed"]["value"]) == Decimal("13")
+
+
+BOARD_CHAIR_ID = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+BOARD_CHAIR = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=BOARD_CHAIR_ID, roles=("approver",)
+)
+
+
+def _seed_board_chair(db: Session) -> None:
+    if db.get(User, BOARD_CHAIR_ID) is not None:
+        return
+    db.add(
+        User(
+            id=BOARD_CHAIR_ID,
+            organization_id=DEMO_ORG_ID,
+            email="board-chair@aequoros.example",
+            display_name="Ama Mensah",
+            job_title="Board Chair",
+            role="approver",
+        )
+    )
+    db.commit()
+
+
+def test_attested_narratives_render_in_the_pdf(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    materialize_canonical_test_book(db_session)
+    _seed_board_chair(db_session)
+    scenario_id = _approved_scenario(db_session)
+    run_id = _run_enterprise_stress(db_session, scenario_id)
+    _attested_signoff(db_session, run_id, checker=BOARD_CHAIR)
+    package = _generate(db_session)
+    narrative = _section(package.snapshot, "stress_narrative")
+    assert narrative is not None
+    assert [row["code"] for row in narrative["rows"]] == [
+        "scenario_narrative",
+        "assumptions_rationale",
+        "methodology_summary",
+        "board_challenge",
+        "credibility_rationale",
+        "attested_by",
+    ]
+    attested = next(row for row in narrative["rows"] if row["code"] == "attested_by")
+    # Name and designation, not the user id (audit m13).
+    assert attested["value"].startswith("Ama Mensah, Board Chair (attested ")
+    assert str(BOARD_CHAIR_ID) not in attested["value"]
+
+    pdf = export_package(db_session, MAKER, package, "pdf")
+    text = _pdf_text(_stored_bytes(db_session, storage, pdf.object_path))
+    assert "Stress Test Narrative (Board-attested)" in text
+    for statement in (
+        SCENARIO_NARRATIVE,
+        ASSUMPTIONS_RATIONALE,
+        METHODOLOGY_SUMMARY,
+        BOARD_CHALLENGE,
+        CREDIBILITY_RATIONALE,
+    ):
+        assert statement in text, statement
+    assert "Ama Mensah, Board Chair" in text
+    assert _findings(package.snapshot, "appendix2_narrative_completeness") == []
+
+
+def test_a_changed_narrative_changes_the_content_digest(db_session: Session) -> None:
+    package = _prepare(db_session)
+    original = digests.content_digest(package.snapshot)
+    altered = copy.deepcopy(package.snapshot)
+    narrative = next(s for s in altered["sections"] if s["code"] == "stress_narrative")
+    narrative["rows"][0]["value"] = "A different scenario narrative."
+    assert digests.content_digest(altered) != original
+
+
+def test_the_narrative_pdf_is_byte_deterministic(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    package = _prepare(db_session)
+    first = export_package(db_session, MAKER, package, "pdf")
+    first_bytes = _stored_bytes(db_session, storage, first.object_path)
+    second = export_package(db_session, MAKER, package, "pdf")
+    assert second.checksum_sha256 == first.checksum_sha256
+    assert _stored_bytes(db_session, storage, second.object_path) == first_bytes
+
+
+def test_an_unrecorded_narrative_element_prints_not_stated_and_warns(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    materialize_canonical_test_book(db_session)
+    _seed_checker(db_session)
+    scenario_id = _approved_scenario(db_session)
+    run_id = _run_enterprise_stress(db_session, scenario_id)
+    _attested_signoff(db_session, run_id, methodology_summary=None, board_challenge=None)
+    package = _generate(db_session)
+    rows = {
+        row["code"]: row
+        for row in _section(package.snapshot, "stress_narrative")["rows"]  # type: ignore[index]
+    }
+    assert rows["methodology_summary"]["value"] is None
+    assert rows["board_challenge"]["value"] is None
+    (warning,) = _findings(package.snapshot, "appendix2_narrative_completeness")
+    assert warning["severity"] == "WARNING"
+    assert "Methodology summary" in warning["detail"]
+    assert "Board challenge" in warning["detail"]
+
+    pdf = export_package(db_session, MAKER, package, "pdf")
+    text = _pdf_text(_stored_bytes(db_session, storage, pdf.object_path))
+    assert text.count("Not stated") >= 2
+
+
+def test_narrative_markup_and_formula_text_are_inert_in_every_artifact(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    """User-typed narrative can never inject reportlab markup into the PDF or a
+    formula into the workbook / CSV."""
+    materialize_canonical_test_book(db_session)
+    _seed_checker(db_session)
+    scenario_id = _approved_scenario(db_session)
+    run_id = _run_enterprise_stress(db_session, scenario_id)
+    _attested_signoff(
+        db_session,
+        run_id,
+        scenario_narrative='=HYPERLINK("http://example.invalid","x") <b>not bold</b> & <font',
+        board_challenge="Line one.\nLine two <unclosed",
+    )
+    package = _generate(db_session)
+
+    pdf = export_package(db_session, MAKER, package, "pdf")
+    text = _pdf_text(_stored_bytes(db_session, storage, pdf.object_path))
+    assert "<b>not bold</b> & <font" in text
+    assert "Line two <unclosed" in text
+
+    xlsx = export_package(db_session, MAKER, package, "xlsx")
+    workbook = load_workbook(io.BytesIO(_stored_bytes(db_session, storage, xlsx.object_path)))
+    sheet = next(workbook[name] for name in workbook.sheetnames if "Narrative" in name)
+    injected = [
+        cell
+        for row in sheet.iter_rows()
+        for cell in row
+        if isinstance(cell.value, str) and cell.value.startswith("=HYPERLINK")
+    ]
+    assert injected, "the narrative cell is present"
+    assert all(cell.data_type == "s" for cell in injected)
+
+    csv = export_package(db_session, MAKER, package, "csv")
+    with zipfile.ZipFile(io.BytesIO(_stored_bytes(db_session, storage, csv.object_path))) as zf:
+        entry = next(name for name in zf.namelist() if name.endswith("stress_narrative.csv"))
+        content = zf.read(entry).decode("utf-8")
+    assert "'=HYPERLINK" in content
+
+
+def test_appendix_ii_prints_the_directives_labels_not_engine_keys(db_session: Session) -> None:
+    package = _prepare(db_session)
+    impact = _section(package.snapshot, "t1_impact_of_adverse")
+    assert impact is not None
+    descriptions = {row["description"] for row in impact["rows"]}
+    assert descriptions <= set(APPENDIX2_EXPOSURE_CLASS_LABELS.values())
+    assert "GOG" not in descriptions and "RETAIL SME" not in descriptions
+    drivers = {
+        row["description"]
+        for row in _section(package.snapshot, "t6_risk_drivers")["rows"]  # type: ignore[index]
+    }
+    assert "FX rates (USD to GH Cedi)" in drivers
+    assert "Average yield on Government of Ghana securities" in drivers
+    assert "FX USD GHS" not in drivers
+
+
+def test_a_pre_p0_snapshot_still_renders_without_the_new_blocks(db_session: Session) -> None:
+    """Existing packages stay untouched: a snapshot generated before the new
+    sections / metadata existed renders with no 409 and without them."""
+    package = _prepare(db_session)
+    legacy = copy.deepcopy(package.snapshot)
+    legacy["sections"] = [
+        section
+        for section in legacy["sections"]
+        if section["code"] not in {"t5_pillar2", "stress_narrative"}
+    ]
+    for key in ("parameter_provenance", "generation_findings", "report_notes"):
+        legacy["metadata"].pop(key, None)
+    rendered = build_rendered_return(
+        get_template("bog-icaap-stress-appendix2-v1"),  # type: ignore[arg-type]
+        legacy,
+        package.source_runs,
+        package_id=str(package.id),
+        package_version=package.version,
+    )
+    codes = {section.layout.section_code for section in rendered.sections}
+    assert "t5_pillar2" not in codes and "stress_narrative" not in codes
+    assert "t5_rwa" in codes
+    assert rendered.report_notes == ()
+
+
+def test_no_appendix_ii_header_or_citation_hard_codes_the_car_floor() -> None:
+    for template_id in ("bog-icaap-stress-appendix2-v1", "bog-sdi-stress-annual-v1"):
+        template = get_template(template_id)
+        assert template is not None
+        for layout in template.sections:
+            assert "13%" not in layout.source_citation, (template_id, layout.section_code)
+            for column in layout.columns:
+                assert "13%" not in column.header, (template_id, column.header)
+    capital = get_template("bog-bsd2-capital-v1")
+    assert capital is not None
+    for layout in capital.sections:
+        assert "13%" not in layout.source_citation
+
+
+def test_the_67g_granularity_is_not_claimed() -> None:
+    """¶67(g) may only be cited as NOT provided (audit §4.8 / M23)."""
+    definition = REGISTRY["ICAAP-STRESS-APPENDIX2"]
+    assert "¶67(g)" in definition.directive_citation
+    assert "not provided" in definition.directive_citation
+    template = get_template(definition.template_id)
+    assert template is not None
+    for layout in template.sections:
+        if "¶67(g)" in layout.source_citation:
+            assert "not provided" in layout.source_citation, layout.section_code
+
+
+def test_the_sdi_packet_carries_the_narrative_and_its_own_governed_floor(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    materialize_canonical_test_book(db_session)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    bank.institution_type = "savings_and_loans"
+    db_session.flush()
+    _seed_checker(db_session)
+    scenario_id = _approved_scenario(db_session, code="sdi_adverse_2027")
+    run_id = _run_enterprise_stress(db_session, scenario_id)
+    _attested_signoff(db_session, run_id)
+    package = _generate_sdi(db_session)
+
+    assert _section(package.snapshot, "stress_narrative") is not None
+    car = next(
+        entry
+        for entry in package.snapshot["metadata"]["parameter_provenance"]
+        if entry["param_code"] == "car_min"
+    )
+    # The SDI floor is its own (Act 930 s.29), never the bank 13%.
+    assert Decimal(car["applied_value"]) == Decimal("10")
+    assert car["governed"]["scope_key"] == "sdi"
+    pdf = export_package(db_session, MAKER, package, "pdf")
+    text = _pdf_text(_stored_bytes(db_session, storage, pdf.object_path))
+    assert "Minimum total capital ratio applied: 10%" in text
+    assert SCENARIO_NARRATIVE in text
+    assert "13% CAR" not in text

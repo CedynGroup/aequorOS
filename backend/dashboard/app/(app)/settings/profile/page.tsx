@@ -286,7 +286,19 @@ export default function ProfilePage() {
                       placeholder="Jane Mensah"
                     />
                   </Field>
-                  <Field label="Job title" htmlFor="job-title">
+                  {/* This is the DESIGNATION that prints on a filed return —
+                      beside the officer's name in the attestation block, in
+                      both forms of it: the signature's Designation box when
+                      e-signature is enabled, and the "Officers of record"
+                      table when it is not. Left blank, that line on the filed
+                      document is blank, which is why the field says where it
+                      goes rather than leaving an officer to discover it on a
+                      PDF a supervisor is already reading. */}
+                  <Field
+                    label="Designation"
+                    htmlFor="job-title"
+                    hint="Prints beside your name on filed returns"
+                  >
                     <input
                       id="job-title"
                       value={form.jobTitle}

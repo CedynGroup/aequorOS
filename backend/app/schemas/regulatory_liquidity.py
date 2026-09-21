@@ -18,6 +18,10 @@ type RegulatoryModule = Literal[
     "optimizer",
     "whatif",
     "irr",
+    # The IRRBB Standardised Framework is its own module, not a scenario of
+    # ``irr``: a different bucket ladder, a different scenario set and a
+    # different outlier rule (P5-DESIGN §1.1).
+    "irr_sf",
     "fx",
     "ftp",
     # Pre-existing contract gap closed alongside the credit addition: both run
@@ -92,6 +96,11 @@ type RegulatoryLineSection = Literal[
     "irr_gap",
     "irr_eve",
     "irr_ear",
+    # IRRBB Standardised Framework: the bucketed base ladder, the per-currency
+    # change in economic value per prescribed shape, and the earnings grid.
+    "irr_sf_ladder",
+    "irr_sf_eve",
+    "irr_sf_nii",
     "fx_position",
     "fx_var",
     "fx_hedge",

@@ -23,9 +23,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from decimal import Decimal
+from datetime import UTC, date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 
@@ -35,6 +36,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core import observability
+from app.domain.policy import Direction, direction_for
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -42,17 +44,20 @@ from app.models import (
     RegulatoryMetricResult,
     RegulatoryPackage,
     RegulatoryRun,
+    User,
 )
 from app.schemas.regulatory_liquidity import Bsd3SummaryRowRead
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.services import (
     filing_reconciliation,
     regulatory_capital,
+    regulatory_forecasting,
     regulatory_liquidity,
     withdrawal_impact,
 )
 from app.services.attestation import digests, register_state
 from app.services.audit import record_event
+from app.services.regulatory_reporting import family_hooks
 from app.services.regulatory_reporting.common import (
     get_bank_or_404,
     get_snapshot_for_reporting_date,
@@ -73,6 +78,14 @@ from app.services.regulatory_reporting.provenance import (
     source_run_entry as _calculation_source_run_entry,
 )
 from app.services.regulatory_reporting.registry import REGISTRY, ReturnDefinition
+from app.services.regulatory_reporting.templates import (
+    APPENDIX2_PILLAR2_RISKS,
+    NOT_MODELLED,
+    NOT_STATED,
+    TEMPLATE_REVISIONS,
+    appendix2_exposure_class_label,
+    appendix2_risk_driver_label,
+)
 
 #: Observability (docs/sdi.md §19) — the runtime-log counterpart to the persistent
 #: ``regulatory_package.generated`` audit event, tagged with the institution class so
@@ -101,8 +114,9 @@ MODULE_FX = "fx"
 MODULE_FORECAST = "forecast"
 # The ICAAP data companion consumes 5-year forecast runs only. Desk runs may
 # carry other horizons (persisted as ``inputs.horizon_years``; absent == 5),
-# and must never displace the regulatory 5-year projection here.
-_ICAAP_FORECAST_HORIZON_YEARS = 5
+# and must never displace the regulatory 5-year projection here. The rule is
+# ``regulatory_forecasting.regulatory_horizon_clause`` — shared with the capital
+# plan, so the two ICAAP consumers can never disagree about which run counts.
 
 _FORECAST_SUMMARY_FIELDS = (
     "avg_roe_pct",
@@ -205,87 +219,70 @@ def generate_package(
         raise
 
 
-def _generate_package(
-    db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryPackageCreate
-) -> RegulatoryPackageRead:
-    actor_user_id = require_actor(ctx)
-    bank = get_bank_or_404(db, ctx, bank_id)
-    definition = REGISTRY.get(payload.return_code)
-    if definition is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"Return code '{payload.return_code}' is not registered. "
-                "List the available templates via the return-template endpoint."
+FREEZE_ONLY_FAMILIES: frozenset[str] = frozenset({"icaap"})
+
+
+def _refuse_freeze_only_family(definition: ReturnDefinition) -> None:
+    """Refuse the generic mint for a return whose package comes from a freeze.
+
+    An ICAAP package is the evidence that a particular version of a particular
+    cycle was reviewed and sealed. Minting one from this endpoint would produce
+    a filing document with no review chain behind it and nothing to bind the
+    signatures to, which is the whole property the ICAAP filing plane exists to
+    guarantee.
+    """
+    if definition.family not in FREEZE_ONLY_FAMILIES:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "error_code": "icaap_generated_by_freeze",
+            "message": (
+                f"'{definition.code}' is not generated here. An ICAAP filing exists "
+                "because an ICAAP cycle was reviewed and frozen \u2014 open the ICAAP "
+                "workspace and freeze the cycle, which mints this package and binds "
+                "it to the review that approved it."
             ),
-        )
-    # Server-side eligibility (audit ARCH-8) through the SINGLE authority the
-    # reporting calendar also consumes, so the two surfaces cannot disagree. It
-    # is evaluated HERE, at the only package-mint site, which is what makes an
-    # ineligible return structurally impossible to generate: an SDI POSTing a
-    # bank-only BSD code directly never reaches a generator. Every dimension —
-    # institution class, jurisdiction, regulator, cadence anchor, effective date
-    # — is named on the 403 rather than a single opaque refusal.
-    eligibility = resolve_eligibility(db, ctx, bank, as_of=payload.reporting_date)
-    bank_class = eligibility.institution_class
-    eligibility.require(definition, reporting_date=payload.reporting_date)
-    # The figures are the figures AS OF the regulator's reporting date, for every
-    # cadence — no "nearest earlier book" fallback (see the resolver's docstring
-    # for the daily-return fail-open it replaces).
-    period = get_snapshot_for_reporting_date(
-        db,
-        ctx,
-        bank,
-        payload.reporting_date,
-        return_code=definition.code,
-        frequency=definition.frequency,
+            "return_code": definition.code,
+            "return_family": definition.family,
+        },
     )
 
-    # The data-integrity gate (audit P0-10 / 2026-08-22 D-2), evaluated HERE for
-    # the same reason eligibility is: this is the only package-mint site, so a
-    # return built on a book that does not balance is structurally impossible
-    # rather than merely discouraged. It runs before any generator so a refusal
-    # leaves nothing behind, and it raises ``FilingBlockedError`` — a 409 whose
-    # detail names the gap, the governed tolerance and its source.
-    filing_reconciliation.assert_filing_reconciled(
-        db,
-        ctx,
-        bank,
-        as_of=period.period_end,
-        period_id=period.id,
-        purpose="package_generation",
-    )
 
-    generated = _GENERATORS[definition.generator](db, ctx, bank, period, definition)
+def _supersede_prior(  # noqa: PLR0913 - the supersession key is its named parts
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    definition: ReturnDefinition,
+    *,
+    reporting_date: date,
+    basis: str,
+    rehearsal: bool = False,
+) -> tuple[RegulatoryPackage | None, int | None, Any]:
+    """Retire the current version for this (return, date, basis) and number the next.
 
-    # The withdrawn-evidence gate (audit 2026-08-22 D-12), on the same line and
-    # for the same reason as the two gates above: this is the only package-mint
-    # site, so a return bound to a run that was sealed on canonical rows since
-    # retired under two-officer withdrawal is structurally impossible rather
-    # than merely unlikely. The sealed runs themselves are never touched — they
-    # remain the faithful record of the book as it stood; it is the FILING that
-    # is refused, with a 409 naming every withdrawal behind the refusal.
-    withdrawal_impact.assert_source_runs_current(
-        db,
-        _load_source_runs(db, ctx, generated.source_runs),
-        purpose="package_generation",
-    )
+    Supersession and versioning are per-basis: solo and consolidated are
+    independent current-version chains for the same (return, reporting date).
+    Shared by the generator path and the ICAAP freeze path so the two cannot
+    drift into two notions of "which version is current".
 
-    _enrich_institution_block(db, ctx, bank, generated.snapshot)
-    _stamp_basis(generated.snapshot, payload.basis)
-    _stamp_provenance(db, ctx, bank, definition, payload, generated)
-    _apply_prior_period_comparative(db, ctx, bank, definition, payload, generated.snapshot)
-
-    # Supersession and versioning are per-basis: solo and consolidated are
-    # independent current-version chains for the same (return, reporting date).
+    A REHEARSAL is a third, separate chain (D-029 / D-068). It must never retire
+    a real version, and a real version must never retire a rehearsal: they are
+    answers to different questions, and either direction would let a dry run
+    change the status of a filing (or a filing erase the evidence of a dry run).
+    The row-level CHECK can only express the first half — ``supersedes_id IS
+    NULL`` on a rehearsal — because the second reads another row. This is where
+    the other half lives.
+    """
     prior_current = db.scalar(
         select(RegulatoryPackage).where(
             RegulatoryPackage.organization_id == ctx.organization_id,
             RegulatoryPackage.bank_id == bank.id,
             RegulatoryPackage.return_code == definition.code,
-            RegulatoryPackage.reporting_date == payload.reporting_date,
-            RegulatoryPackage.basis == payload.basis,
+            RegulatoryPackage.reporting_date == reporting_date,
+            RegulatoryPackage.basis == basis,
             RegulatoryPackage.status != "superseded",
+            RegulatoryPackage.is_rehearsal == rehearsal,
         )
     )
     # ORASS parity: an ACKNOWLEDGED return is final at the regulator; a
@@ -313,8 +310,9 @@ def _generate_package(
             RegulatoryPackage.organization_id == ctx.organization_id,
             RegulatoryPackage.bank_id == bank.id,
             RegulatoryPackage.return_code == definition.code,
-            RegulatoryPackage.reporting_date == payload.reporting_date,
-            RegulatoryPackage.basis == payload.basis,
+            RegulatoryPackage.reporting_date == reporting_date,
+            RegulatoryPackage.basis == basis,
+            RegulatoryPackage.is_rehearsal == rehearsal,
         )
         .order_by(RegulatoryPackage.version.desc())
         .limit(1)
@@ -329,11 +327,113 @@ def _generate_package(
             entity_id=prior_current.id,
             details={
                 "return_code": definition.code,
-                "reporting_date": payload.reporting_date.isoformat(),
+                "reporting_date": reporting_date.isoformat(),
                 "version": prior_current.version,
             },
         )
+        # The family's own hook runs on a DIRECT supersession too, not only on
+        # a table transition: a superseding regeneration never passes through
+        # ``workflow.transition`` (P3-DESIGN §5.4).
+        family_hooks.on_package_superseded(db, ctx, prior_current)
         db.flush()
+    return prior_current, prior_version, resubmission_authorization
+
+
+def _generate_package(
+    db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryPackageCreate
+) -> RegulatoryPackageRead:
+    actor_user_id = require_actor(ctx)
+    bank = get_bank_or_404(db, ctx, bank_id)
+    definition = REGISTRY.get(payload.return_code)
+    if definition is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Return code '{payload.return_code}' is not registered. "
+                "List the available templates via the return-template endpoint."
+            ),
+        )
+    # The family gate, BEFORE eligibility. A return whose packages exist only
+    # because a workspace cycle was frozen cannot be minted here at ANY date, so
+    # answering "not eligible on this reporting date" would be a true sentence
+    # about the wrong question and would send an operator hunting for a date
+    # that does not exist. Said once, structurally, at the only generic mint
+    # site (ICAAP P3 §4.2).
+    _refuse_freeze_only_family(definition)
+    # Server-side eligibility (audit ARCH-8) through the SINGLE authority the
+    # reporting calendar also consumes, so the two surfaces cannot disagree. It
+    # is evaluated HERE, and again at the OTHER mint site
+    # (``generate_frozen_package``, with a documented ``ignore``), which is what
+    # makes an ineligible return structurally impossible to generate: an SDI
+    # POSTing a bank-only BSD code directly never reaches a generator. Every
+    # dimension — institution class, jurisdiction, regulator, cadence anchor,
+    # effective date — is named on the 403 rather than a single opaque refusal.
+    eligibility = resolve_eligibility(db, ctx, bank, as_of=payload.reporting_date)
+    bank_class = eligibility.institution_class
+    eligibility.require(definition, reporting_date=payload.reporting_date)
+    # The figures are the figures AS OF the regulator's reporting date, for every
+    # cadence — no "nearest earlier book" fallback (see the resolver's docstring
+    # for the daily-return fail-open it replaces).
+    period = get_snapshot_for_reporting_date(
+        db,
+        ctx,
+        bank,
+        payload.reporting_date,
+        return_code=definition.code,
+        frequency=definition.frequency,
+    )
+
+    # The data-integrity gate (audit P0-10 / 2026-08-22 D-2), evaluated HERE for
+    # the same reason eligibility is, so a return built on a book that does not
+    # balance is structurally impossible rather than merely discouraged. It runs
+    # before any generator so a refusal leaves nothing behind, and it raises
+    # ``FilingBlockedError`` — a 409 whose detail names the gap, the governed
+    # tolerance and its source. The frozen mint site's caller holds this one
+    # (``icaap/freeze.py::_assert_reconciled``, D-069): either owner may hold a
+    # gate, NEITHER may drop it.
+    filing_reconciliation.assert_filing_reconciled(
+        db,
+        ctx,
+        bank,
+        as_of=period.period_end,
+        period_id=period.id,
+        purpose="package_generation",
+    )
+
+    generated = _GENERATORS[definition.generator](db, ctx, bank, period, definition)
+
+    # The withdrawn-evidence gate (audit 2026-08-22 D-12), on the same line and
+    # for the same reason as the two gates above: a return bound to a run that
+    # was sealed on canonical rows since retired under two-officer withdrawal is
+    # structurally impossible rather than merely unlikely. The sealed runs
+    # themselves are never touched — they remain the faithful record of the book
+    # as it stood; it is the FILING that is refused, with a 409 naming every
+    # withdrawal behind the refusal. ``generate_frozen_package`` runs the same
+    # gate over ITS lineage (D-069), so neither mint site can lose it.
+    _assert_evidence_current(db, ctx, generated.source_runs)
+
+    _enrich_institution_block(db, ctx, bank, generated.snapshot)
+    _stamp_basis(generated.snapshot, payload.basis)
+    _stamp_template_revision(definition, generated.snapshot)
+    _stamp_provenance(
+        db,
+        ctx,
+        bank,
+        definition,
+        reporting_date=payload.reporting_date,
+        snapshot=generated.snapshot,
+        source_runs=generated.source_runs,
+    )
+    _apply_prior_period_comparative(db, ctx, bank, definition, payload, generated.snapshot)
+
+    prior_current, prior_version, resubmission_authorization = _supersede_prior(
+        db,
+        ctx,
+        bank,
+        definition,
+        reporting_date=payload.reporting_date,
+        basis=payload.basis,
+    )
 
     # Attestation binding, sealed with the snapshot (docs/attestation_esignature.md
     # §3.1). Every return gets a content_digest — snapshot_sha256 embeds
@@ -404,6 +504,202 @@ def _generate_package(
     )
     db.commit()
     return read_package(db, package)
+
+
+@dataclass(frozen=True)
+class FrozenSnapshot:
+    """What a family's own freeze path hands the package minter."""
+
+    snapshot: dict[str, Any]
+    source_runs: list[dict[str, Any]]
+
+
+def _is_rehearsal(snapshot: dict[str, Any]) -> bool:
+    """Is this frozen snapshot a DRY RUN?
+
+    Read from the snapshot's own cycle block rather than taken on trust from the
+    caller, so the package row and the rendered document cannot disagree about
+    what the reader is looking at — the renderers derive the watermark from the
+    same field (``render/from_snapshot.py``). The caller may still state it
+    explicitly, which is what a future non-ICAAP freeze-minted family would do.
+    """
+    cycle = ((snapshot.get("metadata") or {}).get("icaap") or {}).get("cycle") or {}
+    return cycle.get("kind") == "rehearsal"
+
+
+def generate_frozen_package(  # noqa: PLR0913 - the mint key is its named parts
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    *,
+    return_code: str,
+    reporting_date: date,
+    build: Callable[[], FrozenSnapshot],
+    basis: str = "solo",
+    notes: str | None = None,
+    commit: bool = True,
+    is_rehearsal: bool | None = None,
+) -> RegulatoryPackage:
+    """Mint an immutable package from a snapshot the FAMILY froze.
+
+    The seam between a workspace freeze and the regulatory plane. The caller
+    (the ICAAP freeze, and the ¶82 disclosure approval) owns everything about
+    WHAT is in the snapshot; this owns everything about what a package IS —
+    versioning, supersession, the content and register digests, the audit event
+    — so an ICAAP filing is the same kind of object as every other return and is
+    read, exported, signed and submitted by exactly the same code.
+
+    Two deliberate differences from :func:`generate_package`:
+
+    * **``effective_date`` is not gated.** ``registry.py`` records the rule:
+      a commencement date is not a generation gate, because blocking on it would
+      stop a bank preparing and dry-running a return before its first live
+      filing. That mattered nowhere until ``ICAAP-REPORT`` became the first
+      entry with an effective date (D-058), and the rehearsal path is the whole
+      reason P3 can be proven at all. Every OTHER blocking dimension — the
+      institution's licence class, its jurisdiction, its supervisor — still
+      refuses, and the resolved state is recorded on the snapshot so a rehearsal
+      filing says so about itself.
+    * **``commit`` may be False**, so a caller that is minting this package as
+      one step of a larger transaction (a freeze that also writes stage
+      decisions and copies attachments) can roll the whole thing back. Nothing
+      is half-frozen.
+    """
+    actor_user_id = require_actor(ctx)
+    definition = REGISTRY.get(return_code)
+    if definition is None:  # pragma: no cover - a caller naming an unregistered code
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Return code '{return_code}' is not registered.",
+        )
+    eligibility = resolve_eligibility(db, ctx, bank, as_of=reporting_date)
+    eligibility.require(
+        definition, reporting_date=reporting_date, ignore={"effective_date"}
+    )
+    effective_from = eligibility.effective_from(definition)
+    built = build()
+    # The withdrawn-evidence gate, HERE rather than in the caller (D-069, and
+    # the architecture audit's M1). A freeze-minted filing binds engine runs
+    # exactly as a generated one does — the ICAAP report binds every live block's
+    # run plus every annex's ``source_runs`` — so the refusal belongs at the
+    # mint, not in one family's freeze. Placed at the mint, the NEXT
+    # freeze-minted family inherits it instead of having to remember it; placed
+    # in ``freeze_cycle`` it would have to be re-remembered once per family.
+    # Before anything is enriched, superseded or flushed, so a refusal leaves
+    # nothing behind.
+    _assert_evidence_current(db, ctx, built.source_runs)
+    snapshot = built.snapshot
+    _enrich_institution_block(db, ctx, bank, snapshot)
+    _stamp_basis(snapshot, basis)
+    _stamp_template_revision(definition, snapshot)
+    # The authority record, for the same reason and from the same function the
+    # generic mint site uses: "a new generator cannot ship without a stated
+    # authority" was false for every freeze-minted family until this line
+    # existed (architecture audit M3). ``declared_methodologies`` and the
+    # per-section ``authority`` are the CF-1 disclosure — what an examiner reads
+    # to learn which figure a return means.
+    _stamp_provenance(
+        db,
+        ctx,
+        bank,
+        definition,
+        reporting_date=reporting_date,
+        snapshot=snapshot,
+        source_runs=built.source_runs,
+    )
+    metadata = snapshot.setdefault("metadata", {})
+    filing_meta = metadata.setdefault("filing", {})
+    filing_meta["filing_role"] = definition.filing_role
+    filing_meta["effective_from"] = effective_from.isoformat() if effective_from else None
+    filing_meta["effective_from_parameter"] = definition.effective_from_parameter
+    # A filing prepared before the return is in force is a REHEARSAL, and the
+    # document says so rather than the reader having to infer it from dates.
+    filing_meta["pre_effective"] = bool(
+        effective_from is not None and reporting_date < effective_from
+    )
+    missing = eligibility.missing_effective_parameter(definition)
+    if missing:
+        filing_meta["effective_from_missing_parameter"] = missing
+    rehearsal = _is_rehearsal(snapshot) if is_rehearsal is None else is_rehearsal
+    filing_meta["is_rehearsal"] = rehearsal
+
+    prior_current, prior_version, resubmission_authorization = _supersede_prior(
+        db,
+        ctx,
+        bank,
+        definition,
+        reporting_date=reporting_date,
+        basis=basis,
+        rehearsal=rehearsal,
+    )
+    register_digest = (
+        digests.register_state_digest(register_state.register_state_rows(db, ctx, bank.id))
+        if not built.source_runs
+        else None
+    )
+    package = RegulatoryPackage(
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        return_family=definition.family,
+        return_code=definition.code,
+        reporting_date=reporting_date,
+        frequency=definition.frequency,
+        basis=basis,
+        status="generated",
+        version=(prior_version or 0) + 1,
+        is_rehearsal=rehearsal,
+        supersedes_id=prior_current.id if prior_current is not None else None,
+        snapshot=snapshot,
+        source_runs=built.source_runs,
+        validation_report=None,
+        generated_by=actor_user_id,
+        generated_at=datetime.now(UTC),
+        notes=notes,
+        snapshot_sha256=snapshot_content_hash(snapshot),
+        content_digest=digests.content_digest(snapshot),
+        register_state_digest=register_digest,
+    )
+    db.add(package)
+    db.flush()
+    if resubmission_authorization is not None:
+        resubmission_authorization.consumed_by_package_id = package.id
+    record_event(
+        db,
+        ctx,
+        event_type="regulatory_package.generated",
+        entity_type="regulatory_package",
+        entity_id=package.id,
+        details={
+            "bank_id": str(bank.id),
+            "return_code": definition.code,
+            "return_family": definition.family,
+            "reporting_date": reporting_date.isoformat(),
+            "basis": basis,
+            "version": package.version,
+            "supersedes_id": (str(prior_current.id) if prior_current is not None else None),
+            "source_runs": [entry["run_id"] for entry in built.source_runs],
+            "content_digest": package.content_digest,
+            "register_state_digest": package.register_state_digest,
+            "minted_by": "family_freeze",
+            "pre_effective": filing_meta["pre_effective"],
+            "is_rehearsal": rehearsal,
+        },
+    )
+    logger.info(
+        "regulatory_package.frozen return_code=%s family=%s bank=%s org=%s "
+        "reporting_date=%s basis=%s version=%s pre_effective=%s",
+        definition.code,
+        definition.family,
+        bank.id,
+        ctx.organization_id,
+        reporting_date.isoformat(),
+        basis,
+        package.version,
+        filing_meta["pre_effective"],
+    )
+    if commit:
+        db.commit()
+    return package
 
 
 def _row(code: str, description: str, value: Any, **extra: Any) -> dict[str, Any]:
@@ -581,10 +877,39 @@ def _headline_comparative_section(totals: list[dict[str, Any]]) -> dict[str, Any
     )
 
 
+def _stamp_template_revision(definition: ReturnDefinition, snapshot: dict[str, Any]) -> None:
+    """Bind the snapshot to the template text it is generated under (D-021).
+
+    Only templates whose wording has been revised carry a revision; an
+    unstamped snapshot of one of them is a package generated before the
+    revision and renders with the frozen earlier text, so its re-export never
+    changes under it.
+    """
+    revision = TEMPLATE_REVISIONS.get(definition.template_id)
+    if revision is not None:
+        snapshot.setdefault("metadata", {})["template_revision"] = revision
+
+
 def _stamp_basis(snapshot: dict[str, Any], basis: str) -> None:
     """Record the solo/consolidated reporting basis on the snapshot in place."""
     snapshot.setdefault("institution", {})["basis"] = basis
     snapshot.setdefault("metadata", {})["basis"] = basis
+
+
+def _assert_evidence_current(
+    db: Session, ctx: TenantContext, source_runs: list[dict[str, Any]]
+) -> None:
+    """Refuse to mint a package bound to a run whose inputs were withdrawn.
+
+    Named rather than inlined because BOTH package-mint sites must run it and
+    the seam between them is where gates have twice gone missing (D-069). An
+    empty lineage is a pass — a master-data pack binds no engine evidence.
+    """
+    withdrawal_impact.assert_source_runs_current(
+        db,
+        _load_source_runs(db, ctx, source_runs),
+        purpose="package_generation",
+    )
 
 
 def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the input
@@ -592,8 +917,10 @@ def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the i
     ctx: TenantContext,
     bank: Bank,
     definition: ReturnDefinition,
-    payload: RegulatoryPackageCreate,
-    generated: GeneratedReturn,
+    *,
+    reporting_date: date,
+    snapshot: dict[str, Any],
+    source_runs: list[dict[str, Any]],
 ) -> None:
     """Write the authority record onto the snapshot, in place, before sealing.
 
@@ -617,20 +944,25 @@ def _stamp_provenance(  # noqa: PLR0913 — the full generation context is the i
     Every section is then stamped with an authority, so no field in a stored
     snapshot is left without one. Resolution order for a consumer is
     ``row.authority ?? section.authority``.
+
+    Takes the snapshot, its lineage and the reporting date rather than a
+    ``GeneratedReturn`` + ``RegulatoryPackageCreate``, because the FROZEN mint
+    site has neither and must run this too: a family that freezes its own
+    snapshot is still a family, and "a new generator cannot ship without a
+    stated authority" is only true if both mint sites can call this (D-069).
     """
-    snapshot = generated.snapshot
     declared = snapshot.get("provenance")
     if isinstance(declared, dict) and declared.get("authority"):
         authority = str(declared["authority"])
     else:
-        runs = _load_source_runs(db, ctx, generated.source_runs)
+        runs = _load_source_runs(db, ctx, source_runs)
         report_authority = (
             ReportAuthority.ENGINE_RUN if runs else ReportAuthority.MASTER_DATA_REGISTER
         )
         snapshot["provenance"] = build_engine_provenance(
             definition=definition,
             bank=bank,
-            effective_date=payload.reporting_date,
+            effective_date=reporting_date,
             runs=runs,
             authority=report_authority,
         ).to_dict()
@@ -1131,7 +1463,7 @@ def _generate_capital(
         _row("total_rwa_ghs", preview.total_rwa.description, preview.total_rwa.value, unit="ghs"),
     ]
     sections.append(_headline_comparative_section(totals))
-    metadata = {
+    metadata: dict[str, Any] = {
         "form_code": preview.header.form_code,
         "form_title": preview.header.form_title,
         "regulator_name": preview.header.regulator,
@@ -1139,6 +1471,10 @@ def _generate_capital(
         "baseline_run_id": str(preview.run_id),
         "engine_validations": [item.model_dump(mode="json") for item in preview.validations],
     }
+    baseline = db.get(RegulatoryRun, preview.run_id) if preview.run_id else None
+    pending = [] if baseline is None else _pending_minimum_notes(baseline, period.period_end)
+    if pending:
+        metadata["report_notes"] = pending
     runs = _latest_succeeded_runs_by_scenario(db, ctx, bank, period, MODULE_CAPITAL)
     return GeneratedReturn(
         snapshot=_envelope(bank, period, definition, sections, totals, metadata),
@@ -1447,24 +1783,18 @@ def _generate_icaap_stress(
     period: BankReportingPeriod,
     definition: ReturnDefinition,
 ) -> GeneratedReturn:
-    forecast_run = next(
-        (
-            run
-            for run in db.scalars(
-                select(RegulatoryRun)
-                .where(
-                    RegulatoryRun.organization_id == ctx.organization_id,
-                    RegulatoryRun.bank_id == bank.id,
-                    RegulatoryRun.reporting_period_id == period.id,
-                    RegulatoryRun.module == MODULE_FORECAST,
-                    RegulatoryRun.status == "succeeded",
-                )
-                .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
-            )
-            if run.inputs.get("horizon_years", _ICAAP_FORECAST_HORIZON_YEARS)
-            == _ICAAP_FORECAST_HORIZON_YEARS
-        ),
-        None,
+    forecast_run = db.scalar(
+        select(RegulatoryRun)
+        .where(
+            RegulatoryRun.organization_id == ctx.organization_id,
+            RegulatoryRun.bank_id == bank.id,
+            RegulatoryRun.reporting_period_id == period.id,
+            RegulatoryRun.module == MODULE_FORECAST,
+            RegulatoryRun.status == "succeeded",
+            regulatory_forecasting.regulatory_horizon_clause(),
+        )
+        .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
+        .limit(1)
     )
     if forecast_run is None:
         raise HTTPException(
@@ -1518,6 +1848,21 @@ def _generate_icaap_stress(
         _section("forecast_path", "Projected Balance-Sheet Path", path_rows),
         _section("stress_summary", "Stress Scenario Outcomes", stress_rows, optional=True),
     ]
+    # Reverse stress (Stress Testing Guideline ¶36): the latest stored reverse-
+    # stress run for the period, re-tabulated through the SAME row builder the
+    # Board/ALCO stress pack uses. Absent a run the section is omitted and the
+    # package says so — no frontier is ever inferred.
+    reverse_run = _latest_reverse_stress_run(db, ctx, bank, period)
+    frontier_rows = _stress_frontier_rows(reverse_run) if reverse_run is not None else []
+    if reverse_run is not None:
+        sections.append(
+            _section(
+                "reverse_stress",
+                "Reverse Stress Test Summary",
+                frontier_rows,
+                optional=True,
+            )
+        )
     totals = [
         _row(
             code,
@@ -1527,7 +1872,7 @@ def _generate_icaap_stress(
         for code in ("cumulative_net_income", "min_car_pct", "min_lcr_pct", "min_nsfr_pct")
         if code in metrics
     ]
-    metadata = {
+    metadata: dict[str, Any] = {
         "forecast_run_id": str(forecast_run.id),
         "forecast_scenario_code": forecast_run.scenario_code,
         "assumptions": metrics.get("assumptions", {}),
@@ -1536,6 +1881,20 @@ def _generate_icaap_stress(
     source_runs = [_source_run_entry(forecast_run)] + [
         _source_run_entry(run) for run in stress_runs
     ]
+    if reverse_run is not None:
+        metadata["reverse_stress_run_id"] = str(reverse_run.id)
+        metadata["reverse_stress_narrative"] = _reverse_stress_narrative(reverse_run)
+        metadata["report_notes"] = [_reverse_stress_note(frontier_rows)]
+        source_runs.append(_source_run_entry(reverse_run))
+    else:
+        absent = (
+            "No reverse stress test has been run for this reporting period, so the "
+            "reverse stress test summary is omitted; nothing is substituted for it."
+        )
+        metadata["report_notes"] = [absent]
+        metadata["generation_findings"] = [
+            {"rule": "icaap_reverse_stress", "severity": "INFO", "detail": absent}
+        ]
     return GeneratedReturn(
         snapshot=_envelope(bank, period, definition, sections, totals, metadata),
         source_runs=source_runs,
@@ -1570,10 +1929,6 @@ def _appendix2_period_label(label: str) -> str:
         if label.startswith(prefix):
             return f"{wording}{label.removeprefix(prefix)}"
     return label
-
-
-def _appendix2_variable_label(variable: str) -> str:
-    return variable.replace("_", " ").upper()
 
 
 def _appendix2_row(code: str, description: str, fields: dict[str, Any]) -> dict[str, Any]:
@@ -1620,7 +1975,7 @@ def _appendix2_table1_sections(  # noqa: PLR0912, PLR0915 - one flat table mappi
             impact_rows.append(
                 _appendix2_row(
                     f"y{year}:{loss['exposure_class']}",
-                    _appendix2_variable_label(loss["exposure_class"]),
+                    appendix2_exposure_class_label(loss["exposure_class"]),
                     {"value": loss["loss"], "year": str(year)},
                 )
             )
@@ -1821,44 +2176,156 @@ def _appendix2_table4_section(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
 
 
-def _appendix2_table5_section(table5: dict[str, Any]) -> dict[str, Any]:
-    built = [
-        _appendix2_row(
-            row["label"],
-            _appendix2_period_label(row["label"]),
-            {
-                "value": row.get("total_pillar1_rwa"),
-                "credit_rwa": row.get("credit_rwa"),
-                "operational_rwa": row.get("operational_rwa"),
-                "market_rwa": row.get("market_rwa"),
-                "pillar1_requirement": row.get("pillar1_requirement"),
-                "pillar2_total": row["pillar2"].get("total"),
-                "total_capital_requirement": row.get("total_capital_requirement"),
-            },
+def _is_nil(value: Any) -> bool:
+    try:
+        return value is not None and Decimal(str(value)) == 0
+    except InvalidOperation:
+        return False
+
+
+def _appendix2_pillar2(row: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """One Table 5 column's Pillar 2 block, and the risks it has NOT modelled.
+
+    ``None`` means no Pillar 2 amount is recorded for the risk ("Not modelled");
+    ``0`` means the risk WAS assessed and the charge is nil, and prints as 0.00.
+    The two are never folded together (regulatory audit P0R-6). The run's
+    ``total`` is the sum of the recorded risks, so a column with nothing recorded
+    carried ``0.000``, which a filed Table 5 prints as a zero requirement: a
+    total over nothing is itself not modelled (``None``); a total over some but
+    not all risks is kept and declared partial through ``pillar2_coverage``.
+    """
+    pillar2 = row.get("pillar2") or {}
+    values = {field: pillar2.get(key) for field, key, _ in APPENDIX2_PILLAR2_RISKS}
+    missing = [label for field, _, label in APPENDIX2_PILLAR2_RISKS if values[field] is None]
+    nil = [label for field, _, label in APPENDIX2_PILLAR2_RISKS if _is_nil(values[field])]
+    if len(missing) == len(APPENDIX2_PILLAR2_RISKS):
+        total = None
+        coverage = NOT_MODELLED
+    else:
+        total = pillar2.get("total")
+        coverage = (
+            "Partial — excludes " + ", ".join(missing) if missing else "All Pillar 2 risks assessed"
         )
-        for row in table5["rows"]
+        if nil:
+            coverage += "; assessed nil: " + ", ".join(nil)
+    return {**values, "pillar2_total": total, "pillar2_coverage": coverage}, missing
+
+
+def _appendix2_table5_sections(
+    table5: dict[str, Any], *, include_pillar2: bool = True
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Table 5 → the RWA/requirements grid, the per-risk Pillar 2 grid, and the
+    advisory findings about Pillar 2 coverage (INFO/WARNING only).
+
+    ``include_pillar2=False`` is the SDI packet (D-020): SDIs are outside the
+    ICAAP Guideline and have no Pillar 2 regime, so neither the Pillar 2 grid,
+    nor a Pillar 2 total, nor a Pillar 2 coverage finding is produced — and the
+    row carries the requirement at the governed CAR only, never a "total" that
+    could hold an engine-side add-on under a name the regime does not have.
+    """
+    rwa_rows: list[dict[str, Any]] = []
+    pillar2_rows: list[dict[str, Any]] = []
+    unmodelled_columns: list[str] = []
+    for row in table5["rows"]:
+        label = row["label"]
+        description = _appendix2_period_label(label)
+        fields: dict[str, Any] = {
+            "value": row.get("total_pillar1_rwa"),
+            "credit_rwa": row.get("credit_rwa"),
+            "operational_rwa": row.get("operational_rwa"),
+            "market_rwa": row.get("market_rwa"),
+            "pillar1_requirement": row.get("pillar1_requirement"),
+        }
+        if include_pillar2:
+            pillar2, missing = _appendix2_pillar2(row)
+            if len(missing) == len(APPENDIX2_PILLAR2_RISKS):
+                unmodelled_columns.append(description)
+            fields["pillar2_total"] = pillar2["pillar2_total"]
+            fields["total_capital_requirement"] = row.get("total_capital_requirement")
+            pillar2_rows.append(_appendix2_row(label, description, pillar2))
+        rwa_rows.append(_appendix2_row(label, description, fields))
+    findings: list[dict[str, str]] = []
+    if unmodelled_columns:
+        findings.append(
+            {
+                "rule": "appendix2_pillar2_coverage",
+                "severity": "WARNING",
+                "detail": (
+                    "Appendix II Table 5 records no Pillar 2 capital requirement for: "
+                    + "; ".join(unmodelled_columns)
+                    + f". Those columns print '{NOT_MODELLED}', and their Total Capital "
+                    "Requirements figure is the Pillar 1 requirement alone, which "
+                    "understates the requirement until the Pillar 2 assessment for them "
+                    "is recorded."
+                ),
+            }
+        )
+    sections = [
+        _section(
+            "t5_rwa",
+            "Appendix II Table 5 — Evolution of RWA & Capital Requirements"
+            if include_pillar2
+            else "Evolution of RWA & Capital Requirement",
+            rwa_rows,
+        )
     ]
-    return _section(
-        "t5_rwa",
-        "Appendix II Table 5 — Evolution of RWA & Capital Requirements",
-        built,
-    )
+    if include_pillar2:
+        sections.append(
+            _section(
+                "t5_pillar2",
+                "Appendix II Table 5 — Pillar 2 Capital Requirements by Risk",
+                pillar2_rows,
+                optional=True,
+            )
+        )
+    return sections, findings
+
+
+#: Table 6 drivers the directive asks for as a year-on-year CHANGE while the
+#: scenario authors a LEVEL (Appendix III Table 6: "Year-on-Year Changes in Stock
+#: Market Valuation (GSE Index)"). Shown as the change, never as the level.
+_APPENDIX2_YOY_DRIVERS = frozenset({"gse_index"})
+_YOY_QUANTUM = Decimal("0.000001")
+
+
+def _year_on_year(level: Any, prior: Any) -> str | None:
+    """The fractional change from ``prior`` to ``level``, or ``None`` when either
+    is absent or the prior level is zero (no change can be stated)."""
+    try:
+        current = Decimal(str(level)) if level is not None else None
+        previous = Decimal(str(prior)) if prior is not None else None
+    except InvalidOperation:
+        return None
+    if current is None or previous is None or previous == 0:
+        return None
+    return str((current / previous - 1).quantize(_YOY_QUANTUM))
 
 
 def _appendix2_table6_section(table6: dict[str, Any]) -> dict[str, Any]:
-    built = [
-        _appendix2_row(
-            f"{row['variable']}:y{row['year_index']}",
-            _appendix2_variable_label(row["variable"]),
-            {
-                "value": row.get("stress_value"),
-                "year_index": str(row["year_index"]),
-                "base_value": row.get("base_value"),
-                "stress_value": row.get("stress_value"),
-            },
+    by_variable: dict[str, dict[int, dict[str, Any]]] = {}
+    for row in table6["rows"]:
+        by_variable.setdefault(row["variable"], {})[int(row["year_index"])] = row
+    built: list[dict[str, Any]] = []
+    for row in table6["rows"]:
+        variable = row["variable"]
+        base_value = row.get("base_value")
+        stress_value = row.get("stress_value")
+        if variable in _APPENDIX2_YOY_DRIVERS:
+            prior = by_variable[variable].get(int(row["year_index"]) - 1) or {}
+            base_value = _year_on_year(base_value, prior.get("base_value"))
+            stress_value = _year_on_year(stress_value, prior.get("stress_value"))
+        built.append(
+            _appendix2_row(
+                f"{variable}:y{row['year_index']}",
+                appendix2_risk_driver_label(variable),
+                {
+                    "value": stress_value,
+                    "year_index": str(row["year_index"]),
+                    "base_value": base_value,
+                    "stress_value": stress_value,
+                },
+            )
         )
-        for row in table6["rows"]
-    ]
     return _section(
         "t6_risk_drivers",
         "Appendix II Table 6 — Key Risk Drivers & Forecasting Assumptions",
@@ -1906,17 +2373,32 @@ def _generate_attested_appendix2(  # noqa: PLR0913 — five are the standard
     t1_sections, t1_totals = _appendix2_table1_sections(
         table1, basel_applicable=include_basel_table2
     )
+    t5_sections, findings = _appendix2_table5_sections(
+        appendix["table5_rwa"], include_pillar2=include_basel_table2
+    )
     sections = [
         *t1_sections,
         _appendix2_table3_section(appendix["table3_profit_and_loss"]),
         _appendix2_table4_section(appendix["table4_financial_position"]),
-        _appendix2_table5_section(appendix["table5_rwa"]),
+        *t5_sections,
         _appendix2_table6_section(appendix["table6_risk_drivers"]),
         _appendix2_governance_section(run, signoff),
     ]
     if include_basel_table2:
         sections.insert(len(t1_sections), _appendix2_table2_section(appendix["table2_capital"]))
+    if signoff is not None:
+        narrative, narrative_findings = _appendix2_narrative_section(db, ctx, signoff)
+        sections.append(narrative)
+        findings.extend(narrative_findings)
 
+    provenance = _appendix2_parameter_provenance(
+        run,
+        table1,
+        period,
+        appendix.get("unit") or "",
+        basel_applicable=include_basel_table2,
+    )
+    findings.extend(_weaker_minimum_findings(provenance))
     metadata: dict[str, Any] = {
         # The reporting unit comes from the stress run that produced these
         # tables. It used to default to ``GHS'000`` — a currency literal on a
@@ -1934,7 +2416,13 @@ def _generate_attested_appendix2(  # noqa: PLR0913 — five are the standard
         "enterprise_stress_run_id": str(run.id),
         "enterprise_stress_input_hash": run.input_hash,
         "basel_table2_included": include_basel_table2,
+        # The minima the capital-requirement lines were measured against, with
+        # the governed row that supplied each — the report notes state them, so
+        # the column headers can stay free of a hard-coded percentage.
+        "parameter_provenance": provenance,
     }
+    if findings:
+        metadata["generation_findings"] = findings
     if signoff is not None:
         metadata["governance"] = {
             "signoff_id": str(signoff.id),
@@ -1996,12 +2484,14 @@ def _appendix2_governance_section(run: RegulatoryRun, signoff: Any | None) -> di
         _appendix2_row("input_hash", "Enterprise-stress input hash", {"value": run.input_hash}),
     ]
     if signoff is not None:
+        # Status in words, and no attester user id: who attested is printed by
+        # name and designation in the narrative section (regulatory audit P0R-12,
+        # m13) — a raw identifier is not a statement a reader can use.
         rows += [
-            _appendix2_row("signoff_status", "Board attestation status", {"value": signoff.status}),
             _appendix2_row(
-                "attested_by",
-                "Attested by (Board/approver)",
-                {"value": str(signoff.attested_by) if signoff.attested_by else None},
+                "signoff_status",
+                "Board attestation status",
+                {"value": _SIGNOFF_STATUS_LABELS.get(signoff.status, _humanised(signoff.status))},
             ),
             _appendix2_row(
                 "stays_above_all_minima",
@@ -2021,10 +2511,346 @@ def _appendix2_governance_section(run: RegulatoryRun, signoff: Any | None) -> di
     )
 
 
+_SIGNOFF_STATUS_LABELS: dict[str, str] = {
+    "draft": "Draft",
+    "pending_attestation": "Awaiting Board attestation",
+    "attested": "Attested by the Board",
+    "withdrawn": "Withdrawn",
+}
+
+
+def _humanised(code: str | None) -> str:
+    """A machine code in words ("severely_adverse" -> "Severely adverse")."""
+    text = str(code or "").replace("_", " ").strip()
+    return text[:1].upper() + text[1:]
+
+
 def _appendix2_bool(value: bool | None) -> str | None:
     if value is None:
         return None
     return "Yes" if value else "No"
+
+
+#: The attested sign-off's narrative elements, in the order the submission
+#: reads them, with the label printed beside each. The paragraph mapping lives
+#: on the model (``EnterpriseStressSignoff``) and in the template's citation.
+_APPENDIX2_NARRATIVE_ELEMENTS: tuple[tuple[str, str], ...] = (
+    (
+        "scenario_narrative",
+        "Scenario narrative — risks, exposures, entities and macroeconomic conditions "
+        "covered (¶67(a)–(b))",
+    ),
+    (
+        "assumptions_rationale",
+        "Assumptions rationale — justification of the assumptions and of expert-judgement "
+        "overlays (¶67(b), ¶45)",
+    ),
+    ("methodology_summary", "Methodology summary — methodologies used (¶67(c))"),
+    ("board_challenge", "Board challenge (¶20)"),
+    (
+        "credibility_rationale",
+        "Board's rationale for its assessment of the credibility of the framework and "
+        "results (¶20)",
+    ),
+)
+
+
+def _narrative_text(value: str | None) -> str | None:
+    """The recorded text, with line endings normalised; blank is absent (it prints
+    "Not stated", never an empty paragraph)."""
+    if value is None:
+        return None
+    text = value.replace("\r\n", "\n").replace("\r", "\n").strip()
+    return text or None
+
+
+def _attester_line(db: Session, ctx: TenantContext, signoff: Any) -> str | None:
+    """Who attested, by name and designation — not the user id (audit m13).
+
+    Resolved at generation and sealed into the snapshot, so a later change to
+    the user's profile cannot rewrite what the filed return says.
+    """
+    if signoff.attested_by is None:
+        return None
+    user = db.scalar(
+        select(User).where(
+            User.id == signoff.attested_by,
+            User.organization_id == ctx.organization_id,
+        )
+    )
+    name = (user.display_name or "").strip() if user is not None else ""
+    title = (user.job_title or "").strip() if user is not None else ""
+    line = f"{name or 'Name not recorded'}, {title or 'designation not recorded'}"
+    if signoff.attested_at is not None:
+        line += f" (attested {signoff.attested_at.date().isoformat()})"
+    return line
+
+
+def _appendix2_narrative_section(
+    db: Session, ctx: TenantContext, signoff: Any
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """The Board-attested narrative as a rendered section (ICAAP P0, audit §4.4).
+
+    The narratives were already in the snapshot — ``metadata.governance``, inside
+    the content digest the signatures bind — but no artifact printed them, and
+    the regulator reads the PDF, not the metadata (Stress Testing Guideline
+    ¶67(a)–(c), ¶20). This section carries them as rows the PDF sets as prose.
+    An element the sign-off does not record prints "Not stated" and raises a
+    validation warning; nothing is paraphrased or filled in.
+    """
+    rows: list[dict[str, Any]] = []
+    missing: list[str] = []
+    for key, label in _APPENDIX2_NARRATIVE_ELEMENTS:
+        text = _narrative_text(getattr(signoff, key, None))
+        if text is None:
+            missing.append(label)
+        rows.append(_appendix2_row(key, label, {"value": text}))
+    rows.append(
+        _appendix2_row("attested_by", "Attested by", {"value": _attester_line(db, ctx, signoff)})
+    )
+    findings: list[dict[str, str]] = []
+    if missing:
+        findings.append(
+            {
+                "rule": "appendix2_narrative_completeness",
+                "severity": "WARNING",
+                "detail": (
+                    "The Board-attested stress sign-off records nothing for: "
+                    + "; ".join(missing)
+                    + f". The narrative prints '{NOT_STATED}' for each."
+                ),
+            }
+        )
+    section = _section(
+        "stress_narrative",
+        "Stress Test Narrative (Board-attested)",
+        rows,
+        optional=True,
+    )
+    return section, findings
+
+
+#: Every minimum Appendix II's figures are measured against (regulatory audit
+#: P0R-5): the capital-requirement lines (CAR, paid-up) and the ¶77 "stays above
+#: all minima" verdict (CET1, Tier 1, leverage). Each entry is (control-plane
+#: code, where the run records the APPLIED value, printed label, applied unit —
+#: ``None`` means the tables' own reporting unit —, Basel regime only).
+_APPENDIX2_GOVERNED_MINIMA: tuple[tuple[str, tuple[str, str], str, str | None, bool], ...] = (
+    ("car_min", ("table1", "car_target_pct"), "Minimum total capital ratio", "percent", False),
+    ("cet1_min", ("thresholds", "cet1_min"), "Minimum CET1 ratio", "percent", True),
+    ("tier1_min", ("thresholds", "tier1_min"), "Minimum Tier 1 ratio", "percent", True),
+    ("leverage_min", ("thresholds", "leverage_min"), "Minimum leverage ratio", "percent", True),
+    (
+        "paid_up_min",
+        ("table1", "paid_up_min"),
+        "Minimum unimpaired paid-up capital",
+        None,
+        False,
+    ),
+    # The Table 2 recognition ceilings (D-024 / audit M21), recorded on runs from
+    # 2026-09-19; an earlier run carries none and prints no line for them.
+    (
+        "at1_cap_pct_rwa",
+        ("caps", "at1_cap_pct_rwa"),
+        "Maximum Additional Tier 1 capital recognised, as a percentage of RWA,",
+        "percent",
+        True,
+    ),
+    (
+        "tier2_cap_pct_rwa",
+        ("caps", "tier2_cap_pct_rwa"),
+        "Maximum Tier 2 capital recognised, as a percentage of RWA,",
+        "percent",
+        True,
+    ),
+)
+
+_GOVERNED_ROW_FIELDS = (
+    "param_code",
+    "value",
+    "unit",
+    "source_citation",
+    "confirmation_status",
+    "effective_from",
+    "scope_type",
+    "scope_key",
+    "jurisdiction_code",
+    "parameter_id",
+)
+
+#: The resolver's layer order (``app.domain.policy.resolution_order``): a
+#: licence-type row wins over the class row whatever their dates.
+_RESOLUTION_LAYER_RANK: dict[str, int] = {"institution_type": 0, "institution_class": 1}
+
+
+def _governed_row(run: RegulatoryRun, code: str, as_of: date) -> dict[str, Any] | None:
+    """The control-plane row that supplied ``code`` to the run, at ``as_of``.
+
+    Read from the run's own ``parameter_provenance`` (audit D-18) — the record,
+    sealed beside the run, of WHICH governed rows produced its inputs. That
+    ledger is over-inclusive by design, so the row is chosen the way the
+    resolver chose it: active on the as-of, the licence-type layer before the
+    class layer, then the newest generation. ``None`` when the run predates the
+    record or consumed no row for the code.
+    """
+    candidates: list[dict[str, Any]] = []
+    for entry in run.parameter_provenance or []:
+        if not isinstance(entry, dict) or entry.get("param_code") != code:
+            continue
+        try:
+            start = date.fromisoformat(str(entry.get("effective_from")))
+            raw_end = entry.get("effective_to")
+            end = date.fromisoformat(str(raw_end)) if raw_end else None
+        except ValueError:
+            continue
+        if start <= as_of and (end is None or end > as_of):
+            candidates.append(entry)
+    if not candidates:
+        return None
+    best_layer = min(
+        _RESOLUTION_LAYER_RANK.get(str(entry.get("scope_type")), 2) for entry in candidates
+    )
+    layer = [
+        entry
+        for entry in candidates
+        if _RESOLUTION_LAYER_RANK.get(str(entry.get("scope_type")), 2) == best_layer
+    ]
+    newest = max(str(entry["effective_from"]) for entry in layer)
+    chosen = min(
+        (entry for entry in layer if str(entry["effective_from"]) == newest),
+        key=lambda entry: str(entry.get("parameter_id")),
+    )
+    return {field: chosen.get(field) for field in _GOVERNED_ROW_FIELDS}
+
+
+#: The capital-ratio minima a capital return prints beside each ratio.
+_CAPITAL_RATIO_MINIMA: tuple[tuple[str, str], ...] = (
+    ("car_min", "minimum total capital ratio"),
+    ("cet1_min", "minimum CET1 ratio"),
+    ("tier1_min", "minimum Tier 1 ratio"),
+    ("leverage_min", "minimum leverage ratio"),
+)
+
+
+def _percent_text(value: Any) -> str:
+    """``"6.500000"`` → ``"6.5%"`` (a governed row's stored scale is not printed)."""
+    try:
+        number = Decimal(str(value))
+    except InvalidOperation:
+        return f"{value}%"
+    shown = (
+        number.quantize(Decimal(1)) if number == number.to_integral_value() else number.normalize()
+    )
+    return f"{shown:f}%"
+
+
+def _pending_minimum_notes(run: RegulatoryRun, as_of: date) -> list[str]:
+    """One note per capital minimum whose governed row awaits confirmation.
+
+    Founder directive D-024: a ``pending`` value is applied — pending never
+    blocks a calculation or a return — but every output that shows it says it
+    awaits confirmation. Read from the run's own sealed parameter provenance, so
+    the note names the row the arithmetic used.
+    """
+    notes: list[str] = []
+    for code, label in _CAPITAL_RATIO_MINIMA:
+        governed = _governed_row(run, code, as_of)
+        if governed is None or governed.get("confirmation_status") != "pending":
+            continue
+        notes.append(
+            f"The {label} of {_percent_text(governed.get('value'))} is governed parameter "
+            f"{code}, pending confirmation ({governed.get('source_citation', '')}). It is "
+            "applied as governed until it is confirmed or changed in the regulatory "
+            "parameter set."
+        )
+    return notes
+
+
+def _applied_minimum(run: RegulatoryRun, table1: dict[str, Any], source: tuple[str, str]) -> Any:
+    where, key = source
+    if where == "table1":
+        return table1.get(key)
+    if where == "caps":
+        return ((run.inputs or {}).get("recognition_caps_pct_rwa") or {}).get(key)
+    parameters = (run.inputs or {}).get("parameters") or {}
+    thresholds = (parameters.get("capital") or {}).get("thresholds_pct") or {}
+    return thresholds.get(key)
+
+
+def _minimum_basis(
+    applied: Any, governed: dict[str, Any] | None, unit: str | None, code: str = ""
+) -> str | None:
+    """How the applied value stands against the governed row — three ways, so a
+    weaker value is never described as stricter (security audit M-2). For a
+    ceiling (a recognition cap) the stricter value is the LOWER one."""
+    if governed is None:
+        return "not_recorded"
+    if unit != "percent" or governed.get("value") is None:
+        return None
+    try:
+        difference = Decimal(str(applied)) - Decimal(str(governed["value"]))
+    except InvalidOperation:
+        return None
+    if direction_for(code) is Direction.CEILING:
+        difference = -difference
+    if difference > 0:
+        return "stricter_than_governed"
+    if difference < 0:
+        return "weaker_than_governed"
+    return "governed"
+
+
+def _appendix2_parameter_provenance(
+    run: RegulatoryRun,
+    table1: dict[str, Any],
+    period: BankReportingPeriod,
+    unit: str,
+    *,
+    basel_applicable: bool = True,
+) -> list[dict[str, Any]]:
+    """Each minimum applied, as the value used plus its authority.
+
+    A list, not a mapping, so the printed order survives any JSON store. The
+    CET1 / Tier 1 / leverage minima exist only under the bank (Basel) regime.
+    """
+    entries: list[dict[str, Any]] = []
+    for code, source, label, applied_unit, basel_only in _APPENDIX2_GOVERNED_MINIMA:
+        if basel_only and not basel_applicable:
+            continue
+        applied = _applied_minimum(run, table1, source)
+        if applied is None:
+            continue
+        governed = _governed_row(run, code, period.period_end)
+        entries.append(
+            {
+                "param_code": code,
+                "label": label,
+                "applied_value": applied,
+                "applied_unit": applied_unit or unit,
+                "basis": _minimum_basis(applied, governed, applied_unit, code),
+                "governed": governed,
+            }
+        )
+    return entries
+
+
+def _weaker_minimum_findings(entries: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """A WARNING for every minimum the run applied below its governed value."""
+    return [
+        {
+            "rule": "appendix2_minimum_weaker_than_governed",
+            "severity": "WARNING",
+            "detail": (
+                f"The source run applied {entry['label'].lower()} of "
+                f"{entry['applied_value']} while the governed parameter "
+                f"{entry['param_code']} is {entry['governed']['value']}: the figures "
+                "measured against it understate the requirement. Re-run the stress test "
+                "under the current governed minima before filing."
+            ),
+        }
+        for entry in entries
+        if entry.get("basis") == "weaker_than_governed"
+    ]
 
 
 def _carries_a_verdict(threshold_min: Any, status: str | None) -> bool:
@@ -2198,27 +3024,78 @@ def _stress_attribution(
     return rows
 
 
+def _latest_reverse_stress_run(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> RegulatoryRun | None:
+    """The latest succeeded reverse-stress run for the period, or ``None``.
+
+    One lookup for every package that reports reverse stress (the stress pack
+    and the ICAAP data companion), so the two can never pick different runs.
+    """
+    return db.scalar(
+        select(RegulatoryRun)
+        .where(
+            RegulatoryRun.organization_id == ctx.organization_id,
+            RegulatoryRun.bank_id == bank.id,
+            RegulatoryRun.reporting_period_id == period.id,
+            RegulatoryRun.module == "reverse_stress",
+            RegulatoryRun.status == "succeeded",
+        )
+        .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
+        .limit(1)
+    )
+
+
+def _reverse_stress_narrative(reverse_run: RegulatoryRun) -> str:
+    """The run's stored narrative, normalised the same way for every package."""
+    return str(reverse_run.metrics.get("narrative") or "").strip()
+
+
+def _reverse_stress_note(frontier_rows: list[dict[str, Any]]) -> str:
+    """The reverse-stress result as one printed sentence per axis, in words."""
+    parts: list[str] = []
+    for row in frontier_rows:
+        if row.get("breached") == "true":
+            parts.append(
+                f"{row['description']}: {row['value']}x (ratio at breach "
+                f"{row.get('ratio_at_breach_pct')}% against a {row.get('floor_pct')}% floor)."
+            )
+        else:
+            parts.append(f"{row['description']}.")
+    return "Reverse stress test (before management actions): " + " ".join(parts)
+
+
 def _stress_frontier_rows(reverse_run: RegulatoryRun) -> list[dict[str, Any]]:
+    """The reverse-stress frontier, one row per axis, in words.
+
+    The description and the ``scenario`` column name the scaled scenario and the
+    floor in words (regulatory audit P0R-11); the machine ``scenario_code`` stays
+    on the row for consumers that key on it.
+    """
     rows: list[dict[str, Any]] = []
-    for axis_code, floor_key, ratio_key in (
-        ("liquidity_frontier", "lcr_min_pct", "lcr_at_breach_pct"),
-        ("capital_frontier", "cet1_min_pct", "worst_cet1_at_breach_pct"),
+    for axis_code, axis_label, floor_label, floor_key, ratio_key in (
+        ("liquidity_frontier", "liquidity", "LCR", "lcr_min_pct", "lcr_at_breach_pct"),
+        ("capital_frontier", "capital", "CET1", "cet1_min_pct", "worst_cet1_at_breach_pct"),
     ):
         axis = reverse_run.metrics[axis_code.replace("_frontier", "_axis")]
         breached = axis["breached"]
+        scenario = _humanised(axis["scenario_code"])
         rows.append(
             _row(
                 axis_code,
                 (
-                    f"Severity multiplier breaching the {axis['scenario_code']} floor"
+                    f"Severity multiplier at which the scaled {scenario} {axis_label} "
+                    f"scenario first breaches the {floor_label} floor"
                     if breached
-                    else f"No breach up to {axis['k_max']}x scenario severity"
+                    else f"No {floor_label} floor breach up to {axis['k_max']}x the "
+                    f"{scenario} {axis_label} scenario's severity"
                 ),
                 axis.get("breach_multiplier", axis.get("k_max", "")),
                 breached="true" if breached else "false",
                 floor_pct=axis.get(floor_key),
                 ratio_at_breach_pct=axis.get(ratio_key),
                 scenario_code=axis["scenario_code"],
+                scenario=scenario,
             )
         )
     return rows
@@ -2351,18 +3228,7 @@ def _generate_stress_pack(
             },
         )
 
-    reverse_run = db.scalar(
-        select(RegulatoryRun)
-        .where(
-            RegulatoryRun.organization_id == ctx.organization_id,
-            RegulatoryRun.bank_id == bank.id,
-            RegulatoryRun.reporting_period_id == period.id,
-            RegulatoryRun.module == "reverse_stress",
-            RegulatoryRun.status == "succeeded",
-        )
-        .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
-        .limit(1)
-    )
+    reverse_run = _latest_reverse_stress_run(db, ctx, bank, period)
 
     traffic_rows = _stress_traffic_lights(db, scenario_runs)
     evolution_rows = _stress_ratio_evolution(capital_runs)
@@ -2435,7 +3301,7 @@ def _generate_stress_pack(
     }
     if reverse_run is not None:
         metadata["reverse_stress_run_id"] = str(reverse_run.id)
-        metadata["reverse_stress_narrative"] = reverse_run.metrics.get("narrative", "")
+        metadata["reverse_stress_narrative"] = _reverse_stress_narrative(reverse_run)
 
     source_runs = [_source_run_entry(run) for _, _, run in scenario_runs]
     if reverse_run is not None:

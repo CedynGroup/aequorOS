@@ -14,6 +14,8 @@ always produces identical bytes (stable re-export checksums).
 from __future__ import annotations
 
 import io
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from reportlab.lib import colors
@@ -21,7 +23,6 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase.pdfmetrics import stringWidth
-from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
@@ -29,12 +30,20 @@ from reportlab.platypus import (
     PageBreak,
     PageTemplate,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
 )
 
+from app.services.regulatory_reporting.exports.pdf_parts import NAVY as _NAVY
+from app.services.regulatory_reporting.exports.pdf_parts import PageFurniture as _PageFurniture
+from app.services.regulatory_reporting.exports.pdf_parts import (
+    escape_text,
+    prose_entries,
+)
+from app.services.regulatory_reporting.exports.pdf_parts import (
+    invariant_canvas as _invariant_canvas,
+)
 from app.services.regulatory_reporting.templates import (
     ColumnSpec,
     RenderedCell,
@@ -44,11 +53,9 @@ from app.services.regulatory_reporting.templates import (
     format_cell,
 )
 
-_NAVY = colors.HexColor("#1F3864")  # single header rule; no other branding
 _GRID_GREY = colors.HexColor("#BFBFBF")
 _HEADER_GREY = colors.HexColor("#D9D9D9")
 _TOTAL_GREY = colors.HexColor("#F2F2F2")
-_WATERMARK_GREY = colors.Color(0.75, 0.75, 0.75, alpha=0.4)
 
 _STYLES = getSampleStyleSheet()
 _TITLE = ParagraphStyle("ReturnTitle", parent=_STYLES["Title"], textColor=_NAVY)
@@ -60,6 +67,10 @@ _CELL_RIGHT = ParagraphStyle("CellRight", parent=_CELL, alignment=2)
 _FIELD_LABEL = ParagraphStyle(
     "FieldLabel", parent=_CELL, fontSize=6.5, leading=8, textColor=colors.grey
 )
+#: Narrative sections (``presentation='prose'``): a bold element label over its
+#: body text, set at body size on the portrait measure.
+_PROSE_LABEL = ParagraphStyle("ProseLabel", parent=_BODY, fontSize=9.5, leading=12, spaceAfter=1)
+_PROSE_BODY = ParagraphStyle("ProseBody", parent=_BODY, fontSize=9.5, leading=13, spaceAfter=4)
 
 #: The attestation block's four signing cells, in points, across the 18 mm text
 #: margins (595.28 − 2 × 51.02 = 493.2 pt). The signature column is the widest
@@ -118,51 +129,6 @@ _MARGINS = {
 }
 
 
-def _canvas_pagesize(canvas: pdf_canvas.Canvas) -> tuple[float, float]:
-    """This page's (width, height) in points, whatever template produced it."""
-    size = getattr(canvas, "_pagesize", None)
-    if size is None:
-        return _PORTRAIT
-    width, height = size
-    return float(width), float(height)
-
-
-def _invariant_canvas(*args: Any, **kwargs: Any) -> pdf_canvas.Canvas:
-    kwargs["invariant"] = 1
-    return pdf_canvas.Canvas(*args, **kwargs)
-
-
-class _PageFurniture:
-    """Draws the navy header rule on every page and the SANDBOX watermark
-    when the package's default submission channel is the sandbox simulator."""
-
-    def __init__(self, *, watermark: bool, footer: str) -> None:
-        self._watermark = watermark
-        self._footer = footer
-
-    def __call__(self, canvas: pdf_canvas.Canvas, _doc: SimpleDocTemplate) -> None:
-        # The furniture draws on WHICHEVER template this page uses, so the size
-        # is read from the canvas rather than a module constant — the header rule
-        # and footer must span a landscape section page as well as a portrait
-        # cover.
-        width, height = _canvas_pagesize(canvas)
-        canvas.saveState()
-        canvas.setStrokeColor(_NAVY)
-        canvas.setLineWidth(2)
-        canvas.line(18 * mm, height - 14 * mm, width - 18 * mm, height - 14 * mm)
-        canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(colors.grey)
-        canvas.drawString(18 * mm, 10 * mm, self._footer)
-        canvas.drawRightString(width - 18 * mm, 10 * mm, f"Page {canvas.getPageNumber()}")
-        if self._watermark:
-            canvas.setFont("Helvetica-Bold", 72)
-            canvas.setFillColor(_WATERMARK_GREY)
-            canvas.translate(width / 2, height / 2)
-            canvas.rotate(45)
-            canvas.drawCentredString(0, 0, "SANDBOX")
-        canvas.restoreState()
-
-
 def _cover(rendered: RenderedReturn) -> list[Any]:
     pairs = dict(rendered.metadata_pairs)
     story: list[Any] = [
@@ -202,6 +168,12 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
         story.append(Spacer(0, 6 * mm))
         for note in rendered.template.notes:
             story.append(Paragraph(f"Note: {note}", _SMALL))
+    if rendered.report_notes:
+        # Package-specific statements from the snapshot — the governed minima
+        # applied and what this package omits. Snapshot text, so escaped.
+        story.append(Spacer(0, 4 * mm))
+        for note in rendered.report_notes:
+            story.append(Paragraph(f"Report note: {escape_text(note)}", _SMALL))
     return story
 
 
@@ -247,18 +219,148 @@ def _signing_block() -> Table:
     return table
 
 
-def _attestation(rendered: RenderedReturn) -> list[Any]:
+#: The unsigned block keeps the signed block's Name and Designation columns and
+#: its Date column, and drops only Signature — so the two forms of the page are
+#: recognisably the same document. The Signature width is redistributed rather
+#: than left as a gap.
+_RECORD_COLUMN_WIDTHS: tuple[float, ...] = (128 + 79, 128 + 79, 79.2)
+_RECORD_ROW_HEIGHT = 16
+
+
+def _record_block(officer: AttestedOfficer) -> Table:
+    """One officer's line, on the same ruled form the signature block uses.
+
+    Not a different layout — the SAME block with the Signature column removed
+    and the three remaining ones filled in. An installation that does not
+    collect signatures still files a return that says who prepared, reviewed
+    and released it, in the shape BoG's form asks for.
+    """
+    labels = ("Name", "Designation", "Date")
+    body = [
+        [
+            Paragraph(officer.name, _BODY),
+            Paragraph(officer.title or "—", _BODY),
+            Paragraph(officer.at, _BODY),
+        ],
+        [Paragraph(label, _FIELD_LABEL) for label in labels],
+    ]
+    table = Table(
+        body,
+        colWidths=list(_RECORD_COLUMN_WIDTHS),
+        rowHeights=[_RECORD_ROW_HEIGHT, _SIGNING_LABEL_HEIGHT],
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                ("LINEBELOW", (0, 0), (-1, 0), 0.75, colors.black),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), _SIGNING_COLUMN_GUTTER),
+                ("TOPPADDING", (0, 1), (-1, 1), 1.5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
+#: Which officer fills which row of the attestation block. The first two are
+#: BoG's own wording; the third was added when the filing chain gained a
+#: Validator, so the officer who releases a return to the regulator appears on
+#: the document they released (founder decision 2026-09-20).
+_RECORD_ROWS: tuple[tuple[str, str], ...] = (
+    ("Preparer", "Prepared by"),
+    ("Approver", "Reviewed and approved by"),
+    ("Validator", "Released for filing by"),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class AttestedOfficer:
+    """An officer who decided on this return, as the chain recorded them."""
+
+    #: The stage in the bank's own words — "Preparer", "Approver", "Validator".
+    stage: str
+    name: str
+    title: str | None
+    at: str
+
+
+def _attestation(
+    rendered: RenderedReturn,
+    *,
+    signing_required: bool,
+    officers: Sequence[AttestedOfficer] = (),
+) -> list[Any]:
+    """The attestation page. ONE form, with the Signature column conditional.
+
+    This is BoG's block either way — the prompt, the ruled line, the column
+    labels, and the Act 930 s.93(3) wording underneath. What changes is a
+    single column:
+
+    SIGNING ON — Name / Designation / Signature / Date, empty, for the
+    ceremony to fill. ``pdf_signing.DEFAULT_PLACEMENTS`` is pinned to that
+    geometry, so nothing in it may move.
+
+    SIGNING OFF — the same block with Signature removed and the other three
+    filled from the filing chain's own decisions. An installation that does
+    not collect signatures still files a document that says who prepared,
+    reviewed and released the return, in the shape the regulator's form asks
+    for. (An earlier attempt replaced the block with a prose list; that
+    changed the document rather than the column, which is not what was asked.)
+    """
     story: list[Any] = [
         PageBreak(),
         Paragraph("Attestation", _H2),
         Spacer(0, 4 * mm),
     ]
-    for line in rendered.attestation_lines:
-        story.append(Paragraph(line, _BODY))
-        if line.endswith(": "):
-            story.append(Spacer(0, _SIGNING_BLOCK_LEAD))
-            story.append(_signing_block())
+
+    if signing_required:
+        for line in rendered.attestation_lines:
+            story.append(Paragraph(line, _BODY))
+            if line.endswith(": "):
+                story.append(Spacer(0, _SIGNING_BLOCK_LEAD))
+                story.append(_signing_block())
+            story.append(Spacer(0, 4 * mm))
+        return story
+
+    # Unsigned: the officers' rows first, in the order the return moved, then
+    # the attestation wording the prompts belong to.
+    by_stage = {officer.stage: officer for officer in officers}
+    printed = False
+    for stage, prompt in _RECORD_ROWS:
+        officer = by_stage.get(stage)
+        if officer is None:
+            # A row prints only where a decision exists. An empty ruled line
+            # under "Released for filing by" would ask a supervisor for
+            # something that is not coming.
+            continue
+        story.append(Paragraph(f"{prompt} (name / designation / date):", _BODY))
+        story.append(Spacer(0, _SIGNING_BLOCK_LEAD))
+        story.append(_record_block(officer))
         story.append(Spacer(0, 4 * mm))
+        printed = True
+    if not printed:
+        story.append(
+            Paragraph("No officer decisions are recorded against this version.", _BODY)
+        )
+        story.append(Spacer(0, 4 * mm))
+
+    for line in rendered.attestation_lines:
+        if line.endswith(": "):
+            continue  # its row is printed above, with the values in it
+        story.append(Paragraph(line, _BODY))
+        story.append(Spacer(0, 4 * mm))
+
+    story.append(
+        Paragraph(
+            "Electronic signature is not enabled for this institution, so this "
+            "return carries no officer signature. The officers above are the "
+            "record of who prepared, reviewed and released it.",
+            _BODY,
+        )
+    )
+    story.append(Spacer(0, 4 * mm))
     return story
 
 
@@ -480,9 +582,35 @@ def _section_table(section: RenderedSection, available: float) -> Table:
     return table
 
 
+def _prose_body(section: RenderedSection) -> list[Any]:
+    """A narrative section set as headed paragraphs instead of a grid.
+
+    Rows are (key, label, text): the label heads the paragraph and the text is
+    the body, both escaped by ``pdf_parts`` — the text is what a user typed. An
+    absent body arrives as the column's null label ("Not stated"), so nothing
+    prints blank.
+    """
+    columns = section.layout.columns
+    label_index = next((i for i, spec in enumerate(columns) if spec.key == "description"), None)
+    value_index = next((i for i, spec in enumerate(columns) if spec.key == "value"), None)
+    entries: list[tuple[str, str]] = []
+    for row in section.rows:
+        label = format_cell(row.cells[label_index]) if label_index is not None else ""
+        body = format_cell(row.cells[value_index]) if value_index is not None else ""
+        entries.append((label, body))
+    return prose_entries(entries, label_style=_PROSE_LABEL, body_style=_PROSE_BODY)
+
+
 def _sections(rendered: RenderedReturn) -> list[Any]:
     story: list[Any] = []
     for section in rendered.sections:
+        prose = section.layout.presentation == "prose"
+        if prose:
+            # Prose reads at portrait measure; a landscape line runs ~180
+            # characters. The switch takes effect at the page break below (and
+            # holds for any overflow page of the narrative); the landscape
+            # template is restored after the section, for the next page break.
+            story.append(NextPageTemplate(_PORTRAIT_TEMPLATE))
         story.append(PageBreak())
         story.append(Paragraph(section.title, _H2))
         story.append(
@@ -494,12 +622,17 @@ def _sections(rendered: RenderedReturn) -> list[Any]:
         )
         story.append(Paragraph(f"Source: {section.layout.source_citation}", _SMALL))
         story.append(Spacer(0, 3 * mm))
-        # Sections render on the LANDSCAPE template, so the budget is the
-        # landscape frame's width — not the portrait one the cover uses.
-        story.append(_section_table(section, _frame_width(_LANDSCAPE)))
+        if prose:
+            story.extend(_prose_body(section))
+        else:
+            # Sections render on the LANDSCAPE template, so the budget is the
+            # landscape frame's width — not the portrait one the cover uses.
+            story.append(_section_table(section, _frame_width(_LANDSCAPE)))
         for note in section.layout.notes:
             story.append(Spacer(0, 2 * mm))
             story.append(Paragraph(f"Note: {note}", _SMALL))
+        if prose:
+            story.append(NextPageTemplate(_LANDSCAPE_TEMPLATE))
     return story
 
 
@@ -550,7 +683,13 @@ def _provenance(rendered: RenderedReturn) -> list[Any]:
     return story
 
 
-def render_pdf(rendered: RenderedReturn, *, sandbox_watermark: bool) -> bytes:
+def render_pdf(
+    rendered: RenderedReturn,
+    *,
+    sandbox_watermark: bool,
+    signing_required: bool = True,
+    officers: Sequence[AttestedOfficer] = (),
+) -> bytes:
     buffer = io.BytesIO()
     document = BaseDocTemplate(
         buffer,
@@ -583,7 +722,9 @@ def render_pdf(rendered: RenderedReturn, *, sandbox_watermark: bool) -> bytes:
     # ``_sections`` and ``_provenance`` each begin with.
     story = [
         *_cover(rendered),
-        *_attestation(rendered),
+        *_attestation(
+            rendered, signing_required=signing_required, officers=officers
+        ),
         NextPageTemplate(_LANDSCAPE_TEMPLATE),
         *_sections(rendered),
         NextPageTemplate(_PORTRAIT_TEMPLATE),

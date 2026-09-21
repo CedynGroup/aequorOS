@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ClosedModel(BaseModel):
@@ -51,6 +51,23 @@ class ExaminerPackageRead(ClosedModel):
     content_digest: str | None = None
 
 
+class ExaminerIcaapCycleRead(ClosedModel):
+    """One ICAAP cycle a supervisor may read: frozen and later, never a draft."""
+
+    cycle_id: UUID
+    cycle_kind: str
+    basis: str
+    status: str
+    round: int
+    package_id: UUID | None = None
+    framework_code: str | None = None
+    framework_version: str | None = None
+    framework_digest: str | None = None
+    frozen_at: datetime | None = None
+    board_approved_at: datetime | None = None
+    submitted_at: datetime | None = None
+
+
 class ExaminerDocumentationRead(ClosedModel):
     bank_id: str
     bank_name: str
@@ -64,3 +81,8 @@ class ExaminerDocumentationRead(ClosedModel):
     cfp_active: bool = False
     audit_event_count: int
     register_endpoints: list[str]
+    #: ICAAP cycles whose as-of date is this reporting period end. Only cycles
+    #: that were FROZEN are listed: before a freeze the workspace is the bank's
+    #: working draft and a supervisor reading it would be reading figures the
+    #: Board has never seen.
+    icaap_cycles: list[ExaminerIcaapCycleRead] = Field(default_factory=list)

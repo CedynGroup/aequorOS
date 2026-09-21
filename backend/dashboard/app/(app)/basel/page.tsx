@@ -126,6 +126,12 @@ export default function BaselOverview() {
   const tier1Min = numOrNull(data?.buffers.tier1MinPct);
   const cet1Min = numOrNull(data?.buffers.cet1MinPct);
   const leverageMin = numOrNull(data?.buffers.leverageMinPct);
+  // A governed minimum awaiting stakeholder confirmation still applies; the bar
+  // says so rather than presenting a provisional value as settled (D-024).
+  const minimumLabel = (code: string): string =>
+    data?.buffers.minimumConfirmationStatus?.[code] === "pending"
+      ? "Regulatory minimum (pending confirmation)"
+      : "Regulatory minimum";
   const carAssessment = assessAgainstFloor(
     numOrNull(data?.metrics.carPct),
     carMin,
@@ -380,7 +386,7 @@ export default function BaselOverview() {
                     warnAt={tier1Min}
                     direction="above"
                     unit="%"
-                    limitLabel="Regulatory minimum"
+                    limitLabel={minimumLabel("tier1_min")}
                     format={(v) => v.toFixed(1)}
                   />
                 )}
@@ -398,7 +404,7 @@ export default function BaselOverview() {
                     warnAt={cet1Min}
                     direction="above"
                     unit="%"
-                    limitLabel="Regulatory minimum"
+                    limitLabel={minimumLabel("cet1_min")}
                     format={(v) => v.toFixed(1)}
                   />
                 )}
@@ -416,7 +422,7 @@ export default function BaselOverview() {
                     warnAt={leverageMin}
                     direction="above"
                     unit="%"
-                    limitLabel="Regulatory minimum"
+                    limitLabel={minimumLabel("leverage_min")}
                     format={(v) => v.toFixed(1)}
                   />
                 )}

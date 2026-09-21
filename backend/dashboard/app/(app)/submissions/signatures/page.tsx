@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { PenLine, Signature } from 'lucide-react';
 import type { AwaitingSignatureRead } from '@aequoros/risk-service-api';
 import PageHeader from '@/components/ui/PageHeader';
+import { RehearsalPill } from '@/components/submissions/shared';
 import SectionCard from '@/components/ui/SectionCard';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import QueryBoundary from '@/components/ui/QueryBoundary';
@@ -42,7 +43,13 @@ export default function AwaitingSignaturePage() {
       key: 'return',
       header: 'Return',
       render: (row) => (
-        <span className="font-mono text-caption font-medium text-navy">{row.returnCode}</span>
+        <span className="inline-flex items-center gap-2">
+          <span className="font-mono text-caption font-medium text-navy">{row.returnCode}</span>
+          {/* A signer asked to sign a practice run must be told which it is
+              BEFORE they sign, not after. This queue was the last surface that
+              could not say (security audit S-6). */}
+          {row.isRehearsal === true && <RehearsalPill />}
+        </span>
       ),
     },
     {

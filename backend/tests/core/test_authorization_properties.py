@@ -60,6 +60,10 @@ _REFERENCE_ROLE_PERMISSIONS: dict[RoleBundle, frozenset[Permission]] = {
         }
     ),
     RoleBundle.APPROVER: frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
+    # Transmission to the regulator, and nothing else. APPROVE is absent here as
+    # deliberately as it is in the production map: the two authorities were one
+    # until 2026-09-20 and must never be re-merged.
+    RoleBundle.VALIDATOR: frozenset({Permission.VIEW, Permission.SUBMIT}),
     RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
     RoleBundle.ORG_OWNER: frozenset({Permission.ADMINISTER}),
     RoleBundle.INTEGRATION_WRITER: frozenset({Permission.INGEST}),

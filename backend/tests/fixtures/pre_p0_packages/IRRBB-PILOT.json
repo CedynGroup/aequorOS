@@ -1,0 +1,573 @@
+{
+ "baseline_sha256": {
+  "pdf": "151a4c59bbf27a49bded1aae0ed5fb4a743521950d857ac5cdc91c4a0d660f69",
+  "xlsx": "3b7d47c8ea4a7da0700762b956369ed62d9337398ac29a9aa78deb0fc6662e7c",
+  "zip": "b8e2ae3a9b30e36b16012d0007dc745a489c9f0f849b4ea830397a1430a551a2"
+ },
+ "basis": "solo",
+ "frequency": "quarterly",
+ "generated_at": "2026-09-19T18:55:00.982712+00:00",
+ "package_id": "01a0bb05-9776-7b40-a42e-bdc12ad2d069",
+ "reporting_date": "2026-03-31",
+ "return_code": "IRRBB-PILOT",
+ "return_family": "irrbb",
+ "snapshot": {
+  "fidelity": "REPRESENTATIVE",
+  "institution": {
+   "bank_id": "BK-SAMP0001",
+   "basis": "solo",
+   "currency": "GHS",
+   "jurisdiction_code": "GH",
+   "license_type": "universal",
+   "name": "Sample Bank Ltd",
+   "short_name": "Sample Bank"
+  },
+  "metadata": {
+   "baseline_run_id": "3860cad5-3a52-4e41-b214-ecc8a4dbbb92",
+   "basis": "solo",
+   "bog_ghs_450_rows_present": true,
+   "eve_limit_pct": "15.000000",
+   "generated_at": "2026-09-19T18:55:00.980512+00:00",
+   "worst_scenario": "parallel_down_200"
+  },
+  "provenance": {
+   "authority": "engine_run",
+   "authority_basis": "Sealed calculation runs are the authority: every figure traces to a RegulatoryRun listed in source_runs by module, run id, value-based input hash and engine version.",
+   "authority_counts": {},
+   "calculation_version": "regulatory-irr-v1.0.0",
+   "declared_methodologies": [],
+   "effective_date": "2026-03-31",
+   "fact_generation": {
+    "as_of_dates": [
+     "2026-03-31"
+    ],
+    "input_hashes": [
+     "186c4996996495d04807149c0deb34df3628ef7b4c292539faca6c4dedf70fdb",
+     "2e01b38db91bf03df14636f97da125a4129448d15508dc7565d98484eb7d26f0",
+     "51642d9383e0fcc93b8d0c68ae49f208cde79e5081a37e785d9a5567a51bd811",
+     "6d3b721a51ff6248a376f30e3cf97dd24a8ecc11f213e3e9f0c71de20b207299",
+     "8da86210832bbb128b8443f14b1ee94d61c39a58579e3563c476a1e8fb438829",
+     "bd3ea409045beb25a25ec6ff8316374c0d28c70b30569ce6b8506f29dbb826b9",
+     "e58a842d7bac54ef334c2b0197d808629309cfe2f319a0b7004b58559ce0164a"
+    ],
+    "input_schema_versions": [
+     "bank-facts-v2"
+    ]
+   },
+   "formula_cells_evaluated": null,
+   "formula_evaluator_version": "",
+   "mapping_schema_version": "bog-linemap-v1",
+   "mapping_version": "",
+   "official_workbook": "",
+   "parameter_version": "d8a85d86d77ee882826df79c53aa8f24fec74d37e4a3affd370e6d0d407747b7",
+   "policy_resolution": {
+    "base_currency": "GHS",
+    "institution_type": "universal_bank",
+    "jurisdiction_code": "GH",
+    "run_jurisdictions": [
+     "GH"
+    ],
+    "scenarios": [
+     "baseline",
+     "flattener",
+     "parallel_down_200",
+     "parallel_up_200",
+     "short_down_250",
+     "short_up_250",
+     "steepener"
+    ]
+   },
+   "regulator": "BOG",
+   "return_code": "IRRBB-PILOT",
+   "return_family": "irrbb",
+   "schema_version": "reporting-provenance-v1",
+   "source_runs": [
+    {
+     "actor_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+     "as_of_date": "2026-03-31",
+     "base_currency": "GHS",
+     "calculation_version": "regulatory-irr-v1.0.0",
+     "computed_at": "2026-09-19T18:55:00.580500",
+     "engine_version": "regulatory-irr-v1.0.0",
+     "filable": true,
+     "input_hash": "186c4996996495d04807149c0deb34df3628ef7b4c292539faca6c4dedf70fdb",
+     "input_schema_version": "bank-facts-v2",
+     "jurisdiction_code": "GH",
+     "missing_provenance_fields": [],
+     "module": "irr",
+     "output_schema_version": "irr-metrics-v1",
+     "parameter_digest": "d8a85d86d77ee882826df79c53aa8f24fec74d37e4a3affd370e6d0d407747b7",
+     "parameter_rows_digest": "2296b68c073dda60ac2c958f69db56a5082286241c025eafdf36f3d6fe7b72cd",
+     "provenance_complete": true,
+     "reporting_period_id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+     "run_id": "3860cad5-3a52-4e41-b214-ecc8a4dbbb92",
+     "scenario_code": "baseline"
+    },
+    {
+     "actor_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+     "as_of_date": "2026-03-31",
+     "base_currency": "GHS",
+     "calculation_version": "regulatory-irr-v1.0.0",
+     "computed_at": "2026-09-19T18:55:00.654186",
+     "engine_version": "regulatory-irr-v1.0.0",
+     "filable": true,
+     "input_hash": "6d3b721a51ff6248a376f30e3cf97dd24a8ecc11f213e3e9f0c71de20b207299",
+     "input_schema_version": "bank-facts-v2",
+     "jurisdiction_code": "GH",
+     "missing_provenance_fields": [],
+     "module": "irr",
+     "output_schema_version": "irr-metrics-v1",
+     "parameter_digest": "d8a85d86d77ee882826df79c53aa8f24fec74d37e4a3affd370e6d0d407747b7",
+     "parameter_rows_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+     "provenance_complete": true,
+     "reporting_period_id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+     "run_id": "6168b76e-ba0f-4227-af99-4860c573ee2c",
+     "scenario_code": "flattener"
+    },
+    {
+     "actor_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+     "as_of_date": "2026-03-31",
+     "base_currency": "GHS",
+     "calculation_version": "regulatory-irr-v1.0.0",
+     "computed_at": "2026-09-19T18:55:00.605360",
+     "engine_version": "regulatory-irr-v1.0.0",
+     "filable": true,
+     "input_hash": "bd3ea409045beb25a25ec6ff8316374c0d28c70b30569ce6b8506f29dbb826b9",
+     "input_schema_version": "bank-facts-v2",
+     "jurisdiction_code": "GH",
+     "missing_provenance_fields": [],
+     "module": "irr",
+     "output_schema_version": "irr-metrics-v1",
+     "parameter_digest": "d8a85d86d77ee882826df79c53aa8f24fec74d37e4a3affd370e6d0d407747b7",
+     "parameter_rows_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+     "provenance_complete": true,
+     "reporting_period_id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+     "run_id": "a659fcf7-7b73-420c-8eab-0c1c1403f468",
+     "scenario_code": "parallel_down_200"
+    },
+    {
+     "actor_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+     "as_of_date": "2026-03-31",
+     "base_currency": "GHS",
+     "calculation_version": "regulatory-irr-v1.0.0",
+     "computed_at": "2026-09-19T18:55:00.593139",
+     "engine_version": "regulatory-irr-v1.0.0",
+     "filable": true,
+     "input_hash": "8da86210832bbb128b8443f14b1ee94d61c39a58579e3563c476a1e8fb438829",
+     "input_schema_version": "bank-facts-v2",
+     "jurisdiction_code": "GH",
+     "missing_provenance_fields": [],
+     "module": "irr",
+     "output_schema_version": "irr-metrics-v1",
+     "parameter_digest": "d8a85d86d77ee882826df79c53aa8f24fec74d37e4a3affd370e6d0d407747b7",
+     "parameter_rows_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+     "provenance_complete": true,
+     "reporting_period_id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+     "run_id": "6ac42cb0-606b-4994-99fa-76e8fa6572e5",
+     "scenario_code": "parallel_up_200"
+    },
+    {
+     "actor_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+     "as_of_date": "2026-03-31",
+     "base_currency": "GHS",
+     "calculation_version": "regulatory-irr-v1.0.0",
+     "computed_at": "2026-09-19T18:55:00.629756",
+     "engine_version": "regulatory-irr-v1.0.0",
+     "filable": true,
+     "input_hash": "e58a842d7bac54ef334c2b0197d808629309cfe2f319a0b7004b58559ce0164a",
+     "input_schema_version": "bank-facts-v2",
+     "jurisdiction_code": "GH",
+     "missing_provenance_fields": [],
+     "module": "irr",
+     "output_schema_version": "irr-metrics-v1",
+     "parameter_digest": "d8a85d86d77ee882826df79c53aa8f24fec74d37e4a3affd370e6d0d407747b7",
+     "parameter_rows_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+     "provenance_complete": true,
+     "reporting_period_id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+     "run_id": "bb464194-5882-4eff-a9b7-5d25606743b6",
+     "scenario_code": "short_down_250"
+    },
+    {
+     "actor_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+     "as_of_date": "2026-03-31",
+     "base_currency": "GHS",
+     "calculation_version": "regulatory-irr-v1.0.0",
+     "computed_at": "2026-09-19T18:55:00.617788",
+     "engine_version": "regulatory-irr-v1.0.0",
+     "filable": true,
+     "input_hash": "2e01b38db91bf03df14636f97da125a4129448d15508dc7565d98484eb7d26f0",
+     "input_schema_version": "bank-facts-v2",
+     "jurisdiction_code": "GH",
+     "missing_provenance_fields": [],
+     "module": "irr",
+     "output_schema_version": "irr-metrics-v1",
+     "parameter_digest": "d8a85d86d77ee882826df79c53aa8f24fec74d37e4a3affd370e6d0d407747b7",
+     "parameter_rows_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+     "provenance_complete": true,
+     "reporting_period_id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+     "run_id": "3f14e8a4-0ba1-40eb-bccb-d0074bb52793",
+     "scenario_code": "short_up_250"
+    },
+    {
+     "actor_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+     "as_of_date": "2026-03-31",
+     "base_currency": "GHS",
+     "calculation_version": "regulatory-irr-v1.0.0",
+     "computed_at": "2026-09-19T18:55:00.641970",
+     "engine_version": "regulatory-irr-v1.0.0",
+     "filable": true,
+     "input_hash": "51642d9383e0fcc93b8d0c68ae49f208cde79e5081a37e785d9a5567a51bd811",
+     "input_schema_version": "bank-facts-v2",
+     "jurisdiction_code": "GH",
+     "missing_provenance_fields": [],
+     "module": "irr",
+     "output_schema_version": "irr-metrics-v1",
+     "parameter_digest": "d8a85d86d77ee882826df79c53aa8f24fec74d37e4a3affd370e6d0d407747b7",
+     "parameter_rows_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+     "provenance_complete": true,
+     "reporting_period_id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+     "run_id": "defd72ef-0d1a-4153-ae77-190c2aca6e91",
+     "scenario_code": "steepener"
+    }
+   ],
+   "source_runs_rationale": null,
+   "template_hash": "",
+   "template_id": "bog-irrbb-pilot-v1"
+  },
+  "regulator": "BOG",
+  "reporting_date": "2026-03-31",
+  "reporting_period": {
+   "id": "d9a1439d-08e7-425c-a2d2-eef75611f390",
+   "label": "2026-03",
+   "period_end": "2026-03-31",
+   "period_start": "2026-03-01"
+  },
+  "return_code": "IRRBB-PILOT",
+  "return_family": "irrbb",
+  "schema_version": "regulatory-package-v1",
+  "sections": [
+   {
+    "authority": "engine_run",
+    "code": "repricing_gap",
+    "optional": false,
+    "rows": [
+     {
+      "code": "overnight",
+      "cumulative_gap_ghs": "-170000000.0000",
+      "description": "Repricing gap overnight",
+      "rsa_ghs": "70000000.0000",
+      "rsl_ghs": "240000000.0000",
+      "value": "-170000000.0000",
+      "within_12m": true
+     },
+     {
+      "code": "1-7d",
+      "cumulative_gap_ghs": "-110000000.0000",
+      "description": "Repricing gap 1-7d",
+      "rsa_ghs": "60000000.0000",
+      "rsl_ghs": "0.0000",
+      "value": "60000000.0000",
+      "within_12m": true
+     },
+     {
+      "code": "8-30d",
+      "cumulative_gap_ghs": "-220000000.0000",
+      "description": "Repricing gap 8-30d",
+      "rsa_ghs": "90000000.0000",
+      "rsl_ghs": "200000000.0000",
+      "value": "-110000000.0000",
+      "within_12m": true
+     },
+     {
+      "code": "1-3m",
+      "cumulative_gap_ghs": "-410000000.0000",
+      "description": "Repricing gap 1-3m",
+      "rsa_ghs": "410000000.0000",
+      "rsl_ghs": "600000000.0000",
+      "value": "-190000000.0000",
+      "within_12m": true
+     },
+     {
+      "code": "3-6m",
+      "cumulative_gap_ghs": "-440000000.0000",
+      "description": "Repricing gap 3-6m",
+      "rsa_ghs": "270000000.0000",
+      "rsl_ghs": "300000000.0000",
+      "value": "-30000000.0000",
+      "within_12m": true
+     },
+     {
+      "code": "6-12m",
+      "cumulative_gap_ghs": "-370000000.0000",
+      "description": "Repricing gap 6-12m",
+      "rsa_ghs": "290000000.0000",
+      "rsl_ghs": "220000000.0000",
+      "value": "70000000.0000",
+      "within_12m": true
+     },
+     {
+      "code": "1-3y",
+      "cumulative_gap_ghs": "-200000000.0000",
+      "description": "Repricing gap 1-3y",
+      "rsa_ghs": "390000000.0000",
+      "rsl_ghs": "220000000.0000",
+      "value": "170000000.0000",
+      "within_12m": false
+     },
+     {
+      "code": "3-5y",
+      "cumulative_gap_ghs": "180000000.0000",
+      "description": "Repricing gap 3-5y",
+      "rsa_ghs": "380000000.0000",
+      "rsl_ghs": "0.0000",
+      "value": "380000000.0000",
+      "within_12m": false
+     },
+     {
+      "code": "5y+",
+      "cumulative_gap_ghs": "335000000.0000",
+      "description": "Repricing gap 5y+",
+      "rsa_ghs": "200000000.0000",
+      "rsl_ghs": "45000000.0000",
+      "value": "155000000.0000",
+      "within_12m": false
+     }
+    ],
+    "title": "Repricing Gap by Bucket",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "eve_scenarios",
+    "optional": false,
+    "rows": [
+     {
+      "breach": false,
+      "code": "parallel_up_200",
+      "delta_eve_pct_tier1": "-4.941253",
+      "description": "\u0394EVE under parallel_up_200",
+      "eve_ghs": "-114398373.1018",
+      "value": "-13835507.3950"
+     },
+     {
+      "breach": false,
+      "code": "parallel_down_200",
+      "delta_eve_pct_tier1": "5.352491",
+      "description": "\u0394EVE under parallel_down_200",
+      "eve_ghs": "-85575890.3675",
+      "value": "14986975.3393"
+     },
+     {
+      "breach": false,
+      "code": "short_up_250",
+      "delta_eve_pct_tier1": "-1.775065",
+      "description": "\u0394EVE under short_up_250",
+      "eve_ghs": "-105533046.4794",
+      "value": "-4970180.7726"
+     },
+     {
+      "breach": false,
+      "code": "short_down_250",
+      "delta_eve_pct_tier1": "1.824592",
+      "description": "\u0394EVE under short_down_250",
+      "eve_ghs": "-95454007.4106",
+      "value": "5108858.2962"
+     },
+     {
+      "breach": false,
+      "code": "steepener",
+      "delta_eve_pct_tier1": "-0.796963",
+      "description": "\u0394EVE under steepener",
+      "eve_ghs": "-102794363.2632",
+      "value": "-2231497.5564"
+     },
+     {
+      "breach": false,
+      "code": "flattener",
+      "delta_eve_pct_tier1": "0.183437",
+      "description": "\u0394EVE under flattener",
+      "eve_ghs": "-100049242.4562",
+      "value": "513623.2506"
+     },
+     {
+      "breach": false,
+      "code": "parallel_up_450",
+      "delta_eve_pct_tier1": "-10.599511",
+      "description": "\u0394EVE under parallel_up_450",
+      "eve_ghs": "-130241496.3424",
+      "value": "-29678630.6356"
+     },
+     {
+      "breach": false,
+      "code": "parallel_down_450",
+      "delta_eve_pct_tier1": "12.690432",
+      "description": "\u0394EVE under parallel_down_450",
+      "eve_ghs": "-65029656.7209",
+      "value": "35533208.9859"
+     },
+     {
+      "code": "eve_up_450_ghs",
+      "description": "\u0394EVE under +450 bp parallel (BoG GHS calibration)",
+      "value": "-29678630.6356"
+     },
+     {
+      "code": "eve_down_450_ghs",
+      "description": "\u0394EVE under -450 bp parallel (BoG GHS calibration)",
+      "value": "35533208.9859"
+     }
+    ],
+    "title": "\u0394EVE by Supervisory Shock",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "earnings_at_risk",
+    "optional": false,
+    "rows": [
+     {
+      "code": "ear_up_200_ghs",
+      "description": "Earnings at risk, +200 bp parallel",
+      "value": "-7450600.0000"
+     },
+     {
+      "code": "ear_down_200_ghs",
+      "description": "Earnings at risk, -200 bp parallel",
+      "value": "7450600.0000"
+     },
+     {
+      "code": "ear_up_450_ghs",
+      "description": "Earnings at risk, +450 bp parallel (BoG GHS calibration)",
+      "value": "-16763850.0000"
+     },
+     {
+      "code": "ear_down_450_ghs",
+      "description": "Earnings at risk, -450 bp parallel (BoG GHS calibration)",
+      "value": "16763850.0000"
+     },
+     {
+      "code": "nii_base_ghs",
+      "description": "Base net interest income",
+      "value": "254380000.0000"
+     }
+    ],
+    "title": "\u0394NII / Earnings at Risk",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   },
+   {
+    "authority": "engine_run",
+    "code": "summary",
+    "optional": false,
+    "rows": [
+     {
+      "code": "eve_base_ghs",
+      "description": "Economic value of equity (base)",
+      "value": "-100562865.7068"
+     },
+     {
+      "code": "worst_eve_change_ghs",
+      "description": "Worst-case EVE change (parallel_down_200)",
+      "value": "14986975.3393"
+     },
+     {
+      "code": "worst_eve_change_pct_tier1",
+      "description": "Worst-case EVE change as % of Tier 1",
+      "value": "5.352491"
+     },
+     {
+      "code": "duration_gap",
+      "description": "Duration gap (years)",
+      "value": "0.4807"
+     },
+     {
+      "code": "tier1_ghs",
+      "description": "Tier 1 capital",
+      "value": "280000000.0000"
+     }
+    ],
+    "title": "IRRBB Summary",
+    "total": null,
+    "unit": "",
+    "unit_kind": ""
+   }
+  ],
+  "template_id": "bog-irrbb-pilot-v1",
+  "totals": [
+   {
+    "code": "eve_base_ghs",
+    "description": "Economic value of equity (base)",
+    "value": "-100562865.7068"
+   },
+   {
+    "code": "worst_eve_change_ghs",
+    "description": "Worst-case EVE change",
+    "value": "14986975.3393"
+   },
+   {
+    "code": "worst_eve_change_pct_tier1",
+    "description": "Worst-case EVE change as % of Tier 1",
+    "value": "5.352491"
+   },
+   {
+    "code": "cumulative_12m_gap_ghs",
+    "description": "Cumulative 12-month repricing gap",
+    "value": "-370000000.0000"
+   },
+   {
+    "code": "tier1_ghs",
+    "description": "Tier 1 capital",
+    "value": "280000000.0000"
+   }
+  ]
+ },
+ "source_runs": [
+  {
+   "engine_version": "regulatory-irr-v1.0.0",
+   "input_hash": "186c4996996495d04807149c0deb34df3628ef7b4c292539faca6c4dedf70fdb",
+   "module": "irr",
+   "run_id": "3860cad5-3a52-4e41-b214-ecc8a4dbbb92"
+  },
+  {
+   "engine_version": "regulatory-irr-v1.0.0",
+   "input_hash": "6d3b721a51ff6248a376f30e3cf97dd24a8ecc11f213e3e9f0c71de20b207299",
+   "module": "irr",
+   "run_id": "6168b76e-ba0f-4227-af99-4860c573ee2c"
+  },
+  {
+   "engine_version": "regulatory-irr-v1.0.0",
+   "input_hash": "bd3ea409045beb25a25ec6ff8316374c0d28c70b30569ce6b8506f29dbb826b9",
+   "module": "irr",
+   "run_id": "a659fcf7-7b73-420c-8eab-0c1c1403f468"
+  },
+  {
+   "engine_version": "regulatory-irr-v1.0.0",
+   "input_hash": "8da86210832bbb128b8443f14b1ee94d61c39a58579e3563c476a1e8fb438829",
+   "module": "irr",
+   "run_id": "6ac42cb0-606b-4994-99fa-76e8fa6572e5"
+  },
+  {
+   "engine_version": "regulatory-irr-v1.0.0",
+   "input_hash": "e58a842d7bac54ef334c2b0197d808629309cfe2f319a0b7004b58559ce0164a",
+   "module": "irr",
+   "run_id": "bb464194-5882-4eff-a9b7-5d25606743b6"
+  },
+  {
+   "engine_version": "regulatory-irr-v1.0.0",
+   "input_hash": "2e01b38db91bf03df14636f97da125a4129448d15508dc7565d98484eb7d26f0",
+   "module": "irr",
+   "run_id": "3f14e8a4-0ba1-40eb-bccb-d0074bb52793"
+  },
+  {
+   "engine_version": "regulatory-irr-v1.0.0",
+   "input_hash": "51642d9383e0fcc93b8d0c68ae49f208cde79e5081a37e785d9a5567a51bd811",
+   "module": "irr",
+   "run_id": "defd72ef-0d1a-4153-ae77-190c2aca6e91"
+  }
+ ],
+ "version": 1
+}

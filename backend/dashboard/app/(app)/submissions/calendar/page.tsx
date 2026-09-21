@@ -2,9 +2,12 @@
 
 /**
  * Regulatory Reporting — Calendar (hub landing). The paged deadline board shows
- * due-date-ordered registry obligations while its KPI summary covers the entire
- * selected horizon. Each row carries its RAG grade, linked package state, and an
- * Act 930 penalty-exposure note; rows deep-link into the Returns workspace.
+ * due-date-ordered registry obligations while its KPI summary covers the whole
+ * window. That window runs both ways: the reporting dates the bank already owes
+ * as well as the ones coming up, because an overdue return is exactly the one
+ * still outstanding with the regulator. Each row carries its RAG grade, linked
+ * package state, and an Act 930 penalty-exposure note; rows deep-link into the
+ * Returns workspace.
  */
 
 import PageContainer from '@/components/ui/PageContainer';
@@ -68,6 +71,12 @@ export default function RegulatoryCalendarPage() {
   const rangeEnd = Math.min(offset + obligations.length, total);
 
   const pageOverdue = obligations.filter((o) => o.rag === 'overdue');
+  // The board covers reporting dates already owed as well as upcoming ones, so
+  // the subtitle names both halves rather than promising only what is ahead.
+  const lookbackMonths = query.data?.lookbackMonths;
+  const obligationSpan = lookbackMonths
+    ? `the past ${lookbackMonths} months and the next ${horizon}`
+    : `the next ${horizon} months`;
 
   const columns = useMemo<Column<ReportingObligationRead>[]>(() => [
     {
@@ -81,6 +90,26 @@ export default function RegulatoryCalendarPage() {
           <p className="text-caption text-slate truncate max-w-[320px]">
             {o.title}
           </p>
+          {/*
+            An annex is filed INSIDE its parent return, so it is not a separate
+            obligation with a separate deadline. Listing one as its own row told
+            a bank it owed two filings where the regulator asked for one; the
+            backend nests them here instead, and they render as chips under the
+            return that carries them.
+          */}
+          {(o.annexes ?? []).length > 0 && (
+            <p className="mt-1 flex flex-wrap gap-1">
+              {(o.annexes ?? []).map((annex) => (
+                <span
+                  key={annex.returnCode}
+                  title={`Filed within ${o.returnCode}`}
+                  className="inline-flex items-center rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-caption text-slate"
+                >
+                  {annex.returnCode}
+                </span>
+              ))}
+            </p>
+          )}
         </div>
       ),
     },
@@ -221,7 +250,7 @@ export default function RegulatoryCalendarPage() {
 
           <SectionCard
             title="Reporting obligations"
-            subtitle={`Registry obligations for the next ${horizon} months — showing ${rangeStart}–${rangeEnd} of ${total} by due date`}
+            subtitle={`Registry obligations across ${obligationSpan} — showing ${rangeStart}–${rangeEnd} of ${total} by due date`}
             noPadding
             footer={
               <div className="flex items-center justify-between gap-3 flex-wrap w-full">

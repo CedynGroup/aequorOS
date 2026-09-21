@@ -18,6 +18,13 @@ import {
   PackageSubmitCreateChannelToJSON,
   PackageSubmitCreateChannelToJSONTyped,
 } from "./PackageSubmitCreateChannel";
+import type { ExternalRef } from "./ExternalRef";
+import {
+  ExternalRefFromJSON,
+  ExternalRefFromJSONTyped,
+  ExternalRefToJSON,
+  ExternalRefToJSONTyped,
+} from "./ExternalRef";
 
 /**
  * Channel selection for submitRegulatoryPackage; omitted -> registry default.
@@ -31,6 +38,12 @@ export interface PackageSubmitCreate {
    * @memberof PackageSubmitCreate
    */
   channel?: PackageSubmitCreateChannel;
+  /**
+   *
+   * @type {ExternalRef}
+   * @memberof PackageSubmitCreate
+   */
+  externalRef?: ExternalRef;
 }
 
 /**
@@ -59,6 +72,10 @@ export function PackageSubmitCreateFromJSONTyped(
       json["channel"] == null
         ? undefined
         : PackageSubmitCreateChannelFromJSON(json["channel"]),
+    externalRef:
+      json["external_ref"] == null
+        ? undefined
+        : ExternalRefFromJSON(json["external_ref"]),
   };
 }
 
@@ -76,5 +93,6 @@ export function PackageSubmitCreateToJSONTyped(
 
   return {
     channel: PackageSubmitCreateChannelToJSON(value["channel"]),
+    external_ref: ExternalRefToJSON(value["externalRef"]),
   };
 }

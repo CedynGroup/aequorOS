@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -207,3 +208,91 @@ def test_the_recorded_value_is_the_exact_decimal_the_engine_consumed(
     entry = rp.consume_parameter_provenance(db_session)[0]
 
     assert Decimal(entry["value"]) == resolved.decimal
+
+
+def test_the_registry_dispatch_scan_never_enters_the_run_ledger(
+    db_session: Session,
+) -> None:
+    """The plane boundary, asserted where the leak was (regression 2026-09-20).
+
+    ``eligibility.resolve_eligibility`` answers a DISPATCH question — "which
+    returns exist for this institution, and from when" — by resolving EVERY
+    registered definition's ``effective_from_parameter``, across every family.
+    It seals no run, so those rows are not any run's provenance. While they
+    landed in this session-scoped ledger, the next engine run drained them:
+    that is how an ICAAP commencement date joined a LIQUIDITY run's
+    ``parameter_provenance`` and moved an already-filed LCR-NSFR package's
+    ``content_digest`` across a rerun over an unchanged book.
+
+    Asserted on the scan itself rather than on one parameter code, so a
+    registry entry written years from now — ICAAP, Nigeria, Kenya — is covered
+    without anyone remembering this file exists.
+    """
+    from app.api.deps import TenantContext  # noqa: PLC0415
+    from app.services.regulatory_reporting.eligibility import (  # noqa: PLC0415
+        governed_effective_parameter_codes,
+        resolve_eligibility,
+    )
+
+    bank = _bank(db_session)
+    ctx = TenantContext(
+        organization_id=ORG_1,
+        actor_user_id=UUID("33333333-3333-4333-8333-333333333333"),
+    )
+    rp.consume_parameter_provenance(db_session)  # start from a clean ledger
+
+    resolved = resolve_eligibility(db_session, ctx, bank, as_of=date(2027, 6, 30))
+
+    # Non-vacuity: the scan must genuinely have READ governed rows, or this
+    # test would pass on a registry that names no governed commencement date.
+    assert governed_effective_parameter_codes(), "no registry entry governs its own date"
+    assert any(value is not None for value in resolved.governed_effective_dates.values()), (
+        "the dispatch scan resolved no governed commencement date — vacuous"
+    )
+    assert rp.consume_parameter_provenance(db_session) == []
+
+
+def test_the_icaap_report_plane_never_enters_the_run_ledger(db_session: Session) -> None:
+    """The D-078 residual, closed rather than pinned (architecture audit M4).
+
+    D-078 fixed the DISPATCH plane and flagged what it left: the module-level
+    ``try_resolve``/``resolve`` still recorded unconditionally, and the ICAAP
+    report plane used them. That was harmless only because of an invariant
+    nobody had written down — "no ICAAP request session ever seals a
+    ``RegulatoryRun``" — which a *run the engine now* button on an ICAAP block
+    would break in a single line.
+
+    So the ICAAP plane is now non-recording BY CONSTRUCTION: its governed-row
+    reads go through ``app/services/icaap/parameters.py`` and
+    ``icaap/params.resolve_p2``, both of which pass ``record=False``. It keeps
+    its own record — ``_parameter_provenance`` on the frozen snapshot, inside
+    ``package_digest`` — which is bound to the document rather than to whichever
+    run the session seals next.
+
+    Asserted on the plane's own doors rather than on one parameter code, so an
+    ICAAP feature written later is covered without anyone remembering this file
+    exists. The import-graph half lives in
+    ``tests/architecture/test_icaap_boundaries.py``.
+    """
+    from app.services.icaap import parameters as icaap_parameters  # noqa: PLC0415
+    from app.services.icaap import params as icaap_p2_params  # noqa: PLC0415
+
+    bank = _bank(db_session)
+    as_of = date(2026, 12, 31)
+    rp.consume_parameter_provenance(db_session)  # start from a clean ledger
+
+    deadline = icaap_parameters.resolve(
+        db_session,
+        bank,
+        icaap_parameters.SUBMISSION_MONTHS,
+        purpose="Filing the ICAAP report.",
+        as_of=as_of,
+    )
+    pillar2 = icaap_p2_params.resolve_p2(db_session, bank, as_of=as_of)
+
+    # Non-vacuity: both doors must genuinely have READ approved rows, or an
+    # unseeded control plane would make this pass by resolving nothing at all.
+    assert deadline.parameter_id
+    assert pillar2.rows, "resolve_p2 resolved no governed row — vacuous"
+
+    assert rp.consume_parameter_provenance(db_session) == []

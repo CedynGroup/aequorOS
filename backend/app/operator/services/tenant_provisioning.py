@@ -358,7 +358,6 @@ def _step_first_owner(
 def _step_parameters(
     db: Session,
     bank: Bank,
-    organization_id: str,
     operator: OperatorContext,
     state: _SagaState,
 ) -> None:
@@ -374,13 +373,16 @@ def _step_parameters(
     Regime-scoped by construction: a licence class receives only the parameters
     its own entitled modules read, so an SDI is never given a Basel LCR floor
     BoG does not impose on it (``services/parameter_register.py``).
+
+    The governed capital minima are not written into the register (founder
+    directives D-024 / D-042): the calculations take them from the regulatory
+    parameter set, so provisioning never waits on — or fails for want of — a
+    governed value; a missing one refuses at calculation time.
     """
     institution_class = institution_types.get_type(db, bank).institution_class
     result = parameter_register.seed_tenant_register(
         db,
-        organization_id=organization_id,
-        jurisdiction_code=bank.jurisdiction_code,
-        institution_class=institution_class,
+        bank=bank,
         approved_by=f"tenant_provisioning:{operator.email}",
         approved_at=utc_now(),
     )
@@ -524,7 +526,7 @@ def provision_tenant(  # noqa: PLR0915 - one linear saga; each step is named and
         _step_sso_stub(db, organization.id, state)
         administrator = _step_first_admin(db, payload, organization.id, state)
         _step_first_owner(db, organization.id, administrator, operator, state)
-        _step_parameters(db, bank, organization.id, operator, state)
+        _step_parameters(db, bank, operator, state)
         _step_readiness(db, organization.id, bank.id, state)
     except _SagaAbort:
         db.rollback()

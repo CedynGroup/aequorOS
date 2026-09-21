@@ -355,6 +355,35 @@ export function useEnterpriseStressRunHistory(
   });
 }
 
+/**
+ * One immutable run by id, as a READ.
+ *
+ * {@link useReopenEnterpriseStressRun} is a mutation because the registry
+ * re-opens a run on a click. The ICAAP stress tab has no click: it renders the
+ * run its cycle is BOUND to, so it needs the same route as a query. A run that
+ * no longer exists resolves to null rather than throwing — the ICAAP says what
+ * it is bound to, and the absence of the run is part of that statement.
+ */
+export function useEnterpriseStressRun(
+  bankId: string | undefined,
+  runId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: [RUN_KEY, 'by-id', bankId, runId ?? null],
+    queryFn: async () => {
+      try {
+        return await authFetch<EnterpriseStressRead>(
+          `/banks/${bankId}/enterprise-stress/runs/${runId}`
+        );
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+    enabled: Boolean(bankId && runId),
+  });
+}
+
 /** Re-open one immutable run by id → its full projection + Appendix II. */
 export function useReopenEnterpriseStressRun(bankId: string | undefined) {
   return useMutation({

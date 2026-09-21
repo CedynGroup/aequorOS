@@ -368,6 +368,49 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
 
 ---
 
+## 3d. ICAAP workspace and the filing plane (backend/docs/icaap_workspace_and_filing.md)
+
+The ICAAP workspace is the first surface that is a **document under review**
+rather than a computed view: cycles, narrative sections, a stage/decision chain,
+data blocks bound to computed evidence, and — at freeze — an immutable
+regulatory package. It reuses the calculation-run pattern (§3) for every figure
+and the live/governance boundary (§3b) absolutely: no ICAAP module may import
+the live plane or re-derive facts, pinned by
+`tests/architecture/test_icaap_boundaries.py`. A Board-approved figure is one
+that was computed once, reviewed, and can be pointed at afterwards.
+
+Four structural facts this plane adds, each of which has already cost a defect
+when it was assumed away:
+
+1. **There is a SECOND package-mint site.** `generate_frozen_package` is a PEER
+   of `generate_package`, not a variant: the caller owns what is in the
+   snapshot, the mint site owns what a package IS. Gates may live on either
+   side; **neither side may drop one**. `freeze_cycle` runs the
+   reporting-period and reconciliation gates the generic site runs, because
+   they are not reachable from the frozen path otherwise.
+2. **`family_hooks` is the one seam a return family may use.** Lazy
+   `importlib` dispatch (the family package imports the generic plane, so a
+   module-level import would close the cycle), a no-op default for every hook,
+   and deliberately not `if package.return_family == "icaap"` in five services.
+3. **The `ai` job lane exists.** `icaap_ai_draft` is its only member, the
+   default lane excludes it by construction, and
+   `app/worker.py::resolve_job_types` refuses a process that mixes lanes. The
+   reason is the model credential: the process holding `ANTHROPIC_API_KEY` runs
+   nothing else, and it deploys from its own compose file.
+4. **Jurisdiction identity is data under `app/domain/icaap/frameworks/<code>/`**
+   with no `if jurisdiction ==` anywhere — the same rule §2 and the jurisdictions
+   registry state, applied to a whole regulatory regime. Read the sourcing
+   caveats in the linked document before relying on the Nigeria or Kenya
+   framework: neither primary text is in the checkout.
+
+The dispatch/calculation parameter boundary belongs here too: package
+generation resolves every registry entry's `effective_from_parameter` to decide
+which returns exist, so `PrefetchedParameterResolver.load()` **requires** an
+explicit `record=` and the registry-driven sites pass `record=False`. Without
+it, adding one registry entry moved an unrelated family's content digest.
+
+---
+
 ## 4. Findings infrastructure
 
 Generic, reusable workflow — verified in `app/models/risk.py` and `app/services/findings.py`:

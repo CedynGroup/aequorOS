@@ -15,6 +15,10 @@ paths = [
   '''backend/tests/.*''',
   '''.*\.env\.example$''',
   '''.*/fixtures/.*''',
+  # Jurisdiction ICAAP manifests are pure domain data. Their `"key"` fields are
+  # section identifiers ("business_model_strategy", "pillar2_quantification"),
+  # which clear the generic-api-key entropy bar and are not credentials.
+  '''backend/app/domain/icaap/frameworks/.*\.json$''',
 ]
 regexes = [
   # Deliberate leak-assertion canaries in the market-data credential tests.

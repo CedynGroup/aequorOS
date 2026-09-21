@@ -1,0 +1,358 @@
+{
+  "schema": "aequoros-icaap-framework-v1",
+  "code": "test_icaap",
+  "jurisdiction": "GH",
+  "regulator": "BOG",
+  "title": "Test ICAAP instrument (non-production fixture)",
+  "short_title": "Test ICAAP instrument",
+  "version": "e2e.1",
+  "status": "final",
+  "effective_from": "2024-01-01",
+  "effective_from_citations": [
+    {
+      "doc": "TEST-ICAAP-DOC",
+      "ref": "1"
+    }
+  ],
+  "first_as_of_date": "2024-12-31",
+  "first_as_of_basis": "sourced",
+  "first_as_of_note": null,
+  "institution_classes": [
+    "bank"
+  ],
+  "filing_return_code": "ICAAP-REPORT",
+  "supersedes": null,
+  "section_key_map": [],
+  "cross_framework_section_map": [],
+  "documents": [
+    {
+      "id": "TEST-ICAAP-DOC",
+      "title": "Test instrument used only by the automated proofs",
+      "short_label": "Test instrument",
+      "issuer": "AequorOS (test fixture)",
+      "issued": "2024-01",
+      "status": "final",
+      "url": null
+    }
+  ],
+  "related_instruments": [],
+  "deadline": {
+    "as_of": "fy_end",
+    "fy_end_month_day": "12-31",
+    "months_after_fye_param": "icaap_submission_months",
+    "citations": [
+      {
+        "doc": "TEST-ICAAP-DOC",
+        "ref": "1"
+      }
+    ]
+  },
+  "document_citations": [],
+  "sections": [
+    {
+      "key": "executive_summary",
+      "letter": "a",
+      "order": 1,
+      "title": "Executive summary",
+      "citation": {
+        "doc": "TEST-ICAAP-DOC",
+        "ref": "1"
+      },
+      "source_status": "sourced",
+      "guidance": "What the executive_summary section must cover.",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": true,
+      "requirements": [
+        {
+          "id": "executive_summary_item",
+          "text": "Address the matter recorded as executive_summary_item.",
+          "citations": [
+            {
+              "doc": "TEST-ICAAP-DOC",
+              "ref": "1"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "capital_adequacy",
+      "letter": "b",
+      "order": 2,
+      "title": "Capital adequacy",
+      "citation": {
+        "doc": "TEST-ICAAP-DOC",
+        "ref": "1"
+      },
+      "source_status": "sourced",
+      "guidance": "What the capital_adequacy section must cover.",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": true,
+      "requirements": [
+        {
+          "id": "capital_adequacy_item",
+          "text": "Address the matter recorded as capital_adequacy_item.",
+          "citations": [
+            {
+              "doc": "TEST-ICAAP-DOC",
+              "ref": "1"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        }
+      ]
+    },
+    {
+      "key": "supervisory_measures",
+      "letter": "c",
+      "order": 3,
+      "title": "Supervisory measures",
+      "citation": {
+        "doc": "TEST-ICAAP-DOC",
+        "ref": "1"
+      },
+      "source_status": "sourced",
+      "guidance": "What the supervisory_measures section must cover.",
+      "data_blocks": [],
+      "ai_draftable": true,
+      "public_disclosure": false,
+      "requirements": [
+        {
+          "id": "supervisory_measures_item",
+          "text": "Address the matter recorded as supervisory_measures_item.",
+          "citations": [
+            {
+              "doc": "TEST-ICAAP-DOC",
+              "ref": "1"
+            }
+          ],
+          "evidence": [
+            "narrative"
+          ],
+          "waivable": true,
+          "applies_when": null
+        }
+      ]
+    }
+  ],
+  "table5_rows": [],
+  "table5_citation": null,
+  "risk_categories": [
+    {
+      "key": "credit",
+      "number": 1,
+      "title": "Credit risk",
+      "citation": {
+        "doc": "TEST-ICAAP-DOC",
+        "ref": "1"
+      },
+      "title_status": "verbatim",
+      "pillar1_coverage": "partial",
+      "custom": false,
+      "components": [
+        {
+          "key": "credit_concentration",
+          "table5_row": null,
+          "p29_class": "pillar1_not_fully_captured",
+          "p29_basis": "inferred",
+          "allowed_methods": [
+            "not_capitalised"
+          ]
+        }
+      ],
+      "sub_requirements": []
+    }
+  ],
+  "attachments": [
+    {
+      "kind": "senior_management_report",
+      "title": "Senior Management report on the ICAAP",
+      "citations": [
+        {
+          "doc": "TEST-ICAAP-DOC",
+          "ref": "1"
+        }
+      ],
+      "gate": "freeze",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "executive_summary"
+      ]
+    },
+    {
+      "kind": "board_resolution",
+      "title": "Board resolution approving the ICAAP",
+      "citations": [
+        {
+          "doc": "TEST-ICAAP-DOC",
+          "ref": "1"
+        }
+      ],
+      "gate": "submission",
+      "min_count": 1,
+      "max_count": null,
+      "relaxable_by_signing_policy": false,
+      "media_types": [
+        "application/pdf"
+      ],
+      "applies_when": null,
+      "section_keys": [
+        "executive_summary"
+      ]
+    }
+  ],
+  "stages": [
+    {
+      "seq": 1,
+      "key": "preparation",
+      "title": "Preparation",
+      "decision": "prepare",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "TEST-ICAAP-DOC",
+          "ref": "1"
+        }
+      ]
+    },
+    {
+      "seq": 2,
+      "key": "cro_review",
+      "title": "Chief Risk Officer review",
+      "decision": "review",
+      "default_officer_titles": [
+        "Chief Risk Officer"
+      ],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "TEST-ICAAP-DOC",
+          "ref": "1"
+        }
+      ]
+    },
+    {
+      "seq": 3,
+      "key": "brc_review",
+      "title": "Board Risk Committee approval",
+      "decision": "approve",
+      "default_officer_titles": [],
+      "freeze_on_approve": true,
+      "citations": [
+        {
+          "doc": "TEST-ICAAP-DOC",
+          "ref": "1"
+        }
+      ]
+    },
+    {
+      "seq": 4,
+      "key": "board_approval",
+      "title": "Board approval",
+      "decision": "attest",
+      "default_officer_titles": [],
+      "freeze_on_approve": false,
+      "citations": [
+        {
+          "doc": "TEST-ICAAP-DOC",
+          "ref": "1"
+        }
+      ]
+    }
+  ],
+  "stages_source_status": "platform_default",
+  "material_change_triggers": [
+    {
+      "code": "other",
+      "label": "Other material change",
+      "citations": [
+        {
+          "doc": "TEST-ICAAP-DOC",
+          "ref": "1"
+        }
+      ]
+    }
+  ],
+  "materiality_matrix": {
+    "source_status": "platform_default",
+    "likelihood_levels": [
+      {
+        "score": 1,
+        "key": "rare",
+        "label": "Rare"
+      }
+    ],
+    "impact_levels": [
+      {
+        "score": 1,
+        "key": "minor",
+        "label": "Minor"
+      }
+    ],
+    "rating_bands_param": "icaap_materiality_rating_bands",
+    "material_if": {
+      "min_score_param": "icaap_materiality_material_min_score",
+      "or_min_impact_param": "icaap_materiality_material_min_impact"
+    }
+  },
+  "disclosure": {
+    "citations": [
+      {
+        "doc": "TEST-ICAAP-DOC",
+        "ref": "1"
+      }
+    ],
+    "source_status": "sourced",
+    "channel": "institution_website",
+    "submit_months_after_fye_param": "icaap_disclosure_submission_months",
+    "trigger": "annual_and_each_update",
+    "content_selection": "bank_selected",
+    "never_public_block_types": [
+      "supervisory_addons"
+    ],
+    "requires_disclosure_approval": true,
+    "note": null
+  },
+  "filing": {
+    "return_codes": {
+      "annual": "ICAAP-REPORT",
+      "update": "ICAAP-UPDATE",
+      "disclosure": "ICAAP-DISCLOSURE"
+    },
+    "annexes": [],
+    "attestation": {
+      "source_status": "platform_default",
+      "lines": {
+        "preparer": "Prepared by the officer responsible for the ICAAP:",
+        "approver": "Approved for submission on behalf of Senior Management:",
+        "board": "Approved by the Board of Directors:"
+      },
+      "statements": {
+        "preparer": "I prepared this test ICAAP report.",
+        "approver": "I approve this test ICAAP report for submission.",
+        "board": "The Board has reviewed, challenged and approved this test ICAAP."
+      }
+    },
+    "stress_validation": null,
+    "exposure_draft_line": null
+  },
+  "notes": []
+}

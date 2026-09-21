@@ -34,6 +34,7 @@ from app.domain.stress.management_actions import (
     ManagementAction,
     ManagementActionError,
     ManagementActionPlan,
+    RecognitionCaps,
     apply_management_actions,
 )
 from app.domain.stress.orchestrator import (
@@ -57,6 +58,10 @@ from tests.domain.stress_fixtures import (
     sample_bank_latest_facts,
     severe_paths,
 )
+
+#: Test data for the governed AT1 / Tier 2 recognition caps (D-024: the engine
+#: takes them as an argument; production resolves them from the control plane).
+_RECOGNITION_CAPS = RecognitionCaps(at1_pct_rwa=Decimal("1.5"), tier2_pct_rwa=Decimal("2"))
 
 M = Decimal("1000000")
 _INCOME = Decimal("180") * M
@@ -334,6 +339,7 @@ def test_a_severity_the_plan_never_priced_refuses_instead_of_the_fullest_lever()
             capital_params=bog_capital_params(),
             paid_up_min=Decimal("0"),
             car_target_pct=Decimal("10"),
+            recognition_caps=_RECOGNITION_CAPS,
         )
     assert exc.value.state is OutcomeState.POLICY_UNRESOLVED
     assert exc.value.details[0].items == ("action:a1", "severity:severe")
@@ -358,6 +364,7 @@ def test_a_priced_severity_still_scales_the_action() -> None:
         capital_params=bog_capital_params(),
         paid_up_min=Decimal("0"),
         car_target_pct=Decimal("10"),
+        recognition_caps=_RECOGNITION_CAPS,
     )
     assert result.actions[0].resolved_capital_raise == Decimal("50000000.0000")
 
@@ -398,6 +405,7 @@ def test_a_partial_bottom_up_decomposition_refuses_instead_of_mixing_methodologi
             severe_paths(),
             currency="GHS",
             car_target_pct=Decimal("13"),
+            recognition_caps=_RECOGNITION_CAPS,
             paid_up_min=Decimal("400") * M,
             exposure_class_losses=losses,
         )

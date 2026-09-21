@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from app.core.authorization import (
+    ROLE_PERMISSIONS,
     BindingGrant,
     BindingStatus,
     ConditionCheck,
@@ -57,6 +58,11 @@ ROLE_EXPECTATIONS: tuple[
         PrincipalType.HUMAN,
         RoleBundle.APPROVER,
         frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
+    ),
+    (
+        PrincipalType.HUMAN,
+        RoleBundle.VALIDATOR,
+        frozenset({Permission.VIEW, Permission.SUBMIT}),
     ),
     (PrincipalType.HUMAN, RoleBundle.ACCOUNT_ADMIN, frozenset({Permission.ADMINISTER})),
     (PrincipalType.HUMAN, RoleBundle.ORG_OWNER, frozenset({Permission.ADMINISTER})),
@@ -132,6 +138,36 @@ def test_liq_analyst_plus_reg_approver_does_not_create_cross_product_authority()
     assert _evaluate(Permission.APPROVE, _resource(module=Module.REGULATORY), bindings).allowed
     assert not _evaluate(Permission.APPROVE, _resource(module=Module.LIQUIDITY), bindings).allowed
     assert not _evaluate(Permission.RUN, _resource(module=Module.REGULATORY), bindings).allowed
+
+
+def test_approving_a_return_is_not_authority_to_file_it() -> None:
+    """The split that closed the filing SoD hole, asserted on the bundles.
+
+    Until 2026-09-20 the approve and submit route dependencies required the same
+    permission, so an Approver could transmit a return to the regulator alone
+    (``docs/filing_workflow_redesign.md`` §1 finding 3). The separation is only
+    real while these four assertions hold: putting SUBMIT into the Approver
+    bundle, or APPROVE into the Validator bundle, restores the defect under a
+    new name.
+    """
+    approver = _binding(role=RoleBundle.APPROVER, module=ModuleScope.ALL)
+    validator = _binding(role=RoleBundle.VALIDATOR, module=ModuleScope.ALL)
+    resource = _resource(module=Module.REGULATORY)
+
+    assert _evaluate(Permission.APPROVE, resource, [approver]).allowed
+    assert not _evaluate(Permission.SUBMIT, resource, [approver]).allowed
+    assert _evaluate(Permission.SUBMIT, resource, [validator]).allowed
+    assert not _evaluate(Permission.APPROVE, resource, [validator]).allowed
+
+
+def test_no_bundle_other_than_validator_carries_submit() -> None:
+    """A second reviewer of the same rule, stated over the whole bundle map."""
+    carriers = {
+        bundle
+        for bundle, permissions in ROLE_PERMISSIONS.items()
+        if Permission.SUBMIT in permissions
+    }
+    assert carriers == {RoleBundle.VALIDATOR}
 
 
 @pytest.mark.parametrize(("principal_type", "role_bundle", "expected"), ROLE_EXPECTATIONS)

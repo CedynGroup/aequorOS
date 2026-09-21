@@ -1,3 +1,5 @@
+import { IcaapApi } from "../src/apis/IcaapApi";
+import { Configuration } from "../src/runtime";
 import { AccountId, instanceOfAccountId } from "../src/models/AccountId";
 import { AsOfDate, instanceOfAsOfDate } from "../src/models/AsOfDate";
 import {
@@ -427,3 +429,76 @@ void (0 as unknown as MetadataContract);
 void (0 as unknown as AssumptionValueContract);
 void (0 as unknown as ScenarioAssumptionsContract);
 void closedPayload;
+
+
+// ---------------------------------------------------------------------------
+// Multipart form fields carry TEXT.
+//
+// `multipart/form-data` has no JSON types. Two field kinds used to reach the
+// wire as something FastAPI could not read: a `Decimal` (Pydantic types it
+// `number | string`, and the generator wrapped it in a JSON `Blob` built by an
+// unrelated RESPONSE model's converter, which threw before the request was even
+// made), and a `date` (appended as a `Date`, which `FormData` stringifies to
+// "Sat Sep 19 2026 …" rather than ISO). The post-generation fixer rewrites both.
+// This drives the real generated operation and reads the body it produced.
+// ---------------------------------------------------------------------------
+
+let capturedBody: FormData | null = null;
+const icaapApi = new IcaapApi(
+  new Configuration({
+    basePath: "http://localhost",
+    fetchApi: (async (_url: string, init: RequestInit) => {
+      capturedBody = init.body as FormData;
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as unknown as Configuration["fetchApi"],
+  }),
+);
+
+const letterFile = new File([new Uint8Array([1, 2, 3])], "letter.pdf", {
+  type: "application/pdf",
+});
+
+async function checkMultipartFormFields(): Promise<void> {
+  await icaapApi
+    .createIcaapSupervisoryAddonRaw({
+      bankId: "BK-SAMP0001",
+      appliesToBasis: "consolidated",
+      basis: "rwa_percent",
+      // The decimal the preparer typed, byte for byte. A round trip through a
+      // JavaScript number is how 1.005% becomes 1.0049999999999999.
+      basisValue: "1.005",
+      effectiveFrom: new Date("2026-12-31T00:00:00Z"),
+      letter: letterFile,
+      letterDate: new Date("2026-06-30T00:00:00Z"),
+      letterReference: "BSD/2026/001",
+    })
+    .catch(() => undefined);
+
+  const form = capturedBody as FormData | null;
+  assert(form !== null, "the supervisory add-on request sent no body");
+  assert(
+    form!.get("basis_value") === "1.005",
+    `basis_value must cross as the exact decimal text, got ${String(form!.get("basis_value"))}`,
+  );
+  assert(
+    form!.get("effective_from") === "2026-12-31",
+    `effective_from must cross as an ISO date, got ${String(form!.get("effective_from"))}`,
+  );
+  assert(
+    form!.get("letter_date") === "2026-06-30",
+    `letter_date must cross as an ISO date, got ${String(form!.get("letter_date"))}`,
+  );
+  assert(
+    form!.get("letter") instanceof File,
+    "the letter must still cross as the uploaded file",
+  );
+}
+
+void checkMultipartFormFields().catch((error: unknown) => {
+  // No @types/node here, so a failure has to surface as an unhandled rejection
+  // rather than as an exit code — node still exits non-zero.
+  throw error;
+});

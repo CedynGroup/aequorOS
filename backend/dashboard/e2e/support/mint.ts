@@ -97,6 +97,25 @@ export const E2E_USERS: Record<
     roles: ["viewer"],
     authv: 2,
   },
+  // A board member. Scalar `viewer` and one exact Capital/confidential
+  // APPROVER binding on the sample bank: baseline membership (1) plus that
+  // grant (1) on top of the initial version. Holds NO Regulatory Reporting
+  // authority, which is the point — the ICAAP filing surface has to give them
+  // a signature they could not give through `/submissions`.
+  board: {
+    id: "eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec",
+    roles: ["viewer"],
+    authv: 3,
+  },
+  // The officer who transmits a return to the regulator. Scalar `viewer` on
+  // purpose — filing authority is the binding and nothing else — plus two
+  // grants on top of baseline membership: the organization-wide read sentence
+  // and the Regulatory Reporting / restricted `submit` sentence.
+  validator: {
+    id: "eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed",
+    roles: ["viewer"],
+    authv: 4,
+  },
 };
 
 export const E2E_STORAGE_ROLES = [
@@ -110,6 +129,8 @@ export const E2E_STORAGE_ROLES = [
   "liquidity_viewer",
   "liquidity_aggregated_viewer",
   "invite_fresh",
+  "board",
+  "validator",
 ] as const satisfies readonly (keyof typeof E2E_USERS)[];
 
 export async function mintBackendToken(

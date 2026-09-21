@@ -135,6 +135,11 @@ class RoleBundle(StrEnum):
     AUDITOR = "auditor"
     ANALYST = "analyst"
     APPROVER = "approver"
+    #: The officer who transmits a return to the regulator. Named for the third
+    #: filing role the bank actually has (docs/filing_workflow_redesign.md), and
+    #: it deliberately does NOT carry ``Permission.VALIDATE`` — that verb is the
+    #: machine rules check the Preparer re-runs, not this person's act.
+    VALIDATOR = "validator"
     ACCOUNT_ADMIN = "account_admin"
     ORG_OWNER = "org_owner"
     INTEGRATION_WRITER = "integration_writer"
@@ -161,6 +166,20 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
             }
         ),
         RoleBundle.APPROVER: frozenset({Permission.VIEW, Permission.REVIEW, Permission.APPROVE}),
+        # Transmission to the regulator is its OWN authority. The bundle carries
+        # VIEW so the holder can open the return they are being asked to file,
+        # and SUBMIT so they can file it — and nothing else.
+        #
+        # APPROVE is deliberately absent, and adding it later would re-open the
+        # hole this bundle exists to close: before 2026-09-20 the approve and
+        # submit route dependencies required the same permission, so whoever
+        # approved a return could also transmit it to the regulator alone. One
+        # bundle that both approves and files reinstates that under a new name.
+        # A bank whose Validator must also record the approval decision needs
+        # two explicit bindings, which the grant surface blocks under SoD until
+        # the stage engine's per-object condition lands
+        # (docs/filing_workflow_redesign.md §3.3).
+        RoleBundle.VALIDATOR: frozenset({Permission.VIEW, Permission.SUBMIT}),
         # Account administration is intentionally outside operational bundles.
         RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
         # Ownership is a distinct authority even though its first bounded

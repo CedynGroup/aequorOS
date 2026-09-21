@@ -24,6 +24,7 @@ import type {
   BankReportingPeriodRead,
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
+import { loginUrlWithReason } from "@/lib/loginUrl";
 import { useBanks, useReportingPeriods } from "@/lib/api/hooks";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { setActiveJurisdiction } from "@/lib/format";
@@ -31,6 +32,7 @@ import {
   effectiveInstitutionModules,
   effectiveOrganizationModules,
   hasEffectiveCapability,
+  hasStructuralCapability,
   isPersonalSettingsPath,
   moduleSetFrom,
   type ModuleScope,
@@ -229,6 +231,50 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      capitalCreate: hasEffectiveCapability(
+        institutionCapabilities,
+        "cap",
+        "confidential",
+        "create",
+      ),
+      capitalEdit: hasEffectiveCapability(
+        institutionCapabilities,
+        "cap",
+        "confidential",
+        "edit",
+      ),
+      capitalExport: hasEffectiveCapability(
+        institutionCapabilities,
+        "cap",
+        "confidential",
+        "export",
+      ),
+      // The checker half of the ICAAP Pillar 2 maker-checker. Institution-scoped
+      // like the rest of CAP; the service still refuses self-approval.
+      //
+      // Read STRUCTURALLY, because `approve` is projected with
+      // `requires_contextual_authorization` — the evaluator cannot answer
+      // "may this officer approve THIS revision" without the revision. Asking
+      // `hasEffectiveCapability` therefore answered false for every holder of a
+      // correct binding, and the approve-and-sign control was offered to nobody
+      // at all. It is an offer, not authority: the service re-decides, and
+      // additionally refuses an approver who authored the revision.
+      capitalApprove: hasStructuralCapability(
+        institutionCapabilities,
+        "cap",
+        "confidential",
+        "approve",
+      ),
+      // ORGANIZATION-scoped on purpose: internal audit's authority is over the
+      // organization, not granted institution by institution. It gates only
+      // whether the "Record independent review" control is offered — the
+      // service decides independence from who worked on the cycle.
+      auditCreate: hasEffectiveCapability(
+        organizationCapabilities,
+        "audit",
+        "confidential",
+        "create",
+      ),
       irrbbAggregatedView: hasEffectiveCapability(
         institutionCapabilities,
         "irrbb",
@@ -324,26 +370,51 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   );
 
   if (banksQuery.error || profileQuery.error) {
+    const authorityError = banksQuery.error ?? profileQuery.error;
+    const apiError = isApiError(authorityError) ? authorityError : null;
+    // A 401 here is not an outage. Every grant, revocation or status change
+    // bumps the holder's authorization version in the same transaction, which
+    // is what makes new authority take effect at once and stops an old token
+    // keeping the old view — so a routine grant lands the grantee here. The
+    // service answered, promptly and correctly; the session is simply spent.
+    //
+    // Saying "unreachable" and offering "Retry" was wrong twice over: it named
+    // an outage that had not happened, and the only control on the screen was
+    // one that can never succeed, because no number of retries re-mints a
+    // token. `access_changed` already existed as a sign-in reason and the sign
+    // -in form already renders it; nothing had ever routed anyone to it.
+    const staleSession = apiError?.status === 401;
     return (
       <FullScreenPanel
-        title="Risk service unreachable"
+        title={staleSession ? "Your access has changed" : "Risk service unreachable"}
         description={
-          isApiError(banksQuery.error ?? profileQuery.error)
-            ? ((banksQuery.error ?? profileQuery.error)?.message ??
-              "Effective authority is temporarily unavailable.")
-            : "Could not resolve effective authority from the risk service."
+          staleSession
+            ? (apiError?.message ??
+              "Your permissions changed, so this session is out of date. Sign in again to pick them up.")
+            : apiError
+              ? (apiError.message ?? "Effective authority is temporarily unavailable.")
+              : "Could not resolve effective authority from the risk service."
         }
         action={
-          <button
-            type="button"
-            onClick={() => {
-              void banksQuery.refetch();
-              void profileQuery.refetch();
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
-          >
-            Retry
-          </button>
+          staleSession ? (
+            <a
+              href={loginUrlWithReason("access_changed")}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+            >
+              Sign in again
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                void banksQuery.refetch();
+                void profileQuery.refetch();
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+            >
+              Retry
+            </button>
+          )
         }
       />
     );

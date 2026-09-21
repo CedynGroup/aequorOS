@@ -23,6 +23,7 @@ from app.schemas.capital_plan import (
     IlaapSnapshotListRead,
     IlaapSnapshotRead,
 )
+from app.schemas.common import ErrorResponse
 from app.services import capital_plan
 
 router = APIRouter(tags=["capital-plan"])
@@ -32,10 +33,27 @@ router = APIRouter(tags=["capital-plan"])
     "/banks/{bank_id}/capital-plan",
     response_model=CapitalPlanSummaryRead,
     operation_id="getCapitalPlan",
+    responses={
+        status.HTTP_403_FORBIDDEN: {
+            "model": ErrorResponse,
+            "description": "The caller holds no confidential capital view for the institution.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "model": ErrorResponse,
+            "description": "The institution does not exist in the caller's organization.",
+        },
+    },
 )
 def get_capital_plan(
     bank_id: str, db: DbSession, access: CapitalConfidentialView
 ) -> CapitalPlanSummaryRead:
+    """The plan document, its approval state, the projection and the ILAAP evidence.
+
+    A projection that cannot be measured (no resolvable capital minimum,
+    unresolved licence type or jurisdiction) is NOT an error: the summary is
+    returned with ``projection: null`` and ``projection_unavailable`` stating why,
+    so the plan itself stays readable.
+    """
     return capital_plan.get_capital_plan(db, access.ctx, bank_id)
 
 

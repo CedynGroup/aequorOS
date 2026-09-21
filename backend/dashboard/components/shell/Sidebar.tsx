@@ -18,6 +18,7 @@ import {
   BrainCircuit,
   FileBarChart2,
   FileCheck2,
+  ClipboardCheck,
   Landmark,
   Settings,
   PanelLeftClose,
@@ -85,6 +86,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/reports", label: "Reports", icon: FileBarChart2 },
       { href: "/institution", label: "Institution Profile", icon: Landmark },
+      { href: "/icaap", label: "ICAAP", icon: ClipboardCheck },
       { href: "/submissions", label: "Regulatory Reporting", icon: FileCheck2 },
       { href: "/settings", label: "Settings", icon: Settings },
     ],

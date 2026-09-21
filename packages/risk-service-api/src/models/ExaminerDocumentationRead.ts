@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { ExaminerIcaapCycleRead } from "./ExaminerIcaapCycleRead";
+import {
+  ExaminerIcaapCycleReadFromJSON,
+  ExaminerIcaapCycleReadFromJSONTyped,
+  ExaminerIcaapCycleReadToJSON,
+  ExaminerIcaapCycleReadToJSONTyped,
+} from "./ExaminerIcaapCycleRead";
 import type { CfpApprovedVersion } from "./CfpApprovedVersion";
 import {
   CfpApprovedVersionFromJSON,
@@ -75,6 +82,12 @@ export interface ExaminerDocumentationRead {
    * @memberof ExaminerDocumentationRead
    */
   cfpApprovedVersion?: CfpApprovedVersion;
+  /**
+   *
+   * @type {Array<ExaminerIcaapCycleRead>}
+   * @memberof ExaminerDocumentationRead
+   */
+  icaapCycles?: Array<ExaminerIcaapCycleRead>;
   /**
    *
    * @type {string}
@@ -168,6 +181,12 @@ export function ExaminerDocumentationReadFromJSONTyped(
       json["cfp_approved_version"] == null
         ? undefined
         : CfpApprovedVersionFromJSON(json["cfp_approved_version"]),
+    icaapCycles:
+      json["icaap_cycles"] == null
+        ? undefined
+        : (json["icaap_cycles"] as Array<any>).map(
+            ExaminerIcaapCycleReadFromJSON,
+          ),
     jurisdictionCode: json["jurisdiction_code"],
     latestRuns: (json["latest_runs"] as Array<any>).map(
       ExaminerRunReadFromJSON,
@@ -200,6 +219,12 @@ export function ExaminerDocumentationReadToJSONTyped(
     bank_name: value["bankName"],
     cfp_active: value["cfpActive"],
     cfp_approved_version: CfpApprovedVersionToJSON(value["cfpApprovedVersion"]),
+    icaap_cycles:
+      value["icaapCycles"] == null
+        ? undefined
+        : (value["icaapCycles"] as Array<any>).map(
+            ExaminerIcaapCycleReadToJSON,
+          ),
     jurisdiction_code: value["jurisdictionCode"],
     latest_runs: (value["latestRuns"] as Array<any>).map(ExaminerRunReadToJSON),
     packages: (value["packages"] as Array<any>).map(ExaminerPackageReadToJSON),

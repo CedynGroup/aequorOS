@@ -44,10 +44,26 @@ type ReturnFamily = Literal[
     "sdi",
     # The credit / NPL family (Notice BG/GOV/SEC/2025/23; credit PR-6).
     "credit",
+    # The ICAAP FILING family (ICAAP P3): the annual report, its ¶74 updates and
+    # the ¶82 disclosure. Distinct from "icaap_stress", which is the Appendix II
+    # stress annex filed INSIDE the report (D-011) — same subject, different
+    # filing role, and the family is what package-route authorization and the
+    # freeze-only generation gate key on.
+    "icaap",
 ]
 type ReturnFrequency = Literal["weekly", "monthly", "quarterly", "semiannual", "annual", "daily"]
-type ChannelCode = Literal["orass_sandbox", "email", "manual"]
+# Mirrors ``schemas.regulatory_reporting.ChannelCode``. ``orass_api`` is here
+# because the ICAAP report and update are filed through the portal API
+# (founder determination 2026-09-20); a narrower local alias silently made
+# those entries a type error.
+type ChannelCode = Literal["orass_api", "orass_sandbox", "email", "manual"]
 type FilingFormat = Literal["xlsx", "csv", "pdf"]
+#: What a return IS within a filing, as opposed to what it contains. An
+#: ``obligation`` is filed in its own right; an ``annex`` is carried inside its
+#: parent's submission (D-011: ``ICAAP-STRESS-APPENDIX2`` is Appendix II of the
+#: ICAAP report, not a second thing to file); a ``companion`` is prepared
+#: alongside a parent without being part of its submission package.
+type FilingRole = Literal["obligation", "annex", "companion"]
 
 REGULATOR_BOG = "BOG"
 
@@ -90,6 +106,27 @@ def annual_month_day(month: int, day: int) -> Callable[[date], date]:
     def rule(reporting_date: date) -> date:
         year = reporting_date.year + 1
         return date(year, month, min(day, monthrange(year, month)[1]))
+
+    return rule
+
+
+def _deadline_is_governed(return_code: str) -> Callable[[date], date]:
+    """A ``deadline_rule`` that refuses to answer, because the answer is governed.
+
+    Founder directive D-024: a deadline BoG sets is a regulatory number and
+    lives in the control plane, not in this file. The definition still has to
+    carry a callable (the field is not optional, and every other entry's rule is
+    real), so the ICAAP entries carry one that RAISES. That is the honest shape:
+    a caller that reaches it has bypassed ``deadline_parameter`` and would
+    otherwise have silently invented a filing deadline.
+    """
+
+    def rule(reporting_date: date) -> date:
+        raise RuntimeError(
+            f"'{return_code}' has no deadline in code: its due date is the governed "
+            "parameter named by ``deadline_parameter``, resolved at the reporting "
+            f"anchor. Reached with reporting_date={reporting_date.isoformat()}."
+        )
 
     return rule
 
@@ -193,9 +230,41 @@ class ReturnDefinition:
     # A tuple of pairs rather than a dict so the frozen definition stays
     # hashable and genuinely immutable.
     declared_methodologies: tuple[tuple[str, str], ...] = ()
-    # A working workbook is an internal review artifact with recalculable
-    # formulas. It is separately labelled and never filed or signed.
+    # A working workbook carries recalculable formulas. It is separately
+    # labelled and never signed. Whether it is also FILED depends on the
+    # generator, not on this flag: only ``bog_form`` returns file theirs
+    # (workflow.WORKING_ARTIFACT_FILING_GENERATORS, founder decision
+    # 2026-09-20, which named BoG's own workbook). A generator whose working
+    # copy is an AequorOS calculation sheet keeps it internal.
     supports_working_copy: bool = False
+    # --- filing composition and governed timing (ICAAP P3) ----------------
+    # What this return is WITHIN a filing. An ``annex``/``companion`` names its
+    # parent in ``annex_of``; the reporting calendar then shows it under the
+    # parent rather than as a separate obligation, which is what D-011 decided:
+    # the ICAAP report is the one BoG submission and Appendix II rides inside
+    # it. Before the parent is effective the annex keeps its own row, so the
+    # FY2025 dry runs are untouched.
+    filing_role: FilingRole = "obligation"
+    annex_of: str | None = None
+    # Founder directive D-024: a deadline is a regulatory number, so it is a
+    # governed row in the control plane, not a literal here. When this names a
+    # parameter code, the due date is "that many months after the reporting
+    # date", resolved at the anchor; ``deadline_rule`` is then a guard that
+    # must never be called. A missing parameter OMITS the obligation with a
+    # note naming the code — never a substituted default.
+    deadline_parameter: str | None = None
+    # Likewise for the date a return comes into force. ``effective_from`` above
+    # is the registry's own literal (and stays ``None`` for every entry that has
+    # one only in prose); this names a governed row instead, so the first ICAAP
+    # as-of date can be corrected in the console when BoG confirms it.
+    effective_from_parameter: str | None = None
+    # The filing needs a reference the platform cannot mint — the URL a ¶82
+    # disclosure was published at. Submission refuses without it.
+    requires_external_ref: bool = False
+    # The channels this return may be submitted through, where the answer is
+    # narrower than "whatever the bank has configured". ``None`` keeps today's
+    # behaviour (any configured channel).
+    allowed_channels: tuple[ChannelCode, ...] | None = None
 
 
 def _bog_definitions() -> list[ReturnDefinition]:
@@ -492,7 +561,7 @@ REGISTRY: dict[str, ReturnDefinition] = {
             directive_citation=(
                 "Large Exposures Directive, September 2025 — FINAL but NOT YET IN "
                 "FORCE, effective 1 January 2027 (docs/bog_parameter_sources.md: "
-                "\"All VERIFIED; none in force yet\") — ¶¶11-12 and ¶¶57-58, Appendix "
+                '"All VERIFIED; none in force yet") — ¶¶11-12 and ¶¶57-58, Appendix '
                 "Templates 1, 1a, 2, 3 and 4: applies to Savings and Loans and Finance "
                 "Houses; monthly reporting; 15% of Net Own Funds limit on commencement."
             ),
@@ -548,6 +617,158 @@ REGISTRY: dict[str, ReturnDefinition] = {
             # the sealed credit run's provenance and the WS-A registry carry
             # the class-scoped ownership instead of a mis-declared single pick.
         ),
+        # --- the ICAAP FILING family (ICAAP P3, D-011) -----------------------
+        # These three are the BoG submission itself. They are NOT generated
+        # through POST /regulatory-packages: an ICAAP package exists only
+        # because a workspace cycle was frozen, which is what binds the filed
+        # document to the review chain that approved it. The generic mint site
+        # refuses them by name (``icaap_generated_by_freeze``).
+        ReturnDefinition(
+            code="ICAAP-REPORT",
+            family="icaap",
+            title="Internal Capital Adequacy Assessment Process (ICAAP) Report",
+            directive_citation=(
+                "BoG Guideline on Internal Capital Adequacy Assessment Process "
+                "(Exposure Draft, February 2026) ¶49 — the ICAAP document's required "
+                "structure; ¶71 — submitted with Board resolutions and senior "
+                "management reports; ¶72 — annual submission; ¶9 — effective "
+                "1 January 2027. The Guideline describes the report's contents in "
+                "prose and publishes NO reporting template, so this return is graded "
+                "PARTIAL and its structure is the Guideline's own section list."
+            ),
+            frequency="annual",
+            # D-024: the deadline is a regulatory number, so it is a governed
+            # row (``icaap_submission_months``) and not a literal. This rule is
+            # a guard that must never be called — the calendar resolves the
+            # parameter, and a missing one omits the obligation with a note.
+            deadline_rule=_deadline_is_governed("ICAAP-REPORT"),
+            deadline_parameter="icaap_submission_months",
+            generator="icaap_report",
+            template_id="bog-icaap-report-v1",
+            fidelity="PARTIAL",
+            # TRANSPORT: ORASS document upload. The public record does NOT
+            # establish this — docs/research/bog_orass_submission_channels.md
+            # §4.6 records the channel as UNKNOWN, and the directives name only
+            # a physical address. This is the founder's determination of
+            # 2026-09-20 from how the institution actually submits, recorded as
+            # evidence rather than inferred; do not "correct" it back to manual
+            # on the strength of the research note, and do not extend it to the
+            # other ICAAP entries (see their own comments).
+            #
+            # ``email`` rides alongside because ``allowed_channels`` is enforced
+            # strictly: without it a portal outage on the 31 March obligation
+            # would leave NO path to file, turning BoG downtime into a missed
+            # statutory deadline. ``manual`` stays so a submission made outside
+            # the platform, and a rehearsal, remain recordable.
+            default_channel="orass_sandbox",
+            allowed_channels=("orass_api", "orass_sandbox", "email", "manual"),
+            # The signed PDF IS the filing. There is no workbook to carry
+            # alongside it: BoG publishes no ICAAP template, so auto-exporting
+            # an xlsx would attach a reconstruction nobody asked for.
+            filing_format="pdf",
+            effective_from_parameter="icaap_report_first_as_of_date",
+            prerequisites=("icaap:cycle:frozen",),
+            supports_working_copy=True,
+            # CF-1 / audit D-20, and the reason the architecture audit's M3
+            # mattered: this is the ONE return that prints CAR, CET1, Tier 1 and
+            # leverage beside LCR, IRRBB and stress figures, so "which car_pct
+            # does this mean?" is a live question on its first page. The headline
+            # binds the ``capital_position`` block, which resolves through
+            # ``official_capital_position`` — the sealed ``capital`` module run —
+            # and this return is bank-only, so the CRD authority is the one that
+            # owns these figures. ``car_pct`` alone has three other registered
+            # methodologies (BSD5A's printed ratio, the s.29 NOF ratio, the
+            # forecast path); naming this one is what stops a reader assuming
+            # any of them.
+            declared_methodologies=(
+                ("car_pct", "crd_basel_capital_run"),
+                ("cet1_ratio_pct", "crd_basel_capital_run"),
+                ("tier1_ratio_pct", "crd_basel_capital_run"),
+                ("leverage_ratio_pct", "crd_basel_capital_run"),
+            ),
+        ),
+        ReturnDefinition(
+            code="ICAAP-UPDATE",
+            family="icaap",
+            title="ICAAP Update (material change)",
+            directive_citation=(
+                "BoG Guideline on ICAAP (Exposure Draft, February 2026) ¶74 — an "
+                "institution updates its ICAAP and submits the update where a "
+                "material change in its risk profile, strategy or operating "
+                "environment occurs, without waiting for the annual cycle."
+            ),
+            frequency="annual",
+            deadline_rule=_deadline_is_governed("ICAAP-UPDATE"),
+            generator="icaap_report",
+            template_id="bog-icaap-update-v1",
+            fidelity="PARTIAL",
+            # TRANSPORT: ORASS document upload. The public record does NOT
+            # establish this — docs/research/bog_orass_submission_channels.md
+            # §4.6 records the channel as UNKNOWN, and the directives name only
+            # a physical address. This is the founder's determination of
+            # 2026-09-20 from how the institution actually submits, recorded as
+            # evidence rather than inferred; do not "correct" it back to manual
+            # on the strength of the research note, and do not extend it to the
+            # other ICAAP entries (see their own comments).
+            #
+            # ``email`` rides alongside because ``allowed_channels`` is enforced
+            # strictly: without it a portal outage on the 31 March obligation
+            # would leave NO path to file, turning BoG downtime into a missed
+            # statutory deadline. ``manual`` stays so a submission made outside
+            # the platform, and a rehearsal, remain recordable.
+            default_channel="orass_sandbox",
+            allowed_channels=("orass_api", "orass_sandbox", "email", "manual"),
+            filing_format="pdf",
+            # ¶74 updates are triggered by an event, never by the calendar: the
+            # due date lives on the cycle that was opened for the change, and
+            # minting a periodic obligation for one would invent a deadline.
+            event_driven=True,
+            effective_from_parameter="icaap_report_first_as_of_date",
+            prerequisites=("icaap:cycle:frozen",),
+            supports_working_copy=True,
+            # A ¶74 update is the same document for a changed risk profile: same
+            # framework, same headline, same block. Same declaration.
+            declared_methodologies=(
+                ("car_pct", "crd_basel_capital_run"),
+                ("cet1_ratio_pct", "crd_basel_capital_run"),
+                ("tier1_ratio_pct", "crd_basel_capital_run"),
+                ("leverage_ratio_pct", "crd_basel_capital_run"),
+            ),
+        ),
+        ReturnDefinition(
+            code="ICAAP-DISCLOSURE",
+            family="icaap",
+            title="ICAAP Public Disclosure",
+            directive_citation=(
+                "BoG Guideline on ICAAP (Exposure Draft, February 2026) ¶82 — an "
+                "institution publicly discloses its ICAAP outcome annually and with "
+                "each update. The published location is the filing reference; no "
+                "disclosure template is published, so this return is a "
+                "REPRESENTATIVE reconstruction of the disclosure statement."
+            ),
+            frequency="annual",
+            deadline_rule=_deadline_is_governed("ICAAP-DISCLOSURE"),
+            deadline_parameter="icaap_disclosure_submission_months",
+            generator="icaap_disclosure",
+            template_id="bog-icaap-disclosure-v1",
+            fidelity="REPRESENTATIVE",
+            default_channel="manual",
+            allowed_channels=("manual",),
+            filing_format="pdf",
+            # The platform cannot mint the URL the bank published at; recording
+            # the disclosure without it would record a claim with no evidence.
+            requires_external_ref=True,
+            effective_from_parameter="icaap_report_first_as_of_date",
+            prerequisites=("icaap:cycle:frozen",),
+            # DELIBERATELY EMPTY, and this comment is the reason. A ¶82
+            # disclosure carries only the prose sections the bank chose to
+            # publish — ``icaap/disclosure.py`` keeps the ``s_*`` sections and
+            # drops the headline entirely, so the capital ratios the report
+            # declares are never in the published statement. Declaring a
+            # methodology for a figure this return does not carry would put a
+            # claim in the filed record about a number that is not there.
+            declared_methodologies=(),
+        ),
         ReturnDefinition(
             code="ICAAP-STRESS",
             family="icaap_stress",
@@ -567,6 +788,10 @@ REGISTRY: dict[str, ReturnDefinition] = {
             template_id="bog-icaap-stress-v1",
             fidelity="REPRESENTATIVE",
             default_channel="manual",
+            # Prepared alongside the ICAAP report rather than inside its
+            # submission package (D-011): a data companion, not an annex.
+            filing_role="companion",
+            annex_of="ICAAP-REPORT",
         ),
         ReturnDefinition(
             code="ICAAP-STRESS-APPENDIX2",
@@ -579,9 +804,11 @@ REGISTRY: dict[str, ReturnDefinition] = {
                 "capital projected ≥3 years; Appendix II Tables 1–6 (Summary Results, "
                 "Regulatory Capital, P&L, Statement of Financial Position, Evolution of "
                 "RWA & Capital Requirements, Key Risk Drivers). Results reported with and "
-                "without management actions (¶67(f)), at the currency / business-line / "
-                "sector / borrower-group granularity of ¶67(g). Board-attested per ¶20. "
-                "Effective 1 Jan 2027."
+                "without management actions (¶67(f)). Adverse losses are reported by CRD "
+                "exposure class (allocated by credit-RWA share where exposure-level data "
+                "is absent); the ¶67(g) currency / business-line / sector / borrower-group "
+                "vulnerability analysis is not provided in this return and belongs in the "
+                "ICAAP narrative. Board-attested per ¶20. Effective 1 Jan 2027."
             ),
             frequency="annual",
             # CONFIRMED: end of March of the ensuing year (Stress Testing
@@ -594,6 +821,13 @@ REGISTRY: dict[str, ReturnDefinition] = {
             # stress run (docs/stress.md §1.8, §3.4, §3.8).
             fidelity="CONFIRMED",
             default_channel="manual",
+            # Appendix II IS an annex of the ICAAP report (D-011): once the
+            # report is in force it rides inside that one submission, and the
+            # calendar shows it under the parent instead of as a second thing
+            # to file. Before the parent's effective date it keeps its own row,
+            # so the FY2025 dry runs are untouched.
+            filing_role="annex",
+            annex_of="ICAAP-REPORT",
         ),
         ReturnDefinition(
             code="SDI-STRESS-ANNUAL",

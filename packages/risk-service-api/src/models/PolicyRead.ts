@@ -105,6 +105,12 @@ export interface PolicyRead {
   id: string;
   /**
    *
+   * @type {boolean}
+   * @memberof PolicyRead
+   */
+  orderedSlots?: boolean;
+  /**
+   *
    * @type {string}
    * @memberof PolicyRead
    */
@@ -213,6 +219,8 @@ export function PolicyReadFromJSONTyped(
     effectiveFrom: new Date(json["effective_from"]),
     effectiveTo: EffectiveToFromJSON(json["effective_to"]),
     id: json["id"],
+    orderedSlots:
+      json["ordered_slots"] == null ? undefined : json["ordered_slots"],
     reason: json["reason"],
     requireSignature: json["require_signature"],
     requireSignedPdf: json["require_signed_pdf"],
@@ -249,6 +257,7 @@ export function PolicyReadToJSONTyped(
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),
     effective_to: EffectiveToToJSON(value["effectiveTo"]),
     id: value["id"],
+    ordered_slots: value["orderedSlots"],
     reason: value["reason"],
     require_signature: value["requireSignature"],
     require_signed_pdf: value["requireSignedPdf"],

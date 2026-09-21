@@ -121,6 +121,10 @@ ENGINE_VERSION = "regulatory-irr-v1.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
 OUTPUT_SCHEMA_VERSION = "irr-metrics-v1"
 MODULE_IRR = "irr"
+#: The IRRBB Standardised Framework's module value. Declared here beside
+#: ``MODULE_IRR`` so the two can be read together and never collide; the SF
+#: service owns everything else about it.
+MODULE_IRR_SF = "irr_sf"
 BASELINE_SCENARIO = "baseline"
 IRR_RUN_SCENARIO_CODES = (BASELINE_SCENARIO, *IRR_SCENARIO_CODES)
 
@@ -1334,6 +1338,19 @@ def _load_facts(
             .order_by(BankFinancialFact.fact_group, BankFinancialFact.category)
         )
     )
+
+
+def tier1_for_period(
+    db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
+) -> Decimal:
+    """The ΔEVE denominator for a period — the SF's public seam onto this one.
+
+    ``app.services.regulatory_irr_sf`` needs exactly the figure the legacy IRR
+    module uses, and importing a private name across service modules is how two
+    denominators come to disagree. The alias is additive: the legacy call sites
+    keep calling ``_load_tier1`` and nothing about them changes.
+    """
+    return _load_tier1(db, ctx, bank, period)
 
 
 def _load_tier1(

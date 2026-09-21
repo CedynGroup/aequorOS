@@ -31,7 +31,10 @@ EXPECTED_FACTS = 1308
 # 176 = the long-standing 167 plus the two BoG GHS ±450 bp IRRBB parallel
 # shock rows (plan W6.4; IRRBB Guideline Feb 2026 Appendix II–III).
 # shocks, plus the seven usd_funding_stress liquidity shocks (Phase 2 item 2).
-EXPECTED_PARAMS = 181
+# 177 since 2026-09-19 (founder directive D-042): the four governed capital
+# minima (car_min, cet1_min, tier1_min, leverage_min) are no longer seeded into a
+# tenant register; the clamp supplies the control-plane value.
+EXPECTED_PARAMS = 177
 OTHER_ASSETS_FLOOR = Decimal("40000000")
 
 
@@ -196,7 +199,9 @@ def test_parameter_seed_counts_and_values(db_session: Session) -> None:
     assert _count(db_session, ParamLcrRunoffRate) == 12
     assert _count(db_session, ParamNsfrWeight) == 21
     assert _count(db_session, ParamRiskWeight) == 7
-    assert _count(db_session, ParamCapitalThreshold) == 28
+    # 24 = 28 less the four governed capital minima the register no longer
+    # carries (D-042).
+    assert _count(db_session, ParamCapitalThreshold) == 24
     # 101 = the long-standing 99 plus the two BoG GHS ±450 bp IRRBB parallel
     # shock rows (plan W6.4; IRRBB Guideline Feb 2026 Appendix II–III).
     assert _count(db_session, ParamStressShock) == 113  # + usd stress + NMD run-off

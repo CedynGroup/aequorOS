@@ -26,7 +26,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -210,6 +210,23 @@ _SUMMARY_FIELDS = (
     "min_lcr_pct",
     "min_nsfr_pct",
 )
+
+
+def regulatory_horizon_clause() -> ColumnElement[bool]:
+    """SQL predicate: the forecast run projects the regulatory 5-year horizon.
+
+    THE one statement of the rule the ICAAP consumers apply (the ICAAP data
+    companion and the capital-plan projection): ``inputs.horizon_years`` is
+    persisted only for a non-default horizon (see ``_build_snapshot``), so an
+    absent key — or JSON null — IS the regulatory projection, and a desk run at
+    another horizon never becomes it. Compiles to ``CAST(inputs ->> ... AS
+    INTEGER)`` on Postgres and ``JSON_EXTRACT`` on SQLite, so a stored ``"5"`` and
+    ``5`` agree on both.
+    """
+    return (
+        func.coalesce(RegulatoryRun.inputs["horizon_years"].as_integer(), PROJECTION_YEARS)
+        == PROJECTION_YEARS
+    )
 
 
 class ForecastRunError(Exception):

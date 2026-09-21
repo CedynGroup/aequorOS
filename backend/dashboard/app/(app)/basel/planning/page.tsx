@@ -26,6 +26,9 @@ import {
   useRefreshIlaap,
 } from "@/lib/api/hooks";
 import FloorNotAssessed from "@/components/basel/FloorNotAssessed";
+import CapitalPlanProjection, {
+  CapitalPlanProjectionUnavailable,
+} from "@/components/basel/CapitalPlanProjection";
 import {
   assessAgainstFloor,
   floorStatus,
@@ -292,6 +295,14 @@ export default function CapitalPlanning() {
               </p>
             ) : null}
           </SectionCard>
+
+          {capitalPlan.data?.projection ? (
+            <CapitalPlanProjection projection={capitalPlan.data.projection} />
+          ) : capitalPlan.data?.projectionUnavailable ? (
+            <CapitalPlanProjectionUnavailable
+              unavailable={capitalPlan.data.projectionUnavailable}
+            />
+          ) : null}
 
           {data ? (
             <>

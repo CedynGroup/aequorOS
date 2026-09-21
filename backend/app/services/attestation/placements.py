@@ -49,12 +49,13 @@ from app.models import (
     RegulatoryPackage,
     ReturnSignaturePlacement,
 )
+from app.services.attestation import layouts
 from app.services.attestation.pdf_signing import (
     DEFAULT_PLACEMENTS,
     FIELD_TYPES,
-    ROLE_FIELD_NAMES,
     SIGNATURE_FIELD_TYPE,
     FieldPlacement,
+    default_placements,
     min_box_size,
     too_small_detail,
 )
@@ -66,16 +67,47 @@ type PlacementSource = Literal["package", "bank_template", "organization_templat
 
 @dataclass(frozen=True)
 class ResolvedPlacements:
-    """The placement set in force, and which of the three sources produced it."""
+    """The placement set in force, and which of the three sources produced it.
+
+    ``editable`` is False for a layout whose attestation page this platform draws
+    itself: there is nothing to accommodate, because the rules the boxes sit on
+    are ours. It is the layout's answer, not the package's — whether THIS package
+    can still be re-placed additionally depends on its attestation state, which
+    is the caller's check.
+    """
 
     source: PlacementSource
     placements: tuple[FieldPlacement, ...]
+    editable: bool = True
 
 
 def resolve(
-    db: Session, ctx: TenantContext, package: RegulatoryPackage
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    *,
+    signing_order: Sequence[str] | None = None,
 ) -> ResolvedPlacements:
-    """The placements this package's signature fields will be created from."""
+    """The placements this package's signature fields will be created from.
+
+    For an ICAAP filing report the answer is fixed and not negotiable: the
+    attestation page is drawn by this platform at :func:`pdf_signing.signing_rule_y`,
+    so a template or an override could only move a signature off the rule it is
+    supposed to sit on. Every other family keeps the three-source chain exactly
+    as it was.
+
+    ``signing_order`` is how many blocks the ICAAP page needs — the ceremony the
+    policy in force resolves to. Omitted, it falls back to the two-signer default
+    that ships disabled-Board (D-043) rather than guessing that a third block is
+    wanted: a ``Sig_Board`` nobody is entitled to fill would block certification
+    outright, since a field cannot be removed after the preparer certifies.
+    """
+    if layouts.layout_for_family(package.return_family) == "icaap":
+        order = tuple(signing_order) if signing_order else layouts.STANDARD_SIGNING_ORDER
+        return ResolvedPlacements(
+            "default", default_placements(order, layout="icaap"), editable=False
+        )
+
     override = _package_rows(db, ctx, package.id)
     if override:
         return ResolvedPlacements("package", _as_placements(override))
@@ -121,6 +153,7 @@ def upsert_template(  # noqa: PLR0913 - the scope key plus the payload
     reason: str,
 ) -> list[ReturnSignaturePlacement]:
     """Replace the template placement set for one ``(bank?, return_code)`` scope."""
+    _require_placeable_return(return_code)
     placements = _indexed(placements)
     _require_complete(placements)
     scope = (
@@ -187,6 +220,7 @@ def set_package_override(
     document) or tampering (adding a field the DocMDP policy forbids). An empty
     list clears the override and falls the package back to its return template.
     """
+    _require_placeable_family(package.return_family)
     if package.attestation_state != "unsigned":
         raise AttestationConflict(
             "placement_locked",
@@ -241,7 +275,43 @@ def set_package_override(
 # --- internals --------------------------------------------------------------
 
 
-def _require_complete(placements: Sequence[FieldPlacement]) -> None:
+#: The refusal a fixed-layout return answers a placement write with. One message
+#: for both scopes: the reason is the same either way, and it is not a state the
+#: operator can clear — it is what the return IS.
+_FIXED_LAYOUT_REFUSAL = (
+    "The ICAAP report's signature blocks are ruled on an attestation page this "
+    "platform draws, so they cannot be moved: a box placed anywhere else would "
+    "print the officer's mark beside its line rather than on it."
+)
+
+
+def _require_placeable_family(return_family: str) -> None:
+    if layouts.layout_for_family(return_family) != "standard":
+        raise AttestationConflict("placement_fixed_for_return", _FIXED_LAYOUT_REFUSAL)
+
+
+def _require_placeable_return(return_code: str) -> None:
+    """The same check, for a template scoped by return code rather than package.
+
+    An unregistered code is left placeable. A template is only ever consulted for
+    a package whose family resolves through the registry anyway, so refusing an
+    unknown code here would block nothing and break the workspace for a return
+    added between releases.
+    """
+    from app.services.regulatory_reporting.registry import (  # noqa: PLC0415 - cycle
+        get_definition,
+    )
+
+    definition = get_definition(return_code)
+    if definition is not None:
+        _require_placeable_family(definition.family)
+
+
+def _require_complete(
+    placements: Sequence[FieldPlacement],
+    *,
+    signing_order: Sequence[str] = layouts.STANDARD_SIGNING_ORDER,
+) -> None:
     """Refuse a set the document could not be signed from.
 
     These are the same rules ``pdf_signing._validate_placements`` enforces
@@ -249,14 +319,21 @@ def _require_complete(placements: Sequence[FieldPlacement]) -> None:
     media box). Checking them here too is deliberate: an author must be told
     their box is too small when they save it, not when a colleague's
     certification fails hours later on a filing deadline.
+
+    ``signing_order`` is what "complete" means for this return. It was the whole
+    of ``ROLE_FIELD_NAMES``, which conflated the field-name vocabulary with the
+    required set; now that the vocabulary knows the word ``board`` those are two
+    different questions, and only the order answers the second one. The codes and
+    the wording are unchanged — an operator placing a Board box on a two-signer
+    return reads the same refusal they always have.
     """
     roles = [placement.signing_role for placement in placements]
-    unknown_roles = sorted(set(roles) - set(ROLE_FIELD_NAMES))
+    unknown_roles = sorted(set(roles) - set(signing_order))
     if unknown_roles:
         raise AttestationConflict(
             "placement_role_unsupported",
             f"Signing role(s) {unknown_roles} have no field on the return artifact; only "
-            f"{sorted(ROLE_FIELD_NAMES)} can be placed on the document.",
+            f"{sorted(signing_order)} can be placed on the document.",
         )
     unknown_types = sorted({p.field_type for p in placements} - set(FIELD_TYPES))
     if unknown_types:
@@ -276,7 +353,7 @@ def _require_complete(placements: Sequence[FieldPlacement]) -> None:
             "Each signing role has exactly one signature field on the document, so the "
             "signature can only be placed once per signer.",
         )
-    missing = sorted(set(ROLE_FIELD_NAMES) - set(signature_roles))
+    missing = sorted(set(signing_order) - set(signature_roles))
     if missing:
         raise AttestationConflict(
             "placement_incomplete",

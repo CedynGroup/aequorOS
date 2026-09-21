@@ -34,8 +34,7 @@
  * read as a voided one.
  */
 
-import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BadgeCheck,
   FileSearch,
@@ -56,6 +55,9 @@ import StatusPill from '@/components/ui/StatusPill';
 import { ErrorPanel } from '@/components/ui/QueryBoundary';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { isApiError } from '@/lib/api/client';
+import { useModuleScope } from '@/components/shell/BankContext';
+import { useUserProfile } from '@/components/profile/ProfileProvider';
+import { filingAuthorityFor } from '@/lib/submissions/filingAuthority';
 import {
   usePackageAttestation,
   useVerifyPackageAttestation,
@@ -87,23 +89,76 @@ export default function AttestationPanel({
   returnLabel,
   packageStatus,
   validationClean,
+  returnFamily,
+  certifyRole: controlledCertifyRole,
+  onCertifyRoleChange,
+  showInlineCertifyActions = true,
 }: {
   bankId: string;
   packageId: string;
   /** e.g. "BSD3 · 31 Mar 2026 v2" — used in the ceremony heading. */
   returnLabel: string;
   packageStatus: PackageStatus;
-  /** Validation passed with zero ERROR findings — the T1 precondition. */
+  /** Every check passed with no findings to fix — the T1 precondition. */
   validationClean: boolean;
+  /**
+   * The package's return family. Required rather than optional because it
+   * decides which authority the checker affordance is offered on, and a new
+   * mount that did not answer would silently get the prudential answer.
+   */
+  returnFamily: string;
+  /**
+   * The open ceremony, when the surface around this panel owns it. The Returns
+   * workspace lifts the certify act into its command bar so the officer meets
+   * one act at the top of the screen instead of hunting for it in a card; the
+   * ceremony itself still lives here, because the workspace it opens is this
+   * panel's.
+   */
+  certifyRole?: SigningRole | null;
+  onCertifyRoleChange?: (role: SigningRole | null) => void;
+  /** False when the surface has lifted the certify buttons out of this card. */
+  showInlineCertifyActions?: boolean;
 }) {
-  const { data: session } = useSession();
-  const roles = session?.user?.roles ?? [];
-  const isApprover = roles.includes('approver') || roles.includes('admin');
+  const { capitalApprove } = useModuleScope();
+  const { effectiveAuthority, isLoading: authorityLoading } = useUserProfile();
+  /**
+   * Whether to OFFER the checker act — never whether to permit it. The server
+   * decides that, and decides it differently per family
+   * (`attestation_api._ensure_certify_authority`).
+   *
+   * For the prudential returns the scalar ladder is the right and unchanged
+   * question: a bank's approvers approve its returns. An ICAAP report is a
+   * scoped surface, so the server asks for an exact Capital/confidential
+   * APPROVE binding for this institution and refuses a scalar approver who
+   * holds none. Asking the scalar question here got both halves wrong: a board
+   * member whose whole authority is over capital was never SHOWN the
+   * approve-and-sign control, and a reporting approver with no capital
+   * standing was shown one the server would refuse.
+   *
+   * The projection is the active institution's, which is the institution every
+   * surface that mounts this panel is already looking at.
+   */
+  const filingAuthority = filingAuthorityFor(effectiveAuthority, bankId, {
+    resolved: !authorityLoading,
+  });
+  const isApprover =
+    returnFamily === 'icaap'
+      ? capitalApprove === true
+      : filingAuthority.mayApprove;
 
   const statusQuery = usePackageAttestation(bankId, packageId);
   const voidAttestation = useVoidAttestation(bankId);
 
-  const [certifyRole, setCertifyRole] = useState<SigningRole | null>(null);
+  const [ownCertifyRole, setOwnCertifyRole] = useState<SigningRole | null>(null);
+  const certifyRole =
+    controlledCertifyRole !== undefined ? controlledCertifyRole : ownCertifyRole;
+  const setCertifyRole = onCertifyRoleChange ?? setOwnCertifyRole;
+  // The deep-link effect below runs once, on mount, and must not re-run when a
+  // parent re-renders with a fresh callback identity — reopening a signing
+  // ceremony because a prop changed is exactly the surprise a ceremony must not
+  // spring on a signer.
+  const setCertifyRoleRef = useRef(setCertifyRole);
+  setCertifyRoleRef.current = setCertifyRole;
   const [ssoOutcome, setSsoOutcome] = useState<string | null>(null);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
@@ -130,7 +185,7 @@ export default function AttestationPanel({
     const outcome = params.get('stepUp');
     if (!role && !outcome) return;
     if (role && role in SIGNING_ROLE_ACTIONS) {
-      setCertifyRole(role as SigningRole);
+      setCertifyRoleRef.current(role as SigningRole);
       setSsoOutcome(outcome);
     }
     params.delete('sign');
@@ -197,16 +252,25 @@ export default function AttestationPanel({
                 packageStatus={packageStatus}
                 validationClean={validationClean}
                 isApprover={isApprover}
+                returnFamily={returnFamily}
+                showCertifyButtons={showInlineCertifyActions}
                 onCertify={setCertifyRole}
                 onVoid={() => setVoidOpen(true)}
               />
             </>
           ) : (
             <p className="rounded border border-border-light bg-surface px-3.5 py-2.5 text-caption text-navy/85 leading-relaxed">
-              The signing policy in force for this return does not require a
-              signature. Nothing is certified, and submission is not gated on
-              attestation. Configure a policy under Regulatory Reporting →
-              Settings if that is wrong.
+              {/*
+                Which of the three reasons applies is not cosmetic. Two of them
+                are deployment switches that no policy can overrule, and sending
+                an officer to Settings to fix one of those would send them to a
+                screen that cannot.
+              */}
+              {status.policy.source === 'icaap_signing_disabled'
+                ? 'The assessment is not signed in this installation. Nothing is certified here and submission is not gated on a signature: the assessment is prepared and approved in the usual way, and the Board resolution filed with it is the evidence of the Board’s approval. A signing policy cannot change this — ask your AequorOS administrator to switch ICAAP signing on.'
+                : status.policy.source === 'esign_disabled'
+                  ? 'Signing is switched off for this installation, so no return is certified here and submission is not gated on a signature. A signing policy cannot change this — ask your AequorOS administrator.'
+                  : 'The signing policy in force for this return does not require a signature. Nothing is certified, and submission is not gated on attestation. Configure a policy under Regulatory Reporting → Settings if that is wrong.'}
             </p>
           )}
 
@@ -479,6 +543,8 @@ function Actions({
   packageStatus,
   validationClean,
   isApprover,
+  returnFamily,
+  showCertifyButtons,
   onCertify,
   onVoid,
 }: {
@@ -486,6 +552,13 @@ function Actions({
   packageStatus: PackageStatus;
   validationClean: boolean;
   isApprover: boolean;
+  returnFamily: string;
+  /**
+   * False when the surface has lifted the certify act to its own command bar.
+   * The sentence below stays either way — it is what tells an officer why the
+   * act is not theirs, or not yet.
+   */
+  showCertifyButtons: boolean;
   onCertify: (role: SigningRole) => void;
   onVoid: () => void;
 }) {
@@ -508,7 +581,9 @@ function Actions({
   return (
     <div className="pt-4 border-t border-border-light space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
-        {(state === 'unsigned' || state === 'void') && preparerOutstanding && (
+        {showCertifyButtons &&
+          (state === 'unsigned' || state === 'void') &&
+          preparerOutstanding && (
           <button
             type="button"
             disabled={!canCertifyAsPreparer}
@@ -519,7 +594,15 @@ function Actions({
             {SIGNING_ROLE_ACTIONS.preparer}
           </button>
         )}
-        {state === 'preparer_certified' && checkerRole && (
+        {/* ABSENT, not disabled, for an officer who does not hold the checker
+            authority at all: a greyed-out "Approve and sign" invites someone to
+            infer that the act is theirs and the moment is wrong, when neither
+            is true (docs/filing_workflow_redesign.md §4b.1). The sentence below
+            names the authority the server asks for. */}
+        {showCertifyButtons &&
+          isApprover &&
+          state === 'preparer_certified' &&
+          checkerRole && (
           <button
             type="button"
             disabled={!canCertifyAsChecker}
@@ -546,13 +629,15 @@ function Actions({
         {state === 'fully_certified'
           ? 'Fully certified — nothing further is required before submission.'
           : state === 'preparer_certified' && !isApprover
-            ? 'Awaiting a checker signature. Approving requires the approver role — maker-checker cannot be satisfied by a preparer.'
+            ? returnFamily === 'icaap'
+              ? 'Awaiting a checker signature. Approving this assessment requires capital approval authority for this institution — maker-checker cannot be satisfied by a preparer.'
+              : 'Awaiting a checker signature. Approving requires the approver role — maker-checker cannot be satisfied by a preparer.'
             : state === 'preparer_certified'
               ? 'You are certifying the identical frozen figures shown above; the server refuses the signature on any difference.'
               : !CERTIFIABLE_STATUSES.includes(packageStatus)
-                ? `A return must be validated before it can be certified (this package is '${packageStatus}').`
+                ? 'The checks have not run cleanly against this version yet, so there is nothing here to certify.'
                 : !validationClean
-                  ? 'Validation has not passed cleanly — figures with ERROR findings cannot be attested to.'
+                  ? 'Some checks are still failing — figures with failing checks cannot be attested to.'
                   : 'Certifying freezes the figures: regeneration is refused for this return and reporting date until the attestation is completed or voided.'}
       </p>
     </div>

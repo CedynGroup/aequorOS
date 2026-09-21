@@ -55,13 +55,15 @@ test.describe("attestation surfaces", () => {
       // The panel is bound to a package, so establish one first — the same path a
       // preparer takes (the UI round-trips createRegulatoryPackage).
       const generate = page
-        .getByRole("button", { name: /generate package|regenerate/i })
+        .getByRole("button", { name: /generate the return|^regenerate$/i })
         .first();
       await expect(generate).toBeVisible({ timeout: 5_000 });
       await generate.click();
-      await expect(page.getByText(/Generated|Validated/).first()).toBeVisible({
-        timeout: 30_000,
-      });
+      // The checks run with generation — there is no Validate button to press
+      // (docs/filing_workflow_redesign.md §4b.2).
+      await expect(
+        page.getByText(/Generated|Checks passed/).first(),
+      ).toBeVisible({ timeout: 60_000 });
 
       // A reviewer must be able to SEE that a return is unsigned, not infer it
       // from an absence.
@@ -115,22 +117,26 @@ test.describe("the certification ceremony", () => {
 
         await page.goto(GATED_RETURN);
         const generate = page
-          .getByRole("button", { name: /generate package|regenerate/i })
+          .getByRole("button", { name: /generate the return|^regenerate$/i })
           .first();
         await expect(generate).toBeVisible({ timeout: 5_000 });
         await generate.click();
-        await expect(page.getByText(/Generated|Validated/).first()).toBeVisible(
-          {
-            timeout: 30_000,
-          },
-        );
-        const validate = page
-          .getByRole("button", { name: /^Validate/ })
+        await expect(
+          page.getByText(/Generated|Checks passed/).first(),
+        ).toBeVisible({ timeout: 60_000 });
+        // Machine validation is not a human act: it runs with generation, and
+        // the only button is the honest one — "Re-run checks", beside
+        // Regenerate, for source figures that moved under an existing version.
+        await expect(
+          page.getByRole("button", { name: /^validate$/i }),
+        ).toHaveCount(0);
+        const rerun = page
+          .getByRole("button", { name: "Re-run checks" })
           .first();
-        if (await validate.count()) {
-          await validate.click();
-          await expect(page.getByText(/Validated/).first()).toBeVisible({
-            timeout: 30_000,
+        if (await rerun.count()) {
+          await rerun.click();
+          await expect(page.getByText("Checks passed").first()).toBeVisible({
+            timeout: 60_000,
           });
         }
 
@@ -148,19 +154,24 @@ test.describe("the certification ceremony", () => {
         // fail if the element is missing, so the check cannot go trivially green.
         const clearance = page.getByTestId("attestation-clearance").first();
         await expect(clearance).toHaveText(/^Not cleared to submit/i);
+        await expect(clearance).toContainText(/preparer/i);
+        await expect(clearance).toContainText(/approver/i);
         await expect(
           page.getByText("Cleared to submit", { exact: true }),
         ).toHaveCount(0);
         await expect(page.getByText("Unsigned").first()).toBeVisible();
 
-        // Disabled AND told why, naming the signatures that are missing: a greyed
-        // control with no reason sends the operator hunting, and a `title` alone is
-        // invisible on a touch device.
-        await expect(page.getByTestId("submit-package")).toBeDisabled();
-        const blocked = page.getByTestId("submit-blocked-reason");
-        await expect(blocked).toContainText(/not fully certified/i);
-        await expect(blocked).toContainText(/preparer/i);
-        await expect(blocked).toContainText(/approver/i);
+        // And the filing control is not disabled here — it is ABSENT. This is a
+        // PREPARER's session, and transmission is the Validator's authority
+        // alone (docs/filing_workflow_redesign.md §4b.1). What this session is
+        // offered instead is its own act, named, with what pressing it does —
+        // which is what the assertions below drive.
+        await expect(page.getByTestId("transmission-row")).toHaveCount(0);
+        const act = page.getByTestId("primary-filing-action");
+        await expect(act).toHaveText(/certify and freeze/i);
+        await expect(
+          page.getByTestId("primary-filing-action-reason"),
+        ).toContainText(/sends the return to the approver/i);
 
         const certify = page.getByRole("button", {
           name: "Certify and freeze",
@@ -373,22 +384,26 @@ test.describe("the signing workspace", () => {
 
         await page.goto(GATED_RETURN);
         const generate = page
-          .getByRole("button", { name: /generate package|regenerate/i })
+          .getByRole("button", { name: /generate the return|^regenerate$/i })
           .first();
         await expect(generate).toBeVisible({ timeout: 5_000 });
         await generate.click();
-        await expect(page.getByText(/Generated|Validated/).first()).toBeVisible(
-          {
-            timeout: 30_000,
-          },
-        );
-        const validate = page
-          .getByRole("button", { name: /^Validate/ })
+        await expect(
+          page.getByText(/Generated|Checks passed/).first(),
+        ).toBeVisible({ timeout: 60_000 });
+        // Machine validation is not a human act: it runs with generation, and
+        // the only button is the honest one — "Re-run checks", beside
+        // Regenerate, for source figures that moved under an existing version.
+        await expect(
+          page.getByRole("button", { name: /^validate$/i }),
+        ).toHaveCount(0);
+        const rerun = page
+          .getByRole("button", { name: "Re-run checks" })
           .first();
-        if (await validate.count()) {
-          await validate.click();
-          await expect(page.getByText(/Validated/).first()).toBeVisible({
-            timeout: 30_000,
+        if (await rerun.count()) {
+          await rerun.click();
+          await expect(page.getByText("Checks passed").first()).toBeVisible({
+            timeout: 60_000,
           });
         }
 
@@ -569,7 +584,12 @@ test.describe("the signing workspace", () => {
 });
 
 /**
- * The Export artifacts card — what Download actually hands over (SIGN-13).
+ * The artifacts group — what pressing one actually hands over (SIGN-13).
+ *
+ * Exporting and downloading used to be two acts on two cards: mint the export,
+ * find it in a list below, press Download. The group in the command bar IS the
+ * file — it produces what does not exist yet and hands over what does — so the
+ * assertions below follow that one gesture.
  *
  * The defect this guards was found live: a fully certified return whose
  * Download button served the raw unsigned PDF. The certification half cannot be
@@ -592,25 +612,27 @@ test.describe("the filed document", () => {
 
       await page.goto(GATED_RETURN);
       const generate = page
-        .getByRole("button", { name: /generate package|regenerate/i })
+        .getByRole("button", { name: /generate the return|^regenerate$/i })
         .first();
       await expect(generate).toBeVisible({ timeout: 5_000 });
       await generate.click();
-      await expect(page.getByText(/Generated|Validated/).first()).toBeVisible({
-        timeout: 30_000,
-      });
-
-      await page.getByRole("button", { name: "PDF", exact: true }).click();
+      // The checks run with generation — there is no Validate button to press
+      // (docs/filing_workflow_redesign.md §4b.2).
       await expect(
-        page.getByRole("button", { name: /Download pdf artifact/i }),
+        page.getByText(/Generated|Checks passed/).first(),
+      ).toBeVisible({ timeout: 60_000 });
+
+      await page
+        .getByRole("button", { name: /produce and download pdf/i })
+        .click();
+      // Once it exists the same control hands it over rather than minting again.
+      await expect(
+        page.getByRole("button", { name: /^download pdf$/i }),
       ).toBeVisible({ timeout: 30_000 });
 
-      // Nothing is signed, so nothing may present itself as the signed return —
-      // and the base export is not yet labelled as something it supersedes.
-      await expect(page.getByText(/Signed return/i)).toHaveCount(0);
-      await expect(page.getByText(/Pre-signature engine output/i)).toHaveCount(
-        0,
-      );
+      // Nothing is signed, so nothing may present itself as the signed return.
+      await expect(page.getByText(/Signed PDF/i)).toHaveCount(0);
+      await expect(page.getByText(/^Signed by /i)).toHaveCount(0);
 
       const packages = await page.request.get(
         `${API}/banks/BK-SAMP0001/regulatory-packages?return_code=LMT&limit=1`,

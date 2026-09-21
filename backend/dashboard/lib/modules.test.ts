@@ -8,10 +8,14 @@ import {
   isPersonalSettingsPath,
   isPathVisible,
   hubRedirectFor,
+  moduleForPath,
   isRootPath,
   landingPathFor,
   type ModuleScope,
 } from "./modules";
+import { existsSync as fileExists } from "node:fs";
+import { join as joinPath, resolve as resolvePath } from "node:path";
+import { ICAAP_CYCLE_TABS, icaapTabHrefs } from "../components/icaap/tabs";
 
 const resolved = (
   liquidityAggregatedView: boolean,
@@ -403,6 +407,66 @@ assert.equal(isHrefVisible("/irr/scenarios", memberOnly), false);
 assert.equal(isPathVisible("/irr/scenarios", memberOnly), false);
 assert.equal(hubRedirectFor("/irr/scenarios", memberOnly), "/");
 
+// ---------------------------------------------------------------------------
+// The IRRBB standardised framework (P5)
+//
+// It reads on AGGREGATED view like the rest of the module — the CONFIDENTIAL
+// authority it needs is for MINTING a run, which the screen gates on its own.
+// Putting the page behind confidential view would hide a supervisory-monitoring
+// view from the analyst who has to read it.
+//
+// It is hidden for an SDI: the whole framework parameter set is governed for
+// the bank institution class, so an SDI has no governed value for any of it and
+// every run would refuse. The nav must not offer a walled-up door.
+// ---------------------------------------------------------------------------
+
+assert.ok(
+  fileExists(
+    joinPath(
+      __dirname.includes(".test-out")
+        ? resolvePath(__dirname, "../..")
+        : resolvePath(__dirname, ".."),
+      "app",
+      "(app)",
+      "irr",
+      "standardised",
+      "page.tsx",
+    ),
+  ),
+  "the standardised framework tab is routed but has no page.tsx behind it",
+);
+assert.equal(isHrefVisible("/irr/standardised", resolved(true, true)), true);
+assert.equal(isPathVisible("/irr/standardised", resolved(true, true)), true);
+assert.deepEqual(hrefAccess("/irr/standardised", memberOnly), {
+  state: "disabled",
+  reason:
+    "Requires IRRBB · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.equal(isHrefVisible("/irr/standardised", memberOnly), false);
+assert.equal(hubRedirectFor("/irr/standardised", memberOnly), "/");
+assert.equal(
+  isHrefVisible("/irr/standardised", {
+    ...resolved(true, true),
+    institutionClass: "sdi",
+  }),
+  false,
+);
+assert.deepEqual(
+  hrefAccess("/irr/standardised", {
+    ...resolved(true, true),
+    institutionClass: "sdi",
+  }),
+  { state: "hidden" },
+);
+// The other IRRBB tabs are unchanged by that exclusion.
+assert.equal(
+  isHrefVisible("/irr/sensitivity", {
+    ...resolved(true, true),
+    institutionClass: "sdi",
+  }),
+  true,
+);
+
 // Hubs redirect when hidden; a member without institution authority also
 // returns from public product-module paths to the root empty workspace.
 assert.equal(hubRedirectFor("/", ownerOnly), "/settings");
@@ -507,6 +571,233 @@ for (const [capabilities, visible] of [
     assert.equal(isHrefVisible(route, scope), visible);
   }
 }
+
+// ---------------------------------------------------------------------------
+// ICAAP workspace (P1). Two independent gates, both fail-closed:
+//   1. exact CAP/confidential view authority,
+//   2. institution class — an SDI has no Pillar 2 regime, and the backend 404s
+//      every ICAAP route for one.
+// There is no deployment flag (D-046): ICAAP is part of the product for every
+// eligible bank. The nav still hides it until the scope RESOLVES, so a link is
+// never offered before the projection says the caller can follow it.
+// ---------------------------------------------------------------------------
+
+const icaapCycleId = "6d2b1f7e-0000-4000-8000-000000000001";
+const ICAAP_PATHS = [
+  "/icaap",
+  `/icaap/${icaapCycleId}/overview`,
+  `/icaap/${icaapCycleId}/sections/executive_summary`,
+  `/icaap/${icaapCycleId}/attachments`,
+  // P2's risk & capital tabs. They are listed here so every gate below —
+  // CAP/confidential view, the SDI rule, the pre-resolve nav rule — is asserted
+  // against them too. A new tab that only the layout knew about would otherwise
+  // escape the authority check.
+  `/icaap/${icaapCycleId}/risks`,
+  `/icaap/${icaapCycleId}/appetite`,
+  `/icaap/${icaapCycleId}/pillar2`,
+];
+
+assert.equal(moduleForPath("/icaap"), "capital");
+assert.equal(
+  moduleForPath(`/icaap/${icaapCycleId}/sections/executive_summary`),
+  "capital",
+);
+
+const icaapEnabled = resolved(true, true);
+for (const path of ICAAP_PATHS) {
+  assert.equal(isHrefVisible(path, icaapEnabled), true);
+  assert.equal(isPathVisible(path, icaapEnabled), true);
+}
+
+// Confidential view is the whole gate: an aggregated-only capital scope does
+// not reach the institution's own capital assessment.
+const icaapAggregatedOnly = resolved(true, true, {
+  capitalConfidentialView: false,
+});
+for (const path of ICAAP_PATHS) {
+  assert.deepEqual(hrefAccess(path, icaapAggregatedOnly), { state: "hidden" });
+  assert.equal(isPathVisible(path, icaapAggregatedOnly), false);
+}
+
+// An SDI tenant never sees it, confidential view notwithstanding.
+const icaapSdi = resolved(true, true, {
+  institutionClass: "sdi",
+});
+for (const path of ICAAP_PATHS) {
+  assert.deepEqual(hrefAccess(path, icaapSdi), { state: "hidden" });
+  assert.equal(isPathVisible(path, icaapSdi), false);
+}
+
+// Before the scope resolves the nav hides ICAAP, while the route guard stays
+// permissive so a deep-link refresh waits instead of flashing a 404.
+const icaapUnresolved: ModuleScope = {
+  ...unresolved,
+  capitalConfidentialView: true,
+};
+assert.deepEqual(hrefAccess("/icaap", icaapUnresolved), { state: "hidden" });
+assert.equal(isPathVisible("/icaap", icaapUnresolved), true);
+
+// The hub URL redirects a baseline-only member to the root workspace rather
+// than 404ing, and never advertises the surface with a grant sentence.
+assert.equal(hubRedirectFor("/icaap", memberOnly), "/");
+assert.deepEqual(hrefAccess("/icaap", memberOnly), { state: "hidden" });
+assert.equal(
+  hubRedirectFor(`/icaap/${icaapCycleId}/overview`, memberOnly),
+  null,
+);
+
+// `/basel/planning` is unchanged by any of the above.
+assert.equal(isHrefVisible("/basel/planning", resolved(true, true)), true);
+assert.deepEqual(hrefAccess("/basel/planning", aggregatedCapitalOnly), {
+  state: "hidden",
+});
+
+// ---------------------------------------------------------------------------
+// ICAAP cycle tabs (P1-P3)
+//
+// A tab is offered only when a route file exists behind it, and a declared-but-
+// disabled tab must stay out of the strip: a tab whose page does not exist is a
+// promise the app cannot keep — the P1 convention that makes a typed URL a
+// genuine 404 rather than a blank screen implying the feature shipped. Every
+// declared tab now HAS a page, so the rule is checked below in both directions
+// rather than by naming the exceptions.
+// ---------------------------------------------------------------------------
+
+const enabledSegments = ICAAP_CYCLE_TABS.filter((tab) => tab.enabled).map(
+  (tab) => tab.segment,
+);
+assert.deepEqual(enabledSegments, [
+  "overview",
+  "sections",
+  "risks",
+  "appetite",
+  "pillar2",
+  "stress",
+  "review",
+  "attachments",
+  "filing",
+]);
+
+const tabHrefs = icaapTabHrefs(icaapCycleId).map((tab) => tab.href);
+for (const segment of [
+  "risks",
+  "appetite",
+  "pillar2",
+  "stress",
+  "review",
+  "filing",
+]) {
+  assert.ok(
+    tabHrefs.includes(`/icaap/${icaapCycleId}/${segment}`),
+    `the ${segment} tab must be in the strip`,
+  );
+}
+// A tab declared but not enabled must never reach the strip. The list is empty
+// today; the check is kept so that re-declaring a future phase's tab cannot
+// quietly offer a route that does not exist.
+for (const tab of ICAAP_CYCLE_TABS.filter((entry) => !entry.enabled)) {
+  assert.ok(
+    !tabHrefs.some((href) => href.endsWith(`/${tab.segment}`)),
+    `${tab.segment} is disabled, so it must not be offered`,
+  );
+}
+
+// The convention, made executable rather than hand-maintained: the list above
+// drifted the moment a tab was enabled, and a hand-checked list cannot tell
+// whether the page behind a tab exists. Now it is read off the filesystem, so
+// enabling a tab without its route file — or deleting a route file behind an
+// enabled tab — fails here rather than in a preparer's browser.
+const dashboardRoot = __dirname.includes(".test-out")
+  ? resolvePath(__dirname, "../..")
+  : resolvePath(__dirname, "..");
+for (const tab of ICAAP_CYCLE_TABS) {
+  const routeFile = joinPath(
+    dashboardRoot,
+    "app",
+    "(app)",
+    "icaap",
+    "[cycleId]",
+    tab.segment,
+    "page.tsx",
+  );
+  assert.equal(
+    fileExists(routeFile),
+    tab.enabled,
+    tab.enabled
+      ? `the ${tab.segment} tab is offered but has no page.tsx behind it`
+      : `the ${tab.segment} tab has a page.tsx but is not offered — enable it or remove the page`,
+  );
+}
+
+// Every tab the strip offers passes the same gates as the rest of the module:
+// visible only with CAP/confidential view, and never for an SDI (which has no
+// Pillar 2 regime at all).
+for (const href of tabHrefs) {
+  assert.equal(isPathVisible(href, icaapEnabled), true, href);
+  assert.equal(isPathVisible(href, icaapAggregatedOnly), false, href);
+  assert.equal(isPathVisible(href, icaapSdi), false, href);
+}
+
+// ---------------------------------------------------------------------------
+// P2 capability projection
+//
+// Both are exact-capability reads with no fallback: an omitted field is deny,
+// and neither is ever satisfied by a scalar role. They gate CONTROLS only — the
+// service re-decides, and additionally refuses self-approval (Pillar 2) and a
+// reviewer who helped prepare the cycle (independent review), neither of which
+// a capability can express.
+// ---------------------------------------------------------------------------
+
+const capitalApproverCapabilities = [
+  {
+    module: "cap",
+    sensitivity: "confidential",
+    permission: "approve",
+    requiresContextualAuthorization: false,
+  },
+] as Parameters<typeof hasEffectiveCapability>[0];
+
+assert.equal(
+  hasEffectiveCapability(
+    capitalApproverCapabilities,
+    "cap",
+    "confidential",
+    "approve",
+  ),
+  true,
+);
+// An edit grant is not an approve grant: that collapse would break the
+// maker-checker in the UI before the server ever saw the request.
+assert.equal(
+  hasEffectiveCapability(
+    capitalApproverCapabilities,
+    "cap",
+    "confidential",
+    "edit",
+  ),
+  false,
+);
+// A capability whose final answer needs object context is never authority.
+assert.equal(
+  hasEffectiveCapability(
+    [
+      {
+        module: "audit",
+        sensitivity: "confidential",
+        permission: "create",
+        requiresContextualAuthorization: true,
+      },
+    ] as Parameters<typeof hasEffectiveCapability>[0],
+    "audit",
+    "confidential",
+    "create",
+  ),
+  false,
+);
+// Omission is deny, on both new fields.
+const withoutP2Capabilities: ModuleScope = resolved(true, true);
+assert.notEqual(withoutP2Capabilities.capitalApprove, true);
+assert.notEqual(withoutP2Capabilities.auditCreate, true);
 
 console.log(
   "modules.test.ts: binding-controlled navigation and deep links passed.",

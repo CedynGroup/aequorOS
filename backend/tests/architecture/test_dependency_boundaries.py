@@ -71,6 +71,8 @@ REGULATORY_PLANE: tuple[str, ...] = (
     "services/pipeline.py",
     "services/enterprise_stress.py",
     "services/reverse_stress.py",
+    # The ICAAP workspace seals a Board-approved filing from the same runs.
+    "services/icaap",
 )
 
 

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import BankReportingPeriod, RegulatoryPackage, User
+from app.schemas.filing_workflow import PackageStageDecisionCreate
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.schemas.regulatory_reporting import (
     PackageApprovalDecisionCreate,
@@ -18,6 +19,7 @@ from app.schemas.regulatory_reporting import (
     RegulatoryPackageCreate,
 )
 from app.services import regulatory_liquidity
+from app.services.filing_workflow import chain as filing_chain
 from app.services.regulatory_reporting import calendar, generation, validation, workflow
 from tests.factories.attestation import relax_signing
 from tests.fixtures.canonical_bank_fixture import (
@@ -32,6 +34,15 @@ CHECKER = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
 )
+#: The third officer. Since the filing chain landed
+#: (``docs/filing_workflow_redesign.md`` §3) an Approver's approval is no longer
+#: authority to file: the return moves to the Validator's stage, and only when
+#: that stage has approved does the chain say the return may be transmitted.
+#: These tests therefore walk three officers, not two.
+VALIDATOR = TenantContext(
+    organization_id=DEMO_ORG_ID,
+    actor_user_id=UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+)
 REPORTING_DATE = date(2026, 3, 31)
 
 
@@ -42,16 +53,20 @@ def _seed_with_baseline_run(db: Session) -> None:
     # that requires signatures, so opt BSD3 out the way an administrator would;
     # the one-act composition is proved in test_attestation_workspace.py.
     relax_signing(db, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
-    if db.scalar(select(User.id).where(User.id == CHECKER.actor_user_id)) is None:
-        db.add(
-            User(
-                id=CHECKER.actor_user_id,
-                organization_id=DEMO_ORG_ID,
-                email="demo.checker@example.test",
-                display_name="Demo Checker",
+    for ctx, email, name in (
+        (CHECKER, "demo.checker@example.test", "Demo Checker"),
+        (VALIDATOR, "demo.validator@example.test", "Demo Validator"),
+    ):
+        if db.scalar(select(User.id).where(User.id == ctx.actor_user_id)) is None:
+            db.add(
+                User(
+                    id=ctx.actor_user_id,
+                    organization_id=DEMO_ORG_ID,
+                    email=email,
+                    display_name=name,
+                )
             )
-        )
-        db.commit()
+            db.commit()
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,
@@ -78,6 +93,38 @@ def _generate(db: Session):
         SAMPLE_BANK_ID,
         RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
+
+
+def _send_on(db: Session, package_id: UUID) -> None:
+    """The Approver's second act: release the approved return to the Validator.
+
+    Approving and releasing are two acts (founder decision 2026-09-20), so the
+    approval leaves the return with the Approver until they send it on.
+    """
+    filing_chain.hand_off(db, CHECKER, _package_row(db, package_id))
+    db.commit()
+
+
+def _validate_stage(db: Session, package_id: UUID) -> None:
+    """The Validator takes the final stage — the act that makes a return filable.
+
+    The Approver's decision records their approval and the release hands the
+    return on; the Validator's decision completes the chain. Nothing here
+    bypasses a control: it performs the third role's decision through the same
+    service a Validator's request goes through.
+    """
+    _send_on(db, package_id)
+    package = _package_row(db, package_id)
+    state = filing_chain.load_state(db, VALIDATOR, package)
+    filing_chain.decide(
+        db,
+        VALIDATOR,
+        package,
+        PackageStageDecisionCreate(
+            decision="approved", round=package.workflow_round, review_digest=state.review_digest
+        ),
+    )
+    db.commit()
 
 
 def _package_row(db: Session, package_id: UUID) -> RegulatoryPackage:
@@ -130,7 +177,12 @@ def test_full_lifecycle_to_acknowledged(db_session: Session) -> None:
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
-    assert approved.status == "approved"
+    # The Approver's approval hands the return to the Validator; it is not
+    # authority to file, so the return is still with a reviewer.
+    assert approved.status == "pending_approval"
+
+    _validate_stage(db_session, package.id)
+    assert _package_row(db_session, package.id).status == "approved"
 
     submitted = workflow.submit_package(
         db_session,
@@ -284,6 +336,7 @@ def test_prior_period_movement_flags_large_swings_as_warning(db_session: Session
         prior_package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
+    _validate_stage(db_session, prior_package.id)
     workflow.submit_package(
         db_session,
         MAKER,
@@ -363,6 +416,7 @@ def test_calendar_links_current_package_and_grades_rag(db_session: Session) -> N
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
+    _validate_stage(db_session, package.id)
     workflow.submit_package(
         db_session,
         MAKER,

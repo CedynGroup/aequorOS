@@ -1,0 +1,81 @@
+{
+  "schema_version": "icaap-editor-v1",
+  "top_node": "doc",
+  "nodes": {
+    "doc": {"content": "block*", "groups": [], "leaf": false, "inline": false, "atom": false, "attrs": {}},
+    "paragraph": {
+      "content": "inline*",
+      "groups": ["block"],
+      "leaf": false,
+      "inline": false,
+      "atom": false,
+      "attrs": {
+        "aiSuggestionId": {"type": "uuid_or_null", "default": null}
+      }
+    },
+    "heading": {
+      "content": "inline*",
+      "groups": ["block"],
+      "leaf": false,
+      "inline": false,
+      "atom": false,
+      "attrs": {
+        "level": {"type": "integer", "enum": [2, 3, 4], "required": true}
+      }
+    },
+    "blockquote": {"content": "block+", "groups": ["block"], "leaf": false, "inline": false, "atom": false, "attrs": {}},
+    "bulletList": {"content": "listItem+", "groups": ["block", "list"], "leaf": false, "inline": false, "atom": false, "attrs": {}},
+    "orderedList": {
+      "content": "listItem+",
+      "groups": ["block", "list"],
+      "leaf": false,
+      "inline": false,
+      "atom": false,
+      "attrs": {
+        "start": {"type": "integer", "minimum": 1, "maximum": 10000, "default": 1},
+        "type": {"type": "string_or_null", "enum": [null, "1"], "default": null}
+      }
+    },
+    "listItem": {"content": "paragraph block*", "groups": [], "leaf": false, "inline": false, "atom": false, "attrs": {}},
+    "hardBreak": {"content": null, "groups": ["inline"], "leaf": true, "inline": true, "atom": false, "attrs": {}},
+    "text": {"content": null, "groups": ["inline"], "leaf": true, "inline": true, "atom": false, "attrs": {}},
+    "dataBlock": {
+      "content": null,
+      "groups": ["block"],
+      "leaf": true,
+      "inline": false,
+      "atom": true,
+      "attrs": {
+        "blockId": {"type": "uuid", "required": true}
+      }
+    },
+    "factRef": {
+      "content": null,
+      "groups": ["inline"],
+      "leaf": true,
+      "inline": true,
+      "atom": true,
+      "attrs": {
+        "blockId": {"type": "uuid", "required": true},
+        "factKey": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$", "required": true},
+        "suggestionId": {"type": "uuid_or_null", "default": null}
+      }
+    }
+  },
+  "marks": {
+    "bold": {"attrs": {}},
+    "italic": {"attrs": {}},
+    "underline": {"attrs": {}}
+  },
+  "limits": {
+    "max_doc_bytes": 262144,
+    "max_depth": 16,
+    "max_nodes": 20000,
+    "max_text_length": 20000
+  },
+  "parity_notes": {
+    "groups": "ProseMirror writes several groups as one space-separated string; compare spec.group.split(' ') with this list, ignoring order.",
+    "doc_content": "block* (not Tiptap's default block+): the server must be able to store a section nobody has written yet. The editor overrides Document with content: 'block*'.",
+    "atom": "Compare ProseMirror spec.atom (undefined counts as false) with 'atom', and type.isLeaf with 'leaf'. type.isAtom is atom||isLeaf and is NOT what these fields mean."
+  }
+}

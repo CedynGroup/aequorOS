@@ -17,6 +17,7 @@
  */
 
 import PageContainer from '@/components/ui/PageContainer';
+import ReturnVersionCompare from '@/components/submissions/ReturnVersionCompare';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, GitCompareArrows, Scale } from 'lucide-react';
 import type {
@@ -102,6 +103,10 @@ function ModeToggle({
   const options: { value: ComparisonMode; label: string }[] = [
     { value: 'version', label: 'Version' },
     { value: 'period', label: 'Period' },
+    // The question an officer asks after a send-back: what changed between the
+    // version I filed and the one I am about to. It compares PACKAGE cells,
+    // not run metrics, so it has its own surface.
+    { value: 'return', label: 'Return version' },
   ];
   return (
     <div
@@ -519,6 +524,9 @@ export default function ComparePage() {
       />
 
       <PageContainer className="py-6 space-y-6">
+        {mode === 'return' ? (
+          <ReturnVersionCompare bankId={bank?.id} />
+        ) : (
         <QueryBoundary
           contained
           isLoading={selectorsLoading}
@@ -681,6 +689,7 @@ export default function ComparePage() {
             />
           )}
         </QueryBoundary>
+        )}
       </PageContainer>
     </>
   );

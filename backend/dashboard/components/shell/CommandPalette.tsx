@@ -25,6 +25,7 @@ import {
   Settings,
   ArrowRight,
   BookOpenCheck,
+  ClipboardCheck,
 } from "lucide-react";
 
 type Item = {
@@ -258,7 +259,7 @@ const items: Item[] = [
     href: "/basel/planning",
     icon: ShieldCheck,
     group: "Modules",
-    keywords: "icaap ilaap pillar 2 management actions triggers",
+    keywords: "ilaap pillar 2 management actions triggers capital plan",
   },
   {
     id: "basel-subs",
@@ -390,6 +391,17 @@ const items: Item[] = [
     keywords: "rates feeds sources bog",
   },
 
+  {
+    id: "icaap",
+    label: "ICAAP Workspace",
+    href: "/icaap",
+    icon: ClipboardCheck,
+    group: "Governance",
+    keywords:
+      "icaap internal capital adequacy assessment pillar 2 board report",
+    requiresCapitalConfidentialView: true,
+    institutionScope: "bank",
+  },
   {
     id: "reports",
     label: "Reports Library",

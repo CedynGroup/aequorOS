@@ -70,8 +70,10 @@ from app.domain.stress.credit_bottom_up import (
     result_for_year,
 )
 from app.domain.stress.management_actions import (
+    RECOGNITION_CAP_CODES,
     ManagementActionError,
     ManagementActionsResult,
+    RecognitionCaps,
     apply_management_actions,
 )
 from app.domain.stress.operational import OperationalConfig
@@ -97,10 +99,6 @@ from app.models import (
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
-    CanonicalCounterparty,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
     FinancialFactRow,
     ManagementActionPlan,
     ParamCapitalThreshold,
@@ -120,6 +118,7 @@ from app.schemas.enterprise_stress import (
     PlanAssumptionsIn,
 )
 from app.services import (
+    credit_exposure_book,
     enterprise_run_visibility,
     institution_types,
     jurisdictions,
@@ -427,6 +426,53 @@ def _capital_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
     )
 
 
+def _recognition_caps(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date, *, basel_applicable: bool
+) -> RecognitionCaps | None:
+    """The governed AT1 / Tier 2 recognition ceilings (percent of RWA) on ``as_of``.
+
+    Founder directive D-024 / regulatory audit M21: Appendix II Table 2 and the
+    management-action overlay used to carry 1.5 and 2 as literals for every
+    institution. Now they are ``at1_cap_pct_rwa`` / ``tier2_cap_pct_rwa`` from the
+    control plane, with the usual precedence — a board register row may only
+    tighten a ceiling (lower it), and a code the register does not carry is the
+    governed value. A bank with no governed value refuses (``missing_parameter``):
+    its Table 2 needs them. An SDI resolves its own class rows (D-042: the
+    pre-2026-09-19 values, pending), so its management-action results are
+    unchanged; if they are absent it gets ``None`` and only a plan that adds AT1 or
+    Tier 2 capital refuses.
+    """
+    board = {
+        row.threshold_code: _dec(row.value_pct)
+        for row in get_active_params(
+            db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
+        )
+        if row.threshold_code in RECOGNITION_CAP_CODES
+    }
+    effective = regulatory_parameters.clamp_overrides(db, bank, board, as_of=as_of).values
+    values: dict[str, Decimal] = {}
+    for code in RECOGNITION_CAP_CODES:
+        value = effective.get(code)
+        if value is None:
+            governed = regulatory_parameters.try_resolve(db, bank, code, as_of=as_of)
+            value = None if governed is None else governed.normalized_value
+        if value is not None:
+            values[code] = value
+    missing = [code for code in RECOGNITION_CAP_CODES if code not in values]
+    if missing and not basel_applicable:
+        return None
+    if missing:
+        raise EnterpriseStressError(
+            "missing_parameter",
+            "The Additional Tier 1 and Tier 2 recognition caps are not configured in the "
+            "regulatory parameter set for this institution.",
+            {"param_codes": missing},
+        )
+    return RecognitionCaps(
+        at1_pct_rwa=values["at1_cap_pct_rwa"], tier2_pct_rwa=values["tier2_cap_pct_rwa"]
+    )
+
+
 def _resolve_car_target_pct(
     payload: EnterpriseStressRunCreate, capital_params: CapitalParams
 ) -> Decimal:
@@ -451,24 +497,35 @@ def _resolve_car_target_pct(
     """
     governed = capital_params.car_min_pct
     requested = payload.car_target_pct
-    if requested is None:
+    if requested is None or requested == governed:
+        # Stating the governed floor explicitly is the same run: ONE number, in
+        # the governed value's own representation, so the value-based hash of
+        # the two requests is identical (a register row read back at its column
+        # scale, "13.000000", must not differ from a request's "13").
         return governed
     if requested < governed:
         raise EnterpriseStressError(
             "car_target_below_regulatory_minimum",
             (
-                f"The requested CAR target of {requested}% is below this institution's "
-                f"governed minimum capital adequacy ratio of {governed}%, so the "
-                "Appendix II capital-requirement lines computed from it would understate "
-                "what the institution must hold. Model an internal target at or above "
-                "the regulatory minimum, or omit the field to use the governed floor."
+                f"The requested CAR target of {_plain(requested)}% is below this "
+                "institution's governed minimum capital adequacy ratio of "
+                f"{_plain(governed)}%, so the Appendix II capital-requirement lines "
+                "computed from it would understate what the institution must hold. Model "
+                "an internal target at or above the regulatory minimum, or omit the field "
+                "to use the governed floor."
             ),
             {
-                "requested_car_target_pct": str(requested),
-                "governed_car_min_pct": str(governed),
+                "requested_car_target_pct": _plain(requested),
+                "governed_car_min_pct": _plain(governed),
             },
         )
     return requested
+
+
+def _plain(value: Decimal) -> str:
+    """A percentage as a reader writes it: ``13.000000`` → ``13``, ``12.50`` → ``12.5``."""
+    shown = value.quantize(Decimal(1)) if value == value.to_integral_value() else value.normalize()
+    return f"{shown:f}"
 
 
 def _sdi_capital_params(  # noqa: PLR0913 - the resolved capital inputs
@@ -719,48 +776,31 @@ def _fx_positions(rows: Sequence[FinancialFactRow]) -> list[FxPosition]:
 
 # --- Phase 4: exposure-level canonical readers (read-only, stable models) ----
 # The per-risk methods (bottom-up credit, concentration, contingent leverage)
-# read the canonical position book directly, mirroring le_generation's
-# current-generation slice (accepted/warning, non-superseded) WITHOUT importing
-# it (le_generation pulls in the concurrently-reworked regulatory_* services).
-# Everything here degrades gracefully to empty when the bank has no canonical
-# positions — the existing BankFinancialFact-only path is byte-identical.
+# read the canonical position book through ``credit_exposure_book`` — the public
+# module that owns the current-generation slice (accepted/warning,
+# non-superseded) and that the ICAAP granularity adjustment reads too, so the
+# two cannot drift apart. Everything here degrades gracefully to empty when the
+# bank has no canonical positions — the existing BankFinancialFact-only path is
+# byte-identical.
+#
+# That module states an amount it could NOT convert into the reporting currency
+# as ``None`` rather than zero, because a missing conversion and an empty
+# position are different facts. This service has always read both as zero, and
+# its sealed runs and their input hashes are reproduced from that reading, so it
+# keeps it: ``_reported`` is the adapter, and the only place the two meet.
 
-_CANONICAL_INCLUDED_STATUSES = ("accepted", "warning")
-# The migrating credit book: loans + interbank placements (the counterparty
-# credit exposures the AppI credit method downgrades). Securities are the
-# sovereign/investment book (market/IRRBB stress), excluded from the credit-loss
-# migration but INCLUDED in concentration (issuer/sovereign concentration is a
-# real Ghanaian risk — DDEP).
-_CREDIT_POSITION_TYPES = ("LOAN", "INTERBANK_PLACEMENT")
-_CONCENTRATION_POSITION_TYPES = ("LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING")
-_FUNDING_POSITION_TYPES = ("DEPOSIT", "INTERBANK_BORROWING")
-_DERIVATIVE_POSITION_TYPES = ("DERIVATIVE", "FX_HEDGE", "INTEREST_RATE_SWAP")
+_CREDIT_POSITION_TYPES = credit_exposure_book.CREDIT_POSITION_TYPES
+_CONCENTRATION_POSITION_TYPES = credit_exposure_book.CONCENTRATION_POSITION_TYPES
+_FUNDING_POSITION_TYPES = credit_exposure_book.FUNDING_POSITION_TYPES
+_DERIVATIVE_POSITION_TYPES = credit_exposure_book.DERIVATIVE_POSITION_TYPES
+
+_ExposureRow = credit_exposure_book.ExposureRow
+_load_exposure_rows = credit_exposure_book.load_exposure_rows
 
 
-@dataclass(frozen=True)
-class _ExposureRow:
-    """One current-generation position snapshot flattened for the Phase-4 methods.
-
-    Built once by ``_load_exposure_rows`` (the single place the SQLAlchemy ``Row``
-    is unpacked), so every downstream builder consumes a typed dataclass — the
-    ``le_generation`` house pattern.
-    """
-
-    source_reference: str
-    position_type: str
-    currency: str
-    balance_ghs: Decimal
-    is_foreign_currency: bool
-    notional_ghs: Decimal
-    ifrs9_stage: int | None
-    attributes: dict[str, Any]
-    counterparty_type: str | None
-    counterparty_resident: bool | None
-    counterparty_country: str | None
-    group_key: str
-    regulatory_category: str | None
-    product_risk_weight_code: str | None
-    product_code: str | None
+def _reported(amount: Decimal | None) -> Decimal:
+    """An amount with no reporting-currency conversion contributes nothing."""
+    return _ZERO if amount is None else amount
 
 
 # Documented PD/LGD defaults used when the source carries none on the snapshot
@@ -782,116 +822,6 @@ _DEFAULT_DERIVATIVE_PFE_PCT = Decimal("5")
 _ZERO_PD_CLASSES = frozenset(
     {"gog", "bog", "other_sovereigns_central_banks", "multilateral_development_banks"}
 )
-
-
-def _canonical_group_key(source_reference: str, counterparty: Any) -> str:
-    """Connected-group / single-name identity (le_generation's pattern)."""
-    if counterparty is not None:
-        if counterparty.group_reference:
-            return f"group:{counterparty.group_reference}"
-        cp_attributes = counterparty.attributes or {}
-        for key in ("group_reference", "group", "parent"):
-            value = cp_attributes.get(key)
-            if value:
-                return f"group:{value}"
-        return f"cp:{counterparty.name}"
-    return f"pos:{source_reference}"
-
-
-def _load_exposure_rows(
-    db: Session,
-    ctx: TenantContext,
-    bank: Bank,
-    as_of: date,
-    position_types: tuple[str, ...],
-) -> list[_ExposureRow]:
-    """The current-generation (accepted/warning, non-superseded) slice, flattened.
-
-    The single place a SQLAlchemy ``Row`` is unpacked; balance/notional are
-    resolved to GHS here (foreign books without an ingested conversion contribute
-    zero, mirroring ``fact_derivation``/``le_generation``).
-    """
-    # ``jurisdictions.base_currency`` deliberately raises rather than substituting
-    # (enterprise audit 2026-08-20 §6): ``banks.currency`` is NOT NULL with no
-    # default, so an unset value is a skipped decision at the creation site, not a
-    # Ghanaian bank. Byte-identical for every bank that has one.
-    base_currency = jurisdictions.base_currency(bank)
-    records = db.execute(
-        select(
-            CanonicalPositionSnapshot,
-            CanonicalPosition,
-            CanonicalCounterparty,
-            CanonicalProduct,
-        )
-        .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
-        .outerjoin(
-            CanonicalCounterparty,
-            CanonicalPositionSnapshot.counterparty_id == CanonicalCounterparty.id,
-        )
-        .outerjoin(
-            CanonicalProduct,
-            CanonicalPositionSnapshot.product_id == CanonicalProduct.id,
-        )
-        .where(
-            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
-            CanonicalPositionSnapshot.bank_id == bank.id,
-            CanonicalPositionSnapshot.as_of_date == as_of,
-            CanonicalPositionSnapshot.superseded_by.is_(None),
-            CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_CANONICAL_INCLUDED_STATUSES),
-            CanonicalPosition.position_type.in_(position_types),
-        )
-        .order_by(CanonicalPositionSnapshot.source_reference)
-    ).all()
-
-    rows: list[_ExposureRow] = []
-    for snapshot, position, counterparty, product in records:
-        attributes = dict(snapshot.attributes or {})
-        currency = str(position.currency).strip().upper()
-        balance_value = attributes.get("balance_ghs")
-        if balance_value is not None and balance_value != "":
-            balance_ghs = _dec(balance_value)
-        elif currency == base_currency:
-            balance_ghs = _dec(snapshot.balance or 0)
-        else:
-            balance_ghs = _ZERO
-        notional_value = attributes.get("notional_ghs")
-        if notional_value is not None and notional_value != "":
-            notional_ghs = _dec(notional_value)
-        elif currency == base_currency and snapshot.notional is not None:
-            notional_ghs = _dec(snapshot.notional)
-        else:
-            notional_ghs = _ZERO
-        issuer = attributes.get("issuer")
-        group_key = _canonical_group_key(str(snapshot.source_reference), counterparty)
-        if counterparty is None and issuer:
-            group_key = f"issuer:{issuer}"
-        rows.append(
-            _ExposureRow(
-                source_reference=str(snapshot.source_reference),
-                position_type=str(position.position_type),
-                currency=currency,
-                balance_ghs=balance_ghs,
-                is_foreign_currency=currency != base_currency,
-                notional_ghs=notional_ghs,
-                ifrs9_stage=snapshot.ifrs9_stage,
-                attributes=attributes,
-                counterparty_type=(
-                    counterparty.counterparty_type if counterparty is not None else None
-                ),
-                counterparty_resident=(counterparty.resident if counterparty is not None else None),
-                counterparty_country=(
-                    counterparty.country_code if counterparty is not None else None
-                ),
-                group_key=group_key,
-                regulatory_category=(product.regulatory_category if product is not None else None),
-                product_risk_weight_code=(
-                    product.risk_weight_code if product is not None else None
-                ),
-                product_code=(product.product_code if product is not None else None),
-            )
-        )
-    return rows
 
 
 def _crd_class_for(row: _ExposureRow) -> str:  # noqa: PLR0911 - a flat CRD classifier
@@ -975,7 +905,7 @@ def _build_credit_exposures(
     unresolved_codes: set[str] = set()
     missing_code_only = True
     for row in rows:
-        if row.balance_ghs <= _ZERO:
+        if _reported(row.balance_rep) <= _ZERO:
             continue
         crd_class = _crd_class_for(row)
         pd_pct, lgd_pct = _exposure_pd_lgd(row, crd_class)
@@ -991,7 +921,7 @@ def _build_credit_exposures(
             CreditExposure(
                 exposure_id=row.source_reference,
                 crd_class=crd_class,
-                ead=row.balance_ghs,
+                ead=_reported(row.balance_rep),
                 pd_pct=pd_pct,
                 lgd_pct=lgd_pct,
                 risk_weight_pct=risk_weight_pct,
@@ -1046,7 +976,7 @@ def _build_concentration_inputs(
 ) -> ConcentrationInputs | None:
     exposures: list[ConcentrationExposure] = []
     for row in asset_rows:
-        if row.balance_ghs <= _ZERO:
+        if _reported(row.balance_rep) <= _ZERO:
             continue
         sector = (
             row.attributes.get("sector") or row.attributes.get("industry") or row.counterparty_type
@@ -1057,7 +987,7 @@ def _build_concentration_inputs(
         exposures.append(
             ConcentrationExposure(
                 exposure_id=row.source_reference,
-                ead=row.balance_ghs,
+                ead=_reported(row.balance_rep),
                 group_key=row.group_key,
                 sector=str(sector) if sector else None,
                 geography=row.counterparty_country,
@@ -1067,9 +997,9 @@ def _build_concentration_inputs(
             )
         )
     funding: list[FundingPosition] = [
-        FundingPosition(source_key=row.group_key, amount=row.balance_ghs)
+        FundingPosition(source_key=row.group_key, amount=_reported(row.balance_rep))
         for row in funding_rows
-        if row.balance_ghs > _ZERO
+        if _reported(row.balance_rep) > _ZERO
     ]
     if not exposures and not funding:
         return None
@@ -1102,7 +1032,7 @@ def _build_contingent_leverage_inputs(
         pfe = (
             _dec(attributes["pfe_addon_ghs"])
             if attributes.get("pfe_addon_ghs")
-            else row.notional_ghs * _DEFAULT_DERIVATIVE_PFE_PCT / _HUNDRED
+            else _reported(row.notional_rep) * _DEFAULT_DERIVATIVE_PFE_PCT / _HUNDRED
         )
         replacement_cost = (
             _dec(attributes["mtm_ghs"])
@@ -1112,7 +1042,7 @@ def _build_contingent_leverage_inputs(
         derivatives.append(
             DerivativePosition(
                 position_id=row.source_reference,
-                notional=row.notional_ghs,
+                notional=_reported(row.notional_rep),
                 pfe_addon=pfe,
                 replacement_cost=replacement_cost,
             )
@@ -1154,35 +1084,42 @@ def _credit_overlays(
 
 
 def _pillar2_overlay(
-    outcome: EnterpriseStressOutcome, tier1: Decimal, horizon_years: int
+    outcome: EnterpriseStressOutcome, horizon_years: int
 ) -> dict[int, Pillar2Requirement] | None:
     """Derive the Table 5 Pillar-2 add-ons from the enterprise outcome (GHS'000).
 
     credit_concentration ← the concentration Pillar-2 charge; irrbb ← the adverse
-    ΔEVE; country_and_fx ← the incremental NOP-vs-Tier-1; other ← the worst
-    operational loss. Sovereign / reputational stay unmodelled (None). Held
-    across the horizon (an as-of ICAAP assessment).
+    ΔEVE; country_and_fx ← the FX revaluation loss net of its Pillar 1 charge;
+    other ← the worst operational loss. Sovereign / reputational stay unmodelled
+    (None). Held across the horizon (an as-of ICAAP assessment).
+
+    ``None`` means the risk was NOT assessed (its module did not run); an
+    assessed charge of nil is ``Decimal(0)`` — an EVE gain, an FX book that
+    gains under this scenario, a zero concentration charge. The two used to be
+    folded together (a nil charge became ``None``), so Table 5 printed "Not
+    modelled" for a risk that had been assessed (regulatory audit P0R-6). Only
+    new runs change; a stored run keeps what it recorded.
+
+    **FX (D-038, extracted 2026-09-20).** The add-on is computed by
+    ``app.domain.icaap.pillar2.fx`` — the same function the ICAAP Pillar 2
+    register runs — inside ``orchestrator._run_fx``. This overlay only converts
+    it to the directive's reporting unit. Until 2026-09-20 it restated
+    ``Tier 1 × max(ΔNOP%, 0)`` here, so one filed ICAAP carried two different
+    definitions of the same quantity and the source-consistency control forced
+    the preparer to explain a discrepancy the platform had created (audit W3).
     """
     credit_conc: Decimal | None = None
     irrbb: Decimal | None = None
     country_fx: Decimal | None = None
     other: Decimal | None = None
-    if (
-        outcome.concentration is not None
-        and outcome.concentration.pillar2_concentration_charge > _ZERO
-    ):
-        credit_conc = thousands(outcome.concentration.pillar2_concentration_charge)
+    if outcome.concentration is not None:
+        credit_conc = thousands(max(outcome.concentration.pillar2_concentration_charge, _ZERO))
     if outcome.irr is not None:
-        eve_loss = max(-outcome.irr.delta_eve, _ZERO)
-        if eve_loss > _ZERO:
-            irrbb = thousands(eve_loss)
+        irrbb = thousands(max(-outcome.irr.delta_eve, _ZERO))
     if outcome.fx is not None:
-        nop_uplift = max(outcome.fx.stressed_nop_pct_tier1 - outcome.fx.base_nop_pct_tier1, _ZERO)
-        addon = tier1 * nop_uplift / _HUNDRED
-        if addon > _ZERO:
-            country_fx = thousands(addon)
-    if outcome.operational is not None and outcome.operational.pillar2_operational_charge > _ZERO:
-        other = thousands(outcome.operational.pillar2_operational_charge)
+        country_fx = thousands(outcome.fx.pillar2_addon)
+    if outcome.operational is not None:
+        other = thousands(max(outcome.operational.pillar2_operational_charge, _ZERO))
     if credit_conc is None and irrbb is None and country_fx is None and other is None:
         return None
     requirement = Pillar2Requirement(
@@ -1686,6 +1623,9 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
     forecast_facts = [_forecast_fact(fact) for fact in forecast_rows]
     capital_params = _capital_params(db, ctx, bank, as_of)
     car_target_pct = _resolve_car_target_pct(payload, capital_params)
+    recognition_caps = _recognition_caps(
+        db, ctx, bank, as_of, basel_applicable=capital_params.basel_applicable
+    )
     # The Basel liquidity leg (LCR/NSFR + its params) is a bank-only regime. An SDI
     # run omits it entirely (docs/sdi.md §4.6; QA audit 2026-08-20 P0-1) — do NOT
     # resolve the Basel liquidity thresholds for an SDI, which would fail-loud on the
@@ -1797,6 +1737,7 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
                 capital_params=capital_params,
                 paid_up_min=paid_up_min,
                 car_target_pct=car_target_pct,
+                recognition_caps=recognition_caps,
             )
         except ManagementActionError as exc:
             # A plan whose modelled relief leaves a post-action ratio without a
@@ -1817,10 +1758,17 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
         # decision at the creation site, not a Ghanaian bank.
         currency=jurisdictions.base_currency(bank),
         car_target_pct=car_target_pct,
+        recognition_caps=recognition_caps,
         paid_up_min=paid_up_min,
         source=scenario.source,
         exposure_class_losses=exposure_class_losses,
-        pillar2_by_stress_year=_pillar2_overlay(outcome, tier1, payload.horizon_years),
+        # D-020: an SDI has no Pillar 2 regime (outside the ICAAP Guideline), so
+        # no add-on is layered onto its capital requirement.
+        pillar2_by_stress_year=(
+            _pillar2_overlay(outcome, payload.horizon_years)
+            if capital_params.basel_applicable
+            else None
+        ),
         management_actions=management_result,
         # SDI: omit the Basel Table-2 3-tier capital build (docs/sdi.md §4.6).
         basel_applicable=capital_params.basel_applicable,
@@ -1879,6 +1827,11 @@ def run_enterprise_stress_test(  # noqa: PLR0915 - one linear orchestration of t
             None if plan_model is None else management_action_plans.plan_snapshot(db, plan_model)
         ),
     }
+    if recognition_caps is not None:
+        # D-024 / M21: the governed AT1 / Tier 2 recognition caps Table 2 and the
+        # management-action overlay applied (D-042: an SDI's too). Absent only
+        # when none resolved, which an SDI run without them tolerates.
+        inputs["recognition_caps_pct_rwa"] = recognition_caps.as_parameters()
     input_hash = _hash(inputs)
 
     outcome_json = outcome.serialize()

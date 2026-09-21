@@ -17,9 +17,22 @@ import type {
   ChannelConfigRead,
   EmailFallbackInstructionsRead,
   ErrorResponse,
+  FilingSetPreviewRead,
+  FilingWorkflowTemplateCreate,
+  FilingWorkflowTemplateDecision,
+  FilingWorkflowTemplateListRead,
+  FilingWorkflowTemplateRead,
+  FilingWorkflowTemplateSubmit,
+  FilingWorkflowTemplateUpdate,
   PackageApprovalDecisionCreate,
   PackageApprovalRequestCreate,
+  PackageAttachmentListRead,
+  PackageAttachmentRead,
+  PackageAttachmentWithdraw,
+  PackageChainRead,
   PackageComparisonRead,
+  PackageSendForApproval,
+  PackageStageDecisionCreate,
   PackageStatusFilter,
   PackageSubmitCreate,
   PackageVersionChainRead,
@@ -53,12 +66,38 @@ import {
   EmailFallbackInstructionsReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  FilingSetPreviewReadFromJSON,
+  FilingSetPreviewReadToJSON,
+  FilingWorkflowTemplateCreateFromJSON,
+  FilingWorkflowTemplateCreateToJSON,
+  FilingWorkflowTemplateDecisionFromJSON,
+  FilingWorkflowTemplateDecisionToJSON,
+  FilingWorkflowTemplateListReadFromJSON,
+  FilingWorkflowTemplateListReadToJSON,
+  FilingWorkflowTemplateReadFromJSON,
+  FilingWorkflowTemplateReadToJSON,
+  FilingWorkflowTemplateSubmitFromJSON,
+  FilingWorkflowTemplateSubmitToJSON,
+  FilingWorkflowTemplateUpdateFromJSON,
+  FilingWorkflowTemplateUpdateToJSON,
   PackageApprovalDecisionCreateFromJSON,
   PackageApprovalDecisionCreateToJSON,
   PackageApprovalRequestCreateFromJSON,
   PackageApprovalRequestCreateToJSON,
+  PackageAttachmentListReadFromJSON,
+  PackageAttachmentListReadToJSON,
+  PackageAttachmentReadFromJSON,
+  PackageAttachmentReadToJSON,
+  PackageAttachmentWithdrawFromJSON,
+  PackageAttachmentWithdrawToJSON,
+  PackageChainReadFromJSON,
+  PackageChainReadToJSON,
   PackageComparisonReadFromJSON,
   PackageComparisonReadToJSON,
+  PackageSendForApprovalFromJSON,
+  PackageSendForApprovalToJSON,
+  PackageStageDecisionCreateFromJSON,
+  PackageStageDecisionCreateToJSON,
   PackageStatusFilterFromJSON,
   PackageStatusFilterToJSON,
   PackageSubmitCreateFromJSON,
@@ -123,10 +162,22 @@ export interface CreateRegulatoryPackageRequest {
   regulatoryPackageCreate: RegulatoryPackageCreate;
 }
 
+export interface DecideFilingWorkflowTemplateRequest {
+  bankId: string;
+  templateId: string;
+  filingWorkflowTemplateDecision: FilingWorkflowTemplateDecision;
+}
+
 export interface DecidePackageApprovalRequest {
   bankId: string;
   packageId: string;
   packageApprovalDecisionCreate: PackageApprovalDecisionCreate;
+}
+
+export interface DecidePackageFilingStageRequest {
+  bankId: string;
+  packageId: string;
+  packageStageDecisionCreate: PackageStageDecisionCreate;
 }
 
 export interface DecidePackageResubmissionRequest {
@@ -139,6 +190,12 @@ export interface DecidePackageResubmissionRequest {
 export interface DownloadEmailFallbackEmlRequest {
   bankId: string;
   packageId: string;
+}
+
+export interface DownloadPackageAttachmentRequest {
+  bankId: string;
+  packageId: string;
+  attachmentId: string;
 }
 
 export interface DownloadRegulatoryArtifactRequest {
@@ -167,6 +224,11 @@ export interface GetEmailFallbackInstructionsRequest {
   packageId: string;
 }
 
+export interface GetPackageFilingChainRequest {
+  bankId: string;
+  packageId: string;
+}
+
 export interface GetPackageVersionChainRequest {
   bankId: string;
   packageId: string;
@@ -181,12 +243,26 @@ export interface GetReportingSettingsRequest {
   bankId: string;
 }
 
+export interface HandOffPackageFilingStageRequest {
+  bankId: string;
+  packageId: string;
+}
+
+export interface ListFilingWorkflowTemplatesRequest {
+  bankId: string;
+}
+
 export interface ListPackageArtifactVersionsRequest {
   bankId: string;
   packageId: string;
 }
 
 export interface ListPackageArtifactsRequest {
+  bankId: string;
+  packageId: string;
+}
+
+export interface ListPackageAttachmentsRequest {
   bankId: string;
   packageId: string;
 }
@@ -208,6 +284,7 @@ export interface ListRegulatoryPackagesRequest {
 export interface ListReportingObligationsRequest {
   bankId: string;
   horizonMonths?: number;
+  lookbackMonths?: number;
   limit?: number | null;
   offset?: number;
 }
@@ -221,6 +298,7 @@ export interface ListReturnAnchorsRequest {
   bankId: string;
   returnCode: string;
   horizonMonths?: number;
+  lookbackMonths?: number;
 }
 
 export interface ListSubmissionEventsRequest {
@@ -233,6 +311,16 @@ export interface ListSubmissionEventsRequest {
 export interface PollRegulatorySubmissionRequest {
   bankId: string;
   packageId: string;
+}
+
+export interface PreviewPackageFilingSetRequest {
+  bankId: string;
+  packageId: string;
+}
+
+export interface ProposeFilingWorkflowTemplateRequest {
+  bankId: string;
+  filingWorkflowTemplateCreate: FilingWorkflowTemplateCreate;
 }
 
 export interface PutChannelConfigRequest {
@@ -258,15 +346,49 @@ export interface RequestPackageResubmissionRequest {
   resubmissionRequestCreate: ResubmissionRequestCreate;
 }
 
+export interface SendPackageForApprovalRequest {
+  bankId: string;
+  packageId: string;
+  packageSendForApproval: PackageSendForApproval;
+}
+
+export interface SubmitFilingWorkflowTemplateRequest {
+  bankId: string;
+  templateId: string;
+  filingWorkflowTemplateSubmit: FilingWorkflowTemplateSubmit;
+}
+
 export interface SubmitRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
   packageSubmitCreate: PackageSubmitCreate;
 }
 
+export interface UpdateFilingWorkflowTemplateRequest {
+  bankId: string;
+  templateId: string;
+  filingWorkflowTemplateUpdate: FilingWorkflowTemplateUpdate;
+}
+
+export interface UploadPackageAttachmentRequest {
+  bankId: string;
+  packageId: string;
+  file: Blob;
+  kind: string;
+  title: string;
+  attributes?: string | null;
+}
+
 export interface ValidateRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
+}
+
+export interface WithdrawPackageAttachmentRequest {
+  bankId: string;
+  packageId: string;
+  attachmentId: string;
+  packageAttachmentWithdraw: PackageAttachmentWithdraw;
 }
 
 /**
@@ -535,6 +657,90 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Approve or reject a proposed chain. Never by whoever proposed it.
+   * Decide Filing Workflow Template
+   */
+  async decideFilingWorkflowTemplateRaw(
+    requestParameters: DecideFilingWorkflowTemplateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling decideFilingWorkflowTemplate().',
+      );
+    }
+
+    if (requestParameters["templateId"] == null) {
+      throw new runtime.RequiredError(
+        "templateId",
+        'Required parameter "templateId" was null or undefined when calling decideFilingWorkflowTemplate().',
+      );
+    }
+
+    if (requestParameters["filingWorkflowTemplateDecision"] == null) {
+      throw new runtime.RequiredError(
+        "filingWorkflowTemplateDecision",
+        'Required parameter "filingWorkflowTemplateDecision" was null or undefined when calling decideFilingWorkflowTemplate().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}/decision`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"template_id"}}`,
+            encodeURIComponent(String(requestParameters["templateId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FilingWorkflowTemplateDecisionToJSON(
+          requestParameters["filingWorkflowTemplateDecision"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FilingWorkflowTemplateReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Approve or reject a proposed chain. Never by whoever proposed it.
+   * Decide Filing Workflow Template
+   */
+  async decideFilingWorkflowTemplate(
+    requestParameters: DecideFilingWorkflowTemplateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FilingWorkflowTemplateRead> {
+    const response = await this.decideFilingWorkflowTemplateRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Decide Package Approval
    */
   async decidePackageApprovalRaw(
@@ -610,6 +816,90 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<RegulatoryPackageRead> {
     const response = await this.decidePackageApprovalRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Approve this stage, or send the return back to a NAMED earlier stage.  The authority is the stage\'s: the transmitting stage takes ``Permission.SUBMIT``, which only the Validator bundle carries. A send-back here is INTERNAL and is never the regulator\'s ``rejected``.
+   * Decide Package Filing Stage
+   */
+  async decidePackageFilingStageRaw(
+    requestParameters: DecidePackageFilingStageRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PackageChainRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling decidePackageFilingStage().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling decidePackageFilingStage().',
+      );
+    }
+
+    if (requestParameters["packageStageDecisionCreate"] == null) {
+      throw new runtime.RequiredError(
+        "packageStageDecisionCreate",
+        'Required parameter "packageStageDecisionCreate" was null or undefined when calling decidePackageFilingStage().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/workflow/decisions`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: PackageStageDecisionCreateToJSON(
+          requestParameters["packageStageDecisionCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PackageChainReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Approve this stage, or send the return back to a NAMED earlier stage.  The authority is the stage\'s: the transmitting stage takes ``Permission.SUBMIT``, which only the Validator bundle carries. A send-back here is INTERNAL and is never the regulator\'s ``rejected``.
+   * Decide Package Filing Stage
+   */
+  async decidePackageFilingStage(
+    requestParameters: DecidePackageFilingStageRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PackageChainRead> {
+    const response = await this.decidePackageFilingStageRaw(
       requestParameters,
       initOverrides,
     );
@@ -775,6 +1065,83 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<void> {
     await this.downloadEmailFallbackEmlRaw(requestParameters, initOverrides);
+  }
+
+  /**
+   * Stream one filed document from the outputs tier.
+   * Download Package Attachment
+   */
+  async downloadPackageAttachmentRaw(
+    requestParameters: DownloadPackageAttachmentRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling downloadPackageAttachment().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling downloadPackageAttachment().',
+      );
+    }
+
+    if (requestParameters["attachmentId"] == null) {
+      throw new runtime.RequiredError(
+        "attachmentId",
+        'Required parameter "attachmentId" was null or undefined when calling downloadPackageAttachment().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attachments/{attachment_id}/download`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          )
+          .replace(
+            `{${"attachment_id"}}`,
+            encodeURIComponent(String(requestParameters["attachmentId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Stream one filed document from the outputs tier.
+   * Download Package Attachment
+   */
+  async downloadPackageAttachment(
+    requestParameters: DownloadPackageAttachmentRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.downloadPackageAttachmentRaw(requestParameters, initOverrides);
   }
 
   /**
@@ -1136,6 +1503,78 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Where the return is, who holds it, every decision, and what THIS caller may do.
+   * Get Package Filing Chain
+   */
+  async getPackageFilingChainRaw(
+    requestParameters: GetPackageFilingChainRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PackageChainRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getPackageFilingChain().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling getPackageFilingChain().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/workflow`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PackageChainReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Where the return is, who holds it, every decision, and what THIS caller may do.
+   * Get Package Filing Chain
+   */
+  async getPackageFilingChain(
+    requestParameters: GetPackageFilingChainRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PackageChainRead> {
+    const response = await this.getPackageFilingChainRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * The whole supersession chain, each version with what it can still offer.  The package list carries statuses and timestamps only, which cannot answer what is asked about a superseded filing: who certified it, which file went to the regulator, and whether any file survives at all. This adds the signatures (withdrawn cycles flagged), both artifact surfaces, and the ``has_retrievable_files`` verdict a never-exported version needs.
    * Get Package Version Chain
    */
@@ -1338,6 +1777,138 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Pass an approved return to the next stage — or file it, if this is last.  The second of the two acts the filing chain now has. It carries the SAME authority as the decision it follows, because handing a return to the regulator is not a lesser act than approving it: the dependency resolves the stage\'s own permission, so the transmitting stage still demands ``SUBMIT`` and nobody but the Validator can complete a filing.
+   * Hand Off Package Filing Stage
+   */
+  async handOffPackageFilingStageRaw(
+    requestParameters: HandOffPackageFilingStageRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PackageChainRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling handOffPackageFilingStage().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling handOffPackageFilingStage().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/workflow/hand-off`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PackageChainReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Pass an approved return to the next stage — or file it, if this is last.  The second of the two acts the filing chain now has. It carries the SAME authority as the decision it follows, because handing a return to the regulator is not a lesser act than approving it: the dependency resolves the stage\'s own permission, so the transmitting stage still demands ``SUBMIT`` and nobody but the Validator can complete a filing.
+   * Hand Off Package Filing Stage
+   */
+  async handOffPackageFilingStage(
+    requestParameters: HandOffPackageFilingStageRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PackageChainRead> {
+    const response = await this.handOffPackageFilingStageRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Every proposed chain, plus the one a return sent for approval now would pin.
+   * List Filing Workflow Templates
+   */
+  async listFilingWorkflowTemplatesRaw(
+    requestParameters: ListFilingWorkflowTemplatesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listFilingWorkflowTemplates().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/filing-workflow-templates`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FilingWorkflowTemplateListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Every proposed chain, plus the one a return sent for approval now would pin.
+   * List Filing Workflow Templates
+   */
+  async listFilingWorkflowTemplates(
+    requestParameters: ListFilingWorkflowTemplatesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FilingWorkflowTemplateListRead> {
+    const response = await this.listFilingWorkflowTemplatesRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Every archived render and signed revision, oldest first.  The artifact list above is the upserted row per kind — always the unsigned base export. This is the chain: the base, then one revision per officer, each naming the signature that pinned it.
    * List Package Artifact Versions
    */
@@ -1482,6 +2053,78 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * What is attached, and which documents this return still needs.
+   * List Package Attachments
+   */
+  async listPackageAttachmentsRaw(
+    requestParameters: ListPackageAttachmentsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PackageAttachmentListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listPackageAttachments().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling listPackageAttachments().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attachments`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PackageAttachmentListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * What is attached, and which documents this return still needs.
+   * List Package Attachments
+   */
+  async listPackageAttachments(
+    requestParameters: ListPackageAttachmentsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PackageAttachmentListRead> {
+    const response = await this.listPackageAttachmentsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * List Regulatory Packages
    */
   async listRegulatoryPackagesRaw(
@@ -1612,6 +2255,10 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
       queryParameters["horizon_months"] = requestParameters["horizonMonths"];
     }
 
+    if (requestParameters["lookbackMonths"] != null) {
+      queryParameters["lookback_months"] = requestParameters["lookbackMonths"];
+    }
+
     if (requestParameters["limit"] != null) {
       queryParameters["limit"] = requestParameters["limit"];
     }
@@ -1733,7 +2380,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).
+   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).  ``lookback_months`` is the trailing half of that window and ``horizon_months`` the forward half. Elapsed reporting dates are offered because an overdue return is exactly the one still owed to the regulator; each carries its true ``data_status``, and a date with no computed position is listed, never hidden.
    * List Return Anchors
    */
   async listReturnAnchorsRaw(
@@ -1762,6 +2409,10 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
 
     if (requestParameters["horizonMonths"] != null) {
       queryParameters["horizon_months"] = requestParameters["horizonMonths"];
+    }
+
+    if (requestParameters["lookbackMonths"] != null) {
+      queryParameters["lookback_months"] = requestParameters["lookbackMonths"];
     }
 
     const headerParameters: runtime.HTTPHeaders = {};
@@ -1793,7 +2444,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).
+   * The reporting dates this return reports on, and what exists for each.  The dates are the REGULATOR\'s, derived from the return definition, so this is the list a preparer picks a reporting date from — not the bank\'s ingested reporting periods, which are a consequence of data arrival rather than a filing calendar (``services/regulatory_reporting/anchors.py``).  ``lookback_months`` is the trailing half of that window and ``horizon_months`` the forward half. Elapsed reporting dates are offered because an overdue return is exactly the one still owed to the regulator; each carries its true ``data_status``, and a date with no computed position is listed, never hidden.
    * List Return Anchors
    */
   async listReturnAnchors(
@@ -1994,6 +2645,150 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<SubmissionPollRead> {
     const response = await this.pollRegulatorySubmissionRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * What transmitting this package would actually send.  Answered by the submission\'s own resolver in its read-only mode, never by listing the package\'s artifact rows — those name the UNSIGNED export and omit the format that is minted at submission, so a confirmation built from them would tell an officer they are filing files that are not the ones sent. See ``services/regulatory_reporting/filing_preview.py``.
+   * Preview Package Filing Set
+   */
+  async previewPackageFilingSetRaw(
+    requestParameters: PreviewPackageFilingSetRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FilingSetPreviewRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling previewPackageFilingSet().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling previewPackageFilingSet().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/filing-set`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FilingSetPreviewReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * What transmitting this package would actually send.  Answered by the submission\'s own resolver in its read-only mode, never by listing the package\'s artifact rows — those name the UNSIGNED export and omit the format that is minted at submission, so a confirmation built from them would tell an officer they are filing files that are not the ones sent. See ``services/regulatory_reporting/filing_preview.py``.
+   * Preview Package Filing Set
+   */
+  async previewPackageFilingSet(
+    requestParameters: PreviewPackageFilingSetRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FilingSetPreviewRead> {
+    const response = await this.previewPackageFilingSetRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Propose a filing chain. It governs nothing until somebody else approves it.
+   * Propose Filing Workflow Template
+   */
+  async proposeFilingWorkflowTemplateRaw(
+    requestParameters: ProposeFilingWorkflowTemplateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling proposeFilingWorkflowTemplate().',
+      );
+    }
+
+    if (requestParameters["filingWorkflowTemplateCreate"] == null) {
+      throw new runtime.RequiredError(
+        "filingWorkflowTemplateCreate",
+        'Required parameter "filingWorkflowTemplateCreate" was null or undefined when calling proposeFilingWorkflowTemplate().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/filing-workflow-templates`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FilingWorkflowTemplateCreateToJSON(
+          requestParameters["filingWorkflowTemplateCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FilingWorkflowTemplateReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Propose a filing chain. It governs nothing until somebody else approves it.
+   * Propose Filing Workflow Template
+   */
+  async proposeFilingWorkflowTemplate(
+    requestParameters: ProposeFilingWorkflowTemplateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FilingWorkflowTemplateRead> {
+    const response = await this.proposeFilingWorkflowTemplateRaw(
       requestParameters,
       initOverrides,
     );
@@ -2319,6 +3114,172 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * The Preparer\'s act: pin the chain and hand the return to the next stage.  ``checks_passed`` gates entry. Machine validation is not a stage and not a person, so there is nothing to press called \"Validate\" — the checks run with generation and the Preparer clears them.
+   * Send Package For Approval
+   */
+  async sendPackageForApprovalRaw(
+    requestParameters: SendPackageForApprovalRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PackageChainRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling sendPackageForApproval().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling sendPackageForApproval().',
+      );
+    }
+
+    if (requestParameters["packageSendForApproval"] == null) {
+      throw new runtime.RequiredError(
+        "packageSendForApproval",
+        'Required parameter "packageSendForApproval" was null or undefined when calling sendPackageForApproval().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/workflow/send-for-approval`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: PackageSendForApprovalToJSON(
+          requestParameters["packageSendForApproval"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PackageChainReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The Preparer\'s act: pin the chain and hand the return to the next stage.  ``checks_passed`` gates entry. Machine validation is not a stage and not a person, so there is nothing to press called \"Validate\" — the checks run with generation and the Preparer clears them.
+   * Send Package For Approval
+   */
+  async sendPackageForApproval(
+    requestParameters: SendPackageForApprovalRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PackageChainRead> {
+    const response = await this.sendPackageForApprovalRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Submit Filing Workflow Template
+   */
+  async submitFilingWorkflowTemplateRaw(
+    requestParameters: SubmitFilingWorkflowTemplateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling submitFilingWorkflowTemplate().',
+      );
+    }
+
+    if (requestParameters["templateId"] == null) {
+      throw new runtime.RequiredError(
+        "templateId",
+        'Required parameter "templateId" was null or undefined when calling submitFilingWorkflowTemplate().',
+      );
+    }
+
+    if (requestParameters["filingWorkflowTemplateSubmit"] == null) {
+      throw new runtime.RequiredError(
+        "filingWorkflowTemplateSubmit",
+        'Required parameter "filingWorkflowTemplateSubmit" was null or undefined when calling submitFilingWorkflowTemplate().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}/submit`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"template_id"}}`,
+            encodeURIComponent(String(requestParameters["templateId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FilingWorkflowTemplateSubmitToJSON(
+          requestParameters["filingWorkflowTemplateSubmit"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FilingWorkflowTemplateReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Submit Filing Workflow Template
+   */
+  async submitFilingWorkflowTemplate(
+    requestParameters: SubmitFilingWorkflowTemplateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FilingWorkflowTemplateRead> {
+    const response = await this.submitFilingWorkflowTemplateRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Submit an approved package via the requested (or registry-default) channel.
    * Submit Regulatory Package
    */
@@ -2403,6 +3364,214 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Update Filing Workflow Template
+   */
+  async updateFilingWorkflowTemplateRaw(
+    requestParameters: UpdateFilingWorkflowTemplateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling updateFilingWorkflowTemplate().',
+      );
+    }
+
+    if (requestParameters["templateId"] == null) {
+      throw new runtime.RequiredError(
+        "templateId",
+        'Required parameter "templateId" was null or undefined when calling updateFilingWorkflowTemplate().',
+      );
+    }
+
+    if (requestParameters["filingWorkflowTemplateUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "filingWorkflowTemplateUpdate",
+        'Required parameter "filingWorkflowTemplateUpdate" was null or undefined when calling updateFilingWorkflowTemplate().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"template_id"}}`,
+            encodeURIComponent(String(requestParameters["templateId"])),
+          ),
+        method: "PATCH",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FilingWorkflowTemplateUpdateToJSON(
+          requestParameters["filingWorkflowTemplateUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FilingWorkflowTemplateReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Update Filing Workflow Template
+   */
+  async updateFilingWorkflowTemplate(
+    requestParameters: UpdateFilingWorkflowTemplateRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FilingWorkflowTemplateRead> {
+    const response = await this.updateFilingWorkflowTemplateRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Attach one document, identified from its own bytes.  The body is read to ONE byte past the limit and refused there, the same way both ICAAP upload routes do it: a cap applied after the whole body is in memory is not a cap, it is a description of what was already allocated. The service keeps its own check as the invariant — this route is not the only caller — but nothing beyond ``limit + 1`` bytes is ever held here.
+   * Upload Package Attachment
+   */
+  async uploadPackageAttachmentRaw(
+    requestParameters: UploadPackageAttachmentRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PackageAttachmentRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling uploadPackageAttachment().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling uploadPackageAttachment().',
+      );
+    }
+
+    if (requestParameters["file"] == null) {
+      throw new runtime.RequiredError(
+        "file",
+        'Required parameter "file" was null or undefined when calling uploadPackageAttachment().',
+      );
+    }
+
+    if (requestParameters["kind"] == null) {
+      throw new runtime.RequiredError(
+        "kind",
+        'Required parameter "kind" was null or undefined when calling uploadPackageAttachment().',
+      );
+    }
+
+    if (requestParameters["title"] == null) {
+      throw new runtime.RequiredError(
+        "title",
+        'Required parameter "title" was null or undefined when calling uploadPackageAttachment().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const consumes: runtime.Consume[] = [
+      { contentType: "multipart/form-data" },
+    ];
+    // @ts-ignore: canConsumeForm may be unused
+    const canConsumeForm = runtime.canConsumeForm(consumes);
+
+    let formParams: { append(param: string, value: any): any };
+    let useForm = false;
+    // use FormData to transmit files using content-type "multipart/form-data"
+    useForm = canConsumeForm;
+    if (useForm) {
+      formParams = new FormData();
+    } else {
+      formParams = new URLSearchParams();
+    }
+
+    if (requestParameters["attributes"] != null) {
+      formParams.append("attributes", requestParameters["attributes"] as any);
+    }
+
+    if (requestParameters["file"] != null) {
+      formParams.append("file", requestParameters["file"] as any);
+    }
+
+    if (requestParameters["kind"] != null) {
+      formParams.append("kind", requestParameters["kind"] as any);
+    }
+
+    if (requestParameters["title"] != null) {
+      formParams.append("title", requestParameters["title"] as any);
+    }
+
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attachments`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: formParams,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PackageAttachmentReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Attach one document, identified from its own bytes.  The body is read to ONE byte past the limit and refused there, the same way both ICAAP upload routes do it: a cap applied after the whole body is in memory is not a cap, it is a description of what was already allocated. The service keeps its own check as the invariant — this route is not the only caller — but nothing beyond ``limit + 1`` bytes is ever held here.
+   * Upload Package Attachment
+   */
+  async uploadPackageAttachment(
+    requestParameters: UploadPackageAttachmentRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PackageAttachmentRead> {
+    const response = await this.uploadPackageAttachmentRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Validate Regulatory Package
    */
   async validateRegulatoryPackageRaw(
@@ -2471,6 +3640,101 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     );
     return await response.value();
   }
+
+  /**
+   * Record that a document should not have been filed. Never an edit.
+   * Withdraw Package Attachment
+   */
+  async withdrawPackageAttachmentRaw(
+    requestParameters: WithdrawPackageAttachmentRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<PackageAttachmentRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling withdrawPackageAttachment().',
+      );
+    }
+
+    if (requestParameters["packageId"] == null) {
+      throw new runtime.RequiredError(
+        "packageId",
+        'Required parameter "packageId" was null or undefined when calling withdrawPackageAttachment().',
+      );
+    }
+
+    if (requestParameters["attachmentId"] == null) {
+      throw new runtime.RequiredError(
+        "attachmentId",
+        'Required parameter "attachmentId" was null or undefined when calling withdrawPackageAttachment().',
+      );
+    }
+
+    if (requestParameters["packageAttachmentWithdraw"] == null) {
+      throw new runtime.RequiredError(
+        "packageAttachmentWithdraw",
+        'Required parameter "packageAttachmentWithdraw" was null or undefined when calling withdrawPackageAttachment().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attachments/{attachment_id}/withdraw`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"package_id"}}`,
+            encodeURIComponent(String(requestParameters["packageId"])),
+          )
+          .replace(
+            `{${"attachment_id"}}`,
+            encodeURIComponent(String(requestParameters["attachmentId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: PackageAttachmentWithdrawToJSON(
+          requestParameters["packageAttachmentWithdraw"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      PackageAttachmentReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Record that a document should not have been filed. Never an edit.
+   * Withdraw Package Attachment
+   */
+  async withdrawPackageAttachment(
+    requestParameters: WithdrawPackageAttachmentRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<PackageAttachmentRead> {
+    const response = await this.withdrawPackageAttachmentRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
 }
 
 /**
@@ -2503,6 +3767,7 @@ export const ExportRegulatoryPackageKindEnum = {
   Xlsx: "xlsx",
   XlsxOfficial: "xlsx_official",
   XlsxWorking: "xlsx_working",
+  DocxWorking: "docx_working",
   Csv: "csv",
   Pdf: "pdf",
 } as const;

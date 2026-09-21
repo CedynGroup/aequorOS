@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Final, Literal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -52,7 +52,7 @@ from app.schemas.regulatory_reporting import (
 )
 from app.services import filing_reconciliation, institution_profile, notifications
 from app.services.audit import record_event
-from app.services.regulatory_reporting import artifact_versions
+from app.services.regulatory_reporting import artifact_versions, family_hooks
 from app.services.regulatory_reporting.channel_config import (
     channel_config_row,
     decrypt_channel_credentials,
@@ -73,7 +73,7 @@ from app.services.regulatory_reporting.common import (
     read_package,
     require_actor,
 )
-from app.services.regulatory_reporting.registry import get_definition
+from app.services.regulatory_reporting.registry import ReturnDefinition, get_definition
 
 # §2 lifecycle. "generated" is re-entered on approval rejection (rework) and
 # on a failed re-validation; "superseded" is reachable from any non-terminal
@@ -83,10 +83,19 @@ from app.services.regulatory_reporting.registry import get_definition
 # (prior channel must be email with pending_orass_reupload still set).
 ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     "draft": frozenset({"generated", "superseded"}),
-    "generated": frozenset({"validated", "superseded"}),
+    # "generated -> pending_approval" is the RESEND after a send-back: the
+    # return went back to the Preparer, its checks still pass, and it is sent
+    # again without a re-run. Entry to the chain is gated by ``checks_passed``,
+    # not by a status, so the status must be able to follow the chain there.
+    "generated": frozenset({"validated", "pending_approval", "superseded"}),
     "validated": frozenset({"pending_approval", "generated", "superseded"}),
     "pending_approval": frozenset({"approved", "generated", "superseded"}),
-    "approved": frozenset({"submitted", "superseded"}),
+    # "approved -> pending_approval / generated" is the Validator's send-back
+    # BEFORE filing: the chain completed, the Validator looked again and
+    # returned it to the Approver or the Preparer. Only a recorded send-back
+    # decision produces it (``filing_workflow.chain``), and it never weakens the
+    # filing gate — ``-> submitted`` still requires the chain to be complete.
+    "approved": frozenset({"submitted", "pending_approval", "generated", "superseded"}),
     # Regulator outcomes (ORASS parity): "rejected" is returned-for-correction
     # (rework via a superseding version), "declined" is the final refusal.
     "submitted": frozenset({"acknowledged", "rejected", "declined", "submitted"}),
@@ -100,7 +109,77 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     "superseded": frozenset(),
 }
 
-type ArtifactKind = Literal["xlsx", "csv", "pdf", "xlsx_working"]
+type ArtifactKind = Literal["xlsx", "csv", "pdf", "xlsx_working", "docx_working"]
+#: Artifacts whose content RECALCULATES: the figures move if a reader edits a
+#: cell, so none of them is ever signed and none of them is a record of truth.
+#: "xlsx_working" is the copy of an official form carrying the template's own
+#: live formulas, "docx_working" the Word copy of an ICAAP report.
+WORKING_ARTIFACT_KINDS: Final[frozenset[str]] = frozenset({"xlsx_working", "docx_working"})
+#: The working kinds that ALSO go to the regulator, named one at a time.
+#: Founder decision 2026-09-20: supervisors prefer the Excel form with its
+#: formulas live, so the formula workbook now rides ALONGSIDE the protected
+#: values-only workbook in the filing set. Filed is not signed — certification
+#: still pins its revision to the values-only PDF
+#: (``attestation.artifact_signing.ARTIFACT_KIND``), which stays the record of
+#: truth; nothing here moves it.
+FILABLE_WORKING_ARTIFACT_KINDS: Final[frozenset[str]] = frozenset({"xlsx_working"})
+#: What a filing leaves behind on the KIND axis. DERIVED, never written out: a
+#: new working kind added to ``WORKING_ARTIFACT_KINDS`` lands here by default
+#: and has to be named in ``FILABLE_WORKING_ARTIFACT_KINDS`` to reach a
+#: regulator. That is the property the single set used to give by excluding
+#: everything — a working kind still cannot be admitted to a filing by
+#: omission, it must opt in.
+UNFILABLE_WORKING_ARTIFACT_KINDS: Final[frozenset[str]] = (
+    WORKING_ARTIFACT_KINDS - FILABLE_WORKING_ARTIFACT_KINDS
+)
+#: ...and which returns may carry each opted-in kind, by GENERATOR. The second
+#: axis, and it is deny-by-default in the same way: a filable kind whose
+#: generator is not listed here is not filed.
+#:
+#: The founder's decision named one thing — *"BoG appear to prefer Excel with
+#: formulas"* — and the workbook it named is the official Bank of Ghana form,
+#: produced by ``bog_form`` from BoG's own committed template by evaluating the
+#: template's own formulas. An SDI packet's working copy is an AequorOS
+#: calculation sheet, not a regulator's workbook; filing it would be inferring
+#: a second regulator's preference from a decision that stated one. So it stays
+#: internal, and its "not a filing artifact" label stays true.
+#: A kind with no entry here reaches nobody: adding a kind to
+#: ``FILABLE_WORKING_ARTIFACT_KINDS`` is not enough, the generators that may
+#: file it have to be named too.
+WORKING_ARTIFACT_FILING_GENERATORS: Final[dict[str, frozenset[str]]] = {
+    "xlsx_working": frozenset({"bog_form"}),
+}
+
+
+def filing_admits_artifact(kind: str, *, generator: str | None) -> bool:
+    """Is an artifact of ``kind``, produced by ``generator``, part of a filing?
+
+    Deny-by-default on both axes, and the ONE place either question is asked.
+    An ordinary artifact (pdf/xlsx/csv) is always admitted; a recalculable one
+    must have opted in by kind AND have its generator named for that kind.
+    """
+    if kind not in WORKING_ARTIFACT_KINDS:
+        return True
+    if kind in UNFILABLE_WORKING_ARTIFACT_KINDS:
+        return False
+    return generator is not None and generator in WORKING_ARTIFACT_FILING_GENERATORS.get(
+        kind, frozenset()
+    )
+#: Presentation order of a filing set and of the artifact list behind it. The
+#: signed record leads (pinned below, outside this map); then the Excel copies
+#: — the format 44 of 47 returns declare as ``filing_format`` — and the CSV
+#: convenience export last. Rank only: ties keep their export order.
+FILING_PRESENTATION_ORDER: Final[dict[str, int]] = {
+    "pdf": 0,
+    "xlsx": 1,
+    "xlsx_working": 2,
+    "csv": 3,
+}
+_UNRANKED_ARTIFACT_ORDER: Final[int] = 9
+#: Channels that send nothing to a regulator. A REHEARSAL package (D-029/D-068)
+#: may only be submitted through one of these: the dry run exercises the act of
+#: submitting, it does not perform it.
+NON_TRANSMITTING_CHANNELS: Final[frozenset[str]] = frozenset({"manual"})
 type Exporter = Callable[
     [Session, TenantContext, RegulatoryPackage, ArtifactKind], RegulatoryPackageArtifact
 ]
@@ -123,10 +202,26 @@ def transition(
     *,
     details: dict[str, Any] | None = None,
 ) -> None:
-    """Apply one allowed status transition and audit it (no commit)."""
+    """Apply one allowed status transition and audit it (no commit).
+
+    This is the ONE writer of ``-> submitted``, which is why the filing chain's
+    transmission gate is asked here rather than on a route. Two filing gates
+    have already been lost at a seam in this codebase because they sat at one
+    mint site and a second was added (D-069; the withdrawn-evidence check
+    missing from ``generate_frozen_package``). A gate at the choke point is one
+    a new path cannot forget.
+    """
     ensure_transition_allowed(package, new_status)
+    if new_status == "submitted":
+        from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
+
+        filing_chain.assert_transmission_permitted(db, ctx, package)
     previous = package.status
     package.status = new_status
+    # The family's own reaction to the move (ICAAP: the cycle follows its
+    # package into submitted / acknowledged). Runs BEFORE the audit event so a
+    # hook that refuses leaves no record of a transition that did not happen.
+    family_hooks.on_transition(db, ctx, package, previous=previous, new_status=new_status)
     record_event(
         db,
         ctx,
@@ -185,26 +280,19 @@ def request_approval(
     package_id: UUID,
     payload: PackageApprovalRequestCreate,
 ) -> RegulatoryPackageRead:
+    from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
+
     actor_user_id = require_actor(ctx)
     get_bank_or_404(db, ctx, bank_id)
-    package = get_package_or_404(db, ctx, bank_id, package_id)
-    if package.status != "validated":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Approval can only be requested for a validated package; this package "
-                f"is '{package.status}'. Validate it first."
-            ),
-        )
-    report = package.validation_report or {}
-    if report.get("error_count", 0) or not report.get("passed"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "The latest validation report carries ERROR findings; resolve them and "
-                "re-validate before requesting approval."
-            ),
-        )
+    package = get_package_or_404(db, ctx, bank_id, package_id, for_update=True)
+    # The Preparer's act. The chain owns the preconditions — ``checks_passed``
+    # gates ENTRY, which is what machine validation is for; it is not a stage
+    # and not a person. The status follows the chain, not the other way round.
+    filing_chain.start_chain(
+        db, ctx, package, note=payload.reason, actor=actor_user_id
+    )
+    # The coarse approval log stays: it is append-only evidence with its own
+    # readers (``RegulatoryPackageRead.approvals``). The CHAIN is the authority.
     _add_approval(
         db, ctx, package, action="requested", actor_user_id=actor_user_id, reason=payload.reason
     )
@@ -223,7 +311,6 @@ def request_approval(
         entity_id=package.id,
         recipient_role="approver",
     )
-    transition(db, ctx, package, "pending_approval")
     db.commit()
     return read_package(db, package)
 
@@ -340,15 +427,19 @@ def record_certification_approval(
     """The approval decision a checker's certification IS (no commit).
 
     An approver's signature over the frozen figures and their approval of the
-    filing are one act, not two — so the decision row is written in the same
-    transaction as the signature. Called from the attestation workflow, which is
-    already where ``pending_approval -> approved`` happens, so the row and the
-    status can never disagree.
+    filing are one act, not two — so the chain decision is written in the same
+    transaction as the signature. Nobody has to approve a second time in the
+    workspace because they signed.
 
-    The status transition is deliberately NOT repeated here: the caller has
-    already moved it, and ``transition`` would refuse the ``validated ->
-    approved`` shape a single-slot policy produces.
+    It is the CHAIN that moves, not the status: the status is the chain's
+    projection. So a checker's signature advances the return to the stage after
+    theirs, and with the default chain that stage is the Validator — the return
+    becomes ``approved``, i.e. filable, only when the Validator has taken it.
+    This used to write ``approved`` directly, which is the conflation the
+    redesign removes: a signature by the Approver is not authority to file.
     """
+    from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
+
     approval = _add_approval(
         db,
         ctx,
@@ -358,6 +449,8 @@ def record_certification_approval(
         reason=reason,
     )
     _notify_decision(db, ctx, package, approved=True, reason=reason)
+    filing_chain.record_stage_approval(db, ctx, package, actor=actor_user_id, comment=reason)
+    filing_chain.apply_projection(db, ctx, filing_chain.load_state(db, ctx, package))
     return approval
 
 
@@ -370,7 +463,7 @@ def decide_approval(
 ) -> RegulatoryPackageRead:
     actor_user_id = require_actor(ctx)
     get_bank_or_404(db, ctx, bank_id)
-    package = get_package_or_404(db, ctx, bank_id, package_id)
+    package = get_package_or_404(db, ctx, bank_id, package_id, for_update=True)
     ensure_decidable(package, actor_user_id)
     if payload.action == "approved":
         _ensure_approval_is_not_the_signature(db, ctx, package)
@@ -391,10 +484,44 @@ def decide_approval(
     )
     approved = payload.action == "approved"
     _notify_decision(db, ctx, package, approved=approved, reason=payload.reason)
-    new_status = "approved" if approved else "generated"
-    transition(db, ctx, package, new_status, details={"decision": payload.action})
+    # The chain decides where the return goes; the status is its projection.
+    # This route is the COMPATIBILITY surface: it decides the stage the return
+    # is actually waiting at, on the state as the server holds it. The chain
+    # route (``POST .../workflow/decisions``) is the one that pins the round and
+    # the review digest the officer was looking at, and is what the redesigned
+    # workspace uses.
+    _decide_on_chain(db, ctx, package, approved=approved, reason=payload.reason)
     db.commit()
     return read_package(db, package)
+
+
+def _decide_on_chain(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    *,
+    approved: bool,
+    reason: str | None,
+) -> None:
+    """Record this approve/reject as the chain decision it is."""
+    from app.schemas.filing_workflow import PackageStageDecisionCreate  # noqa: PLC0415
+    from app.services.filing_workflow import chain as filing_chain  # noqa: PLC0415 - cycle
+
+    state = filing_chain.load_state(db, ctx, package)
+    filing_chain.decide(
+        db,
+        ctx,
+        package,
+        PackageStageDecisionCreate(
+            decision="approved" if approved else "returned",
+            round=package.workflow_round,
+            review_digest=state.review_digest,
+            # A rejection at approval has always meant "back to the preparer",
+            # and now it says so by name instead of by a status going backwards.
+            return_to_seq=None if approved else 1,
+            comment=reason,
+        ),
+    )
 
 
 def send_back_for_corrections(
@@ -422,7 +549,7 @@ def send_back_for_corrections(
         db, ctx, package, action="rejected", actor_user_id=actor_user_id, reason=reason
     )
     _notify_decision(db, ctx, package, approved=False, reason=reason)
-    transition(db, ctx, package, "generated", details={"decision": "rejected"})
+    _decide_on_chain(db, ctx, package, approved=False, reason=reason)
     return approval
 
 
@@ -649,6 +776,35 @@ def _resolve_exporter() -> Exporter:
     return export_package
 
 
+#: Every format a filing carries when the return can produce it. The required
+#: ``filing_format`` is always attempted first; these ride alongside it.
+_FULL_FILING_PACK: Final[tuple[ArtifactKind, ...]] = (
+    "xlsx",
+    "pdf",
+    "xlsx_working",
+    "csv",
+)
+
+
+def _produces_working_copy(definition: ReturnDefinition | None) -> bool:
+    """Can this return render a live-formula workbook at all?
+
+    Two sources, and they are different things: an official regulator template
+    yields the REGULATOR's workbook with its own formulas, while
+    ``supports_working_copy`` yields an AequorOS calculation sheet. A return
+    with neither — LMT, for one — has no formula workbook in existence.
+    """
+    if definition is None:
+        return False
+    from app.services.regulatory_reporting.bog_forms.registry_entries import (  # noqa: PLC0415 - cycle
+        is_bog_official_template,
+    )
+
+    return bool(
+        is_bog_official_template(definition.template_id) or definition.supports_working_copy
+    )
+
+
 def _filing_set(
     db: Session, ctx: TenantContext, package: RegulatoryPackage, *, mint_missing: bool = True
 ) -> tuple[list[FiledArtifact], dict[str, Any]]:
@@ -672,17 +828,32 @@ def _filing_set(
     is the artifacts it already had, with the filing format auto-exported when
     there are none — the operator's main path, unchanged.
 
+    The formula workbook (``xlsx_working``) rides along too, by founder
+    decision of 2026-09-20: supervisors prefer the Excel form with its formulas
+    live, so both Excel copies are filed. It is filed and NOT signed — the
+    protected values-only artifact the officers certified remains the record of
+    truth, and the workbook says so on its own face.
+
+    That applies to the official BoG forms ONLY — the decision named BoG's own
+    workbook, and ``filing_admits_artifact`` is where both halves of the
+    question (which kind, which generator) are asked. An SDI packet's working
+    sheet is an AequorOS calculation aid, stays internal, and keeps saying so.
+
     ``mint_missing=False`` for the read-only preview of the same set: a GET that
     renders the downtime email bundle must not mint an artifact as a side effect.
     """
     artifacts = _package_artifacts(db, package)
     signed = artifact_versions.latest_signed_version(db, ctx, package)
+    definition = get_definition(package.return_code)
+    generator = definition.generator if definition is not None else None
     filed: list[FiledArtifact] = [
         artifact
         for artifact in artifacts
-        # the ALM/Finance working copy (live formulas) is an internal review
-        # artifact and is NEVER filed with the regulator
-        if artifact.kind != "xlsx_working"
+        # A recalculable artifact reaches the regulator only if its kind opted
+        # in AND this return's generator is named for that kind — the official
+        # BoG forms, and nothing else. The Word ICAAP draft and every SDI
+        # working sheet stay internal.
+        if filing_admits_artifact(artifact.kind, generator=generator)
         and (signed is None or artifact.kind != signed.version.kind)
     ]
     detail: dict[str, Any] = {}
@@ -699,23 +870,64 @@ def _filing_set(
             }
             for revision in artifact_versions.signed_revisions(db, ctx, package)
         ]
-    definition = get_definition(package.return_code)
     required = definition.filing_format if definition is not None else "xlsx"
     exported: list[str] = []
-    if (
-        mint_missing
-        and required is not None
-        and required not in {artifact.kind for artifact in filed}
-    ):
-        # Minted only when the filing would otherwise not carry that format —
-        # which is also what keeps this away from a kind a live signature covers,
-        # since the signed revision is already IN ``filed`` under its own kind
-        # and re-export of a signed kind is refused (``exports._refuse_if_signed``).
+    if mint_missing:
+        # THE FULL PACK, not just the required format (founder decision
+        # 2026-09-20). Until now a filing carried whatever the preparer had
+        # happened to export, plus the one required format minted on the way
+        # out — so an identical return filed twice could carry three files or
+        # one, decided by which buttons somebody pressed. A supervisor should
+        # receive the same set every time.
+        #
+        # Order is the presentation order: the values-only workbook and the PDF
+        # are the record, the formula workbook (where the return produces one)
+        # carries the regulator's own live formulas, and the CSV is the
+        # machine-readable copy.
+        #
+        # ``filing_admits_artifact`` still decides whether a recalculable kind
+        # may go at all, and a kind a live signature covers is never re-exported
+        # (``exports._refuse_if_signed``) because the signed revision is already
+        # in ``filed`` under its own kind.
+        wanted: list[ArtifactKind] = [required] if required is not None else []
+        for kind in _FULL_FILING_PACK:
+            if kind not in wanted:
+                wanted.append(kind)
         exporter = _resolve_exporter()
-        filed.append(exporter(db, ctx, package, required))
-        exported.append(required)
+        for kind in wanted:
+            if kind in {artifact.kind for artifact in filed}:
+                continue
+            if not filing_admits_artifact(kind, generator=generator):
+                continue
+            if kind in WORKING_ARTIFACT_KINDS and not _produces_working_copy(definition):
+                # No formula workbook exists for this return — BoG publishes no
+                # template for it and no calculation sheet is built. Nothing is
+                # being withheld; there is nothing to mint.
+                continue
+            try:
+                filed.append(exporter(db, ctx, package, kind))
+            except HTTPException:
+                # One format failing to render must not sink the filing: the
+                # required format is attempted first and its failure still
+                # raises, because a filing without it is not a filing.
+                if kind == required:
+                    raise
+                continue
+            exported.append(kind)
     if exported:
         detail["auto_exported_kinds"] = exported
+    # Order what goes, and what the record says went: the signed revision
+    # first — never buried behind a copy nobody signed — then the Excel copies
+    # ahead of the CSV. Stable, so artifacts of one kind keep their export
+    # order, and the auto-exported filing format lands in its own rank rather
+    # than at the tail.
+    filed.sort(
+        key=lambda artifact: (
+            -1
+            if signed is not None and artifact is signed.version
+            else FILING_PRESENTATION_ORDER.get(artifact.kind, _UNRANKED_ARTIFACT_ORDER)
+        )
+    )
     detail["filed_artifacts"] = [
         {
             "kind": artifact.kind,
@@ -726,6 +938,16 @@ def _filing_set(
         }
         for artifact in filed
     ]
+    # The documents the return was filed WITH, by hash. Channels transmit only
+    # artifacts — attachment transport over ORASS or email is not in scope, and
+    # ICAAP is manual-only — so this is a MANIFEST: the record that answers
+    # "which Board resolution did we file with the FY2026 ICAAP" from the
+    # database, years later, without trusting a folder.
+    from app.services.regulatory_reporting import (  # noqa: PLC0415 - breaks an import cycle
+        attachments as reporting_attachments,
+    )
+
+    detail["attachments"] = reporting_attachments.manifest(db, ctx, package)
     return filed, detail
 
 
@@ -866,6 +1088,36 @@ def _ensure_channel_submittable(
 ) -> tuple[bool, str | None]:
     """Guard the narrow submitted->submitted re-upload; returns
     ``(is_reupload, prior_email_ref)``."""
+    if package.is_rehearsal and channel_code not in NON_TRANSMITTING_CHANNELS:
+        # The cross-table half of D-029/D-068 that a CHECK cannot express: the
+        # channel lives on ``regulatory_submission_events``, so the DB cannot
+        # see it from the package row. A rehearsal records that it was
+        # submitted; it never actually transmits anything to a regulator.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "rehearsal_channel_not_permitted",
+                "message": (
+                    "This is a rehearsal, not a filing. Record its submission "
+                    "manually; it is never transmitted to the regulator."
+                ),
+                "allowed_channels": sorted(NON_TRANSMITTING_CHANNELS),
+            },
+        )
+    definition = get_definition(package.return_code)
+    allowed = definition.allowed_channels if definition is not None else None
+    if allowed is not None and channel_code not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "channel_not_supported_for_return",
+                "message": (
+                    f"'{package.return_code}' is filed through "
+                    f"{', '.join(allowed)}; '{channel_code}' is not one of them."
+                ),
+                "allowed_channels": list(allowed),
+            },
+        )
     if package.status != "submitted":
         # Everything else defers to the transition table (approved -> submitted).
         ensure_transition_allowed(package, "submitted")
@@ -893,13 +1145,48 @@ def _ensure_channel_submittable(
     return True, latest.external_ref
 
 
-def submit_package_via_channel(
+def _resolve_external_ref(
+    definition: ReturnDefinition | None,
+    channel_code: str,
+    *,
+    external_ref: str | None,
+) -> str | None:
+    """The regulator-side reference a MANUAL submission is recorded under.
+
+    Only the manual channel takes one from the client: every other channel
+    MINTS its reference at the regulator and a client-supplied value there would
+    be a claim about the regulator's own record. A return whose registry entry
+    declares ``requires_external_ref`` — the paragraph 82 disclosure, whose
+    "filing" IS the published URL — refuses without it, because recording the
+    disclosure with no evidence of where it was published records nothing.
+    """
+    if channel_code != "manual":
+        return None
+    value = (external_ref or "").strip() or None
+    if definition is not None and definition.requires_external_ref and value is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "external_ref_required",
+                "message": (
+                    f"'{definition.code}' is recorded against the reference the "
+                    "regulator or the publication itself carries. Provide it with "
+                    "the submission."
+                ),
+                "return_code": definition.code,
+            },
+        )
+    return value
+
+
+def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its named parts
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     package_id: UUID,
     *,
     channel_override: str | None = None,
+    external_ref: str | None = None,
 ) -> RegulatoryPackageRead:
     """Resolve the channel, deliver the package, and record the outcome.
 
@@ -919,6 +1206,9 @@ def submit_package_via_channel(
     )
 
     is_reupload, prior_email_ref = _ensure_channel_submittable(db, package, channel_code)
+    external_ref = _resolve_external_ref(
+        definition, channel_code, external_ref=external_ref
+    )
 
     _ensure_attested(db, ctx, package)
     # Sits beside the attestation gate for the same reason it lives in the
@@ -929,6 +1219,10 @@ def submit_package_via_channel(
     )
 
     if channel_code == "manual":
+        # ``mint_missing=False``: recording a submission that happened outside
+        # the platform must not have the side effect of minting an artifact
+        # nobody filed. What the record says was filed is what already existed.
+        _filed, filing_detail = _filing_set(db, ctx, package, mint_missing=False)
         transition(db, ctx, package, "submitted", details={"channel": channel_code})
         add_submission_event(
             db,
@@ -936,8 +1230,11 @@ def submit_package_via_channel(
             package,
             channel="manual",
             event="submitted",
-            external_ref=None,
-            detail={"note": "Submission recorded as completed manually outside AequorOS."},
+            external_ref=external_ref,
+            detail={
+                "note": "Submission recorded as completed manually outside AequorOS.",
+                **filing_detail,
+            },
         )
         db.commit()
         return read_package(db, package)
@@ -1358,10 +1655,21 @@ def list_package_artifacts(
     db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> list[RegulatoryPackageArtifact]:
     """All artifacts for a package (persisted list; UI must not rely on
-    session-local export caches)."""
+    session-local export caches).
+
+    Returned in ``FILING_PRESENTATION_ORDER`` — the same order a filing goes
+    in, so the download list a preparer reads cannot disagree with what the
+    submission record says went: the submission document first, then both Excel
+    copies, then the CSV.
+    """
     get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
-    return _package_artifacts(db, package)
+    return sorted(
+        _package_artifacts(db, package),
+        key=lambda artifact: FILING_PRESENTATION_ORDER.get(
+            artifact.kind, _UNRANKED_ARTIFACT_ORDER
+        ),
+    )
 
 
 def export_package_artifact(

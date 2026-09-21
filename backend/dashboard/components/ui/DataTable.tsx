@@ -53,6 +53,7 @@ export default function DataTable<T>({
   onRowClick,
   rowClassName,
   scrollLabel = 'Table',
+  stickyFirstColumn = false,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -69,9 +70,20 @@ export default function DataTable<T>({
   rowClassName?: (row: T, idx: number) => string;
   /** Names the scroll region for screen readers when the table overflows. */
   scrollLabel?: string;
+  /**
+   * Pins the first column while the rest scrolls. For wide reference tables —
+   * a regulatory return's line codes and descriptions must stay readable while
+   * an officer scans the currency columns, or a figure loses the row it belongs
+   * to. Off by default: it costs a background on every first cell.
+   */
+  stickyFirstColumn?: boolean;
 }) {
   const padY = density === 'compact' ? 'py-1.5' : 'py-2.5';
   const clickable = Boolean(onRowClick);
+  const pinned = (index: number, isTotal = false): string =>
+    stickyFirstColumn && index === 0
+      ? `sticky left-0 z-[5] ${isTotal ? 'bg-surface' : 'bg-surface-raised'}`
+      : '';
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ start: false, end: false });
@@ -139,13 +151,17 @@ export default function DataTable<T>({
         <table className="w-full text-body border-collapse tnum">
           <thead>
             <tr className="border-b border-border bg-surface">
-              {columns.map((c) => (
+              {columns.map((c, columnIndex) => (
                 <th
                   key={c.key}
                   scope="col"
                   style={{ width: c.width }}
                   className={`${padY} px-4 text-micro font-medium uppercase tracking-wider text-slate ${
                     stickyHeader ? 'sticky top-0 z-10 bg-surface' : ''
+                  } ${
+                    stickyFirstColumn && columnIndex === 0
+                      ? 'sticky left-0 z-[11] bg-surface'
+                      : ''
                   } ${
                     c.align === 'right' || c.numeric
                       ? 'text-right'
@@ -186,12 +202,12 @@ export default function DataTable<T>({
                     rowClassName ? rowClassName(row, i) : ''
                   }`}
                 >
-                  {columns.map((c) => (
+                  {columns.map((c, columnIndex) => (
                     <td
                       key={c.key}
                       className={`${padY} px-4 align-middle ${
                         c.numeric ? 'num' : ''
-                      } ${
+                      } ${pinned(columnIndex, isTotal)} ${
                         c.align === 'right' && !c.numeric
                           ? 'text-right'
                           : c.align === 'center'

@@ -393,9 +393,11 @@ class EnterpriseStressSignoff(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     # ¶67(a)(b): risks / exposures / entities covered + macro conditions and
     # assumptions — the analyst's narrative on the run.
     scenario_narrative: Mapped[str] = mapped_column(Text, nullable=False)
-    # ¶67(d), ¶45: methodologies + justification of expert-judgement overlays —
-    # the CRO/analyst assumptions rationale.
+    # ¶67(b), ¶45: justification of the assumptions and of expert-judgement
+    # overlays — the CRO/analyst assumptions rationale.
     assumptions_rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    # ¶67(c): the methodologies used (¶67(d) is the impact on profitability,
+    # capital and liquidity, which the run's tables carry, not this text).
     methodology_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     # ¶16 reporting & challenge / ¶20: the Board's challenge and review record.
     board_challenge: Mapped[str | None] = mapped_column(Text, nullable=True)

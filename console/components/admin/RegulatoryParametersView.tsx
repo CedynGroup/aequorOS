@@ -7,6 +7,7 @@ import {
   getWorkforceSession,
   listRegulatoryParameters,
   proposeRegulatoryParameter,
+  shapeErrorOf,
   type RegulatoryParameter,
 } from '@/lib/api';
 import { useApi, useMutation } from '@/lib/use-api';
@@ -16,13 +17,18 @@ import {
   buildChains,
   confirmationLabel,
   displayValue,
+  formatStructuredValue,
   isProposalValid,
   lifecycleOf,
+  parseStructuredValue,
   scopeTypeLabel,
+  shapeName,
   validateProposal,
+  valueMode,
   type ParameterChain,
   type ProposeForm,
   type ProposeFormErrors,
+  type ValueMode,
 } from '@/lib/regulatory-parameters';
 import {
   Button,
@@ -94,12 +100,65 @@ function blankForm(): ProposeForm {
     param_code: '',
     jurisdiction_code: '',
     value_numeric: '',
+    value_json: '',
     unit: '',
     source_citation: '',
     confirmation_status: 'pending',
     effective_from: today(),
     change_rationale: '',
   };
+}
+
+/**
+ * A table-valued parameter, rendered read-only.
+ *
+ * The console has always shown a structural row as the words "Structured
+ * value", which is honest but useless: an operator could not see what an SDI's
+ * risk-weight composition or an ICAAP band table actually said without reading
+ * the database. This renders the body itself — as a table when its form is one
+ * this screen recognises, and as pretty JSON otherwise, which is never wrong,
+ * only plainer.
+ */
+function StructuredValuePreview({ body }: { body: Record<string, unknown> }) {
+  const bands = Array.isArray(body.bands) ? (body.bands as Record<string, unknown>[]) : null;
+
+  if (bands && bands.length > 0 && bands.every((b) => b && typeof b === 'object')) {
+    const columns = [...new Set(bands.flatMap((band) => Object.keys(band)))];
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-caption">
+          <thead>
+            <tr className="border-b border-hair text-slate">
+              {columns.map((column) => (
+                <th key={column} className="px-2 py-1 text-left font-medium">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {bands.map((band, index) => (
+              <tr key={index} className="border-b border-hair/60">
+                {columns.map((column) => (
+                  <td key={column} className="px-2 py-1 font-mono text-ink">
+                    {band[column] === null || band[column] === undefined
+                      ? DASH
+                      : String(band[column])}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <pre className="max-h-80 overflow-auto rounded bg-surface p-3 font-mono text-caption text-ink">
+      {JSON.stringify(body, null, 2)}
+    </pre>
+  );
 }
 
 /** Confirmation state, worded for a reader who has never seen the enum. */
@@ -129,6 +188,15 @@ function ValueCell({ row }: { row: RegulatoryParameter }) {
     return (
       <Chip tone="warn" title="This record carries no value. Nothing is being applied.">
         Not set
+      </Chip>
+    );
+  }
+  if (row.value_json !== null) {
+    // A structural row's body is shown in full in the history drawer; here the
+    // form's own name is more useful than a truncated table.
+    return (
+      <Chip tone="neutral" title={JSON.stringify(row.value_json)}>
+        {shapeName(row.param_code) ?? 'Structured value'}
       </Chip>
     );
   }
@@ -170,6 +238,19 @@ export default function RegulatoryParametersView() {
   const [proposeOpen, setProposeOpen] = useState(false);
   const [form, setForm] = useState<ProposeForm>(blankForm);
   const [formErr, setFormErr] = useState<ProposeFormErrors>({});
+  /**
+   * Which value arm the form is showing.
+   *
+   * For a REGISTERED code the declared shape decides and this is ignored
+   * (D-037) — a band table cannot be typed into the number field and a
+   * percentage cannot be pasted as JSON. For an unregistered code there is no
+   * declared shape, so the operator chooses; the default stays the number
+   * field the console has always shown.
+   */
+  const [valueArm, setValueArm] = useState<ValueMode>('scalar');
+  const mode = valueMode(form.param_code.trim(), valueArm);
+  const declaredShape = shapeName(form.param_code.trim());
+  const structuredPreview = parseStructuredValue(form.value_json);
   const [approveFor, setApproveFor] = useState<RegulatoryParameter | null>(null);
   const [approveNote, setApproveNote] = useState('');
   const [historyFor, setHistoryFor] = useState<ParameterChain | null>(null);
@@ -184,6 +265,15 @@ export default function RegulatoryParametersView() {
       reload();
     },
   });
+
+  /**
+   * The server's own shape refusal, shown against the path IT named.
+   *
+   * The client mirror can disagree with the server — it is a mirror, and a
+   * mirror can be out of date. When it does, the server's sentence is the one
+   * displayed, because the server is what decides whether the row is written.
+   */
+  const serverShapeError = shapeErrorOf(proposeM.error);
 
   const approveM = useMutation(
     (id: string, change_rationale?: string) =>
@@ -202,6 +292,7 @@ export default function RegulatoryParametersView() {
   function openBlankPropose() {
     setForm(blankForm());
     setFormErr({});
+    setValueArm('scalar');
     proposeM.reset();
     setProposeOpen(true);
   }
@@ -219,6 +310,9 @@ export default function RegulatoryParametersView() {
       param_code: row.param_code,
       jurisdiction_code: row.jurisdiction_code,
       value_numeric: '',
+      // Blank, for the same reason the scalar is: re-approving the outgoing
+      // table unchanged is exactly the mistake supersession exists to prevent.
+      value_json: '',
       unit: row.unit,
       source_citation: '',
       confirmation_status: 'pending',
@@ -226,22 +320,29 @@ export default function RegulatoryParametersView() {
       change_rationale: '',
     });
     setFormErr({});
+    setValueArm(row.value_json !== null ? 'structural' : 'scalar');
     proposeM.reset();
     setHistoryFor(null);
     setProposeOpen(true);
   }
 
   function submitPropose() {
-    const errs = validateProposal(form, today());
+    const errs = validateProposal(form, today(), mode);
     setFormErr(errs);
     if (!isProposalValid(errs)) return;
+    // Exactly one arm is sent. The backend refuses a row carrying both, and a
+    // registered structural code refuses a number (and vice versa) at propose
+    // AND at approve.
+    const structuredArm =
+      mode === 'structural' ? parseStructuredValue(form.value_json) : null;
     void proposeM.mutate({
       scope_type: form.scope_type,
       scope_key: form.scope_key.trim(),
       param_code: form.param_code.trim(),
       jurisdiction_code: form.jurisdiction_code.trim(),
       // Sent as the STRING the operator typed — never through Number().
-      value_numeric: form.value_numeric.trim(),
+      value_numeric: mode === 'scalar' ? form.value_numeric.trim() : null,
+      value_json: structuredArm && structuredArm.ok ? structuredArm.value : null,
       unit: form.unit.trim(),
       source_citation: form.source_citation.trim(),
       confirmation_status: form.confirmation_status,
@@ -717,23 +818,36 @@ export default function RegulatoryParametersView() {
                 }
               />
             </Field>
-            <Field
-              label="Value"
-              required
-              error={formErr.value_numeric}
-              hint="Exactly as the regulation states it. Digits and an optional decimal point."
-              htmlFor="rp-value"
-            >
-              <Input
-                id="rp-value"
-                autoComplete="off"
-                inputMode="decimal"
-                className="font-mono"
-                value={form.value_numeric}
-                invalid={Boolean(formErr.value_numeric)}
-                onChange={(e) => setForm((f) => ({ ...f, value_numeric: e.target.value }))}
-              />
-            </Field>
+            {mode === 'scalar' ? (
+              <Field
+                label="Value"
+                required
+                error={formErr.value_numeric}
+                hint="Exactly as the regulation states it. Digits and an optional decimal point."
+                htmlFor="rp-value"
+              >
+                <Input
+                  id="rp-value"
+                  autoComplete="off"
+                  inputMode="decimal"
+                  className="font-mono"
+                  value={form.value_numeric}
+                  invalid={Boolean(formErr.value_numeric)}
+                  onChange={(e) => setForm((f) => ({ ...f, value_numeric: e.target.value }))}
+                />
+              </Field>
+            ) : (
+              <Field
+                label="Value"
+                hint="This parameter carries a table, not a number. It is edited below."
+              >
+                <p className="text-caption text-slate">
+                  {declaredShape
+                    ? `Declared form: ${declaredShape}.`
+                    : 'Structured value.'}
+                </p>
+              </Field>
+            )}
             <Field
               label="Unit"
               required
@@ -785,6 +899,82 @@ export default function RegulatoryParametersView() {
               </Select>
             </Field>
           </div>
+
+          {/* ------------------------------------------- structured value (D-037) */}
+          {!declaredShape && (
+            <Field
+              label="How this parameter is expressed"
+              hint="This code has no declared form, so say which one it carries. A code the platform knows decides for itself."
+              htmlFor="rp-arm"
+            >
+              <Select
+                id="rp-arm"
+                value={valueArm}
+                onChange={(e) => setValueArm(e.target.value as ValueMode)}
+              >
+                <option value="scalar">A single number</option>
+                <option value="structural">A table or mapping (JSON)</option>
+              </Select>
+            </Field>
+          )}
+
+          {mode === 'structural' && (
+            <Field
+              label="Structured value"
+              required
+              error={formErr.value_json}
+              hint={
+                declaredShape
+                  ? `Checked against the declared ${declaredShape} form before it is sent, and again by the server at proposal and at approval.`
+                  : 'A JSON object. The server checks it against the code\'s declared form, when it has one.'
+              }
+              htmlFor="rp-value-json"
+            >
+              <Textarea
+                id="rp-value-json"
+                rows={12}
+                spellCheck={false}
+                className="font-mono text-caption"
+                value={form.value_json}
+                invalid={Boolean(formErr.value_json)}
+                onChange={(e) => setForm((f) => ({ ...f, value_json: e.target.value }))}
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    setForm((f) => ({ ...f, value_json: formatStructuredValue(f.value_json) }))
+                  }
+                >
+                  Tidy the JSON
+                </Button>
+                {structuredPreview.ok ? (
+                  <span className="text-caption text-slate">
+                    Parsed. The preview below is what will be sent.
+                  </span>
+                ) : (
+                  form.value_json.trim() !== '' && (
+                    <span className="text-caption text-danger">
+                      {structuredPreview.message}
+                    </span>
+                  )
+                )}
+              </div>
+              {structuredPreview.ok && (
+                <div className="mt-3">
+                  <StructuredValuePreview body={structuredPreview.value} />
+                </div>
+              )}
+            </Field>
+          )}
+
+          {serverShapeError && (
+            <FormError>
+              The server refused this value:{' '}
+              <span className="font-mono">{serverShapeError.path}</span> —{' '}
+              {serverShapeError.message}
+            </FormError>
+          )}
 
           <Field
             label="Source"

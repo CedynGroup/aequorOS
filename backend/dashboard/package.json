@@ -8,12 +8,16 @@
     "start": "next start -p 3001",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node .test-out/app/login/loginErrors.test.js && node .test-out/lib/authCookies.test.js && node .test-out/lib/loginUrl.test.js && node .test-out/lib/api/values.test.js && node .test-out/lib/api/accountAdministration.test.js && node .test-out/lib/api/grants.test.js && node .test-out/lib/api/fail-open-guard.test.js && node .test-out/lib/api/queryPolicy.test.js && node .test-out/lib/api/queryAuthorityBoundary.test.js && node .test-out/lib/modules.test.js && node .test-out/lib/outbound.test.js && node .test-out/lib/ip-version.test.js && rm -rf .test-out",
+    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node .test-out/app/login/loginErrors.test.js && node .test-out/lib/authCookies.test.js && node .test-out/lib/loginUrl.test.js && node .test-out/lib/api/values.test.js && node .test-out/lib/api/returnAnchors.test.js && node .test-out/lib/api/accountAdministration.test.js && node .test-out/lib/api/grants.test.js && node .test-out/lib/api/fail-open-guard.test.js && node .test-out/lib/api/queryPolicy.test.js && node .test-out/lib/api/queryAuthorityBoundary.test.js && node .test-out/lib/modules.test.js && node .test-out/components/icaap/editor/schema.parity.test.js && node .test-out/lib/icaap/appetite.test.js && node .test-out/components/icaap/p2/labels.test.js && node .test-out/components/icaap/p2/no-literals.test.js && node .test-out/lib/api/icaapRiskCapitalNormalize.test.js && node .test-out/components/icaap/p2/resilience.test.js && node .test-out/lib/api/icaapFilingNormalize.test.js && node .test-out/components/icaap/p3/labels.test.js && node .test-out/components/icaap/p3/resilience.test.js && node .test-out/components/attestation/boardSignature.test.js && node .test-out/components/submissions/rehearsal.test.js && node .test-out/components/submissions/filingSurface.test.js && node .test-out/components/submissions/transmitPreview.test.js && node .test-out/lib/submissions/filedArtifacts.test.js && node .test-out/lib/submissions/certificationSummary.test.js && node .test-out/lib/api/grantRequirements.parity.test.js && node .test-out/lib/api/sodDecision.test.js && node .test-out/lib/api/irrbbSfNormalize.test.js && node .test-out/components/irr/sf/labels.test.js && node .test-out/components/irr/sf/resilience.test.js && node .test-out/lib/outbound.test.js && node .test-out/lib/ip-version.test.js && rm -rf .test-out",
     "e2e": "playwright test"
   },
   "dependencies": {
     "@aequoros/risk-service-api": "workspace:*",
     "@tanstack/react-query": "^5",
+    "@tiptap/core": "3.31.3",
+    "@tiptap/pm": "3.31.3",
+    "@tiptap/react": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
     "lucide-react": "^0.446.0",
     "next": "14.2.15",
     "next-auth": "5.0.0-beta.25",

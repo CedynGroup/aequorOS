@@ -26,9 +26,14 @@ The policy vocabulary lives only in `backend/app/core/authorization.py`:
 - static bundles and their exact granted actions: the executable
   [`RoleBundle` and `ROLE_PERMISSIONS`](../app/core/authorization.py) definitions.
 
-`configure`, `sign_off`, and `submit` are reserved action names but are not in
-any v1 bundle. Workflow-specific authority for them must be designed explicitly
-rather than inferred from a nearby role.
+`configure` and `sign_off` are reserved action names that are not in any v1
+bundle. Workflow-specific authority for them must be designed explicitly rather
+than inferred from a nearby role. `submit` left that reserved set on 2026-09-20:
+it is carried by the `validator` bundle alone and enforced on the filing surface
+([filing submit authority rollout](filing_submit_authority_rollout.md)). It is
+the worked example of the rule — the authority was designed, given its own
+bundle and its own gate, rather than folded into the Approver that sat next to
+it.
 
 Org Owner is a distinct binding authority even though the bounded v1 action
 vocabulary currently overlaps Account Admin. The grant-administration boundary
@@ -128,7 +133,10 @@ immutable `audit_events` envelope. The shared condition authority contributes
 request-wide state available at the projection boundary (currently demo mode)
 to every evaluated tuple. Maker/checker, step-up, digest, routed-recipient, and
 approval-limit checks remain owned by their workflows and cannot be bypassed by
-adding another allow binding. The filing workflow is not changed by this slice.
+adding another allow binding. `approve`, `sign_off` and `submit` name the
+runtime conditions they REQUIRE, so an evaluation that does not receive them
+denies: a route that forgets to establish maker/checker context is refused
+rather than allowed.
 
 The persistence boundary performs two fail-closed checks before evaluating any
 binding: the principal must still be an active tenant member of the declared
@@ -292,7 +300,8 @@ sensitivity, and one required reason. Arrays are rejected by the closed request
 schema, so two authority combinations require two requests and two binding rows.
 Preview returns the canonical authority sentence; create requires that exact
 sentence and refuses if names or scope presentation changed before commit.
-Members may grant Viewer, Auditor, Analyst, Approver, or Account Admin. Org
+Members may grant Viewer, Auditor, Analyst, Approver, Validator, or Account
+Admin. Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
 only as organization-wide Account Administration at all sensitivity levels.
 
@@ -300,7 +309,9 @@ The server runs assignment-time separation-of-duties policy and returns the
 authoritative `allow`, `warn`, or `block` decision. C9 account-administration
 versus operational maker/checker authority is blocked. An overlapping Analyst
 and Approver pair is warned because per-object maker-checker remains a runtime
-condition that no additional binding may bypass.
+condition that no additional binding may bypass. An Approver and Validator pair
+is BLOCKED, scope-independently, because no such runtime condition exists yet
+for approve-then-file.
 
 Revoke changes only the targeted row and records revoker, time, and reason.
 Create and revoke both write an `audit_events` record containing actor, grantee,
@@ -420,6 +431,28 @@ OpenAPI bank-path and bank-query operations, generates request inputs for reads 
 mutations, and checks the shared dependency and standard error envelope for an
 authenticated sibling-organization member with no bindings on Postgres.
 
+## Filing submit authority (built 2026-09-20)
+
+Transmitting a regulatory return to the regulator is its own permission. It used
+to share `Permission.APPROVE` with the approval decision, so one authority both
+approved a return and filed it — and on an ungated return family the scalar
+`approver` role alone satisfied the submit route. `Permission.SUBMIT` is now
+carried by the `validator` bundle (`view` + `submit`, never `approve`), and
+`require_package_submit` takes one scoped path for every family: an interactive
+human, then one complete active binding over Regulatory Reporting / restricted
+for the exact institution. Visibility is still decided first, so a gated family
+the caller cannot see stays a `404`.
+
+No migration backfills the authority: granting it to everyone who could approve
+would encode the defect being removed, and unlike the ownership split this
+cutover changes no `users` row, so the pre-cutover set stays queryable from the
+scalar role itself. An organization has no filing authority until its Org Owner
+writes one, and the grant surface blocks Approver and Validator on one identity
+because the per-object condition that would catch approve-then-file at action
+time is still the stage engine's later work. The authoritative contract is
+[filing_submit_authority_rollout.md](filing_submit_authority_rollout.md); the
+design it implements is [filing_workflow_redesign.md](filing_workflow_redesign.md).
+
 ## Product rollout boundary
 
 Liquidity enforcement scope and held configuration routes are owned by the
@@ -431,7 +464,10 @@ engine, shared workbench, and run-registry requirements are owned by the
 surfaces, result projections, and required grants are owned by the
 [FX rollout contract](fx_enforcement_rollout.md). FTP dashboards, runs, shared
 workbench entries, and deployment grants are owned by the
-[FTP rollout contract](ftp_enforcement_rollout.md). Existing
+[FTP rollout contract](ftp_enforcement_rollout.md). Regulatory filing — the
+submit and poll routes, the Validator bundle, and the grants that must exist
+before any return can be transmitted — is owned by the
+[filing submit authority rollout](filing_submit_authority_rollout.md). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,

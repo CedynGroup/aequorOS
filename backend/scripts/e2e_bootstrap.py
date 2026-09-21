@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy import create_engine
@@ -46,7 +47,7 @@ from app.core.authorization import (
 )
 from app.core.security import hash_password
 from app.db.base import Base
-from app.models import IntegrationKey, Organization, User
+from app.models import IntegrationKey, Organization, RegulatoryParameter, User
 from app.services import authorization, membership
 from app.services.attestation.identity import ensure_signer_identity
 from app.services.attestation.keys import SignerKeyService
@@ -78,7 +79,32 @@ E2E_USERS = {
     "liquidity_aggregated_viewer": UUID("eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea"),
     "macro_viewer": UUID("eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec"),
     "invite_fresh": UUID("eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb"),
+    # A board member: Capital/confidential APPROVER on the sample bank and
+    # nothing else. Deliberately holds NO Regulatory Reporting access, because
+    # that is the real shape of the person — the ICAAP filing surface has to
+    # give them a signature they could not otherwise give.
+    "board": UUID("eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec"),
+    # The officer who transmits a return to the regulator, and only that.
+    # Filing stopped sharing the approver's permission on 2026-09-20
+    # (docs/filing_workflow_redesign.md §6 step 1): a Validator holds an exact
+    # Regulatory Reporting / restricted `submit` binding, plus a read sentence
+    # so they can open the return they are being asked to file. Deliberately
+    # NOT the `approver` fixture — one identity that both approves and files is
+    # the defect the split closed, and the tenant grant surface blocks it.
+    "validator": UUID("eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed"),
 }
+
+#: The governed date from which an ICAAP report may be filed.
+#:
+#: The seeded value is the Ghana exposure draft's inferred first year end
+#: (2026-12-31, ``confirmation_status="pending"``), which is AFTER the canonical
+#: test book's span — so a freeze would be refused ``return_not_yet_effective``
+#: and the filing journey could never run. Staff move this row in the console
+#: when a regulator confirms its regime's commencement (D-024/D-032); the e2e
+#: stack has no console, so the row is moved here, the same way the pytest
+#: suite's ``govern_first_as_of`` helper moves it. It is DATA, not code: no
+#: commencement date is written into an engine.
+E2E_ICAAP_FIRST_AS_OF = date(2025, 12, 31)
 
 
 def main() -> None:
@@ -96,6 +122,7 @@ def main() -> None:
         # migration is the correct answer to an empty registry, not a bug to
         # relax. Shared with the hermetic pytest suite so the two cannot drift.
         seed_global_reference_data(session)
+        _govern_icaap_commencement(session)
         if session.get(Organization, DEMO_ORG_ID) is None:
             session.add(Organization(id=DEMO_ORG_ID, name="E2E Tenant"))
         # One hash for every user rather than one per user: Argon2id is
@@ -126,6 +153,14 @@ def main() -> None:
                             "liquidity_aggregated_viewer",
                             "invite_fresh",
                             "macro_viewer",
+                            # A board member holds no scalar role at all: their
+                            # authority is one exact Capital/confidential
+                            # binding, which is the whole point of the fixture.
+                            "board",
+                            # Likewise the Validator: a scalar role must never
+                            # supply filing authority, so this fixture must be
+                            # unable to file on anything but its binding.
+                            "validator",
                         }
                         else role
                     ),
@@ -151,6 +186,18 @@ def main() -> None:
             granted_by_id="e2e-bootstrap",
             commit=False,
         )
+        # A review stage can name the officer titles that may take it, and the
+        # check compares the SIGNED-IN user's recorded job title — never a
+        # title sent with the decision, which would let a caller state who
+        # approved the ICAAP. One fixture officer therefore needs one.
+        #
+        # It is THIS user and not `approver`, deliberately: the signing
+        # workspace's recipient picker labels an option
+        # `"{display name}{ — job title} ({role})"`, and
+        # `e2e/support/ceremony.ts` selects the approver by that exact label.
+        # Giving `approver` a title renames the option and hangs both
+        # full-lifecycle journeys on a select with "no matching option".
+        users["board"].job_title = "Chief Risk Officer"
         users["account_admin"].role = "account_admin"
         users["legacy_account_admin"].role = "account_admin"
         users["integration_admin"].role = "account_admin"
@@ -237,6 +284,67 @@ def main() -> None:
             ),
             reason="exercise exact Liquidity read authority without granting another module",
         )
+        # The board member. Capital/confidential APPROVER on the sample bank and
+        # nothing else — no Regulatory Reporting access at all, which is why the
+        # ICAAP Filing tab embeds the signing workspace rather than linking to
+        # `/submissions`.
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["board"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.APPROVER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.CAPITAL,
+                SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="a board member signs the ICAAP without Regulatory Reporting access",
+        )
+        # The Validator: two sentences, because they answer two questions. The
+        # read sentence opens the Returns workspace; the filing sentence is the
+        # only authority in the product that reaches a regulator channel.
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["validator"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.ALL,
+                SensitivityScope.ALL,
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="a validator must be able to read the return they are asked to file",
+        )
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["validator"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VALIDATOR,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.REGULATORY,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="the officer who transmits this tenant's returns to the regulator",
+        )
         authorization.create_role_binding(
             session,
             organization_id=DEMO_ORG_ID,
@@ -310,6 +418,38 @@ def _materialize_live_plane(session: Session) -> None:
     print(f"live plane: {facts} current facts, modules ok: {', '.join(modules_ok) or 'none'}")
     for module, error in sorted(modules_failed.items()):
         print(f"live plane: module {module} failed: {error}")
+
+
+def _govern_icaap_commencement(session: Session) -> None:
+    """Move the ICAAP commencement date onto the canonical book's year end.
+
+    The seeded row is the Ghana exposure draft's INFERRED first year end and is
+    marked ``pending``; the canonical test book stops before it, so an annual
+    FY2025 assessment would be refused ``return_not_yet_effective`` and the
+    filing journey could never run.
+
+    This writes the control-plane ROW, which is exactly what staff do in the
+    console when a regulator confirms a commencement date — so it is also a
+    proof that the change takes effect without a release (D-024 / D-032). No
+    date is written into an engine, a template or a service.
+    """
+    from app.services.icaap.freeze import FIRST_AS_OF_PARAM  # noqa: PLC0415 - avoid a cycle
+
+    rows = (
+        session.query(RegulatoryParameter)
+        .filter(RegulatoryParameter.param_code == FIRST_AS_OF_PARAM)
+        .all()
+    )
+    for row in rows:
+        row.value_json = {
+            "schema": "icaap-effective-date-v1",
+            "date": E2E_ICAAP_FIRST_AS_OF.isoformat(),
+        }
+    session.flush()
+    print(
+        f"governed {FIRST_AS_OF_PARAM} to {E2E_ICAAP_FIRST_AS_OF.isoformat()} "
+        f"({len(rows)} row(s))"
+    )
 
 
 def _enrol_signing_keys(session: Session) -> None:

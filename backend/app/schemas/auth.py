@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from app.schemas.authorization import EffectiveAuthorityRead, ScopedGrantInput
+from app.schemas.text import reject_control_characters
 
 _BCP47_PATTERN = (
     r"^[A-Za-z]{2,3}(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?"
@@ -82,6 +83,11 @@ class ProfileUpdateRequest(BaseModel):
             return value
         stripped = value.strip()
         return stripped or None
+
+    # The display name and job title print on filed returns as the attester's
+    # name and designation (Appendix II narrative), so the XLSX constraint on
+    # control characters applies to them too.
+    _no_control_characters = field_validator("display_name", "job_title")(reject_control_characters)
 
     @field_validator("timezone")
     @classmethod

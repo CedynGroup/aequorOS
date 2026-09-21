@@ -9,7 +9,9 @@ allow-list here is the single source of truth for valid types.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
+from types import MappingProxyType
 from typing import Any
 from uuid import UUID
 
@@ -34,9 +36,10 @@ def _as_aware(value: datetime | None) -> datetime | None:
 
 # Live-engine job types (jobs.job_type has no DB CHECK — validate in code).
 #
-# HAZARD: a new job type must land in THREE places in the same change —
-# this tuple, ``worker.HANDLERS``, and (when the scheduler enqueues it behind
-# a flag) ``scheduler.any_scheduling_enabled``. A type listed here but absent
+# HAZARD: a new job type must land in FOUR places in the same change —
+# this tuple, ``worker.HANDLERS``, (when the scheduler enqueues it behind
+# a flag) ``scheduler.any_scheduling_enabled``, and ``JOB_LANES`` when a
+# DEDICATED worker must own it. A type listed here but absent
 # from HANDLERS is enqueueable yet never claimable: its jobs sit "queued"
 # forever (the notification_email_mirror precedent — enqueued by the tick,
 # orphaned until its handler entry landed). The parity test
@@ -53,7 +56,28 @@ JOB_TYPES = (
     "notification_email_mirror",
     "database_direct_health",
     "desk_capture",
+    "icaap_ai_draft",
 )
+
+#: The lane a worker process must be running to claim a job type.
+#:
+#: Lanes exist for ONE reason: ``icaap_ai_draft`` is the only job that holds an
+#: external model credential, and adding it to ``HANDLERS`` (which the parity
+#: test above requires) would otherwise make EVERY worker able to claim it —
+#: including the API's in-process thread. The default lane never contains an AI
+#: type, so the core fleet is unchanged by construction rather than by
+#: configuration. BI commentary adds its own ``"bi"`` entries here.
+DEFAULT_LANE = "core"
+JOB_LANES: Mapping[str, str] = MappingProxyType({"icaap_ai_draft": "ai"})
+
+
+def lane_of(job_type: str) -> str:
+    return JOB_LANES.get(job_type, DEFAULT_LANE)
+
+
+def job_types_in_lane(lane: str) -> tuple[str, ...]:
+    """Every declared job type belonging to ``lane``, in JOB_TYPES order."""
+    return tuple(job_type for job_type in JOB_TYPES if lane_of(job_type) == lane)
 
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).
 _BACKOFF_BASE_SECONDS = 5
@@ -96,9 +120,23 @@ STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
 
 
 def stale_after_for(job_type: str, default: timedelta) -> timedelta:
-    """The reclaim window for ``job_type``: its override, else the deployment default."""
+    """The reclaim window for ``job_type``: its override, else the deployment default.
+
+    The AI lane computes its window from AI settings rather than taking an entry
+    in the static override map, because it is derived: the SDK retries timeouts,
+    so one model call can legitimately occupy a worker for
+    ``AI_REQUEST_TIMEOUT_SECONDS x (AI_MAX_RETRIES + 1)``, and a window shorter
+    than that would reclaim a live job and send the request twice. Deriving it
+    keeps the two in step when either setting is tuned.
+    """
     override = STALE_AFTER_OVERRIDES_SECONDS.get(job_type)
-    return timedelta(seconds=override) if override is not None else default
+    if override is not None:
+        return timedelta(seconds=override)
+    if lane_of(job_type) == "ai":
+        from app.core.config import get_settings  # noqa: PLC0415 - avoid an import cycle
+
+        return timedelta(seconds=get_settings().ai.stale_after_seconds)
+    return default
 
 
 class UnknownJobTypeError(ValueError):
@@ -295,7 +333,13 @@ def latest_for_entity(
     )
 
 
-def reclaim_stale(db: Session, now: datetime, *, stale_after: timedelta) -> int:
+def reclaim_stale(
+    db: Session,
+    now: datetime,
+    *,
+    stale_after: timedelta,
+    job_types: tuple[str, ...] | None = None,
+) -> int:
     """Reclaim jobs stuck in ``running`` past ``stale_after`` and return the count.
 
     ``claim_next`` commits ``status='running'`` before the handler runs, and only
@@ -318,9 +362,12 @@ def reclaim_stale(db: Session, now: datetime, *, stale_after: timedelta) -> int:
     batch ended ``failed`` with "worker presumed dead" despite nothing having
     died.
     """
-    running = db.scalars(
-        select(Job).where(Job.status == "running", Job.completed_at.is_(None))
-    ).all()
+    statement = select(Job).where(Job.status == "running", Job.completed_at.is_(None))
+    if job_types is not None:
+        # Each worker reaps only its OWN lane, so a core worker can never apply
+        # the fleet default to an AI job whose legitimate runtime is minutes.
+        statement = statement.where(Job.job_type.in_(job_types))
+    running = db.scalars(statement).all()
     reclaimed = 0
     for job in running:
         window = stale_after_for(job.job_type, stale_after)
