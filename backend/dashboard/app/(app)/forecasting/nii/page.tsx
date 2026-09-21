@@ -41,9 +41,9 @@ export default function NiiForecastPage() {
   const bankId = bank?.id;
 
   // The route guard already requires confidential view for this tab; the
-  // hook takes the same projection so no run detail is requested without it.
+  // hook takes the same projection so nothing is requested without it.
   const scenarioSet = useScenarioRunSet(
-    bankId,
+    moduleScope.forecastingAggregatedView ? bankId : undefined,
     moduleScope.forecastingConfidentialView === true,
   );
   const runsByScenario: Record<string, ForecastRunRead | undefined> = {

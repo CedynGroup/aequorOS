@@ -118,9 +118,17 @@ export default function ScenariosPage() {
   const bankId = bank?.id;
   const periodId = period?.id;
   const canRun = moduleScope.forecastingRun === true;
+  // Presets and summaries ride aggregated view, run detail confidential; no
+  // query is issued before the projection resolves.
+  const forecastingBankId = moduleScope.forecastingAggregatedView
+    ? bankId
+    : undefined;
+  const runDetailBankId = moduleScope.forecastingConfidentialView
+    ? forecastingBankId
+    : undefined;
 
-  const scenariosQuery = useForecastScenarios(bankId);
-  const runsQuery = useForecastRuns(bankId, { limit: 50 });
+  const scenariosQuery = useForecastScenarios(forecastingBankId);
+  const runsQuery = useForecastRuns(forecastingBankId, { limit: 50 });
   const createRun = useCreateForecastRun(bankId);
 
   const runs = runsQuery.data?.runs ?? [];
@@ -128,8 +136,8 @@ export default function ScenariosPage() {
   // A/B selection for the comparison section.
   const [runAId, setRunAId] = useState<string | null>(null);
   const [runBId, setRunBId] = useState<string | null>(null);
-  const runA = useForecastRun(bankId, runAId);
-  const runB = useForecastRun(bankId, runBId);
+  const runA = useForecastRun(runDetailBankId, runAId);
+  const runB = useForecastRun(runDetailBankId, runBId);
 
   return (
     <>

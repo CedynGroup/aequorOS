@@ -333,6 +333,11 @@ export default function WhatIfLab() {
   const periodId = period?.id;
   const isSdi = moduleScope.institutionClass === "sdi";
   const canRun = moduleScope.forecastingRun === true;
+  // Stored what-if runs are Forecasting run detail; nothing is requested
+  // before the projection says the caller may open them.
+  const runsBankId = moduleScope.forecastingConfidentialView
+    ? bankId
+    : undefined;
 
   // ---- The CAR floor (NEW-37) -------------------------------------------
   // Bank: the capital module's own configured minimum, the same field the limit
@@ -355,7 +360,10 @@ export default function WhatIfLab() {
     useState<WhatIfShockCode>("rate_shock_up_400");
 
   // Latest stored run per shock, for reload on mount (unchanged wiring).
-  const runsQuery = useRegulatoryRuns(bankId, { module: "whatif", limit: 50 });
+  const runsQuery = useRegulatoryRuns(runsBankId, {
+    module: "whatif",
+    limit: 50,
+  });
   const latestIds = new Map<string, string>();
   for (const run of runsQuery.data?.runs ?? []) {
     if (!latestIds.has(run.scenarioCode)) {
@@ -363,18 +371,18 @@ export default function WhatIfLab() {
     }
   }
   const storedRate = useRegulatoryRun(
-    bankId,
+    runsBankId,
     latestIds.get("rate_shock_up_400"),
   );
   const storedCedi = useRegulatoryRun(
-    bankId,
+    runsBankId,
     latestIds.get("cedi_depreciation_20"),
   );
   const storedDefault = useRegulatoryRun(
-    bankId,
+    runsBankId,
     latestIds.get("default_spike"),
   );
-  const storedMpr = useRegulatoryRun(bankId, latestIds.get("mpr_cut_200"));
+  const storedMpr = useRegulatoryRun(runsBankId, latestIds.get("mpr_cut_200"));
   const storedByShock: Record<string, RegulatoryRunRead | undefined> = {
     rate_shock_up_400: storedRate.data,
     cedi_depreciation_20: storedCedi.data,

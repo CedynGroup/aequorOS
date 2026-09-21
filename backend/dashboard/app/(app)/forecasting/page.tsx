@@ -110,10 +110,14 @@ function BalanceSheetWorkspace() {
   const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
-  // Run summaries ride aggregated view (the page's own gate); a full run is
-  // confidential, so its query is never issued without that authority.
+  // Every Forecasting query waits for the projected authority: summaries ride
+  // aggregated view, a full run is confidential. Nothing is requested before
+  // the projection resolves, so an unbound deep link never reaches the API.
+  const forecastingBankId = moduleScope.forecastingAggregatedView
+    ? bankId
+    : undefined;
   const canViewRuns = moduleScope.forecastingConfidentialView === true;
-  const runDetailBankId = canViewRuns ? bankId : undefined;
+  const runDetailBankId = canViewRuns ? forecastingBankId : undefined;
   const canRun = moduleScope.forecastingRun === true;
   const searchParams = useSearchParams();
   const requestedRunId = searchParams.get('run');
@@ -122,7 +126,7 @@ function BalanceSheetWorkspace() {
   const [horizonYears, setHorizonYears] = useState<number>(DEFAULT_HORIZON_YEARS);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
-  const runsQuery = useForecastRuns(bankId, { limit: 50 });
+  const runsQuery = useForecastRuns(forecastingBankId, { limit: 50 });
   const runs = runsQuery.data?.runs ?? [];
   const liveSummary = useLiveSummary(bankId);
   const liveForecast = liveSummary.data?.modules.find((module) => module.module === 'forecast');
@@ -131,7 +135,7 @@ function BalanceSheetWorkspace() {
 
   const runQuery = useForecastRun(runDetailBankId, activeRunId);
   const createRun = useCreateForecastRun(bankId);
-  const scenarioSet = useScenarioRunSet(bankId, canViewRuns);
+  const scenarioSet = useScenarioRunSet(forecastingBankId, canViewRuns);
 
   const run = runQuery.data;
 
