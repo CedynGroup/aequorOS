@@ -103,7 +103,7 @@ export const E2E_USERS: Record<
   // authority, which is the point — the ICAAP filing surface has to give them
   // a signature they could not give through `/submissions`.
   board: {
-    id: "eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec",
+    id: "eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef",
     roles: ["viewer"],
     authv: 3,
   },

@@ -182,10 +182,10 @@ def _insert_section(
         text(
             """
             INSERT INTO icaap_sections
-              (id, organization_id, bank_id, cycle_id, section_key, title, letter, position,
-               working_doc, working_rev, requirement_states, created_at, updated_at)
+              (id, organization_id, bank_id, cycle_id, section_key, letter, position,
+               working_doc, working_rev, checklist_state, created_at, updated_at)
             VALUES
-              (:id, :org, :bank, :cycle, 'executive_summary', 'Executive summary', 'A', 1,
+              (:id, :org, :bank, :cycle, 'executive_summary', 'a', 1,
                '{"type":"doc","content":[]}'::json, 0, '{}'::json, :now, :now)
             """
         ),
