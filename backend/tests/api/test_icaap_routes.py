@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -31,7 +32,7 @@ from tests.fixtures.canonical_bank_fixture import (
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/icaap"
 SECTION = "executive_summary"
-AS_OF = "2025-12-31"
+AS_OF = date(2025, 12, 31)
 
 
 @pytest.fixture(autouse=True)
@@ -130,7 +131,7 @@ def test_a_preparer_can_write_commit_link_a_figure_and_see_readiness(
 ) -> None:
     cycle = _create_cycle(db_client, auth)
     cycle_id = cycle["id"]
-    assert cycle["as_of_date"] == AS_OF
+    assert cycle["as_of_date"] == AS_OF.isoformat()
     assert cycle["due_date"] == "2026-03-31"
     assert len(cycle["sections"]) == 17
 
