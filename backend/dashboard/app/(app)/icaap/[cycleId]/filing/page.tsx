@@ -10,21 +10,23 @@ import PageContainer from "@/components/ui/PageContainer";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useIcaapCycle } from "@/lib/api/icaap";
 import FilingWorkspace from "@/components/icaap/p3/FilingWorkspace";
+import { use } from "react";
 
 export default function IcaapFilingPage({
   params,
 }: {
-  params: { cycleId: string };
+  params: Promise<{ cycleId: string }>;
 }) {
+  const { cycleId } = use(params);
   const { bank } = useBankContext();
-  const cycleQuery = useIcaapCycle(bank?.id, params.cycleId);
+  const cycleQuery = useIcaapCycle(bank?.id, cycleId);
 
   return (
     <PageContainer className="py-6">
       {bank && (
         <FilingWorkspace
           bankId={bank.id}
-          cycleId={params.cycleId}
+          cycleId={cycleId}
           cycleKind={cycleQuery.data?.cycleKind ?? null}
           cycleTitle={cycleQuery.data?.title ?? ""}
         />

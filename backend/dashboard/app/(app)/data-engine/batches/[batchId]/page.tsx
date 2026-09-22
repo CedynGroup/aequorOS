@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Immutable detail of one ingestion batch: outcome, record gating counts,
@@ -6,16 +6,13 @@
  * preserved), and where the raw file and report landed in tiered storage.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import PageHeader from '@/components/ui/PageHeader';
-import EmptyState from '@/components/ui/EmptyState';
-import { ErrorPanel, PageSkeleton } from '@/components/ui/QueryBoundary';
-import { useBankContext } from '@/components/shell/BankContext';
-import { fmtLocale } from '@/lib/format';
-import {
-  useIngestionBatch,
-  useTranslationFailures,
-} from '@/lib/api/ingestion';
+import PageContainer from "@/components/ui/PageContainer";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import { ErrorPanel, PageSkeleton } from "@/components/ui/QueryBoundary";
+import { useBankContext } from "@/components/shell/BankContext";
+import { fmtLocale } from "@/lib/format";
+import { useIngestionBatch, useTranslationFailures } from "@/lib/api/ingestion";
 import {
   ArtifactPath,
   BatchStatusPill,
@@ -26,11 +23,12 @@ import {
   formatDateTime,
   referenceRowCounts,
   tablesBreakdown,
-} from '@/components/data-engine/shared';
+} from "@/components/data-engine/shared";
 import {
   WARNING_COUNTS_LEGEND,
   warningRuleHint,
-} from '@/components/data-engine/content';
+} from "@/components/data-engine/content";
+import { use } from "react";
 
 type ReportFailure = {
   rule: string;
@@ -42,17 +40,16 @@ type ReportFailure = {
 };
 
 const SEVERITY_TONE: Record<string, string> = {
-  BLOCKER: 'text-critical',
-  ERROR: 'text-critical',
-  WARNING: 'text-warning',
-  INFO: 'text-slate',
+  BLOCKER: "text-critical",
+  ERROR: "text-critical",
+  WARNING: "text-warning",
+  INFO: "text-slate",
 };
 
-export default function BatchDetailPage({
-  params,
-}: {
-  params: { batchId: string };
+export default function BatchDetailPage(props: {
+  params: Promise<{ batchId: string }>;
 }) {
+  const params = use(props.params);
   const { bank } = useBankContext();
   const batchQuery = useIngestionBatch(bank?.id, params.batchId);
   const failuresQuery = useTranslationFailures(bank?.id, params.batchId);
@@ -95,7 +92,7 @@ export default function BatchDetailPage({
   // by volume — mapped to actionable operator hints where we have one.
   const warningRules = new Set<string>([
     ...findings
-      .filter((finding) => finding.severity === 'WARNING')
+      .filter((finding) => finding.severity === "WARNING")
       .map((finding) => finding.rule),
     ...Object.keys(suppressed),
   ]);
@@ -112,14 +109,16 @@ export default function BatchDetailPage({
       <PageHeader
         eyebrow="Data Engine"
         breadcrumbs={[
-          { label: 'Data Engine', href: '/data-engine' },
-          { label: 'Batches', href: '/data-engine' },
+          { label: "Data Engine", href: "/data-engine" },
+          { label: "Batches", href: "/data-engine" },
           { label: batch.id.slice(0, 8) },
         ]}
         title={
           <span className="flex items-center gap-3">
-            Ingestion batch{' '}
-            <span className="font-mono text-h2 text-slate">{batch.id.slice(0, 13)}</span>
+            Ingestion batch{" "}
+            <span className="font-mono text-h2 text-slate">
+              {batch.id.slice(0, 13)}
+            </span>
             <BatchStatusPill status={batch.status} />
           </span>
         }
@@ -134,9 +133,9 @@ export default function BatchDetailPage({
         {warningHints.length > 0 && (
           <div className="card border-l-4 border-l-warning p-5 space-y-3">
             <p className="text-body font-medium text-navy">
-              {batch.recordsWarning.toLocaleString(fmtLocale())} rows carry data-quality
-              flags — they are in the canonical model and participate in calculations.
-              How to resolve the flags:
+              {batch.recordsWarning.toLocaleString(fmtLocale())} rows carry
+              data-quality flags — they are in the canonical model and
+              participate in calculations. How to resolve the flags:
             </p>
             {warningHints.map(({ rule, hint }) => (
               <div key={rule}>
@@ -147,14 +146,14 @@ export default function BatchDetailPage({
           </div>
         )}
 
-        {batch.status === 'rejected' && (
+        {batch.status === "rejected" && (
           <div className="card border-l-4 border-l-critical p-5 space-y-2">
             <p className="text-body font-medium text-critical">
               Batch rejected — nothing from this source was accepted
             </p>
             {(blockerDetails.length > 0
               ? blockerDetails
-              : ['A blocking validation failure rejected the batch.']
+              : ["A blocking validation failure rejected the batch."]
             ).map((detail, index) => (
               <p key={index} className="text-body text-navy/80">
                 {detail}
@@ -166,7 +165,7 @@ export default function BatchDetailPage({
         {batch.errorMessage && (
           <div className="card border-l-4 border-l-critical p-5">
             <p className="text-body font-medium text-navy">
-              {batch.errorCode ?? 'failure'}
+              {batch.errorCode ?? "failure"}
             </p>
             <p className="mt-1 text-body text-navy/80">{batch.errorMessage}</p>
           </div>
@@ -179,7 +178,7 @@ export default function BatchDetailPage({
               Every sheet / table the source contained and what the active
               mapping resolved it to.
               {unmatchedTables.length > 0 &&
-                ` ${unmatchedTables.length} table${unmatchedTables.length > 1 ? 's' : ''} matched no mapping and ${unmatchedTables.length > 1 ? 'were' : 'was'} skipped.`}
+                ` ${unmatchedTables.length} table${unmatchedTables.length > 1 ? "s" : ""} matched no mapping and ${unmatchedTables.length > 1 ? "were" : "was"} skipped.`}
             </p>
             <div className="mt-3">
               <TablesBreakdownTable tables={tables} />
@@ -215,7 +214,10 @@ export default function BatchDetailPage({
             dedicated storage buckets.
           </p>
           <ArtifactPath label="Raw source" path={batch.rawArtifactPath} />
-          <ArtifactPath label="Validation report" path={batch.reportArtifactPath} />
+          <ArtifactPath
+            label="Validation report"
+            path={batch.reportArtifactPath}
+          />
           {batch.contentHash && (
             <ArtifactPath label="Content SHA-256" path={batch.contentHash} />
           )}
@@ -225,10 +227,10 @@ export default function BatchDetailPage({
           <h2 className="text-h2 text-navy">Validation findings</h2>
           {Object.keys(suppressed).length > 0 && (
             <p className="text-caption text-slate">
-              Large batch:{' '}
+              Large batch:{" "}
               {Object.entries(suppressed)
                 .map(([rule, count]) => `${count} further ${rule} findings`)
-                .join(', ')}{' '}
+                .join(", ")}{" "}
               are counted in the totals above but not listed individually.
             </p>
           )}
@@ -242,7 +244,7 @@ export default function BatchDetailPage({
               {findings.map((finding, index) => (
                 <div key={index} className="px-5 py-3 flex items-start gap-4">
                   <span
-                    className={`shrink-0 w-20 text-caption font-medium ${SEVERITY_TONE[finding.severity] ?? 'text-slate'}`}
+                    className={`shrink-0 w-20 text-caption font-medium ${SEVERITY_TONE[finding.severity] ?? "text-slate"}`}
                   >
                     {finding.severity}
                   </span>
@@ -250,8 +252,12 @@ export default function BatchDetailPage({
                     <p className="text-body text-navy">{finding.detail}</p>
                     <p className="mt-0.5 text-caption font-mono text-slate truncate">
                       {finding.rule}
-                      {finding.source_reference ? ` · ${finding.source_reference}` : ''}
-                      {finding.source_locator ? ` · ${finding.source_locator}` : ''}
+                      {finding.source_reference
+                        ? ` · ${finding.source_reference}`
+                        : ""}
+                      {finding.source_locator
+                        ? ` · ${finding.source_locator}`
+                        : ""}
                     </p>
                   </div>
                 </div>
@@ -278,7 +284,9 @@ export default function BatchDetailPage({
                       {failure.sourceLocator}
                     </span>
                   </div>
-                  <p className="mt-1 text-body text-navy">{failure.errorMessage}</p>
+                  <p className="mt-1 text-body text-navy">
+                    {failure.errorMessage}
+                  </p>
                   <pre className="mt-2 rounded bg-surface px-3 py-2 text-caption font-mono text-slate overflow-x-auto">
                     {JSON.stringify(failure.rawRecord)}
                   </pre>

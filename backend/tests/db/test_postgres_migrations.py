@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from sqlalchemy.engine import Engine, make_url
 from alembic import command
 from app.core.config import get_settings
 from app.db.session import get_engine
+from app.services.ai import observability
 from tests.api.helpers import ORG_1, ORG_2
 
 
@@ -170,6 +172,29 @@ def alembic_config_for_app() -> Config:
 def clear_database_caches() -> None:
     get_settings.cache_clear()
     get_engine.cache_clear()
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_migrations_preserve_application_warning_logs(
+    migrated_postgres_schema: MigratedPostgresSchema,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """In-process migrations must not silence an already imported application logger."""
+    caplog.set_level(logging.WARNING, logger="app.ai")
+    observability.log_cache_miss_if_cold(
+        cache_read_input_tokens=0,
+        feature="icaap_drafting",
+        prompt_version="icaap-draft-v1",
+    )
+    assert any(
+        record.name == "app.ai"
+        and record.levelno == logging.WARNING
+        and record.getMessage() == observability.EVENT_CACHE_MISS
+        for record in caplog.records
+    )
 
 
 def test_reconciliation_migration_targets_the_regulatory_parameter_control_plane() -> None:

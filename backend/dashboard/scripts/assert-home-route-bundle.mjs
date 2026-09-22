@@ -4,21 +4,44 @@ import { resolve } from "node:path";
 
 const dashboardRoot = resolve(import.meta.dirname, "..");
 const distDir = resolve(dashboardRoot, process.env.NEXT_DIST_DIR || ".next");
-const manifestPath = resolve(distDir, "app-build-manifest.json");
-const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-const homeEntryNames = ["/(app)/page", "/(app)/layout", "/layout"];
-const missingHomeEntries = homeEntryNames.filter(
-  (entryName) => !Array.isArray(manifest.pages?.[entryName]),
+const routeDir = resolve(distDir, "server/app/(app)/page");
+const clientManifestPath = resolve(
+  distDir,
+  "server/app/(app)/page_client-reference-manifest.js",
+);
+const clientManifestSource = readFileSync(clientManifestPath, "utf8").trim();
+const assignmentPrefix = 'globalThis.__RSC_MANIFEST["/(app)/page"] = ';
+const assignmentStart = clientManifestSource.indexOf(assignmentPrefix);
+if (assignmentStart < 0 || !clientManifestSource.endsWith(";")) {
+  throw new Error(
+    `Could not read the Command Center client reference manifest at ${clientManifestPath}`,
+  );
+}
+const clientManifest = JSON.parse(
+  clientManifestSource.slice(assignmentStart + assignmentPrefix.length, -1),
+);
+const homeEntrySuffixes = [
+  "/backend/dashboard/app/layout",
+  "/backend/dashboard/app/(app)/layout",
+  "/backend/dashboard/app/(app)/page",
+];
+const homeEntries = homeEntrySuffixes.map((suffix) =>
+  Object.entries(clientManifest.entryJSFiles).find(([entryName]) =>
+    entryName.endsWith(suffix),
+  ),
+);
+const missingHomeEntries = homeEntrySuffixes.filter(
+  (_, index) => !homeEntries[index],
 );
 
 if (missingHomeEntries.length > 0) {
   throw new Error(
-    `Could not find the Command Center entry graph entries (${missingHomeEntries.join(", ")}) in ${manifestPath}`,
+    `Could not find the Command Center entry graph entries (${missingHomeEntries.join(", ")}) in ${clientManifestPath}`,
   );
 }
 
 const initialJavaScript = [
-  ...new Set(homeEntryNames.flatMap((entryName) => manifest.pages[entryName])),
+  ...new Set(homeEntries.flatMap((entry) => entry[1])),
 ].filter((file) => file.endsWith(".js"));
 const offendingChunks = [];
 const offendingEditorChunks = [];
@@ -57,16 +80,13 @@ if (offendingEditorChunks.length > 0) {
     "Command Center initial entry graph contains the ICAAP editor's " +
       `ProseMirror runtime: ${offendingEditorChunks.join(", ")}. Tiptap must be ` +
       "reached only through components/icaap/SectionEditorLoader.tsx, which " +
-      'imports it with dynamic(..., { ssr: false }).',
+      "imports it with dynamic(..., { ssr: false }).",
   );
 }
 
-const loadableManifestPath = resolve(distDir, "react-loadable-manifest.json");
+const loadableManifestPath = resolve(routeDir, "react-loadable-manifest.json");
 const loadableManifest = JSON.parse(readFileSync(loadableManifestPath, "utf8"));
-const ratioChartEntries = Object.entries(loadableManifest).filter(
-  ([moduleName]) =>
-    moduleName.endsWith("DeferredRatioTrendChart.tsx -> ./RatioTrendChart"),
-);
+const ratioChartEntries = Object.values(loadableManifest);
 
 if (ratioChartEntries.length !== 1) {
   throw new Error(
@@ -74,7 +94,7 @@ if (ratioChartEntries.length !== 1) {
   );
 }
 
-const deferredChartChunks = ratioChartEntries[0][1].files.filter((file) =>
+const deferredChartChunks = ratioChartEntries[0].files.filter((file) =>
   file.endsWith(".js"),
 );
 const deferredChunkHasRecharts = deferredChartChunks.some((chunk) =>
@@ -90,17 +110,26 @@ if (!deferredChunkHasRecharts) {
 // The positive half of the editor rule: prove the deferred chunk EXISTS and
 // carries the runtime, so the negative check above cannot pass vacuously (for
 // example because the editor was deleted, or its import path changed).
-const editorEntries = Object.entries(loadableManifest).filter(([moduleName]) =>
-  moduleName.endsWith("SectionEditorLoader.tsx -> ./editor/SectionEditor"),
+const editorRouteDir = resolve(
+  distDir,
+  "server/app/(app)/icaap/[cycleId]/sections/[sectionKey]/page",
 );
+const editorLoadableManifestPath = resolve(
+  editorRouteDir,
+  "react-loadable-manifest.json",
+);
+const editorLoadableManifest = JSON.parse(
+  readFileSync(editorLoadableManifestPath, "utf8"),
+);
+const editorEntries = Object.values(editorLoadableManifest);
 
 if (editorEntries.length !== 1) {
   throw new Error(
-    `Expected one deferred ICAAP SectionEditor entry in ${loadableManifestPath}; found ${editorEntries.length}`,
+    `Expected one deferred ICAAP SectionEditor entry in ${editorLoadableManifestPath}; found ${editorEntries.length}`,
   );
 }
 
-const deferredEditorChunks = editorEntries[0][1].files.filter((file) =>
+const deferredEditorChunks = editorEntries[0].files.filter((file) =>
   file.endsWith(".js"),
 );
 const deferredEditorHasProseMirror = deferredEditorChunks.some((chunk) => {

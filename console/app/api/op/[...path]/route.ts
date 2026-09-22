@@ -16,24 +16,29 @@
  * backend routes.
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
-import { operatorApiUrl, readSession, sessionBearer } from '@/lib/server-auth';
+import { NextResponse, type NextRequest } from "next/server";
+import { operatorApiUrl, readSession, sessionBearer } from "@/lib/server-auth";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 async function forward(req: NextRequest, path: string[]) {
-  const joined = path.join('/');
-  if (!joined.startsWith('operator/')) {
+  const joined = path.join("/");
+  if (!joined.startsWith("operator/")) {
     return NextResponse.json(
-      { error: { code: 'not_proxied', message: 'Only /operator paths are proxied.' } },
+      {
+        error: {
+          code: "not_proxied",
+          message: "Only /operator paths are proxied.",
+        },
+      },
       { status: 404 },
     );
   }
 
   const target = `${operatorApiUrl()}/${joined}${req.nextUrl.search}`;
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: "application/json" };
 
-  const incomingAuth = req.headers.get('authorization');
+  const incomingAuth = req.headers.get("authorization");
   const session = readSession(req);
   const bearer = session ? sessionBearer(session) : null;
   if (incomingAuth) {
@@ -44,22 +49,25 @@ async function forward(req: NextRequest, path: string[]) {
     headers.Authorization = `Bearer ${bearer}`;
   }
 
-  const contentType = req.headers.get('content-type');
-  if (contentType) headers['Content-Type'] = contentType;
+  const contentType = req.headers.get("content-type");
+  if (contentType) headers["Content-Type"] = contentType;
 
   let upstream: Response;
   try {
     upstream = await fetch(target, {
       method: req.method,
       headers,
-      body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text(),
-      cache: 'no-store',
+      body:
+        req.method === "GET" || req.method === "HEAD"
+          ? undefined
+          : await req.text(),
+      cache: "no-store",
     });
   } catch {
     return NextResponse.json(
       {
         error: {
-          code: 'operator_api_unreachable',
+          code: "operator_api_unreachable",
           message: `The console could not reach the operator API at ${operatorApiUrl()}.`,
         },
       },
@@ -69,34 +77,50 @@ async function forward(req: NextRequest, path: string[]) {
 
   const body = await upstream.arrayBuffer();
   const responseHeaders: Record<string, string> = {
-    'Content-Type': upstream.headers.get('content-type') ?? 'application/json',
+    "Content-Type": upstream.headers.get("content-type") ?? "application/json",
   };
-  const contentDisposition = upstream.headers.get('content-disposition');
-  if (contentDisposition) responseHeaders['Content-Disposition'] = contentDisposition;
-  const cacheControl = upstream.headers.get('cache-control');
-  if (cacheControl) responseHeaders['Cache-Control'] = cacheControl;
+  const contentDisposition = upstream.headers.get("content-disposition");
+  if (contentDisposition)
+    responseHeaders["Content-Disposition"] = contentDisposition;
+  const cacheControl = upstream.headers.get("cache-control");
+  if (cacheControl) responseHeaders["Cache-Control"] = cacheControl;
   return new NextResponse(body, {
     status: upstream.status,
     headers: responseHeaders,
   });
 }
 
-export async function GET(req: NextRequest, ctx: { params: { path: string[] } }) {
-  return forward(req, ctx.params.path);
+export async function GET(
+  req: NextRequest,
+  ctx: { params: Promise<{ path: string[] }> },
+) {
+  return forward(req, (await ctx.params).path);
 }
 
-export async function POST(req: NextRequest, ctx: { params: { path: string[] } }) {
-  return forward(req, ctx.params.path);
+export async function POST(
+  req: NextRequest,
+  ctx: { params: Promise<{ path: string[] }> },
+) {
+  return forward(req, (await ctx.params).path);
 }
 
-export async function PUT(req: NextRequest, ctx: { params: { path: string[] } }) {
-  return forward(req, ctx.params.path);
+export async function PUT(
+  req: NextRequest,
+  ctx: { params: Promise<{ path: string[] }> },
+) {
+  return forward(req, (await ctx.params).path);
 }
 
-export async function PATCH(req: NextRequest, ctx: { params: { path: string[] } }) {
-  return forward(req, ctx.params.path);
+export async function PATCH(
+  req: NextRequest,
+  ctx: { params: Promise<{ path: string[] }> },
+) {
+  return forward(req, (await ctx.params).path);
 }
 
-export async function DELETE(req: NextRequest, ctx: { params: { path: string[] } }) {
-  return forward(req, ctx.params.path);
+export async function DELETE(
+  req: NextRequest,
+  ctx: { params: Promise<{ path: string[] }> },
+) {
+  return forward(req, (await ctx.params).path);
 }

@@ -127,7 +127,10 @@ def test_seed_is_idempotent_and_its_downgrade_removes_only_its_own_rows(
     with migrated_postgres_schema.app_engine.begin() as connection:
         surviving = set(
             connection.scalars(
-                text("SELECT param_code FROM regulatory_parameter WHERE param_code = ANY(:codes)"),
+                text(
+                    "SELECT param_code FROM regulatory_parameter "
+                    "WHERE param_code = ANY(:codes) AND jurisdiction_code = 'GH'"
+                ),
                 {"codes": sorted(ICAAP_PARAM_CODES)},
             )
         )

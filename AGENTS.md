@@ -447,8 +447,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   through the last month end on or before today. Before these gates, `frontend/` and `console/` were in no
   workflow and the dashboard's fail-open guard, SSRF egress guard, and browser journeys
   were unenforced. Each workflow's header comment is its gate inventory — keep it accurate.
-  `console` is deliberately NOT lint-gated (no ESLint dependency or config in that
-  workspace); see ARCHITECTURE.md §8. Which Postgres job owns which test suites is
+  For console checks and CI coverage, see [ARCHITECTURE.md §8](ARCHITECTURE.md#8-validation-commands).
+  Which Postgres job owns which test suites is
   defined by the `risk-service:test-postgres-*` task comments in `backend/mise.toml`
   and pinned by `tests/architecture/test_ci_task_wiring.py`.
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the

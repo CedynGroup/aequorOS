@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 
 /** A cycle URL with no tab lands on the readiness overview. */
-export default function IcaapCycleIndex({
+export default async function IcaapCycleIndex({
   params,
 }: {
-  params: { cycleId: string };
+  params: Promise<{ cycleId: string }>;
 }) {
-  redirect(`/icaap/${params.cycleId}/overview`);
+  const { cycleId } = await params;
+  redirect(`/icaap/${cycleId}/overview`);
 }

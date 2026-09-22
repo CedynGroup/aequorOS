@@ -82,6 +82,10 @@ LAYOUTS: Final[tuple[Layout, ...]] = (
 _MUTATION_METHODS: Final = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _CATALOGUE_VALUES: Final[Mapping[str, str]] = {
     "channel": "email",
+    "section_key": "executive_summary",
+    "item_id": "050a",
+    "seq": "1",
+    "version_no": "1",
     "curve_name": "AEQ.GHS.OIS",
     "model": "nmd-duration",
     "module": "liquidity",
@@ -367,6 +371,11 @@ def _route_references(route: APIRoute) -> tuple[list[Reference], type[BaseModel]
     for parameter in route.dependant.path_params:
         name = parameter.name
         if name == "bank_id" or not name.endswith("_id"):
+            continue
+        # Framework checklist keys are catalogue strings, not tenant object IDs.
+        if name == "item_id" and route.path.endswith(
+            "/sections/{section_key}/requirements/{item_id}"
+        ):
             continue
         kind = path_parameter_kind(route.path, name)
         references.append(Reference("path", name, kind or f"unknown:{name}"))

@@ -57,6 +57,11 @@ export const E2E_USERS: Record<
     roles: ["viewer"],
     authv: 2,
   },
+  fx_member: {
+    id: "eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed",
+    roles: ["viewer"],
+    authv: 2,
+  },
   grant_member: {
     id: "eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5",
     roles: ["viewer"],
@@ -103,7 +108,7 @@ export const E2E_USERS: Record<
   // authority, which is the point — the ICAAP filing surface has to give them
   // a signature they could not give through `/submissions`.
   board: {
-    id: "eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef",
+    id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
     roles: ["viewer"],
     authv: 3,
   },
@@ -112,7 +117,7 @@ export const E2E_USERS: Record<
   // grants on top of baseline membership: the organization-wide read sentence
   // and the Regulatory Reporting / restricted `submit` sentence.
   validator: {
-    id: "eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed",
+    id: "eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef",
     roles: ["viewer"],
     authv: 4,
   },

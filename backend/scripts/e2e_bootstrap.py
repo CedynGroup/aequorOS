@@ -93,12 +93,13 @@ E2E_USERS = {
     "liquidity_viewer": UUID("eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9"),
     "liquidity_aggregated_viewer": UUID("eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea"),
     "macro_viewer": UUID("eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec"),
+    "fx_member": UUID("eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed"),
     "invite_fresh": UUID("eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb"),
     # A board member: Capital/confidential APPROVER on the sample bank and
     # nothing else. Deliberately holds NO Regulatory Reporting access, because
     # that is the real shape of the person — the ICAAP filing surface has to
     # give them a signature they could not otherwise give.
-    "board": UUID("eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef"),
+    "board": UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"),
     # The officer who transmits a return to the regulator, and only that.
     # Filing stopped sharing the approver's permission on 2026-09-20
     # (docs/filing_workflow_redesign.md §6 step 1): a Validator holds an exact
@@ -106,7 +107,7 @@ E2E_USERS = {
     # so they can open the return they are being asked to file. Deliberately
     # NOT the `approver` fixture — one identity that both approves and files is
     # the defect the split closed, and the tenant grant surface blocks it.
-    "validator": UUID("eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed"),
+    "validator": UUID("eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef"),
 }
 
 #: The governed date from which an ICAAP report may be filed.
@@ -161,6 +162,7 @@ def main() -> None:
                         if role
                         in {
                             "grant_member",
+                            "fx_member",
                             "account_admin",
                             "legacy_account_admin",
                             "integration_admin",
@@ -485,8 +487,7 @@ def _govern_icaap_commencement(session: Session) -> None:
         }
     session.flush()
     print(
-        f"governed {FIRST_AS_OF_PARAM} to {E2E_ICAAP_FIRST_AS_OF.isoformat()} "
-        f"({len(rows)} row(s))"
+        f"governed {FIRST_AS_OF_PARAM} to {E2E_ICAAP_FIRST_AS_OF.isoformat()} ({len(rows)} row(s))"
     )
 
 
