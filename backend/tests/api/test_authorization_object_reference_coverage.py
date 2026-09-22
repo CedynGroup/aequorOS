@@ -297,3 +297,30 @@ def test_home_icaap_and_filing_routes_are_reachable(coverage: Coverage, kind: st
     )
     assert response.status_code == 200, response.text
     assert coverage.home[kind] in response.text
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/api/v1/authorization/access-requests/{request_id}/approve",
+        "/api/v1/auth/sso/access-requests/{user_id}/approve",
+        "/api/v1/auth/sso/access-requests/{user_id}/reject",
+    ),
+)
+def test_access_request_cross_organization_is_not_found(coverage: Coverage, path: str) -> None:
+    route = next(route for route in _ROUTES if route.path == path and route.method == "POST")
+    built = foreign_request(
+        route,
+        coverage.document,
+        "cross_organization",
+        home=coverage.home,
+        owner=coverage.other_org,
+    )
+    assert built is not None
+    request, _requested = built
+    if route.body_model is not None:
+        route.body_model.model_validate(request.body)
+    before = coverage._digests()
+    response = coverage._send(route, request)
+    assert response.status_code == 404, response.text
+    assert coverage._digests() == before

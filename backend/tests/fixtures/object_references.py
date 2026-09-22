@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import InstitutionScope, ModuleScope, RoleBundle, SensitivityScope
 from app.models import (
+    AuthorizationAccessRequest,
     AuthorizationBinding,
     Bank,
     BankFinancialFact,
@@ -1040,6 +1041,25 @@ def _access_request(session: Session, tenant: TenantSeed, _objects: ObjectSet) -
     )
 
 
+def _authorization_access_request(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        AuthorizationAccessRequest(
+            organization_id=tenant.organization_id,
+            requester_user_id=tenant.maker_id,
+            institution_id=tenant.bank_id,
+            route="/liquidity",
+            page_title="Liquidity",
+            module_scope=ModuleScope.LIQUIDITY.value,
+            sensitivity_scope=SensitivityScope.AGGREGATED.value,
+            permission="view",
+            reason_category="role_change",
+            reason_detail=tenant.marker,
+            status="pending",
+        ),
+    )
+
+
 def _bank(_session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return tenant.bank_id
 
@@ -1523,6 +1543,12 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         bank_scoped=False,
     ),
     ObjectKind(
+        "authorization_access_request",
+        _authorization_access_request,
+        ("/api/v1/authorization/access-requests/{request_id}",),
+        bank_scoped=False,
+    ),
+    ObjectKind(
         "access_request",
         _access_request,
         ("/api/v1/auth/sso/access-requests/{user_id}",),
@@ -1657,6 +1683,7 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "integration_key": IntegrationKey,
     "binding": AuthorizationBinding,
     "access_request": User,
+    "authorization_access_request": AuthorizationAccessRequest,
 }
 
 #: Body and query identifier fields, resolved by the most specific route path
