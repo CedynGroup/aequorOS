@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -1200,6 +1201,7 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
     request names no institution and approval must preserve that scope; a
     temporary cover request carries its own expiry through to the binding."""
 
+    expiry = datetime.now(UTC) + timedelta(days=30)
     member_headers = headers(user_id=GRANTEE, roles=("viewer",), authorization_version=1)
     payload = {
         "route": "/institution",
@@ -1208,7 +1210,7 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
         "permission": "view",
         "reason_category": "temporary_cover",
         "reason_detail": "Covering the registers desk during leave",
-        "valid_until": "2026-10-19T09:00:00+00:00",
+        "valid_until": expiry.isoformat(),
     }
 
     institution_named = grant_client.post(
@@ -1240,7 +1242,7 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
     assert body["institution_scope"] == "organization"
     assert body["institution_id"] is None
     assert body["institution_name"] is None
-    assert body["valid_until"].startswith("2026-10-19T09:00:00")
+    assert datetime.fromisoformat(body["valid_until"]).replace(tzinfo=UTC) == expiry
     duplicate = grant_client.post(
         "/api/v1/authorization/access-requests",
         headers=member_headers,
@@ -1287,7 +1289,7 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
     assert binding["institution_id"] is None
     assert binding["module_scope"] == "account"
     assert binding["sensitivity_scope"] == "restricted"
-    assert binding["valid_until"].startswith("2026-10-19T09:00:00")
+    assert datetime.fromisoformat(binding["valid_until"]).replace(tzinfo=UTC) == expiry
 
     with _session() as db:
         user = db.get(User, GRANTEE)
