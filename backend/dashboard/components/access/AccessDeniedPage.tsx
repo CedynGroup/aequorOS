@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LockKeyhole } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
-import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import {
   GrantReasonFields,
   reasonDraftComplete,
@@ -13,7 +12,14 @@ import {
 } from "@/components/access/GrantReasonFields";
 import { authorizationApi, normalizeApiError } from "@/lib/api/client";
 import { fmtLocale } from "@/lib/format";
-import type { AccessDeniedRoute, AccessRequirement } from "@/lib/modules";
+import {
+  accessRequestRequirements,
+  type AccessDeniedRoute,
+  type AccessRequirement,
+} from "@/lib/modules";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { useBanks } from "@/lib/api/hooks";
 
 const initialReason: GrantReasonDraft = {
   reasonCategory: "role_change",
@@ -45,6 +51,9 @@ export default function AccessDeniedPage({
   route: string;
 }) {
   const queryClient = useQueryClient();
+  const { bank } = useBankContext();
+  const { effectiveAuthority } = useUserProfile();
+  const banks = useBanks();
   // Account Administration is evaluated organization-wide, so its requests
   // target the organization itself rather than one institution.
   const organizationScoped = denied.requirements.every(
@@ -66,7 +75,20 @@ export default function AccessDeniedPage({
   const institutionOptions = institutions.data?.institutions ?? [];
   const targetInstitution = organizationScoped
     ? null
-    : institutionId || institutionOptions[0]?.id || "";
+    : institutionId || bank?.id || institutionOptions[0]?.id || "";
+  const targetBank = banks.data?.banks.find(
+    (entry) => entry.id === targetInstitution,
+  );
+  const capabilities = organizationScoped
+    ? (effectiveAuthority?.organizationCapabilities ?? [])
+    : (effectiveAuthority?.institutionCapabilities.find(
+        (entry) => entry.institutionId === targetInstitution,
+      )?.capabilities ?? []);
+  const requirements = accessRequestRequirements(
+    route,
+    capabilities,
+    targetBank?.institutionTypeDetail?.institutionClass ?? null,
+  );
   const pending = useMemo(
     () =>
       requests.data?.requests.filter(
@@ -74,17 +96,19 @@ export default function AccessDeniedPage({
           request.status === "pending" &&
           request.route === route &&
           (request.institutionId ?? null) === targetInstitution &&
-          denied.requirements.some((required) => matches(request, required)),
+          requirements.some((required) => matches(request, required)),
       ) ?? [],
-    [denied.requirements, requests.data?.requests, route, targetInstitution],
+    [requirements, requests.data?.requests, route, targetInstitution],
   );
-  const allRequirementsPending = denied.requirements.every((required) =>
-    pending.some((request) => matches(request, required)),
-  );
+  const allRequirementsPending =
+    requirements.length > 0 &&
+    requirements.every((required) =>
+      pending.some((request) => matches(request, required)),
+    );
   const create = useMutation({
     mutationFn: async () =>
       Promise.all(
-        denied.requirements.map((required) =>
+        requirements.map((required) =>
           authorizationApi.createAuthorizationAccessRequest({
             accessRequestCreate: {
               route,
@@ -113,7 +137,8 @@ export default function AccessDeniedPage({
   });
 
   const targetReady = organizationScoped || Boolean(targetInstitution);
-  const complete = targetReady && reasonDraftComplete(reason);
+  const complete =
+    targetReady && requirements.length > 0 && reasonDraftComplete(reason);
 
   return (
     <>
@@ -133,23 +158,21 @@ export default function AccessDeniedPage({
                 </p>
               </div>
             </div>
-            <DisabledWithReason reason={denied.reason}>
-              <div className="rounded-md border border-border-light bg-surface p-4">
-                <p className="text-caption font-medium text-navy">
-                  Required permission{denied.requirements.length > 1 ? "s" : ""}
-                </p>
-                <ul className="mt-2 space-y-1 text-body text-navy">
-                  {denied.requirements.map((required) => (
-                    <li
-                      key={`${required.moduleScope}-${required.sensitivityScope}`}
-                    >
-                      {required.moduleLabel} · {required.sensitivityLabel} ·{" "}
-                      {required.permissionLabel}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </DisabledWithReason>
+            <div className="rounded-md border border-border-light bg-surface p-4">
+              <p className="text-caption font-medium text-navy">
+                Required permission{requirements.length > 1 ? "s" : ""}
+              </p>
+              <ul className="mt-2 space-y-1 text-body text-navy">
+                {requirements.map((required) => (
+                  <li
+                    key={`${required.moduleScope}-${required.sensitivityScope}`}
+                  >
+                    {required.moduleLabel} · {required.sensitivityLabel} ·{" "}
+                    {required.permissionLabel}
+                  </li>
+                ))}
+              </ul>
+            </div>
             <p className="text-body text-slate">
               An organization owner or admin can grant this access.
             </p>
@@ -179,7 +202,11 @@ export default function AccessDeniedPage({
                     </select>
                   </label>
                 )}
-                {allRequirementsPending ? (
+                {requirements.length === 0 ? (
+                  <p role="status" className="text-body text-slate">
+                    No additional permissions are required for this institution.
+                  </p>
+                ) : allRequirementsPending ? (
                   <p
                     role="status"
                     className="rounded-md bg-action-light px-4 py-3 text-body text-navy"
@@ -221,7 +248,11 @@ export default function AccessDeniedPage({
             ) : (
               <button
                 type="button"
-                disabled={institutions.isLoading || !targetReady}
+                disabled={
+                  institutions.isLoading ||
+                  !targetReady ||
+                  requirements.length === 0
+                }
                 onClick={() => setFormOpen(true)}
                 className="btn-primary w-fit px-4 py-2.5 text-body font-medium disabled:opacity-50"
               >
