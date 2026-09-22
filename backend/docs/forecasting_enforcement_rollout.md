@@ -69,13 +69,20 @@ regulatory-parameter control plane and its own cutover.
 ## Dashboard controls
 
 `/forecasting` (Balance Sheet) and `/forecasting/assumptions` require
-aggregated view; `/forecasting/nii`, `/forecasting/scenario`,
-`/forecasting/whatif`, `/forecasting/reverse-stress`, and
-`/forecasting/optimizer` require confidential view because each is built on
-full run detail. A tab the user cannot open stays visible in the module tab
-strip, disabled, with the exact grant sentence; a workspace deep link renders the disabled Forecasting shell and
-issues no Forecasting request. An aggregated-only reader on the Balance Sheet
-sees the live baseline and the run index but never requests a run's detail.
+aggregated view. Scenarios and Reverse Stress require confidential view; NII,
+Optimizer, and What-if require both aggregated and confidential view because
+they read a run index before opening full results.
+
+A missing view grant leaves the workspace and its navigation visible but
+disabled. Direct workspace links preserve the console shell and explain the
+missing Forecasting view permission in a hover/focus tooltip, directing the
+member to an Org Owner via Settings → Members. This includes unbound members
+and account-only administrators with no institution authority. The disabled
+workspace does not mount data consumers or issue Forecasting API requests;
+missing aggregated view is never presented as an empty run history.
+Structural exclusions, unknown routes, and unauthorized object details retain
+404 responses. An aggregated-only reader on the Balance Sheet sees the live
+baseline and run index but never requests a run's detail.
 
 Every execution control — **Run forecast**, the scenario designer's run action,
 **Run optimizer**, the what-if **Run** control, and **Run reverse stress** —
@@ -94,7 +101,7 @@ to grant it."
 Basel → Planning requests the forecast run index only with aggregated view and
 a run's path only with confidential view; the Command Center pulse wall and its
 prior-close ladder request Forecasting data only when `/forecasting` is
-visible to the user.
+enabled for the user.
 
 ## Deny-impact inventory
 
@@ -210,5 +217,3 @@ Attach all of the following before deployment:
 6. browser evidence for an unbound user, an aggregated-view reader, a
    confidential-view reader with every run control disabled, and an exactly
    Forecasting-bound analyst with the run actions enabled.
-
-NII, Optimizer, and What-if require both aggregated and confidential Forecasting view. Missing either grant disables their workspace and navigation with an Org Owner / Settings → Members tooltip, without mounting data consumers. Unknown paths and unauthorized object details retain 404 responses.

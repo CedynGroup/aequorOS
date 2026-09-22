@@ -1,6 +1,6 @@
-import ModuleTabs from '@/components/shell/ModuleTabs';
+import ModuleTabs from "@/components/shell/ModuleTabs";
 
-import { forecastingTabs } from '@/components/forecasting/tabs';
+import { forecastingTabs } from "@/components/forecasting/tabs";
 
 export default function ForecastingLayout({
   children,
