@@ -920,16 +920,8 @@ export const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Where a hub URL should send a user it is hidden from, or null to 404.
- *
- * Hub URLs are destinations people type or are sent to rather than deep links
- * into someone else's data, so a hidden one redirects instead of 404ing:
- *   - `/`         → the first visible surface (`landingPathFor`);
- *   - `/settings` → personal settings, which every active session can open,
- *                   when organization settings need authority the user lacks.
- * Baseline-only members get the shell-based denial page on the explicit
- * public-route allow-list; structural exclusions and hidden object-specific
- * paths stay not-found (docs/rbac.md §8.2).
+ * The root landing router redirects to the first visible surface when needed.
+ * Public-route denials and object-existence protection follow docs/rbac.md §8.2.
  */
 export function hubRedirectFor(
   pathname: string,

@@ -31,8 +31,8 @@
 > references remain hidden.
 
 This document specifies how AequorOS grants access to bank users, what each user
-type can see and do, how the three settings surfaces (personal / org-admin /
-vendor-platform) are structured, and how banks invite and onboard their people.
+type can see and do, how personal settings, Access, and the staff console are
+structured, and how banks invite and onboard their people.
 It is written to be **built incrementally on the auth layer that already exists**
 (JWT sessions, `organization_id` RLS, the remaining operational
 `approver > analyst > examiner > viewer` hierarchy, explicit account-admin
@@ -52,7 +52,7 @@ Read [§2](#2-current-state--target) first (what exists vs what to build), then 
 building:
 
 - Building the **role-aware dashboards** → [§5 personas](#5-personas--roles--what-they-need), [§9 per-persona dashboards](#9-per-persona-dashboards-what-to-build), [§8 enforcement](#8-enforcement-architecture).
-- Building **settings** → [§10 three-tier settings](#10-settings-architecture-three-tiers), [§12 UI specs](#12-user-menu--ui-specs).
+- Building **settings** → [§10 Settings and Access](#10-settings-and-access-architecture), [§12 UI specs](#12-user-menu--ui-specs).
 - Building **invite / onboarding** → [§11 lifecycle & onboarding](#11-user-lifecycle--onboarding).
 - Need the **data model / API** → [§13](#13-data-model), [§14](#14-target-api-surface).
 - Sequencing the work → [§15 roadmap](#15-phased-roadmap).
@@ -235,8 +235,8 @@ This is the answer to "who gets access, at what level, and for what." Posture:
 | 17  | **ALCO Secretary / pack compiler**  | 1/2            | Assembles the committee pack from unit-owned sections; chases section sign-offs; records decisions & action items; circulates pre-meeting. Usually treasury middle office or Finance (confirm with practitioner) | all module outputs (V), PACK                   | I (compile) + V                 | Analyst (PACK) + `pack:compile`, `pack:publish`, `committee:record`              |
 | 18  | **Credit contributor**              | 1              | Contributes the credit section (loan book, NPLs, concentrations narrative) to the monthly committee pack; **not a treasury user** — touches nothing else                                                         | PACK (own section), LE outputs (V)             | I (own section only)            | Analyst scoped to owned pack section                                             |
 | 19  | **Operations contributor**          | 1              | Contributes the op-risk incidents section monthly; **not a treasury user** — the narrowest access pattern in the product                                                                                         | PACK (own section)                             | I (own section only)            | Analyst scoped to owned pack section                                             |
-| —   | **Org Admin**                       | —              | Manages the bank's users, roles, SSO/SCIM, org settings, audit — **no operational approve/run**                                                                                                                  | Settings only                                  | admin                           | Org Admin                                                                        |
-| —   | **Org Owner**                       | —              | The bank's account owner: Org Admin + billing + ownership transfer                                                                                                                                               | Settings + billing                             | admin+                          | Org Owner                                                                        |
+| —   | **Org Admin**                       | —              | Manages the bank's users, roles, SSO/SCIM, org settings, audit — **no operational approve/run**                                                                                                                  | Access administration                                  | admin                           | Org Admin                                                                        |
+| —   | **Org Owner**                       | —              | The bank's account owner: Org Admin + billing + ownership transfer                                                                                                                                               | Access + billing                             | admin+                          | Org Owner                                                                        |
 
 **Reading it for dashboards:** persona → role preset → [§9](#9-per-persona-dashboards-what-to-build) tells you the landing page, visible nav, and allowed actions to render.
 
@@ -581,9 +581,7 @@ A member who saves a grant for themselves is told their session ended and sent
 to sign in again (`/login?reason=access_changed`); a session an administrator
 ended says so too (`reason=session_ended`).
 Query caches are partitioned by tenant, actor, `authv`, and institution.
-Personal profile self-service remains available to an active user without Account
-administration authority; organization settings require organization-wide
-Account administration.
+For Settings and Access tab visibility, see [§10](#10-settings-and-access-architecture).
 
 For members whose only authority is [baseline membership](../backend/docs/authorization_foundation.md#baseline-membership),
 `/` renders the shell and "No authorized institutions yet" workspace. The complete
@@ -640,12 +638,12 @@ role-gate the surface, don't fork the app.
 
 | Role preset                  | Visible nav (modules)                                                       | Allowed actions                                                           | Hidden / disabled                                      |
 | ---------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **Treasurer**                | Command Center, LIQ, FCST, FTP, IRRBB, FX, CAP(view), Risk, Alerts, Reports | approve runs/exceptions, view all, mint official runs (with tier), export | Data Engine writes, Settings admin, reg submit         |
-| **ALM Manager**              | Command Center, FCST, IRRBB, LIQ, BEH, FTP, Markets, Positions              | create/edit scenarios, run calcs, configure assumptions                   | approve own runs, reg sign-off, Settings admin         |
-| **Liquidity Manager**        | Command Center, LIQ, FCST(view), Alerts, DATA(view)                         | run LIQ, monitor, view                                                    | other-module writes, approve, Settings                 |
+| **Treasurer**                | Command Center, LIQ, FCST, FTP, IRRBB, FX, CAP(view), Risk, Alerts, Reports | approve runs/exceptions, view all, mint official runs (with tier), export | Data Engine writes, Access administration, reg submit         |
+| **ALM Manager**              | Command Center, FCST, IRRBB, LIQ, BEH, FTP, Markets, Positions              | create/edit scenarios, run calcs, configure assumptions                   | approve own runs, reg sign-off, Access administration         |
+| **Liquidity Manager**        | Command Center, LIQ, FCST(view), Alerts, DATA(view)                         | run LIQ, monitor, view                                                    | other-module writes, approve, Access administration                 |
 | **FX Dealer**                | FX (own desk), Markets, Positions, LIQ(funding)                             | deal entry on own desk/ccy                                                | settlement approve/release, other desks, other modules |
 | **FX / Market Risk Officer** | FX, IRRBB(challenge), CAP(mkt), Risk, Alerts                                | review/approve FX limits, configure limits, view                          | deal entry (SoD), reg submit                           |
-| **IRRBB Analyst**            | IRRBB, BEH, FCST, REG(IRRBB templates)                                      | run IRRBB, set assumptions, prep IRRBB return                             | approve own, submit, Settings                          |
+| **IRRBB Analyst**            | IRRBB, BEH, FCST, REG(IRRBB templates)                                      | run IRRBB, set assumptions, prep IRRBB return                             | approve own, submit, Access administration                          |
 | **FTP Owner**                | FTP, LIQ, FCST                                                              | configure FTP curves, run, approve own methodology                        | other-module writes, reg submit                        |
 | **Back-office / Ops**        | DATA, FX/LIQ post-trade, Alerts                                             | confirm/settle, approve **xor** release (per user)                        | deal entry, both approve+release                       |
 | **Finance / Control**        | DATA(map), REG, CAP, FCST, Reports                                          | map data, prep returns, reconcile, export                                 | reg sign-off (unless CFO), approve own                 |
@@ -658,7 +656,7 @@ role-gate the surface, don't fork the app.
 | **MD / CEO**                 | Command Center (published), REG (attestation queue), Reports                | **sign/attest returns** (step-up), view published views                   | edit anything, deal entry, data entry, submit          |
 | **ALCO Secretary**           | Committee pack workspace, all module outputs (view), Reports                | assemble pack, chase section sign-offs, record decisions/actions, publish | edit unit sections they don't own, reg sign-off/submit |
 | **Credit / Ops contributor** | **Their pack section only** (+ LE outputs view for Credit)                  | contribute + edit own section until sign-off                              | everything else — the narrowest surface in the app     |
-| **Org Admin / Owner**        | **Settings / Org console** (+ read dashboards)                              | manage users/roles/SSO/SCIM/audit (+ billing = Owner)                     | run/approve/submit anything                            |
+| **Org Admin / Owner**        | **Access control** (+ read dashboards)                              | manage users/roles/SSO/SCIM/audit (+ billing = Owner)                     | run/approve/submit anything                            |
 
 The existing **role-lens tabs** on Command Center (Treasurer / ALM / Risk / CFO)
 are the right pattern — extend them to _default and lock_ to the user's role
@@ -668,7 +666,8 @@ rather than being a free toggle for everyone.
 
 ## 10. Settings and access architecture
 
-Three distinct surfaces. **Do not conflate them.**
+Personal controls, access administration, app settings, and staff operations
+have distinct surfaces.
 
 ### 10.1 Personal — the avatar dropdown (every user)
 
@@ -706,11 +705,9 @@ without authority they are disabled with the shared permission tooltip and
 direct links render the same explanation instead of 404. My access is open to
 every member.
 
-Grant preview/create and access requests share structured reasons:
-`new_joiner`, `role_change`, `project_engagement`, `temporary_cover`,
-`regulator_audit_request`, `incident_break_glass`, and `other`, plus optional
-detail/reference. Other requires detail; temporary cover and break-glass grants
-require an editable expiry. Historical free-text reasons migrate to Other.
+Grant preview/create and access requests share the reason picker defined by the
+[structured reason contract](../backend/docs/authorization_foundation.md#structured-grant-reasons).
+Members can filter grants by reason category.
 
 ### 10.3 App settings (`/settings`, every active member)
 
@@ -1089,8 +1086,8 @@ Build in this phase:
    (mandatory for bank tenants; JIT never deprovisions).
 4. **Session/MFA/step-up policy + token revocation** on role change through the
    built `authorization_version` / `authv` invalidation seam.
-5. **Administration area consolidation** — grow Settings + the Data Engine
-   screens into the §10.2 org console behind Org Admin/`sso:manage`/`users:*`,
+5. **Administration area consolidation** — grow Access and the Data Engine
+   screens from the §10.2 access area behind Org Admin/`sso:manage`/`users:*`,
    so bank IT self-serves connections and SSO without AequorOS staff. The
    read-only connection-health panel becomes actionable here (test/rotate/
    disable stay in the integration tabs, permission-gated).

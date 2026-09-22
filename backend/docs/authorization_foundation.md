@@ -78,9 +78,10 @@ states, unambiguous. `valid_from` is inclusive and `valid_until` is exclusive.
 The low-level creation service also verifies that the principal type matches the identity
 record, machine and human bundles are not mixed, and a tenant-user or operator
 grantor is active. It requires non-empty grant provenance and creates only an
-active binding. The tenant surface fixes validity to immediate with no expiry
-and exposes only explicit single-binding revocation; scheduled and expiry
-lifecycle remain later work.
+active binding. Tenant grants start immediately and accept an optional expiry;
+see the [structured reason contract](#structured-grant-reasons) for categories
+that require one. Explicit single-binding revocation remains available;
+scheduled starts remain later work.
 
 ## Baseline membership
 
@@ -172,9 +173,8 @@ falling back to legacy authority.
 
 The dashboard shell, command palette, module tabs, route guard, and query policy
 consume this server projection. Capability and product caches are partitioned by
-tenant, actor, `authv`, and institution. Baseline-only shell navigation and
-personal settings follow [docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboard);
-organization settings require organization-wide Account administration.
+tenant, actor, `authv`, and institution. Shell, Settings, and Access navigation follow
+[docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboard).
 Institution Profile navigation (`/institution` and its tabs) requires a final,
 non-contextual organization-scoped ACCOUNT/restricted `view` capability;
 institution-scoped capabilities and Account administration alone do not expose it.
@@ -296,8 +296,8 @@ tenant-side owner designation or transfer action.
 and `GET /api/v1/organization/members` require a persisted Org Owner binding
 through the evaluator; scalar account-admin or token claims are insufficient.
 Create has one scalar role bundle, one institution coverage, one module, one
-sensitivity, and one required reason. Arrays are rejected by the closed request
-schema, so two authority combinations require two requests and two binding rows.
+sensitivity, and a [structured reason](#structured-grant-reasons). Arrays are
+rejected by the closed request schema, so two authority combinations require two requests and two binding rows.
 Preview returns the canonical authority sentence; create requires that exact
 sentence and refuses if names or scope presentation changed before commit.
 Members may grant Viewer, Auditor, Analyst, Approver, Validator, or Account
@@ -322,7 +322,7 @@ active. Baseline membership ends only through [deactivation](#baseline-membershi
 
 The Members response is tenant-filtered and aggregates identity, lifecycle,
 SSO-access-request state, last activity, authentication method, active grant
-count, and complete binding summaries. Settings renders this as a grant count
+count, and complete binding summaries. Access → Members renders a grant count
 plus at most two compact fragments, with lifecycle kept separate from access.
 Its Define → Review → Done sentence composer fixes the principal and makes all
 four binding dimensions single-valued. The same sentence is reused in review,
@@ -336,6 +336,39 @@ The SSO routes retain their split administration boundary: account
 administrators may list or reject never-activated request stubs, but only an Org
 Owner may call `POST /api/v1/auth/sso/access-requests/{user_id}/approve` because
 approval creates authority.
+
+### Structured grant reasons
+
+Grant preview/create, SSO approval, and route access requests use
+`reason_category`, `reason_detail`, `reference`, and `valid_until` from
+`app/schemas/authorization.py`. The category is required; detail and reference
+are optional except that `other` requires non-empty detail. `temporary_cover`
+and `incident_break_glass` require an expiry. The generated OpenAPI schema and
+client own the complete enum and payload shapes. Migration `202609180054`
+preserves historical free-text reasons under `other`.
+
+For a grant, submit one scalar scope from the applicable rollout contract with
+the confirmed `principal_user_id` and structured reason fields. Preview that
+payload at `/api/v1/authorization/bindings/preview`, then create it at
+`/api/v1/authorization/bindings` with the returned
+`expected_authority_sentence`. Never submit an array of grants.
+
+### Route access requests
+
+Active members can submit and list their own route requests. The
+`/organization/institutions/access-request` directory exposes their own
+organization's institution IDs, names, and classes for target selection without
+requiring operational coverage. The Owner-only `/organization/institutions`
+directory uses the same entries for the grant composer; neither grants product
+access. The class lets the dashboard select the route's actual sensitivity.
+
+Pending requests deduplicate by requester, route, institution target (or
+organization target), module, sensitivity, and permission. Org Owners list,
+approve, or reject them through `/authorization/access-requests`; approval
+preserves the requested scope and uses the scoped-grant service. An equivalent
+effective binding can resolve approval without creating duplicate authority;
+the resolution records the binding and actor in audit evidence. Navigation and
+the request form are owned by [docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboard).
 
 ## Authorization version and deployment transition
 

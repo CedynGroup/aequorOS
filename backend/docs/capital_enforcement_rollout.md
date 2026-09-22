@@ -238,33 +238,10 @@ surface. An Approver CAP/confidential row grants `view`, `review`, and
 contextual `approve`; maker-checker is still evaluated against the specific
 plan.
 
-The least-privilege ILAAP operator therefore needs two independently complete
-rows:
-
-```json
-[
-  {
-    "principal_user_id": "<confirmed human user UUID>",
-    "role_bundle": "analyst",
-    "institution_scope": "institution",
-    "institution_id": "<exact BK-*>",
-    "module_scope": "cap",
-    "sensitivity_scope": "confidential",
-    "reason": "<institution-approved reason>",
-    "expected_authority_sentence": "<server preview response>"
-  },
-  {
-    "principal_user_id": "<same confirmed human user UUID>",
-    "role_bundle": "viewer",
-    "institution_scope": "institution",
-    "institution_id": "<same exact BK-*>",
-    "module_scope": "liq",
-    "sensitivity_scope": "confidential",
-    "reason": "<institution-approved reason>",
-    "expected_authority_sentence": "<server preview response>"
-  }
-]
-```
+An ILAAP operator needs two separate grants at the same exact institution:
+Analyst / CAP / confidential and Viewer / LIQ / confidential.
+Use the [grant submission contract](authorization_foundation.md#structured-grant-reasons)
+for the payload, reason fields, and preview/create sequence.
 
 Do not replace these with one incomplete row, combine fields across rows, copy
 production users into code, or widen scope to `all` to compensate for a missing

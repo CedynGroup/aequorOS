@@ -217,20 +217,9 @@ Create separate aggregated and confidential rows when the person's duties
 consume both. The explicit `all` value remains a broad grant, not a shortcut
 the rollout may infer.
 
-Example least-privilege request for a run maker:
-
-```json
-{
-  "principal_user_id": "<confirmed human user UUID>",
-  "role_bundle": "analyst",
-  "institution_scope": "institution",
-  "institution_id": "<exact BK-* ID>",
-  "module_scope": "liq",
-  "sensitivity_scope": "confidential",
-  "reason": "<institution-approved reason>",
-  "expected_authority_sentence": "<server preview response>"
-}
-```
+For a run maker, use Analyst / LIQ / confidential at the exact institution.
+Use the [grant submission contract](authorization_foundation.md#structured-grant-reasons)
+for the payload, reason fields, and preview/create sequence.
 
 Do not backfill from scalar roles, create bindings for scheduled internal
 workers, combine partial rows into a synthetic permission, or reuse a grant
