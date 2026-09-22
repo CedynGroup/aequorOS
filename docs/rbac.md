@@ -556,6 +556,12 @@ organization-wide: those requests carry no institution and approval preserves
 organization scope. A request carries its own reason category, detail,
 reference and — for temporary cover and break-glass — the expiry the approver's
 form is pre-filled from; owners review requests under Access → Members only.
+A pending request has two audited exits: the owner approves it (a grant, or an
+already-effective equivalent binding) or rejects it with the same reason picker
+(`POST /authorization/access-requests/{id}/reject`, nothing granted, the member
+may re-file). A grant made through the ordinary composer closes every pending
+request of that member the evaluator now allows, so nothing lingers to block a
+later request.
 Unknown IDs, object-detail routes, cross-tenant objects, structural exclusions,
 and non-existent paths remain 404 and never disclose permissions.
 The root `/` is the post-sign-in landing, not a deep link: for users with separate
@@ -621,6 +627,9 @@ Send each user to where their job starts, not always Command Center:
 | Data/Ops                            | `/data-engine`                        |
 | Auditor / Compliance                | `/reports` + Audit log                |
 | Org Admin / Owner                   | `/access` (Access control)            |
+
+`/access` itself lands on Members for a member with Account administration
+authority and on My access for everyone else (`accessIndexDestination`).
 
 ---
 

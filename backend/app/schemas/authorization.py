@@ -282,3 +282,19 @@ class AccessRequestListRead(ClosedModel):
 class AccessRequestApprove(ScopedGrantInput):
     role_bundle: GrantableRoleBundle
     expected_authority_sentence: str = Field(min_length=1, max_length=2000)
+
+
+class AccessRequestReject(ClosedModel):
+    """Why an Org Owner declined a request, in the grant vocabulary (no expiry)."""
+
+    reason_category: GrantReasonCategory
+    reason_detail: str = Field(default="", max_length=2000)
+    reference: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def validate_reason(self) -> AccessRequestReject:
+        self.reason_detail = self.reason_detail.strip()
+        self.reference = self.reference.strip() if self.reference else None
+        if self.reason_category is GrantReasonCategory.OTHER and not self.reason_detail:
+            raise ValueError("reason detail is required when the category is other")
+        return self

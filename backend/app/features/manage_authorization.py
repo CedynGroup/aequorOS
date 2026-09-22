@@ -17,8 +17,12 @@ from app.core.authorization import (
     GrantorType,
     GrantReasonCategory,
     InstitutionScope,
+    Module,
     ModuleScope,
     Permission,
+    PrincipalLocator,
+    PrincipalType,
+    ResourceLocator,
     RoleBundle,
     Sensitivity,
     SensitivityScope,
@@ -38,6 +42,7 @@ from app.schemas.authorization import (
     AccessRequestCreate,
     AccessRequestListRead,
     AccessRequestRead,
+    AccessRequestReject,
     BindingCreateRequest,
     BindingCreateResponse,
     BindingListRead,
@@ -477,6 +482,7 @@ def create_authorization_binding(
             reference=payload.reference,
             valid_until=payload.valid_until,
             expected_authority_sentence=payload.expected_authority_sentence,
+            commit=False,
         )
     except (
         grant_administration.GrantAdministrationError,
@@ -485,6 +491,9 @@ def create_authorization_binding(
         if isinstance(exc, authorization.AuthorizationInvariantError):
             exc = grant_administration.GrantAdministrationError(str(exc))
         raise grant_conflict(exc) from exc
+    _resolve_satisfied_access_requests(db, ctx, result)
+    db.commit()
+    db.refresh(result.binding)
     return binding_response(db, ctx.organization_id, result)
 
 
@@ -540,6 +549,94 @@ def _pending_access_request(
             AuthorizationAccessRequest.status == "pending",
         )
     )
+
+
+def _resolve_access_request(
+    db: DbSession,
+    request: AuthorizationAccessRequest,
+    *,
+    actor_user_id: UUID,
+    result: grant_administration.GrantResult,
+    details: dict[str, object] | None = None,
+) -> None:
+    """Close a pending request against the binding that now satisfies it."""
+
+    request.status = "approved"
+    request.resolved_at = utc_now()
+    request.resolved_by_user_id = actor_user_id
+    request.binding_id = result.binding.id
+    db.add(
+        AuditEvent(
+            organization_id=request.organization_id,
+            actor_user_id=actor_user_id,
+            event_type="authorization.access_request_approved",
+            entity_type="authorization_access_request",
+            entity_id=str(request.id),
+            details={
+                "binding_id": str(result.binding.id),
+                "requester_user_id": str(request.requester_user_id),
+                "route": request.route,
+                "institution_id": request.institution_id,
+                "module": request.module_scope,
+                "sensitivity": request.sensitivity_scope,
+                "permission": request.permission,
+                "authority_sentence": result.authority_sentence,
+                **(details or {}),
+            },
+        )
+    )
+
+
+def _resolve_satisfied_access_requests(
+    db: DbSession,
+    ctx: TenantContext,
+    result: grant_administration.GrantResult,
+) -> None:
+    """Close every pending request the grantee's authority now satisfies.
+
+    An Owner who grants through the ordinary composer instead of "Review
+    request" must not leave the request pending forever: the dedup index would
+    then block the member from ever re-filing. Satisfaction is the evaluator's
+    verdict over the stored bindings, never a scope comparison of our own.
+    """
+
+    assert ctx.actor_user_id is not None
+    binding = result.binding
+    pending = list(
+        db.scalars(
+            select(AuthorizationAccessRequest).where(
+                AuthorizationAccessRequest.organization_id == ctx.organization_id,
+                AuthorizationAccessRequest.requester_user_id == binding.principal_user_id,
+                AuthorizationAccessRequest.status == "pending",
+            )
+        )
+    )
+    if not pending:
+        return
+    principal = PrincipalLocator(
+        ctx.organization_id, binding.principal_user_id, PrincipalType.HUMAN
+    )
+    for request in pending:
+        resource = ResourceLocator(
+            ctx.organization_id,
+            InstitutionScope.INSTITUTION
+            if request.institution_id
+            else InstitutionScope.ORGANIZATION,
+            request.institution_id,
+            Module(request.module_scope),
+            Sensitivity(request.sensitivity_scope),
+        )
+        decision = authorization.evaluate_permission(
+            db, principal, Permission(request.permission), resource
+        )
+        if decision.allowed:
+            _resolve_access_request(
+                db,
+                request,
+                actor_user_id=ctx.actor_user_id,
+                result=result,
+                details={"resolution": "satisfied_by_grant"},
+            )
 
 
 @router.post(
@@ -784,32 +881,72 @@ def approve_authorization_access_request(
         if isinstance(exc, authorization.AuthorizationInvariantError):
             exc = grant_administration.GrantAdministrationError(str(exc))
         raise grant_conflict(exc) from exc
-    request.status = "approved"
+    _resolve_access_request(db, request, actor_user_id=ctx.actor_user_id, result=result)
+    db.commit()
+    db.refresh(result.binding)
+    return binding_response(db, ctx.organization_id, result)
+
+
+@router.post(
+    "/authorization/access-requests/{request_id}/reject",
+    response_model=AccessRequestRead,
+    operation_id="rejectAuthorizationAccessRequest",
+)
+def reject_authorization_access_request(
+    request_id: UUID,
+    payload: AccessRequestReject,
+    db: DbSession,
+    ctx: GrantAdminTenant,
+) -> AccessRequestRead:
+    """Decline a pending request so the member may re-file later; nothing is granted."""
+
+    assert ctx.actor_user_id is not None
+    request = db.scalar(
+        select(AuthorizationAccessRequest)
+        .where(
+            AuthorizationAccessRequest.id == request_id,
+            AuthorizationAccessRequest.organization_id == ctx.organization_id,
+            AuthorizationAccessRequest.status == "pending",
+        )
+        .with_for_update()
+    )
+    if request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Access request not found.",
+        )
+    request.status = "rejected"
     request.resolved_at = utc_now()
     request.resolved_by_user_id = ctx.actor_user_id
-    request.binding_id = result.binding.id
     db.add(
         AuditEvent(
             organization_id=ctx.organization_id,
             actor_user_id=ctx.actor_user_id,
-            event_type="authorization.access_request_approved",
+            event_type="authorization.access_request_rejected",
             entity_type="authorization_access_request",
             entity_id=str(request.id),
             details={
-                "binding_id": str(result.binding.id),
                 "requester_user_id": str(request.requester_user_id),
                 "route": request.route,
                 "institution_id": request.institution_id,
                 "module": request.module_scope,
                 "sensitivity": request.sensitivity_scope,
                 "permission": request.permission,
-                "authority_sentence": result.authority_sentence,
+                "reason_category": payload.reason_category.value,
+                "reason_detail": payload.reason_detail,
+                "reference": payload.reference,
             },
         )
     )
     db.commit()
-    db.refresh(result.binding)
-    return binding_response(db, ctx.organization_id, result)
+    db.refresh(request)
+    user = _member_or_404(db, ctx, request.requester_user_id)
+    bank = (
+        db.scalar(select(Bank).where(Bank.id == request.institution_id))
+        if request.institution_id
+        else None
+    )
+    return _access_request_read(request, user=user, bank=bank)
 
 
 @router.post(

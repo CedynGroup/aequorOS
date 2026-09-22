@@ -313,6 +313,38 @@
         "title": "AccessRequestRead",
         "type": "object"
       },
+      "AccessRequestReject": {
+        "additionalProperties": false,
+        "description": "Why an Org Owner declined a request, in the grant vocabulary (no expiry).",
+        "properties": {
+          "reason_category": {
+            "$ref": "#/components/schemas/GrantReasonCategory"
+          },
+          "reason_detail": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Reason Detail",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          }
+        },
+        "required": [
+          "reason_category"
+        ],
+        "title": "AccessRequestReject",
+        "type": "object"
+      },
       "ActionItemIn": {
         "additionalProperties": false,
         "description": "One credible action; mirrors the domain ``ManagementAction`` contract.",
@@ -57685,6 +57717,115 @@
           }
         ],
         "summary": "Approve Authorization Access Request",
+        "tags": [
+          "authorization"
+        ]
+      }
+    },
+    "/api/v1/authorization/access-requests/{request_id}/reject": {
+      "post": {
+        "description": "Decline a pending request so the member may re-file later; nothing is granted.",
+        "operationId": "rejectAuthorizationAccessRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequestReject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Authorization Access Request",
         "tags": [
           "authorization"
         ]

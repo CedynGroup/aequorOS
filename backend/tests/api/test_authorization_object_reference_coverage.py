@@ -303,6 +303,7 @@ def test_home_icaap_and_filing_routes_are_reachable(coverage: Coverage, kind: st
     "path",
     (
         "/api/v1/authorization/access-requests/{request_id}/approve",
+        "/api/v1/authorization/access-requests/{request_id}/reject",
         "/api/v1/auth/sso/access-requests/{user_id}/approve",
         "/api/v1/auth/sso/access-requests/{user_id}/reject",
     ),

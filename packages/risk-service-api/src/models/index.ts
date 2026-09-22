@@ -3,6 +3,7 @@ export * from "./AccessRequestApprove";
 export * from "./AccessRequestCreate";
 export * from "./AccessRequestListRead";
 export * from "./AccessRequestRead";
+export * from "./AccessRequestReject";
 export * from "./AccountId";
 export * from "./AccountNumber";
 export * from "./ActionItemIn";

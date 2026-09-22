@@ -1430,3 +1430,133 @@ def test_route_requests_sharing_requirement_resolve_against_effective_binding(
     pending = grant_client.get("/api/v1/authorization/access-requests", headers=_owner_headers())
     assert pending.status_code == 200
     assert pending.json()["requests"] == []
+
+
+def _file_route_request(client: TestClient, route: str, **overrides: object) -> str:
+    response = client.post(
+        "/api/v1/authorization/access-requests",
+        headers=headers(user_id=GRANTEE, roles=("viewer",)),
+        json={
+            "route": route,
+            "institution_id": BANK_A,
+            "module_scope": "liq",
+            "sensitivity_scope": "confidential",
+            "permission": "view",
+            "reason_category": "role_change",
+        }
+        | overrides,
+    )
+    assert response.status_code == 201, response.text
+    return str(response.json()["id"])
+
+
+def test_rejected_request_is_audited_with_its_reason_and_can_be_refiled(
+    grant_client: TestClient,
+) -> None:
+    request_id = _file_route_request(grant_client, "/liquidity/forecast")
+    sibling_headers = headers(
+        user_id=GRANTEE,
+        roles=("viewer",),
+    )
+    missing_detail = grant_client.post(
+        f"/api/v1/authorization/access-requests/{request_id}/reject",
+        headers=_owner_headers(),
+        json={"reason_category": "other"},
+    )
+    assert missing_detail.status_code == 422
+    member_cannot_reject = grant_client.post(
+        f"/api/v1/authorization/access-requests/{request_id}/reject",
+        headers=sibling_headers,
+        json={"reason_category": "role_change"},
+    )
+    assert member_cannot_reject.status_code in {403, 404}
+
+    rejected = grant_client.post(
+        f"/api/v1/authorization/access-requests/{request_id}/reject",
+        headers=_owner_headers(),
+        json={
+            "reason_category": "other",
+            "reason_detail": "Treasury forecasting is not part of this role",
+            "reference": "HR-2026-0042",
+        },
+    )
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["status"] == "rejected"
+    again = grant_client.post(
+        f"/api/v1/authorization/access-requests/{request_id}/reject",
+        headers=_owner_headers(),
+        json={"reason_category": "role_change"},
+    )
+    assert again.status_code == 404
+
+    with _session() as db:
+        request = db.get(AuthorizationAccessRequest, UUID(request_id))
+        assert request is not None
+        assert request.status == "rejected"
+        assert request.binding_id is None
+        assert request.resolved_by_user_id == USER_1
+        audit = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "authorization.access_request_rejected",
+                AuditEvent.entity_id == request_id,
+            )
+        )
+        assert audit is not None
+        assert audit.actor_user_id == USER_1
+        assert audit.details["reason_category"] == "other"
+        assert audit.details["reason_detail"] == "Treasury forecasting is not part of this role"
+        assert audit.details["reference"] == "HR-2026-0042"
+        assert not list(
+            db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.principal_user_id == GRANTEE,
+                    AuthorizationBinding.role_bundle == "viewer",
+                )
+            )
+        )
+    pending = grant_client.get("/api/v1/authorization/access-requests", headers=_owner_headers())
+    assert pending.json()["requests"] == []
+
+    refiled = _file_route_request(grant_client, "/liquidity/forecast")
+    assert refiled != request_id
+    mine = grant_client.get(
+        "/api/v1/authorization/access-requests/mine",
+        headers=sibling_headers,
+    )
+    assert [row["status"] for row in mine.json()["requests"]] == ["pending", "rejected"]
+
+
+def test_composer_grant_resolves_the_requests_it_satisfies(grant_client: TestClient) -> None:
+    satisfied = _file_route_request(grant_client, "/liquidity/forecast")
+    unrelated = _file_route_request(
+        grant_client, "/fx", module_scope="fx", sensitivity_scope="aggregated"
+    )
+
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(grant_client, role="viewer"),
+    )
+    assert created.status_code == 201, created.text
+    binding_id = created.json()["binding"]["id"]
+
+    with _session() as db:
+        resolved = db.get(AuthorizationAccessRequest, UUID(satisfied))
+        assert resolved is not None
+        assert resolved.status == "approved"
+        assert resolved.binding_id == UUID(binding_id)
+        assert resolved.resolved_by_user_id == USER_1
+        audit = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == "authorization.access_request_approved",
+                AuditEvent.entity_id == satisfied,
+            )
+        )
+        assert audit is not None
+        assert audit.details["binding_id"] == binding_id
+        assert audit.details["resolution"] == "satisfied_by_grant"
+        still_pending = db.get(AuthorizationAccessRequest, UUID(unrelated))
+        assert still_pending is not None
+        assert still_pending.status == "pending"
+    pending = grant_client.get("/api/v1/authorization/access-requests", headers=_owner_headers())
+    assert [row["id"] for row in pending.json()["requests"]] == [unrelated]

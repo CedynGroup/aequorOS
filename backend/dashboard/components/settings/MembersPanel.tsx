@@ -18,6 +18,7 @@ import type {
   BindingCreateResponse,
   BindingRead,
   AccessRequestRead,
+  GrantReasonCategory,
   MemberRead,
 } from "@aequoros/risk-service-api";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -51,6 +52,7 @@ import {
   reasonDraftComplete,
   reasonLabel,
   toDatetimeLocalValue,
+  type GrantReasonDraft,
 } from "@/components/access/GrantReasonFields";
 
 const MEMBERS_KEY = ORGANIZATION_MEMBERS_QUERY_KEY;
@@ -119,6 +121,7 @@ export default function MembersPanel() {
   const [revoking, setRevoking] = useState<BindingRead | null>(null);
   const [requestedGrant, setRequestedGrant] =
     useState<AccessRequestRead | null>(null);
+  const [rejecting, setRejecting] = useState<AccessRequestRead | null>(null);
   const [reasonFilter, setReasonFilter] = useState("");
 
   const members = membersQuery.data?.members ?? [];
@@ -187,22 +190,31 @@ export default function MembersPanel() {
                       {request.permission}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const member = members.find(
-                        (candidate) =>
-                          candidate.userId === request.requesterUserId,
-                      );
-                      if (member) {
-                        setRequestedGrant(request);
-                        setGranting(member);
-                      }
-                    }}
-                    className="btn-primary px-3 py-2 text-caption font-medium"
-                  >
-                    Review request
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRejecting(request)}
+                      className="rounded-md border border-border px-3 py-2 text-caption font-medium text-navy hover:bg-surface-muted"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const member = members.find(
+                          (candidate) =>
+                            candidate.userId === request.requesterUserId,
+                        );
+                        if (member) {
+                          setRequestedGrant(request);
+                          setGranting(member);
+                        }
+                      }}
+                      className="btn-primary px-3 py-2 text-caption font-medium"
+                    >
+                      Review request
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -272,6 +284,18 @@ export default function MembersPanel() {
           onRevoked={() => {
             setRevoking(null);
             void queryClient.invalidateQueries({ queryKey: MEMBERS_KEY });
+          }}
+        />
+      )}
+      {rejecting && (
+        <RejectRequestDialog
+          request={rejecting}
+          onClose={() => setRejecting(null)}
+          onRejected={() => {
+            setRejecting(null);
+            void queryClient.invalidateQueries({
+              queryKey: ROUTE_REQUESTS_KEY,
+            });
           }}
         />
       )}
@@ -1201,6 +1225,80 @@ function RevokeDialog({
           >
             <Clock3 size={15} aria-hidden />{" "}
             {revoke.isPending ? "Revoking…" : "Revoke access"}
+          </button>
+        </div>
+      </form>
+    </DialogFrame>
+  );
+}
+
+function RejectRequestDialog({
+  request,
+  onClose,
+  onRejected,
+}: {
+  request: AccessRequestRead;
+  onClose: () => void;
+  onRejected: () => void;
+}) {
+  const [reason, setReason] = useState<GrantReasonDraft>({
+    reasonCategory: "other" satisfies GrantReasonCategory,
+    reasonDetail: "",
+    reference: "",
+    validUntil: "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const reject = useMutation({
+    mutationFn: () =>
+      authorizationApi.rejectAuthorizationAccessRequest({
+        requestId: request.id,
+        accessRequestReject: {
+          reasonCategory: reason.reasonCategory,
+          reasonDetail: reason.reasonDetail.trim(),
+          reference: reason.reference.trim() || null,
+        },
+      }),
+    onSuccess: onRejected,
+    onError: async (failure) =>
+      setError((await normalizeApiError(failure)).message),
+  });
+  const complete = reasonDraftComplete(reason);
+  return (
+    <DialogFrame title="Reject access request" onClose={onClose}>
+      <form
+        className="space-y-4 p-5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (complete) reject.mutate();
+        }}
+      >
+        <p className="text-body text-navy">
+          {request.requesterName} asked for {request.pageTitle}
+          {request.institutionName ? ` at ${request.institutionName}` : ""}.
+          Nothing is granted; they can ask again later, and your decision is
+          recorded in the audit trail.
+        </p>
+        <GrantReasonFields value={reason} onChange={setReason} expiry={false} />
+        {error && (
+          <p role="alert" className="text-caption text-critical">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy hover:bg-surface-muted"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!complete || reject.isPending}
+            className="inline-flex items-center gap-2 rounded-md bg-danger px-4 py-2.5 text-body font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            <X size={15} aria-hidden />{" "}
+            {reject.isPending ? "Rejecting…" : "Reject request"}
           </button>
         </div>
       </form>
