@@ -40,9 +40,9 @@ for (const category of ["temporary_cover", "incident_break_glass"]) {
         name: "Reject access request",
       });
       await dialog.getByLabel("Reason category").selectOption(category);
-      await expect(
-        dialog.locator('input[type="datetime-local"]'),
-      ).toHaveCount(0);
+      await expect(dialog.locator('input[type="datetime-local"]')).toHaveCount(
+        0,
+      );
       const submit = dialog.getByRole("button", {
         name: "Reject request",
         exact: true,
