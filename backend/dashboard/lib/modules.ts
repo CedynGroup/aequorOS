@@ -467,18 +467,9 @@ const REGULATORY_PUBLISHED_VIEW = requirement(
   "published",
   "Published",
 );
-const ACCOUNT_RESTRICTED_ADMINISTER = requirement(
-  "account",
-  "Account Administration",
-  "restricted",
-  "Restricted",
-  "administer",
-  "Administer",
-);
-
 /** The exact capability that opens each module's home surface. */
 const MODULE_ENTRY_REQUIREMENTS: Readonly<
-  Record<ModuleKey, AccessRequirement>
+  Record<Exclude<ModuleKey, "access" | "settings">, AccessRequirement>
 > = {
   command_center: RISK_AGGREGATED_VIEW,
   risk: RISK_CONFIDENTIAL_VIEW,
@@ -507,8 +498,6 @@ const MODULE_ENTRY_REQUIREMENTS: Readonly<
     "Restricted",
   ),
   regulatory_reporting: REGULATORY_PUBLISHED_VIEW,
-  access: ACCOUNT_RESTRICTED_ADMINISTER,
-  settings: ACCOUNT_RESTRICTED_ADMINISTER,
 };
 
 function permissionReason(permissions: readonly string[]): string | undefined {
@@ -619,8 +608,18 @@ const SCOPED_MODULE_ROUTES = [
   },
   {
     prefix: "/ftp",
-    aggregated: requirement("ftp", "Funds Transfer Pricing", "aggregated", "Aggregated"),
-    confidential: requirement("ftp", "Funds Transfer Pricing", "confidential", "Confidential"),
+    aggregated: requirement(
+      "ftp",
+      "Funds Transfer Pricing",
+      "aggregated",
+      "Aggregated",
+    ),
+    confidential: requirement(
+      "ftp",
+      "Funds Transfer Pricing",
+      "confidential",
+      "Confidential",
+    ),
     aggregatedView: "ftpAggregatedView",
     confidentialView: "ftpConfidentialView",
     confidentialRoutes: ["/ftp/scenarios"],
@@ -744,9 +743,8 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
     return { state: "hidden" };
   }
   const moduleKey = moduleForPath(path);
-  if (moduleKey) {
+  if (moduleKey && moduleKey !== "access" && moduleKey !== "settings") {
     if (isBaselineOnlyScope(scope)) {
-      if (moduleKey === "settings") return { state: "enabled" };
       const reason =
         liquidityPermissionReason(path, scope) ??
         scopedModulePermissionReason(path, scope) ??
@@ -836,7 +834,7 @@ export function landingPathFor(scope: ModuleScope): string | null {
   );
 }
 
-const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
+export const PUBLIC_MODULE_ROUTES: ReadonlySet<string> = new Set([
   "/alerts",
   "/basel",
   "/basel/exposures",
@@ -1014,4 +1012,27 @@ export function accessDeniedForPath(
     reason: requirementsReason(requirements)!,
     requirements,
   };
+}
+
+export function accessRequestRequirements(
+  pathname: string,
+  capabilities: readonly EffectiveCapabilityRead[],
+  institutionClass: string | null,
+): readonly AccessRequirement[] {
+  const denied = accessDeniedForPath(pathname, {
+    modules: new Set(),
+    organizationModules: new Set(),
+    hasInstitutionAuthority: false,
+    institutionClass,
+    isResolved: true,
+  });
+  return (denied?.requirements ?? []).filter(
+    (required) =>
+      !hasEffectiveCapability(
+        capabilities,
+        required.moduleScope,
+        required.sensitivityScope,
+        required.permission,
+      ),
+  );
 }

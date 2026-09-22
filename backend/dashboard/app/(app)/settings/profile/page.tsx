@@ -211,10 +211,6 @@ export default function ProfilePage() {
   return (
     <>
       <PageHeader
-        breadcrumbs={[
-          { label: 'Settings', href: '/settings' },
-          { label: 'Profile & preferences' },
-        ]}
         title="Profile & preferences"
       />
 

@@ -103,6 +103,7 @@ _PUBLIC_ACCESS_REQUEST_ROUTES = frozenset(
         "/fx/limits",
         "/fx/scenarios",
         "/fx/var",
+        "/icaap",
         "/institution",
         "/institution/history",
         "/institution/outlets",
@@ -114,6 +115,7 @@ _PUBLIC_ACCESS_REQUEST_ROUTES = frozenset(
         "/irr/limits",
         "/irr/scenarios",
         "/irr/sensitivity",
+        "/irr/standardised",
         "/liquidity",
         "/liquidity/buffer",
         "/liquidity/cfp",
@@ -174,7 +176,9 @@ def _route_requirement(
         requirements = ((ModuleScope.FX, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
     elif normalized.startswith("/fx"):
         requirements = ((ModuleScope.FX, Sensitivity.AGGREGATED, Permission.VIEW),)
-    elif normalized == "/basel/planning":
+    elif normalized == "/ftp/scenarios":
+        requirements = ((ModuleScope.FTP, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
+    elif normalized in {"/basel/planning", "/icaap"}:
         requirements = ((ModuleScope.CAPITAL, Sensitivity.CONFIDENTIAL, Permission.VIEW),)
     else:
         root = normalized.split("/", 2)[1]
