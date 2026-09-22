@@ -77,14 +77,61 @@ rolled-back `monkeypatch` (no product code changed): the sweep then reported the
 sibling-bank package leak, and passed once the patch was undone.
 
 The deterministic layer reproduced the two same-organization cross-bank defects,
-held in `object_reference_routes.KNOWN_DEFECTS`:
+held in `object_reference_routes.KNOWN_DEFECTS` and asserted as still-defective
+(a fix must promote them):
 `POST /banks/{bank_id}/system-of-record/{declaration_id}/approve` and `.../revoke`
-resolve the declaration by id within the organization only
-(`system_of_record.get_declaration` ignores `bank_id`), so a caller bound to
+resolved the declaration by id within the organization only
+(`system_of_record.get_declaration` ignored `bank_id`), so a caller bound to
 bank A approved/revoked a sibling bank's declaration — a 200 that returned the
 sibling bank's identifier and mutated its row. Recorded for the product owner;
-no product code was changed in this test-only change. The disposable server was
+no product code was changed in that test-only change. The disposable server was
 stopped and its worktree-local data removed afterwards.
+
+### Fix verification
+
+2026-09-19, Python 3.13, disposable local PostgreSQL 17 with the same
+NOBYPASSRLS `risk_service_test` role, schema migrated to head. The fix scopes
+`system_of_record.get_declaration` (hence `approve`/`revoke`) and
+`canonical_withdrawal.get_withdrawal` (hence withdrawal approve/reverse) by the
+route's bank at the query, and makes a withdrawal request resolve any cited
+`declaration_id` against the same bank-scoped lookup. A sibling bank's row now
+gets the route's ordinary not-found shape before any state check, so the
+refusal has no side effects and reveals nothing the caller did not send.
+
+Order of evidence:
+
+1. Unfixed base, quarantine in place: both routes still reproduced as
+   defective (`test_known_defects_are_still_reproduced` passed).
+2. Fix applied, quarantine still in place — `-k known_defects` on the coverage
+   layer: **1 failed** (5.17s) on the promotion assertion, naming both routes
+   (`documented object-reference defects are no longer reproduced; remove them
+   from KNOWN_DEFECTS`), as the layer is designed to force.
+3. Fix applied, `KNOWN_DEFECTS` emptied — coverage layer: **400 passed**
+   (34.63s; the two former skips now run in the strict parametrization, with
+   the nested single-foreign-child cases included); generative layer against
+   the disposable Postgres: **2 passed** (46.73s).
+
+The focused hermetic regression `tests/api/test_system_of_record_bank_scope.py`
+contains three tests covering declaration approve/revoke, withdrawal approval
+of pending and applied sibling rows, withdrawal reversal, and a withdrawal
+request citing a foreign declaration. Every foreign refusal checks unchanged
+row state, object audit-event and tenant job-queue counts, and compares its
+404 envelope with the same route's response to a fresh unknown UUID, excluding
+request_id and normalizing the caller-supplied id. The citation test also checks
+that no withdrawal was created. Positive controls approve and revoke declarations
+under the sibling's own path, approve and reverse a pending withdrawal against
+the sample bank's duplicate book, retain the sibling's owning-path 409 on
+reapproval, and accept the sample bank's own declaration as a citation.
+The original three-test regression failed **3/3** against the unfixed service
+and passed **3/3** with the fix; the response comparisons and successful
+withdrawal lifecycle controls were completed during review. The disposable
+server was stopped and its data removed afterwards.
+
+Re-verified 2026-09-21 after rebasing onto `main` with the #230 filing chain and
+the #233 census repair: census guard, focused regression and service suites
+**23 passed**; coverage layer **433 passed, 0 skipped** (the two former
+system-of-record skips now run in the strict parametrization); generative layer
+on the disposable Postgres `risk_service_test` role **2 passed** (36.9s).
 
 ## Object-reference census after the filing chain (#230)
 

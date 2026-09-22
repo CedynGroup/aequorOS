@@ -156,6 +156,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   **Bank-route existence rule:** follow [docs/rbac.md §4](docs/rbac.md#4-tenancy--the-two-planes)
   for the cross-tenant 404 contract, `app/api/deps.py::resolve_tenant_bank` mounting
   requirements, and regression coverage when adding bank routes.
+  **By-id lookups under `/banks/{bank_id}` must be bank-scoped at the query.** Two
+  banks of one organization share an RLS tenant, so organization scoping alone
+  cannot isolate their child objects. See the
+  [foundation contract](backend/docs/authorization_foundation.md#executable-verification)
+  for refusal semantics and the regression coverage.
   Preserve baseline membership as system-managed lifecycle evidence, never evaluator
   fallback access. Activation/deactivation must use `app/services/membership.py`;
   [the foundation contract](backend/docs/authorization_foundation.md#baseline-membership)
