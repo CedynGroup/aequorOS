@@ -16,6 +16,7 @@ import type {
   AccessRequestCreate,
   AccessRequestListRead,
   AccessRequestRead,
+  AccessRequestReject,
   BindingCreateRequest,
   BindingCreateResponse,
   BindingListRead,
@@ -36,6 +37,8 @@ import {
   AccessRequestListReadToJSON,
   AccessRequestReadFromJSON,
   AccessRequestReadToJSON,
+  AccessRequestRejectFromJSON,
+  AccessRequestRejectToJSON,
   BindingCreateRequestFromJSON,
   BindingCreateRequestToJSON,
   BindingCreateResponseFromJSON,
@@ -77,6 +80,11 @@ export interface ListAuthorizationBindingsRequest {
 
 export interface PreviewAuthorizationBindingRequest {
   bindingPreviewRequest: BindingPreviewRequest;
+}
+
+export interface RejectAuthorizationAccessRequestRequest {
+  requestId: string;
+  accessRequestReject: AccessRequestReject;
 }
 
 export interface RevokeAuthorizationBindingRequest {
@@ -606,6 +614,78 @@ export class AuthorizationApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BindingPreviewRead> {
     const response = await this.previewAuthorizationBindingRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Decline a pending request so the member may re-file later; nothing is granted.
+   * Reject Authorization Access Request
+   */
+  async rejectAuthorizationAccessRequestRaw(
+    requestParameters: RejectAuthorizationAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<AccessRequestRead>> {
+    if (requestParameters["requestId"] == null) {
+      throw new runtime.RequiredError(
+        "requestId",
+        'Required parameter "requestId" was null or undefined when calling rejectAuthorizationAccessRequest().',
+      );
+    }
+
+    if (requestParameters["accessRequestReject"] == null) {
+      throw new runtime.RequiredError(
+        "accessRequestReject",
+        'Required parameter "accessRequestReject" was null or undefined when calling rejectAuthorizationAccessRequest().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/authorization/access-requests/{request_id}/reject`.replace(
+          `{${"request_id"}}`,
+          encodeURIComponent(String(requestParameters["requestId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: AccessRequestRejectToJSON(
+          requestParameters["accessRequestReject"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      AccessRequestReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Decline a pending request so the member may re-file later; nothing is granted.
+   * Reject Authorization Access Request
+   */
+  async rejectAuthorizationAccessRequest(
+    requestParameters: RejectAuthorizationAccessRequestRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<AccessRequestRead> {
+    const response = await this.rejectAuthorizationAccessRequestRaw(
       requestParameters,
       initOverrides,
     );

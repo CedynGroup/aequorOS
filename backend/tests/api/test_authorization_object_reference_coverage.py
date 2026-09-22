@@ -273,6 +273,7 @@ def test_seeded_objects_exist_for_their_owners(coverage: Coverage) -> None:
     "path",
     (
         "/api/v1/authorization/access-requests/{request_id}/approve",
+        "/api/v1/authorization/access-requests/{request_id}/reject",
         "/api/v1/auth/sso/access-requests/{user_id}/approve",
         "/api/v1/auth/sso/access-requests/{user_id}/reject",
     ),

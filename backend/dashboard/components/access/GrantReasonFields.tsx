@@ -56,10 +56,19 @@ function defaultExpiry(category: GrantReasonCategory): string {
 export function GrantReasonFields({
   value,
   onChange,
+  expiry = true,
 }: {
   value: GrantReasonDraft;
   onChange: (next: GrantReasonDraft) => void;
+  /** False for decisions that grant nothing (a rejection), where no expiry applies. */
+  expiry?: boolean;
 }) {
+  const expiryFor = (reasonCategory: GrantReasonCategory) =>
+    expiry && requiresExpiry(reasonCategory)
+      ? value.reasonCategory === reasonCategory && value.validUntil
+        ? value.validUntil
+        : defaultExpiry(reasonCategory)
+      : "";
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="block">
@@ -74,11 +83,7 @@ export function GrantReasonFields({
             onChange({
               ...value,
               reasonCategory,
-              validUntil: requiresExpiry(reasonCategory)
-                ? value.reasonCategory === reasonCategory && value.validUntil
-                  ? value.validUntil
-                  : defaultExpiry(reasonCategory)
-                : "",
+              validUntil: expiryFor(reasonCategory),
             });
           }}
           className="w-full rounded-md border border-border bg-surface px-3 py-2.5 text-body text-navy"
@@ -122,7 +127,7 @@ export function GrantReasonFields({
           placeholder="Add context for the approver"
         />
       </label>
-      {requiresExpiry(value.reasonCategory) && (
+      {expiry && requiresExpiry(value.reasonCategory) && (
         <label className="block sm:col-span-2">
           <span className="mb-1.5 block text-caption font-medium text-navy">
             Access expires
