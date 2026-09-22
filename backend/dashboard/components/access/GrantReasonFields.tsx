@@ -28,10 +28,13 @@ export function requiresExpiry(category: GrantReasonCategory): boolean {
 }
 
 /** True once the draft carries everything the server will validate. */
-export function reasonDraftComplete(value: GrantReasonDraft): boolean {
+export function reasonDraftComplete(
+  value: GrantReasonDraft,
+  { expiry = true }: { expiry?: boolean } = {},
+): boolean {
   return (
     (value.reasonCategory !== "other" || Boolean(value.reasonDetail.trim())) &&
-    (!requiresExpiry(value.reasonCategory) || Boolean(value.validUntil))
+    (!expiry || !requiresExpiry(value.reasonCategory) || Boolean(value.validUntil))
   );
 }
 
