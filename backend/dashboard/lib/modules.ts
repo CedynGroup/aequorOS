@@ -698,7 +698,12 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
           ? { state: "enabled" }
           : { state: "hidden" };
     }
-    if (!scope.hasInstitutionAuthority) return { state: "hidden" };
+    if (
+      !scope.hasInstitutionAuthority &&
+      !(moduleKey === "forecasting" && PUBLIC_MODULE_ROUTES.has(path))
+    ) {
+      return { state: "hidden" };
+    }
     if (scope.entitledModules && !scope.entitledModules.has(moduleKey)) {
       return { state: "hidden" };
     }
