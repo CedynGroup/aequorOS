@@ -19,7 +19,6 @@ import {
 } from "@/lib/modules";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
-import { useBanks } from "@/lib/api/hooks";
 
 const initialReason: GrantReasonDraft = {
   reasonCategory: "role_change",
@@ -53,7 +52,6 @@ export default function AccessDeniedPage({
   const queryClient = useQueryClient();
   const { bank } = useBankContext();
   const { effectiveAuthority } = useUserProfile();
-  const banks = useBanks();
   // Account Administration is evaluated organization-wide, so its requests
   // target the organization itself rather than one institution.
   const organizationScoped = denied.requirements.every(
@@ -76,7 +74,7 @@ export default function AccessDeniedPage({
   const targetInstitution = organizationScoped
     ? null
     : institutionId || bank?.id || institutionOptions[0]?.id || "";
-  const targetBank = banks.data?.banks.find(
+  const targetEntry = institutionOptions.find(
     (entry) => entry.id === targetInstitution,
   );
   const capabilities = organizationScoped
@@ -87,7 +85,7 @@ export default function AccessDeniedPage({
   const requirements = accessRequestRequirements(
     route,
     capabilities,
-    targetBank?.institutionTypeDetail?.institutionClass ?? null,
+    targetEntry?.institutionClass ?? null,
   );
   const pending = useMemo(
     () =>
@@ -136,7 +134,8 @@ export default function AccessDeniedPage({
       setError((await normalizeApiError(failure)).message),
   });
 
-  const targetReady = organizationScoped || Boolean(targetInstitution);
+  const targetReady =
+    organizationScoped || Boolean(targetEntry?.institutionClass);
   const complete =
     targetReady && requirements.length > 0 && reasonDraftComplete(reason);
 

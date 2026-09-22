@@ -210,6 +210,7 @@ class InstitutionDirectoryEntryRead(ClosedModel):
     id: str
     name: str
     short_name: str | None
+    institution_class: str | None
 
 
 class InstitutionDirectoryRead(ClosedModel):

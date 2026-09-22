@@ -39,6 +39,7 @@
     "lib/modules.test.ts",
     "lib/accessRequests.test.ts",
     "components/access/AccessDeniedPage.test.tsx",
+    "components/shell/BankContext.test.tsx",
     "components/access/AccessDeniedPage.tsx",
     "components/icaap/editor/schema.ts",
     "components/icaap/editor/schema.parity.test.ts",

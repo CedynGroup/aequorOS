@@ -28,6 +28,7 @@ from app.models import (
     AuthorizationAccessRequest,
     AuthorizationBinding,
     Bank,
+    InstitutionType,
     Organization,
     User,
 )
@@ -849,6 +850,26 @@ def _authentication_method(user: User) -> Literal["password", "sso", "service"]:
     return "password"
 
 
+def _institution_directory(db: DbSession, organization_id: str) -> InstitutionDirectoryRead:
+    entries = db.execute(
+        select(Bank, InstitutionType.institution_class)
+        .outerjoin(InstitutionType, Bank.institution_type == InstitutionType.type_code)
+        .where(Bank.organization_id == organization_id)
+        .order_by(Bank.name, Bank.id)
+    )
+    return InstitutionDirectoryRead(
+        institutions=[
+            InstitutionDirectoryEntryRead(
+                id=bank.id,
+                name=bank.name,
+                short_name=bank.short_name,
+                institution_class=institution_class,
+            )
+            for bank, institution_class in entries
+        ]
+    )
+
+
 @router.get(
     "/organization/institutions",
     response_model=InstitutionDirectoryRead,
@@ -868,15 +889,7 @@ def list_organization_institutions(
     what the owner personally reads.
     """
 
-    banks = db.scalars(
-        select(Bank).where(Bank.organization_id == ctx.organization_id).order_by(Bank.name, Bank.id)
-    )
-    return InstitutionDirectoryRead(
-        institutions=[
-            InstitutionDirectoryEntryRead(id=bank.id, name=bank.name, short_name=bank.short_name)
-            for bank in banks
-        ]
-    )
+    return _institution_directory(db, ctx.organization_id)
 
 
 @router.get(
@@ -887,15 +900,7 @@ def list_organization_institutions(
 def list_access_request_institutions(db: DbSession, ctx: Tenant) -> InstitutionDirectoryRead:
     """Public organization structure needed to target an access request."""
 
-    banks = db.scalars(
-        select(Bank).where(Bank.organization_id == ctx.organization_id).order_by(Bank.name, Bank.id)
-    )
-    return InstitutionDirectoryRead(
-        institutions=[
-            InstitutionDirectoryEntryRead(id=bank.id, name=bank.name, short_name=bank.short_name)
-            for bank in banks
-        ]
-    )
+    return _institution_directory(db, ctx.organization_id)
 
 
 @router.get(

@@ -1021,6 +1021,7 @@ export * from "./IngestionSummaryRead";
 export * from "./IngestionUploadRead";
 export * from "./InputsDigest";
 export * from "./InstitutionCapabilitiesRead";
+export * from "./InstitutionClass";
 export * from "./InstitutionCode";
 export * from "./InstitutionDirectoryEntryRead";
 export * from "./InstitutionDirectoryRead";
