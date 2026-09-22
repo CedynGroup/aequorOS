@@ -1283,29 +1283,6 @@ def _icaap_suggestion(session: Session, tenant: TenantSeed, objects: ObjectSet) 
     )
 
 
-def _package_attachment(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
-    return _uuid(
-        session,
-        RegulatoryPackageAttachment(
-            organization_id=tenant.organization_id,
-            bank_id=tenant.bank_id,
-            package_id=UUID(objects["package"]),
-            package_version=1,
-            kind="board_resolution",
-            title=tenant.marker,
-            original_filename="resolution.pdf",
-            media_type="application/pdf",
-            byte_size=100,
-            sha256="a" * 64,
-            storage_tier="outputs",
-            object_path=f"{tenant.slug}/resolution.pdf",
-            source="package_upload",
-            gate="submission",
-            attached_by=tenant.maker_id,
-        ),
-    )
-
-
 _BANK_PREFIX: Final = "/api/v1/banks/{bank_id}"
 _CASE_PREFIX: Final = "/api/v1/cases/{case_id}"
 
@@ -1612,11 +1589,6 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
             "/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/sections/{section_key}/ai-drafts/{suggestion_id}",
         ),
     ),
-    ObjectKind(
-        "package_attachment",
-        _package_attachment,
-        ("/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attachments/{attachment_id}",),
-    ),
 )
 
 KINDS_BY_NAME: Final[Mapping[str, ObjectKind]] = {kind.name: kind for kind in OBJECT_KINDS}
@@ -1637,7 +1609,6 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "icaap_resource_line": IcaapResourcesReconciliationLine,
     "supervisory_addon": BankSupervisoryAddon,
     "icaap_suggestion": IcaapAiSuggestion,
-    "package_attachment": RegulatoryPackageAttachment,
     "period": BankReportingPeriod,
     "regulatory_run": RegulatoryRun,
     "enterprise_stress_run": RegulatoryRun,
