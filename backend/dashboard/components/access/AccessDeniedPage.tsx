@@ -157,6 +157,24 @@ export default function AccessDeniedPage({
                 </p>
               </div>
             </div>
+            {institutionOptions.length > 1 && (
+              <label className="block">
+                <span className="mb-1.5 block text-caption font-medium text-navy">
+                  Institution
+                </span>
+                <select
+                  value={targetInstitution ?? ""}
+                  onChange={(event) => setInstitutionId(event.target.value)}
+                  className="w-full rounded-md border border-border bg-surface px-3 py-2.5 text-body text-navy"
+                >
+                  {institutionOptions.map((institution) => (
+                    <option key={institution.id} value={institution.id}>
+                      {institution.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="rounded-md border border-border-light bg-surface p-4">
               <p className="text-caption font-medium text-navy">
                 Required permission{requirements.length > 1 ? "s" : ""}
@@ -183,24 +201,6 @@ export default function AccessDeniedPage({
                   if (complete && !allRequirementsPending) create.mutate();
                 }}
               >
-                {institutionOptions.length > 1 && (
-                  <label className="block">
-                    <span className="mb-1.5 block text-caption font-medium text-navy">
-                      Institution
-                    </span>
-                    <select
-                      value={targetInstitution ?? ""}
-                      onChange={(event) => setInstitutionId(event.target.value)}
-                      className="w-full rounded-md border border-border bg-surface px-3 py-2.5 text-body text-navy"
-                    >
-                      {institutionOptions.map((institution) => (
-                        <option key={institution.id} value={institution.id}>
-                          {institution.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
                 {requirements.length === 0 ? (
                   <p role="status" className="text-body text-slate">
                     No additional permissions are required for this institution.

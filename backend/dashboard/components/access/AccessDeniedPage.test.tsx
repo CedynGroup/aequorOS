@@ -185,6 +185,47 @@ try {
   assert.equal(submitted[2].moduleScope, "liq");
   assert.equal(submitted[2].sensitivityScope, "confidential");
   act(() => renderer.unmount());
+  institutions.splice(
+    0,
+    institutions.length,
+    { id: "BK-SDI00001", name: "Alpha", institutionClass: "sdi" },
+    { id: "BK-BANK0001", name: "Beta", institutionClass: "bank" },
+  );
+  act(() => {
+    renderer = create(
+      <AccessDeniedPage
+        route="/basel/planning"
+        denied={{
+          title: "Capital planning",
+          reason: "Access required",
+          requirements: modules.accessRequestRequirements(
+            "/basel/planning",
+            [],
+            null,
+          ),
+        }}
+      />,
+    );
+  });
+  assert.equal(renderer!.root.findAllByType("form").length, 0);
+  assert.equal(renderer!.root.findByType("select").props.value, "BK-SDI00001");
+  assert.equal(renderer!.root.findByType("button").props.disabled, true);
+  act(() =>
+    renderer.root.findByType("select").props.onChange({
+      target: { value: "BK-BANK0001" },
+    }),
+  );
+  assert.equal(renderer!.root.findByType("button").props.disabled, false);
+  act(() => renderer.root.findByType("button").props.onClick());
+  act(() =>
+    renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }),
+  );
+  assert.equal(submitted.length, 4);
+  assert.equal(submitted[3].institutionId, "BK-BANK0001");
+  assert.equal(submitted[3].moduleScope, "cap");
+  assert.equal(submitted[3].sensitivityScope, "confidential");
+  assert.equal(submitted[3].permission, "view");
+  act(() => renderer.unmount());
 } finally {
   loader._load = originalLoad;
 }
