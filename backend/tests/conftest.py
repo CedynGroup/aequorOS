@@ -217,6 +217,7 @@ def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(real, "__init__", _refuse)
 
 
+
 @pytest.fixture(autouse=True)
 def fresh_settings_cache() -> Iterator[None]:
     """Kill order-dependent settings pollution across the suite.
