@@ -53,6 +53,14 @@ async function expectDisabledWithReason(
   await expect(page.getByRole("tooltip", { name: reason })).toBeVisible();
 }
 
+async function expectDisabledWorkspace(page: Page, reason: RegExp) {
+  await expect(page.getByRole("region", { name: "Forecasting workspace" })).toBeVisible(FIRST_PAINT);
+  await expect(page.getByRole("navigation", { name: "Module sections" })).toBeVisible();
+  await expectDisabledWithReason(page, "View Forecasting", reason);
+  await expect(page.getByRole("tooltip")).toContainText("Org Owner");
+  await expect(page.getByRole("tooltip")).toContainText("Settings → Members");
+}
+
 test.afterEach(async ({ page }) => {
   // Abandon, never await, a profile handler the last navigation cancelled.
   await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -61,7 +69,7 @@ test.afterEach(async ({ page }) => {
 test.describe("unbound Forecasting user", () => {
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
-  test("hides navigation and 404s deep links without Forecasting requests", async ({
+  test("keeps disabled workspaces and navigation without Forecasting requests", async ({
     page,
   }) => {
     const forecastingRequests: string[] = [];
@@ -78,13 +86,11 @@ test.describe("unbound Forecasting user", () => {
       "/forecasting/optimizer",
     ]) {
       await page.goto(deepLink);
-      await expect(page.getByText(/404|not found/i).first()).toBeVisible(
-        FIRST_PAINT,
-      );
+      await expectDisabledWorkspace(page, /Requires Forecasting .* View/i);
     }
     await expect(
       page.getByRole("link", { name: "Forecasting", exact: true }),
-    ).toHaveCount(0);
+    ).toHaveAttribute("aria-disabled", "true");
     expect(forecastingRequests).toEqual([]);
 
     if (evidenceDir) {
@@ -201,6 +207,16 @@ test.describe("Forecasting confidential-only reader", () => {
       "Run scenario",
       /Requires Forecasting · Aggregated · View/i,
     );
+    for (const [href, label] of [
+      ["/forecasting/nii", "NII Forecast"],
+      ["/forecasting/optimizer", "Optimizer"],
+      ["/forecasting/whatif", "What-if Lab"],
+    ]) {
+      await page.goto(href);
+      await expectDisabledWorkspace(page, /Requires Forecasting · Aggregated · View/i);
+      await expect(page.getByRole("link", { name: label, exact: true })).toHaveAttribute("aria-disabled", "true");
+      await expect(page.getByText("No succeeded forecast runs yet")).toHaveCount(0);
+    }
     expect(requests).toEqual([]);
   });
 });
@@ -255,9 +271,7 @@ test.describe("Forecasting aggregated-only reader", () => {
     ).not.toHaveAttribute("aria-disabled", "true");
 
     await page.goto("/forecasting/reverse-stress");
-    await expect(page.getByText(/404|not found/i).first()).toBeVisible(
-      FIRST_PAINT,
-    );
+    await expectDisabledWorkspace(page, CONFIDENTIAL_VIEW_REASON);
     expect(detailRequests).toEqual([]);
 
     if (evidenceDir) {

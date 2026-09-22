@@ -73,7 +73,7 @@ aggregated view; `/forecasting/nii`, `/forecasting/scenario`,
 `/forecasting/whatif`, `/forecasting/reverse-stress`, and
 `/forecasting/optimizer` require confidential view because each is built on
 full run detail. A tab the user cannot open stays visible in the module tab
-strip, disabled, with the exact grant sentence; a deep link to it 404s and
+strip, disabled, with the exact grant sentence; a workspace deep link renders the disabled Forecasting shell and
 issues no Forecasting request. An aggregated-only reader on the Balance Sheet
 sees the live baseline and the run index but never requests a run's detail.
 
@@ -210,3 +210,5 @@ Attach all of the following before deployment:
 6. browser evidence for an unbound user, an aggregated-view reader, a
    confidential-view reader with every run control disabled, and an exactly
    Forecasting-bound analyst with the run actions enabled.
+
+NII, Optimizer, and What-if require both aggregated and confidential Forecasting view. Missing either grant disables their workspace and navigation with an Org Owner / Settings → Members tooltip, without mounting data consumers. Unknown paths and unauthorized object details retain 404 responses.

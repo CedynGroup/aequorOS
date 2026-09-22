@@ -131,14 +131,7 @@ for (const moduleCase of [
     confidentialRoute: "/scenarios",
     scenarioSensitivity: "Confidential",
   },
-  {
-    prefix: "/forecasting",
-    label: "Forecasting",
-    aggregated: "forecastingAggregatedView",
-    confidential: "forecastingConfidentialView",
-    confidentialRoute: "/scenario",
-    scenarioSensitivity: "Confidential",
-  },
+
 ] as const) {
   const deniedModule = resolved(true, true, {
     [moduleCase.aggregated]: false,
@@ -331,7 +324,7 @@ for (const href of [
   assert.deepEqual(hrefAccess(href, aggregatedForecastingOnly), {
     state: "disabled",
     reason:
-      "Requires Forecasting · Confidential · View. Ask your organization owner or admin to grant it.",
+      "Requires Forecasting · Confidential · View. Ask an Org Owner to grant access via Settings → Members.",
   });
 }
 
@@ -343,7 +336,7 @@ assert.equal(isHrefVisible("/forecasting", deniedForecasting), false);
 assert.deepEqual(hrefAccess("/forecasting", deniedForecasting), {
   state: "disabled",
   reason:
-    "Requires Forecasting · Aggregated · View. Ask your organization owner or admin to grant it.",
+    "Requires Forecasting · Aggregated · View. Ask an Org Owner to grant access via Settings → Members.",
 });
 assert.equal(isPathVisible("/forecasting/scenario", deniedForecasting), true);
 
@@ -1347,3 +1340,21 @@ assert.match(
 console.log(
   "modules.test.ts: binding-controlled navigation and deep links passed.",
 );
+
+for (const path of ["/forecasting/nii", "/forecasting/optimizer", "/forecasting/whatif"]) {
+  assert.equal(isPathVisible(path, deniedForecasting), true);
+  assert.deepEqual(hrefAccess(path, deniedForecasting), {
+    state: "disabled",
+    reason: "Requires Forecasting · Aggregated · View. Ask an Org Owner to grant access via Settings → Members.",
+  });
+}
+for (const path of ["/forecasting", "/forecasting/scenario", "/forecasting/reverse-stress"]) {
+  const unbound = resolved(true, true, {
+    forecastingAggregatedView: false,
+    forecastingConfidentialView: false,
+  });
+  assert.equal(isPathVisible(path, unbound), true);
+  assert.equal(hrefAccess(path, unbound).state, "disabled");
+  assert.equal(isPathVisible(`${path}/opaque-run-id`, unbound), false);
+}
+assert.equal(isPathVisible("/forecasting/reverse-stress", aggregatedForecastingOnly), true);
