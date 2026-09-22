@@ -140,9 +140,7 @@ test.describe("operational Analyst", () => {
 test.describe("Organization Owner", () => {
   test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
-  test("can administer integration keys from Access", async ({
-    page,
-  }) => {
+  test("can administer integration keys from Access", async ({ page }) => {
     await page.goto("/access/integration-keys");
     await expect(
       page.getByRole("heading", { name: "Integration keys" }),

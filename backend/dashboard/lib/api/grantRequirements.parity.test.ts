@@ -66,7 +66,10 @@ function draft(over: Partial<GrantDraft>): GrantDraft {
     institutionId: "BK-SAMP0001",
     moduleScope: "all" as GrantDraft["moduleScope"],
     sensitivityScope: "all" as GrantDraft["sensitivityScope"],
-    reason: "test",
+    reasonCategory: "other",
+    reasonDetail: "test",
+    reference: "",
+    validUntil: "",
     ...over,
   };
 }
@@ -102,7 +105,9 @@ test("the mirrored gate equals the backend's CHAIN_DECISION_GATE", () => {
 
 test("the case that cost a session: Approver at Confidential is inert", () => {
   const warning = grantShortfall(
-    draft({ sensitivityScope: "confidential" as GrantDraft["sensitivityScope"] }),
+    draft({
+      sensitivityScope: "confidential" as GrantDraft["sensitivityScope"],
+    }),
   );
   assert.ok(warning, "an Approver at Confidential must warn");
   assert.match(warning, /Restricted/);
@@ -113,7 +118,9 @@ test("a sound grant says nothing", () => {
   assert.equal(grantShortfall(draft({})), null);
   assert.equal(
     grantShortfall(
-      draft({ sensitivityScope: "restricted" as GrantDraft["sensitivityScope"] }),
+      draft({
+        sensitivityScope: "restricted" as GrantDraft["sensitivityScope"],
+      }),
     ),
     null,
   );
@@ -197,9 +204,7 @@ test("only same bundle on the same institution counts", () => {
     "a grant on a sibling institution is not this one",
   );
   assert.equal(
-    overlappingGrantNotice(draft({}), [
-      { ...heldApprover, status: "revoked" },
-    ]),
+    overlappingGrantNotice(draft({}), [{ ...heldApprover, status: "revoked" }]),
     null,
     "a revoked row allows nothing and must not be reported",
   );
@@ -216,7 +221,9 @@ test("an organization-wide draft compares against organization-wide rows", () =>
     "an institution row is not the same target as an organization-wide draft",
   );
   assert.ok(
-    overlappingGrantNotice(orgDraft, [{ ...heldApprover, institutionId: null }]),
+    overlappingGrantNotice(orgDraft, [
+      { ...heldApprover, institutionId: null },
+    ]),
   );
 });
 
