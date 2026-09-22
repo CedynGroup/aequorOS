@@ -4,7 +4,10 @@ import { accessRequestRequirements, PUBLIC_MODULE_ROUTES } from "./modules";
 
 import { reasonDraftComplete } from "../components/access/GrantReasonFields";
 
-for (const reasonCategory of ["temporary_cover", "incident_break_glass"] as const) {
+for (const reasonCategory of [
+  "temporary_cover",
+  "incident_break_glass",
+] as const) {
   const draft = {
     reasonCategory,
     reasonDetail: "",
@@ -20,7 +23,12 @@ for (const reasonCategory of ["temporary_cover", "incident_break_glass"] as cons
 }
 assert.equal(
   reasonDraftComplete(
-    { reasonCategory: "other", reasonDetail: "", reference: "", validUntil: "" },
+    {
+      reasonCategory: "other",
+      reasonDetail: "",
+      reference: "",
+      validUntil: "",
+    },
     { expiry: false },
   ),
   false,

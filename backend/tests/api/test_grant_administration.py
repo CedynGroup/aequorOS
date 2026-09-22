@@ -12,7 +12,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.core.authorization import (
+    GrantReasonCategory,
     InstitutionScope,
     Module,
     ModuleScope,
@@ -25,6 +27,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
+from app.features.manage_authorization import reject_authorization_access_request
 from app.models import (
     AuditEvent,
     AuthorizationAccessRequest,
@@ -34,6 +37,7 @@ from app.models import (
     RefreshToken,
     User,
 )
+from app.schemas.authorization import AccessRequestReject
 from app.services import authentication, authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
@@ -1445,8 +1449,9 @@ def test_route_requests_sharing_requirement_resolve_against_effective_binding(
             assert len(audits) == 1
             assert audits[0].actor_user_id == USER_1
             assert audits[0].details["binding_id"] == binding_id
-            assert audits[0].details["authority_sentence"] == (
-                first.json()["binding"]["authority_sentence"]
+            assert (
+                audits[0].details["authority_sentence"]
+                == (first.json()["binding"]["authority_sentence"])
             )
     pending = grant_client.get("/api/v1/authorization/access-requests", headers=_owner_headers())
     assert pending.status_code == 200
@@ -1587,10 +1592,6 @@ def test_composer_grant_resolves_the_requests_it_satisfies(grant_client: TestCli
 def test_composer_does_not_overwrite_concurrent_request_rejection(
     grant_client: TestClient,
 ) -> None:
-    from app.api.deps import TenantContext
-    from app.features.manage_authorization import reject_authorization_access_request
-    from app.schemas.authorization import AccessRequestReject
-
     with _session() as db:
         if db.get_bind().dialect.name != "postgresql":
             pytest.skip("PostgreSQL row locks are required for concurrency coverage.")
@@ -1616,7 +1617,7 @@ def test_composer_does_not_overwrite_concurrent_request_rejection(
             finally:
                 reject_authorization_access_request(
                     UUID(request_id),
-                    AccessRequestReject(reason_category="role_change"),
+                    AccessRequestReject(reason_category=GrantReasonCategory.ROLE_CHANGE),
                     rejecting,
                     TenantContext(ORG_1, actor_user_id=USER_1),
                 )
