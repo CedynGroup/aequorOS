@@ -345,7 +345,9 @@ Grant preview/create, SSO approval, and route access requests use
 are optional except that `other` requires non-empty detail. `temporary_cover`
 and `incident_break_glass` require an expiry. The generated OpenAPI schema and
 client own the complete enum and payload shapes. Migration `202609180054`
-preserves historical free-text reasons under `other`.
+preserves historical free-text reasons under `other`. Rejection uses the same
+category, detail, and reference fields, including required detail for `other`,
+but never requires an expiry because it grants no authority.
 
 For a grant, submit one scalar scope from the applicable rollout contract with
 the confirmed `principal_user_id` and structured reason fields. Preview that
@@ -364,10 +366,17 @@ access. The class lets the dashboard select the route's actual sensitivity.
 
 Pending requests deduplicate by requester, route, institution target (or
 organization target), module, sensitivity, and permission. Org Owners list and
-approve them through `/authorization/access-requests`; approval
+approve or reject them through `/authorization/access-requests`; approval
 preserves the requested scope and uses the scoped-grant service. An equivalent
 effective binding can resolve approval without creating duplicate authority;
-the resolution records the binding and actor in audit evidence. Navigation and
+the resolution records the binding and actor in audit evidence. Ordinary composer
+grants also resolve pending requests that the evaluator now allows, recording
+the first matching binding and its authority sentence rather than assuming the
+new grant supplied the authority. Composer resolution locks pending requests in
+ID order before grant creation and rechecks their status; approval and rejection
+lock their pending request too, so a concurrent rejection cannot be overwritten.
+Rejection records the actor and structured reason in audit evidence, grants
+nothing, and allows the member to re-file. Navigation and
 the request form are owned by [docs/rbac.md §8.2](../../docs/rbac.md#82-frontend-dashboard).
 
 ## Authorization version and deployment transition

@@ -553,15 +553,12 @@ applies (institution class included), so whatever hides a public route also
 names what is missing. Requests target one institution, except Account
 Administration routes (`/institution*`), which the evaluator resolves
 organization-wide: those requests carry no institution and approval preserves
-organization scope. A request carries its own reason category, detail,
-reference and — for temporary cover and break-glass — the expiry the approver's
-form is pre-filled from; owners review requests under Access → Members only.
-A pending request has two audited exits: the owner approves it (a grant, or an
-already-effective equivalent binding) or rejects it with the same reason picker
-(`POST /authorization/access-requests/{id}/reject`, nothing granted, the member
-may re-file). A grant made through the ordinary composer closes every pending
-request of that member the evaluator now allows, so nothing lingers to block a
-later request.
+organization scope. The form uses the shared
+[structured reason picker](../backend/docs/authorization_foundation.md#structured-grant-reasons),
+and pre-fills the owner's review form from the request. Owners review requests
+under Access → Members only. The
+[request lifecycle contract](../backend/docs/authorization_foundation.md#route-access-requests)
+owns approval, rejection, and automatic resolution by composer grants.
 Unknown IDs, object-detail routes, cross-tenant objects, structural exclusions,
 and non-existent paths remain 404 and never disclose permissions.
 The root `/` is the post-sign-in landing, not a deep link: for users with separate

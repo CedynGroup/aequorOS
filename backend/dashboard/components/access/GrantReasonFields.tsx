@@ -34,7 +34,9 @@ export function reasonDraftComplete(
 ): boolean {
   return (
     (value.reasonCategory !== "other" || Boolean(value.reasonDetail.trim())) &&
-    (!expiry || !requiresExpiry(value.reasonCategory) || Boolean(value.validUntil))
+    (!expiry ||
+      !requiresExpiry(value.reasonCategory) ||
+      Boolean(value.validUntil))
   );
 }
 

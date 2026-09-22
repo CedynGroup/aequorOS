@@ -1242,7 +1242,10 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
     assert body["institution_scope"] == "organization"
     assert body["institution_id"] is None
     assert body["institution_name"] is None
-    assert datetime.fromisoformat(body["valid_until"]).replace(tzinfo=UTC) == expiry
+    request_expiry = datetime.fromisoformat(body["valid_until"])
+    if request_expiry.tzinfo is None:
+        request_expiry = request_expiry.replace(tzinfo=UTC)
+    assert request_expiry == expiry
     duplicate = grant_client.post(
         "/api/v1/authorization/access-requests",
         headers=member_headers,
@@ -1289,7 +1292,10 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
     assert binding["institution_id"] is None
     assert binding["module_scope"] == "account"
     assert binding["sensitivity_scope"] == "restricted"
-    assert datetime.fromisoformat(binding["valid_until"]).replace(tzinfo=UTC) == expiry
+    binding_expiry = datetime.fromisoformat(binding["valid_until"])
+    if binding_expiry.tzinfo is None:
+        binding_expiry = binding_expiry.replace(tzinfo=UTC)
+    assert binding_expiry == expiry
 
     with _session() as db:
         user = db.get(User, GRANTEE)
