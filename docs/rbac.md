@@ -563,13 +563,8 @@ institution or organization capabilities, when the Command Center lies outside
 their authority the route guard sends them to the first surface they can see
 in sidebar order (`lib/modules.ts::landingPathFor`,
 the §8.3 order), falling back to personal settings — never a 404 on arrival.
-`/settings` is personal and operational configuration for every active member:
-Appearance, Current account, Data & compute, and About. Access administration
-is a separate top-level `/access` area. Its entry and My access placeholder are
-visible to every member; Members, Authentication, and Integration keys stay
-visible but disabled with the exact Account/restricted/administer tooltip when
-authority is absent. Legacy `/settings#members`, `#authentication`, and
-integration-key anchors client-redirect to the new routes.
+Settings and Access have separate top-level areas; their contents and tab
+visibility are owned by [§10](#10-settings-and-access-architecture).
 Ownership is two explicit sentences, never one implied one: the `org_owner`
 Account binding (administer members, grants, SSO, keys) and an organization-wide
 `viewer` / all modules / all sensitivities binding, the §7 "read dashboards for
@@ -581,7 +576,6 @@ A member who saves a grant for themselves is told their session ended and sent
 to sign in again (`/login?reason=access_changed`); a session an administrator
 ended says so too (`reason=session_ended`).
 Query caches are partitioned by tenant, actor, `authv`, and institution.
-For Settings and Access tab visibility, see [§10](#10-settings-and-access-architecture).
 
 For members whose only authority is [baseline membership](../backend/docs/authorization_foundation.md#baseline-membership),
 `/` renders the shell and "No authorized institutions yet" workspace. The complete
@@ -703,7 +697,8 @@ The three administration tabs require organization-wide
 ACCOUNT/restricted/administer authority. They are never hidden from a member:
 without authority they are disabled with the shared permission tooltip and
 direct links render the same explanation instead of 404. My access is open to
-every member.
+every member. Legacy `/settings#members`, `#authentication`, and integration-key
+anchors client-redirect to the corresponding Access routes.
 
 Grant preview/create and access requests share the reason picker defined by the
 [structured reason contract](../backend/docs/authorization_foundation.md#structured-grant-reasons).

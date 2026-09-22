@@ -226,7 +226,9 @@ test.describe("fresh active member baseline", () => {
       ownerPage.getByText("Requested access", { exact: true }),
     ).toBeVisible();
     await expect(
-      ownerPage.getByText("Foreign Exchange", { exact: false }),
+      ownerPage.getByText("E2E Invite_fresh · Foreign Exchange", {
+        exact: true,
+      }),
     ).toBeVisible();
     await ownerPage.getByRole("button", { name: "Review request" }).click();
     await expect(ownerPage.getByLabel("Module")).toHaveValue("fx");

@@ -14,7 +14,7 @@ to login and failed external compliance filters.
 
 ## Scope
 
-79 App Router page entries across the authenticated shell, login, the inspector,
+App Router pages cover the authenticated shell, login, the inspector,
 and dynamic detail routes. The route groups under `app/(app)/`:
 
 | Area               | Routes             | What it reads                                                                               |

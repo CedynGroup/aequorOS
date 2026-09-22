@@ -22,9 +22,12 @@ MODULES      IRRBB /irr                 Overview · EVE & NII · Gap Analysis ·
              Forecasting /forecasting   Balance Sheet · NII · Scenarios · What-if · Optimizer · Assumptions
              Behavioral /behavioral     Overview · NMD Duration · Prepayment · Deposit Stability
 DATA         Data Engine /data-engine   Overview · Excel/CSV · API Push · Market Data · T24 · Adapters · Canonical
-GOVERNANCE   Reports /reports (+ /reports/board-pack) · Submissions /submissions · Settings /settings
+GOVERNANCE   Reports /reports (+ /reports/board-pack) · Submissions /submissions
 PERSONAL     Avatar menu → Profile & preferences /settings/profile
 ```
+
+For the separate Access and Settings areas, see
+[RBAC §10](rbac.md#10-settings-and-access-architecture).
 
 Placement rules: market data **management** (connect/rotate/upload) lives in the Data Engine;
 market data **consumption** (curves, rates, ratings analysis) lives in Markets.
