@@ -24,7 +24,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
-from app.models import AuditEvent, AuthorizationBinding, Bank, RefreshToken, User
+from app.models import AuditEvent, AuthorizationBinding, Bank, InstitutionType, RefreshToken, User
 from app.services import authentication, authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
@@ -888,9 +888,7 @@ def test_approving_and_filing_cannot_land_on_one_identity(grant_client: TestClie
     approver = grant_client.post(
         "/api/v1/authorization/bindings",
         headers=_owner_headers(),
-        json=_reviewed_payload(
-            grant_client, role="approver", reason="Independent checker duties"
-        ),
+        json=_reviewed_payload(grant_client, role="approver", reason="Independent checker duties"),
     )
     assert approver.status_code == 201, approver.text
 
@@ -1215,3 +1213,36 @@ def test_organization_scoped_access_request_carries_expiry_into_the_grant(
         {key: capability[key] for key in ("module", "sensitivity", "permission")}
         for capability in me.json()["effective_authority"]["organization_capabilities"]
     ]
+
+
+def test_access_request_directory_exposes_uncovered_institution_class(
+    grant_client: TestClient,
+) -> None:
+    with _session() as db:
+        bank = db.get(Bank, BANK_B)
+        assert bank is not None
+        sdi_type = db.scalar(
+            select(InstitutionType).where(InstitutionType.institution_class == "sdi")
+        )
+        assert sdi_type is not None
+        bank.institution_type = sdi_type.type_code
+        db.commit()
+
+    member_headers = headers(user_id=GRANTEE, roles=("viewer",))
+    operational = grant_client.get("/api/v1/banks", headers=member_headers)
+    assert operational.status_code == 200, operational.text
+    assert operational.json()["banks"] == []
+
+    for path, actor_headers in (
+        ("/api/v1/organization/institutions", _owner_headers()),
+        ("/api/v1/organization/institutions/access-request", member_headers),
+    ):
+        response = grant_client.get(path, headers=actor_headers)
+        assert response.status_code == 200, response.text
+        entries = {entry["id"]: entry for entry in response.json()["institutions"]}
+        assert entries[BANK_A]["institution_class"] == "bank"
+        assert entries[BANK_B]["institution_class"] == "sdi"
+        with _session() as db:
+            assert set(entries) == set(
+                db.scalars(select(Bank.id).where(Bank.organization_id == ORG_1))
+            )

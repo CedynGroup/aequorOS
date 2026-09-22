@@ -33,7 +33,6 @@ import {
   effectiveOrganizationModules,
   hasEffectiveCapability,
   hasStructuralCapability,
-  isPersonalSettingsPath,
   moduleSetFrom,
   type ModuleScope,
 } from "@/lib/modules";
@@ -98,7 +97,9 @@ export function useModuleScope(): ModuleScope {
 
 export default function BankProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isPersonalSelfService = isPersonalSettingsPath(pathname);
+  const isPersonalSelfService =
+    pathname === "/settings/profile" ||
+    pathname.startsWith("/settings/profile/");
   const profileQuery = useUserProfile();
   const banksQuery = useBanks(!isPersonalSelfService);
   const bank = banksQuery.data?.banks[0] ?? null;
@@ -386,13 +387,16 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     const staleSession = apiError?.status === 401;
     return (
       <FullScreenPanel
-        title={staleSession ? "Your access has changed" : "Risk service unreachable"}
+        title={
+          staleSession ? "Your access has changed" : "Risk service unreachable"
+        }
         description={
           staleSession
             ? (apiError?.message ??
               "Your permissions changed, so this session is out of date. Sign in again to pick them up.")
             : apiError
-              ? (apiError.message ?? "Effective authority is temporarily unavailable.")
+              ? (apiError.message ??
+                "Effective authority is temporarily unavailable.")
               : "Could not resolve effective authority from the risk service."
         }
         action={

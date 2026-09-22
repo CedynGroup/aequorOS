@@ -5,10 +5,12 @@ import { act, create } from "react-test-renderer";
 import * as modules from "../../lib/modules";
 
 const institutions = [
-  { id: "BK-AAAAAAAA", name: "Alpha" },
-  { id: "BK-BBBBBBBB", name: "Beta" },
-  { id: "BK-CCCCCCCC", name: "Gamma" },
+  { id: "BK-AAAAAAAA", name: "Alpha", institutionClass: "bank" },
+  { id: "BK-BBBBBBBB", name: "Beta", institutionClass: "bank" },
+  { id: "BK-CCCCCCCC", name: "Gamma", institutionClass: "bank" },
 ];
+let baselineOnly = false;
+let activeBank: (typeof institutions)[number] | null = institutions[1];
 const capability = (module: string) => ({
   module,
   sensitivity: "confidential",
@@ -26,32 +28,34 @@ const container = ({ children }: { children?: React.ReactNode }) => (
 loader._load = (request, parent, isMain) => {
   if (request === "@/lib/modules") return modules;
   if (request === "@/components/shell/BankContext") {
-    return { useBankContext: () => ({ bank: institutions[1] }) };
+    return { useBankContext: () => ({ bank: activeBank }) };
   }
   if (request === "@/components/profile/ProfileProvider") {
     return {
       useUserProfile: () => ({
         effectiveAuthority: {
-          institutionCapabilities: [
-            {
-              institutionId: institutions[0].id,
-              capabilities: [capability("risk")],
-            },
-            {
-              institutionId: institutions[1].id,
-              capabilities: [capability("liq")],
-            },
-            {
-              institutionId: institutions[2].id,
-              capabilities: [capability("liq"), capability("risk")],
-            },
-          ],
+          institutionCapabilities: baselineOnly
+            ? []
+            : [
+                {
+                  institutionId: institutions[0].id,
+                  capabilities: [capability("risk")],
+                },
+                {
+                  institutionId: institutions[1].id,
+                  capabilities: [capability("liq")],
+                },
+                {
+                  institutionId: institutions[2].id,
+                  capabilities: [capability("liq"), capability("risk")],
+                },
+              ],
         },
       }),
     };
   }
   if (request === "@/lib/api/hooks") {
-    return { useBanks: () => ({ data: { banks: institutions } }) };
+    return { useBanks: () => ({ data: { banks: [] } }) };
   }
   if (request === "@tanstack/react-query")
     return {
@@ -148,6 +152,38 @@ try {
     renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }),
   );
   assert.equal(submitted.length, 2);
+  act(() => renderer.unmount());
+  activeBank = null;
+  baselineOnly = true;
+  institutions.splice(0, institutions.length, {
+    id: "BK-SDI00001",
+    name: "Savings and loans",
+    institutionClass: "sdi",
+  });
+  act(() => {
+    renderer = create(
+      <AccessDeniedPage
+        route="/liquidity"
+        denied={{
+          title: "Liquidity",
+          reason: "Access required",
+          requirements: modules.accessRequestRequirements(
+            "/liquidity",
+            [],
+            null,
+          ),
+        }}
+      />,
+    );
+  });
+  act(() => renderer.root.findByType("button").props.onClick());
+  act(() =>
+    renderer.root.findByType("form").props.onSubmit({ preventDefault() {} }),
+  );
+  assert.equal(submitted.length, 3);
+  assert.equal(submitted[2].institutionId, "BK-SDI00001");
+  assert.equal(submitted[2].moduleScope, "liq");
+  assert.equal(submitted[2].sensitivityScope, "confidential");
   act(() => renderer.unmount());
 } finally {
   loader._load = originalLoad;

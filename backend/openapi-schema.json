@@ -55,6 +55,7 @@
               "auditor",
               "analyst",
               "approver",
+              "validator",
               "account_admin"
             ],
             "title": "Role Bundle",
@@ -33218,6 +33219,17 @@
             "title": "Id",
             "type": "string"
           },
+          "institution_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Class"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -33237,7 +33249,8 @@
         "required": [
           "id",
           "name",
-          "short_name"
+          "short_name",
+          "institution_class"
         ],
         "title": "InstitutionDirectoryEntryRead",
         "type": "object"

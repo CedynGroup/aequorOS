@@ -137,6 +137,7 @@ export const AccessRequestApproveRoleBundleEnum = {
   Auditor: "auditor",
   Analyst: "analyst",
   Approver: "approver",
+  Validator: "validator",
   AccountAdmin: "account_admin",
 } as const;
 export type AccessRequestApproveRoleBundleEnum =

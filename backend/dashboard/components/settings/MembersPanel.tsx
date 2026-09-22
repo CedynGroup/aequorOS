@@ -603,7 +603,7 @@ function initialDraft(
 
 function GrantComposer({
   member,
-  accessRequest,
+  accessRequest: initialAccessRequest,
   banks,
   selfUserId,
   onClose,
@@ -617,6 +617,7 @@ function GrantComposer({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const [accessRequest, setAccessRequest] = useState(initialAccessRequest);
   const isSelfGrant = Boolean(selfUserId) && member.userId === selfUserId;
   const [step, setStep] = useState<"define" | "review" | "done">("define");
   const [draft, setDraft] = useState<GrantDraft>(() =>
@@ -761,6 +762,7 @@ function GrantComposer({
   };
 
   const resetForAnother = () => {
+    setAccessRequest(undefined);
     setDraft(initialDraft(banks));
     setSaved(null);
     setPreviewResult(null);

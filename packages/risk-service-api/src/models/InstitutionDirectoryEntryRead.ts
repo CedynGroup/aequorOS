@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { InstitutionClass } from "./InstitutionClass";
+import {
+  InstitutionClassFromJSON,
+  InstitutionClassFromJSONTyped,
+  InstitutionClassToJSON,
+  InstitutionClassToJSONTyped,
+} from "./InstitutionClass";
 import type { ShortName } from "./ShortName";
 import {
   ShortNameFromJSON,
@@ -33,6 +40,12 @@ export interface InstitutionDirectoryEntryRead {
   id: string;
   /**
    *
+   * @type {InstitutionClass}
+   * @memberof InstitutionDirectoryEntryRead
+   */
+  institutionClass: InstitutionClass;
+  /**
+   *
    * @type {string}
    * @memberof InstitutionDirectoryEntryRead
    */
@@ -52,6 +65,8 @@ export function instanceOfInstitutionDirectoryEntryRead(
   value: object,
 ): value is InstitutionDirectoryEntryRead {
   if (!("id" in value) || value["id"] === undefined) return false;
+  if (!("institutionClass" in value) || value["institutionClass"] === undefined)
+    return false;
   if (!("name" in value) || value["name"] === undefined) return false;
   if (!("shortName" in value) || value["shortName"] === undefined) return false;
   return true;
@@ -73,6 +88,7 @@ export function InstitutionDirectoryEntryReadFromJSONTyped(
   return {
     ...json,
     id: json["id"],
+    institutionClass: InstitutionClassFromJSON(json["institution_class"]),
     name: json["name"],
     shortName: ShortNameFromJSON(json["short_name"]),
   };
@@ -94,6 +110,7 @@ export function InstitutionDirectoryEntryReadToJSONTyped(
 
   return {
     id: value["id"],
+    institution_class: InstitutionClassToJSON(value["institutionClass"]),
     name: value["name"],
     short_name: ShortNameToJSON(value["shortName"]),
   };
