@@ -24,13 +24,22 @@
  * disagree — fix the mirror, never the test.
  */
 
-import type { GrantDraft } from './grants';
+import type { GrantDraft } from "./grants";
+
+type GrantScope = Pick<
+  GrantDraft,
+  | "roleBundle"
+  | "institutionScope"
+  | "institutionId"
+  | "moduleScope"
+  | "sensitivityScope"
+>;
 
 /** The module a filing-chain decision is evaluated against. */
-export const CHAIN_DECISION_MODULE = 'reg';
+export const CHAIN_DECISION_MODULE = "reg";
 
 /** The sensitivity a filing-chain decision is evaluated against. */
-export const CHAIN_DECISION_SENSITIVITY = 'restricted';
+export const CHAIN_DECISION_SENSITIVITY = "restricted";
 
 /**
  * Bundles whose whole purpose is deciding on a return in the filing chain.
@@ -40,16 +49,16 @@ export const CHAIN_DECISION_SENSITIVITY = 'restricted';
  * legitimate choice there rather than a mistake worth interrupting.
  */
 const CHAIN_DECISION_BUNDLES: Record<string, string> = {
-  approver: 'approve returns or send them back',
-  validator: 'file returns with the regulator',
+  approver: "approve returns or send them back",
+  validator: "file returns with the regulator",
 };
 
 function coversModule(scope: string): boolean {
-  return scope === CHAIN_DECISION_MODULE || scope === 'all';
+  return scope === CHAIN_DECISION_MODULE || scope === "all";
 }
 
 function coversSensitivity(scope: string): boolean {
-  return scope === CHAIN_DECISION_SENSITIVITY || scope === 'all';
+  return scope === CHAIN_DECISION_SENSITIVITY || scope === "all";
 }
 
 /**
@@ -60,7 +69,7 @@ function coversSensitivity(scope: string): boolean {
  * scoping deliberately. What it must not do is let the Owner believe they have
  * granted something they have not.
  */
-export function grantShortfall(draft: GrantDraft): string | null {
+export function grantShortfall(draft: GrantScope): string | null {
   const work = CHAIN_DECISION_BUNDLES[draft.roleBundle];
   if (work === undefined) return null;
 
@@ -69,12 +78,12 @@ export function grantShortfall(draft: GrantDraft): string | null {
   if (moduleOk && sensitivityOk) return null;
 
   const missing: string[] = [];
-  if (!moduleOk) missing.push('Regulatory Reporting (or all modules)');
-  if (!sensitivityOk) missing.push('Restricted (or all sensitivity levels)');
+  if (!moduleOk) missing.push("Regulatory Reporting (or all modules)");
+  if (!sensitivityOk) missing.push("Restricted (or all sensitivity levels)");
 
   return (
     `This grant will not let them ${work}. Deciding on a return is evaluated ` +
-    `against ${missing.join(' and ')}, and scopes are matched exactly — a ` +
+    `against ${missing.join(" and ")}, and scopes are matched exactly — a ` +
     `narrower level does not include a wider one. They will be able to sign ` +
     `in and see the return, then be refused when they act on it.`
   );
@@ -106,21 +115,23 @@ export type HeldGrant = Readonly<{
 }>;
 
 export function overlappingGrantNotice(
-  draft: GrantDraft,
+  draft: GrantScope,
   held: readonly HeldGrant[],
 ): string | null {
   const target =
-    draft.institutionScope === 'institution' ? (draft.institutionId ?? null) : null;
+    draft.institutionScope === "institution"
+      ? (draft.institutionId ?? null)
+      : null;
   const same = held.filter(
     (grant) =>
-      grant.status === 'active' &&
+      grant.status === "active" &&
       grant.roleBundle === draft.roleBundle &&
       (grant.institutionId ?? null) === target,
   );
   if (same.length === 0) return null;
 
   return (
-    `They already hold ${same.length === 1 ? 'an active' : `${same.length} active`} ` +
+    `They already hold ${same.length === 1 ? "an active" : `${same.length} active`} ` +
     `${draft.roleBundle} grant here. A new grant is a SEPARATE row — scopes do ` +
     `not merge across rows, so this one has to be complete on its own, and the ` +
     `existing one keeps whatever it already allows. If you meant to widen the ` +

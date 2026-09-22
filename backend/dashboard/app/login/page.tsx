@@ -1,24 +1,29 @@
-import { Suspense } from 'react';
-import { Fraunces } from 'next/font/google';
-import Logo from '@/components/shell/Logo';
-import LoginForm from './LoginForm';
+import { Suspense } from "react";
+import { Fraunces } from "next/font/google";
+import Logo from "@/components/shell/Logo";
+import LoginForm from "./LoginForm";
 
 // Editorial display serif — the same family the marketing site leads with, so
 // the brand voice carries from aequoros.com into the product.
-const fraunces = Fraunces({ subsets: ['latin'], weight: ['500'], display: 'swap' });
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  weight: ["500"],
+  display: "swap",
+});
 
 // Rendered per request: the SSO button reflects the org's live connection state
 // (Access → Authentication), not a build-time snapshot.
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-const apiOrigin = (process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? 'http://localhost:8000')
-  .replace(/\/api\/v1\/?$/, '');
+const apiOrigin = (
+  process.env.NEXT_PUBLIC_RISK_API_BASE_URL ?? "http://localhost:8000"
+).replace(/\/api\/v1\/?$/, "");
 
 /** Public probe: is an SSO connection enabled? Backend down → just hide the button. */
 async function ssoEnabled(): Promise<boolean> {
   try {
     const res = await fetch(`${apiOrigin}/api/v1/auth/sso/status`, {
-      cache: 'no-store',
+      cache: "no-store",
       signal: AbortSignal.timeout(1500),
     });
     if (!res.ok) return false;
@@ -100,8 +105,8 @@ export default async function LoginPage() {
             <h2 className="text-h1 text-navy">Sign in</h2>
             <p className="mt-2 text-body text-slate leading-relaxed">
               {withSso
-                ? 'Use your AequorOS credentials, or single sign-on through your institution.'
-                : 'Use your AequorOS credentials.'}
+                ? "Use your AequorOS credentials, or single sign-on through your institution."
+                : "Use your AequorOS credentials."}
             </p>
 
             {/* LoginForm reads ?callbackUrl via useSearchParams, which requires a

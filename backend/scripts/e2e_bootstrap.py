@@ -86,6 +86,8 @@ E2E_USERS = {
     "approver": UUID("eeeeeeee-2222-4eee-8eee-eeeeeeeeeee2"),
     "analyst": UUID("eeeeeeee-3333-4eee-8eee-eeeeeeeeeee3"),
     "viewer": UUID("eeeeeeee-4444-4eee-8eee-eeeeeeeeeee4"),
+    "access_request_member": UUID("eeeeeeee-1010-4eee-8eee-eeeeeeee1010"),
+    "access_extra_member": UUID("eeeeeeee-1011-4eee-8eee-eeeeeeee1011"),
     "grant_member": UUID("eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5"),
     "account_admin": UUID("eeeeeeee-6666-4eee-8eee-eeeeeeeeeee6"),
     "legacy_account_admin": UUID("eeeeeeee-7777-4eee-8eee-eeeeeeeeeee7"),
@@ -161,6 +163,8 @@ def main() -> None:
                         if role
                         in {
                             "grant_member",
+                            "access_request_member",
+                            "access_extra_member",
                             "account_admin",
                             "legacy_account_admin",
                             "integration_admin",
@@ -485,8 +489,7 @@ def _govern_icaap_commencement(session: Session) -> None:
         }
     session.flush()
     print(
-        f"governed {FIRST_AS_OF_PARAM} to {E2E_ICAAP_FIRST_AS_OF.isoformat()} "
-        f"({len(rows)} row(s))"
+        f"governed {FIRST_AS_OF_PARAM} to {E2E_ICAAP_FIRST_AS_OF.isoformat()} ({len(rows)} row(s))"
     )
 
 

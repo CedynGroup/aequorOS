@@ -57,7 +57,7 @@ configuration and ingestion diagnostics.
 
 > **Bank identifier.** `{bank_id}` is your **institution ID** — the short
 > identifier you were onboarded with (format `BK-XXXXXXXX`, shown in
-> Settings → Institution profile). It is the bank's one and only identifier
+> Institution profile (`/institution`)). It is the bank's one and only identifier
 > across the platform. It must match the institution selected when the
 > integration key was issued. Lowercase input is accepted and normalized.
 

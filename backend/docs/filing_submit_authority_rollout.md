@@ -120,7 +120,7 @@ an omission:
 
 ### Granting it
 
-One indivisible binding per Validator, through Settings → Members (the Org Owner
+One indivisible binding per Validator, through Access → Members (the Org Owner
 gate) or `POST /api/v1/authorization/bindings`:
 
 ```
