@@ -11,7 +11,7 @@ product interface is shown on-site at `/product#product-ui`.
 - Next.js 16 (App Router) with React 19
 - TypeScript
 - Tailwind CSS v3
-- Fraunces + Inter via `next/font/google`
+- Self-hosted Fraunces + Inter variable fonts via Fontsource
 - Deploy: Coolify (apex domain, behind Cloudflare)
 
 ## Design system

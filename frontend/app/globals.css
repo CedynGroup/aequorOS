@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 :root {
+  --font-fraunces: 'Fraunces Variable';
+  --font-inter: 'Inter Variable';
   --navy-deep: #0f1845;
   --navy: #1e2761;
   --accent: #4fc3f7;
