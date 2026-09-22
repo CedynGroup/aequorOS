@@ -1,6 +1,6 @@
 [tools]
 python = "3.13"
-uv = "latest"
+uv = "0.11.18"
 
 [tasks."risk-service:sync"]
 description = "Install dependencies with uv"

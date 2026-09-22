@@ -25,7 +25,7 @@ jobs:
           # Pinned: a release must be reproducible, and mise-action installs a
           # floating version by default. Keep in step with risk-service.yml.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       - name: Install workspace dependencies

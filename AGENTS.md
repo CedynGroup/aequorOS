@@ -478,6 +478,13 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   a fail-closed 409 naming a seed migration, a missing live plane as "no computed data yet"
   on every module page. Full prerequisites (object storage included):
   `backend/dashboard/README.md` §End-to-end.
+  **Test databases are built once per pytest process, never per test**
+  (`backend/tests/conftest.py`): rollback-isolated tests (tenant API and
+  `tests/operator` alike) share one schema through a savepoint-bound sessionmaker,
+  and `@pytest.mark.committing_db` tests share a second schema that is TRUNCATEd
+  and reseeded before each test. Only `tests/db` migration tests build schemas of
+  their own. A test that needs a fresh schema is the exception to justify, not the
+  default to reach for.
 - Regulatory `input_hash` must stay **value-based**: the snapshot `facts` list excludes `fact.id`
   and is sorted by canonical JSON (`INPUT_SCHEMA_VERSION = "bank-facts-v2"`). The live engine
   re-derives facts (new UUIDs) on every refresh, so an id- or order-dependent hash would break

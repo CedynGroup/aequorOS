@@ -110,7 +110,10 @@ name: Risk Service CI
 # backend gate, and ruling it out cost real time while the 2026-08-21 outage was
 # being diagnosed. Every job below pins 2026.7.7 — the version every task in
 # this file was verified against locally, published 2026-07-15 with linux-x64
-# assets. Bump it deliberately, in one commit, not by drift.
+# assets. Bump it deliberately, in one commit, not by drift. The same rule pins
+# `uv` in every `install_args` line and in `backend/mise.toml` `[tools]`: a
+# `latest` there is one more network lookup per job and one more moving part
+# under the gate; keep the two declarations on the same version.
 #
 # BRANCH PROTECTION — the part that decides whether any of this stops a merge.
 # `main` required exactly ONE status check as of 2026-08-22 (`GET
@@ -236,7 +239,7 @@ jobs:
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       - name: Lint risk service
@@ -258,7 +261,7 @@ jobs:
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       # Cheap, hermetic, and first to fail: this is the job that notices when
@@ -343,7 +346,7 @@ jobs:
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       # NOBYPASSRLS on purpose, and this is a HARD REQUIREMENT, not hygiene: the
@@ -445,7 +448,7 @@ jobs:
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       - name: Create restricted test role
@@ -506,7 +509,7 @@ jobs:
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       # Started as a step rather than a `services:` entry on purpose: a service
@@ -580,7 +583,7 @@ jobs:
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       - name: Install workspace dependencies
@@ -606,7 +609,7 @@ jobs:
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
           version: 2026.7.7
-          install_args: python@3.13 uv@latest node@24 pnpm@11.2.2
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       - name: Real-data API suite

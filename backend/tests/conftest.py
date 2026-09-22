@@ -12,9 +12,8 @@ os.environ["RUN_INPROCESS_WORKER"] = "0"
 os.environ["DATABASE_URL"] = ""
 os.environ["WORKER_DATABASE_URL"] = ""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
@@ -280,28 +279,6 @@ def _postgres_schema_url(database_url: str, schema_name: str) -> str:
     )
 
 
-def _prepare_database_url(
-    *,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> tuple[str, str | None]:
-    test_database_url = os.getenv("TEST_DATABASE_URL")
-    if test_database_url is None:
-        database_path = tmp_path / "risk_service_test.db"
-        return f"sqlite+pysqlite:///{database_path}", None
-
-    schema_name = f"risk_service_test_{uuid4().hex}"
-    admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
-    try:
-        with admin_engine.connect() as connection:
-            connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
-    finally:
-        admin_engine.dispose()
-
-    monkeypatch.setenv("DATABASE_URL", _postgres_schema_url(test_database_url, schema_name))
-    return os.environ["DATABASE_URL"], schema_name
-
-
 def _drop_postgres_schema(database_url: str, schema_name: str | None) -> None:
     if schema_name is None:
         return
@@ -369,6 +346,9 @@ def _seed_demo_tenants(engine: Engine) -> None:
 class _TestDatabase:
     database_url: str
     engine: Engine
+    #: Rebuilds the baseline rows after a test commits through the outer
+    #: transaction and the schema has to be reset for the tests that follow.
+    seed: Callable[[Engine], None]
 
 
 @dataclass
@@ -381,16 +361,46 @@ class _LazyTestApp:
         return self.app
 
 
-@pytest.fixture(scope="session")
-def _shared_test_database(
-    tmp_path_factory: pytest.TempPathFactory,
+def sqlite_database_url(tmp_path_factory: pytest.TempPathFactory, name: str) -> str:
+    database_path = tmp_path_factory.mktemp(f"{name}-test-database") / "risk_service_test.db"
+    return f"sqlite+pysqlite:///{database_path}"
+
+
+@contextmanager
+def build_test_database(
+    database_url: str,
+    *,
+    seed: Callable[[Engine], None],
 ) -> Iterator[_TestDatabase]:
-    """Build the rollback-isolated test database once per pytest process."""
+    """Create the model schema and its baseline rows on one engine.
+
+    Nothing is dropped on exit: the SQLite file lives in a discarded temp
+    directory and a Postgres schema is dropped with CASCADE by its creator.
+    """
+    engine = get_engine(database_url)
+    if engine.dialect.name == "sqlite":
+        _enable_sqlite_foreign_keys(engine)
+    try:
+        Base.metadata.create_all(engine)
+        seed(engine)
+        yield _TestDatabase(database_url=database_url, engine=engine, seed=seed)
+    finally:
+        engine.dispose()
+        get_settings.cache_clear()
+        get_engine.cache_clear()
+
+
+@contextmanager
+def _session_test_database(
+    tmp_path_factory: pytest.TempPathFactory,
+    name: str,
+) -> Iterator[_TestDatabase]:
+    """A database for the whole pytest process: a Postgres schema of its own
+    under ``TEST_DATABASE_URL``, otherwise a SQLite file."""
     test_database_url = os.getenv("TEST_DATABASE_URL")
     schema_name: str | None = None
     if test_database_url is None:
-        database_path = tmp_path_factory.mktemp("shared-test-database") / "risk_service_test.db"
-        database_url = f"sqlite+pysqlite:///{database_path}"
+        database_url = sqlite_database_url(tmp_path_factory, name)
     else:
         schema_name = f"risk_service_test_{uuid4().hex}"
         admin_engine = create_engine(test_database_url, isolation_level="AUTOCOMMIT")
@@ -401,23 +411,49 @@ def _shared_test_database(
             admin_engine.dispose()
         database_url = _postgres_schema_url(test_database_url, schema_name)
 
-    engine = get_engine(database_url)
-    if engine.dialect.name == "sqlite":
-        _enable_sqlite_foreign_keys(engine)
     try:
-        Base.metadata.create_all(engine)
-        _seed_demo_tenants(engine)
-        yield _TestDatabase(
-            database_url=database_url,
-            engine=engine,
-        )
+        with build_test_database(database_url, seed=_seed_demo_tenants) as database:
+            yield database
     finally:
-        Base.metadata.drop_all(engine)
-        engine.dispose()
-        get_settings.cache_clear()
-        get_engine.cache_clear()
         if test_database_url is not None:
             _drop_postgres_schema(test_database_url, schema_name)
+
+
+@pytest.fixture(scope="session")
+def _shared_test_database(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[_TestDatabase]:
+    """Build the rollback-isolated test database once per pytest process."""
+    with _session_test_database(tmp_path_factory, "shared") as database:
+        yield database
+
+
+@pytest.fixture(scope="session")
+def _shared_committing_database(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[_TestDatabase]:
+    """The database every ``committing_db`` test commits into, built once.
+
+    A committing test needs real commits — independent connections, worker
+    threads, row and advisory locks — not a schema of its own: building one
+    per test is DDL for every table on every test. The schema is instead
+    reset to its freshly built state before each test (``_reset_test_database``).
+    """
+    with _session_test_database(tmp_path_factory, "committing") as database:
+        yield database
+
+
+def _reset_test_database(database: _TestDatabase) -> None:
+    """Return a shared schema to its freshly built state without DDL."""
+    tables = Base.metadata.sorted_tables
+    with database.engine.begin() as connection:
+        if connection.dialect.name == "postgresql":
+            names = ", ".join(f'"{table.name}"' for table in tables)
+            connection.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+        else:
+            for table in reversed(tables):
+                connection.execute(table.delete())
+    database.seed(database.engine)
 
 
 @pytest.fixture(scope="session")
@@ -478,7 +514,7 @@ def _rollback_sessionmaker_lifecycle(
         if not outer_is_active:
             Base.metadata.drop_all(database.engine)
             Base.metadata.create_all(database.engine)
-            _seed_demo_tenants(database.engine)
+            database.seed(database.engine)
             pytest.fail(
                 "The rollback-isolated database transaction was committed directly. "
                 "Mark this test with @pytest.mark.committing_db when its writes must really "
@@ -607,70 +643,56 @@ def tenant_ctx() -> TenantContext:
 
 
 @pytest.fixture
-def committing_db_client(
-    tmp_path: Path,
+def _committing_test_database(
+    _shared_committing_database: _TestDatabase,
     monkeypatch: pytest.MonkeyPatch,
-    fake_storage: FakeStorage,
-    storage_engine: InMemoryStorageClient,
-) -> Iterator[TestClient]:
-    """A fresh schema, engine, application, and committing client for one test."""
-    test_database_url = os.getenv("TEST_DATABASE_URL")
-    database_url, schema_name = _prepare_database_url(tmp_path=tmp_path, monkeypatch=monkeypatch)
+) -> Iterator[_TestDatabase]:
+    """Point one test whose writes must really commit at the reset shared schema."""
+    database_url = _shared_committing_database.database_url
     monkeypatch.setenv("DATABASE_URL", database_url)
     get_settings.cache_clear()
     get_engine.cache_clear()
-
+    # The engine the application resolves for this test; the session fixture's
+    # own engine only outlives it so the schema can be dropped at the end.
     engine = get_engine(database_url)
     if engine.dialect.name == "sqlite":
         _enable_sqlite_foreign_keys(engine)
+    database = _TestDatabase(
+        database_url=database_url, engine=engine, seed=_shared_committing_database.seed
+    )
     try:
-        Base.metadata.create_all(engine)
-        _seed_demo_tenants(engine)
-        app = create_app()
-        app.dependency_overrides[get_object_storage] = lambda: fake_storage
-        app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine
-        with TestClient(app, raise_server_exceptions=False) as test_client:
-            yield test_client
+        _reset_test_database(database)
+        yield database
     finally:
-        Base.metadata.drop_all(engine)
         engine.dispose()
         get_settings.cache_clear()
         get_engine.cache_clear()
-        if test_database_url is not None:
-            _drop_postgres_schema(test_database_url, schema_name)
 
 
 @pytest.fixture
-def committing_db_session(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[Session]:
-    """A fresh schema and engine-backed committing session for one test."""
-    test_database_url = os.getenv("TEST_DATABASE_URL")
-    database_url, schema_name = _prepare_database_url(tmp_path=tmp_path, monkeypatch=monkeypatch)
-    monkeypatch.setenv("DATABASE_URL", database_url)
-    get_settings.cache_clear()
-    get_engine.cache_clear()
+def committing_db_client(
+    _committing_test_database: _TestDatabase,
+    fake_storage: FakeStorage,
+    storage_engine: InMemoryStorageClient,
+) -> Iterator[TestClient]:
+    """A reset schema, engine, application, and committing client for one test."""
+    _ = _committing_test_database
+    app = create_app()
+    app.dependency_overrides[get_object_storage] = lambda: fake_storage
+    app.dependency_overrides[get_ingestion_storage] = lambda: storage_engine
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client
 
-    engine = get_engine(database_url)
-    if engine.dialect.name == "sqlite":
-        _enable_sqlite_foreign_keys(engine)
-    session: Session | None = None
+
+@pytest.fixture
+def committing_db_session(_committing_test_database: _TestDatabase) -> Iterator[Session]:
+    """A reset schema and engine-backed committing session for one test."""
+    _ = _committing_test_database
+    session = get_sessionmaker()()
     try:
-        Base.metadata.create_all(engine)
-        _seed_demo_tenants(engine)
-        session = get_sessionmaker()()
-        assert session is not None
         yield session
     finally:
-        if session is not None:
-            session.close()
-        Base.metadata.drop_all(engine)
-        engine.dispose()
-        get_settings.cache_clear()
-        get_engine.cache_clear()
-        if test_database_url is not None:
-            _drop_postgres_schema(test_database_url, schema_name)
+        session.close()
 
 
 @pytest.fixture
