@@ -39,7 +39,9 @@ test.describe("fresh active member baseline", () => {
     await expect(
       page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
-    await expect(page.getByText("Liquidity Monitoring · Confidential · View")).toBeVisible();
+    await expect(
+      page.getByText("Liquidity Monitoring · Confidential · View"),
+    ).toBeVisible();
 
     const navigation = page.getByRole("navigation");
     for (const name of [
@@ -130,9 +132,13 @@ test.describe("fresh active member baseline", () => {
     }
     await page.keyboard.press("Escape");
     await page.goto("/irr/scenarios");
-    await expect(page.getByRole("heading", { name: "Access required" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
     await page.goto("/basel/planning");
-    await expect(page.getByRole("heading", { name: "Access required" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
 
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/settings$/);
@@ -172,7 +178,9 @@ test.describe("fresh active member baseline", () => {
     await expect(page).toHaveURL(/\/access\/integration-keys$/);
 
     await page.goto("/fx");
-    await expect(page.getByRole("heading", { name: "Access required" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
     await expect(
       page.getByText("Foreign Exchange · Aggregated · View", { exact: true }),
     ).toBeVisible();
@@ -214,8 +222,12 @@ test.describe("fresh active member baseline", () => {
     });
     const ownerPage = await ownerContext.newPage();
     await ownerPage.goto("/access/members");
-    await expect(ownerPage.getByText("Requested access", { exact: true })).toBeVisible();
-    await expect(ownerPage.getByText("Foreign Exchange", { exact: false })).toBeVisible();
+    await expect(
+      ownerPage.getByText("Requested access", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      ownerPage.getByText("Foreign Exchange", { exact: false }),
+    ).toBeVisible();
     await ownerPage.getByRole("button", { name: "Review request" }).click();
     await expect(ownerPage.getByLabel("Module")).toHaveValue("fx");
     await expect(ownerPage.getByLabel("Sensitivity")).toHaveValue("aggregated");
@@ -224,7 +236,9 @@ test.describe("fresh active member baseline", () => {
     );
     await ownerPage.getByRole("button", { name: "Review grant" }).click();
     await ownerPage.getByRole("button", { name: "Grant access" }).click();
-    await expect(ownerPage.getByText("Grant created", { exact: true })).toBeVisible();
+    await expect(
+      ownerPage.getByText("Grant created", { exact: true }),
+    ).toBeVisible();
     if (evidenceDir) {
       await ownerPage.screenshot({
         path: path.join(evidenceDir, "owner-approved-access-request.png"),

@@ -24,12 +24,12 @@ different organization from the one that owns that connection.
 
 ## What AequorOS needs from you
 
-| Item                    | Example                                                                                                                                                                             |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Issuer URL              | `https://accounts.google.com` (Google) · `https://login.microsoftonline.com/{tenant-id}/v2.0` (Entra)                                                                               |
-| Client ID               | issued by your IdP when you register the app                                                                                                                                        |
+| Item                    | Example                                                                                                                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issuer URL              | `https://accounts.google.com` (Google) · `https://login.microsoftonline.com/{tenant-id}/v2.0` (Entra)                                                                             |
+| Client ID               | issued by your IdP when you register the app                                                                                                                                      |
 | Client secret           | issued alongside the client ID — **never email it**; your admin enters it directly in AequorOS (Access → Authentication), where it is stored encrypted and can never be read back |
-| Allowed email domain(s) | `yourbank.com.gh`                                                                                                                                                                   |
+| Allowed email domain(s) | `yourbank.com.gh`                                                                                                                                                                 |
 
 **The redirect URIs you must register in your IdP:**
 

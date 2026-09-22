@@ -17,25 +17,25 @@ to login and failed external compliance filters.
 79 App Router page entries across the authenticated shell, login, the inspector,
 and dynamic detail routes. The route groups under `app/(app)/`:
 
-| Area               | Routes             | What it reads                                                                                         |
-| ------------------ | ------------------ | ----------------------------------------------------------------------------------------------------- |
-| Overview           | `/`                | cross-module KPIs, live-engine freshness, filing calendar                                             |
-| Liquidity          | `/liquidity/*`     | LCR, NSFR, monitoring tools, stress, EWI, CFP, submission preview                                     |
-| Basel capital      | `/basel/*`         | RWA, capital structure, CAR, capital stress                                                           |
-| Interest-rate risk | `/irr/*`           | repricing gap, EVE/EaR sensitivity, limits, positions                                                 |
-| FX                 | `/fx/*`            | net open position, VaR, hedges                                                                        |
-| FTP                | `/ftp/*`           | transfer curve, product and branch profitability, rates                                               |
-| Forecasting        | `/forecasting/*`   | multi-year projection, scenario, optimizer, what-if                                                   |
-| Behavioral         | `/behavioral`      | per-tenant NMD duration, prepayment, deposit stability                                                |
-| Markets            | `/markets/*`       | published curves, indices, desk determinations                                                        |
-| Positions          | `/positions/*`     | canonical book and record-level lineage                                                               |
-| Data Engine        | `/data-engine/*`   | Excel/CSV, API push, database-direct, T24, market data                                                |
-| Submissions        | `/submissions/*`   | return generation, validation, certification, approvals, artifacts                                    |
-| Institution        | `/institution/*`   | profile, board registers, governance                                                                  |
-| Risk / Alerts      | `/risk`, `/alerts` | limit wall, findings, pipeline alerts                                                                 |
-| Reports            | `/reports/*`       | ALCO, board pack, ICAAP stress pack, comparisons                                                      |
+| Area               | Routes             | What it reads                                                                               |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------- |
+| Overview           | `/`                | cross-module KPIs, live-engine freshness, filing calendar                                   |
+| Liquidity          | `/liquidity/*`     | LCR, NSFR, monitoring tools, stress, EWI, CFP, submission preview                           |
+| Basel capital      | `/basel/*`         | RWA, capital structure, CAR, capital stress                                                 |
+| Interest-rate risk | `/irr/*`           | repricing gap, EVE/EaR sensitivity, limits, positions                                       |
+| FX                 | `/fx/*`            | net open position, VaR, hedges                                                              |
+| FTP                | `/ftp/*`           | transfer curve, product and branch profitability, rates                                     |
+| Forecasting        | `/forecasting/*`   | multi-year projection, scenario, optimizer, what-if                                         |
+| Behavioral         | `/behavioral`      | per-tenant NMD duration, prepayment, deposit stability                                      |
+| Markets            | `/markets/*`       | published curves, indices, desk determinations                                              |
+| Positions          | `/positions/*`     | canonical book and record-level lineage                                                     |
+| Data Engine        | `/data-engine/*`   | Excel/CSV, API push, database-direct, T24, market data                                      |
+| Submissions        | `/submissions/*`   | return generation, validation, certification, approvals, artifacts                          |
+| Institution        | `/institution/*`   | profile, board registers, governance                                                        |
+| Risk / Alerts      | `/risk`, `/alerts` | limit wall, findings, pipeline alerts                                                       |
+| Reports            | `/reports/*`       | ALCO, board pack, ICAAP stress pack, comparisons                                            |
 | Access control     | `/access/*`        | Members and scoped grants; SSO and access requests; integration keys; My access placeholder |
-| Settings           | `/settings/*`      | appearance, profile/account, data and compute status, and About |
+| Settings           | `/settings/*`      | appearance, profile/account, data and compute status, and About                             |
 
 `app/inspect` is the tenant inspector; `app/api/*` holds the server-only route
 handlers for attestation step-up, auth, and impersonation cookies.

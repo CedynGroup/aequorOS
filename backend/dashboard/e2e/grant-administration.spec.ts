@@ -75,7 +75,10 @@ test.describe("scoped grant administration", () => {
     await expect.poll(() => catalogueRequests.length).toBeGreaterThan(0);
     await expect(
       composer.getByLabel("Institution coverage").locator("option"),
-    ).toContainText(["Every institution in the organization", "Sample Bank Ltd"]);
+    ).toContainText([
+      "Every institution in the organization",
+      "Sample Bank Ltd",
+    ]);
     await composer
       .getByLabel("Institution coverage")
       .selectOption("BK-SAMP0001");

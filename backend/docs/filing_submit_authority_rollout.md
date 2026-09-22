@@ -8,7 +8,7 @@ production identities into this repository.
 
 ## What was wrong
 
-`require_package_submit` required `Permission.APPROVE` — the *same permission* as
+`require_package_submit` required `Permission.APPROVE` — the _same permission_ as
 `require_package_approve`. Two consequences, both live:
 
 - an officer holding approval authority for a return could also file it to the Bank
@@ -72,7 +72,7 @@ officer who opened it, and the poll route records the regulator's decision.
   `workflow._ensure_channel_submittable`, before the transition check, and is
   independent of authorization. Pinned by
   `tests/api/test_package_authorization.py::test_a_rehearsal_is_unfilable_even_with_transmission_authority`,
-  which holds *both* the Capital read grant and the filing grant and is still refused.
+  which holds _both_ the Capital read grant and the filing grant and is still refused.
 - **Existing sealed and submitted packages.** No migration touches
   `regulatory_packages`, `regulatory_package_approvals`, signatures or artifacts.
 - The examiner branch. Impersonation is read-only and never files.
@@ -108,10 +108,10 @@ an omission:
 
 - Granting transmission authority to everyone who held approval authority would
   encode the very defect being removed. The whole point of Bernard's review is that
-  the Validator is a *different person* from the Approver.
+  the Validator is a _different person_ from the Approver.
 - The precedent is `202608250044` (the foundation migration backfills no binding) and
   `202608280046` (assign nothing where the intent is ambiguous, and leave the state
-  queryable). Here the pre-cutover state remains queryable *without* a control table,
+  queryable). Here the pre-cutover state remains queryable _without_ a control table,
   because this cutover changes no `users` row: the scalar role that used to authorize
   filing is still on the user and is reported in the `role` column of the gate below.
 - An organization therefore has **no filing authority at all** until its Org Owner
@@ -254,7 +254,7 @@ blocking the backend deploy:
    label.
 2. **The Submit control is offered to people the server now refuses.**
    `app/(app)/submissions/returns/page.tsx` computes `canSubmit = status ===
-   'approved'` — pure lifecycle, no authority — so a Preparer or Approver looking
+'approved'` — pure lifecycle, no authority — so a Preparer or Approver looking
    at an approved return still sees an enabled Submit button and receives a clean
    403 naming Validator on click. That is the visible half of the same problem the
    redesign describes (§4b.1: absent when the surface is not this role's, disabled
@@ -268,8 +268,8 @@ blocking the backend deploy:
   stated twice and independently.
 - `tests/core/test_authorization_properties.py` — the generative oracle carries the
   new bundle, so the evaluator is compared against an independent restatement of it.
-- `tests/api/test_package_authorization.py`, section *transmission to the regulator is
-  its own authority* — a complete Approver binding over the filing scope is refused
+- `tests/api/test_package_authorization.py`, section _transmission to the regulator is
+  its own authority_ — a complete Approver binding over the filing scope is refused
   with a named reason; a scalar `approver`/`admin` with no binding is refused; a
   Validator binding passes authorization; the preparer cannot file their own return;
   a gated family still hides before it refuses; a rehearsal is refused past both
