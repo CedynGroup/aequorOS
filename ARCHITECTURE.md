@@ -542,11 +542,12 @@ All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 appeared in no workflow at all, and the dashboard workflow ran neither `lint` nor `test`, so
 the regulatory fail-open guard and the browser-runtime SSRF guard were unenforced):
 
-| Workflow                             | Jobs                                                                                                                                                                                                                                                              |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/risk-service.yml` | `static` · `architecture` · `postgres` · `postgres-suite` (with OpenBao) · `storage` · `journeys` (Playwright + MinIO; exact eight-journey fixture-drift quarantine tracked in #151) · `api-fresh` · `real-data` (conditional) |
-| `.github/workflows/dashboard.yml`    | `dashboard` — client typecheck, dashboard typecheck, lint, test, production build + Command Center entry-graph guard                                                                                                                                              |
-| `.github/workflows/web.yml`          | `frontend` — lint, build · `console` — typecheck, test, build                                                                                                                                                                                                     |
+| Workflow                                   | Jobs                                                                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `.github/workflows/risk-service.yml`       | `static` · `architecture` · `postgres` · `postgres-suite` (with OpenBao) · `storage` · `api-fresh` · `real-data` (conditional) |
+| `.github/workflows/dashboard.yml`          | `dashboard` — client typecheck, dashboard typecheck, lint, test, production build + Command Center entry-graph guard           |
+| `.github/workflows/web.yml`                | `frontend` — lint, build · `console` — typecheck, test, build                                                                  |
+| `.github/workflows/dashboard-journeys.yml` | `journeys` — manual dispatch; see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)                  |
 
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.

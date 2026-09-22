@@ -3,10 +3,23 @@
 Creates the schema, the GLOBAL reference registries a deployment gets from
 its migrations (jurisdictions, institution types, the regulatory-parameter
 control plane — ``tests/fixtures/reference_data.py``, shared with the
-hermetic pytest suite), and the tenant scaffolding the API's zero-trust layer
-requires before any request can succeed: the demo organization and one user
-per role. Everything else (bank, periods, facts) flows through the API in the
-Playwright global setup — the same paths the product uses.
+hermetic pytest suite), the tenant scaffolding the API's zero-trust layer
+requires before any request can succeed (the demo organization and one user
+per role), and the canonical Sample Bank book (``tests/fixtures/
+canonical_bank_fixture.py``), carried forward to the reporting anchor
+currently due. Everything downstream — the liquidity baseline run, the
+institution profile, every package — flows through the API in the Playwright
+global setup and the journeys themselves: the same paths the product uses.
+
+The book is carried forward because the Returns workspace opens on the
+regulator's anchor (the last month end on or before today for a monthly return —
+``services/regulatory_reporting/anchors.py``), and a return can only be
+generated from an EXACT snapshot as of that date. The canonical book ends at
+a fixed month; without the carry-forward every anchor after it reads "no
+position has been computed", correctly, and the generate journeys have
+nothing to drive. ``extend_canonical_test_book`` appends one snapshot per
+month end through the last month end on or before today, each repeating the canonical
+latest fact set unchanged.
 
 It also enrols a **software signing key** per human role so the attestation
 ceremony can be driven end to end in a browser. Self-signed and disposable:
@@ -28,9 +41,10 @@ Usage: DATABASE_URL=sqlite+pysqlite:///<path> uv run python scripts/e2e_bootstra
 
 from __future__ import annotations
 
+import calendar
 import hashlib
 import os
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from sqlalchemy import create_engine
@@ -54,6 +68,7 @@ from app.services.attestation.keys import SignerKeyService
 from app.services.organization_ownership import assign_initial_owner
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
+    extend_canonical_test_book,
     materialize_canonical_test_book,
 )
 from tests.fixtures.live_plane import materialize_live_plane
@@ -203,7 +218,7 @@ def main() -> None:
         users["integration_admin"].role = "account_admin"
         session.commit()
         _enrol_signing_keys(session)
-        materialize_canonical_test_book(session)
+        _materialize_book(session)
         legacy_service_user = User(
             organization_id=DEMO_ORG_ID,
             email="e2e.legacy.integration@service.aequoros.invalid",
@@ -402,6 +417,29 @@ def main() -> None:
         session.commit()
         _materialize_live_plane(session)
     print("e2e database bootstrapped")
+
+
+def _materialize_book(session: Session) -> None:
+    """Seed the canonical book and carry it forward to the anchor currently due."""
+    summary = materialize_canonical_test_book(session)
+    appended = extend_canonical_test_book(session, through=latest_month_end_on_or_before())
+    print(
+        f"canonical book: {summary.periods} periods, carried forward through "
+        f"{appended[-1].isoformat() if appended else 'the canonical span'} "
+        f"({len(appended)} appended)"
+    )
+
+
+def latest_month_end_on_or_before(today: date | None = None) -> date:
+    """The last month end on or before ``today``.
+
+    Mirrors the Returns workspace's first anchor <= today in descending order,
+    including today itself when it is a month end.
+    """
+    today = today or date.today()
+    if today.day == calendar.monthrange(today.year, today.month)[1]:
+        return today
+    return today.replace(day=1) - timedelta(days=1)
 
 
 def _materialize_live_plane(session: Session) -> None:

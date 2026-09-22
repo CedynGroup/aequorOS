@@ -362,15 +362,22 @@ pull requests and pushes do not enqueue it. A maintainer launches it from the
 Actions UI or with
 `gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It installs
 Chromium, starts MinIO with its built-in KMS, and runs this same command against
-real CI-local object storage. The run requires at least 20 journeys to execute.
-Eight package-generation journeys are temporarily declared as expected failures
-because the canonical fixture has no exact snapshot for the regulator-selected
-anchor; the exact list is in `e2e/support/quarantine.ts`, and the repair is
-tracked in [#151](https://github.com/CedynGroup/aequorOS/issues/151). The custom
-reporter fails the manual run for any non-quarantined failure, unexpected
-quarantine pass, skipped or undiscovered quarantine entry, or `test.fail`
-declaration missing from that list. The quarantine is fixture drift, not relaxed
-product behavior: reporting still refuses to substitute an earlier snapshot.
+real CI-local object storage. The run requires at least 20 journeys to execute
+and the quarantine in `e2e/support/quarantine.ts` to match the size the
+workflow pins. A journey may only be parked there by name, declared with
+`test.fail` and a reason beside it, and with the workflow's gate edited to
+admit it; the custom reporter fails the run for any non-quarantined failure,
+unexpected quarantine pass, skipped or undiscovered quarantine entry, or
+`test.fail` declaration missing from that list.
+
+The Returns workspace opens on the regulator's latest reporting anchor on or
+before today, and a return generates only from the exact snapshot as of that
+date — an earlier book is never substituted. The canonical fixture ends at a fixed
+month, so `scripts/e2e_bootstrap.py` carries it forward
+(`extend_canonical_test_book`) one month-end snapshot at a time through the last
+month end on or before today, each repeating the canonical latest fact set. That is
+what gives the package-generation journeys a real position to generate from
+without changing how the product selects a reporting date.
 
 ## Deploy to bank.aequoros.com
 
