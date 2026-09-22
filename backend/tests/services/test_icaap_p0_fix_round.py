@@ -41,7 +41,6 @@ from app.services.regulatory_reporting.templates import (
 )
 from app.services.regulatory_reporting.validation import run_validation_rules
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.fixtures.icaap.postgres_quarantine import NUL_IN_STORED_NARRATIVE
 from tests.services.test_icaap_stress_appendix2_report import (
     MAKER,
     _approved_scenario,
@@ -190,15 +189,16 @@ def test_an_sdi_stress_run_layers_no_pillar_2_add_on(db_session: Session) -> Non
 # --- item 3: control characters never break an export ---------------------------------
 
 
-@pytest.mark.parametrize(
-    "control", ["\x0b", "\x0c", pytest.param("\x00", marks=NUL_IN_STORED_NARRATIVE)]
-)
+@pytest.mark.parametrize("control", ["\x0b", "\x0c", "\x1f"])
 def test_a_control_character_in_a_stored_narrative_exports_to_every_format(
     db_session: Session, storage: InMemoryStorageClient, control: str
 ) -> None:
     """Item 3: a narrative stored with a control character (before the input
     validation existed) still exports to PDF, XLSX and CSV; the XLSX shows a
-    line break for a vertical tab / form feed and a visible substitute otherwise."""
+    line break for a vertical tab / form feed and a visible substitute otherwise.
+
+    NUL is not among the cases: Postgres ``text`` cannot hold one, so no stored
+    narrative ever carried it; ``tests/schemas/test_text.py`` pins its refusal."""
     package = _prepare(db_session, board_challenge=f"Line one{control}line two.")
     stored = _section(package.snapshot, "stress_narrative")
     assert stored is not None
