@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Scenarios — the scenario manager for the forecasting workspace:
@@ -9,50 +9,56 @@
  *     overlay, per-year deltas, and resolved-assumption diff.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowUpRight, GitCompareArrows, Loader2, PlayCircle, RotateCcw } from 'lucide-react';
+import PageContainer from "@/components/ui/PageContainer";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  ArrowUpRight,
+  GitCompareArrows,
+  Loader2,
+  PlayCircle,
+  RotateCcw,
+} from "lucide-react";
 import type {
   ForecastPresetCode,
   ForecastRunRead,
   ForecastRunSummaryRead,
   ForecastScenarioListRead,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import StatusPill from '@/components/ui/StatusPill';
-import KpiStat from '@/components/ui/KpiStat';
-import SectionCard from '@/components/ui/SectionCard';
-import ChartFrame from '@/components/ui/ChartFrame';
-import DeltaBadge from '@/components/ui/DeltaBadge';
-import EmptyState from '@/components/ui/EmptyState';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import StatusPill from "@/components/ui/StatusPill";
+import KpiStat from "@/components/ui/KpiStat";
+import SectionCard from "@/components/ui/SectionCard";
+import ChartFrame from "@/components/ui/ChartFrame";
+import DeltaBadge from "@/components/ui/DeltaBadge";
+import EmptyState from "@/components/ui/EmptyState";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
 import ScenarioLinesChart, {
   type ScenarioPoint,
-} from '@/components/forecasting/charts/ScenarioLinesChart';
+} from "@/components/forecasting/charts/ScenarioLinesChart";
 import {
   ASSUMPTION_FIELDS,
   type AssumptionField,
   type AssumptionKey,
   scenarioLabel,
-} from '@/components/forecasting/lib';
-import ForecastingRunGate from '@/components/forecasting/RunGate';
-import { DisabledWithReason } from '@/components/ui/DisabledWithReason';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "@/components/forecasting/lib";
+import ForecastingRunGate from "@/components/forecasting/RunGate";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useCreateForecastRun,
   useForecastRun,
   useForecastRuns,
   useForecastScenarios,
-} from '@/lib/api/hooks';
-import { fmtTimestamp, num, shortId } from '@/lib/api/values';
-import { currencyCode, fmtCurrency, fmtPct } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { fmtTimestamp, num, shortId } from "@/lib/api/values";
+import { currencyCode, fmtCurrency, fmtPct } from "@/lib/format";
 
 type FormValues = Record<AssumptionKey, number>;
 
 function presetValues(
   scenarios: ForecastScenarioListRead,
-  preset: ForecastPresetCode
+  preset: ForecastPresetCode,
 ): FormValues | null {
   const found = scenarios.scenarios.find((s) => s.code === preset);
   if (!found) return null;
@@ -75,44 +81,44 @@ function presetValues(
 
 const COMPARE_METRICS = [
   {
-    code: 'carPct',
-    label: 'CAR',
+    code: "carPct",
+    label: "CAR",
     fmt: (v: number) => fmtPct(v, 2),
     isCurrency: false,
   },
   {
-    code: 'lcrPct',
-    label: 'LCR',
+    code: "lcrPct",
+    label: "LCR",
     fmt: (v: number) => fmtPct(v, 1),
     isCurrency: false,
   },
   {
-    code: 'nsfrPct',
-    label: 'NSFR',
+    code: "nsfrPct",
+    label: "NSFR",
     fmt: (v: number) => fmtPct(v, 1),
     isCurrency: false,
   },
   {
-    code: 'totalAssets',
-    label: 'Total assets',
+    code: "totalAssets",
+    label: "Total assets",
     fmt: (v: number) => fmtCurrency(v),
     isCurrency: true,
   },
   {
-    code: 'nii',
-    label: 'NII',
+    code: "nii",
+    label: "NII",
     fmt: (v: number) => fmtCurrency(v),
     isCurrency: true,
   },
   {
-    code: 'netIncome',
-    label: 'Net income',
+    code: "netIncome",
+    label: "Net income",
     fmt: (v: number) => fmtCurrency(v),
     isCurrency: true,
   },
 ] as const;
 
-type CompareMetricCode = (typeof COMPARE_METRICS)[number]['code'];
+type CompareMetricCode = (typeof COMPARE_METRICS)[number]["code"];
 
 export default function ScenariosPage() {
   const { bank, period, moduleScope } = useBankContext();
@@ -142,10 +148,7 @@ export default function ScenariosPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Forecasting"
-        title="Scenario Manager"
-      />
+      <PageHeader eyebrow="Forecasting" title="Scenario Manager" />
 
       <QueryBoundary
         isLoading={scenariosQuery.isLoading || runsQuery.isLoading}
@@ -230,18 +233,18 @@ function ScenarioDesigner({
   createRun: ReturnType<typeof useCreateForecastRun>;
   canRun: boolean;
 }) {
-  const [preset, setPreset] = useState<ForecastPresetCode>('base');
+  const [preset, setPreset] = useState<ForecastPresetCode>("base");
   const [overrides, setOverrides] = useState<Partial<FormValues>>({});
 
   const baseline = useMemo(
     () => presetValues(scenarios, preset),
-    [scenarios, preset]
+    [scenarios, preset],
   );
   const values: FormValues | null = baseline
     ? { ...baseline, ...overrides }
     : null;
   const touched = ASSUMPTION_FIELDS.filter(
-    (f) => baseline && values && values[f.key] !== baseline[f.key]
+    (f) => baseline && values && values[f.key] !== baseline[f.key],
   );
   const isCustom = touched.length > 0;
 
@@ -250,7 +253,7 @@ function ScenarioDesigner({
     if (isCustom) {
       createRun.mutate({
         reportingPeriodId: periodId,
-        scenarioCode: 'custom',
+        scenarioCode: "custom",
         assumptions: {
           loanGrowthPct: values.loanGrowthPct,
           depositGrowthPct: values.depositGrowthPct,
@@ -292,7 +295,7 @@ function ScenarioDesigner({
               ) : (
                 <PlayCircle size={13} aria-hidden />
               )}
-              Run {isCustom ? 'custom scenario' : scenarioLabel(preset)}
+              Run {isCustom ? "custom scenario" : scenarioLabel(preset)}
             </button>
           )}
         </ForecastingRunGate>
@@ -315,8 +318,8 @@ function ScenarioDesigner({
                 }}
                 className={`px-3 py-1.5 rounded text-caption font-medium ${
                   preset === s.code && !isCustom
-                    ? 'bg-surface-raised text-navy shadow-sm'
-                    : 'text-slate hover:text-navy'
+                    ? "bg-surface-raised text-navy shadow-sm"
+                    : "text-slate hover:text-navy"
                 }`}
               >
                 {scenarioLabel(s.code)}
@@ -364,11 +367,14 @@ function ScenarioDesigner({
             {touched.map((field) => {
               const delta = values[field.key] - baseline[field.key];
               return (
-                <span key={field.key} className="inline-flex items-center gap-1.5">
+                <span
+                  key={field.key}
+                  className="inline-flex items-center gap-1.5"
+                >
                   <span className="text-caption text-slate">{field.label}</span>
                   <DeltaBadge
                     value={delta}
-                    suffix={field.unit.trim() === 'pp' ? ' pp' : field.unit}
+                    suffix={field.unit.trim() === "pp" ? " pp" : field.unit}
                     decimals={1}
                   />
                 </span>
@@ -382,7 +388,7 @@ function ScenarioDesigner({
         )}
 
         {/* Fresh-run result strip */}
-        {result && result.status === 'succeeded' ? (
+        {result && result.status === "succeeded" ? (
           <div className="border-t border-border-light pt-4 space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
               <StatusPill tone="success">Run succeeded</StatusPill>
@@ -420,7 +426,7 @@ function ScenarioDesigner({
             error={
               new Error(
                 result.error?.message ??
-                  'The forecast run did not complete successfully.'
+                  "The forecast run did not complete successfully.",
               )
             }
             title="Run failed"
@@ -446,8 +452,10 @@ function AssumptionSlider({
   return (
     <div>
       <label className="block text-micro font-medium uppercase tracking-wider text-slate mb-1.5">
-        {field.label}{' '}
-        <span className={`font-mono tnum ${changed ? 'text-action' : 'text-navy'}`}>
+        {field.label}{" "}
+        <span
+          className={`font-mono tnum ${changed ? "text-action" : "text-navy"}`}
+        >
           {value}
           {field.unit}
         </span>
@@ -479,7 +487,10 @@ function AssumptionSlider({
           aria-label={`${field.label} value`}
         />
       </div>
-      <p className="mt-1 text-caption text-slate truncate" title={field.definition}>
+      <p
+        className="mt-1 text-caption text-slate truncate"
+        title={field.definition}
+      >
         {field.definition}
       </p>
     </div>
@@ -506,8 +517,8 @@ function RunRegistryTable({
   if (!runs.length) {
     return (
       <p className="px-5 py-4 text-body text-slate">
-        No forecast runs yet — run a scenario above to create the first
-        saved projection.
+        No forecast runs yet — run a scenario above to create the first saved
+        projection.
       </p>
     );
   }
@@ -535,7 +546,7 @@ function RunRegistryTable({
               <tr
                 key={r.id}
                 className={`border-b border-border-light last:border-b-0 ${
-                  selected ? 'bg-action-light/50' : 'hover:bg-surface-alt'
+                  selected ? "bg-action-light/50" : "hover:bg-surface-alt"
                 }`}
               >
                 <td className="px-4 py-2.5 font-mono text-caption text-slate whitespace-nowrap">
@@ -548,17 +559,17 @@ function RunRegistryTable({
                   {r.periodLabel}
                 </td>
                 <td className="px-4 py-2.5 text-right font-mono tnum">
-                  {r.avgRoePct === null ? '—' : fmtPct(num(r.avgRoePct), 2)}
+                  {r.avgRoePct === null ? "—" : fmtPct(num(r.avgRoePct), 2)}
                 </td>
                 <td className="px-4 py-2.5 text-right font-mono tnum">
-                  {r.year5CarPct === null ? '—' : fmtPct(num(r.year5CarPct), 2)}
+                  {r.year5CarPct === null ? "—" : fmtPct(num(r.year5CarPct), 2)}
                 </td>
                 <td className="px-4 py-2.5 text-right font-mono tnum">
-                  {r.year5LcrPct === null ? '—' : fmtPct(num(r.year5LcrPct), 1)}
+                  {r.year5LcrPct === null ? "—" : fmtPct(num(r.year5LcrPct), 1)}
                 </td>
                 <td className="px-4 py-2.5">
                   <StatusPill
-                    tone={r.status === 'succeeded' ? 'success' : 'critical'}
+                    tone={r.status === "succeeded" ? "success" : "critical"}
                   >
                     {r.status}
                   </StatusPill>
@@ -569,7 +580,7 @@ function RunRegistryTable({
                     name="compare-a"
                     aria-label={`Compare run ${shortId(r.id)} as A`}
                     checked={r.id === runAId}
-                    disabled={r.status !== 'succeeded'}
+                    disabled={r.status !== "succeeded"}
                     onChange={() => onPickA(r.id)}
                     onClick={() => r.id === runAId && onPickA(r.id)}
                     className="accent-action"
@@ -581,14 +592,14 @@ function RunRegistryTable({
                     name="compare-b"
                     aria-label={`Compare run ${shortId(r.id)} as B`}
                     checked={r.id === runBId}
-                    disabled={r.status !== 'succeeded'}
+                    disabled={r.status !== "succeeded"}
                     onChange={() => onPickB(r.id)}
                     onClick={() => r.id === runBId && onPickB(r.id)}
                     className="accent-action"
                   />
                 </td>
                 <td className="px-2 py-2.5 text-center">
-                  {r.status === 'succeeded' && (
+                  {r.status === "succeeded" && (
                     <Link
                       href={`/forecasting?run=${r.id}`}
                       className="inline-flex text-slate hover:text-action"
@@ -612,7 +623,7 @@ function RunRegistryTable({
 // ---------------------------------------------------------------------------
 
 function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
-  const [metricCode, setMetricCode] = useState<CompareMetricCode>('carPct');
+  const [metricCode, setMetricCode] = useState<CompareMetricCode>("carPct");
   const metric = COMPARE_METRICS.find((m) => m.code === metricCode)!;
 
   const labelA = `A · ${scenarioLabel(a.scenarioCode)}`;
@@ -627,7 +638,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
   };
 
   const chartData: ScenarioPoint[] = years.map((year) => ({
-    label: year === 0 ? 'Y0' : `Y${year}`,
+    label: year === 0 ? "Y0" : `Y${year}`,
     a: valueAt(a, year),
     b: valueAt(b, year),
   }));
@@ -640,31 +651,31 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
     isCurrency?: boolean;
   }[] = [
     {
-      label: 'Average ROE',
+      label: "Average ROE",
       a: num(a.summary.avgRoePct),
       b: num(b.summary.avgRoePct),
       fmt: (v: number) => fmtPct(v, 2),
     },
     {
-      label: 'Year-5 CAR',
+      label: "Year-5 CAR",
       a: num(a.summary.year5CarPct),
       b: num(b.summary.year5CarPct),
       fmt: (v: number) => fmtPct(v, 2),
     },
     {
-      label: 'Year-5 LCR',
+      label: "Year-5 LCR",
       a: num(a.summary.year5LcrPct),
       b: num(b.summary.year5LcrPct),
       fmt: (v: number) => fmtPct(v, 1),
     },
     {
-      label: 'Year-5 NSFR',
+      label: "Year-5 NSFR",
       a: num(a.summary.year5NsfrPct),
       b: num(b.summary.year5NsfrPct),
       fmt: (v: number) => fmtPct(v, 1),
     },
     {
-      label: 'Cumulative net income',
+      label: "Cumulative net income",
       a: num(a.summary.cumulativeNetIncome),
       b: num(b.summary.cumulativeNetIncome),
       fmt: (v: number) => fmtCurrency(v),
@@ -696,7 +707,9 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
           actions={
             <select
               value={metricCode}
-              onChange={(e) => setMetricCode(e.target.value as CompareMetricCode)}
+              onChange={(e) =>
+                setMetricCode(e.target.value as CompareMetricCode)
+              }
               aria-label="Comparison metric"
               className="px-2.5 py-1.5 text-caption font-medium text-navy border border-border rounded-md bg-surface-raised hover:bg-surface"
             >
@@ -711,8 +724,8 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
           <ScenarioLinesChart
             data={chartData}
             series={[
-              { key: 'a', name: labelA, colorIndex: 0 },
-              { key: 'b', name: labelB, colorIndex: 3, dashed: true },
+              { key: "a", name: labelA, colorIndex: 0 },
+              { key: "b", name: labelB, colorIndex: 3, dashed: true },
             ]}
             valueFormatter={metric.fmt}
             tickFormatter={
@@ -740,7 +753,10 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
               </thead>
               <tbody>
                 {summaryRows.map((row) => (
-                  <tr key={row.label} className="border-b border-border-light last:border-b-0">
+                  <tr
+                    key={row.label}
+                    className="border-b border-border-light last:border-b-0"
+                  >
                     <td className="px-4 py-2.5 text-navy/90">{row.label}</td>
                     <td className="px-4 py-2.5 text-right font-mono tnum">
                       {row.fmt(row.a)}
@@ -756,7 +772,11 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
                           decimals={1}
                         />
                       ) : (
-                        <DeltaBadge value={row.b - row.a} suffix=" pp" decimals={2} />
+                        <DeltaBadge
+                          value={row.b - row.a}
+                          suffix=" pp"
+                          decimals={2}
+                        />
                       )}
                     </td>
                   </tr>
@@ -788,17 +808,22 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
                 const va = valueAt(a, year);
                 const vb = valueAt(b, year);
                 return (
-                  <tr key={year} className="border-b border-border-light last:border-b-0">
-                    <td className="px-4 py-2.5 font-medium text-navy">Y{year}</td>
-                    <td className="px-4 py-2.5 text-right font-mono tnum">
-                      {va === null ? '—' : metric.fmt(va)}
+                  <tr
+                    key={year}
+                    className="border-b border-border-light last:border-b-0"
+                  >
+                    <td className="px-4 py-2.5 font-medium text-navy">
+                      Y{year}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono tnum">
-                      {vb === null ? '—' : metric.fmt(vb)}
+                      {va === null ? "—" : metric.fmt(va)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono tnum">
+                      {vb === null ? "—" : metric.fmt(vb)}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       {va === null || vb === null ? (
-                        '—'
+                        "—"
                       ) : metric.isCurrency ? (
                         <DeltaBadge
                           value={(vb - va) / 1_000_000}
@@ -830,7 +855,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
             </span>
           ) : (
             <span>
-              {changedAssumptions.length} of {ASSUMPTION_FIELDS.length}{' '}
+              {changedAssumptions.length} of {ASSUMPTION_FIELDS.length}{" "}
               assumptions differ between the two runs.
             </span>
           )
@@ -853,7 +878,7 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
                   <tr
                     key={field.key}
                     className={`border-b border-border-light last:border-b-0 ${
-                      changed ? 'bg-warning-light/30' : ''
+                      changed ? "bg-warning-light/30" : ""
                     }`}
                   >
                     <td className="px-4 py-2.5 text-navy/90">{field.label}</td>
@@ -869,7 +894,9 @@ function CompareSection({ a, b }: { a: ForecastRunRead; b: ForecastRunRead }) {
                       {changed ? (
                         <DeltaBadge
                           value={vb - va}
-                          suffix={field.unit.trim() === 'pp' ? ' pp' : field.unit}
+                          suffix={
+                            field.unit.trim() === "pp" ? " pp" : field.unit
+                          }
                           decimals={1}
                         />
                       ) : (

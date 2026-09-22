@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Assumptions — read-only registry of the assumptions the forecast engine
@@ -11,32 +11,32 @@
  *     presets omit.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, BookOpen, Brain } from 'lucide-react';
+import PageContainer from "@/components/ui/PageContainer";
+import Link from "next/link";
+import { ArrowRight, ArrowUpRight, BookOpen, Brain } from "lucide-react";
 import type {
   ForecastRunRead,
   ForecastScenarioListRead,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import StatusPill from '@/components/ui/StatusPill';
-import EmptyState from '@/components/ui/EmptyState';
-import SectionCard from '@/components/ui/SectionCard';
-import QueryBoundary from '@/components/ui/QueryBoundary';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import StatusPill from "@/components/ui/StatusPill";
+import EmptyState from "@/components/ui/EmptyState";
+import SectionCard from "@/components/ui/SectionCard";
+import QueryBoundary from "@/components/ui/QueryBoundary";
 import {
   ASSUMPTION_FIELDS,
   type AssumptionField,
   latestSucceededId,
   scenarioLabel,
-} from '@/components/forecasting/lib';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "@/components/forecasting/lib";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useForecastRun,
   useForecastRuns,
   useForecastScenarios,
-} from '@/lib/api/hooks';
-import { num } from '@/lib/api/values';
-import { FORECASTING_CONFIDENTIAL_VIEW_REASON } from '@/lib/modules';
+} from "@/lib/api/hooks";
+import { num } from "@/lib/api/values";
+import { FORECASTING_CONFIDENTIAL_VIEW_REASON } from "@/lib/modules";
 
 export default function AssumptionsPage() {
   const { bank, period, moduleScope } = useBankContext();
@@ -119,8 +119,8 @@ export default function AssumptionsPage() {
 
           <p className="text-caption text-slate max-w-3xl leading-relaxed">
             Deposit and prepayment behavior are modelled separately by the
-            per-tenant behavioral ML models; their outputs inform how the
-            preset growth and margin assumptions are calibrated.{' '}
+            per-tenant behavioral ML models; their outputs inform how the preset
+            growth and margin assumptions are calibrated.{" "}
             <Link href="/behavioral" className="text-action hover:underline">
               Open Behavioral Models
             </Link>
@@ -137,39 +137,39 @@ export default function AssumptionsPage() {
 // ---------------------------------------------------------------------------
 
 type Source =
-  | { kind: 'custom'; label: string }
-  | { kind: 'preset'; label: string }
-  | { kind: 'default'; label: string };
+  | { kind: "custom"; label: string }
+  | { kind: "preset"; label: string }
+  | { kind: "default"; label: string };
 
 function sourceFor(
   field: AssumptionField,
   run: ForecastRunRead,
-  scenarios: ForecastScenarioListRead | undefined
+  scenarios: ForecastScenarioListRead | undefined,
 ): Source {
-  if (run.scenarioCode === 'custom') {
-    return { kind: 'custom', label: 'Custom override' };
+  if (run.scenarioCode === "custom") {
+    return { kind: "custom", label: "Custom override" };
   }
   const preset = scenarios?.scenarios.find((s) => s.code === run.scenarioCode);
   if (preset && preset.assumptions[field.apiKey] !== undefined) {
     return {
-      kind: 'preset',
+      kind: "preset",
       label: `${scenarioLabel(run.scenarioCode)} preset`,
     };
   }
   if (field.hasEngineDefault) {
-    return { kind: 'default', label: 'Engine default' };
+    return { kind: "default", label: "Engine default" };
   }
-  return { kind: 'preset', label: `${scenarioLabel(run.scenarioCode)} preset` };
+  return { kind: "preset", label: `${scenarioLabel(run.scenarioCode)} preset` };
 }
 
-function sourceTone(kind: Source['kind']): 'action' | 'slate' | 'amber' {
+function sourceTone(kind: Source["kind"]): "action" | "slate" | "amber" {
   switch (kind) {
-    case 'custom':
-      return 'action';
-    case 'default':
-      return 'amber';
+    case "custom":
+      return "action";
+    case "default":
+      return "amber";
     default:
-      return 'slate';
+      return "slate";
   }
 }
 
@@ -193,10 +193,10 @@ function ResolvedSection({
       computedAt={run.createdAt}
       footer={
         <span>
-          Scenario{' '}
+          Scenario{" "}
           <span className="font-medium text-navy">
             {scenarioLabel(run.scenarioCode)}
-          </span>{' '}
+          </span>{" "}
           · engine {run.engineVersion}
         </span>
       }
@@ -227,14 +227,16 @@ function ResolvedSection({
                       </div>
                       <p className="font-mono text-kpi text-navy tnum">
                         {value.toFixed(field.step < 1 ? 1 : 0)}
-                        <span className="text-body text-slate">{field.unit}</span>
+                        <span className="text-body text-slate">
+                          {field.unit}
+                        </span>
                       </p>
                       <p className="text-caption text-slate leading-relaxed">
                         {field.definition}
                       </p>
                     </div>
                   );
-                }
+                },
               )}
             </div>
           </div>
@@ -288,14 +290,22 @@ function PresetCatalogue({
                 >
                   <td className="px-4 py-2.5">
                     <p className="text-navy/90 font-medium">{field.label}</p>
-                    <p className="text-caption text-slate">{field.definition}</p>
+                    <p className="text-caption text-slate">
+                      {field.definition}
+                    </p>
                   </td>
                   {scenarios.scenarios.map((s) => {
                     const raw = s.assumptions[field.apiKey];
                     return (
-                      <td key={s.code} className="px-4 py-2.5 text-right font-mono tnum">
+                      <td
+                        key={s.code}
+                        className="px-4 py-2.5 text-right font-mono tnum"
+                      >
                         {raw === undefined ? (
-                          <span className="text-slate" title="Preset omits this field — the engine default applies">
+                          <span
+                            className="text-slate"
+                            title="Preset omits this field — the engine default applies"
+                          >
                             —
                           </span>
                         ) : (

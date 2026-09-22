@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Balance Sheet Forecasting — projection workspace for the persisted forecast
@@ -8,38 +8,38 @@
  * figures come off the saved projection payload.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import { Suspense, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { ArrowUpRight, Loader2, PlayCircle } from 'lucide-react';
+import PageContainer from "@/components/ui/PageContainer";
+import { Suspense, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { ArrowUpRight, Loader2, PlayCircle } from "lucide-react";
 import type {
   ForecastRunRead,
   ForecastScenarioCode,
   ProjectionYearRead,
-} from '@aequoros/risk-service-api';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import Sparkline from '@/components/ui/Sparkline';
-import StatusPill from '@/components/ui/StatusPill';
-import EmptyState from '@/components/ui/EmptyState';
-import SectionCard from '@/components/ui/SectionCard';
-import ChartFrame from '@/components/ui/ChartFrame';
-import DeltaBadge from '@/components/ui/DeltaBadge';
-import ValidationList from '@/components/ui/ValidationList';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import DataTable, { type Column } from '@/components/ui/DataTable';
-import { SkeletonChart } from '@/components/ui/Skeleton';
-import BalanceSheetProjectionChart from '@/components/charts/BalanceSheetProjectionChart';
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import Sparkline from "@/components/ui/Sparkline";
+import StatusPill from "@/components/ui/StatusPill";
+import EmptyState from "@/components/ui/EmptyState";
+import SectionCard from "@/components/ui/SectionCard";
+import ChartFrame from "@/components/ui/ChartFrame";
+import DeltaBadge from "@/components/ui/DeltaBadge";
+import ValidationList from "@/components/ui/ValidationList";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import DataTable, { type Column } from "@/components/ui/DataTable";
+import { SkeletonChart } from "@/components/ui/Skeleton";
+import BalanceSheetProjectionChart from "@/components/charts/BalanceSheetProjectionChart";
 import ProjectionChart, {
   type ProjectionPoint,
-} from '@/components/forecasting/charts/ProjectionChart';
+} from "@/components/forecasting/charts/ProjectionChart";
 import WaterfallChart, {
   type WaterfallStep,
-} from '@/components/forecasting/charts/WaterfallChart';
-import RatioPathChart from '@/components/forecasting/charts/RatioPathChart';
-import ForecastingRunGate from '@/components/forecasting/RunGate';
-import { useScenarioRunSet } from '@/components/forecasting/hooks';
+} from "@/components/forecasting/charts/WaterfallChart";
+import RatioPathChart from "@/components/forecasting/charts/RatioPathChart";
+import ForecastingRunGate from "@/components/forecasting/RunGate";
+import { useScenarioRunSet } from "@/components/forecasting/hooks";
 import {
   liabilitiesOf,
   metricStatus,
@@ -47,24 +47,30 @@ import {
   scenarioLabel,
   yearLabel,
   yoyPct,
-} from '@/components/forecasting/lib';
-import { useBankContext } from '@/components/shell/BankContext';
-import SdiModuleContext from '@/components/sdi/SdiModuleContext';
+} from "@/components/forecasting/lib";
+import { useBankContext } from "@/components/shell/BankContext";
+import SdiModuleContext from "@/components/sdi/SdiModuleContext";
 import {
   useCreateForecastRun,
   useForecastRun,
   useForecastRuns,
   useLiveSummary,
-} from '@/lib/api/hooks';
-import { isoDate, labelize, num, statusTone } from '@/lib/api/values';
-import { currencyCode, fmtCurrency, fmtPct, fmtPctSigned, regShort } from '@/lib/format';
-import { FORECASTING_CONFIDENTIAL_VIEW_REASON } from '@/lib/modules';
-import { seriesColor } from '@/lib/chartTheme';
+} from "@/lib/api/hooks";
+import { isoDate, labelize, num, statusTone } from "@/lib/api/values";
+import {
+  currencyCode,
+  fmtCurrency,
+  fmtPct,
+  fmtPctSigned,
+  regShort,
+} from "@/lib/format";
+import { FORECASTING_CONFIDENTIAL_VIEW_REASON } from "@/lib/modules";
+import { seriesColor } from "@/lib/chartTheme";
 
 const PRESET_SCENARIOS: { code: ForecastScenarioCode; label: string }[] = [
-  { code: 'base', label: 'Base case' },
-  { code: 'adverse', label: 'Adverse' },
-  { code: 'severely_adverse', label: 'Severely adverse' },
+  { code: "base", label: "Base case" },
+  { code: "adverse", label: "Adverse" },
+  { code: "severely_adverse", label: "Severely adverse" },
 ];
 
 /** Selectable projection horizons; 5 years is the regulatory default. */
@@ -73,20 +79,17 @@ const DEFAULT_HORIZON_YEARS = 5;
 
 /** A run's actual horizon is the last projected year on its stored path. */
 function runHorizonYears(run: ForecastRunRead): number {
-  return run.path.reduce(
-    (max, point) => Math.max(max, point.year),
-    0
-  );
+  return run.path.reduce((max, point) => Math.max(max, point.year), 0);
 }
 
-function kpiTone(status: string | null): 'ok' | 'warn' | 'crit' | undefined {
+function kpiTone(status: string | null): "ok" | "warn" | "crit" | undefined {
   switch (status) {
-    case 'green':
-      return 'ok';
-    case 'amber':
-      return 'warn';
-    case 'red':
-      return 'crit';
+    case "green":
+      return "ok";
+    case "amber":
+      return "warn";
+    case "red":
+      return "crit";
     default:
       return undefined;
   }
@@ -120,18 +123,21 @@ function BalanceSheetWorkspace() {
   const runDetailBankId = canViewRuns ? forecastingBankId : undefined;
   const canRun = moduleScope.forecastingRun === true;
   const searchParams = useSearchParams();
-  const requestedRunId = searchParams.get('run');
+  const requestedRunId = searchParams.get("run");
 
-  const [scenario, setScenario] = useState<ForecastScenarioCode>('base');
-  const [horizonYears, setHorizonYears] = useState<number>(DEFAULT_HORIZON_YEARS);
+  const [scenario, setScenario] = useState<ForecastScenarioCode>("base");
+  const [horizonYears, setHorizonYears] = useState<number>(
+    DEFAULT_HORIZON_YEARS,
+  );
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   const runsQuery = useForecastRuns(forecastingBankId, { limit: 50 });
   const runs = runsQuery.data?.runs ?? [];
   const liveSummary = useLiveSummary(bankId);
-  const liveForecast = liveSummary.data?.modules.find((module) => module.module === 'forecast');
-  const activeRunId =
-    selectedRunId ?? requestedRunId ?? null;
+  const liveForecast = liveSummary.data?.modules.find(
+    (module) => module.module === "forecast",
+  );
+  const activeRunId = selectedRunId ?? requestedRunId ?? null;
 
   const runQuery = useForecastRun(runDetailBankId, activeRunId);
   const createRun = useCreateForecastRun(bankId);
@@ -145,7 +151,7 @@ function BalanceSheetWorkspace() {
     run &&
     scenarioSet.adverse &&
     scenarioSet.adverse.id !== run.id &&
-    run.scenarioCode !== 'adverse' &&
+    run.scenarioCode !== "adverse" &&
     scenarioSet.adverse.reportingPeriodId === run.reportingPeriodId
       ? scenarioSet.adverse
       : undefined;
@@ -180,7 +186,7 @@ function BalanceSheetWorkspace() {
               {HORIZON_YEARS_OPTIONS.map((years) => (
                 <option key={years} value={years}>
                   {years} years
-                  {years === DEFAULT_HORIZON_YEARS ? ' (default)' : ''}
+                  {years === DEFAULT_HORIZON_YEARS ? " (default)" : ""}
                 </option>
               ))}
             </select>
@@ -193,7 +199,7 @@ function BalanceSheetWorkspace() {
                   title={
                     periodId || !canRun
                       ? undefined
-                      : 'A derived reporting period is required before a forecast can be run.'
+                      : "A derived reporting period is required before a forecast can be run."
                   }
                   onClick={() =>
                     periodId &&
@@ -203,7 +209,7 @@ function BalanceSheetWorkspace() {
                         scenarioCode: scenario,
                         horizonYears,
                       },
-                      { onSuccess: (created) => setSelectedRunId(created.id) }
+                      { onSuccess: (created) => setSelectedRunId(created.id) },
                     )
                   }
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
@@ -224,12 +230,15 @@ function BalanceSheetWorkspace() {
       {!periodId && (
         <PageContainer className="pt-6">
           <div className="border-l-4 border-l-warning bg-warning-light/40 px-5 py-4 text-body text-navy">
-            <p className="font-medium">A reporting period is required to run a forecast</p>
+            <p className="font-medium">
+              A reporting period is required to run a forecast
+            </p>
             <p className="mt-1 text-slate">
-              This institution has no derived reporting period yet. Activate the current canonical book in the{' '}
+              This institution has no derived reporting period yet. Activate the
+              current canonical book in the{" "}
               <Link href="/data-engine" className="text-action hover:underline">
                 Data Engine
-              </Link>{' '}
+              </Link>{" "}
               to create the immutable period snapshot used by forecast runs.
             </p>
           </div>
@@ -237,7 +246,9 @@ function BalanceSheetWorkspace() {
       )}
 
       <SdiModuleContext title="SDI ALM context">
-        This projection supports deposit, loan, liquidity, and capital planning for a specialised deposit-taking institution. It does not imply a Basel ICAAP requirement.
+        This projection supports deposit, loan, liquidity, and capital planning
+        for a specialised deposit-taking institution. It does not imply a Basel
+        ICAAP requirement.
       </SdiModuleContext>
 
       <QueryBoundary
@@ -251,7 +262,7 @@ function BalanceSheetWorkspace() {
           )}
 
           {!activeRunId ? (
-            liveForecast && liveForecast.status !== 'na' ? (
+            liveForecast && liveForecast.status !== "na" ? (
               <LiveForecastBaseline forecast={liveForecast} />
             ) : (
               <EmptyState
@@ -269,13 +280,16 @@ function BalanceSheetWorkspace() {
           ) : runQuery.isLoading ? (
             <SkeletonChart height={320} />
           ) : runQuery.error ? (
-            <ErrorPanel error={runQuery.error} onRetry={() => runQuery.refetch()} />
-          ) : run && run.status !== 'succeeded' ? (
+            <ErrorPanel
+              error={runQuery.error}
+              onRetry={() => runQuery.refetch()}
+            />
+          ) : run && run.status !== "succeeded" ? (
             <ErrorPanel
               error={
                 new Error(
                   run.error?.message ??
-                    `Run ${labelize(run.status)} — no projection output available.`
+                    `Run ${labelize(run.status)} — no projection output available.`,
                 )
               }
               title={`Run ${labelize(run.status)}`}
@@ -292,7 +306,11 @@ function BalanceSheetWorkspace() {
 function LiveForecastBaseline({
   forecast,
 }: {
-  forecast: { metrics: Record<string, unknown>; computedAt: Date; status: string };
+  forecast: {
+    metrics: Record<string, unknown>;
+    computedAt: Date;
+    status: string;
+  };
 }) {
   const metrics = forecast.metrics;
   const metric = (key: string) => metrics[key] as string | number | undefined;
@@ -304,14 +322,27 @@ function LiveForecastBaseline({
         computedAt={forecast.computedAt}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <KpiStat label="Year-5 CAR" value={fmtPct(num(metric('year5_car_pct')), 2)} />
-          <KpiStat label="Year-5 LCR" value={fmtPct(num(metric('year5_lcr_pct')), 2)} />
-          <KpiStat label="Year-5 NSFR" value={fmtPct(num(metric('year5_nsfr_pct')), 2)} />
-          <KpiStat label="Average ROE" value={fmtPct(num(metric('avg_roe_pct')), 2)} />
+          <KpiStat
+            label="Year-5 CAR"
+            value={fmtPct(num(metric("year5_car_pct")), 2)}
+          />
+          <KpiStat
+            label="Year-5 LCR"
+            value={fmtPct(num(metric("year5_lcr_pct")), 2)}
+          />
+          <KpiStat
+            label="Year-5 NSFR"
+            value={fmtPct(num(metric("year5_nsfr_pct")), 2)}
+          />
+          <KpiStat
+            label="Average ROE"
+            value={fmtPct(num(metric("avg_roe_pct")), 2)}
+          />
         </div>
       </SectionCard>
       <p className="text-caption text-slate">
-        Select a saved run through a direct run link, or create a scenario above to preserve an explicit projection snapshot.
+        Select a saved run through a direct run link, or create a scenario above
+        to preserve an explicit projection snapshot.
       </p>
     </>
   );
@@ -344,9 +375,9 @@ function RunDashboard({
   const horizonAssetGrowth =
     y0 && yFinal ? yoyPct(num(yFinal.totalAssets), num(y0.totalAssets)) : null;
 
-  const carThreshold = metricThreshold(run, 'year5_car_pct', 10);
-  const lcrThreshold = metricThreshold(run, 'year5_lcr_pct', 100);
-  const nsfrThreshold = metricThreshold(run, 'year5_nsfr_pct', 100);
+  const carThreshold = metricThreshold(run, "year5_car_pct", 10);
+  const lcrThreshold = metricThreshold(run, "year5_lcr_pct", 100);
+  const nsfrThreshold = metricThreshold(run, "year5_nsfr_pct", 100);
 
   const projectionData: ProjectionPoint[] = path.map((p) => {
     const adversePoint = adverse?.path.find((a) => a.year === p.year);
@@ -361,7 +392,10 @@ function RunDashboard({
       band:
         adverseAssets === null
           ? null
-          : [Math.min(baseAssets, adverseAssets), Math.max(baseAssets, adverseAssets)],
+          : [
+              Math.min(baseAssets, adverseAssets),
+              Math.max(baseAssets, adverseAssets),
+            ],
     };
   });
 
@@ -378,14 +412,20 @@ function RunDashboard({
     <div className="space-y-6">
       {/* Scenario context strip */}
       <div className="flex items-center gap-3 flex-wrap">
-        <StatusPill tone="action">{scenarioLabel(run.scenarioCode)} scenario</StatusPill>
-        <StatusPill tone={horizon === DEFAULT_HORIZON_YEARS ? 'compliant' : 'action'}>
+        <StatusPill tone="action">
+          {scenarioLabel(run.scenarioCode)} scenario
+        </StatusPill>
+        <StatusPill
+          tone={horizon === DEFAULT_HORIZON_YEARS ? "compliant" : "action"}
+        >
           {horizon}-year horizon
         </StatusPill>
         {adverse && (
           <span className="text-caption text-slate">
-            Adverse band overlaid from run{' '}
-            <span className="font-mono text-navy">{adverse.id.slice(0, 8)}</span>{' '}
+            Adverse band overlaid from run{" "}
+            <span className="font-mono text-navy">
+              {adverse.id.slice(0, 8)}
+            </span>{" "}
             on the same period
           </span>
         )}
@@ -403,10 +443,10 @@ function RunDashboard({
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiStat
           label="Y1 projected asset growth"
-          value={y1AssetGrowth === null ? '—' : fmtPctSigned(y1AssetGrowth, 1)}
+          value={y1AssetGrowth === null ? "—" : fmtPctSigned(y1AssetGrowth, 1)}
           hint={
             horizonAssetGrowth === null
-              ? 'Derived from the stored path'
+              ? "Derived from the stored path"
               : `${fmtPctSigned(horizonAssetGrowth, 1)} over ${horizon}Y · derived from path`
           }
           sparkline={<Sparkline data={assetPath} color={seriesColor(0)} />}
@@ -414,7 +454,7 @@ function RunDashboard({
         <KpiStat
           label={`Year-${horizon} CAR`}
           value={fmtPct(num(run.summary.year5CarPct), 2)}
-          status={kpiTone(metricStatus(run, 'year5_car_pct'))}
+          status={kpiTone(metricStatus(run, "year5_car_pct"))}
           hint={`${regShort()} minimum ${fmtPct(carThreshold, 0)}`}
           sparkline={
             <Sparkline
@@ -429,7 +469,9 @@ function RunDashboard({
           hint={`${horizon}-year average return on equity`}
           sparkline={
             <Sparkline
-              data={path.filter((p) => p.roePct !== null).map((p) => num(p.roePct))}
+              data={path
+                .filter((p) => p.roePct !== null)
+                .map((p) => num(p.roePct))}
               color={seriesColor(2)}
             />
           }
@@ -462,8 +504,8 @@ function RunDashboard({
               </span>
               {adverse && (
                 <span>
-                  Shaded band spans base ↔ adverse total assets ·{' '}
-                  {scenarioLabel(adverse.scenarioCode)} run{' '}
+                  Shaded band spans base ↔ adverse total assets ·{" "}
+                  {scenarioLabel(adverse.scenarioCode)} run{" "}
                   <span className="font-mono">{adverse.id.slice(0, 8)}</span>
                 </span>
               )}
@@ -504,7 +546,10 @@ function RunDashboard({
           height={240}
         >
           <RatioPathChart
-            data={path.map((p) => ({ label: yearLabel(p), value: num(p.carPct) }))}
+            data={path.map((p) => ({
+              label: yearLabel(p),
+              value: num(p.carPct),
+            }))}
             threshold={carThreshold}
             thresholdLabel={`${regShort()} min ${fmtPct(carThreshold, 0)}`}
             color={seriesColor(0)}
@@ -517,7 +562,10 @@ function RunDashboard({
           height={240}
         >
           <RatioPathChart
-            data={path.map((p) => ({ label: yearLabel(p), value: num(p.lcrPct) }))}
+            data={path.map((p) => ({
+              label: yearLabel(p),
+              value: num(p.lcrPct),
+            }))}
             threshold={lcrThreshold}
             thresholdLabel={`Basel min ${fmtPct(lcrThreshold, 0)}`}
             color={seriesColor(1)}
@@ -530,7 +578,10 @@ function RunDashboard({
           height={240}
         >
           <RatioPathChart
-            data={path.map((p) => ({ label: yearLabel(p), value: num(p.nsfrPct) }))}
+            data={path.map((p) => ({
+              label: yearLabel(p),
+              value: num(p.nsfrPct),
+            }))}
             threshold={nsfrThreshold}
             thresholdLabel={`Basel min ${fmtPct(nsfrThreshold, 0)}`}
             color={seriesColor(2)}
@@ -566,27 +617,39 @@ function WaterfallSection({ run }: { run: ForecastRunRead }) {
     if (!opening || !closing) return null;
 
     const deltas: WaterfallStep[] = [
-      { kind: 'total', label: `Opening (Y${year - 1})`, value: num(opening.totalAssets) },
-      { kind: 'delta', label: 'Loans Δ', value: num(closing.loans) - num(opening.loans) },
       {
-        kind: 'delta',
-        label: 'Securities Δ',
+        kind: "total",
+        label: `Opening (Y${year - 1})`,
+        value: num(opening.totalAssets),
+      },
+      {
+        kind: "delta",
+        label: "Loans Δ",
+        value: num(closing.loans) - num(opening.loans),
+      },
+      {
+        kind: "delta",
+        label: "Securities Δ",
         value: num(closing.securities) - num(opening.securities),
       },
-      { kind: 'delta', label: 'Cash Δ', value: num(closing.cash) - num(opening.cash) },
+      {
+        kind: "delta",
+        label: "Cash Δ",
+        value: num(closing.cash) - num(opening.cash),
+      },
     ];
     // Residual between the stored totals and the three tracked components —
     // shown only when the identity doesn't close exactly.
     const explained = deltas
-      .filter((s) => s.kind === 'delta')
+      .filter((s) => s.kind === "delta")
       .reduce((sum, s) => sum + s.value, 0);
     const residual =
       num(closing.totalAssets) - num(opening.totalAssets) - explained;
     if (Math.abs(residual) > 0.005) {
-      deltas.push({ kind: 'delta', label: 'Other Δ', value: residual });
+      deltas.push({ kind: "delta", label: "Other Δ", value: residual });
     }
     deltas.push({
-      kind: 'total',
+      kind: "total",
       label: `Closing (Y${year})`,
       value: num(closing.totalAssets),
     });
@@ -612,7 +675,9 @@ function WaterfallSection({ run }: { run: ForecastRunRead }) {
               type="button"
               onClick={() => setYear(y)}
               className={`px-2.5 py-1 rounded text-caption font-medium ${
-                y === year ? 'bg-surface-raised text-navy shadow-sm' : 'text-slate hover:text-navy'
+                y === year
+                  ? "bg-surface-raised text-navy shadow-sm"
+                  : "text-slate hover:text-navy"
               }`}
             >
               Y{y}
@@ -625,7 +690,8 @@ function WaterfallSection({ run }: { run: ForecastRunRead }) {
           <span>
             Derivation: period-over-period delta decomposition of the persisted
             annual path — opening and closing bars are stored totals; the delta
-            bars are Δloans, Δsecurities, and Δcash between the two stored years.
+            bars are Δloans, Δsecurities, and Δcash between the two stored
+            years.
           </span>
           <span className="inline-flex items-center gap-1.5 ml-auto">
             Net change
@@ -664,12 +730,12 @@ function DeltaUnder({ value }: { value: number | null }) {
 
 const horizonColumns: Column<HorizonRow>[] = [
   {
-    key: 'year',
-    header: 'Year',
-    width: '11%',
+    key: "year",
+    header: "Year",
+    width: "11%",
     render: (r) => (
       <span className="font-medium text-navy">
-        Y{r.point.year}{' '}
+        Y{r.point.year}{" "}
         <span className="font-mono text-caption text-slate">
           {r.point.periodLabel}
         </span>
@@ -677,8 +743,8 @@ const horizonColumns: Column<HorizonRow>[] = [
     ),
   },
   {
-    key: 'assets',
-    header: 'Assets · Δ YoY',
+    key: "assets",
+    header: "Assets · Δ YoY",
     numeric: true,
     render: (r) => (
       <>
@@ -688,30 +754,30 @@ const horizonColumns: Column<HorizonRow>[] = [
     ),
   },
   {
-    key: 'loans',
-    header: 'Loans',
+    key: "loans",
+    header: "Loans",
     numeric: true,
     render: (r) => fmtCurrency(num(r.point.loans)),
   },
   {
-    key: 'deposits',
-    header: 'Deposits',
+    key: "deposits",
+    header: "Deposits",
     numeric: true,
     render: (r) => fmtCurrency(num(r.point.deposits)),
   },
   {
-    key: 'equity',
-    header: 'Equity',
+    key: "equity",
+    header: "Equity",
     numeric: true,
     render: (r) => fmtCurrency(num(r.point.equity)),
   },
   {
-    key: 'nii',
-    header: 'NII · Δ YoY',
+    key: "nii",
+    header: "NII · Δ YoY",
     numeric: true,
     render: (r) =>
       r.point.year === 0 ? (
-        '—'
+        "—"
       ) : (
         <>
           {fmtCurrency(num(r.point.nii))}
@@ -720,50 +786,56 @@ const horizonColumns: Column<HorizonRow>[] = [
       ),
   },
   {
-    key: 'netIncome',
-    header: 'Net income',
+    key: "netIncome",
+    header: "Net income",
     numeric: true,
     render: (r) =>
-      r.point.year === 0 ? '—' : fmtCurrency(num(r.point.netIncome)),
+      r.point.year === 0 ? "—" : fmtCurrency(num(r.point.netIncome)),
   },
   {
-    key: 'roe',
-    header: 'ROE',
+    key: "roe",
+    header: "ROE",
     numeric: true,
     render: (r) =>
-      r.point.roePct === null ? '—' : fmtPct(num(r.point.roePct), 2),
+      r.point.roePct === null ? "—" : fmtPct(num(r.point.roePct), 2),
   },
   {
-    key: 'car',
-    header: 'CAR',
+    key: "car",
+    header: "CAR",
     numeric: true,
     render: (r) => (
       <span
-        className={num(r.point.carPct) < 10 ? 'text-critical font-medium' : undefined}
+        className={
+          num(r.point.carPct) < 10 ? "text-critical font-medium" : undefined
+        }
       >
         {fmtPct(num(r.point.carPct), 2)}
       </span>
     ),
   },
   {
-    key: 'lcr',
-    header: 'LCR',
+    key: "lcr",
+    header: "LCR",
     numeric: true,
     render: (r) => (
       <span
-        className={num(r.point.lcrPct) < 100 ? 'text-critical font-medium' : undefined}
+        className={
+          num(r.point.lcrPct) < 100 ? "text-critical font-medium" : undefined
+        }
       >
         {fmtPct(num(r.point.lcrPct), 1)}
       </span>
     ),
   },
   {
-    key: 'nsfr',
-    header: 'NSFR',
+    key: "nsfr",
+    header: "NSFR",
     numeric: true,
     render: (r) => (
       <span
-        className={num(r.point.nsfrPct) < 100 ? 'text-critical font-medium' : undefined}
+        className={
+          num(r.point.nsfrPct) < 100 ? "text-critical font-medium" : undefined
+        }
       >
         {fmtPct(num(r.point.nsfrPct), 1)}
       </span>
@@ -778,12 +850,10 @@ function HorizonTable({ path }: { path: ProjectionYearRead[] }) {
       point,
       assetGrowthPct: yoyPct(
         num(point.totalAssets),
-        prev ? num(prev.totalAssets) : null
+        prev ? num(prev.totalAssets) : null,
       ),
       niiGrowthPct:
-        point.year > 1 && prev
-          ? yoyPct(num(point.nii), num(prev.nii))
-          : null,
+        point.year > 1 && prev ? yoyPct(num(point.nii), num(prev.nii)) : null,
     };
   });
   return <DataTable columns={horizonColumns} rows={rows} density="compact" />;

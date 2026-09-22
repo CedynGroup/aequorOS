@@ -404,13 +404,16 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     const staleSession = apiError?.status === 401;
     return (
       <FullScreenPanel
-        title={staleSession ? "Your access has changed" : "Risk service unreachable"}
+        title={
+          staleSession ? "Your access has changed" : "Risk service unreachable"
+        }
         description={
           staleSession
             ? (apiError?.message ??
               "Your permissions changed, so this session is out of date. Sign in again to pick them up.")
             : apiError
-              ? (apiError.message ?? "Effective authority is temporarily unavailable.")
+              ? (apiError.message ??
+                "Effective authority is temporarily unavailable.")
               : "Could not resolve effective authority from the risk service."
         }
         action={

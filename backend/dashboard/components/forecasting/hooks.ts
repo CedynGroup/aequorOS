@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Composed forecasting hooks — presentation-layer combinations of the
@@ -6,9 +6,9 @@
  * here fans out over the existing forecast-run resources.
  */
 
-import type { ForecastRunRead } from '@aequoros/risk-service-api';
-import { useForecastRun, useForecastRuns } from '@/lib/api/hooks';
-import { latestSucceededId } from './lib';
+import type { ForecastRunRead } from "@aequoros/risk-service-api";
+import { useForecastRun, useForecastRuns } from "@/lib/api/hooks";
+import { latestSucceededId } from "./lib";
 
 export type ScenarioRunSet = {
   /** Latest succeeded run per preset scenario (undefined while loading / absent). */
@@ -36,9 +36,9 @@ export function useScenarioRunSet(
   const runs = runsQuery.data?.runs ?? [];
   const detailBankId = canViewRuns ? bankId : undefined;
 
-  const baseId = latestSucceededId(runs, 'base');
-  const adverseId = latestSucceededId(runs, 'adverse');
-  const severeId = latestSucceededId(runs, 'severely_adverse');
+  const baseId = latestSucceededId(runs, "base");
+  const adverseId = latestSucceededId(runs, "adverse");
+  const severeId = latestSucceededId(runs, "severely_adverse");
 
   const baseQuery = useForecastRun(detailBankId, baseId);
   const adverseQuery = useForecastRun(detailBankId, adverseId);

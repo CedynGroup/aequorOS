@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Strategy Optimizer — constrained scenario search over the deterministic
@@ -8,12 +8,12 @@
  * table. Wiring (useRunOptimizer + stored-run hydration) is unchanged.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import { Loader2, Search, Trophy } from 'lucide-react';
+import PageContainer from "@/components/ui/PageContainer";
+import { Loader2, Search, Trophy } from "lucide-react";
 import type {
   OptimizerResultRead,
   RegulatoryRunRead,
-} from '@aequoros/risk-service-api';
+} from "@aequoros/risk-service-api";
 import {
   ResponsiveContainer,
   BarChart,
@@ -23,35 +23,35 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-} from 'recharts';
-import PageHeader from '@/components/ui/PageHeader';
-import KpiStat from '@/components/ui/KpiStat';
-import StatusPill from '@/components/ui/StatusPill';
-import RunBadge from '@/components/ui/RunBadge';
-import LimitBar from '@/components/ui/LimitBar';
-import EmptyState from '@/components/ui/EmptyState';
-import SectionCard from '@/components/ui/SectionCard';
-import ChartFrame from '@/components/ui/ChartFrame';
-import QueryBoundary, { ErrorPanel } from '@/components/ui/QueryBoundary';
-import RunProvenance from '@/components/forecasting/RunProvenance';
-import ForecastingRunGate from '@/components/forecasting/RunGate';
-import { useBankContext } from '@/components/shell/BankContext';
+} from "recharts";
+import PageHeader from "@/components/ui/PageHeader";
+import KpiStat from "@/components/ui/KpiStat";
+import StatusPill from "@/components/ui/StatusPill";
+import RunBadge from "@/components/ui/RunBadge";
+import LimitBar from "@/components/ui/LimitBar";
+import EmptyState from "@/components/ui/EmptyState";
+import SectionCard from "@/components/ui/SectionCard";
+import ChartFrame from "@/components/ui/ChartFrame";
+import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
+import RunProvenance from "@/components/forecasting/RunProvenance";
+import ForecastingRunGate from "@/components/forecasting/RunGate";
+import { useBankContext } from "@/components/shell/BankContext";
 import {
   useRegulatoryRun,
   useRegulatoryRuns,
   useRunOptimizer,
-} from '@/lib/api/hooks';
-import { labelize, num } from '@/lib/api/values';
-import { fmtPct, regShort } from '@/lib/format';
+} from "@/lib/api/hooks";
+import { labelize, num } from "@/lib/api/values";
+import { fmtPct, regShort } from "@/lib/format";
 import {
   axisProps,
   CHART_GRID,
   chartTooltipProps,
   seriesColor,
-} from '@/lib/chartTheme';
+} from "@/lib/chartTheme";
 
 const SCOPE_COPY =
-  'Constrained scenario search across 108 decision combinations (loan growth × securities allocation × deposit pricing × dividend payout), projected 5 years each, filtered against regulatory constraints (CAR ≥ 10%, LCR ≥ 100%, NSFR ≥ 100%), ranked by 5-year average ROE.';
+  "Constrained scenario search across 108 decision combinations (loan growth × securities allocation × deposit pricing × dividend payout), projected 5 years each, filtered against regulatory constraints (CAR ≥ 10%, LCR ≥ 100%, NSFR ≥ 100%), ranked by 5-year average ROE.";
 
 // ---------------------------------------------------------------------------
 // Normalized optimizer output — from a fresh result or a stored run.
@@ -200,18 +200,23 @@ export default function StrategicOptimizer() {
   const canRun = moduleScope.forecastingRun === true;
   // The stored optimizer run is Forecasting run detail; nothing is requested
   // before the projection says the caller may open it.
-  const runsBankId = moduleScope.forecastingConfidentialView ? bankId : undefined;
+  const runsBankId = moduleScope.forecastingConfidentialView
+    ? bankId
+    : undefined;
 
   const runOptimizer = useRunOptimizer(bankId);
-  const runsQuery = useRegulatoryRuns(runsBankId, { module: 'optimizer', limit: 1 });
+  const runsQuery = useRegulatoryRuns(runsBankId, {
+    module: "optimizer",
+    limit: 1,
+  });
   const latestStoredId = runsQuery.data?.runs[0]?.id ?? null;
   const storedRun = useRegulatoryRun(runsBankId, latestStoredId);
 
   const view: OptimizerView | null = runOptimizer.data
     ? fromResult(runOptimizer.data)
     : storedRun.data
-    ? fromStoredRun(storedRun.data)
-    : null;
+      ? fromStoredRun(storedRun.data)
+      : null;
 
   const runButton = (
     <ForecastingRunGate canRun={canRun}>
@@ -251,7 +256,10 @@ export default function StrategicOptimizer() {
       >
         <PageContainer className="py-6 space-y-6">
           {runOptimizer.error && (
-            <ErrorPanel error={runOptimizer.error} title="Optimizer run failed" />
+            <ErrorPanel
+              error={runOptimizer.error}
+              title="Optimizer run failed"
+            />
           )}
 
           {!view ? (
@@ -281,7 +289,9 @@ export default function StrategicOptimizer() {
                 <KpiStat
                   label="Best 5Y average ROE"
                   value={
-                    view.top.length ? fmtPct(view.top[0].summary.avgRoePct, 2) : '—'
+                    view.top.length
+                      ? fmtPct(view.top[0].summary.avgRoePct, 2)
+                      : "—"
                   }
                   hint="Highest-ranked feasible strategy"
                 />
@@ -295,8 +305,12 @@ export default function StrategicOptimizer() {
                         key={code}
                         className="inline-flex items-center gap-1.5 text-caption"
                       >
-                        <span className="font-medium text-navy uppercase">{code}</span>
-                        <span className="font-mono text-slate tnum">{count}</span>
+                        <span className="font-medium text-navy uppercase">
+                          {code}
+                        </span>
+                        <span className="font-mono text-slate tnum">
+                          {count}
+                        </span>
                       </span>
                     ))}
                     {Object.values(view.histogram).every((v) => v === 0) && (
@@ -313,88 +327,97 @@ export default function StrategicOptimizer() {
                   title="No feasible strategy in this search"
                   subtitle="Every candidate breached at least one capital or liquidity floor"
                   footer={
-                    <RunProvenance
-                      createdAt={view.provenance.createdAt}
-                    />
+                    <RunProvenance createdAt={view.provenance.createdAt} />
                   }
                 >
                   <p className="text-body text-navy/80 leading-relaxed max-w-3xl">
                     {view.candidatesEvaluated} decision combinations were
                     projected and none kept every regulatory ratio above its
                     floor across all five years. The binding-constraint
-                    histogram above shows which floor eliminated the
-                    candidates — address that ratio (capital raise, asset-mix
-                    shift, or lower payout) and re-run the search.
+                    histogram above shows which floor eliminated the candidates
+                    — address that ratio (capital raise, asset-mix shift, or
+                    lower payout) and re-run the search.
                   </p>
                 </SectionCard>
               ) : (
                 <>
-              {/* Ranked strategy cards */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {view.top.slice(0, 3).map((candidate, i) => (
-                  <StrategyCard key={i} rank={i + 1} candidate={candidate} />
-                ))}
-              </div>
+                  {/* Ranked strategy cards */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {view.top.slice(0, 3).map((candidate, i) => (
+                      <StrategyCard
+                        key={i}
+                        rank={i + 1}
+                        candidate={candidate}
+                      />
+                    ))}
+                  </div>
 
-              {/* Impact chart */}
-              <ChartFrame
-                title="ROE impact across top strategies"
-                subtitle="5-year average ROE of each ranked candidate — the recommended strategy highlighted"
-                height={260}
-                footer={
-                  <RunProvenance
-                    createdAt={view.provenance.createdAt}
-                    note="Kept as saved optimizer projections."
-                  />
-                }
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={view.top.map((c, i) => ({
-                      label: `#${i + 1}`,
-                      roe: c.summary.avgRoePct,
-                    }))}
-                    margin={{ top: 8, right: 16, left: 4, bottom: 4 }}
+                  {/* Impact chart */}
+                  <ChartFrame
+                    title="ROE impact across top strategies"
+                    subtitle="5-year average ROE of each ranked candidate — the recommended strategy highlighted"
+                    height={260}
+                    footer={
+                      <RunProvenance
+                        createdAt={view.provenance.createdAt}
+                        note="Kept as saved optimizer projections."
+                      />
+                    }
                   >
-                    <CartesianGrid
-                      stroke={CHART_GRID}
-                      strokeDasharray="3 3"
-                      vertical={false}
-                    />
-                    <XAxis dataKey="label" {...axisProps} interval={0} />
-                    <YAxis
-                      {...axisProps}
-                      axisLine={false}
-                      width={48}
-                      tickFormatter={(v: number) => `${v.toFixed(1)}%`}
-                    />
-                    <Tooltip
-                      {...chartTooltipProps}
-                      cursor={{ fill: 'transparent' }}
-                      formatter={(v: number) => [fmtPct(v, 2), '5Y avg ROE']}
-                    />
-                    <Bar dataKey="roe" maxBarSize={44} radius={[3, 3, 0, 0]}>
-                      {view.top.map((_, i) => (
-                        <Cell
-                          key={i}
-                          fill={i === 0 ? seriesColor(0) : seriesColor(4)}
-                          fillOpacity={i === 0 ? 0.95 : 0.55}
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={view.top.map((c, i) => ({
+                          label: `#${i + 1}`,
+                          roe: c.summary.avgRoePct,
+                        }))}
+                        margin={{ top: 8, right: 16, left: 4, bottom: 4 }}
+                      >
+                        <CartesianGrid
+                          stroke={CHART_GRID}
+                          strokeDasharray="3 3"
+                          vertical={false}
                         />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartFrame>
+                        <XAxis dataKey="label" {...axisProps} interval={0} />
+                        <YAxis
+                          {...axisProps}
+                          axisLine={false}
+                          width={48}
+                          tickFormatter={(v: number) => `${v.toFixed(1)}%`}
+                        />
+                        <Tooltip
+                          {...chartTooltipProps}
+                          cursor={{ fill: "transparent" }}
+                          formatter={(v: number) => [
+                            fmtPct(v, 2),
+                            "5Y avg ROE",
+                          ]}
+                        />
+                        <Bar
+                          dataKey="roe"
+                          maxBarSize={44}
+                          radius={[3, 3, 0, 0]}
+                        >
+                          {view.top.map((_, i) => (
+                            <Cell
+                              key={i}
+                              fill={i === 0 ? seriesColor(0) : seriesColor(4)}
+                              fillOpacity={i === 0 ? 0.95 : 0.55}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartFrame>
 
-              {/* Full ranking table */}
-              <SectionCard
-                title="Full ranking"
-                subtitle="Top strategies by 5-year average ROE, with the decision levers and constraint outcomes"
-                noPadding
-                computedAt={view.provenance.createdAt ?? undefined}
-              >
-                <RankingTable view={view} />
-              </SectionCard>
+                  {/* Full ranking table */}
+                  <SectionCard
+                    title="Full ranking"
+                    subtitle="Top strategies by 5-year average ROE, with the decision levers and constraint outcomes"
+                    noPadding
+                    computedAt={view.provenance.createdAt ?? undefined}
+                  >
+                    <RankingTable view={view} />
+                  </SectionCard>
                 </>
               )}
 
@@ -433,34 +456,34 @@ function StrategyCard({
 }) {
   const d = candidate.decision;
   const levers: { label: string; value: string }[] = [
-    { label: 'Loan growth', value: fmtPct(d.loanGrowthPct, 1) },
+    { label: "Loan growth", value: fmtPct(d.loanGrowthPct, 1) },
     {
-      label: 'Securities shift',
-      value: `${d.securitiesShiftPp >= 0 ? '+' : ''}${d.securitiesShiftPp.toFixed(1)} pp`,
+      label: "Securities shift",
+      value: `${d.securitiesShiftPp >= 0 ? "+" : ""}${d.securitiesShiftPp.toFixed(1)} pp`,
     },
     {
-      label: 'Deposit premium',
-      value: `${d.depositPremiumBps >= 0 ? '+' : ''}${d.depositPremiumBps} bps`,
+      label: "Deposit premium",
+      value: `${d.depositPremiumBps >= 0 ? "+" : ""}${d.depositPremiumBps} bps`,
     },
-    { label: 'Dividend payout', value: fmtPct(d.dividendPayoutPct, 0) },
+    { label: "Dividend payout", value: fmtPct(d.dividendPayoutPct, 0) },
   ];
   if (d.depositGrowthDeltaPct !== null) {
     levers.push({
-      label: 'Deposit growth Δ',
-      value: `${d.depositGrowthDeltaPct >= 0 ? '+' : ''}${d.depositGrowthDeltaPct.toFixed(1)} pp`,
+      label: "Deposit growth Δ",
+      value: `${d.depositGrowthDeltaPct >= 0 ? "+" : ""}${d.depositGrowthDeltaPct.toFixed(1)} pp`,
     });
   }
   if (d.nimDeltaPct !== null) {
     levers.push({
-      label: 'NIM Δ',
-      value: `${d.nimDeltaPct >= 0 ? '+' : ''}${d.nimDeltaPct.toFixed(2)} pp`,
+      label: "NIM Δ",
+      value: `${d.nimDeltaPct >= 0 ? "+" : ""}${d.nimDeltaPct.toFixed(2)} pp`,
     });
   }
 
   return (
     <div
       className={`card p-5 flex flex-col gap-4 ${
-        rank === 1 ? 'ring-1 ring-success/30' : ''
+        rank === 1 ? "ring-1 ring-success/30" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -468,8 +491,8 @@ function StrategyCard({
           <span
             className={`inline-flex items-center justify-center w-8 h-8 rounded ${
               rank === 1
-                ? 'bg-success-light text-success'
-                : 'bg-surface text-slate'
+                ? "bg-success-light text-success"
+                : "bg-surface text-slate"
             }`}
           >
             {rank === 1 ? <Trophy size={15} aria-hidden /> : `#${rank}`}
@@ -480,7 +503,10 @@ function StrategyCard({
             </p>
             <p className="font-mono text-h2 text-navy tnum">
               {fmtPct(candidate.summary.avgRoePct, 2)}
-              <span className="text-caption text-slate font-sans"> 5Y avg ROE</span>
+              <span className="text-caption text-slate font-sans">
+                {" "}
+                5Y avg ROE
+              </span>
             </p>
           </div>
         </div>
@@ -519,7 +545,11 @@ function StrategyCard({
             direction="above"
             unit="%"
             format={(v) => v.toFixed(1)}
-            limitLabel={c.constraint.toLowerCase() === 'car' ? `${regShort()} floor` : 'Basel floor'}
+            limitLabel={
+              c.constraint.toLowerCase() === "car"
+                ? `${regShort()} floor`
+                : "Basel floor"
+            }
           />
         ))}
       </div>
@@ -554,7 +584,7 @@ function RankingTable({ view }: { view: OptimizerView }) {
             <tr
               key={i}
               className={`border-b border-border-light last:border-b-0 ${
-                i === 0 ? 'bg-success-light/40' : 'hover:bg-surface-alt'
+                i === 0 ? "bg-success-light/40" : "hover:bg-surface-alt"
               }`}
             >
               <td className="px-4 py-2.5">
@@ -562,18 +592,20 @@ function RankingTable({ view }: { view: OptimizerView }) {
                   <span className="font-mono font-medium text-navy tnum">
                     #{i + 1}
                   </span>
-                  {i === 0 && <StatusPill tone="success">Recommended</StatusPill>}
+                  {i === 0 && (
+                    <StatusPill tone="success">Recommended</StatusPill>
+                  )}
                 </span>
               </td>
               <td className="px-4 py-2.5 text-right font-mono tnum">
                 {fmtPct(candidate.decision.loanGrowthPct, 1)}
               </td>
               <td className="px-4 py-2.5 text-right font-mono tnum">
-                {candidate.decision.securitiesShiftPp >= 0 ? '+' : ''}
+                {candidate.decision.securitiesShiftPp >= 0 ? "+" : ""}
                 {candidate.decision.securitiesShiftPp.toFixed(1)} pp
               </td>
               <td className="px-4 py-2.5 text-right font-mono tnum">
-                {candidate.decision.depositPremiumBps >= 0 ? '+' : ''}
+                {candidate.decision.depositPremiumBps >= 0 ? "+" : ""}
                 {candidate.decision.depositPremiumBps} bps
               </td>
               <td className="px-4 py-2.5 text-right font-mono tnum">
@@ -596,7 +628,7 @@ function RankingTable({ view }: { view: OptimizerView }) {
                   {candidate.constraints.map((c) => (
                     <StatusPill
                       key={c.constraint}
-                      tone={c.passed ? 'success' : 'critical'}
+                      tone={c.passed ? "success" : "critical"}
                     >
                       {c.constraint.toUpperCase()}
                     </StatusPill>
