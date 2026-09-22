@@ -363,8 +363,8 @@ directory uses the same entries for the grant composer; neither grants product
 access. The class lets the dashboard select the route's actual sensitivity.
 
 Pending requests deduplicate by requester, route, institution target (or
-organization target), module, sensitivity, and permission. Org Owners list,
-approve, or reject them through `/authorization/access-requests`; approval
+organization target), module, sensitivity, and permission. Org Owners list and
+approve them through `/authorization/access-requests`; approval
 preserves the requested scope and uses the scoped-grant service. An equivalent
 effective binding can resolve approval without creating duplicate authority;
 the resolution records the binding and actor in audit evidence. Navigation and
