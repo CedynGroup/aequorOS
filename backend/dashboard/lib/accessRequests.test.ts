@@ -2,6 +2,30 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { accessRequestRequirements, PUBLIC_MODULE_ROUTES } from "./modules";
 
+import { reasonDraftComplete } from "../components/access/GrantReasonFields";
+
+for (const reasonCategory of ["temporary_cover", "incident_break_glass"] as const) {
+  const draft = {
+    reasonCategory,
+    reasonDetail: "",
+    reference: "",
+    validUntil: "",
+  };
+  assert.equal(reasonDraftComplete(draft), false);
+  assert.equal(reasonDraftComplete(draft, { expiry: false }), true);
+  assert.equal(
+    reasonDraftComplete({ ...draft, validUntil: "2099-01-01T12:00" }),
+    true,
+  );
+}
+assert.equal(
+  reasonDraftComplete(
+    { reasonCategory: "other", reasonDetail: "", reference: "", validUntil: "" },
+    { expiry: false },
+  ),
+  false,
+);
+
 const serverRequirements = JSON.parse(
   execFileSync(
     "uv",

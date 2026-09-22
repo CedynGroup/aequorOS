@@ -1262,7 +1262,7 @@ function RejectRequestDialog({
     onError: async (failure) =>
       setError((await normalizeApiError(failure)).message),
   });
-  const complete = reasonDraftComplete(reason);
+  const complete = reasonDraftComplete(reason, { expiry: false });
   return (
     <DialogFrame title="Reject access request" onClose={onClose}>
       <form
