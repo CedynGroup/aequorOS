@@ -564,7 +564,7 @@ def _pending_access_request(
     )
 
 
-def _resolve_access_request(
+def _resolve_access_request(  # noqa: PLR0913 - explicit resolution actor and authority evidence
     db: DbSession,
     request: AuthorizationAccessRequest,
     *,
