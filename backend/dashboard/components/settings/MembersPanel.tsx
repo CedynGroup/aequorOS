@@ -17,6 +17,8 @@ import type {
   BindingCreateRequest,
   BindingCreateResponse,
   BindingRead,
+  AccessRequestRead,
+  GrantReasonCategory,
   MemberRead,
 } from "@aequoros/risk-service-api";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -44,9 +46,18 @@ import {
   overlappingGrantNotice,
 } from "@/lib/api/grantRequirements";
 import { sodFindings, sodRemedy, type SodFinding } from "@/lib/api/sodDecision";
+import {
+  GrantReasonFields,
+  REASON_OPTIONS,
+  reasonDraftComplete,
+  reasonLabel,
+  toDatetimeLocalValue,
+  type GrantReasonDraft,
+} from "@/components/access/GrantReasonFields";
 
 const MEMBERS_KEY = ORGANIZATION_MEMBERS_QUERY_KEY;
-const REQUESTS_KEY = ["settings", "sso-access-requests"];
+const REQUESTS_KEY = ["access", "sso-access-requests"];
+const ROUTE_REQUESTS_KEY = ["access", "route-access-requests"];
 
 function memberName(member: MemberRead): string {
   return member.displayName || member.email;
@@ -99,12 +110,28 @@ export default function MembersPanel() {
   // Account-plane directory, NOT the operational bank list: an Owner who reads
   // no product still needs every institution offered when scoping a grant.
   const institutionsQuery = useGrantableInstitutions();
+  const accessRequestsQuery = useQuery({
+    queryKey: ROUTE_REQUESTS_KEY,
+    queryFn: () => authorizationApi.listAuthorizationAccessRequests(),
+    retry: false,
+  });
   const { profile } = useUserProfile();
   const [selected, setSelected] = useState<MemberRead | null>(null);
   const [granting, setGranting] = useState<MemberRead | null>(null);
   const [revoking, setRevoking] = useState<BindingRead | null>(null);
+  const [requestedGrant, setRequestedGrant] =
+    useState<AccessRequestRead | null>(null);
+  const [rejecting, setRejecting] = useState<AccessRequestRead | null>(null);
+  const [reasonFilter, setReasonFilter] = useState("");
 
   const members = membersQuery.data?.members ?? [];
+  const visibleMembers = reasonFilter
+    ? members.filter((member) =>
+        member.grants.some(
+          (grant) => grant.grantReasonCategory === reasonFilter,
+        ),
+      )
+    : members;
   const currentSelected = selected
     ? (members.find((member) => member.userId === selected.userId) ?? selected)
     : null;
@@ -118,13 +145,81 @@ export default function MembersPanel() {
         title="Members"
         action={
           membersQuery.data ? (
-            <span className="text-caption text-slate">
-              {members.length} {members.length === 1 ? "member" : "members"}
-            </span>
+            <div className="flex items-center gap-3">
+              <label className="sr-only" htmlFor="grant-reason-filter">
+                Filter members by grant reason
+              </label>
+              <select
+                id="grant-reason-filter"
+                value={reasonFilter}
+                onChange={(event) => setReasonFilter(event.target.value)}
+                className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-caption text-navy"
+              >
+                <option value="">All reasons</option>
+                {REASON_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-caption text-slate">
+                {visibleMembers.length}{" "}
+                {visibleMembers.length === 1 ? "member" : "members"}
+              </span>
+            </div>
           ) : undefined
         }
       />
       <CardBody className="p-0">
+        {(accessRequestsQuery.data?.requests.length ?? 0) > 0 && (
+          <div className="border-b border-border-light bg-warning-light/35 p-5">
+            <p className="text-body font-medium text-navy">Requested access</p>
+            <ul className="mt-2 space-y-2">
+              {accessRequestsQuery.data!.requests.map((request) => (
+                <li
+                  key={request.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warning/25 bg-surface-raised px-4 py-3"
+                >
+                  <div>
+                    <p className="text-body text-navy">
+                      {request.requesterName} · {request.pageTitle}
+                    </p>
+                    <p className="text-caption text-slate">
+                      {request.institutionName ?? "Every institution"} ·{" "}
+                      {request.moduleScope} · {request.sensitivityScope} ·{" "}
+                      {request.permission}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRejecting(request)}
+                      className="rounded-md border border-border px-3 py-2 text-caption font-medium text-navy hover:bg-surface-muted"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const member = members.find(
+                          (candidate) =>
+                            candidate.userId === request.requesterUserId,
+                        );
+                        if (member) {
+                          setRequestedGrant(request);
+                          setGranting(member);
+                        }
+                      }}
+                      className="btn-primary px-3 py-2 text-caption font-medium"
+                    >
+                      Review request
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {membersQuery.isLoading ? (
           <div className="space-y-4 p-5">
             <SkeletonLine width="42%" />
@@ -137,7 +232,7 @@ export default function MembersPanel() {
           </p>
         ) : (
           <ul className="divide-y divide-border-light">
-            {members.map((member) => (
+            {visibleMembers.map((member) => (
               <MemberRow
                 key={member.userId}
                 member={member}
@@ -166,12 +261,19 @@ export default function MembersPanel() {
       {granting && (
         <GrantComposer
           member={granting}
+          accessRequest={requestedGrant ?? undefined}
           banks={institutionsQuery.data?.institutions ?? []}
           selfUserId={profile?.userId}
-          onClose={() => setGranting(null)}
+          onClose={() => {
+            setGranting(null);
+            setRequestedGrant(null);
+          }}
           onSaved={() => {
             void queryClient.invalidateQueries({ queryKey: MEMBERS_KEY });
             void queryClient.invalidateQueries({ queryKey: REQUESTS_KEY });
+            void queryClient.invalidateQueries({
+              queryKey: ROUTE_REQUESTS_KEY,
+            });
           }}
         />
       )}
@@ -182,6 +284,18 @@ export default function MembersPanel() {
           onRevoked={() => {
             setRevoking(null);
             void queryClient.invalidateQueries({ queryKey: MEMBERS_KEY });
+          }}
+        />
+      )}
+      {rejecting && (
+        <RejectRequestDialog
+          request={rejecting}
+          onClose={() => setRejecting(null)}
+          onRejected={() => {
+            setRejecting(null);
+            void queryClient.invalidateQueries({
+              queryKey: ROUTE_REQUESTS_KEY,
+            });
           }}
         />
       )}
@@ -407,6 +521,22 @@ function MemberDetail({
                     }
                   />
                   <DetailFact label="Reason" value={grant.grantReason} />
+                  <div>
+                    <dt className="text-micro font-medium uppercase tracking-wider text-slate">
+                      Reason category
+                    </dt>
+                    <dd className="mt-1">
+                      <StatusPill tone="slate">
+                        {reasonLabel(grant.grantReasonCategory)}
+                      </StatusPill>
+                    </dd>
+                  </div>
+                  {grant.grantReference && (
+                    <DetailFact
+                      label="Reference"
+                      value={grant.grantReference}
+                    />
+                  )}
                   <DetailFact
                     label="Permissions"
                     value={grant.effectivePermissions.join(", ")}
@@ -464,7 +594,23 @@ function DetailFact({ label, value }: { label: string; value: string }) {
 
 function initialDraft(
   banks: readonly { id: string; name: string }[],
+  accessRequest?: AccessRequestRead,
 ): GrantDraft {
+  if (accessRequest) {
+    return {
+      roleBundle: "viewer",
+      institutionScope: accessRequest.institutionScope,
+      institutionId: accessRequest.institutionId ?? undefined,
+      moduleScope: accessRequest.moduleScope,
+      sensitivityScope: accessRequest.sensitivityScope,
+      reasonCategory: accessRequest.reasonCategory,
+      reasonDetail: accessRequest.reasonDetail,
+      reference: accessRequest.reference ?? "",
+      validUntil: accessRequest.validUntil
+        ? toDatetimeLocalValue(new Date(accessRequest.validUntil))
+        : "",
+    };
+  }
   const bank = banks[0];
   return {
     roleBundle: "analyst",
@@ -472,27 +618,35 @@ function initialDraft(
     institutionId: bank?.id,
     moduleScope: "liq",
     sensitivityScope: "confidential",
-    reason: "",
+    reasonCategory: "new_joiner",
+    reasonDetail: "",
+    reference: "",
+    validUntil: "",
   };
 }
 
 function GrantComposer({
   member,
+  accessRequest: initialAccessRequest,
   banks,
   selfUserId,
   onClose,
   onSaved,
 }: {
   member: MemberRead;
+  accessRequest?: AccessRequestRead;
   banks: readonly { id: string; name: string }[];
   /** The acting user's id: a grant to oneself ends the very session composing it. */
   selfUserId?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const [accessRequest, setAccessRequest] = useState(initialAccessRequest);
   const isSelfGrant = Boolean(selfUserId) && member.userId === selfUserId;
   const [step, setStep] = useState<"define" | "review" | "done">("define");
-  const [draft, setDraft] = useState<GrantDraft>(() => initialDraft(banks));
+  const [draft, setDraft] = useState<GrantDraft>(() =>
+    initialDraft(banks, accessRequest),
+  );
   const [saved, setSaved] = useState<BindingCreateResponse | null>(null);
   const [previewResult, setPreviewResult] = useState<{
     key: string;
@@ -513,7 +667,12 @@ function GrantComposer({
         : undefined,
     moduleScope: draft.moduleScope,
     sensitivityScope: draft.sensitivityScope,
-    reason: draft.reason.trim(),
+    reasonCategory: draft.reasonCategory,
+    reasonDetail: draft.reasonDetail.trim(),
+    reference: draft.reference.trim() || undefined,
+    validUntil: draft.validUntil
+      ? new Date(draft.validUntil).toISOString()
+      : undefined,
   };
   const previewKey = [
     member.userId,
@@ -522,6 +681,9 @@ function GrantComposer({
     draft.institutionScope === "institution" ? draft.institutionId : "",
     draft.moduleScope,
     draft.sensitivityScope,
+    draft.reasonCategory,
+    scope.reasonDetail,
+    scope.validUntil ?? "",
   ].join("|");
   previewKeyRef.current = previewKey;
   const previewSentence =
@@ -534,7 +696,6 @@ function GrantComposer({
       authorizationApi.previewAuthorizationBinding({
         bindingPreviewRequest: {
           ...scope,
-          reason: scope.reason || "Authority sentence preview",
           principalUserId: member.userId,
         },
       }),
@@ -566,6 +727,15 @@ function GrantComposer({
 
   const submit = useMutation({
     mutationFn: async () => {
+      if (accessRequest) {
+        return authorizationApi.approveAuthorizationAccessRequest({
+          requestId: accessRequest.id,
+          accessRequestApprove: {
+            ...scope,
+            expectedAuthoritySentence: previewSentence!,
+          },
+        });
+      }
       if (isPendingApproval) {
         return authApi.authApproveSsoAccessRequest({
           userId: member.userId,
@@ -616,6 +786,7 @@ function GrantComposer({
   };
 
   const resetForAnother = () => {
+    setAccessRequest(undefined);
     setDraft(initialDraft(banks));
     setSaved(null);
     setPreviewResult(null);
@@ -667,7 +838,7 @@ function GrantComposer({
           className="space-y-5 p-5"
           onSubmit={(event) => {
             event.preventDefault();
-            if (draft.reason.trim() && previewSentence) {
+            if (reasonDraftComplete(draft) && previewSentence) {
               setError(null);
               setStep("review");
             }
@@ -738,22 +909,10 @@ function GrantComposer({
               }
             />
           </div>
-          <label className="block">
-            <span className="mb-1.5 block text-caption font-medium text-navy">
-              Reason
-            </span>
-            <textarea
-              required
-              minLength={3}
-              rows={3}
-              value={draft.reason}
-              onChange={(event) =>
-                setDraft({ ...draft, reason: event.target.value })
-              }
-              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-body text-navy"
-              placeholder="Why this authority is required"
-            />
-          </label>
+          <GrantReasonFields
+            value={draft}
+            onChange={(reason) => setDraft({ ...draft, ...reason })}
+          />
           {error && (
             <p
               role="alert"
@@ -800,7 +959,7 @@ function GrantComposer({
             </button>
             <button
               type="submit"
-              disabled={!draft.reason.trim() || !previewSentence}
+              disabled={!previewSentence || !reasonDraftComplete(draft)}
               className="px-4 py-2.5 btn-primary text-body font-medium disabled:opacity-50"
             >
               {previewSentence ? "Review grant" : "Preparing review…"}
@@ -819,7 +978,17 @@ function GrantComposer({
             <p className="text-micro font-medium uppercase tracking-wider text-slate">
               Reason
             </p>
-            <p className="mt-1 text-body text-navy">{draft.reason}</p>
+            <p className="mt-1 text-body font-medium text-navy">
+              {reasonLabel(draft.reasonCategory)}
+            </p>
+            {draft.reasonDetail && (
+              <p className="mt-1 text-body text-navy">{draft.reasonDetail}</p>
+            )}
+            {draft.reference && (
+              <p className="mt-1 text-caption text-slate">
+                Reference: {draft.reference}
+              </p>
+            )}
           </div>
           {error && (
             <div
@@ -1056,6 +1225,80 @@ function RevokeDialog({
           >
             <Clock3 size={15} aria-hidden />{" "}
             {revoke.isPending ? "Revoking…" : "Revoke access"}
+          </button>
+        </div>
+      </form>
+    </DialogFrame>
+  );
+}
+
+function RejectRequestDialog({
+  request,
+  onClose,
+  onRejected,
+}: {
+  request: AccessRequestRead;
+  onClose: () => void;
+  onRejected: () => void;
+}) {
+  const [reason, setReason] = useState<GrantReasonDraft>({
+    reasonCategory: "other" satisfies GrantReasonCategory,
+    reasonDetail: "",
+    reference: "",
+    validUntil: "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const reject = useMutation({
+    mutationFn: () =>
+      authorizationApi.rejectAuthorizationAccessRequest({
+        requestId: request.id,
+        accessRequestReject: {
+          reasonCategory: reason.reasonCategory,
+          reasonDetail: reason.reasonDetail.trim(),
+          reference: reason.reference.trim() || null,
+        },
+      }),
+    onSuccess: onRejected,
+    onError: async (failure) =>
+      setError((await normalizeApiError(failure)).message),
+  });
+  const complete = reasonDraftComplete(reason, { expiry: false });
+  return (
+    <DialogFrame title="Reject access request" onClose={onClose}>
+      <form
+        className="space-y-4 p-5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (complete) reject.mutate();
+        }}
+      >
+        <p className="text-body text-navy">
+          {request.requesterName} asked for {request.pageTitle}
+          {request.institutionName ? ` at ${request.institutionName}` : ""}.
+          Nothing is granted; they can ask again later, and your decision is
+          recorded in the audit trail.
+        </p>
+        <GrantReasonFields value={reason} onChange={setReason} expiry={false} />
+        {error && (
+          <p role="alert" className="text-caption text-critical">
+            {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-4 py-2.5 text-body font-medium text-navy hover:bg-surface-muted"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!complete || reject.isPending}
+            className="inline-flex items-center gap-2 rounded-md bg-danger px-4 py-2.5 text-body font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            <X size={15} aria-hidden />{" "}
+            {reject.isPending ? "Rejecting…" : "Reject request"}
           </button>
         </div>
       </form>

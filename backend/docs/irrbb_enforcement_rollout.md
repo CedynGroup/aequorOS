@@ -123,20 +123,9 @@ Do not widen module or sensitivity scope to compensate for a missing row.
 Aggregated and confidential access are separate rows unless the institution
 explicitly approves the broad `all` sensitivity.
 
-Example least-privilege request for an IRRBB run maker:
-
-```json
-{
-  "principal_user_id": "<confirmed human user UUID>",
-  "role_bundle": "analyst",
-  "institution_scope": "institution",
-  "institution_id": "<exact BK-* ID>",
-  "module_scope": "irrbb",
-  "sensitivity_scope": "confidential",
-  "reason": "<institution-approved reason>",
-  "expected_authority_sentence": "<server preview response>"
-}
-```
+For a run maker, use Analyst / IRRBB / confidential at the exact institution.
+Use the [grant submission contract](authorization_foundation.md#structured-grant-reasons)
+for the payload, reason fields, and preview/create sequence.
 
 Do not infer rows from scalar roles, combine partial rows, grant machine
 principals, or reuse authority approved for another module.

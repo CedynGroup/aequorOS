@@ -9,6 +9,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import { Download, KeyRound, ShieldAlert, Webhook } from "lucide-react";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { useBankContext } from "@/components/shell/BankContext";
@@ -82,7 +83,7 @@ export function ConnectionCard() {
           <ConnectionField
             label="Authorization"
             value="Bearer aeq_live_…"
-            hint="Your integration key, sent as the bearer credential on every request — generate one below."
+            hint="Your integration key, sent as the bearer credential on every request — generated under Access → Integration keys."
           />
         </div>
         <div className="rounded border border-warning/30 bg-warning-light/40 p-4">
@@ -93,17 +94,19 @@ export function ConnectionCard() {
             The key identifies + authorizes your institution as a service
             account with one exact bank-scoped Integration Writer grant. It is
             shown once at generation and stored only as a hash. It cannot push
-            for a sibling bank. If a key is exposed, revoke it here immediately;
-            rotate by generating a new key before revoking the old one.
+            for a sibling bank. If a key is exposed, revoke it immediately under{" "}
+            <Link href="/access/integration-keys" className="underline">
+              Access → Integration keys
+            </Link>
+            ; rotate by generating a new key before revoking the old one.
           </p>
         </div>
       </div>
-      <IntegrationKeysPanel />
     </section>
   );
 }
 
-function IntegrationKeysPanel() {
+export function IntegrationKeysPanel() {
   const { bank } = useBankContext();
   const { effectiveAuthority } = useUserProfile();
   const isAdmin = hasAccountAdministrationAuthority(effectiveAuthority);

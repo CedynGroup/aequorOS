@@ -267,7 +267,10 @@ def approve_sso_access_request(
             role_bundle=RoleBundle(payload.role_bundle),
             scope=binding_scope(payload),
             actor_user_id=ctx.actor_user_id,
-            reason=payload.reason,
+            reason=payload.reason_detail or payload.reason_category.value.replace("_", " "),
+            reason_category=payload.reason_category,
+            reference=payload.reference,
+            valid_until=payload.valid_until,
             expected_authority_sentence=payload.expected_authority_sentence,
         )
     except grant_administration.GrantAdministrationError as exc:

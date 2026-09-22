@@ -22,3 +22,15 @@ export function hasAccountDirectoryAuthority(
     "view",
   );
 }
+
+/**
+ * Where `/access` lands: administrators on the Members table they came to
+ * work in, everyone else on their own access summary (docs/rbac.md §8.3).
+ */
+export function accessIndexDestination(
+  authority: EffectiveAuthorityRead | undefined,
+): "/access/members" | "/access/my-access" {
+  return hasAccountAdministrationAuthority(authority)
+    ? "/access/members"
+    : "/access/my-access";
+}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import type { EffectiveAuthorityRead } from "@aequoros/risk-service-api";
 import {
+  accessIndexDestination,
   hasAccountAdministrationAuthority,
   hasAccountDirectoryAuthority,
 } from "./accountAdministration";
@@ -30,6 +31,12 @@ assert.equal(
 assert.equal(hasAccountAdministrationAuthority(undefined), false);
 assert.equal(hasAccountDirectoryAuthority(authority("view")), true);
 assert.equal(hasAccountDirectoryAuthority(authority("administer")), false);
+assert.equal(
+  accessIndexDestination(authority("administer")),
+  "/access/members",
+);
+assert.equal(accessIndexDestination(authority("view")), "/access/my-access");
+assert.equal(accessIndexDestination(undefined), "/access/my-access");
 
 console.log(
   "accountAdministration.test.ts: scoped account-plane authority checks passed.",

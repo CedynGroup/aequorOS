@@ -96,8 +96,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   embed the old UUID string and stay internally consistent with their stored
   snapshots; new runs hash the platform ID.
 - **Integration keys are bank-scoped machine principals.** Account administrators
-  issue a revocable `aeq_live_…` key for one exact `BK-*` institution (Data Engine →
-  API Push). Issuance atomically creates the service identity, key, row, and
+  issue a revocable `aeq_live_…` key for one exact `BK-*` institution (Access →
+  Integration keys). Issuance atomically creates the service identity, key, row, and
   machine-only `integration_writer` binding for DATA/restricted `ingest`; push routes
   require that complete binding and return 404 for a sibling-bank target. Human
   Analyst authority never satisfies machine ingest. Revocation deactivates the key,
@@ -144,7 +144,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   coverage is exact or explicitly organization-wide, and the server returns its
   authoritative assignment-time SoD allow/warn/block decision. Mutations audit the
   complete sentence/scope/reason/actors and invalidate the grantee's sessions in the
-  same transaction. Settings → Members aggregates tenant identities and complete
+  same transaction. Access → Members aggregates tenant identities and complete
   grants; the sentence composer uses only scalar controls. SSO request approval uses
   that same atomic scoped-grant flow—verified identity alone still has no access.
   **Effective dashboard authority** is projected by `/auth/me` from the same evaluator:
@@ -514,7 +514,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - SSO is AequorOS' **own OIDC relying party** — no third-party broker (Auth0 removed
   2026-07-20; never reintroduce `AUTH0_*`). Per-org connection in `sso_connections`
   (issuer, client_id, AES-256-GCM-sealed secret, allowed email domains; RLS-forced),
-  managed in dashboard Settings → Authentication (secret write-only). The backend verifies
+  managed in dashboard Access → Authentication (secret write-only). The backend verifies
   every id_token via OIDC discovery + issuer JWKS (`verify_oidc_id_token`; RS256/ES256,
   `email_verified`, domain allow-list) and links **pre-provisioned** users
   (`auth_provider='oidc'`). The uniquely selected enabled connection is the sole tenant

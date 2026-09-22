@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.authorization import (
     BindingStatus,
     GrantorType,
+    GrantReasonCategory,
     InstitutionScope,
     ModuleScope,
     PrincipalType,
@@ -428,7 +429,11 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
     actor_user_id: UUID,
     reason: str,
     expected_authority_sentence: str,
+    reason_category: GrantReasonCategory = GrantReasonCategory.OTHER,
+    reference: str | None = None,
+    valid_until: datetime | None = None,
     commit: bool = True,
+    reuse_existing: bool = False,
 ) -> GrantResult:
     validate_public_grant(role_bundle, scope)
     principal = db.scalar(
@@ -476,7 +481,19 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
         None,
     )
     if duplicate is not None:
-        raise DuplicateScopedGrant(duplicate.id, sentence)
+        if not reuse_existing:
+            raise DuplicateScopedGrant(duplicate.id, sentence)
+        return GrantResult(
+            duplicate,
+            check_sod_policy(
+                db,
+                organization_id=organization_id,
+                principal_user_id=principal_user_id,
+                role_bundle=role_bundle,
+                scope=scope,
+            ),
+            sentence,
+        )
     decision = check_sod_policy(
         db,
         organization_id=organization_id,
@@ -497,8 +514,10 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
             scope=scope,
             grantor=actor,
             reason=reason,
+            reason_category=reason_category,
+            reference=reference,
             valid_from=utc_now(),
-            valid_until=None,
+            valid_until=valid_until,
             commit=False,
         )
     except authorization.AuthorizationInvariantError as exc:
@@ -611,6 +630,9 @@ def approve_sso_access_request_with_grant(  # noqa: PLR0913
     actor_user_id: UUID,
     reason: str,
     expected_authority_sentence: str,
+    reason_category: GrantReasonCategory = GrantReasonCategory.OTHER,
+    reference: str | None = None,
+    valid_until: datetime | None = None,
 ) -> GrantResult:
     """Activate a verified JIT identity only as one complete grant is created."""
 
@@ -635,6 +657,9 @@ def approve_sso_access_request_with_grant(  # noqa: PLR0913
         scope=scope,
         actor_user_id=actor_user_id,
         reason=reason,
+        reason_category=reason_category,
+        reference=reference,
+        valid_until=valid_until,
         expected_authority_sentence=expected_authority_sentence,
         commit=False,
     )

@@ -179,23 +179,11 @@ organization-scoped `account_admin` / `account` / `restricted` row or the
 organization-scoped `org_owner` / `account` / `restricted` row. A scalar role
 alone is insufficient.
 
-The least-privilege account-administrator grant request is:
+Use the first row above for account administration; use the directory row for directory reads.
+Use the [grant submission contract](authorization_foundation.md#structured-grant-reasons)
+for the payload, reason fields, and preview/create sequence.
 
-```json
-{
-  "principal_user_id": "<confirmed human user UUID>",
-  "role_bundle": "account_admin",
-  "institution_scope": "organization",
-  "institution_id": null,
-  "module_scope": "account",
-  "sensitivity_scope": "restricted",
-  "reason": "<institution-approved reason>",
-  "expected_authority_sentence": "<server preview response>"
-}
-```
-
-For directory access, change only `role_bundle` to the institution-approved
-view-capable bundle. Do not create a machine Account grant, infer authority from
+Do not create a machine Account grant, infer authority from
 `users.role`, or widen module/sensitivity scope to compensate for a missing
 exact row.
 

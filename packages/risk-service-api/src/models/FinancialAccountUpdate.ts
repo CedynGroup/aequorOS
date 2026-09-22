@@ -32,13 +32,6 @@ import {
   FinancialAccountCreateAccountTypeToJSON,
   FinancialAccountCreateAccountTypeToJSONTyped,
 } from "./FinancialAccountCreateAccountType";
-import type { InstitutionId } from "./InstitutionId";
-import {
-  InstitutionIdFromJSON,
-  InstitutionIdFromJSONTyped,
-  InstitutionIdToJSON,
-  InstitutionIdToJSONTyped,
-} from "./InstitutionId";
 import type { FinancialAccountCreateCurrency } from "./FinancialAccountCreateCurrency";
 import {
   FinancialAccountCreateCurrencyFromJSON,
@@ -46,6 +39,13 @@ import {
   FinancialAccountCreateCurrencyToJSON,
   FinancialAccountCreateCurrencyToJSONTyped,
 } from "./FinancialAccountCreateCurrency";
+import type { InstitutionId2 } from "./InstitutionId2";
+import {
+  InstitutionId2FromJSON,
+  InstitutionId2FromJSONTyped,
+  InstitutionId2ToJSON,
+  InstitutionId2ToJSONTyped,
+} from "./InstitutionId2";
 import type { AccountNumber } from "./AccountNumber";
 import {
   AccountNumberFromJSON,
@@ -86,10 +86,10 @@ export interface FinancialAccountUpdate {
   currency?: FinancialAccountCreateCurrency;
   /**
    *
-   * @type {InstitutionId}
+   * @type {InstitutionId2}
    * @memberof FinancialAccountUpdate
    */
-  institutionId?: InstitutionId;
+  institutionId?: InstitutionId2;
   /**
    *
    * @type {FinancialAccountUpdateMetadata}
@@ -152,7 +152,7 @@ export function FinancialAccountUpdateFromJSONTyped(
     institutionId:
       json["institution_id"] == null
         ? undefined
-        : InstitutionIdFromJSON(json["institution_id"]),
+        : InstitutionId2FromJSON(json["institution_id"]),
     metadata:
       json["metadata"] == null
         ? undefined
@@ -181,7 +181,7 @@ export function FinancialAccountUpdateToJSONTyped(
     account_number: AccountNumberToJSON(value["accountNumber"]),
     account_type: FinancialAccountCreateAccountTypeToJSON(value["accountType"]),
     currency: FinancialAccountCreateCurrencyToJSON(value["currency"]),
-    institution_id: InstitutionIdToJSON(value["institutionId"]),
+    institution_id: InstitutionId2ToJSON(value["institutionId"]),
     metadata: FinancialAccountUpdateMetadataToJSON(value["metadata"]),
     reason: value["reason"],
     status: StatusToJSON(value["status"]),

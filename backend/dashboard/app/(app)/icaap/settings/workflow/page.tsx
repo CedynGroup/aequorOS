@@ -21,7 +21,6 @@ export default function IcaapWorkflowSettingsPage() {
       <PageHeader
         title="ICAAP review chain"
         subtitle="Who has to read and approve this institution's capital adequacy assessment, and in what order."
-        breadcrumbs={[{ label: "ICAAP", href: "/icaap" }, { label: "Review chain" }]}
       />
       <PageContainer className="py-6">
         {bank && <WorkflowTemplates bankId={bank.id} />}

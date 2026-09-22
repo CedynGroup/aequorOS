@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Settings → Authentication (SSO) — account-admin-only card for the org's own-OIDC
+ * Access → Authentication (SSO) — account-admin-only card for the org's own-OIDC
  * connection. The bank's IT registers an app in THEIR IdP (Google Workspace,
  * Entra, Okta, …) with our redirect URI, then enters the issuer / client ID /
  * client secret here. The secret is write-only: it is sealed server-side and
@@ -21,8 +21,8 @@ import { authApi, authorizationApi, normalizeApiError } from "@/lib/api/client";
 import { hasAccountAdministrationAuthority } from "@/lib/api/accountAdministration";
 import { ORGANIZATION_MEMBERS_QUERY_KEY } from "@/lib/api/grantAdministration";
 
-const QUERY_KEY = ["settings", "sso-connection"];
-const REQUESTS_KEY = ["settings", "sso-access-requests"];
+const QUERY_KEY = ["access", "sso-connection"];
+const REQUESTS_KEY = ["access", "sso-access-requests"];
 const MEMBERS_KEY = ORGANIZATION_MEMBERS_QUERY_KEY;
 
 interface FormState {
@@ -345,7 +345,7 @@ function AccessRequests() {
             </div>
             {grantingAuthority.isSuccess ? (
               <a
-                href="#members"
+                href="/access/members"
                 className="px-3 py-1.5 btn-primary text-caption font-medium"
               >
                 Review in Members

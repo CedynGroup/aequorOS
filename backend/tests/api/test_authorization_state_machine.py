@@ -433,7 +433,8 @@ def test_grant_administration_state_machine_preserves_exact_union(
                 "institution_id": bank_id,
                 "module_scope": module.value,
                 "sensitivity_scope": sensitivity.value,
-                "reason": "state-machine complete scoped grant",
+                "reason_category": "other",
+                "reason_detail": "state-machine complete scoped grant",
             }
             preview = db_client.post(
                 "/api/v1/authorization/bindings/preview",
@@ -877,7 +878,8 @@ def test_ownership_surface_state_machine_preserves_single_owner(
                 "principal_user_id": str(target),
                 "role_bundle": role.value,
                 **_ownership_scope(role, module, sensitivity),
-                "reason": "ownership property public grant",
+                "reason_category": "other",
+                "reason_detail": "ownership property public grant",
             }
             preview = db_client.post(
                 "/api/v1/authorization/bindings/preview",
@@ -919,7 +921,8 @@ def test_ownership_surface_state_machine_preserves_single_owner(
                 "principal_user_id": str(_OWNERSHIP_JIT),
                 "role_bundle": role.value,
                 **_ownership_scope(role, module, sensitivity),
-                "reason": "ownership property JIT approval",
+                "reason_category": "other",
+                "reason_detail": "ownership property JIT approval",
             }
             preview = db_client.post(
                 "/api/v1/authorization/bindings/preview",

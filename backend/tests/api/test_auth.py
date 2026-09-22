@@ -427,7 +427,8 @@ def test_jit_records_a_request_and_admin_approval_is_the_gate(
         "institution_id": REAL_BANK_ID,
         "module_scope": "liq",
         "sensitivity_scope": "confidential",
-        "reason": "Verified employee approved for liquidity analysis",
+        "reason_category": "other",
+        "reason_detail": "Verified employee approved for liquidity analysis",
     }
     preview = auth_client.post(
         "/api/v1/authorization/bindings/preview",

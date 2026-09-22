@@ -62,6 +62,16 @@ export const E2E_USERS: Record<
     roles: ["viewer"],
     authv: 2,
   },
+  access_request_member: {
+    id: "eeeeeeee-1010-4eee-8eee-eeeeeeee1010",
+    roles: ["viewer"],
+    authv: 2,
+  },
+  access_extra_member: {
+    id: "eeeeeeee-1011-4eee-8eee-eeeeeeee1011",
+    roles: ["viewer"],
+    authv: 2,
+  },
   grant_member: {
     id: "eeeeeeee-5555-4eee-8eee-eeeeeeeeeee5",
     roles: ["viewer"],

@@ -39,7 +39,10 @@ const draft = {
   institutionId: "BK-GH000001",
   moduleScope: "liq",
   sensitivityScope: "confidential",
-  reason: "Treasury monitoring responsibilities",
+  reasonCategory: "other",
+  reasonDetail: "Treasury monitoring responsibilities",
+  reference: "",
+  validUntil: "",
 } as const;
 
 assert.equal(Array.isArray(draft.roleBundle), false);

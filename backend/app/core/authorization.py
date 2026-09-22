@@ -119,6 +119,16 @@ class GrantorType(StrEnum):
     OPERATOR = "operator"
 
 
+class GrantReasonCategory(StrEnum):
+    NEW_JOINER = "new_joiner"
+    ROLE_CHANGE = "role_change"
+    PROJECT_ENGAGEMENT = "project_engagement"
+    TEMPORARY_COVER = "temporary_cover"
+    REGULATOR_AUDIT_REQUEST = "regulator_audit_request"
+    INCIDENT_BREAK_GLASS = "incident_break_glass"
+    OTHER = "other"
+
+
 class OwnerAssignmentStatus(StrEnum):
     ASSIGNED = "assigned"
     DESIGNATION_REQUIRED = "designation_required"
