@@ -26,7 +26,7 @@ from app.core.authorization import ModuleScope
 from app.db.session import force_rls_suspended
 
 revision = "202609200066"
-down_revision = "202609200065"
+down_revision = "202609210066"
 branch_labels = None
 depends_on = None
 
