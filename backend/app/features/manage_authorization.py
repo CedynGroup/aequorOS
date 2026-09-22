@@ -23,6 +23,7 @@ from app.core.authorization import (
     Sensitivity,
     SensitivityScope,
 )
+from app.db.base import utc_now
 from app.models import (
     AuditEvent,
     AuthorizationAccessRequest,
@@ -774,6 +775,7 @@ def approve_authorization_access_request(
             valid_until=payload.valid_until,
             expected_authority_sentence=payload.expected_authority_sentence,
             commit=False,
+            reuse_existing=True,
         )
     except (
         grant_administration.GrantAdministrationError,
@@ -783,9 +785,28 @@ def approve_authorization_access_request(
             exc = grant_administration.GrantAdministrationError(str(exc))
         raise grant_conflict(exc) from exc
     request.status = "approved"
-    request.resolved_at = result.binding.granted_at
+    request.resolved_at = utc_now()
     request.resolved_by_user_id = ctx.actor_user_id
     request.binding_id = result.binding.id
+    db.add(
+        AuditEvent(
+            organization_id=ctx.organization_id,
+            actor_user_id=ctx.actor_user_id,
+            event_type="authorization.access_request_approved",
+            entity_type="authorization_access_request",
+            entity_id=str(request.id),
+            details={
+                "binding_id": str(result.binding.id),
+                "requester_user_id": str(request.requester_user_id),
+                "route": request.route,
+                "institution_id": request.institution_id,
+                "module": request.module_scope,
+                "sensitivity": request.sensitivity_scope,
+                "permission": request.permission,
+                "authority_sentence": result.authority_sentence,
+            },
+        )
+    )
     db.commit()
     db.refresh(result.binding)
     return binding_response(db, ctx.organization_id, result)

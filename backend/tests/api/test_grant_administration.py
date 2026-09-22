@@ -24,7 +24,15 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
-from app.models import AuditEvent, AuthorizationBinding, Bank, InstitutionType, RefreshToken, User
+from app.models import (
+    AuditEvent,
+    AuthorizationAccessRequest,
+    AuthorizationBinding,
+    Bank,
+    InstitutionType,
+    RefreshToken,
+    User,
+)
 from app.services import authentication, authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
@@ -1331,3 +1339,92 @@ def test_access_request_directory_exposes_uncovered_institution_class(
             assert set(entries) == set(
                 db.scalars(select(Bank.id).where(Bank.organization_id == ORG_1))
             )
+
+
+@pytest.mark.parametrize("existing_status", ["active", "revoked"])
+def test_route_requests_sharing_requirement_resolve_against_effective_binding(
+    grant_client: TestClient,
+    existing_status: str,
+) -> None:
+    request_ids = []
+    for route in ("/liquidity/forecast", "/liquidity/monitoring"):
+        response = grant_client.post(
+            "/api/v1/authorization/access-requests",
+            headers=headers(user_id=GRANTEE, roles=("viewer",)),
+            json={
+                "route": route,
+                "institution_id": BANK_A,
+                "module_scope": "liq",
+                "sensitivity_scope": "confidential",
+                "permission": "view",
+                "reason_category": "role_change",
+            },
+        )
+        assert response.status_code == 201, response.text
+        request_ids.append(response.json()["id"])
+    payload = _reviewed_payload(grant_client, role="viewer")
+    payload.pop("principal_user_id")
+    first = grant_client.post(
+        f"/api/v1/authorization/access-requests/{request_ids[0]}/approve",
+        headers=_owner_headers(),
+        json=payload,
+    )
+    assert first.status_code == 200, first.text
+    first_binding = first.json()["binding"]["id"]
+    if existing_status == "revoked":
+        revoked = grant_client.post(
+            f"/api/v1/authorization/bindings/{first_binding}/revoke",
+            headers=_owner_headers(),
+            json={"reason": "Revoke before resolving the second route request"},
+        )
+        assert revoked.status_code == 200, revoked.text
+    with _session() as db:
+        user = db.get(User, GRANTEE)
+        assert user is not None
+        version = user.authorization_version
+
+    second = grant_client.post(
+        f"/api/v1/authorization/access-requests/{request_ids[1]}/approve",
+        headers=_owner_headers(),
+        json=payload,
+    )
+    assert second.status_code == 200, second.text
+    second_binding = second.json()["binding"]["id"]
+    assert (first_binding == second_binding) == (existing_status == "active")
+    with _session() as db:
+        rows = list(
+            db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.organization_id == ORG_1,
+                    AuthorizationBinding.principal_user_id == GRANTEE,
+                    AuthorizationBinding.role_bundle == "viewer",
+                )
+            )
+        )
+        assert len(rows) == (1 if existing_status == "active" else 2)
+        user = db.get(User, GRANTEE)
+        assert user is not None
+        assert user.authorization_version == version + (existing_status != "active")
+        for request_id, binding_id in zip(
+            request_ids, (first_binding, second_binding), strict=True
+        ):
+            request = db.get(AuthorizationAccessRequest, UUID(request_id))
+            assert request is not None
+            assert request.status == "approved"
+            assert request.binding_id == UUID(binding_id)
+            assert request.resolved_at is not None
+            assert request.resolved_by_user_id == USER_1
+            audits = list(
+                db.scalars(
+                    select(AuditEvent).where(
+                        AuditEvent.event_type == "authorization.access_request_approved",
+                        AuditEvent.entity_id == request_id,
+                    )
+                )
+            )
+            assert len(audits) == 1
+            assert audits[0].actor_user_id == USER_1
+            assert audits[0].details["binding_id"] == binding_id
+    pending = grant_client.get("/api/v1/authorization/access-requests", headers=_owner_headers())
+    assert pending.status_code == 200
+    assert pending.json()["requests"] == []

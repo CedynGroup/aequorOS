@@ -433,6 +433,7 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
     reference: str | None = None,
     valid_until: datetime | None = None,
     commit: bool = True,
+    reuse_existing: bool = False,
 ) -> GrantResult:
     validate_public_grant(role_bundle, scope)
     principal = db.scalar(
@@ -480,7 +481,19 @@ def create_scoped_grant(  # noqa: PLR0913 - one complete binding is explicit
         None,
     )
     if duplicate is not None:
-        raise DuplicateScopedGrant(duplicate.id, sentence)
+        if not reuse_existing:
+            raise DuplicateScopedGrant(duplicate.id, sentence)
+        return GrantResult(
+            duplicate,
+            check_sod_policy(
+                db,
+                organization_id=organization_id,
+                principal_user_id=principal_user_id,
+                role_bundle=role_bundle,
+                scope=scope,
+            ),
+            sentence,
+        )
     decision = check_sod_policy(
         db,
         organization_id=organization_id,
