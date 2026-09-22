@@ -197,19 +197,25 @@ def test_stress_pack_without_frontier_omits_the_optional_section(db_session: Ses
 def test_stress_pack_requires_a_stress_scenario(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     period_id = _period_id(db_session)
-    for module, runner in (
-        ("liquidity", regulatory_liquidity.create_liquidity_run),
-        ("capital", regulatory_capital.create_capital_run),
+    for payload, runner in (
+        (
+            RegulatoryRunCreate(
+                module="liquidity", reporting_period_id=period_id, scenario_code="baseline"
+            ),
+            regulatory_liquidity.create_liquidity_run,
+        ),
+        (
+            RegulatoryRunCreate(
+                module="capital", reporting_period_id=period_id, scenario_code="baseline"
+            ),
+            regulatory_capital.create_capital_run,
+        ),
     ):
         run = runner(
             db_session,
             MAKER,
             SAMPLE_BANK_ID,
-            RegulatoryRunCreate(
-                module=module,
-                reporting_period_id=period_id,
-                scenario_code="baseline",  # type: ignore[index]
-            ),
+            payload,
         )
         assert run.status == "succeeded"
     with pytest.raises(HTTPException) as excinfo:
