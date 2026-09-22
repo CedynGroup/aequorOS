@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.capital import loan_classification as engine
+from app.domain.credit.dpd_bands import DPD_BANDS as _DPD_BANDS
 from app.domain.credit.restructure import restructure_holds_npl
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot
@@ -112,17 +113,9 @@ class _DpdExposure:
     days_past_due: int
 
 
-# These are analytical portfolio-at-risk bands, not regulatory classification
-# boundaries. The latter are always resolved from the control plane.
-_DPD_BANDS: tuple[tuple[str, str, int, int | None], ...] = (
-    ("current", "Current", 0, 0),
-    ("1_29", "1–29 days", 1, 29),
-    ("30_59", "30–59 days", 30, 59),
-    ("60_89", "60–89 days", 60, 89),
-    ("90_179", "90–179 days", 90, 179),
-    ("180_359", "180–359 days", 180, 359),
-    ("360_plus", "360+ days", 360, None),
-)
+# The analytical portfolio-at-risk bands (``_DPD_BANDS``) are the ONE definition
+# in ``app.domain.credit.dpd_bands`` — not regulatory classification boundaries,
+# which are always resolved from the control plane.
 _PAR_THRESHOLDS: tuple[tuple[str, str, int], ...] = (
     ("par_30", "PAR 30+", 30),
     ("par_60", "PAR 60+", 60),

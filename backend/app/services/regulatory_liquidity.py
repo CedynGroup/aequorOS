@@ -46,6 +46,8 @@ from app.domain.liquidity.engine import (
     compute_nsfr,
     compute_stressed_ladder,
 )
+from app.domain.liquidity.ladder import LADDER_HORIZON_DAYS as _LADDER_HORIZON_DAYS
+from app.domain.liquidity.ladder import ladder_bucket_index as _ladder_bucket_index
 from app.domain.reporting import period_windows
 from app.models import (
     Bank,
@@ -1593,25 +1595,15 @@ def _engine_params(active: _ActiveLiquidityParams) -> LiquidityParams:
 #
 # Five LMTD horizons in cedi equivalents from the canonical book — the same
 # current-generation accepted/warning slice the LMT return derives from.
-# Undated demand-natured items (cash; current/call/savings deposits) sit in
-# the shortest bucket; other undated in the longest. Stringified and
-# canonically ordered for the value-based input hash.
-_LADDER_HORIZON_DAYS = (30, 91, 182, 365, None)
+# The horizons and the bucket rule (``_LADDER_HORIZON_DAYS``,
+# ``_ladder_bucket_index``: undated demand-natured items in the shortest
+# bucket, other undated in the longest) are ``app.domain.liquidity.ladder``.
+# Stringified and canonically ordered for the value-based input hash.
 _CCY_ASSET_TYPES = ("LOAN", "SECURITY_HOLDING", "CASH", "INTERBANK_PLACEMENT", "OTHER_ASSET")
 _CCY_LIABILITY_TYPES = ("DEPOSIT", "INTERBANK_BORROWING", "OTHER_LIABILITY")
 _CCY_DERIVATIVES = ("DERIVATIVE", "FX_HEDGE", "INTEREST_RATE_SWAP")
 _CCY_DEMAND_DEPOSITS = ("CURRENT", "CALL", "SAVINGS")
 _CCY_STATUSES = ("accepted", "warning")
-
-
-def _ladder_bucket_index(maturity: date | None, as_of: date, *, on_demand: bool) -> int:
-    if maturity is None:
-        return 0 if on_demand else len(_LADDER_HORIZON_DAYS) - 1
-    days = (maturity - as_of).days
-    for index, upper in enumerate(_LADDER_HORIZON_DAYS):
-        if upper is None or days <= upper:
-            return index
-    return len(_LADDER_HORIZON_DAYS) - 1
 
 
 def _currency_ladders(

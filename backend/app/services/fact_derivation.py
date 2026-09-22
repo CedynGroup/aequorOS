@@ -260,6 +260,14 @@ from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
 from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.domain.ftp.engine import CurvePoint, CurveResult, build_curve
+from app.domain.irr.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
+from app.domain.irr.buckets import bucket_for_days as _bucket_for_days
+from app.domain.irr.buckets import repricing_bucket as _repricing_bucket
+from app.domain.positions.families import LOAN_CATEGORY_MAP as _LOAN_CATEGORY_MAP
+from app.domain.positions.families import PAST_DUE_CATEGORY as _PAST_DUE_CATEGORY
+from app.domain.positions.families import RETAIL_LOAN_CATEGORIES as _RETAIL_LOAN_CATEGORIES
+from app.domain.positions.families import loan_family as _loan_family
+from app.domain.positions.families import unclassified_category as _unclassified_category
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -301,52 +309,13 @@ _DEFAULT_CCF_PCT = Decimal("50")
 _DEFAULT_NMD_CORE_PCT = Decimal("50")
 _DEFAULT_NMD_DURATION_MONTHS = Decimal("12")
 
-# The nine canonical IRRBB buckets: (name, upper bound in days, midpoint years).
-_IRR_BUCKETS: tuple[tuple[str, int | None, str], ...] = (
-    ("overnight", 1, "0.003"),
-    ("1-7d", 7, "0.014"),
-    ("8-30d", 30, "0.06"),
-    ("1-3m", 91, "0.17"),
-    ("3-6m", 182, "0.38"),
-    ("6-12m", 365, "0.75"),
-    ("1-3y", 1095, "1.9"),
-    ("3-5y", 1825, "4.0"),
-    ("5y+", None, "7.0"),
-)
+# The nine canonical IRRBB buckets (``_IRR_BUCKETS``: name, upper bound in
+# days, midpoint years) and the loan taxonomy (``_LOAN_CATEGORY_MAP``,
+# ``_PAST_DUE_CATEGORY``, ``_RETAIL_LOAN_CATEGORIES``, ``_loan_family``) are
+# ``app.domain.irr.buckets`` and ``app.domain.positions.families`` (P0-8),
+# re-imported above under the names this module has always used.
 _BUCKET_MIDPOINT = {name: midpoint for name, _, midpoint in _IRR_BUCKETS}
 _SAVINGS_REPRICING_BUCKET = "3-6m"
-
-# Loan regulatory-category → (seed loan_exposure category, risk weight code).
-_LOAN_CATEGORY_MAP: dict[str, tuple[str, str]] = {
-    "CORPORATE_UNRATED": ("corporate_unrated", "RW100"),
-    "CORPORATE_LOAN_UNRATED_100RW": ("corporate_unrated", "RW100"),
-    "AGRICULTURE": ("corporate_unrated", "RW100"),
-    "SME_UNRATED": ("sme_retail", "RW75"),
-    "SME_RETAIL": ("sme_retail", "RW75"),
-    "RETAIL_UNSECURED": ("retail_other", "RW75"),
-    "RETAIL_OTHER": ("retail_other", "RW75"),
-    "RESIDENTIAL_MORTGAGE": ("residential_mortgage", "RW35"),
-    "COMMERCIAL_REAL_ESTATE": ("commercial_real_estate", "RW100"),
-}
-_PAST_DUE_CATEGORY: tuple[str, str] = ("past_due_90", "RW150")
-_RETAIL_LOAN_CATEGORIES = ("retail_other", "residential_mortgage")
-
-#: The IRR/FTP family for an exposure whose regulatory class is unrecognised.
-#: Rate risk is measured on the whole book, so the balance is NOT dropped —
-#: dropping it would understate the repricing gap and the funding-cost base.
-#: It gets its own label rather than joining ``corporate_loans``, because the
-#: platform does not know that it is corporate.
-_UNCLASSIFIED_FAMILY = "unclassified_loans"
-
-# Loan seed category → IRR/FTP family label.
-_LOAN_FAMILY = {
-    "corporate_unrated": "corporate_loans",
-    "sme_retail": "sme_loans",
-    "retail_other": "retail_loans",
-    "residential_mortgage": "mortgages",
-    "commercial_real_estate": "cre_loans",
-    "past_due_90": "corporate_loans",
-}
 
 # FTP documented cost defaults (percent) per product family kind.
 _FTP_ASSET_LOAN_OPEX_PCT = Decimal("0.5")
@@ -1386,27 +1355,10 @@ class _LoanRow:
     risk_weight_code: str | None
 
 
-#: The category an exposure lands in when its regulatory classification is not
-#: one this platform recognises. It is deliberately not a Basel exposure class:
-#: it carries no risk weight, and the capital engine refuses the moment it reads
-#: one of these facts.
-_UNCLASSIFIED_PREFIX = "unclassified_"
-_NON_SLUG_RE = re.compile(r"[^a-z0-9]+")
-
-
-def _loan_family(category: str) -> str:
-    """The IRR/FTP family label for an exposure category."""
-    return _LOAN_FAMILY.get(category, _UNCLASSIFIED_FAMILY)
-
-
-def _unclassified_category(regulatory_category: str | None) -> str:
-    """The exposure category for a loan whose regulatory class is unrecognised.
-
-    Named after the bank's OWN category token so the refusal downstream points at
-    the product taxonomy that has to be fixed, rather than at a generic bucket.
-    """
-    token = _NON_SLUG_RE.sub("_", (regulatory_category or "unmapped").strip().lower()).strip("_")
-    return f"{_UNCLASSIFIED_PREFIX}{token or 'unmapped'}"
+# ``_loan_family`` and ``_unclassified_category`` are
+# ``app.domain.positions.families`` (P0-8): the ``unclassified_<token>``
+# category is deliberately not a Basel exposure class — it carries no risk
+# weight, and the capital engine refuses the moment it reads one of these facts.
 
 
 def _classify_loans(canonical: _Canonical, warnings: list[str]) -> list[_LoanRow]:
@@ -3456,24 +3408,10 @@ def _derive_capital_components(canonical: _Canonical, groups: list[GroupResult])
 # ---------------------------------------------------------------------------
 # IRR
 # ---------------------------------------------------------------------------
-
-
-def _bucket_for_days(days: int) -> str:
-    for name, upper, _ in _IRR_BUCKETS:
-        if upper is None or days <= upper:
-            return name
-    return _IRR_BUCKETS[-1][0]  # pragma: no cover - the 5y+ bucket is unbounded
-
-
-def _repricing_bucket(row: _PositionRow, as_of: date) -> str | None:
-    horizon: date | None
-    if row.rate_type == "FLOATING" and row.next_repricing_date is not None:
-        horizon = row.next_repricing_date
-    else:
-        horizon = row.contractual_maturity or row.next_repricing_date
-    if horizon is None:
-        return None
-    return _bucket_for_days(max((horizon - as_of).days, 0))
+#
+# ``_bucket_for_days`` and ``_repricing_bucket`` are ``app.domain.irr.buckets``
+# (P0-8): floating → next repricing date, else contractual maturity, ``None``
+# when a position states neither.
 
 
 @dataclass

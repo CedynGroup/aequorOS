@@ -42,7 +42,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.errors import ModuleDataUnavailable
+from app.domain.credit.dpd_bands import dpd_band as _dpd_bucket
 from app.domain.credit.migration import LoanState, compute_migration
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -118,8 +120,6 @@ _AMBER_FRACTION = Decimal("0.8")
 
 _ZERO = Decimal("0")
 _HUNDRED = Decimal("100")
-
-_INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")
 
 
 class CreditRunError(Exception):
@@ -304,7 +304,7 @@ def _employer_par30_stats(
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
             CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == "LOAN",
         )
     ).all()
@@ -491,7 +491,7 @@ def _load_snapshot_rows(
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
             CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == "LOAN",
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
@@ -1189,7 +1189,7 @@ def _classified_loan_rows(
             CanonicalPositionSnapshot.as_of_date == as_of,
             CanonicalPositionSnapshot.superseded_by.is_(None),
             CanonicalPositionSnapshot.withdrawn_at.is_(None),
-            CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == "LOAN",
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
@@ -1335,7 +1335,7 @@ def _load_events(
                 CanonicalLoanEvent.bank_id == bank.id,
                 CanonicalLoanEvent.superseded_by.is_(None),
                 CanonicalLoanEvent.withdrawn_at.is_(None),
-                CanonicalLoanEvent.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+                CanonicalLoanEvent.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
                 CanonicalLoanEvent.event_date >= start,
                 CanonicalLoanEvent.event_date <= end,
             )
@@ -1431,24 +1431,8 @@ def get_credit_activity(db: Session, ctx: TenantContext, bank_id: str) -> Credit
 # monthly migration (credit PR-5)
 # ---------------------------------------------------------------------------
 
-_ROLL_BAND_EDGES: tuple[tuple[str, int, int | None], ...] = (
-    ("current", 0, 0),
-    ("1_29", 1, 29),
-    ("30_59", 30, 59),
-    ("60_89", 60, 89),
-    ("90_179", 90, 179),
-    ("180_359", 180, 359),
-    ("360_plus", 360, None),
-)
-
-
-def _dpd_bucket(days_past_due: int | None) -> str | None:
-    if days_past_due is None:
-        return None
-    for code, low, high in _ROLL_BAND_EDGES:
-        if days_past_due >= low and (high is None or days_past_due <= high):
-            return code
-    return None
+# ``_dpd_bucket`` is ``app.domain.credit.dpd_bands.dpd_band`` — the one band
+# definition, shared with the classification service and the migration engine.
 
 
 def _loan_states(rows: list[ClassifiedLoanRow]) -> list[LoanState]:
@@ -1627,7 +1611,7 @@ def get_credit_vintages(db: Session, ctx: TenantContext, bank_id: str) -> Credit
                 CanonicalPositionSnapshot.as_of_date == observed,
                 CanonicalPositionSnapshot.superseded_by.is_(None),
                 CanonicalPositionSnapshot.withdrawn_at.is_(None),
-                CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
+                CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
                 CanonicalPosition.position_type == "LOAN",
             )
         ).all()

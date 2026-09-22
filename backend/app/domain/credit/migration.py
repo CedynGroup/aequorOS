@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from app.domain.credit.dpd_bands import DPD_BAND_CODES
+
 #: The Notice's three states, in its printed order.
 STATE_PERFORMING = "performing"
 STATE_PERFORMING_RESTRUCTURED = "performing_restructured"
@@ -29,16 +31,8 @@ MIGRATION_STATES: tuple[str, ...] = (
     STATE_NPL,
 )
 
-#: The analytical DPD bands (mirrors the classification service's `_DPD_BANDS`).
-ROLL_BUCKETS: tuple[str, ...] = (
-    "current",
-    "1_29",
-    "30_59",
-    "60_89",
-    "90_179",
-    "180_359",
-    "360_plus",
-)
+#: The analytical DPD band codes — the one definition in ``dpd_bands``.
+ROLL_BUCKETS: tuple[str, ...] = DPD_BAND_CODES
 
 _ZERO = Decimal("0")
 _PCT_Q = Decimal("0.0001")
