@@ -1,7 +1,7 @@
 """Add structured grant reasons and route-derived access requests.
 
 Revision ID: 202609180054
-Revises: 202609160053
+Revises: 202609200065
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "202609180054"
-down_revision = "202609160053"
+down_revision = "202609200065"
 branch_labels = None
 depends_on = None
 
