@@ -170,7 +170,6 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_engine.cache_clear()
 
 
-
 @pytest.fixture(autouse=True)
 def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     """No test may construct a real model client.
@@ -191,6 +190,7 @@ def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
         raise ai_client.RealModelForbiddenError(message)
 
     monkeypatch.setattr(ai_client.AnthropicModel, "__init__", _refuse)
+
 
 @pytest.fixture(autouse=True)
 def fresh_settings_cache() -> Iterator[None]:

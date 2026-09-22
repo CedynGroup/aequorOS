@@ -206,7 +206,9 @@ def test_stress_pack_requires_a_stress_scenario(db_session: Session) -> None:
             MAKER,
             SAMPLE_BANK_ID,
             RegulatoryRunCreate(
-                module=module, reporting_period_id=period_id, scenario_code="baseline"  # type: ignore[index]
+                module=module,
+                reporting_period_id=period_id,
+                scenario_code="baseline",  # type: ignore[index]
             ),
         )
         assert run.status == "succeeded"
@@ -216,9 +218,7 @@ def test_stress_pack_requires_a_stress_scenario(db_session: Session) -> None:
     assert excinfo.value.detail["error_code"] == "no_stress_scenarios"  # type: ignore[index]
 
 
-def test_stress_pack_exports_to_xlsx(
-    db_session: Session, storage: InMemoryStorageClient
-) -> None:
+def test_stress_pack_exports_to_xlsx(db_session: Session, storage: InMemoryStorageClient) -> None:
     _seed_stress_outcomes(db_session)
     package = _generate(db_session)
     artifact = export_package(db_session, MAKER, package, "xlsx")
@@ -319,15 +319,11 @@ def test_a_legacy_post_stress_verdict_never_reaches_the_pack(db_session: Session
     authorised = next(r for r in lights if r["code"] == "capital:severe:car_pct")
     assert authorised["status"] in ("green", "amber", "red")
     assert Decimal(authorised["threshold"]) > 0
-    assert authorised["compliance_basis"] == (
-        "Basel III / BoG Capital Requirement Directive (CRD)"
-    )
+    assert authorised["compliance_basis"] == ("Basel III / BoG Capital Requirement Directive (CRD)")
 
     # The withheld row cannot inflate the headline red count either.
     totals = {r["code"]: r for r in package.snapshot["totals"]}
-    assert int(totals["red_light_count"]["value"]) == sum(
-        1 for r in lights if r["status"] == "red"
-    )
+    assert int(totals["red_light_count"]["value"]) == sum(1 for r in lights if r["status"] == "red")
 
     # Sealed evidence is untouched: the run still carries the row it wrote.
     db_session.refresh(legacy)

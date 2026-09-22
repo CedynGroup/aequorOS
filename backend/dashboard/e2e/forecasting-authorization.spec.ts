@@ -54,8 +54,12 @@ async function expectDisabledWithReason(
 }
 
 async function expectDisabledWorkspace(page: Page, reason: RegExp) {
-  await expect(page.getByRole("region", { name: "Forecasting workspace" })).toBeVisible(FIRST_PAINT);
-  await expect(page.getByRole("navigation", { name: "Module sections" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Forecasting workspace" }),
+  ).toBeVisible(FIRST_PAINT);
+  await expect(
+    page.getByRole("navigation", { name: "Module sections" }),
+  ).toBeVisible();
   await expectDisabledWithReason(page, "View Forecasting", reason);
   await expect(page.getByRole("tooltip")).toContainText("Org Owner");
   await expect(page.getByRole("tooltip")).toContainText("Settings → Members");
@@ -213,9 +217,16 @@ test.describe("Forecasting confidential-only reader", () => {
       ["/forecasting/whatif", "What-if Lab"],
     ]) {
       await page.goto(href);
-      await expectDisabledWorkspace(page, /Requires Forecasting · Aggregated · View/i);
-      await expect(page.getByRole("link", { name: label, exact: true })).toHaveAttribute("aria-disabled", "true");
-      await expect(page.getByText("No succeeded forecast runs yet")).toHaveCount(0);
+      await expectDisabledWorkspace(
+        page,
+        /Requires Forecasting · Aggregated · View/i,
+      );
+      await expect(
+        page.getByRole("link", { name: label, exact: true }),
+      ).toHaveAttribute("aria-disabled", "true");
+      await expect(
+        page.getByText("No succeeded forecast runs yet"),
+      ).toHaveCount(0);
     }
     expect(requests).toEqual([]);
   });

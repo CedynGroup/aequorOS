@@ -694,9 +694,7 @@ def test_the_default_composition_is_credit_only_and_says_so(db_session: Session)
     assert summary.included_risk_classes == ("credit",)
     assert summary.excluded_risk_classes == ("market", "operational")
     # Every known class is reported, in scope or not — the omission is visible.
-    assert {row.risk_class for row in summary.risk_classes} == set(
-        sdi_capital.KNOWN_RISK_CLASSES
-    )
+    assert {row.risk_class for row in summary.risk_classes} == set(sdi_capital.KNOWN_RISK_CLASSES)
     # Production copy on the surface that presents the ratio.
     assert "credit risk only" in summary.rwa_scope_note
     assert "No market and operational risk charge is applied" in summary.rwa_scope_note
@@ -906,9 +904,7 @@ def _official_rwa(db: Session, sdi: Bank) -> tuple[Decimal, Decimal, dict[str, D
 def _governed_scope(db: Session, sdi: Bank, composition: dict[str, object] | None) -> None:
     if composition is None:
         return
-    _add_param(
-        db, param_code=sdi_capital.COMPOSITION_PARAM, value_json=composition, unit="count"
-    )
+    _add_param(db, param_code=sdi_capital.COMPOSITION_PARAM, value_json=composition, unit="count")
 
 
 @pytest.mark.parametrize(
@@ -1175,9 +1171,7 @@ def test_a_governed_confirmed_scope_lets_the_official_run_proceed(
     sdi = _sdi(db_session)
     _seed_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
     _seed_positions(db_session, sdi, [("LN/1", "LOAN", "GHS", _BOOK_GHS, _BOOK_GHS)])
-    _governed_scope(
-        db_session, sdi, {"credit": sdi_capital.MEASURE_BUCKET_WEIGHTED_EXPOSURE}
-    )
+    _governed_scope(db_session, sdi, {"credit": sdi_capital.MEASURE_BUCKET_WEIGHTED_EXPOSURE})
     _add_param(
         db_session,
         param_code=sdi_capital.BUCKET_MAP_PARAM,
@@ -1237,9 +1231,7 @@ def test_an_unapproved_bucket_taxonomy_also_refuses_the_official_run(
     resembles is Form BSD 5A's proposal worksheet, a superseded BANK return.
     """
     sdi = _sdi(db_session)
-    _governed_scope(
-        db_session, sdi, {"credit": sdi_capital.MEASURE_BUCKET_WEIGHTED_EXPOSURE}
-    )
+    _governed_scope(db_session, sdi, {"credit": sdi_capital.MEASURE_BUCKET_WEIGHTED_EXPOSURE})
 
     _, source = sdi_capital.resolve_bucket_map(db_session, sdi, _AS_OF)
     assert source == sdi_capital.BUCKET_MAP_CODE_DEFAULT
@@ -1279,9 +1271,7 @@ def test_the_sealed_run_records_who_determined_the_scope(db_session: Session) ->
     declaration itself.
     """
     sdi = _sdi(db_session)
-    _governed_scope(
-        db_session, sdi, {"credit": sdi_capital.MEASURE_BUCKET_WEIGHTED_EXPOSURE}
-    )
+    _governed_scope(db_session, sdi, {"credit": sdi_capital.MEASURE_BUCKET_WEIGHTED_EXPOSURE})
     active = regulatory_capital._load_active_params(  # pyright: ignore[reportPrivateUsage]
         db_session, _CTX, sdi, _AS_OF
     )
