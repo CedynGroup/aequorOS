@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   effectiveInstitutionModules,
   effectiveOrganizationModules,
+  forecastingWorkspaceAccess,
   hasEffectiveCapability,
   hrefAccess,
   isAskPath,
@@ -12,6 +13,7 @@ import {
   moduleForPath,
   isRootPath,
   landingPathFor,
+  type ModuleKey,
   type ModuleScope,
   type ModuleKey as ModuleKeyForTest,
 } from "./modules";
@@ -131,7 +133,6 @@ for (const moduleCase of [
     confidentialRoute: "/scenarios",
     scenarioSensitivity: "Confidential",
   },
-
 ] as const) {
   const deniedModule = resolved(true, true, {
     [moduleCase.aggregated]: false,
@@ -1341,14 +1342,23 @@ console.log(
   "modules.test.ts: binding-controlled navigation and deep links passed.",
 );
 
-for (const path of ["/forecasting/nii", "/forecasting/optimizer", "/forecasting/whatif"]) {
+for (const path of [
+  "/forecasting/nii",
+  "/forecasting/optimizer",
+  "/forecasting/whatif",
+]) {
   assert.equal(isPathVisible(path, deniedForecasting), true);
   assert.deepEqual(hrefAccess(path, deniedForecasting), {
     state: "disabled",
-    reason: "Requires Forecasting · Aggregated · View. Ask an Org Owner to grant access via Settings → Members.",
+    reason:
+      "Requires Forecasting · Aggregated · View. Ask an Org Owner to grant access via Settings → Members.",
   });
 }
-for (const path of ["/forecasting", "/forecasting/scenario", "/forecasting/reverse-stress"]) {
+for (const path of [
+  "/forecasting",
+  "/forecasting/scenario",
+  "/forecasting/reverse-stress",
+]) {
   const unbound = resolved(true, true, {
     forecastingAggregatedView: false,
     forecastingConfidentialView: false,
@@ -1357,4 +1367,63 @@ for (const path of ["/forecasting", "/forecasting/scenario", "/forecasting/rever
   assert.equal(hrefAccess(path, unbound).state, "disabled");
   assert.equal(isPathVisible(`${path}/opaque-run-id`, unbound), false);
 }
-assert.equal(isPathVisible("/forecasting/reverse-stress", aggregatedForecastingOnly), true);
+assert.equal(
+  isPathVisible("/forecasting/reverse-stress", aggregatedForecastingOnly),
+  true,
+);
+
+const accountOnlyForecastingScope = resolved(false, false, {
+  organizationModules: new Set(["settings"]),
+  hasInstitutionAuthority: false,
+  modules: new Set(),
+  entitledModules: null,
+  forecastingAggregatedView: false,
+  forecastingConfidentialView: false,
+  forecastingRun: false,
+});
+for (const [path, requirement] of [
+  ["/forecasting", "Aggregated"],
+  ["/forecasting/assumptions", "Aggregated"],
+  ["/forecasting/scenario", "Confidential"],
+  ["/forecasting/reverse-stress", "Confidential"],
+  ["/forecasting/nii", "Confidential · View and Forecasting · Aggregated"],
+  [
+    "/forecasting/optimizer",
+    "Confidential · View and Forecasting · Aggregated",
+  ],
+  ["/forecasting/whatif", "Confidential · View and Forecasting · Aggregated"],
+]) {
+  const expected = {
+    state: "disabled",
+    reason: `Requires Forecasting · ${requirement} · View. Ask an Org Owner to grant access via Settings → Members.`,
+  };
+  assert.deepEqual(hrefAccess(path, accountOnlyForecastingScope), expected);
+  assert.deepEqual(
+    forecastingWorkspaceAccess(path, accountOnlyForecastingScope),
+    expected,
+  );
+  assert.equal(isPathVisible(path, accountOnlyForecastingScope), true);
+  assert.equal(isHrefVisible(path, accountOnlyForecastingScope), false);
+  const structurallyExcluded = {
+    ...accountOnlyForecastingScope,
+    entitledModules: new Set<ModuleKey>(["liquidity"]),
+  };
+  assert.deepEqual(forecastingWorkspaceAccess(path, structurallyExcluded), {
+    state: "hidden",
+  });
+  assert.equal(isPathVisible(path, structurallyExcluded), false);
+}
+for (const path of [
+  "/forecasting/unknown",
+  "/forecasting/runs/opaque-run-id",
+  "/forecasting/reverse-stress/opaque-run-id",
+]) {
+  assert.equal(
+    forecastingWorkspaceAccess(path, accountOnlyForecastingScope),
+    undefined,
+  );
+  assert.deepEqual(hrefAccess(path, accountOnlyForecastingScope), {
+    state: "hidden",
+  });
+  assert.equal(isPathVisible(path, accountOnlyForecastingScope), false);
+}

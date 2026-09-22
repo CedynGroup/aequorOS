@@ -700,7 +700,10 @@ export function forecastingWorkspaceAccess(
   scope: ModuleScope,
 ): HrefAccess | undefined {
   const path = normalize(pathname);
-  if (moduleForPath(path) !== "forecasting" || !PUBLIC_MODULE_ROUTES.has(path)) {
+  if (
+    moduleForPath(path) !== "forecasting" ||
+    !PUBLIC_MODULE_ROUTES.has(path)
+  ) {
     return undefined;
   }
   return hrefAccess(path, scope);
@@ -725,10 +728,16 @@ function scopedModulePermissionReason(
     if (routePolicy.prefix === "/forecasting") {
       const missing: string[] = [];
       if (scope[capability] !== true) {
-        missing.push(`Forecasting · ${confidential ? "Confidential" : "Aggregated"} · View`);
+        missing.push(
+          `Forecasting · ${confidential ? "Confidential" : "Aggregated"} · View`,
+        );
       }
       if (
-        ["/forecasting/nii", "/forecasting/optimizer", "/forecasting/whatif"].includes(path) &&
+        [
+          "/forecasting/nii",
+          "/forecasting/optimizer",
+          "/forecasting/whatif",
+        ].includes(path) &&
         scope.forecastingAggregatedView !== true
       ) {
         missing.push("Forecasting · Aggregated · View");
@@ -763,7 +772,8 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   // A deep-link refresh must wait for scope resolution, never briefly 404.
   if (!scope.isResolved) return true;
   if (isPersonalSettingsPath(path)) return true;
-  if (forecastingWorkspaceAccess(path, scope)?.state === "disabled") return true;
+  if (forecastingWorkspaceAccess(path, scope)?.state === "disabled")
+    return true;
   const moduleKey = moduleForPath(path);
   if (path === "/" && isBaselineOnlyScope(scope)) {
     return true;
@@ -851,7 +861,12 @@ export function hrefAccess(href: string, scope: ModuleScope): HrefAccess {
           ? { state: "enabled" }
           : { state: "hidden" };
     }
-    if (!scope.hasInstitutionAuthority) return { state: "hidden" };
+    if (
+      !scope.hasInstitutionAuthority &&
+      !(moduleKey === "forecasting" && PUBLIC_MODULE_ROUTES.has(path))
+    ) {
+      return { state: "hidden" };
+    }
     if (
       scope.entitledModules &&
       !ENTITLEMENT_EXEMPT_MODULES.has(moduleKey) &&
