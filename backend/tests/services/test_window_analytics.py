@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -19,11 +19,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
-from app.models import BankReportingPeriod, LiveMetricSnapshot, RegulatoryRun
+from app.models import BankReportingPeriod, LiveMetricSnapshot, RegulatoryRun, User
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import (
+    authorization,
     job_queue,
     pipeline,
     regulatory_capital,
@@ -304,6 +313,100 @@ def test_daily_stats_read_the_measured_headline_for_irr_and_credit(db_session: S
     # The signed value survives aggregation as stored (loss negative).
     assert irr.day_count == 1
     assert irr.min == irr.avg == irr.max == Decimal("-7.25")
+
+
+def _principal_with(
+    db: Session, *, module_scope: ModuleScope, sensitivity_scope: SensitivityScope
+) -> TenantContext:
+    """A fresh human in the demo org holding exactly one Viewer sentence."""
+    user = User(
+        id=uuid4(),
+        organization_id=DEMO_ORG_ID,
+        email=f"{module_scope.value}.{sensitivity_scope.value}.viewer@example.test",
+        display_name=f"{module_scope.value} {sensitivity_scope.value} viewer",
+    )
+    db.add(user)
+    db.flush()
+    authorization.create_role_binding(
+        db,
+        organization_id=DEMO_ORG_ID,
+        principal_user_id=user.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.VIEWER,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION, SAMPLE_BANK_ID, module_scope, sensitivity_scope
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "window-analytics-test"),
+        reason="Exercise credit daily-ladder gating.",
+        commit=False,
+    )
+    db.flush()
+    return TenantContext(
+        organization_id=DEMO_ORG_ID,
+        actor_user_id=user.id,
+        authorization_version=user.authorization_version,
+    )
+
+
+def test_daily_stats_serve_credit_only_to_a_credit_or_all_aggregated_view(
+    db_session: Session,
+) -> None:
+    """Credit daily rows are gated like every other engine (D-017 retro-gate).
+
+    Capital stays ungated on this surface until its own cutover, so it is the
+    control that proves the response is filtered rather than emptied.
+    """
+    materialize_canonical_test_book(db_session)
+    period_id = _period_id(db_session)
+    snapshot_date = date(2026, 3, 31)
+    for module, metrics in (
+        ("capital", {"car_pct": "14.1"}),
+        ("credit", {"npl_ratio_pct": "6.5"}),
+    ):
+        db_session.add(
+            LiveMetricSnapshot(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                module=module,
+                reporting_period_id=period_id,
+                snapshot_date=snapshot_date,
+                metrics=metrics,
+                status="green",
+                computed_at=utc_now(),
+            )
+        )
+    db_session.flush()
+
+    def daily_modules(ctx: TenantContext) -> list[str]:
+        result = window_analytics.compute_window(
+            db_session, ctx, SAMPLE_BANK_ID, start_date=snapshot_date, end_date=snapshot_date
+        )
+        return [row.module for row in result.daily]
+
+    liquidity_only = _principal_with(
+        db_session,
+        module_scope=ModuleScope.LIQUIDITY,
+        sensitivity_scope=SensitivityScope.AGGREGATED,
+    )
+    assert daily_modules(liquidity_only) == ["capital"]
+
+    credit_confidential = _principal_with(
+        db_session,
+        module_scope=ModuleScope.CREDIT,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    # Sensitivity is exact: a confidential credit sentence is not the aggregated one.
+    assert daily_modules(credit_confidential) == ["capital"]
+
+    credit_aggregated = _principal_with(
+        db_session,
+        module_scope=ModuleScope.CREDIT,
+        sensitivity_scope=SensitivityScope.AGGREGATED,
+    )
+    assert daily_modules(credit_aggregated) == ["capital", "credit"]
+
+    # The hermetic fixture's org-wide viewer/all/all sentence keeps seeing it.
+    assert daily_modules(MAKER) == ["capital", "credit"]
 
 
 def test_endpoint_wiring_serializes_decimals_as_strings(db_client: TestClient) -> None:

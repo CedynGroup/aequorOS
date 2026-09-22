@@ -151,6 +151,16 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("TEMENOS_PULL_ENABLED", "0")
     monkeypatch.setenv("DATABASE_DIRECT_HEALTH_ENABLED", "0")
     monkeypatch.setenv("LIVE_REFRESH_ENABLED", "0")
+    # Same .env-leak guard for every BI switch (D-008). All three ship OFF; a
+    # developer who has enabled BI locally would otherwise flip the run-gate
+    # "skipped" assertions, the feature-flags projection, and — once the
+    # scheduler sweep lands — the "inert when disabled" tick tests. The BI
+    # database URL is blanked for the same reason the primary one is: a second
+    # real connection must never open outside the rollback fixture.
+    monkeypatch.setenv("BI_ENABLED", "0")
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "0")
+    monkeypatch.setenv("BI_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("BI_DATABASE_URL", "")
     # Same guard for the OpenBao backend's endpoint and AppRole: a developer who
     # points their .env at a live OpenBao would otherwise flip the tests that
     # assert "this deployment cannot sign" into the configured branch. The

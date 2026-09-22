@@ -17,6 +17,7 @@ export * from "./DocumentsApi";
 export * from "./EnterpriseStressApi";
 export * from "./EnterpriseStressSignoffApi";
 export * from "./ExaminerApi";
+export * from "./FeatureFlagsApi";
 export * from "./FinancialDataApi";
 export * from "./FindingsApi";
 export * from "./ForecastingApi";

@@ -371,7 +371,11 @@ count (Okta caps at 100/org) to prevent proliferation.
 
 ### 7.1 Permission namespace (`resource:action`)
 
-**Domain (per module)** — `{module} ∈ liq | cap | irrbb | fx | ftp | fcst | beh | data | reg | risk | markets`:
+**Domain (per module)** — `{module} ∈ liq | cap | credit | irrbb | fx | ftp | fcst | beh | data | reg | risk | markets`:
+
+_(`credit` added 2026-09-22: the credit engine, blotter and marts had been reachable
+under the `risk` label with no server-side consumer of a `risk` binding. Contract:
+[`backend/docs/credit_enforcement_rollout.md`](../backend/docs/credit_enforcement_rollout.md).)_
 
 ```
 {module}:view          see data / dashboards / results
@@ -885,7 +889,11 @@ valid_until, revoked_at, revoked_by_type, revoked_by_id, revoked_reason`.
 Composite principal/institution tenant
 foreign keys, checks, and FORCE RLS enforce the shape. This table supersedes the
 independent `user_roles`/`user_scopes` proposal, whose arrays could accidentally
-create cross-product authority.
+create cross-product authority. The column list is unchanged by the `credit`
+module (2026-09-22): migration `202609220067` widens the `module_scope` CHECK to
+the enum and MIRRORS each active human `risk` row into an identical `credit` row
+(system-granted, audited, `authv` bumped) rather than rewriting or aliasing
+anything — the evaluator never reads one module as another.
 
 **`invitations`** _(new)_:
 `id, org_id, email, role_presets[], scope, token_hash, invited_by, expires_at,
@@ -1015,7 +1023,12 @@ The static `ROLE_PERMISSIONS` map, scoped binding table, exact evaluator, and
 institution filtering, capability-driven shell/navigation/deep-link boundary,
 authority-partitioned caches, and governed binding-creation/Members slice are built.
 See the [product rollout boundary](../backend/docs/authorization_foundation.md#product-rollout-boundary)
-for enforcing product surfaces. Remaining
+for enforcing product surfaces; each cutover has one contract there
+(liquidity, capital, IRRBB, FX, FTP, ICAAP, account administration, filing
+submit, integration keys, and — 2026-09-22 —
+[credit](../backend/docs/credit_enforcement_rollout.md): the module, its mirror
+migration and the shared live surfaces are enforced; the direct `/credit/*`
+route cutover is recorded there as not yet enforced). Remaining
 Phase-0 work is further endpoint cutovers, their matching module-action controls, and
 per-persona default landings (the root already routes to the first authorized surface)
 ([§8](#8-enforcement-architecture), [§9](#9-per-persona-dashboards-what-to-build)).

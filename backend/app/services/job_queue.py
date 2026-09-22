@@ -57,6 +57,9 @@ JOB_TYPES = (
     "database_direct_health",
     "desk_capture",
     "icaap_ai_draft",
+    "bi_mart_refresh",
+    "bi_mart_backfill",
+    "bi_retention",
 )
 
 #: The lane a worker process must be running to claim a job type.
@@ -66,9 +69,31 @@ JOB_TYPES = (
 #: test above requires) would otherwise make EVERY worker able to claim it —
 #: including the API's in-process thread. The default lane never contains an AI
 #: type, so the core fleet is unchanged by construction rather than by
-#: configuration. BI commentary adds its own ``"bi"`` entries here.
+#: configuration.
+#:
+#: The ``bi`` lane reuses that mechanism for a different reason: mart builds
+#: are heavy and the queue is FIFO across every type in a worker's selection,
+#: so a BI job in the core selection would sit ahead of a bank's
+#: ``pipeline_refresh``. Keeping BI out of the default lane means the core
+#: fleet's latency is unchanged by construction, and the API's in-process
+#: thread can never run a mart build.
 DEFAULT_LANE = "core"
-JOB_LANES: Mapping[str, str] = MappingProxyType({"icaap_ai_draft": "ai"})
+JOB_LANES: Mapping[str, str] = MappingProxyType(
+    {
+        "icaap_ai_draft": "ai",
+        "bi_mart_refresh": "bi",
+        "bi_mart_backfill": "bi",
+        "bi_retention": "bi",
+    }
+)
+
+#: Lanes whose process must run NOTHING else. ``ai`` is exclusive because the
+#: process holding the model credential must not host any other handler (a
+#: compromise of one handler cannot reach the key). ``bi`` is deliberately NOT
+#: exclusive: it is separated for scheduling, not for secrecy, so a developer
+#: may run ``lane:core,lane:bi`` in one local process while production pins
+#: ``lane:bi`` to its own service (D-007).
+EXCLUSIVE_LANES: frozenset[str] = frozenset({"ai"})
 
 
 def lane_of(job_type: str) -> str:
@@ -78,6 +103,7 @@ def lane_of(job_type: str) -> str:
 def job_types_in_lane(lane: str) -> tuple[str, ...]:
     """Every declared job type belonging to ``lane``, in JOB_TYPES order."""
     return tuple(job_type for job_type in JOB_TYPES if lane_of(job_type) == lane)
+
 
 # Retry backoff is 2**attempts * base seconds (10s, 20s, 40s at base=5).
 _BACKOFF_BASE_SECONDS = 5
@@ -118,6 +144,18 @@ STALE_AFTER_OVERRIDES_SECONDS: dict[str, float] = {
     "desk_capture": 6 * 60 * 60,
 }
 
+#: The one BI job whose runtime is a SETTING rather than a measurement:
+#: ``bi_mart_backfill`` processes dates for ``BI_BACKFILL_HOP_SECONDS`` and
+#: then re-enqueues itself, so its window is derived from that bound in
+#: ``BiSettings.backfill_stale_after_seconds`` (the AI-lane shape below) rather
+#: than pinned here, where a retuned hop would silently outgrow it.
+#: ``bi_mart_refresh`` (one bank, one as-of) and ``bi_retention`` (partition
+#: drops) stay on the fleet default and therefore assert they finish inside it;
+#: neither has a measurement yet that says otherwise, and a refresh that is
+#: reclaimed alive re-runs an idempotent slice replace rather than duplicating
+#: a side effect — a real cost, not a corrupting one.
+_BACKFILL_JOB_TYPE = "bi_mart_backfill"
+
 
 def stale_after_for(job_type: str, default: timedelta) -> timedelta:
     """The reclaim window for ``job_type``: its override, else the deployment default.
@@ -127,7 +165,8 @@ def stale_after_for(job_type: str, default: timedelta) -> timedelta:
     so one model call can legitimately occupy a worker for
     ``AI_REQUEST_TIMEOUT_SECONDS x (AI_MAX_RETRIES + 1)``, and a window shorter
     than that would reclaim a live job and send the request twice. Deriving it
-    keeps the two in step when either setting is tuned.
+    keeps the two in step when either setting is tuned. The BI backfill hop is
+    derived for the same reason, from ``BI_BACKFILL_HOP_SECONDS``.
     """
     override = STALE_AFTER_OVERRIDES_SECONDS.get(job_type)
     if override is not None:
@@ -136,6 +175,10 @@ def stale_after_for(job_type: str, default: timedelta) -> timedelta:
         from app.core.config import get_settings  # noqa: PLC0415 - avoid an import cycle
 
         return timedelta(seconds=get_settings().ai.stale_after_seconds)
+    if job_type == _BACKFILL_JOB_TYPE:
+        from app.core.config import get_settings  # noqa: PLC0415 - avoid an import cycle
+
+        return timedelta(seconds=get_settings().bi.backfill_stale_after_seconds)
     return default
 
 

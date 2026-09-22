@@ -17,6 +17,7 @@
 export const Module = {
   Liq: "liq",
   Cap: "cap",
+  Credit: "credit",
   Irrbb: "irrbb",
   Fx: "fx",
   Ftp: "ftp",

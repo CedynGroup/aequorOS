@@ -21,7 +21,7 @@
 #     still stops the deploy at the migrate step.
 #
 # Coolify domains: attach api.aequoros.com to risk-api ONLY (container port
-# 8000). risk-migrate and risk-worker get no domain.
+# 8000). risk-migrate, risk-worker and risk-worker-bi get no domain.
 # =============================================================================
 
 services:
@@ -95,6 +95,50 @@ services:
       # The AI lane is a SEPARATE Coolify app (docker-compose.ai.prod.yml).
       WORKER_JOB_TYPES: "lane:core"
       WORKER_ID: "risk-worker"
+
+  # The BI mart worker: the ONLY process that claims the bi lane
+  # (bi_mart_refresh, bi_mart_backfill, bi_retention). It lives in this file
+  # rather than its own Coolify app because it needs no secret the others lack
+  # — the AI worker is separate to isolate a credential; this one is separate
+  # to keep heavy mart builds out of the core worker's FIFO and out of the API.
+  #
+  # DEPLOY ORDER (D-008): this service must be running and healthy BEFORE
+  # BI_MART_ENQUEUE_ENABLED or BI_SCHEDULER_ENABLED is set in the shared .env.
+  # The API and every worker poll one jobs table; a BI job enqueued while no
+  # bi-lane process exists sits queued forever (the notification_email_mirror
+  # orphan). Both flags ship off, so adding this service to a release is safe
+  # on its own; flipping a flag is a separate, later act.
+  risk-worker-bi:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    restart: unless-stopped
+    # Must exceed one backfill hop: a hop builds dates for BI_BACKFILL_HOP_SECONDS
+    # (default 600 s) and the date in flight when the budget expires runs to
+    # completion. SIGTERM inside a hop loses at most that hop, but giving it
+    # room to finish avoids the reclaim window entirely. Keep this in step with
+    # the hop setting.
+    stop_grace_period: 900s
+    depends_on:
+      risk-migrate:
+        condition: service_completed_successfully
+    # Same two-question probe as risk-worker: can this role claim at all, and
+    # has THIS worker's poll loop written a heartbeat recently. WORKER_ID is
+    # pinned below so the check reads its own heartbeat rather than a peer's.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"from app.worker import healthcheck; healthcheck()\""]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    env_file:
+      - .env
+    environment:
+      # Literal pins (these override env_file). The lane selection is what
+      # makes this the only process that claims BI jobs; the core worker and
+      # the API's in-process thread never select the bi lane.
+      WORKER_JOB_TYPES: "lane:bi"
+      WORKER_ID: "risk-worker-bi"
+      RUN_INPROCESS_WORKER: "0"
 
   # Staff control plane (operator API): the app behind console.aequoros.com.
   # Same image, third entrypoint (api/worker/operator). Attach a dedicated

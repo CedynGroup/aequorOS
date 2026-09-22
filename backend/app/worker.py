@@ -26,6 +26,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.base import utc_now
 from app.db.session import assert_worker_database_access, get_worker_sessionmaker
+from app.jobs import bi_mart_backfill, bi_mart_refresh, bi_retention
 from app.models import Job, WorkerHeartbeat
 from app.services import (
     database_direct_jobs,
@@ -62,6 +63,9 @@ HANDLERS: dict[str, Handler] = {
     "database_direct_health": database_direct_jobs.run_database_direct_health,
     "desk_capture": desk_capture_job.run_desk_capture,
     "icaap_ai_draft": icaap_ai_jobs.run_icaap_ai_draft,
+    "bi_mart_refresh": bi_mart_refresh.run_bi_mart_refresh,
+    "bi_mart_backfill": bi_mart_backfill.run_bi_mart_backfill,
+    "bi_retention": bi_retention.run_bi_retention,
 }
 
 
@@ -73,14 +77,19 @@ def resolve_job_types(raw: str | None) -> tuple[str, ...]:
     """Which job types THIS process claims and reaps.
 
     ``None`` means every handler in the DEFAULT lane, which never contains an
-    AI type. That default is the safety property: adding ``icaap_ai_draft`` to
-    ``HANDLERS`` — which the parity test requires — must not make the core
-    worker, or the API's in-process thread, claim work that needs an external
-    model credential. Opting in is explicit and per-process.
+    AI or a BI type. That default is the safety property: adding
+    ``icaap_ai_draft`` to ``HANDLERS`` — which the parity test requires — must
+    not make the core worker, or the API's in-process thread, claim work that
+    needs an external model credential, and adding the mart builders must not
+    put a heavy build ahead of a bank's ``pipeline_refresh`` in the core FIFO.
+    Opting in is explicit and per-process.
 
     Tokens are comma-separated job types or ``lane:<name>``. A selection that
-    mixes the ``ai`` lane with anything else is refused: the process holding the
-    model key runs nothing else, so a compromise of one handler cannot reach it.
+    mixes an EXCLUSIVE lane (``job_queue.EXCLUSIVE_LANES``, today only ``ai``)
+    with anything else is refused: the process holding the model key runs
+    nothing else, so a compromise of one handler cannot reach it. The ``bi``
+    lane is not exclusive — ``lane:core,lane:bi`` is a valid single-process
+    selection for local development (D-007).
     """
     if raw is None or not raw.strip():
         return tuple(
@@ -108,10 +117,11 @@ def resolve_job_types(raw: str | None) -> tuple[str, ...]:
             raise WorkerConfigurationError(message)
     unique = tuple(dict.fromkeys(selected))
     lanes = {job_queue.lane_of(job_type) for job_type in unique}
-    if "ai" in lanes and len(lanes) > 1:
+    exclusive = sorted(lanes & job_queue.EXCLUSIVE_LANES)
+    if exclusive and len(lanes) > 1:
         message = (
-            "WORKER_JOB_TYPES mixes the ai lane with another lane; the process "
-            "that holds the model credential must run nothing else."
+            f"WORKER_JOB_TYPES mixes the {exclusive[0]} lane with another lane; "
+            "an exclusive lane's process must run nothing else."
         )
         raise WorkerConfigurationError(message)
     return unique
@@ -290,6 +300,8 @@ def start_inprocess_worker() -> threading.Thread | None:
     # The core lane EXPLICITLY, never WORKER_JOB_TYPES: the API process must not
     # claim AI work whatever its environment says, because that is the process a
     # bank's users reach and the one that must never hold a model credential.
+    # The same pin keeps BI mart builds out of the API process: a request
+    # handler's neighbour thread must never stream a bank's book into a mart.
     thread = threading.Thread(
         target=run_worker,
         kwargs={"job_types": resolve_job_types(None)},
@@ -351,12 +363,28 @@ def _warn_if_ai_unconfigured(settings) -> None:  # pragma: no cover - process en
         logger.warning("AI worker started without a usable model backend; requests will cancel.")
 
 
+def _warn_if_bi_disabled(settings) -> None:  # pragma: no cover - process entrypoint
+    """WARN, never refuse — the same rule as the AI worker.
+
+    A BI worker deployed BEFORE its enqueue flag is flipped is the intended
+    deploy order (D-008), not a misconfiguration: it must boot, heartbeat and
+    idle so the flag can be turned on against a process that already exists.
+    """
+    if not settings.bi.mart_enqueue_enabled:
+        logger.warning(
+            "BI worker started with BI_MART_ENQUEUE_ENABLED off; mart jobs skip at the run gate."
+        )
+
+
 def main() -> None:  # pragma: no cover - process entrypoint
     settings = get_settings()
     configure_logging(settings.logging.log_level)
     job_types = resolve_job_types(settings.worker.worker_job_types)
-    if any(job_queue.lane_of(job_type) == "ai" for job_type in job_types):
+    lanes = {job_queue.lane_of(job_type) for job_type in job_types}
+    if "ai" in lanes:
         _warn_if_ai_unconfigured(settings)
+    if "bi" in lanes:
+        _warn_if_bi_disabled(settings)
     run_worker(job_types=job_types)
 
 

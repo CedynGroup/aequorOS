@@ -573,6 +573,101 @@ for (const [capabilities, visible] of [
 }
 
 // ---------------------------------------------------------------------------
+// Credit is its own module (2026-09-22,
+// backend/docs/credit_enforcement_rollout.md). A CREDIT/aggregated view admits
+// it on its own. A `risk` view STILL admits it: the mirror migration copies
+// every active human `risk` row to `credit`, and a tenant that has not migrated
+// holds only the `risk` row — dropping it would hide the module from today's
+// users for nothing. With neither, the module is hidden; the hub link then
+// names the Credit grant, which is the one an Org Owner would issue afresh.
+// ---------------------------------------------------------------------------
+
+const creditView = {
+  module: "credit",
+  sensitivity: "aggregated",
+  permission: "view",
+  requiresContextualAuthorization: false,
+} as const;
+const riskView = {
+  ...creditView,
+  module: "risk",
+  sensitivity: "confidential",
+} as const;
+const liquidityView = { ...creditView, module: "liq" } as const;
+// Credit joined every institution type's default set (migration 202609010046),
+// so a real bank payload entitles it; the shared fixture above predates that.
+const creditEntitled = new Set([
+  "command_center",
+  "risk",
+  "alerts",
+  "liquidity",
+  "capital",
+  "credit",
+  "regulatory_reporting",
+  "data_engine",
+  "institution",
+  "reports",
+  "settings",
+] as const);
+const CREDIT_ROUTES = ["/credit", "/credit/book", "/credit/concentration"];
+
+for (const [capabilities, visible] of [
+  [[creditView], true],
+  [[riskView], true],
+  [[creditView, riskView], true],
+  [[liquidityView], false],
+  [[], false],
+  // Only a VIEW admits a module; a run grant without one does not.
+  [[{ ...creditView, permission: "run" }], false],
+] as const) {
+  const modules = effectiveInstitutionModules(null, capabilities);
+  assert.equal(modules.has("credit"), visible);
+  const scope = resolved(true, true, {
+    modules,
+    entitledModules: creditEntitled,
+    hasInstitutionAuthority: capabilities.length > 0,
+  });
+  for (const route of CREDIT_ROUTES) {
+    assert.equal(isPathVisible(route, scope), visible);
+    assert.equal(isHrefVisible(route, scope), visible);
+  }
+}
+
+// The institution type's entitlement still bounds both paths in: a credit or
+// mirrored risk view cannot surface a module the tenant's class does not carry.
+assert.equal(
+  effectiveInstitutionModules(["liquidity"], [creditView]).has("credit"),
+  false,
+);
+assert.equal(
+  effectiveInstitutionModules(["liquidity"], [riskView]).has("credit"),
+  false,
+);
+assert.equal(
+  effectiveInstitutionModules(["credit"], [riskView]).has("credit"),
+  true,
+);
+assert.equal(
+  effectiveInstitutionModules(["credit"], [creditView]).has("credit"),
+  true,
+);
+// A credit view is a credit view only: it does not drag the Risk & Limits
+// surfaces in with it the way the mirrored `risk` row does.
+assert.deepEqual([...effectiveInstitutionModules(null, [creditView])].sort(), [
+  "credit",
+]);
+
+// A member with no authority at all is told the grant that opens the hub, and
+// deep links below it stay hidden rather than disabled.
+assert.deepEqual(hrefAccess("/credit", memberOnly), {
+  state: "disabled",
+  reason:
+    "Requires Credit · Aggregated · View. Ask your organization owner or admin to grant it.",
+});
+assert.deepEqual(hrefAccess("/credit/book", memberOnly), { state: "hidden" });
+assert.equal(isPathVisible("/credit", memberOnly), false);
+
+// ---------------------------------------------------------------------------
 // ICAAP workspace (P1). Two independent gates, both fail-closed:
 //   1. exact CAP/confidential view authority,
 //   2. institution class — an SDI has no Pillar 2 regime, and the backend 404s

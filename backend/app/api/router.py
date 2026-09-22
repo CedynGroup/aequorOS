@@ -69,6 +69,7 @@ from app.features.push_data import router as push_router
 from app.features.read_behavioral_models import router as behavioral_models_router
 from app.features.read_cashflow_forecast import router as cashflow_forecast_router
 from app.features.read_cashflow_window import router as cashflow_window_router
+from app.features.read_feature_flags import router as feature_flags_router
 from app.features.read_financial_workspace import router as financial_workspace_router
 from app.features.read_liquidity_monitoring import router as liquidity_monitoring_router
 from app.features.read_market_data_views import router as market_data_views_router
@@ -98,6 +99,8 @@ api_router.include_router(health_router)
 v1_router = APIRouter(prefix="/v1")
 
 v1_router.include_router(auth_router)
+# Mounted unconditionally: it is how the dashboard learns whether BI is on.
+v1_router.include_router(feature_flags_router)
 v1_router.include_router(attestation_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(authorization_router)
 v1_router.include_router(banks_router, dependencies=BANK_ROUTE_DEPENDENCIES)

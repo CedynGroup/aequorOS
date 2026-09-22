@@ -40,6 +40,10 @@ class Module(StrEnum):
 
     LIQUIDITY = "liq"
     CAPITAL = "cap"
+    # Credit is its own module (2026-09-22): the credit engine, blotter and
+    # marts were reachable under the ``risk`` label with no server-side gate.
+    # Mirror migration `202609220067` widens the DB CHECK to match this enum.
+    CREDIT = "credit"
     IRRBB = "irrbb"
     FX = "fx"
     FTP = "ftp"
@@ -68,6 +72,7 @@ class ModuleScope(StrEnum):
     ALL = "all"
     LIQUIDITY = Module.LIQUIDITY
     CAPITAL = Module.CAPITAL
+    CREDIT = Module.CREDIT
     IRRBB = Module.IRRBB
     FX = Module.FX
     FTP = Module.FTP

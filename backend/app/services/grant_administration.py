@@ -87,6 +87,7 @@ _MODULE_LABELS = {
     ModuleScope.ALL: "all modules",
     ModuleScope.LIQUIDITY: "Liquidity Monitoring",
     ModuleScope.CAPITAL: "Basel Capital",
+    ModuleScope.CREDIT: "Credit",
     ModuleScope.IRRBB: "IRRBB",
     ModuleScope.FX: "Foreign Exchange",
     ModuleScope.FTP: "Funds Transfer Pricing",

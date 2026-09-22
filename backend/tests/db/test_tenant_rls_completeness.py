@@ -38,6 +38,18 @@ FK under any other name. So the rule below asks for BOTH markers: the
 scoped the other way fails here instead of shipping unnoticed, which is exactly
 how the two tables ``202608230036`` had to close got in.
 
+**Why partitioned parents AND their children are counted (2026-09-22).** The
+BI marts (``202609220066``) are the first ``PARTITION BY RANGE`` tables in the
+schema. A partitioned parent is ``relkind = 'p'``, so a census of ``'r'`` alone
+would never see it — and it is the parent's policy that filters every query
+THROUGH the parent. Its partitions are ordinary ``'r'`` relations that inherit
+NO policy from the parent, so a child created without its own ENABLE + FORCE +
+policy is a table any tenant can read by naming it. The census therefore
+enumerates ``relkind IN ('r', 'p')`` and, in addition, joins ``pg_inherits`` so
+every child partition present at head (the DEFAULT partitions, plus any the
+ensure-partition functions created) is listed and held to the same rule under
+its own name.
+
 Postgres-gated: it needs ``TEST_DATABASE_URL``. The hermetic SQLite suite has no
 row-level security at all, so there is nothing there to assert.
 """
@@ -86,8 +98,13 @@ CROSS_TENANT_BY_DESIGN: dict[str, str] = {
 #: table scoped ONLY by bank would be tenant data the census never counted.
 TENANT_MARKERS: tuple[str, ...] = ("organization_id", "bank_id")
 
+#: ``relkind`` ``'r'`` is an ordinary table (partitions included), ``'p'`` a
+#: partitioned parent. ``parent`` names the parent of a partition so a failure
+#: on a child reads as what it is; a child carries the tenant marker columns
+#: itself, so the marker predicate finds it without any special case.
 _TENANT_TABLE_CENSUS = """
     SELECT c.relname,
+           c.relkind,
            c.relrowsecurity,
            c.relforcerowsecurity,
            (SELECT count(*) FROM pg_policies p
@@ -96,11 +113,15 @@ _TENANT_TABLE_CENSUS = """
               FROM information_schema.columns col
              WHERE col.table_schema = n.nspname
                AND col.table_name = c.relname
-               AND col.column_name = ANY(:markers)) AS markers
+               AND col.column_name = ANY(:markers)) AS markers,
+           (SELECT parent.relname
+              FROM pg_inherits i
+              JOIN pg_class parent ON parent.oid = i.inhparent
+             WHERE i.inhrelid = c.oid) AS parent
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = :schema_name
-      AND c.relkind = 'r'
+      AND c.relkind IN ('r', 'p')
       AND EXISTS (
           SELECT 1 FROM information_schema.columns col
           WHERE col.table_schema = n.nspname
@@ -131,10 +152,20 @@ def test_every_tenant_scoped_table_forces_row_level_security(
     assert any("organization_id" in (row.markers or "") for row in rows), (
         "not one table carries organization_id; the migration chain did not run"
     )
+    # The census cannot pass vacuously on the partitioned shape: at head there
+    # are partitioned parents, and every one of them has at least its DEFAULT
+    # partition listed as a child under its own name.
+    parents = {row.relname for row in rows if row.relkind == "p"}
+    children_of = {row.parent for row in rows if row.parent is not None}
+    assert parents, "no partitioned parent found; the census would not see relkind 'p'"
+    assert parents <= children_of, (
+        f"partitioned parents with no partition in the census: {sorted(parents - children_of)}"
+    )
 
     unprotected = [
-        f"{row.relname} (markers={row.markers}, rowsecurity={row.relrowsecurity}, "
-        f"forced={row.relforcerowsecurity}, policies={row.policies})"
+        f"{row.relname} (kind={row.relkind}, parent={row.parent}, markers={row.markers}, "
+        f"rowsecurity={row.relrowsecurity}, forced={row.relforcerowsecurity}, "
+        f"policies={row.policies})"
         for row in rows
         if row.relname not in CROSS_TENANT_BY_DESIGN
         and not (row.relrowsecurity and row.relforcerowsecurity and row.policies)
@@ -203,7 +234,7 @@ def test_the_documented_exceptions_are_all_real_and_still_unprotected(
                     SELECT c.relname, c.relforcerowsecurity
                     FROM pg_class c
                     JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE n.nspname = :schema_name AND c.relkind = 'r'
+                    WHERE n.nspname = :schema_name AND c.relkind IN ('r', 'p')
                     """
                 ),
                 {"schema_name": migrated_postgres_schema.schema_name},

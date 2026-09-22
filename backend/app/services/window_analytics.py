@@ -13,6 +13,7 @@ plus per-module daily aggregates over the ``LiveMetricSnapshot`` ladder.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -83,6 +84,18 @@ _PRIMARY_METRIC_KEY: dict[str, str] = {
     "forecast": "year5_car_pct",
 }
 
+#: Daily-snapshot modules served only to a principal holding an exact aggregated
+#: ``view`` binding on the engine's module, filtered in SQL before aggregation.
+#: Capital rows are still served to every tenant reader — the capital cutover
+#: owns that decision; this list must only ever grow.
+_GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
+    ("liquidity", Module.LIQUIDITY),
+    ("credit", Module.CREDIT),
+    ("irr", Module.IRRBB),
+    ("fx", Module.FX),
+    ("ftp", Module.FTP),
+)
+
 
 def compute_window(
     db: Session,
@@ -95,13 +108,8 @@ def compute_window(
     """Ratio series + window statistics + daily aggregates for [start, end]."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     _validate_window(start_date, end_date)
-    allowed = {}
-    for engine, module in (
-        ("liquidity", Module.LIQUIDITY),
-        ("irr", Module.IRRBB),
-        ("fx", Module.FX),
-        ("ftp", Module.FTP),
-    ):
+    allowed: dict[str, bool] = {}
+    for engine, module in _GATED_ENGINE_MODULES:
         decision = scoped_authorization.evaluate_bank_permission(
             db,
             ctx,
@@ -112,13 +120,9 @@ def compute_window(
             surface="window_analytics",
         )
         allowed[engine] = decision is not None and decision.allowed
-    liquidity_allowed = allowed["liquidity"]
-    irrbb_allowed = allowed["irr"]
-    fx_allowed = allowed["fx"]
-    ftp_allowed = allowed["ftp"]
     periods = _periods_in_window(db, ctx, bank, start_date, end_date)
     ratios = [
-        *(_liquidity_series(db, ctx, bank, periods) if liquidity_allowed else []),
+        *(_liquidity_series(db, ctx, bank, periods) if allowed["liquidity"] else []),
         *_capital_series(db, ctx, bank, periods),
     ]
     return WindowAnalyticsRead(
@@ -127,17 +131,7 @@ def compute_window(
         end_date=end_date,
         period_count=len(periods),
         ratios=ratios,
-        daily=_daily_stats(
-            db,
-            ctx,
-            bank,
-            start_date,
-            end_date,
-            liquidity_allowed=liquidity_allowed,
-            irrbb_allowed=irrbb_allowed,
-            fx_allowed=fx_allowed,
-            ftp_allowed=ftp_allowed,
-        ),
+        daily=_daily_stats(db, ctx, bank, start_date, end_date, allowed=allowed),
     )
 
 
@@ -264,11 +258,14 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
     start_date: date,
     end_date: date,
     *,
-    liquidity_allowed: bool,
-    irrbb_allowed: bool,
-    fx_allowed: bool,
-    ftp_allowed: bool,
+    allowed: Mapping[str, bool],
 ) -> list[WindowDailyStatRead]:
+    """``allowed`` carries one verdict per gated engine (``_GATED_ENGINE_MODULES``).
+
+    A gated engine absent from ``allowed`` is excluded: the gate list and the
+    verdicts come from the same tuple, so a missing key can only mean the
+    caller skipped the evaluation, and that must not read as permission.
+    """
     query = (
         select(LiveMetricSnapshot)
         .where(
@@ -279,17 +276,11 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
         )
         .order_by(LiveMetricSnapshot.snapshot_date)
     )
-    if not liquidity_allowed:
-        query = query.where(LiveMetricSnapshot.module != "liquidity")
-    if not irrbb_allowed:
-        query = query.where(LiveMetricSnapshot.module != "irr")
-    if not fx_allowed:
-        query = query.where(LiveMetricSnapshot.module != "fx")
-    if not ftp_allowed:
-        query = query.where(LiveMetricSnapshot.module != "ftp")
-    # capital and credit carry no module gate yet (``Module.CREDIT`` does not
-    # exist; ``live-summary`` exposes both ungated today). The CREDIT module
-    # cutover gates them here and in ``live_view`` in the same change.
+    for engine, _module in _GATED_ENGINE_MODULES:
+        if not allowed.get(engine, False):
+            query = query.where(LiveMetricSnapshot.module != engine)
+    # capital carries no module gate here (``live-summary`` exposes it ungated
+    # today); the capital cutover owns that decision.
     values_by_module: dict[str, list[Decimal]] = {}
     for row in db.scalars(query):
         key = _PRIMARY_METRIC_KEY.get(row.module)

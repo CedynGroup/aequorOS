@@ -13,6 +13,22 @@ from app.models.attestation import (
 )
 from app.models.audit_event import AuditEvent
 from app.models.authorization import AuthorizationBinding, OrganizationOwnerAssignment
+from app.models.bi import (
+    BiAggPositionDaily,
+    BiDimBranch,
+    BiDimCounterparty,
+    BiDimDate,
+    BiDimGlAccount,
+    BiDimProduct,
+    BiFactEngineMetric,
+    BiFactGlMonthly,
+    BiFactLoanEvent,
+    BiFactPositionDaily,
+    BiFactPositionEom,
+    BiMartBuild,
+    BiQueryLog,
+    BiReconciliationResult,
+)
 from app.models.calculation import (
     CalculationForecastPeriod,
     CalculationRun,
@@ -212,6 +228,20 @@ __all__ = [
     "Bank",
     "BankFinancialFact",
     "BankSupervisoryAddon",
+    "BiAggPositionDaily",
+    "BiDimBranch",
+    "BiDimCounterparty",
+    "BiDimDate",
+    "BiDimGlAccount",
+    "BiDimProduct",
+    "BiFactEngineMetric",
+    "BiFactGlMonthly",
+    "BiFactLoanEvent",
+    "BiFactPositionDaily",
+    "BiFactPositionEom",
+    "BiMartBuild",
+    "BiQueryLog",
+    "BiReconciliationResult",
     "FinancialFactRow",
     "IcaapAiSuggestion",
     "IcaapAiSuggestionDecision",

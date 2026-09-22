@@ -14784,6 +14784,30 @@
         "title": "ExaminerRunsRead",
         "type": "object"
       },
+      "FeatureFlagsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bi_enabled": {
+            "title": "Bi Enabled",
+            "type": "boolean"
+          },
+          "bi_mart_enqueue_enabled": {
+            "title": "Bi Mart Enqueue Enabled",
+            "type": "boolean"
+          },
+          "bi_scheduler_enabled": {
+            "title": "Bi Scheduler Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bi_enabled",
+          "bi_mart_enqueue_enabled",
+          "bi_scheduler_enabled"
+        ],
+        "title": "FeatureFlagsRead",
+        "type": "object"
+      },
       "FidelityGrade": {
         "enum": [
           "CONFIRMED",
@@ -39502,6 +39526,7 @@
         "enum": [
           "liq",
           "cap",
+          "credit",
           "irrbb",
           "fx",
           "ftp",
@@ -39550,6 +39575,7 @@
           "all",
           "liq",
           "cap",
+          "credit",
           "irrbb",
           "fx",
           "ftp",
@@ -105639,6 +105665,92 @@
         "summary": "Parse Status",
         "tags": [
           "documents"
+        ]
+      }
+    },
+    "/api/v1/feature-flags": {
+      "get": {
+        "operationId": "readFeatureFlags",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Feature Flags",
+        "tags": [
+          "feature-flags"
         ]
       }
     },

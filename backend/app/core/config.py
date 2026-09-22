@@ -709,6 +709,81 @@ class DeskSettings(BaseSettings):
         return keys or None
 
 
+class BiSettings(BaseSettings):
+    """Business-intelligence marts, query surface and the ``bi`` worker lane.
+
+    EVERY switch here ships OFF and every limit ships at its safe value: a
+    deployment that sets nothing has no BI routers mounted, enqueues no mart
+    builds, runs no BI scheduler sweep, and serves nothing from a mart. Turning
+    BI on is three explicit, separately reviewable acts, in this order:
+
+    1. ``risk-worker-bi`` (``WORKER_JOB_TYPES=lane:bi``) is DEPLOYED and healthy.
+       The three BI job types live in the ``bi`` lane, which the core worker and
+       the API's in-process thread never claim by construction. The API and
+       every worker share one ``jobs`` table, so a BI enqueue flag that flips
+       before that process exists orphans every job it produces in ``queued`` —
+       the exact ``notification_email_mirror`` failure this codebase already
+       paid for (D-008). Nothing here may be enabled before step 1.
+    2. ``BI_MART_ENQUEUE_ENABLED`` lets ingestion, withdrawals, the live and
+       official pipelines and the register triggers enqueue ``bi_mart_refresh``;
+       it is re-checked at run time by every BI handler (kill-switch idiom), so
+       flipping it off also drains the backlog as ``skipped``.
+    3. ``BI_ENABLED`` mounts the tenant-facing BI routers; ``BI_SCHEDULER_ENABLED``
+       adds the recovery sweep, retention and subscriptions to the hourly tick.
+
+    ``GET /api/v1/feature-flags`` projects the three booleans to the dashboard;
+    nothing else in this class is served. There is deliberately no grid licence
+    key (D-030: AG Grid Community, grouping and pivot compiled server-side).
+
+    ``BI_DATABASE_URL`` is optional: when set, BI queries run on their own small
+    pool; unset (the default, and "" reads as unset like every other URL here)
+    means the request's tenant session is used.
+
+    ``BI_BACKFILL_HOP_SECONDS`` bounds ONE hop of the self-re-enqueuing backfill
+    job, and :attr:`backfill_stale_after_seconds` derives that job's reclaim
+    window from it, so the two cannot drift apart when the hop is tuned.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    enabled: bool = Field(default=False, alias="BI_ENABLED")
+    mart_enqueue_enabled: bool = Field(default=False, alias="BI_MART_ENQUEUE_ENABLED")
+    scheduler_enabled: bool = Field(default=False, alias="BI_SCHEDULER_ENABLED")
+    daily_retention_days: int = Field(default=95, gt=0, alias="BI_DAILY_RETENTION_DAYS")
+    database_url: str | None = Field(default=None, alias="BI_DATABASE_URL")
+    interactive_timeout_ms: int = Field(default=10_000, gt=0, alias="BI_INTERACTIVE_TIMEOUT_MS")
+    export_timeout_ms: int = Field(default=120_000, gt=0, alias="BI_EXPORT_TIMEOUT_MS")
+    ui_row_cap: int = Field(default=5_000, gt=0, alias="BI_UI_ROW_CAP")
+    grid_page_cap: int = Field(default=500, gt=0, alias="BI_GRID_PAGE_CAP")
+    export_row_cap: int = Field(default=100_000, gt=0, alias="BI_EXPORT_ROW_CAP")
+    export_async_threshold_rows: int = Field(
+        default=10_000, gt=0, alias="BI_EXPORT_ASYNC_THRESHOLD_ROWS"
+    )
+    backfill_hop_seconds: int = Field(default=600, gt=0, alias="BI_BACKFILL_HOP_SECONDS")
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def empty_means_unconfigured(cls, value: str | None) -> str | None:
+        """BI_DATABASE_URL="" means "use the tenant session" (the DatabaseSettings
+        rule: an empty env value neutralizes a .env entry without editing it)."""
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    @property
+    def backfill_stale_after_seconds(self) -> float:
+        """The reclaim window for one ``bi_mart_backfill`` hop.
+
+        A hop stops starting new dates once ``BI_BACKFILL_HOP_SECONDS`` has
+        elapsed, but the date already in flight runs to completion, so one hop
+        can legitimately overrun its budget by a single day's build. Three
+        budgets cover the hop, that overrun and a margin; a shorter window would
+        reclaim a live hop and build the same dates twice (the ``etl_dedup``
+        lesson, applied ahead of time as the AI lane does).
+        """
+        return float(self.backfill_hop_seconds * 3)
+
+
 class WorkerSettings(BaseSettings):
     """Live-engine background worker and scheduler settings.
 
@@ -740,8 +815,11 @@ class WorkerSettings(BaseSettings):
     # listed in ``job_queue.STALE_AFTER_OVERRIDES_SECONDS`` completes inside 15
     # minutes: pipeline_refresh, official_run, market_data_pull, temenos_pull,
     # scheduled_tick, reporting_deadline_scan, notification_email_mirror,
-    # database_direct_health and desk_capture. A handler that outgrows that gets
-    # its own entry in the override map — NOT a bigger global number, because
+    # database_direct_health, bi_mart_refresh and bi_retention (desk_capture
+    # and etl_dedup have overrides; bi_mart_backfill derives its window from
+    # BI_BACKFILL_HOP_SECONDS; the AI lane derives its own from AI_*). A handler
+    # that outgrows that gets its own entry in the override map — NOT a bigger
+    # global number, because
     # this value also governs how fast a genuinely dead worker's jobs come back,
     # so widening it fleet-wide to suit one long handler slows recovery for the
     # nine short ones.
@@ -860,6 +938,7 @@ class Settings(BaseSettings):
     desk: DeskSettings = Field(default_factory=DeskSettings)
     icaap: IcaapSettings = Field(default_factory=IcaapSettings)
     ai: AiSettings = Field(default_factory=AiSettings)
+    bi: BiSettings = Field(default_factory=BiSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     smtp: SmtpSettings = Field(default_factory=SmtpSettings)
     attestation: AttestationSettings = Field(default_factory=AttestationSettings)

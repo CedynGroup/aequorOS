@@ -34,6 +34,7 @@ export const ROLE_OPTIONS = [
 export const MODULE_OPTIONS = [
   ["liq", "Liquidity Monitoring"],
   ["cap", "Basel Capital"],
+  ["credit", "Credit"],
   ["irrbb", "IRRBB"],
   ["fx", "Foreign Exchange"],
   ["ftp", "Funds Transfer Pricing"],

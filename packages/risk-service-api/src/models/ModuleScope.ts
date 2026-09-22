@@ -18,6 +18,7 @@ export const ModuleScope = {
   All: "all",
   Liq: "liq",
   Cap: "cap",
+  Credit: "credit",
   Irrbb: "irrbb",
   Fx: "fx",
   Ftp: "ftp",

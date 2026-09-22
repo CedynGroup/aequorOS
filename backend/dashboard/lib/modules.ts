@@ -235,6 +235,15 @@ export function moduleSetFrom(
 const CAPABILITY_MODULES = {
   liq: ["liquidity"],
   cap: ["capital"],
+  // Credit became its own module on 2026-09-22
+  // (backend/docs/credit_enforcement_rollout.md). Its shared surfaces — the
+  // live-summary row, alerts, window analytics, snapshots — are gated on a
+  // CREDIT/aggregated view binding, so that binding alone admits the module.
+  // `risk` KEEPS `credit` below: the mirror migration copies every active
+  // human `risk` row to `credit`, and a tenant that has not migrated yet still
+  // holds only the `risk` row. Either view admits credit; dropping `risk` here
+  // would hide the module from today's users for nothing.
+  credit: ["credit"],
   irrbb: ["irrbb"],
   fx: ["fx"],
   ftp: ["ftp"],
@@ -430,7 +439,11 @@ const MODULE_ENTRY_REQUIREMENTS: Readonly<Record<ModuleKey, string>> = {
   positions: "Risk & Limits · Confidential · View",
   irrbb: "IRRBB · Aggregated · View",
   liquidity: LIQUIDITY_AGGREGATED_VIEW,
-  credit: "Risk & Limits · Confidential · View",
+  // The sentence names the grant that OPENS the module. Credit is admitted by
+  // its own module now (a mirrored `risk` row still works — see
+  // CAPABILITY_MODULES), and the grant an Org Owner would issue afresh is the
+  // Credit one, matching the rollout contract's exact binding row.
+  credit: "Credit · Aggregated · View",
   fx: "Foreign Exchange · Aggregated · View",
   capital: "Basel Capital · Aggregated · View",
   ftp: "Funds Transfer Pricing · Aggregated · View",

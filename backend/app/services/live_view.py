@@ -44,6 +44,18 @@ _MODULE_ORDER = {
     )
 }
 
+#: Live-engine rows the summary serves only to a principal holding an exact
+#: aggregated ``view`` binding on the engine's module. Capital, rating and
+#: forecast rows are still served to every tenant reader — their module
+#: cutovers own that decision; this list must only ever grow.
+_GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
+    ("liquidity", Module.LIQUIDITY),
+    ("credit", Module.CREDIT),
+    ("irr", Module.IRRBB),
+    ("fx", Module.FX),
+    ("ftp", Module.FTP),
+)
+
 
 def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSummaryRead:
     """The always-live treasury cockpit.
@@ -77,12 +89,7 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
         LiveMetric.organization_id == ctx.organization_id,
         LiveMetric.bank_id == bank.id,
     )
-    for engine, module in (
-        ("liquidity", Module.LIQUIDITY),
-        ("irr", Module.IRRBB),
-        ("fx", Module.FX),
-        ("ftp", Module.FTP),
-    ):
+    for engine, module in _GATED_ENGINE_MODULES:
         decision = scoped_authorization.evaluate_bank_permission(
             db,
             ctx,
@@ -316,8 +323,11 @@ def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved b
     are honest, not zero-filled.
     """
     bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    # ``liquidity`` and ``irr`` are also resolved by the route dependency
+    # (``manage_live_engine.list_live_snapshots``); the others are gated here.
     protected_module = {
         "liquidity": Module.LIQUIDITY,
+        "credit": Module.CREDIT,
         "fx": Module.FX,
         "ftp": Module.FTP,
     }.get(module)
