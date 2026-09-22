@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -91,7 +92,11 @@ from app.services.audit import record_event
 from app.services.live_block import live_block
 from app.services.live_state import current_fact_period_or_409
 from app.services.live_types import LiveFindingSpec, LiveModuleResult, findings_from_validations
-from app.services.loan_classification import LoanClassificationReport, classify_loan_book
+from app.services.loan_classification import (
+    LoanClassificationReport,
+    classified_loans,
+    classify_loan_book,
+)
 from app.services.params import get_active_params
 from app.services.regulatory_liquidity import get_regulatory_run
 
@@ -387,8 +392,7 @@ def _board_threshold_rows(
                     met,
                     "warning",
                     (
-                        f"Provision coverage {coverage:.2f}% meets the Board floor of "
-                        f"{floor}%."
+                        f"Provision coverage {coverage:.2f}% meets the Board floor of {floor}%."
                         if met
                         else f"Provision coverage {coverage:.2f}% is below the Board "
                         f"floor of {floor}%."
@@ -672,9 +676,7 @@ def compute_live(
             employer.hhi if employer is not None and employer.bucket_count > 0 else None
         ),
         "largest_single_name_share_pct": _opt(
-            single.buckets[0].share_of_book_pct
-            if single is not None and single.buckets
-            else None
+            single.buckets[0].share_of_book_pct if single is not None and single.buckets else None
         ),
         "grades": [
             {
@@ -895,9 +897,7 @@ def _persist_success(  # noqa: PLR0913 - one call site; the analysis tuple sprea
             )
         )
     for position, (rule_code, passed, severity, message) in enumerate(
-        _all_validation_rows(
-            db, ctx, bank, as_of, report, limit_pct, restriction_pct
-        ),
+        _all_validation_rows(db, ctx, bank, as_of, report, limit_pct, restriction_pct),
         start=1,
     ):
         db.add(
@@ -1084,7 +1084,7 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
     as_of = period.period_end
-    rows = _classified_loan_rows(db, ctx, bank, as_of)
+    rows = [entry.row for entry in _classified_loan_rows(db, ctx, bank, as_of)]
     total = len(rows)
     needle = (q or "").strip().lower()
     filtered_rows = [
@@ -1113,7 +1113,7 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
 def get_credit_loan_facets(db: Session, ctx: TenantContext, bank_id: str) -> CreditLoanFacetsRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
-    rows = _classified_loan_rows(db, ctx, bank, period.period_end)
+    rows = [entry.row for entry in _classified_loan_rows(db, ctx, bank, period.period_end)]
 
     def counts(values: list[str | None]) -> list[CreditFacetCountRead]:
         tally: dict[str, int] = {}
@@ -1133,11 +1133,35 @@ def get_credit_loan_facets(db: Session, ctx: TenantContext, bank_id: str) -> Cre
     )
 
 
+@dataclass(frozen=True)
+class ClassifiedLoanRow:
+    """One blotter row plus the identity the wire row does not carry.
+
+    ``loan_key`` is the position natural key ``source_system:source_reference``
+    — ``source_reference`` alone is NOT an identity (``CanonicalPosition`` is
+    unique per source system), so month-to-month matching keys on this and
+    never merges two systems' facilities that happen to share a reference.
+    """
+
+    loan_key: str
+    row: CreditLoanRead
+
+
+def _loan_key(source_system: str, source_reference: str) -> str:
+    return f"{source_system}:{source_reference}"
+
+
 def _classified_loan_rows(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> list[CreditLoanRead]:
-    report = classify_loan_book(db, ctx, bank, as_of)
-    if report.loan_count == 0:
+) -> list[ClassifiedLoanRow]:
+    """The classified blotter, ordered by reference, one entry per current LOAN.
+
+    Grades are joined to rows by ``CanonicalPositionSnapshot.id`` through
+    ``classified_loans`` — never by position in two separately ordered slices,
+    which is arbitrary between rows sharing a ``source_reference``.
+    """
+    classified = classified_loans(db, ctx, bank, as_of, record=True)
+    if not classified:
         raise ModuleDataUnavailable(
             error_code="no_loan_book",
             reason="No LOAN positions are in the current canonical book.",
@@ -1163,54 +1187,49 @@ def _classified_loan_rows(
         )
         .order_by(CanonicalPositionSnapshot.source_reference)
     ).all()
-    # The report's per-loan classifications are positional over the SAME ordered
-    # slice (classify_loan_book orders by source_reference too), so zip is safe;
-    # a count mismatch would mean the two queries diverged and must fail loud.
-    loans = report.result.loans
-    if len(loans) != len(records):
-        msg = (
-            f"classified {len(loans)} loans but the blotter query returned "
-            f"{len(records)} — the two canonical slices diverged"
-        )
-        raise RuntimeError(msg)
-    rows: list[CreditLoanRead] = []
-    for classified, (snapshot, position, counterparty, product_row) in zip(
-        loans, records, strict=True
-    ):
+    rows: list[ClassifiedLoanRow] = []
+    for snapshot, position, counterparty, product_row in records:
+        loan = classified.get(snapshot.id)
+        if loan is None:
+            # Same predicates, same session: a row here without a grade means
+            # the two canonical reads diverged — fail loud, never a blank grade.
+            msg = f"snapshot {snapshot.id} is in the blotter slice but was not classified"
+            raise RuntimeError(msg)
         attributes = snapshot.attributes or {}
+        row = CreditLoanRead(
+            source_reference=snapshot.source_reference,
+            counterparty_name=counterparty.name if counterparty is not None else None,
+            product_code=product_row.product_code if product_row is not None else None,
+            branch_id=_str_or_none(attributes.get("branch_id")),
+            sector=_str_or_none(attributes.get("sector")),
+            currency=position.currency,
+            exposure_ghs=loan.exposure_ghs,
+            days_past_due=_int_or_none(attributes.get("days_past_due")),
+            ifrs9_stage=snapshot.ifrs9_stage,
+            grade=loan.grade,
+            non_performing=loan.non_performing,
+            classification_basis=loan.classification_basis,
+            provision_required_ghs=loan.provision_required_ghs,
+            provision_held_ghs=_dec_or_none(attributes.get("ecl_provision_ghs")),
+            restructured=str(attributes.get("restructured", "")).strip().lower()
+            in ("true", "1", "yes"),
+            interest_rate=(
+                Decimal(str(snapshot.interest_rate)) if snapshot.interest_rate is not None else None
+            ),
+            contractual_maturity=(
+                snapshot.contractual_maturity.isoformat()
+                if snapshot.contractual_maturity is not None
+                else None
+            ),
+            origination_date=(
+                position.origination_date.isoformat()
+                if position.origination_date is not None
+                else None
+            ),
+        )
         rows.append(
-            CreditLoanRead(
-                source_reference=snapshot.source_reference,
-                counterparty_name=counterparty.name if counterparty is not None else None,
-                product_code=product_row.product_code if product_row is not None else None,
-                branch_id=_str_or_none(attributes.get("branch_id")),
-                sector=_str_or_none(attributes.get("sector")),
-                currency=position.currency,
-                exposure_ghs=classified.exposure_ghs,
-                days_past_due=_int_or_none(attributes.get("days_past_due")),
-                ifrs9_stage=snapshot.ifrs9_stage,
-                grade=classified.grade,
-                non_performing=classified.non_performing,
-                classification_basis=classified.classification_basis,
-                provision_required_ghs=classified.provision_required_ghs,
-                provision_held_ghs=_dec_or_none(attributes.get("ecl_provision_ghs")),
-                restructured=str(attributes.get("restructured", "")).strip().lower()
-                in ("true", "1", "yes"),
-                interest_rate=(
-                    Decimal(str(snapshot.interest_rate))
-                    if snapshot.interest_rate is not None
-                    else None
-                ),
-                contractual_maturity=(
-                    snapshot.contractual_maturity.isoformat()
-                    if snapshot.contractual_maturity is not None
-                    else None
-                ),
-                origination_date=(
-                    position.origination_date.isoformat()
-                    if position.origination_date is not None
-                    else None
-                ),
+            ClassifiedLoanRow(
+                loan_key=_loan_key(snapshot.source_system, snapshot.source_reference), row=row
             )
         )
     return rows
@@ -1425,16 +1444,17 @@ def _dpd_bucket(days_past_due: int | None) -> str | None:
     return None
 
 
-def _loan_states(rows: list[CreditLoanRead]) -> list[LoanState]:
+def _loan_states(rows: list[ClassifiedLoanRow]) -> list[LoanState]:
+    """Month-end states keyed by the position natural key (see ``ClassifiedLoanRow``)."""
     return [
         LoanState(
-            loan_key=row.source_reference,
-            exposure_ghs=row.exposure_ghs,
-            dpd_bucket=_dpd_bucket(row.days_past_due),
-            non_performing=row.non_performing,
-            restructured_performing=row.restructured and not row.non_performing,
+            loan_key=entry.loan_key,
+            exposure_ghs=entry.row.exposure_ghs,
+            dpd_bucket=_dpd_bucket(entry.row.days_past_due),
+            non_performing=entry.row.non_performing,
+            restructured_performing=entry.row.restructured and not entry.row.non_performing,
         )
-        for row in rows
+        for entry in rows
     ]
 
 
@@ -1525,9 +1545,7 @@ _VINTAGE_WINDOW_MONTHS = 36
 _VINTAGE_MIN_MONTHS = 3
 
 
-def _month_end_as_ofs(
-    db: Session, ctx: TenantContext, bank: Bank, as_of: date
-) -> list[date]:
+def _month_end_as_ofs(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> list[date]:
     """The latest LOAN-book as-of per calendar month, newest window first."""
     rows = db.execute(
         select(CanonicalPositionSnapshot.as_of_date)
@@ -1602,9 +1620,7 @@ def get_credit_vintages(db: Session, ctx: TenantContext, bank_id: str) -> Credit
                 CanonicalPositionSnapshot.as_of_date == observed,
                 CanonicalPositionSnapshot.superseded_by.is_(None),
                 CanonicalPositionSnapshot.withdrawn_at.is_(None),
-                CanonicalPositionSnapshot.validation_status.in_(
-                    _INCLUDED_VALIDATION_STATUSES
-                ),
+                CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
                 CanonicalPosition.position_type == "LOAN",
             )
         ).all()
@@ -1632,11 +1648,7 @@ def get_credit_vintages(db: Session, ctx: TenantContext, bank_id: str) -> Credit
             )
 
     result = compute_vintages(observations)
-    coverage = (
-        (with_origination / total_exposure * _HUNDRED)
-        if total_exposure > _ZERO
-        else _ZERO
-    )
+    coverage = (with_origination / total_exposure * _HUNDRED) if total_exposure > _ZERO else _ZERO
     return CreditVintagesRead(
         as_of=period.period_end.isoformat(),
         available=True,
@@ -1719,9 +1731,9 @@ def get_credit_pd(db: Session, ctx: TenantContext, bank_id: str) -> CreditPdRead
             min_loan_months=DEFAULT_MIN_LOAN_MONTHS,
         )
 
-    books: dict[date, list[CreditLoanRead]] = {}
+    books: dict[date, list[ClassifiedLoanRow]] = {}
 
-    def book(as_of: date) -> list[CreditLoanRead]:
+    def book(as_of: date) -> list[ClassifiedLoanRow]:
         if as_of not in books:
             books[as_of] = _classified_loan_rows(db, ctx, bank, as_of)
         return books[as_of]
@@ -1731,11 +1743,12 @@ def get_credit_pd(db: Session, ctx: TenantContext, bank_id: str) -> CreditPdRead
     pooled: list[TransitionObservation] = []
     exited = 0
     for opening_as_of, closing_as_of in pairs:
-        closing = {row.source_reference: row for row in book(closing_as_of)}
-        for row in book(opening_as_of):
+        closing = {entry.loan_key: entry.row for entry in book(closing_as_of)}
+        for entry in book(opening_as_of):
+            row = entry.row
             if row.non_performing:
                 continue
-            after = closing.get(row.source_reference)
+            after = closing.get(entry.loan_key)
             if after is None:
                 exited += 1
                 continue

@@ -42,9 +42,7 @@ def _bank(session: Session, org_id: str = ORG_1) -> str:
     return bank.id
 
 
-def _period(
-    session: Session, bank_id: str, end: date, label: str, org_id: str = ORG_1
-) -> UUID:
+def _period(session: Session, bank_id: str, end: date, label: str, org_id: str = ORG_1) -> UUID:
     period = BankReportingPeriod(
         organization_id=org_id,
         bank_id=bank_id,
@@ -117,6 +115,80 @@ def test_favorable_direction_registry() -> None:
     assert favorable_direction("something_unmapped") == "neutral"
     # Family fallback: an unlisted RWA amount is still risk.
     assert favorable_direction("sovereign_rwa_ghs") == "lower_better"
+    # Signed ΔEVE is judged on magnitude, never on the raw direction.
+    assert favorable_direction("worst_eve_change_pct_tier1") == "magnitude_lower_better"
+    assert favorable_direction("worst_eve_change_ghs") == "magnitude_lower_better"
+    assert favorable_direction("delta_eve_pct_tier1") == "magnitude_lower_better"
+    assert "worst_eve_change_pct_tier1" not in report_comparison.LOWER_BETTER
+
+
+def test_signed_delta_eve_is_judged_on_magnitude(db_session: Session) -> None:
+    """ΔEVE / Tier 1 is stored signed (loss negative) and the IRRBB outlier test
+    compares |ΔEVE| to the limit, so a deeper loss is adverse even though the
+    number went DOWN, and a shallower loss is favorable even though it went UP."""
+    bank_id = _bank(db_session)
+    period_id = _period(db_session, bank_id, date(2026, 3, 31), "2026-Q1")
+    shallow = _run(
+        db_session,
+        bank_id,
+        period_id,
+        {"worst_eve_change_pct_tier1": "-8.0", "worst_eve_change_ghs": "-800"},
+        module="irr",
+        created_at=datetime(2026, 4, 1, 10, tzinfo=UTC),
+    )
+    deep = _run(
+        db_session,
+        bank_id,
+        period_id,
+        {"worst_eve_change_pct_tier1": "-12.0", "worst_eve_change_ghs": "-1200"},
+        module="irr",
+        created_at=datetime(2026, 4, 2, 10, tzinfo=UTC),
+    )
+    flipped = _run(
+        db_session,
+        bank_id,
+        period_id,
+        {"worst_eve_change_pct_tier1": "8.0", "worst_eve_change_ghs": "800"},
+        module="irr",
+        created_at=datetime(2026, 4, 3, 10, tzinfo=UTC),
+    )
+    db_session.commit()
+
+    worse = report_comparison.build_comparison(
+        db_session,
+        CTX,
+        bank_id,
+        ReportComparisonRequest(mode="version", module="irr", left=shallow, right=deep),
+    )
+    line = _line(worse, "worst_eve_change_pct_tier1")
+    assert line.direction == "down"  # −8 → −12: the raw figure fell...
+    assert line.favorability == "adverse"  # ...but |ΔEVE| grew.
+    assert _line(worse, "worst_eve_change_ghs").favorability == "adverse"
+    assert worse.adverse_count == 2
+    assert worse.favorable_count == 0
+
+    better = report_comparison.build_comparison(
+        db_session,
+        CTX,
+        bank_id,
+        ReportComparisonRequest(mode="version", module="irr", left=deep, right=shallow),
+    )
+    line = _line(better, "worst_eve_change_pct_tier1")
+    assert line.direction == "up"  # −12 → −8: the raw figure rose...
+    assert line.favorability == "favorable"  # ...and |ΔEVE| shrank.
+    assert better.favorable_count == 2
+
+    # A sign flip at the same magnitude is a direction change with no change in
+    # risk: the outlier test would read both sides identically.
+    same_risk = report_comparison.build_comparison(
+        db_session,
+        CTX,
+        bank_id,
+        ReportComparisonRequest(mode="version", module="irr", left=shallow, right=flipped),
+    )
+    line = _line(same_risk, "worst_eve_change_pct_tier1")
+    assert line.direction == "up"
+    assert line.favorability == "neutral"
 
 
 # --- version vs version -----------------------------------------------------
@@ -388,9 +460,7 @@ def test_other_tenant_run_is_not_visible(db_session: Session) -> None:
     db_session.commit()
 
     # ORG_1 cannot resolve ORG_2's bank at all.
-    req = ReportComparisonRequest(
-        mode="version", module="capital", left=other_run, right=other_run
-    )
+    req = ReportComparisonRequest(mode="version", module="capital", left=other_run, right=other_run)
     with pytest.raises(HTTPException) as exc:
         report_comparison.build_comparison(db_session, CTX, other_bank, req)
     assert exc.value.status_code == 404

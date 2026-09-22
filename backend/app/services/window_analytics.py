@@ -68,11 +68,16 @@ _MAX_WINDOW_MONTHS = 36
 _QUANT = Decimal("0.000001")
 
 # Mirror of the dashboard's components/live/moduleDisplay.ts PRIMARY_METRIC —
-# the one headline metric per live module. Keep the two maps in sync.
+# the one headline metric per live module, in LIVE_MODULES order (``_daily_stats``
+# emits rows in this order). ``tests/services/test_primary_metric_parity.py``
+# reads both maps and fails when they drift.
 _PRIMARY_METRIC_KEY: dict[str, str] = {
     "liquidity": "lcr_pct",
     "capital": "car_pct",
-    "irr": "eve_limit_pct",
+    "credit": "npl_ratio_pct",
+    # ΔEVE / Tier 1 is stored SIGNED (a loss is negative) and the engine judges
+    # it on magnitude; ``eve_limit_pct`` is the limit, a parameter, not a metric.
+    "irr": "worst_eve_change_pct_tier1",
     "fx": "nop_pct_tier1",
     "ftp": "portfolio_nim_pct",
     "forecast": "year5_car_pct",
@@ -282,6 +287,9 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
         query = query.where(LiveMetricSnapshot.module != "fx")
     if not ftp_allowed:
         query = query.where(LiveMetricSnapshot.module != "ftp")
+    # capital and credit carry no module gate yet (``Module.CREDIT`` does not
+    # exist; ``live-summary`` exposes both ungated today). The CREDIT module
+    # cutover gates them here and in ``live_view`` in the same change.
     values_by_module: dict[str, list[Decimal]] = {}
     for row in db.scalars(query):
         key = _PRIMARY_METRIC_KEY.get(row.module)

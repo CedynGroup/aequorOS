@@ -1,10 +1,9 @@
 'use client';
 
 /**
- * Tokenized copy of components/charts/RatioHistoryChart for the IRR
- * workspace (the original is shared by other modules and carries hardcoded
- * hex). Colors come from lib/chartTheme so dark and light both work. The
- * threshold here is a ceiling (supervisory ΔEVE/Tier-1 limit), not a floor.
+ * Ratio trend line for the IRR workspace. Colors come from lib/chartTheme so
+ * dark and light both work. The threshold here is a ceiling (supervisory
+ * ΔEVE/Tier-1 limit), not a floor.
  */
 
 import {

@@ -27,13 +27,19 @@ const RATIO_LABELS: Record<WindowRatio, string> = {
   cet1_ratio_pct: 'CET1 ratio',
 };
 
-/** Short labels for the daily primary-metric keys (mirrors moduleDisplay). */
+/**
+ * Short labels for the daily primary-metric keys. Mirrors `PRIMARY_METRIC` in
+ * `components/live/moduleDisplay.ts` (and the backend's `_PRIMARY_METRIC_KEY`);
+ * `moduleDisplay.test.ts` reads this map and fails when they drift.
+ */
 const METRIC_LABELS: Record<string, string> = {
   lcr_pct: 'LCR',
   car_pct: 'CAR',
-  eve_limit_pct: 'ΔEVE / Tier 1',
+  npl_ratio_pct: 'NPL ratio',
+  worst_eve_change_pct_tier1: 'ΔEVE / Tier 1',
   nop_pct_tier1: 'NOP / Tier 1',
   portfolio_nim_pct: 'Portfolio NIM',
+  pit_pd_upper_pct: 'PIT PD upper band',
   year5_car_pct: 'Year-5 CAR',
 };
 

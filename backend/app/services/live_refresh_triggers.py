@@ -1,9 +1,12 @@
 """Authoritative non-ingestion triggers for the live calculation plane.
 
 Ingestion and market-data writers already enqueue their target bank directly.
-Governed methodology, parameter, entitlement, and reconciliation mutations fan
-out one coalesced refresh per affected bank here, in the same transaction as
-the mutation. Reads never heal or schedule the live plane.
+Governed methodology, parameter, entitlement, reconciliation, and withdrawal
+mutations fan out one coalesced refresh per affected bank here, in the same
+transaction as the mutation. The refresh is keyed on the bank's LIVE as-of
+date, never on the mutated row's own date: a withdrawal of a historical book
+must re-derive the current plane, not roll it back to the withdrawn date.
+Reads never heal or schedule the live plane.
 """
 
 from __future__ import annotations

@@ -1267,12 +1267,43 @@ export function useTrainBehavioralModel(
   });
 }
 
+/**
+ * Everything that changes once behavioral assumptions are applied: the
+ * model's own applied state, the engines that consume the assumptions
+ * (liquidity, FTP, IRR, forecasting — named through the same detail-prefix
+ * table the live generation signal uses — and the cash-flow forecast), and
+ * the live summary + snapshot ladders they feed. The previous list named
+ * prefixes (`liquidity`, `ftp`, `irr`, `forecasting`) that no query key ever
+ * used, so four of its five invalidations were no-ops.
+ */
+export const behavioralApplyInvalidationPrefixes: readonly string[] = [
+  "behavioral-model",
+  ...generationInvalidationPrefixes(["liquidity", "ftp", "irr", "forecast"]),
+  "cashflow-forecast",
+  "live-summary",
+];
+
+/** The refresh `useApplyBehavioralModel` performs on success (unit-tested). */
+export function invalidateBehavioralApply(
+  queryClient: QueryClient,
+  scope: QueryAuthorityScope,
+  bankId: string | undefined,
+): Promise<void[]> {
+  return invalidateScopedPrefixes(
+    queryClient,
+    behavioralApplyInvalidationPrefixes,
+    scope,
+    bankId,
+  );
+}
+
 /** Apply reviewed estimates as accepted behavioral assumptions the engines consume. */
 export function useApplyBehavioralModel(
   bankId: string | undefined,
   model: BehavioralModelSlug,
 ) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (products: BehavioralApplyProduct[]) =>
       apiCall(() =>
@@ -1283,12 +1314,9 @@ export function useApplyBehavioralModel(
         }),
       ),
     onSuccess: () => {
-      // Downstream ALM facts change once assumptions are applied.
-      ["behavioral-model", "liquidity", "ftp", "irr", "forecasting"].forEach(
-        (prefix) => {
-          void queryClient.invalidateQueries({ queryKey: [prefix] });
-        },
-      );
+      // Downstream ALM facts change once assumptions are applied — refresh
+      // only this tenant/authority/bank's copies of the affected surfaces.
+      void invalidateBehavioralApply(queryClient, scope, bankId);
     },
   });
 }

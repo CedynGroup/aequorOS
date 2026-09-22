@@ -1,19 +1,20 @@
 'use client';
 
 /**
- * Six-module pulse wall — the Command Center centerpiece.
+ * Module pulse wall — the Command Center centerpiece.
  *
- * One card per regulatory module (Liquidity, Basel capital, IRRBB, FX, FTP,
- * Forecasting), built by the shared `usePulseCards` model: headline metric
- * for the effective period, traffic-light status, real period-over-period
- * delta and sparkline from the dashboard trend series, and when the live
- * figure was computed. Cards are links: focusable, Enter navigates.
+ * One card per live regulatory engine (every module in `DEFAULT_MODULE_ORDER`,
+ * filtered to the tenant's scope), built by the shared `usePulseCards` model:
+ * headline metric for the effective period, traffic-light status, real
+ * period-over-period delta and sparkline from the dashboard trend series, and
+ * when the live figure was computed. Cards are links: focusable, Enter
+ * navigates.
  */
 
 import Link from 'next/link';
 import type { LiveModule } from '@aequoros/risk-service-api';
 import StatusPill from '@/components/ui/StatusPill';
-import DeltaBadge from '@/components/ui/DeltaBadge';
+import { SemanticDelta } from '@/components/ui/DeltaBadge';
 import Sparkline from '@/components/ui/Sparkline';
 import { SkeletonLine } from '@/components/ui/Skeleton';
 import { isApiError } from '@/lib/api/client';
@@ -21,6 +22,7 @@ import { fmtRelative, statusTone } from '@/lib/api/values';
 import {
   LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
+  liveMetricChangeText,
 } from '@/components/live/moduleDisplay';
 import { useModuleScope } from '@/components/shell/BankContext';
 import { isHrefVisible } from '@/lib/modules';
@@ -171,12 +173,15 @@ function PulseCard({ card }: { card: PulseCardModel }) {
           <div className="mt-1.5 flex items-center justify-between gap-2 min-w-0">
             {card.delta !== undefined ? (
               <span className="inline-flex items-center gap-1.5 min-w-0">
-                <DeltaBadge
-                  value={card.delta}
-                  suffix=" pts"
-                  decimals={2}
-                  invert={card.invertDelta}
-                />
+                {/* Glyph and figure follow the signed series above; colour
+                    follows the module's own rule (D-013 / A1-02). */}
+                <SemanticDelta
+                  direction={card.delta.direction}
+                  favorability={card.delta.favorability}
+                  className="text-caption font-medium"
+                >
+                  {liveMetricChangeText(card.delta.change)}
+                </SemanticDelta>
                 <span className="text-caption text-slate-light truncate">
                   {card.deltaBasis === 'close' ? 'vs prior close' : 'vs prior period'}
                 </span>

@@ -688,7 +688,7 @@ def test_shared_reads_filter_irrbb_before_counts_limits_and_aggregation(
     with get_sessionmaker()() as session:
         for model in (LiveMetric, LiveMetricSnapshot, LiveFinding):
             session.execute(delete(model))
-        for module, key in (("irr", "eve_limit_pct"), ("capital", "car_pct")):
+        for module, key in (("irr", "worst_eve_change_pct_tier1"), ("capital", "car_pct")):
             session.add(
                 LiveMetric(
                     organization_id=ORG_1,
@@ -741,7 +741,7 @@ def test_shared_reads_filter_irrbb_before_counts_limits_and_aggregation(
     snapshots = db_client.get(f"{base}/live-snapshots?module=irr", headers=auth)
     assert snapshots.status_code == (200 if allowed else 403), snapshots.text
     if allowed:
-        assert snapshots.json()["snapshots"][0]["metrics"] == {"eve_limit_pct": 123}
+        assert snapshots.json()["snapshots"][0]["metrics"] == {"worst_eve_change_pct_tier1": 123}
     alerts = db_client.get(f"{base}/alerts?limit=1", headers=auth)
     assert alerts.status_code == 200, alerts.text
     assert alerts.json()["total"] == (2 if allowed else 1)

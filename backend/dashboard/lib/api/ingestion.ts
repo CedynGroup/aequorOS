@@ -470,7 +470,7 @@ export function useActivateTemplate(bankId: string | undefined) {
 
 /**
  * Activate the bank's uploaded data: derive the module fact set for one as-of
- * date and recompute all six modules. On success the reporting-period list is
+ * date and recompute every module. On success the reporting-period list is
  * invalidated so the header selector picks up the new period, and every module
  * dashboard query refetches against it.
  */

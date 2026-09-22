@@ -46,6 +46,7 @@ from app.domain.liquidity.engine import (
     compute_nsfr,
     compute_stressed_ladder,
 )
+from app.domain.reporting import period_windows
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -412,7 +413,20 @@ def get_liquidity_dashboard(
         ]
         stored = True
     else:
-        lcr, nsfr, params = _compute_inline_or_409(db, ctx, bank, period, batch=batch)
+        # Current mode computes from the LIVE plane, exactly as ``compute_live``
+        # does. The batch holds ``BankFinancialFact`` — the official spine, which
+        # only an official run writes — so a tenant whose live plane is ready but
+        # has no official run for its latest date used to fail here with
+        # ``financial_facts_missing`` (BI Phase 0 item 2). The trend stays on the
+        # batch: a point is a period's official picture or nothing.
+        current_facts = (
+            load_current_facts(db, ctx, bank, _LIQUIDITY_FACT_GROUPS).facts
+            if reporting_period_id is None
+            else None
+        )
+        lcr, nsfr, params = _compute_inline_or_409(
+            db, ctx, bank, period, batch=batch, facts=current_facts
+        )
         metrics = _metrics_from_results(lcr, nsfr)
         sections = {}
         for item in (*lcr.line_items, *nsfr.line_items):
@@ -1216,10 +1230,9 @@ def _stored_validations(db: Session, run: RegulatoryRun) -> list[RegulatoryValid
 # Dashboard trends show a trailing window, not the bank's full period history. With
 # 10 years of monthly history (~120 periods) and few stored runs, recomputing every
 # period inline on each load cost ~600 queries / ~25s; a trailing year is both fast
-# and a readable sparkline. Tune here if a longer horizon is wanted.
-_TREND_MAX_POINTS = 13
-
-
+# and a readable sparkline. The window is the last period in each of the trailing
+# twelve calendar months plus the latest period (``period_windows``), so a daily
+# feeder shows a year, not its last thirteen business days.
 def _build_trend(
     db: Session,
     ctx: TenantContext,
@@ -1228,7 +1241,7 @@ def _build_trend(
     *,
     batch: _LiquidityDashboardBatch | None = None,
 ) -> list[LiquidityTrendPointRead]:
-    trend_periods = periods[-_TREND_MAX_POINTS:]
+    trend_periods = period_windows.trailing_month_end_window(periods)
     batch = batch or _prefetch_dashboard_batch(db, ctx, bank, trend_periods)
     points: list[LiquidityTrendPointRead] = []
     for period in trend_periods:
@@ -1271,8 +1284,7 @@ def _prefetch_dashboard_batch(
     *,
     extra_period: BankReportingPeriod | None = None,
 ) -> _LiquidityDashboardBatch:
-    trend_periods = periods[-_TREND_MAX_POINTS:]
-    candidates = [*trend_periods]
+    candidates = period_windows.trailing_month_end_window(periods)
     if extra_period is not None and all(item.id != extra_period.id for item in candidates):
         candidates.append(extra_period)
     period_ids = [period.id for period in candidates]
@@ -1341,9 +1353,16 @@ def _active_params_from_batch(
 
 
 def _compute_inline_from_batch(
-    bank: Bank, period: BankReportingPeriod, batch: _LiquidityDashboardBatch
+    bank: Bank,
+    period: BankReportingPeriod,
+    batch: _LiquidityDashboardBatch,
+    *,
+    facts: Sequence[FinancialFactRow] | None = None,
 ) -> tuple[LcrResult, NsfrResult, LiquidityParams]:
-    facts = batch.facts.get(period.id, [])
+    # ``facts`` overrides the batch's official rows for the period: current mode
+    # passes the live plane, which the official spine may not carry yet.
+    if facts is None:
+        facts = batch.facts.get(period.id, [])
     if not facts:
         raise LiquidityRunError(
             "financial_facts_missing",
@@ -1380,17 +1399,18 @@ def _compute_inline(
     )
 
 
-def _compute_inline_or_409(
+def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves named inputs
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
     *,
     batch: _LiquidityDashboardBatch | None = None,
+    facts: Sequence[FinancialFactRow] | None = None,
 ) -> tuple[LcrResult, NsfrResult, LiquidityParams]:
     try:
         return (
-            _compute_inline_from_batch(bank, period, batch)
+            _compute_inline_from_batch(bank, period, batch, facts=facts)
             if batch is not None
             else _compute_inline(db, ctx, bank, period)
         )

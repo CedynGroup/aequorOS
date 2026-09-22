@@ -6,7 +6,9 @@
  * Each lens reorders the same panels (no separate pages, no data changes):
  * Risk leads with the module pulse wall sorted by breach severity, CFO leads
  * with capital and the balance sheet, ALM leads with rate/funding modules.
- * The choice persists in localStorage.
+ * Every lens lists EVERY module in `DEFAULT_MODULE_ORDER` — a lens permutes
+ * the wall, it never hides an engine (`RoleLens.test.ts` pins this). The
+ * choice persists in localStorage.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -26,12 +28,30 @@ export const ROLE_CONFIG: Record<
   treasurer: {
     label: 'Treasurer',
     panels: ['pulse', 'window', 'balance', 'band'],
-    moduleOrder: ['liquidity', 'fx', 'irr', 'capital', 'ftp', 'forecast'],
+    moduleOrder: [
+      'liquidity',
+      'fx',
+      'irr',
+      'capital',
+      'credit',
+      'ftp',
+      'rating',
+      'forecast',
+    ],
   },
   alm: {
     label: 'ALM',
     panels: ['pulse', 'window', 'band', 'balance'],
-    moduleOrder: ['irr', 'liquidity', 'ftp', 'fx', 'capital', 'forecast'],
+    moduleOrder: [
+      'irr',
+      'liquidity',
+      'ftp',
+      'fx',
+      'capital',
+      'credit',
+      'rating',
+      'forecast',
+    ],
   },
   risk: {
     label: 'Risk',
@@ -41,7 +61,16 @@ export const ROLE_CONFIG: Record<
   cfo: {
     label: 'CFO',
     panels: ['balance', 'pulse', 'window', 'band'],
-    moduleOrder: ['capital', 'ftp', 'forecast', 'liquidity', 'irr', 'fx'],
+    moduleOrder: [
+      'capital',
+      'credit',
+      'ftp',
+      'rating',
+      'forecast',
+      'liquidity',
+      'irr',
+      'fx',
+    ],
   },
 };
 

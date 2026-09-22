@@ -65,6 +65,7 @@ from app.models import (
 )
 from app.models.canonical import CanonicalMetadataMixin, is_current_generation
 from app.models.canonical_withdrawal import WITHDRAWABLE_ENTITIES
+from app.services import live_refresh_triggers
 from app.services.audit import record_event
 from app.services.withdrawal_impact import invalidate_register
 
@@ -427,6 +428,20 @@ def approve_withdrawal(
     # standing from that register; leaving a stale memo in place would let the
     # filing gate pass a run this act has just orphaned.
     invalidate_register(db)
+    # The live plane may have been derived from the book just retired. Refresh
+    # it from the bank's LIVE date — never from this withdrawal's own
+    # ``as_of_date``: ``pipeline_refresh`` deletes and rewrites every current
+    # fact from the date it is given, so enqueuing a historical withdrawal's
+    # date would roll the live plane back to that date. A withdrawal of an
+    # older date therefore re-derives the unchanged live book (cheap, exact);
+    # the sealed runs for the withdrawn date are flagged by ``withdrawal_impact``
+    # and are only ever re-minted through the governed official path.
+    live_refresh_triggers.enqueue_bank_change(
+        db,
+        organization_id=row.organization_id,
+        bank_id=row.bank_id,
+        reason="withdrawal_applied",
+    )
     record_event(
         db,
         ctx,
@@ -604,6 +619,14 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
     # Same reason, the other direction: a session holding the pre-reversal memo
     # would keep refusing runs this act has just restored.
     invalidate_register(db)
+    # And the restored book must reach the live plane the same way the retired
+    # one left it — keyed on the live date, see ``approve_withdrawal``.
+    live_refresh_triggers.enqueue_bank_change(
+        db,
+        organization_id=row.organization_id,
+        bank_id=row.bank_id,
+        reason="withdrawal_reversed",
+    )
     record_event(
         db,
         ctx,

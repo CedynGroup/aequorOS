@@ -2,9 +2,7 @@
 
 /**
  * Token-themed ratio trend line chart for the liquidity and Basel capital
- * workspaces. A theme-aware copy of components/charts/RatioHistoryChart
- * (which is shared with other modules and therefore left untouched), extended
- * with an optional second series and an explicit red-floor line.
+ * workspaces, with an optional second series and an explicit red-floor line.
  */
 
 import {

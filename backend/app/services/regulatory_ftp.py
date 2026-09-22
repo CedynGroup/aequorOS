@@ -59,6 +59,7 @@ from app.domain.ftp.engine import (
     shift_curve,
     validate_product_alignment,
 )
+from app.domain.reporting import period_windows
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -261,7 +262,18 @@ def get_ftp_dashboard(
         ]
         stored = True
     else:
-        analysis = _compute_inline_or_409(db, ctx, bank, period, batch=batch)
+        # Current mode computes from the LIVE plane, exactly as ``compute_live``
+        # does. The batch holds ``BankFinancialFact`` — the official spine, which
+        # only an official run writes — so a tenant whose live plane is ready but
+        # has no official run for its latest date used to fail here with
+        # ``financial_facts_missing`` (BI Phase 0 item 2). The trend stays on the
+        # batch: a point is a period's official picture or nothing.
+        current_facts = (
+            load_current_facts(db, ctx, bank, _FTP_FACT_GROUPS).facts
+            if reporting_period_id is None
+            else None
+        )
+        analysis = _compute_inline_or_409(db, ctx, bank, period, batch=batch, facts=current_facts)
         metrics = _metrics_from_analysis(analysis)
         curve = _curve_from_analysis(analysis)
         products = _products_from_analysis(analysis)
@@ -970,10 +982,9 @@ def _nmd_from_run(run: RegulatoryRun) -> list[FtpNmdSegmentRead]:
 # Dashboard trends show a trailing window, not the bank's full period history. With
 # 10 years of monthly history (~120 periods) and few stored runs, recomputing every
 # period inline on each load cost ~480 queries / ~20s; a trailing year is both fast
-# and a readable sparkline. Tune here if a longer horizon is wanted.
-_TREND_MAX_POINTS = 13
-
-
+# and a readable sparkline. The window is the last period in each of the trailing
+# twelve calendar months plus the latest period (``period_windows``), so a daily
+# feeder shows a year, not its last thirteen business days.
 def _build_trend(
     db: Session,
     ctx: TenantContext,
@@ -982,7 +993,7 @@ def _build_trend(
     *,
     batch: _FtpDashboardBatch | None = None,
 ) -> list[FtpTrendPointRead]:
-    trend_periods = periods[-_TREND_MAX_POINTS:]
+    trend_periods = period_windows.trailing_month_end_window(periods)
     batch = batch or _prefetch_dashboard_batch(db, ctx, bank, trend_periods)
     points: list[FtpTrendPointRead] = []
     for period in trend_periods:
@@ -1027,7 +1038,7 @@ def _prefetch_dashboard_batch(
     *,
     extra_period: BankReportingPeriod | None = None,
 ) -> _FtpDashboardBatch:
-    candidates = [*periods[-_TREND_MAX_POINTS:]]
+    candidates = period_windows.trailing_month_end_window(periods)
     if extra_period is not None and all(item.id != extra_period.id for item in candidates):
         candidates.append(extra_period)
     period_ids = [period.id for period in candidates]
@@ -1097,9 +1108,15 @@ def _ltp_draws_from_batch(batch: _FtpDashboardBatch, as_of: date) -> dict[str, D
 
 
 def _compute_inline_from_batch(
-    period: BankReportingPeriod, batch: _FtpDashboardBatch
+    period: BankReportingPeriod,
+    batch: _FtpDashboardBatch,
+    *,
+    facts: Sequence[FinancialFactRow] | None = None,
 ) -> _FtpAnalysis:
-    facts = batch.facts.get(period.id, [])
+    # ``facts`` overrides the batch's official rows for the period: current mode
+    # passes the live plane, which the official spine may not carry yet.
+    if facts is None:
+        facts = batch.facts.get(period.id, [])
     active = _ftp_params_from_batch(batch, period.period_end)
     draws = _ltp_draws_from_batch(batch, period.period_end)
     return _run_analysis(BASELINE_SCENARIO, facts, active, draws)
@@ -1136,17 +1153,18 @@ def compute_scenario_analysis(  # noqa: PLR0913 - the workbench seam names its f
     return _run_analysis(scenario_code, facts, active, draws, shift_override=shift_bp / _HUNDRED)
 
 
-def _compute_inline_or_409(
+def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves named inputs
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
     *,
     batch: _FtpDashboardBatch | None = None,
+    facts: Sequence[FinancialFactRow] | None = None,
 ) -> _FtpAnalysis:
     try:
         return (
-            _compute_inline_from_batch(period, batch)
+            _compute_inline_from_batch(period, batch, facts=facts)
             if batch is not None
             else _compute_inline(db, ctx, bank, period)
         )

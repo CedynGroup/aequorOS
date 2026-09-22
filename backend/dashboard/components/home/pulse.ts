@@ -14,7 +14,14 @@
 
 import type { LiveModule } from "@aequoros/risk-service-api";
 import type { StatusTone } from "@/components/ui/StatusPill";
-import { livePrimaryMetricKey } from "@/components/live/moduleDisplay";
+import {
+  DEFAULT_MODULE_ORDER,
+  LIVE_MODULE_HREFS,
+  fixed,
+  livePrimaryMetricChange,
+  livePrimaryMetricKey,
+  type LiveMetricChange,
+} from "@/components/live/moduleDisplay";
 import {
   useCapitalDashboard,
   useLiveSnapshots,
@@ -27,7 +34,8 @@ import {
 import { num } from "@/lib/api/values";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { isHrefVisible } from "@/lib/modules";
-import { LIVE_MODULE_HREFS } from "@/components/live/moduleDisplay";
+
+export { DEFAULT_MODULE_ORDER, fixed };
 
 export type Traffic = "green" | "amber" | "red";
 export type CardStatus = Traffic | "na";
@@ -45,23 +53,6 @@ export function worstOf(...statuses: Traffic[]): Traffic {
   );
 }
 
-/** toFixed that never renders negative zero ("-0.00" → "0.00"). */
-export function fixed(value: number, decimals: number): string {
-  const rendered = value.toFixed(decimals);
-  return Number(rendered) === 0 ? (0).toFixed(decimals) : rendered;
-}
-
-export const DEFAULT_MODULE_ORDER: LiveModule[] = [
-  "liquidity",
-  "capital",
-  "credit",
-  "irr",
-  "fx",
-  "ftp",
-  "rating",
-  "forecast",
-];
-
 export type PulseCardModel = {
   module: LiveModule;
   isLoading: boolean;
@@ -72,8 +63,11 @@ export type PulseCardModel = {
   status: CardStatus;
   /** Overrides the traffic-light pill (used by the forecast run card). */
   pill?: { tone: StatusTone; label: string };
-  delta?: number;
-  invertDelta?: boolean;
+  /**
+   * Signed change with its glyph and tone already decided by the module's
+   * rule (`livePrimaryMetricChange`) — the wall renders it, never re-judges it.
+   */
+  delta?: LiveMetricChange;
   hint?: string;
   spark?: number[];
   /** 'close' when delta/spark ride the daily EOD ladder, else monthly. */
@@ -87,30 +81,49 @@ export type PulseCardModel = {
 
 type TrendPoint = { reportingPeriodId: string };
 
-/** Value change vs the previous trend point, or undefined when unavailable. */
+/**
+ * Change vs the previous trend point, or undefined when unavailable. The
+ * figure and glyph are the signed move; the tone is the module's own rule
+ * (`livePrimaryMetricChange` — IRR judges |ΔEVE|, so its colour can differ
+ * from its arrow, which is exactly what a signed headline needs).
+ */
 function trendDelta<T extends TrendPoint>(
   trend: T[] | undefined,
   periodId: string | undefined,
   pick: (p: T) => number,
-): number | undefined {
+  module: LiveModule,
+): LiveMetricChange | undefined {
   if (!trend || !periodId) return undefined;
   const idx = trend.findIndex((p) => p.reportingPeriodId === periodId);
   if (idx <= 0) return undefined;
-  return pick(trend[idx]) - pick(trend[idx - 1]);
+  return livePrimaryMetricChange(
+    module,
+    pick(trend[idx]),
+    pick(trend[idx - 1]),
+  );
 }
 
-/** Prior-close delta + daily spark from the plane-2 EOD ladder. */
+/**
+ * Prior-close delta + daily spark from the plane-2 EOD ladder, read at the
+ * module's headline metric key. Both carry the stored (signed) values; the
+ * delta's tone comes from the module's rule like `trendDelta` above.
+ */
 function ladderOverlay(
   snapshots: { metrics: { [key: string]: any } }[] | undefined,
-  key: string,
-): { delta: number; spark: number[] } | null {
+  module: LiveModule,
+): { delta: LiveMetricChange; spark: number[] } | null {
   if (!snapshots || snapshots.length < 2) return null;
+  const key = livePrimaryMetricKey(module);
   const values = snapshots
     .map((s) => Number(s.metrics?.[key]))
     .filter((v) => Number.isFinite(v));
   if (values.length < 2) return null;
   return {
-    delta: values[values.length - 1] - values[values.length - 2],
+    delta: livePrimaryMetricChange(
+      module,
+      values[values.length - 1],
+      values[values.length - 2],
+    ),
     spark: values.slice(-31),
   };
 }
@@ -196,8 +209,11 @@ export function usePulseCards(
         metricLabel: "Liquidity Coverage Ratio",
         value: fixed(num(liq.data.metrics.lcrPct), 2),
         unit: "%",
-        delta: trendDelta(liq.data.trend, liq.data.period.id, (p) =>
-          num(p.lcrPct),
+        delta: trendDelta(
+          liq.data.trend,
+          liq.data.period.id,
+          (p) => num(p.lcrPct),
+          "liquidity",
         ),
         spark: trendSpark(liq.data.trend, liq.data.period.id, (p) =>
           num(p.lcrPct),
@@ -219,8 +235,11 @@ export function usePulseCards(
         metricLabel: "Capital Adequacy Ratio",
         value: fixed(num(cap.data.metrics.carPct), 2),
         unit: "%",
-        delta: trendDelta(cap.data.trend, cap.data.period.id, (p) =>
-          num(p.carPct),
+        delta: trendDelta(
+          cap.data.trend,
+          cap.data.period.id,
+          (p) => num(p.carPct),
+          "capital",
         ),
         spark: trendSpark(cap.data.trend, cap.data.period.id, (p) =>
           num(p.carPct),
@@ -260,6 +279,8 @@ export function usePulseCards(
             : "Prudential limit not assessed",
         computedAt: creditLive.computedAt,
         basisNote: "current live calculation",
+        // The ladder overlay adds the prior-close delta (a rising NPL ratio
+        // is adverse — `ADVERSE_WHEN_UP` in moduleDisplay).
       }),
       status: (creditLive?.status ?? "na") as CardStatus,
     },
@@ -269,12 +290,17 @@ export function usePulseCards(
       error: irr.error,
       ...(irr.data && {
         metricLabel: "Worst ΔEVE / Tier 1",
+        // Signed, as the IRR module page shows it. The delta's figure and
+        // arrow are signed too; only its colour is judged on |ΔEVE| like the
+        // engine's breach rule, so −8 → −12 is a red ▼ (D-013, A1-02).
         value: fixed(num(irr.data.metrics.worstEveChangePctTier1), 2),
         unit: "%",
-        delta: trendDelta(irr.data.trend, irr.data.period.id, (p) =>
-          num(p.worstEveChangePctTier1),
+        delta: trendDelta(
+          irr.data.trend,
+          irr.data.period.id,
+          (p) => num(p.worstEveChangePctTier1),
+          "irr",
         ),
-        invertDelta: true,
         spark: trendSpark(irr.data.trend, irr.data.period.id, (p) =>
           num(p.worstEveChangePctTier1),
         ),
@@ -297,10 +323,12 @@ export function usePulseCards(
         metricLabel: "Net Open Position / Tier 1",
         value: fixed(num(fx.data.metrics.nopPctTier1), 2),
         unit: "%",
-        delta: trendDelta(fx.data.trend, fx.data.period.id, (p) =>
-          num(p.nopPctTier1),
+        delta: trendDelta(
+          fx.data.trend,
+          fx.data.period.id,
+          (p) => num(p.nopPctTier1),
+          "fx",
         ),
-        invertDelta: true,
         spark: trendSpark(fx.data.trend, fx.data.period.id, (p) =>
           num(p.nopPctTier1),
         ),
@@ -324,8 +352,11 @@ export function usePulseCards(
         metricLabel: "Portfolio NIM (weighted)",
         value: fixed(num(ftp.data.metrics.portfolioNimPct), 2),
         unit: "%",
-        delta: trendDelta(ftp.data.trend, ftp.data.period.id, (p) =>
-          num(p.portfolioNimPct),
+        delta: trendDelta(
+          ftp.data.trend,
+          ftp.data.period.id,
+          (p) => num(p.portfolioNimPct),
+          "ftp",
         ),
         spark: trendSpark(ftp.data.trend, ftp.data.period.id, (p) =>
           num(p.portfolioNimPct),
@@ -350,6 +381,8 @@ export function usePulseCards(
           hint: `Implied ${String(ratingLive.metrics.pit_rating_grade ?? "—").toUpperCase()} · sovereign ceiling ${String(ratingLive.metrics.sovereign_ceiling ?? "—").toUpperCase()}`,
           computedAt: ratingLive.computedAt,
           basisNote: "live canonical scorecard",
+          // The ladder overlay adds the prior-close delta (a rising PD band
+          // is adverse — `ADVERSE_WHEN_UP` in moduleDisplay).
         }),
       status: (ratingLive?.status ?? "na") as CardStatus,
     },
@@ -363,10 +396,7 @@ export function usePulseCards(
   const cards = Object.fromEntries(
     DEFAULT_MODULE_ORDER.map((module) => {
       const card = baseCards[module];
-      const overlay = ladderOverlay(
-        ladders[module].data?.snapshots,
-        livePrimaryMetricKey(module),
-      );
+      const overlay = ladderOverlay(ladders[module].data?.snapshots, module);
       return [
         module,
         overlay

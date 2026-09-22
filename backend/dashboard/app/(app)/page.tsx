@@ -5,7 +5,7 @@
  *
  * Composition (top → bottom, permuted by the role lens):
  *   1. Breach banner (open critical/high alerts, or a slim compliance strip)
- *   2. Six-module pulse wall (headline live metric per regulatory engine)
+ *   2. Module pulse wall (headline live metric per regulatory engine)
  *   3. Big-4 balance-sheet strip (canonical facts)
  *   4. Ratio trend (LCR/NSFR/CAR across all periods) + operational feed
  *

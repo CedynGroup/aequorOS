@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from loguru import logger
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -23,7 +24,15 @@ from app.core.config import get_settings
 from app.core.observability import Condition
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
-from app.models import AuthorizationBinding, Bank, User
+from app.models import (
+    AuthorizationBinding,
+    Bank,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    IngestionBatch,
+    LineageRecord,
+    User,
+)
 from app.services import authorization, grant_administration
 from app.services.institution_types import FALLBACK_TYPE_CODE
 from tests.api.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
@@ -55,6 +64,82 @@ def _seed_liquidity_book() -> None:
         session.commit()
     finally:
         session.close()
+
+
+LATER_CURRENT = date(2026, 7, 31)
+LATER_SUPERSEDED = date(2026, 8, 31)
+
+
+def _reobserve_a_fixture_loan_later() -> None:
+    """Re-observe the fixture's ``LOAN/1`` (position FIRST seen at the June
+    fixture date) a month later as a current snapshot, and a month after that
+    as a snapshot that was since superseded. The book's newest honest business
+    date is therefore July: later than the position row's date, earlier than
+    the retired August observation."""
+    session = get_sessionmaker()()
+    try:
+        position = session.scalars(
+            select(CanonicalPosition).where(
+                CanonicalPosition.organization_id == ORG_1,
+                CanonicalPosition.bank_id == SAMPLE_BANK_ID,
+                CanonicalPosition.source_reference == "LOAN/1",
+            )
+        ).one()
+        assert position.as_of_date == FIXTURE_AS_OF
+        batch = IngestionBatch(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            source_system=position.source_system,
+            adapter_version="1.0",
+            extraction_mode="full",
+            status="accepted",
+            as_of_date=LATER_CURRENT,
+        )
+        session.add(batch)
+        session.flush()
+        lineage = LineageRecord(
+            organization_id=ORG_1,
+            ingestion_batch_id=batch.id,
+            operation_type="ADAPTER_TRANSLATE",
+            operation_ref="later-observations",
+            input_lineage_ids=[],
+        )
+        session.add(lineage)
+        session.flush()
+        for as_of, superseded_by in ((LATER_CURRENT, None), (LATER_SUPERSEDED, uuid4())):
+            session.add(
+                CanonicalPositionSnapshot(
+                    organization_id=ORG_1,
+                    bank_id=SAMPLE_BANK_ID,
+                    as_of_date=as_of,
+                    source_system=position.source_system,
+                    source_reference=position.source_reference,
+                    ingestion_batch_id=batch.id,
+                    lineage_id=lineage.id,
+                    validation_status="accepted",
+                    position_id=position.id,
+                    balance=Decimal("29000000"),
+                    ifrs9_stage=1,
+                    superseded_by=superseded_by,
+                    attributes={"balance_ghs": "29000000"},
+                )
+            )
+        session.commit()
+    finally:
+        session.close()
+
+
+def test_default_as_of_is_the_newest_current_snapshot_date(db_client: TestClient) -> None:
+    """Without ``as_of`` the view keys on the newest CURRENT snapshot date — not
+    the position's first-seen date (June) and not a superseded later one (August)."""
+    _seed_liquidity_book()
+    _reobserve_a_fixture_loan_later()
+    _, version = _grant()
+
+    response = db_client.get(URL, headers=headers(authorization_version=version))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["as_of"] == LATER_CURRENT.isoformat()
 
 
 def _add_bank(session: Session, organization_id: str, bank_id: str) -> None:

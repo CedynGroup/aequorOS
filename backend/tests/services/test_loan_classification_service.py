@@ -22,7 +22,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -61,12 +61,14 @@ def _seed_loans(
     db: Session,
     bank: Bank,
     loans: list[tuple],  # (ref, balance_ghs, days_past_due, ifrs9_stage[, extra_attributes])
+    *,
+    source_system: str = "EXCEL_CSV",
 ) -> None:
     """Insert a minimal LOAN book: (ref, balance_ghs, days_past_due, ifrs9_stage)."""
     batch = IngestionBatch(
         organization_id=ORG_1,
         bank_id=bank.id,
-        source_system="EXCEL_CSV",
+        source_system=source_system,
         adapter_version="1.0",
         extraction_mode="full",
         status="accepted",
@@ -87,7 +89,7 @@ def _seed_loans(
         "organization_id": ORG_1,
         "bank_id": bank.id,
         "as_of_date": AS_OF,
-        "source_system": "EXCEL_CSV",
+        "source_system": source_system,
         "ingestion_batch_id": batch.id,
         "lineage_id": lineage.id,
         "validation_status": "accepted",
@@ -379,3 +381,95 @@ def test_restructured_uncured_facility_is_held_npl_and_cured_one_is_released(
     assert report.restructured_count == 3
     assert report.restructure_held_count == 2
     assert report.restructured_exposure_ghs == Decimal("170000")
+
+
+def _snapshot_identities(db: Session, bank: Bank) -> dict:
+    """``snapshot_id -> (source_system, source_reference)`` for the bank's LOAN book."""
+    rows = db.execute(
+        select(
+            CanonicalPositionSnapshot.id,
+            CanonicalPositionSnapshot.source_system,
+            CanonicalPositionSnapshot.source_reference,
+        ).where(
+            CanonicalPositionSnapshot.organization_id == ORG_1,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+        )
+    ).all()
+    return {snapshot_id: (system, reference) for snapshot_id, system, reference in rows}
+
+
+def test_classified_loans_are_keyed_by_snapshot_id_and_tie_to_the_report(
+    db_session: Session,
+) -> None:
+    """The per-loan map is the SAME classification as the report — same grid,
+    same per-loan results, same totals — paired to rows by snapshot identity
+    rather than by position in an ordered slice."""
+    bank = _make_bank(db_session, institution_type="savings_and_loans")
+    _seed_loans(
+        db_session,
+        bank,
+        [
+            ("LN-1", "2000000", 0, 1),  # standard
+            ("LN-2", "1000000", 120, 2),  # substandard
+            ("LN-3", "600000", 200, 3),  # doubtful
+        ],
+    )
+
+    report = svc.classify_loan_book(db_session, CTX, bank, AS_OF)
+    by_snapshot = svc.classified_loans(db_session, CTX, bank, AS_OF, record=False)
+
+    identities = _snapshot_identities(db_session, bank)
+    assert set(by_snapshot) == set(identities)
+    grades = {identities[snapshot_id][1]: loan.grade for snapshot_id, loan in by_snapshot.items()}
+    assert grades == {"LN-1": "standard", "LN-2": "substandard", "LN-3": "doubtful"}
+    assert sorted(by_snapshot.values(), key=repr) == sorted(report.result.loans, key=repr)
+    assert (
+        sum((loan.exposure_ghs for loan in by_snapshot.values()), Decimal(0))
+        == report.result.total_exposure_ghs
+    )
+
+
+def test_two_systems_sharing_a_reference_each_keep_their_own_grade(db_session: Session) -> None:
+    """``source_reference`` is unique per SOURCE SYSTEM, not per bank: two
+    systems may legitimately carry the same reference for two facilities. A
+    positional pairing over a slice ordered by reference is arbitrary between
+    them; the snapshot-id map is not."""
+    bank = _make_bank(db_session, institution_type="universal_bank")
+    _seed_loans(db_session, bank, [("SHARED-REF", "100000", 0, 1)])  # standard
+    _seed_loans(
+        db_session, bank, [("SHARED-REF", "50000", 400, 3)], source_system="API_PUSH"
+    )  # loss
+
+    by_snapshot = svc.classified_loans(db_session, CTX, bank, AS_OF, record=False)
+
+    identities = _snapshot_identities(db_session, bank)
+    by_system = {identities[snapshot_id][0]: loan for snapshot_id, loan in by_snapshot.items()}
+    assert set(by_system) == {"EXCEL_CSV", "API_PUSH"}
+    assert by_system["EXCEL_CSV"].grade == "standard"
+    assert by_system["EXCEL_CSV"].exposure_ghs == Decimal("100000")
+    assert by_system["API_PUSH"].grade == "loss"
+    assert by_system["API_PUSH"].exposure_ghs == Decimal("50000")
+    assert by_system["API_PUSH"].provision_required_ghs == Decimal("50000")
+
+
+def test_classified_loans_record_flag_governs_the_consumption_ledger(db_session: Session) -> None:
+    """``record=False`` is the dispatch plane's read: the grid parameters it
+    resolves never reach the session's consumption ledger, so a run sealed
+    later in the same session cites only what IT resolved. ``record=True`` is
+    the calculation plane's read and lands every grid parameter there."""
+    bank = _make_bank(db_session, institution_type="savings_and_loans")
+    _seed_loans(db_session, bank, [("LN-1", "1000000", 120, 2)])
+    rp.consume_parameter_provenance(db_session)  # start from an empty ledger
+
+    svc.classified_loans(db_session, CTX, bank, AS_OF, record=False)
+    assert rp.consume_parameter_provenance(db_session) == []
+
+    svc.classified_loans(db_session, CTX, bank, AS_OF, record=True)
+    recorded = {entry["param_code"] for entry in rp.consume_parameter_provenance(db_session)}
+    assert {"prov_substandard", "prov_doubtful", "prov_loss"} <= recorded
+
+    # The report path is the calculation plane's and always records.
+    svc.classify_loan_book(db_session, CTX, bank, AS_OF)
+    assert "prov_substandard" in {
+        entry["param_code"] for entry in rp.consume_parameter_provenance(db_session)
+    }

@@ -1,9 +1,8 @@
 'use client';
 
 /**
- * Regulatory-ratio path with a minimum-threshold reference line.
- * Forecasting-local, token-themed copy of components/charts/RatioHistoryChart
- * (that file is shared by other modules and still carries hex colors).
+ * Regulatory-ratio path with a minimum-threshold reference line, themed from
+ * lib/chartTheme for the forecasting workspace.
  */
 
 import {

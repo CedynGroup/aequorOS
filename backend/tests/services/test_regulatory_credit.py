@@ -378,9 +378,7 @@ def test_npl_monthly_return_generates_from_the_sealed_run(db_session: Session) -
     assert Decimal(levels["npl_stock_ghs"]["value"]) == Decimal(
         str(run_metrics["npl_exposure_ghs"])
     )
-    assert Decimal(levels["npl_ratio_pct"]["value"]) == Decimal(
-        str(run_metrics["npl_ratio_pct"])
-    )
+    assert Decimal(levels["npl_ratio_pct"]["value"]) == Decimal(str(run_metrics["npl_ratio_pct"]))
     assert Decimal(levels["npl_ratio_pct"]["value"]) > 0
     # PR-1 fixture states provisions, so coverage rows are present.
     assert "npl_coverage_pct" in levels
@@ -621,9 +619,7 @@ def test_board_threshold_breaches_become_findings_on_both_tiers(
     persisted = {
         row.rule_code
         for row in db_session.scalars(
-            select(RegulatoryValidation).where(
-                RegulatoryValidation.run_id == batch.runs[0].id
-            )
+            select(RegulatoryValidation).where(RegulatoryValidation.run_id == batch.runs[0].id)
         )
     }
     assert {
@@ -725,3 +721,156 @@ def test_employer_par30_ewi_names_the_breaching_employer(db_session: Session) ->
     assert "Ghana Health Service" in ewi.message
     assert "Volta River Authority" not in ewi.message
     _ = period
+
+
+# ---------------------------------------------------------------------------
+# loan identity: (source_system, source_reference), never the bare reference
+# ---------------------------------------------------------------------------
+
+SECOND_SYSTEM = "API_PUSH"
+
+
+def _seed_second_system_loan(
+    db_session: Session, *, as_of: date_type, reference: str, balance: str, dpd: int
+) -> None:
+    """A LOAN from a SECOND source system carrying a reference the fixture's
+    EXCEL_CSV book already uses — legal, because the position natural key is
+    ``(org, bank, source_system, source_reference)``."""
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system=SECOND_SYSTEM,
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=as_of,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="second-system-loan",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    common = {
+        "organization_id": ORG_1,
+        "bank_id": SAMPLE_BANK_ID,
+        "source_system": SECOND_SYSTEM,
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+    position = db_session.scalar(
+        select(CanonicalPosition).where(
+            CanonicalPosition.organization_id == ORG_1,
+            CanonicalPosition.bank_id == SAMPLE_BANK_ID,
+            CanonicalPosition.source_system == SECOND_SYSTEM,
+            CanonicalPosition.source_reference == reference,
+            CanonicalPosition.superseded_by.is_(None),
+            CanonicalPosition.withdrawn_at.is_(None),
+        )
+    )
+    if position is None:
+        position = CanonicalPosition(
+            **common,
+            as_of_date=as_of,
+            source_reference=reference,
+            position_type="LOAN",
+            currency="GHS",
+        )
+        db_session.add(position)
+        db_session.flush()
+    db_session.add(
+        CanonicalPositionSnapshot(
+            **common,
+            as_of_date=as_of,
+            source_reference=reference,
+            position_id=position.id,
+            balance=Decimal(balance),
+            ifrs9_stage=3 if dpd >= 90 else 1,
+            attributes={"balance_ghs": balance, "days_past_due": dpd},
+        )
+    )
+    db_session.commit()
+
+
+def test_blotter_keeps_two_systems_apart_when_they_share_a_reference(
+    db_session: Session,
+) -> None:
+    """Two facilities, one reference, two source systems, two grades: each row
+    on the blotter carries ITS OWN grade and provision. Pairing grades to rows
+    by position in a reference-ordered slice was arbitrary between such ties."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    # The fixture's EXCEL_CSV LOAN/1: 30M, stage 1, no DPD -> standard (1%).
+    _seed_second_system_loan(
+        db_session, as_of=FIXTURE_AS_OF, reference="LOAN/1", balance="777", dpd=400
+    )
+
+    page = regulatory_credit.list_credit_loans(
+        db_session, CTX, SAMPLE_BANK_ID, q="LOAN/1", limit=500
+    )
+
+    twins = [row for row in page.rows if row.source_reference == "LOAN/1"]
+    assert len(twins) == 2
+    by_dpd = {row.days_past_due: row for row in twins}
+    assert set(by_dpd) == {None, 400}
+    fixture_loan, pushed_loan = by_dpd[None], by_dpd[400]
+    assert fixture_loan.exposure_ghs == Decimal("30000000")
+    assert fixture_loan.grade == "standard"
+    assert fixture_loan.non_performing is False
+    assert fixture_loan.provision_required_ghs == Decimal("300000")  # 1% of 30M
+    assert pushed_loan.exposure_ghs == Decimal("777")
+    assert pushed_loan.grade == "loss"
+    assert pushed_loan.non_performing is True
+    assert pushed_loan.provision_required_ghs == Decimal("777")  # 100%
+
+    # The facets count both, under their own grades.
+    facets = regulatory_credit.get_credit_loan_facets(db_session, CTX, SAMPLE_BANK_ID)
+    grades = {facet.value: facet.count for facet in facets.grades}
+    assert grades["loss"] >= 1
+    assert sum(grades.values()) == page.total
+
+
+def test_migration_matches_loans_on_their_natural_key_not_the_bare_reference(
+    db_session: Session,
+) -> None:
+    """A second system's ``LOAN/1`` performing in May and non-performing in June
+    is ONE more matched loan and one more performing→npl flow — not a
+    collision with the fixture's ``LOAN/1`` that merges two facilities."""
+    _prepare(db_session)
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    _seed_prior_month_book(db_session)
+    before = regulatory_credit.get_credit_migration(db_session, CTX, SAMPLE_BANK_ID)
+    assert before.available is True
+
+    _seed_second_system_loan(
+        db_session, as_of=date_type(2026, 5, 31), reference="LOAN/1", balance="777", dpd=0
+    )
+    _seed_second_system_loan(
+        db_session, as_of=FIXTURE_AS_OF, reference="LOAN/1", balance="777", dpd=400
+    )
+    after = regulatory_credit.get_credit_migration(db_session, CTX, SAMPLE_BANK_ID)
+
+    assert after.matched_loan_count == before.matched_loan_count + 1
+    assert after.entry_loan_count == before.entry_loan_count
+    assert after.exit_loan_count == before.exit_loan_count
+    assert before.opening_total_ghs is not None and before.closing_total_ghs is not None
+    assert after.opening_total_ghs == before.opening_total_ghs + Decimal("777")
+    assert after.closing_total_ghs == before.closing_total_ghs + Decimal("777")
+
+    def flow(read, from_state: str, to_state: str) -> Decimal:  # noqa: ANN001
+        return next(
+            (
+                cell.exposure_ghs
+                for cell in read.matrix
+                if cell.from_state == from_state and cell.to_state == to_state
+            ),
+            Decimal(0),
+        )
+
+    assert flow(after, "performing", "npl") == flow(before, "performing", "npl") + Decimal("777")

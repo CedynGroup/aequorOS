@@ -60,6 +60,7 @@ from app.domain.fx.engine import (
     run_fx_scenarios,
     stressed_var_line_item,
 )
+from app.domain.reporting import period_windows
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -248,7 +249,18 @@ def get_fx_dashboard(
         ]
         stored = True
     else:
-        analysis = _compute_inline_or_409(db, ctx, bank, period, batch=batch)
+        # Current mode computes from the LIVE plane, exactly as ``compute_live``
+        # does. The batch holds ``BankFinancialFact`` — the official spine, which
+        # only an official run writes — so a tenant whose live plane is ready but
+        # has no official run for its latest date used to fail here with
+        # ``financial_facts_missing`` (BI Phase 0 item 2). The trend stays on the
+        # batch: a point is a period's official picture or nothing.
+        current_facts = (
+            load_current_facts(db, ctx, bank, (*_FX_FACT_GROUPS, _CAPITAL_COMPONENT_GROUP)).facts
+            if reporting_period_id is None
+            else None
+        )
+        analysis = _compute_inline_or_409(db, ctx, bank, period, batch=batch, facts=current_facts)
         metrics = _metrics_from_analysis(analysis)
         positions = _positions_from_analysis(analysis)
         standalone_vars = _standalone_from_analysis(analysis)
@@ -899,10 +911,9 @@ def _scenarios_from_run(run: RegulatoryRun) -> list[FxScenarioNopRead]:
 # Dashboard trends show a trailing window, not the bank's full period history. With
 # 10 years of monthly history (~120 periods) and few stored runs, recomputing every
 # period inline on each load cost ~500 queries / ~24s; a trailing year is both fast
-# and a readable sparkline. Tune here if a longer horizon is wanted.
-_TREND_MAX_POINTS = 13
-
-
+# and a readable sparkline. The window is the last period in each of the trailing
+# twelve calendar months plus the latest period (``period_windows``), so a daily
+# feeder shows a year, not its last thirteen business days.
 def _build_trend(
     db: Session,
     ctx: TenantContext,
@@ -911,7 +922,7 @@ def _build_trend(
     *,
     batch: _FxDashboardBatch | None = None,
 ) -> list[FxTrendPointRead]:
-    trend_periods = periods[-_TREND_MAX_POINTS:]
+    trend_periods = period_windows.trailing_month_end_window(periods)
     batch = batch or _prefetch_dashboard_batch(db, ctx, bank, trend_periods)
     points: list[FxTrendPointRead] = []
     for period in trend_periods:
@@ -956,7 +967,7 @@ def _prefetch_dashboard_batch(
     *,
     extra_period: BankReportingPeriod | None = None,
 ) -> _FxDashboardBatch:
-    candidates = [*periods[-_TREND_MAX_POINTS:]]
+    candidates = period_windows.trailing_month_end_window(periods)
     if extra_period is not None and all(item.id != extra_period.id for item in candidates):
         candidates.append(extra_period)
     period_ids = [period.id for period in candidates]
@@ -1024,14 +1035,19 @@ def _fx_params_from_batch(batch: _FxDashboardBatch, as_of: date) -> _FxParams | 
     )
 
 
-def _compute_inline_from_batch(
+def _compute_inline_from_batch(  # noqa: PLR0913 - explicit request scope plus optional reuse
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
     batch: _FxDashboardBatch,
+    *,
+    facts: Sequence[FinancialFactRow] | None = None,
 ) -> _FxAnalysis:
-    period_facts = batch.facts.get(period.id, [])
+    # ``facts`` overrides the batch's official rows for the period (FX groups
+    # plus capital components): current mode passes the live plane, which the
+    # official spine may not carry yet.
+    period_facts = batch.facts.get(period.id, []) if facts is None else facts
     facts = [fact for fact in period_facts if fact.fact_group in _FX_FACT_GROUPS]
     active = _fx_params_from_batch(batch, period.period_end)
     return _run_analysis(
@@ -1120,17 +1136,18 @@ def _compute_inline(
     return _run_analysis(db, ctx, bank, period, facts, active)
 
 
-def _compute_inline_or_409(
+def _compute_inline_or_409(  # noqa: PLR0913 - endpoint error boundary preserves named inputs
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     period: BankReportingPeriod,
     *,
     batch: _FxDashboardBatch | None = None,
+    facts: Sequence[FinancialFactRow] | None = None,
 ) -> _FxAnalysis:
     try:
         return (
-            _compute_inline_from_batch(db, ctx, bank, period, batch)
+            _compute_inline_from_batch(db, ctx, bank, period, batch, facts=facts)
             if batch is not None
             else _compute_inline(db, ctx, bank, period)
         )

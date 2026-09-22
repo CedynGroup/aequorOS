@@ -22,7 +22,9 @@ from app.api.deps import (
     Tenant,
     TenantContext,
 )
-from app.models import Bank, CanonicalPosition
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.models import Bank, CanonicalPositionSnapshot
+from app.models.canonical import is_current_generation
 from app.schemas.sdi import (
     CapitalCheckRead,
     DelinquencyBucketRead,
@@ -62,16 +64,22 @@ router = APIRouter(tags=["sdi-diagnostics"])
 
 
 def _effective_as_of(db: DbSession, ctx: TenantContext, bank: Bank, requested: date | None) -> date:
-    """Resolve the as-of date: the caller's, else the LATEST ingested data date
-    (not ``date.today()`` — an S&L's core-banking feed lags the calendar, so a
-    diagnostic keyed on today would read an empty future). Falls back to today
-    when the bank has no canonical positions yet."""
+    """Resolve the as-of date: the caller's, else the LATEST business date the
+    bank's current book carries — the newest current-generation, accepted or
+    warning position SNAPSHOT (``CanonicalPosition.as_of_date`` is the date a
+    facility was FIRST seen, which lags every month no new facility is booked;
+    ``date.today()`` reads an empty future when an S&L's core-banking feed lags
+    the calendar). A bank with no snapshots yet still falls back to today:
+    every diagnostic below answers an empty book as not-computable, and that
+    contract predates this helper."""
     if requested is not None:
         return requested
     latest = db.scalar(
-        select(func.max(CanonicalPosition.as_of_date)).where(
-            CanonicalPosition.organization_id == ctx.organization_id,
-            CanonicalPosition.bank_id == bank.id,
+        select(func.max(CanonicalPositionSnapshot.as_of_date)).where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            *is_current_generation(CanonicalPositionSnapshot),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
     )
     return latest or date.today()

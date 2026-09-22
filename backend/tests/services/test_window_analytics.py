@@ -19,8 +19,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.db.base import utc_now
 from app.db.session import get_sessionmaker
-from app.models import BankReportingPeriod, RegulatoryRun
+from app.models import BankReportingPeriod, LiveMetricSnapshot, RegulatoryRun
 from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.services import (
     job_queue,
@@ -238,6 +239,71 @@ def test_daily_stats_appear_only_when_snapshots_exist(db_session: Session) -> No
         end_date=today - timedelta(days=10),
     )
     assert off_window.daily == []
+
+
+def test_daily_stats_read_the_measured_headline_for_irr_and_credit(db_session: Session) -> None:
+    """IRR aggregates the SIGNED ΔEVE / Tier 1 the engine measured — never the
+    limit (``eve_limit_pct``, a parameter that would make a flat series) — and
+    credit aggregates the NPL ratio; rows come out in live-module order."""
+    materialize_canonical_test_book(db_session)
+    period_id = _period_id(db_session)
+    snapshot_date = date(2026, 3, 31)
+    ladder = (
+        ("capital", {"car_pct": "14.1"}),
+        ("credit", {"npl_ratio_pct": "6.5", "npl_limit_pct": "10"}),
+        # A limit without the measured change is not a headline: no irr row.
+        ("irr", {"eve_limit_pct": "15"}),
+        ("liquidity", {"lcr_pct": "131.2"}),
+    )
+    for module, metrics in ladder:
+        db_session.add(
+            LiveMetricSnapshot(
+                organization_id=DEMO_ORG_ID,
+                bank_id=SAMPLE_BANK_ID,
+                module=module,
+                reporting_period_id=period_id,
+                snapshot_date=snapshot_date,
+                metrics=metrics,
+                status="green",
+                computed_at=utc_now(),
+            )
+        )
+    db_session.commit()
+
+    limit_only = window_analytics.compute_window(
+        db_session, MAKER, SAMPLE_BANK_ID, start_date=snapshot_date, end_date=snapshot_date
+    )
+    assert [row.module for row in limit_only.daily] == ["liquidity", "capital", "credit"]
+    credit = next(row for row in limit_only.daily if row.module == "credit")
+    assert credit.metric_key == "npl_ratio_pct"
+    assert credit.min == credit.avg == credit.max == Decimal("6.5")
+
+    db_session.add(
+        LiveMetricSnapshot(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            module="irr",
+            reporting_period_id=period_id,
+            snapshot_date=date(2026, 3, 30),
+            metrics={"worst_eve_change_pct_tier1": "-7.25", "eve_limit_pct": "15"},
+            status="green",
+            computed_at=utc_now(),
+        )
+    )
+    db_session.commit()
+    measured = window_analytics.compute_window(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        start_date=date(2026, 3, 30),
+        end_date=snapshot_date,
+    )
+    assert [row.module for row in measured.daily] == ["liquidity", "capital", "credit", "irr"]
+    irr = next(row for row in measured.daily if row.module == "irr")
+    assert irr.metric_key == "worst_eve_change_pct_tier1"
+    # The signed value survives aggregation as stored (loss negative).
+    assert irr.day_count == 1
+    assert irr.min == irr.avg == irr.max == Decimal("-7.25")
 
 
 def test_endpoint_wiring_serializes_decimals_as_strings(db_client: TestClient) -> None:

@@ -9,7 +9,9 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.api.deps import DbSession, LiquidityMonitoringResource, TenantContext
-from app.models import Bank, CanonicalPosition
+from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.models import Bank, CanonicalPositionSnapshot
+from app.models.canonical import is_current_generation
 from app.schemas.sdi import (
     LiquidityMonitoringRead,
     ModuleReadinessRead,
@@ -24,12 +26,18 @@ router = APIRouter(tags=["liquidity-monitoring"])
 
 
 def _effective_as_of(db: DbSession, ctx: TenantContext, bank: Bank, requested: date | None) -> date:
+    """The caller's as-of, else the newest business date the current book
+    carries (mirror of ``read_sdi_diagnostics._effective_as_of``): the latest
+    current-generation, accepted/warning position snapshot — never the
+    position's first-seen date, and today only for a bank with no book yet."""
     if requested is not None:
         return requested
     latest = db.scalar(
-        select(func.max(CanonicalPosition.as_of_date)).where(
-            CanonicalPosition.organization_id == ctx.organization_id,
-            CanonicalPosition.bank_id == bank.id,
+        select(func.max(CanonicalPositionSnapshot.as_of_date)).where(
+            CanonicalPositionSnapshot.organization_id == ctx.organization_id,
+            CanonicalPositionSnapshot.bank_id == bank.id,
+            *is_current_generation(CanonicalPositionSnapshot),
+            CanonicalPositionSnapshot.validation_status.in_(INCLUDED_VALIDATION_STATUSES),
         )
     )
     return latest or date.today()
