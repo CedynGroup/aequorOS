@@ -43,6 +43,8 @@ export const MODULE_OPTIONS = [
   ["reg", "Regulatory Reporting"],
   ["risk", "Risk & Limits"],
   ["markets", "Markets"],
+  ["credit", "Credit"],
+  ["institution", "Institution Profile"],
   ["account", "Account Administration"],
   ["audit", "Audit"],
   ["all", "All modules"],

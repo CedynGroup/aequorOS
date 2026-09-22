@@ -96,6 +96,8 @@ _MODULE_LABELS = {
     ModuleScope.REGULATORY: "Regulatory Reporting",
     ModuleScope.RISK: "Risk & Limits",
     ModuleScope.MARKETS: "Markets",
+    ModuleScope.CREDIT: "Credit",
+    ModuleScope.INSTITUTION: "Institution Profile",
     ModuleScope.ACCOUNT: "Account Administration",
     ModuleScope.AUDIT: "Audit",
 }

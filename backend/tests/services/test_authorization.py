@@ -83,7 +83,12 @@ def _banks(db: Session) -> None:
     db.commit()
 
 
-def _raw_binding(*, organization_id: str, institution_id: str) -> AuthorizationBinding:
+def _raw_binding(
+    *,
+    organization_id: str,
+    institution_id: str,
+    module_scope: ModuleScope = ModuleScope.LIQUIDITY,
+) -> AuthorizationBinding:
     return AuthorizationBinding(
         organization_id=organization_id,
         principal_user_id=USER_1,
@@ -91,7 +96,7 @@ def _raw_binding(*, organization_id: str, institution_id: str) -> AuthorizationB
         role_bundle=RoleBundle.VIEWER.value,
         institution_scope=InstitutionScope.INSTITUTION.value,
         institution_id=institution_id,
-        module_scope=ModuleScope.LIQUIDITY.value,
+        module_scope=module_scope.value,
         sensitivity_scope=SensitivityScope.CONFIDENTIAL.value,
         granted_by_type=authorization.GrantorType.SYSTEM.value,
         granted_by_id="test-suite",
@@ -179,6 +184,51 @@ def test_effective_authority_projects_only_exact_binding_dimensions(
         )
         for cap in by_bank[BANK_1]
     ] == [(Module.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW, False)]
+    assert BANK_1_SIBLING not in by_bank
+
+
+@pytest.mark.parametrize("module", [Module.CREDIT, Module.INSTITUTION])
+def test_credit_and_institution_project_per_institution_like_every_product_module(
+    db_session: Session, module: Module
+) -> None:
+    """Both modules are institution-scoped: they ride the bank's capability list, never the
+    organization's, and one exact grant reaches only its own bank."""
+
+    _banks(db_session)
+    user = db_session.get(User, USER_1)
+    assert user is not None
+    bank = db_session.get(Bank, BANK_1)
+    sibling = db_session.get(Bank, BANK_1_SIBLING)
+    assert bank is not None
+    assert sibling is not None
+    db_session.add(
+        _raw_binding(
+            organization_id=ORG_1,
+            institution_id=BANK_1,
+            module_scope=ModuleScope(module.value),
+        )
+    )
+    db_session.commit()
+
+    projection = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=user.id,
+            roles=("admin",),
+            authorization_version=user.authorization_version,
+        ),
+        [bank, sibling],
+        failure_surface="test_effective_authority",
+    )
+
+    assert projection.organization_capabilities == []
+    by_bank = {
+        item.institution_id: item.capabilities for item in projection.institution_capabilities
+    }
+    assert [(cap.module, cap.sensitivity, cap.permission) for cap in by_bank[BANK_1]] == [
+        (module, Sensitivity.CONFIDENTIAL, Permission.VIEW)
+    ]
     assert BANK_1_SIBLING not in by_bank
 
 

@@ -244,6 +244,11 @@ const CAPABILITY_MODULES = {
   reg: ["regulatory_reporting", "reports"],
   risk: ["command_center", "risk", "alerts", "credit", "positions"],
   markets: ["markets"],
+  // Grantable vocabulary whose consuming surfaces still enforce through the
+  // existing Risk & Limits and Account gates; a Credit or Institution
+  // binding opens nothing until those surfaces cut over to it.
+  credit: [],
+  institution: [],
   account: [],
   audit: [],
 } as const satisfies Record<
