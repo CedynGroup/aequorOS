@@ -60,6 +60,7 @@ from tests.storage.inmemory import InMemoryStorageClient
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 SIBLING_BANK_ID = "BK-MKT00002"
+FOREIGN_BANK_ID = "BK-MKT00003"
 CURVE = "GHS_SOVEREIGN"
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -357,6 +358,28 @@ def _add_sibling_bank() -> UUID:
         session.add(period)
         session.commit()
         return period.id
+    finally:
+        session.close()
+
+
+def _add_foreign_bank() -> None:
+    """A bank owned by another tenant, for probes that name it by id."""
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_2
+    try:
+        session.add(
+            Bank(
+                id=FOREIGN_BANK_ID,
+                organization_id=ORG_2,
+                name="Markets foreign bank",
+                short_name="Markets foreign",
+                currency="GHS",
+                jurisdiction_code="GH",
+                license_type="universal_bank",
+                institution_type=FALLBACK_TYPE_CODE,
+            )
+        )
+        session.commit()
     finally:
         session.close()
 
@@ -754,6 +777,7 @@ def test_confidential_view_does_not_open_published_or_restricted_reads(
 def test_template_download_names_the_institution(db_client: TestClient) -> None:
     _seed_book()
     _add_sibling_bank()
+    _add_foreign_bank()
     _, version = _grant()
     auth = _auth(version)
     template = "/api/v1/market-data/templates/yield_curve"
@@ -762,6 +786,9 @@ def test_template_download_names_the_institution(db_client: TestClient) -> None:
     assert granted.status_code == 200, granted.text
     sibling = db_client.get(template, params={"bank_id": SIBLING_BANK_ID}, headers=auth)
     assert sibling.status_code == 403, sibling.text
+    foreign = db_client.get(template, params={"bank_id": FOREIGN_BANK_ID}, headers=auth)
+    assert foreign.status_code == 404, foreign.text
+    assert foreign.json()["error"]["message"] == "Bank not found."
     unknown = db_client.get(template, params={"bank_id": "BK-ZZZZZZZZ"}, headers=auth)
     assert unknown.status_code == 404, unknown.text
     unnamed = db_client.get(template, headers=auth)

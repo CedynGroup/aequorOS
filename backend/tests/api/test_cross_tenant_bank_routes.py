@@ -246,6 +246,25 @@ def _dependency_names(route: APIRoute) -> set[str]:
     return names
 
 
+def _names_bank_in_query(route: APIRoute) -> bool:
+    """Report whether the route takes ``bank_id`` as a query parameter.
+
+    A route may declare it inside an authorization dependency rather than in
+    its own signature, and ``route.dependant.query_params`` only ever holds the
+    endpoint's own parameters. The OpenAPI document flattens the whole tree, so
+    reading the top level alone leaves such a route uncounted here while the
+    document still exercises it.
+    """
+
+    stack = [route.dependant]
+    while stack:
+        dependant = stack.pop()
+        if any(parameter.name == "bank_id" for parameter in dependant.query_params):
+            return True
+        stack.extend(dependant.dependencies)
+    return False
+
+
 def test_every_bank_route_hides_sibling_tenant_bank(
     db_client: TestClient,
     db_session: Session,
@@ -279,10 +298,7 @@ def test_every_bank_route_hides_sibling_tenant_bank(
         route
         for route in app.routes
         if isinstance(route, APIRoute)
-        and (
-            "{bank_id}" in route.path
-            or any(parameter.name == "bank_id" for parameter in route.dependant.query_params)
-        )
+        and ("{bank_id}" in route.path or _names_bank_in_query(route))
     ]
     unguarded = [
         route.path for route in bank_routes if "resolve_tenant_bank" not in _dependency_names(route)
