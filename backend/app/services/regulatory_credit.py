@@ -290,9 +290,13 @@ def _employer_par30_stats(
 
     (employer, par30_pct) rows plus the covered loan count. Loans without the
     documented ``attributes.employer`` key are excluded and the caller
-    discloses the coverage — an unstated employer is never grouped."""
+    discloses the coverage — an unstated employer is never grouped. A
+    foreign-currency loan with no ingested ``balance_ghs`` conversion is
+    unconverted (the same rule ``_event_amount_ghs`` applies to loan events):
+    it leaves BOTH the PAR30 numerator and the employer's total and is not
+    counted as covered — never its native face value in the reporting unit."""
     records = db.execute(
-        select(CanonicalPositionSnapshot)
+        select(CanonicalPositionSnapshot, CanonicalPosition.currency)
         .join(CanonicalPosition, CanonicalPositionSnapshot.position_id == CanonicalPosition.id)
         .where(
             CanonicalPositionSnapshot.organization_id == ctx.organization_id,
@@ -303,17 +307,20 @@ def _employer_par30_stats(
             CanonicalPositionSnapshot.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
             CanonicalPosition.position_type == "LOAN",
         )
-    ).scalars()
+    ).all()
+    base_ccy = jurisdictions.base_currency(bank)
     totals: dict[str, Decimal] = {}
     par30: dict[str, Decimal] = {}
     covered = 0
-    for snapshot in records:
+    for snapshot, currency in records:
         attributes = snapshot.attributes or {}
         employer = str(attributes.get("employer") or "").strip()
         if not employer:
             continue
         balance = _dec_or_none(attributes.get("balance_ghs"))
         if balance is None:
+            if currency != base_ccy:
+                continue
             balance = Decimal(str(snapshot.balance or 0))
         if balance <= 0:
             continue

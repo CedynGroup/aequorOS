@@ -120,6 +120,86 @@ def test_favorable_direction_registry() -> None:
     assert favorable_direction("worst_eve_change_ghs") == "magnitude_lower_better"
     assert favorable_direction("delta_eve_pct_tier1") == "magnitude_lower_better"
     assert "worst_eve_change_pct_tier1" not in report_comparison.LOWER_BETTER
+    # Earnings-at-risk is signed ΔNII judged on |value| by the limit test, so
+    # the four EaR keys carry magnitude semantics and the old ``ear_`` prefix
+    # fallback (which read a gain as adverse) is gone.
+    for key in ("ear_up_200_ghs", "ear_down_200_ghs", "ear_up_450_ghs", "ear_down_450_ghs"):
+        assert favorable_direction(key) == "magnitude_lower_better"
+        assert key not in report_comparison.LOWER_BETTER
+    assert favorable_direction("ear_unlisted_ghs") == "neutral"
+
+
+def test_signed_earnings_at_risk_is_judged_on_magnitude(db_session: Session) -> None:
+    """``compute_ear`` returns the SIGNED ΔNII of a parallel shock (a gain is
+    positive) and ``ear_within_limit`` compares ``max(|up|, |down|)`` to base
+    NII. So +5 → −10 is adverse (more earnings at risk), −10 → +5 favorable,
+    and a sign flip at equal magnitude (+5 → −5) is no change in risk — the
+    old ``lower_better`` listing read the −10 → +5 recovery as adverse."""
+    bank_id = _bank(db_session)
+    period_id = _period(db_session, bank_id, date(2026, 3, 31), "2026-Q1")
+    gain = _run(
+        db_session,
+        bank_id,
+        period_id,
+        {"ear_up_200_ghs": "5", "ear_down_200_ghs": "-5"},
+        module="irr",
+        created_at=datetime(2026, 4, 1, 10, tzinfo=UTC),
+    )
+    loss = _run(
+        db_session,
+        bank_id,
+        period_id,
+        {"ear_up_200_ghs": "-10", "ear_down_200_ghs": "10"},
+        module="irr",
+        created_at=datetime(2026, 4, 2, 10, tzinfo=UTC),
+    )
+    flipped = _run(
+        db_session,
+        bank_id,
+        period_id,
+        {"ear_up_200_ghs": "-5", "ear_down_200_ghs": "5"},
+        module="irr",
+        created_at=datetime(2026, 4, 3, 10, tzinfo=UTC),
+    )
+    db_session.commit()
+
+    worse = report_comparison.build_comparison(
+        db_session,
+        CTX,
+        bank_id,
+        ReportComparisonRequest(mode="version", module="irr", left=gain, right=loss),
+    )
+    up = _line(worse, "ear_up_200_ghs")
+    assert up.direction == "down"  # +5 → −10: the raw figure fell...
+    assert up.favorability == "adverse"  # ...and |ΔNII| grew.
+    down = _line(worse, "ear_down_200_ghs")
+    assert down.direction == "up"  # −5 → +10: the raw figure rose...
+    assert down.favorability == "adverse"  # ...and |ΔNII| grew.
+    assert worse.adverse_count == 2
+    assert worse.favorable_count == 0
+
+    better = report_comparison.build_comparison(
+        db_session,
+        CTX,
+        bank_id,
+        ReportComparisonRequest(mode="version", module="irr", left=loss, right=gain),
+    )
+    assert _line(better, "ear_up_200_ghs").direction == "up"  # −10 → +5
+    assert _line(better, "ear_up_200_ghs").favorability == "favorable"
+    assert _line(better, "ear_down_200_ghs").direction == "down"  # +10 → −5
+    assert _line(better, "ear_down_200_ghs").favorability == "favorable"
+    assert better.favorable_count == 2
+    assert better.adverse_count == 0
+
+    same_risk = report_comparison.build_comparison(
+        db_session,
+        CTX,
+        bank_id,
+        ReportComparisonRequest(mode="version", module="irr", left=gain, right=flipped),
+    )
+    assert _line(same_risk, "ear_up_200_ghs").direction == "down"  # +5 → −5
+    assert _line(same_risk, "ear_up_200_ghs").favorability == "neutral"
+    assert _line(same_risk, "ear_down_200_ghs").favorability == "neutral"
 
 
 def test_signed_delta_eve_is_judged_on_magnitude(db_session: Session) -> None:

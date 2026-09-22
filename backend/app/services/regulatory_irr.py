@@ -1223,7 +1223,7 @@ def compute_live(
         period,
         facts,
         active,
-        tier1=_tier1_from_facts(current.facts),
+        tier1=_capital_base(db, ctx, bank, current.source_as_of_date, current.facts),
     )
     snapshot = current_snapshot(
         _build_snapshot(bank, period, BASELINE_SCENARIO, facts, active),
@@ -1373,8 +1373,7 @@ def tier1_for_period(
 def _load_tier1(
     db: Session, ctx: TenantContext, bank: Bank, period: BankReportingPeriod
 ) -> Decimal:
-    if institution_types.institution_class(db, bank) == "sdi":
-        return sdi_capital.net_own_funds(db, ctx, bank, period.period_end)
+    """The official run's ΔEVE denominator over the period's capital spine."""
     components = list(
         db.scalars(
             select(BankFinancialFact).where(
@@ -1385,7 +1384,32 @@ def _load_tier1(
             )
         )
     )
-    return _tier1_from_facts(components)
+    return _capital_base(db, ctx, bank, period.period_end, components)
+
+
+def _capital_base(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    facts: Sequence[FinancialFactRow],
+) -> Decimal:
+    """The ΔEVE denominator for one book — the ONE statement of the regime split.
+
+    A bank's Tier 1 comes from the capital-component ``facts`` in hand; an SDI
+    uses its signed Act 930 s.29 Net Own Funds as of ``as_of``
+    (``sdi_capital.net_own_funds``), the denominator the SDI-IRRBB-QUARTERLY
+    return names. Shared by the official run (``_load_tier1``) and the live
+    tier (``compute_live``) so the two cannot disagree: until 2026-09-21 the
+    live tier derived Tier 1 from facts for every class, so an SDI's live
+    ΔEVE/T1 headline sat on a different denominator from its filed trend
+    point. ``_compute_inline_from_batch`` applies the same split over the
+    class and Net Own Funds its batch prefetches rather than re-querying per
+    trend point.
+    """
+    if institution_types.institution_class(db, bank) == "sdi":
+        return sdi_capital.net_own_funds(db, ctx, bank, as_of)
+    return _tier1_from_facts(facts)
 
 
 def _tier1_from_facts(facts: Sequence[FinancialFactRow]) -> Decimal:

@@ -8,7 +8,11 @@ Two sources feed the P&L forms, both existing platform state:
   convention: P&L accounts are cleared to reserves at the year end), so the
   period-to-date column is the latest generation on/before period end and the
   month / quarter columns are differences of consecutive period-to-date
-  balances. Which accounts feed which official line is the bank's
+  balances. An account the register marks ``balance_basis="period"`` is closed
+  monthly instead: the latest generation in each calendar month is that
+  month's movement and a window sums its months (an intra-month generation is
+  a month-to-date figure, superseded by the later one in the same month —
+  never added to it). Which accounts feed which official line is the bank's
   chart-of-accounts mapping, stated one of two ways: (1) on the ledger itself —
   an account whose ``attributes["bsd7_line"]`` equals the line tag (``"1a"``,
   ``"2a_savings"`` … the tags are the official item numbers); (2) as data —
@@ -289,11 +293,28 @@ def _ytd_total(rc: ResolveContext, rows: list[_Generation], upper: date) -> Deci
 
 
 def _period_total(rc: ResolveContext, rows: list[_Generation], lower: date) -> Decimal:
-    """Σ balance over every generation with as_of ≥ ``lower`` in this column's
-    currency slice — period-movement ledgers."""
+    """Σ balance of the latest generation per account code per calendar month
+    with as_of ≥ ``lower``, in this column's currency slice — period-movement
+    ledgers.
+
+    A ``period``-basis account is closed monthly, so its balance as of any date
+    is the month-to-date movement and the month-end balance is the month's
+    movement. A weekly or daily book therefore lands several current-generation
+    rows per account per month, each a cumulative figure: only the latest one
+    in each month is that month's movement, the earlier ones are superseded by
+    it. Summing every generation would count the intra-month movement twice.
+    Windows always start on day 1 of a month, so a month never straddles one.
+    """
+    latest: dict[tuple[str, int, int], _Generation] = {}
+    for row in rows:
+        if row.as_of < lower:
+            continue
+        key = (row.code, row.as_of.year, row.as_of.month)
+        current = latest.get(key)
+        if current is None or row.as_of > current.as_of:
+            latest[key] = row
     return sum(
-        (row.balance for row in rows if row.as_of >= lower and _in_currency(rc, row.currency)),
-        Decimal(0),
+        (row.balance for row in latest.values() if _in_currency(rc, row.currency)), Decimal(0)
     )
 
 
@@ -306,8 +327,10 @@ def _pl_line(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     (alternative/complementary selection), ``gl_classes`` (default any),
     ``balance_basis`` ``"ytd"`` (default; balances are fiscal-year-to-date,
     month/quarter = difference of consecutive period-to-date balances) |
-    ``"period"`` (each generation is that as-of's movement; the window sums
-    them) — a register row's ``balance_basis`` overrides it per account,
+    ``"period"`` (the account is closed monthly: each generation is its
+    month-to-date movement, the latest generation in a month is that month's
+    movement, and the window sums the months) — a register row's
+    ``balance_basis`` overrides it per account,
     ``fiscal_year_start_month`` (default 1), ``sign`` (default 1; a register
     row's ``sign`` applies per account on top). Returns None when no account is
     selected for the line in the fiscal year (the bank's CoA mapping has not
@@ -322,7 +345,7 @@ def _pl_line(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:
     sign = Decimal(str(params.get("sign", 1)))
     fy_start = fiscal_year_start(upper, start_month)
     rows = _selected_generations(rc, params, fy_start, upper)
-    # period-movement accounts: the window's generations ARE the movement
+    # period-movement accounts: the window's months (latest generation each) ARE the movement
     period_rows = [row for row in rows if row.basis == "period" and row.as_of >= lower]
     ytd_rows = [row for row in rows if row.basis != "period"]
     if not period_rows and not ytd_rows:

@@ -14,12 +14,22 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.models import Bank, BankReportingPeriod, RegulatoryPackage, RegulatoryParameter
+from app.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.schemas.regulatory_reporting import RegulatoryPackageCreate
-from app.services import loan_classification, sdi_capital, sdi_capital_checks, sdi_readiness
+from app.services import (
+    fact_derivation,
+    loan_classification,
+    regulatory_irr,
+    sdi_capital,
+    sdi_capital_checks,
+    sdi_readiness,
+)
+from app.services.live_state import load_current_facts
 from app.services.regulatory_reporting import calendar, generation
 from app.services.regulatory_reporting.le_generation import (
     _table1_thresholds,  # pyright: ignore[reportPrivateUsage]
@@ -29,6 +39,7 @@ from app.services.regulatory_reporting.le_generation import (
 from app.services.regulatory_reporting.registry import REGISTRY
 from tests.api.helpers import ORG_1, USER_1
 from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 
 _CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 
@@ -239,3 +250,54 @@ def test_sdi_large_exposures_uses_governed_s29_net_own_funds(
     )
     assert metadata["sdi_rwa_taxonomy_source"] == sdi_capital.BUCKET_MAP_CONTROL_PLANE
     assert metadata["sdi_rwa_composition_source"] == sdi_capital.COMPOSITION_CONTROL_PLANE
+
+
+def test_sdi_irrbb_live_headline_uses_the_official_net_own_funds_denominator(
+    db_session: Session,
+) -> None:
+    """Both IRR tiers divide an SDI's ΔEVE by the SAME capital base.
+
+    The fixture's ``capital_structure`` (40m CET1 − 5m goodwill + 10m Tier 2)
+    makes the two candidates differ: facts-derived Tier 1 is 35m, the signed
+    Act 930 s.29 Net Own Funds — what the official run and the
+    SDI-IRRBB-QUARTERLY return already use — is 45m. Until 2026-09-21
+    ``compute_live`` derived Tier 1 from facts for every class, so the SDI's
+    live ΔEVE/T1 headline and its filed trend point sat on different
+    denominators (BI recon H-008)."""
+    materialize_canonical_test_book(db_session)
+    sdi = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert sdi is not None
+    sdi.institution_type = "savings_and_loans"
+    db_session.flush()
+    seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    fact_derivation.derive_facts(db_session, _CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    fact_derivation.derive_current_facts(db_session, _CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    period = db_session.scalar(
+        select(BankReportingPeriod).where(
+            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+            BankReportingPeriod.period_end == FIXTURE_AS_OF,
+        )
+    )
+    assert period is not None
+
+    net_own_funds = sdi_capital.net_own_funds(db_session, _CTX, sdi, FIXTURE_AS_OF)
+    facts_tier1 = regulatory_irr._tier1_from_facts(
+        load_current_facts(db_session, _CTX, sdi, ("capital_component",)).facts
+    )
+    assert net_own_funds == Decimal("45000000")
+    assert facts_tier1 == Decimal("35000000")  # the fixture discriminates the two bases
+
+    official = regulatory_irr.run_all_irr_scenarios(
+        db_session, _CTX, SAMPLE_BANK_ID, IrrScenarioBatchCreate(reporting_period_id=period.id)
+    ).runs[0]
+    assert official.scenario_code == "baseline" and official.status == "succeeded"
+    live = regulatory_irr.compute_live(db_session, _CTX, sdi, period)
+
+    assert Decimal(official.metrics["tier1_ghs"]) == net_own_funds
+    assert Decimal(live.metrics["tier1_ghs"]) == net_own_funds
+    assert (
+        live.metrics["worst_eve_change_pct_tier1"] == official.metrics["worst_eve_change_pct_tier1"]
+    )
+    assert live.metrics["eve_base_ghs"] == official.metrics["eve_base_ghs"]
+    assert live.input_hash == official.input_hash  # the denominator stays out of the hash

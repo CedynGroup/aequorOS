@@ -27,7 +27,8 @@ Generated from `bog_forms/linemaps/bsd7a.py` + `layouts/BSD7A.json` (row tables 
   *Month-ended* = period-to-date at month end − period-to-date at the previous month end (0 in the fiscal
   year's first month). If the previous month's generation is missing the month cell stays blank
   (input_required) rather than showing the year-to-date figure. Ledgers that deliver period movements instead
-  set `balance_basis="period"` (the window sums generations). Domestic/Foreign per Guide §2 by the account's
+  set `balance_basis="period"` (the window sums the latest generation of each calendar month, so a weekly or
+  daily book never counts a month-to-date row beside its month-end). Domestic/Foreign per Guide §2 by the account's
   currency (no stated currency ⇒ base currency); a line that is tagged but has nothing in one currency reads 0
   in that column; a line with **no tagged account is blank — never a guessed split.** Sign convention: income
   and expense lines carry ledger magnitudes (the template's own arithmetic subtracts expenses); the two signed

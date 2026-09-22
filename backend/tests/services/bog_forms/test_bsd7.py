@@ -421,6 +421,75 @@ def test_pl_line_quarter_differs_from_period_to_date_off_q1(db_client: TestClien
         session.close()
 
 
+def test_pl_line_period_basis_reads_the_latest_generation_per_month(db_client: TestClient) -> None:
+    """A weekly / daily book lands several current-generation rows of one P&L
+    account in a month. A ``period``-basis account is closed monthly, so each
+    row is a month-to-date figure: the latest one in the month IS the month's
+    movement and the earlier ones are superseded by it, never added to it
+    (H-006). A same-date corrected re-push is superseded at ingestion and is
+    never read; a ``ytd`` account ignores the intra-month row outright."""
+    _materialize(db_client)
+    session = get_sessionmaker()()
+    try:
+        session.info["organization_id"] = ORG_1
+        batch = IngestionBatch(
+            organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, source_system="API_PUSH",
+            adapter_version="1.0", extraction_mode="full", status="accepted",
+            as_of_date=date(2025, 5, 31),
+        )  # fmt: skip
+        session.add(batch)
+        session.flush()
+        lineage = LineageRecord(
+            organization_id=ORG_1, ingestion_batch_id=batch.id, operation_type="ADAPTER_TRANSLATE",
+            operation_ref="weekly", input_lineage_ids=[],
+        )  # fmt: skip
+        session.add(lineage)
+        session.flush()
+
+        def gl(as_of: date, balance: int) -> CanonicalGlAccount:
+            return CanonicalGlAccount(
+                organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of_date=as_of,
+                source_system="API_PUSH", source_reference="4001",
+                ingestion_batch_id=batch.id, lineage_id=lineage.id,
+                validation_status="accepted",
+                account_code="4001", name="Loan interest", account_class="INCOME",
+                currency="GHS", balance=Decimal(balance), attributes={LINE_ATTRIBUTE: "1a"},
+            )  # fmt: skip
+
+        # month-end books Mar 300 → Apr 400 → May 550, plus a Friday book on 15 May
+        # (month-to-date 200) — four current generations, two of them in May
+        current = [gl(date(2025, 3, 31), 300), gl(date(2025, 4, 30), 400)]
+        current += [gl(date(2025, 5, 15), 200), gl(date(2025, 5, 31), 550)]
+        session.add_all(current)
+        session.flush()
+        # a corrected re-push for 31 May superseded this earlier row at ingestion
+        superseded = gl(date(2025, 5, 31), 9_999)
+        superseded.superseded_by = current[-1].id
+        session.add(superseded)
+        session.flush()
+        period = session.scalar(
+            select(BankReportingPeriod).where(
+                BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+                BankReportingPeriod.period_end == date(2025, 5, 31),
+            )
+        )
+        assert period is not None
+        resolve = get_resolver("bsd7.pl_line")
+        period_basis = {"line": "1a", "gl_classes": ["INCOME"], "balance_basis": "period"}
+        # May's movement is the 31 May figure alone — never 200 + 550
+        assert resolve(_rc(session, period, "month_domestic"), period_basis) == Decimal(550)
+        assert resolve(_rc(session, period, "quarter"), period_basis) == Decimal(950)  # Apr + May
+        assert resolve(_rc(session, period, "ptd"), period_basis) == Decimal(1250)  # Mar+Apr+May
+        # the superseded 9,999 generation is never read on either basis
+        ytd_basis = {"line": "1a", "gl_classes": ["INCOME"]}
+        assert resolve(_rc(session, period, "ptd"), ytd_basis) == Decimal(550)
+        assert resolve(_rc(session, period, "month_domestic"), ytd_basis) == Decimal(150)
+        assert resolve(_rc(session, period, "quarter"), ytd_basis) == Decimal(250)
+    finally:
+        session.rollback()
+        session.close()
+
+
 def test_average_facts_means_month_end_observations(db_client: TestClient) -> None:
     _materialize(db_client)
     session = get_sessionmaker()()

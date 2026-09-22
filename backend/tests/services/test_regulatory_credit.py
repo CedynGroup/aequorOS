@@ -723,6 +723,97 @@ def test_employer_par30_ewi_names_the_breaching_employer(db_session: Session) ->
     _ = period
 
 
+def _seed_employer_loans(
+    db_session: Session, loans: tuple[tuple[str, str, str, int, str | None], ...]
+) -> None:
+    """LOAN rows ``(reference, currency, native balance, dpd, balance_ghs)``
+    for one employer; ``balance_ghs=None`` means no ingested conversion."""
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="EXCEL_CSV",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=FIXTURE_AS_OF,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="employer-fx-book",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    common = {
+        "organization_id": ORG_1,
+        "bank_id": SAMPLE_BANK_ID,
+        "as_of_date": FIXTURE_AS_OF,
+        "source_system": "EXCEL_CSV",
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+    for ref, currency, balance, dpd, balance_ghs in loans:
+        position = CanonicalPosition(
+            **common, source_reference=ref, position_type="LOAN", currency=currency
+        )
+        db_session.add(position)
+        db_session.flush()
+        attributes: dict[str, object] = {"days_past_due": dpd, "employer": "Ghana Health Service"}
+        if balance_ghs is not None:
+            attributes["balance_ghs"] = balance_ghs
+        db_session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=ref,
+                position_id=position.id,
+                balance=Decimal(balance),
+                ifrs9_stage=1,
+                attributes=attributes,
+            )
+        )
+    db_session.commit()
+
+
+def test_employer_par30_excludes_an_unconverted_foreign_currency_loan(
+    db_session: Session,
+) -> None:
+    """A foreign-currency loan with no ingested ``balance_ghs`` is UNCONVERTED:
+    it leaves both legs of the employer's PAR30 and the covered count, exactly
+    as ``_event_amount_ghs`` treats an unconverted loan event. It used to fall
+    back to the native face value — USD 1m counted as 1m in the reporting
+    unit — which diluted the employer's PAR30 from 50% to 8.33% and turned a
+    breach of the 10% EWI into a pass. A base-currency loan with no
+    ``balance_ghs`` still counts at its (base-currency) face value."""
+    _prepare(db_session)
+    _set_thresholds(db_session, {"employer_par30_ewi_pct": Decimal("10")})
+    _seed_employer_loans(
+        db_session,
+        (
+            ("LOAN/FX/1", "GHS", "100000", 60, "100000"),
+            ("LOAN/FX/2", "GHS", "100000", 0, None),
+            ("LOAN/FX/3", "USD", "1000000", 0, None),
+        ),
+    )
+    bank = _bank(db_session)
+
+    rows, covered = regulatory_credit._employer_par30_stats(db_session, CTX, bank, FIXTURE_AS_OF)
+    assert rows == [("Ghana Health Service", Decimal("50"))]
+    assert covered == 2
+
+    fact_derivation.derive_current_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
+    db_session.commit()
+    dashboard = regulatory_credit.get_credit_dashboard(db_session, CTX, SAMPLE_BANK_ID)
+    ewi = {row.rule_code: row for row in dashboard.validations}["employer_par30_within_ewi"]
+    assert ewi.passed is False
+    assert "Ghana Health Service (50.0%)" in ewi.message
+    assert "2 loan(s) state an employer" in ewi.message
+
+
 # ---------------------------------------------------------------------------
 # loan identity: (source_system, source_reference), never the bare reference
 # ---------------------------------------------------------------------------

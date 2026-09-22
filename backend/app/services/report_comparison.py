@@ -161,12 +161,8 @@ LOWER_BETTER: frozenset[str] = frozenset(
         "ecl_stage1_ghs",
         "ecl_stage2_ghs",
         "ecl_stage3_ghs",
-        # Interest-rate sensitivity — more rate risk in the banking book.
-        # (ΔEVE keys are signed and live in MAGNITUDE_LOWER_BETTER below.)
-        "ear_up_200_ghs",
-        "ear_up_450_ghs",
-        "ear_down_200_ghs",
-        "ear_down_450_ghs",
+        # Interest-rate sensitivity: ΔEVE and EaR are signed deltas and live in
+        # MAGNITUDE_LOWER_BETTER below.
         # FX open position & value at risk — larger exposure is riskier.
         "nop_pct_tier1",
         "single_ccy_max_pct",
@@ -189,12 +185,20 @@ LOWER_BETTER: frozenset[str] = frozenset(
 #: worst scenario by ``abs()``; ``regulatory_irr`` classifies status on ``abs()``).
 #: A move from −8% to −12% is therefore a WORSE position even though the figure
 #: went down, which plain ``lower_better`` would have read as favorable.
+#: Earnings-at-risk is the same shape: ``compute_ear`` returns the signed ΔNII
+#: of a parallel shock (a gain is positive) and the limit test compares
+#: ``max(|EaR up|, |EaR down|)`` to base NII, so a +5 → −10 move is adverse
+#: and a −10 → +5 move favorable — the sign alone says nothing.
 MAGNITUDE_LOWER_BETTER: frozenset[str] = frozenset(
     {
         "delta_eve_pct_tier1",
         "delta_eve_ghs",
         "worst_eve_change_pct_tier1",
         "worst_eve_change_ghs",
+        "ear_up_200_ghs",
+        "ear_up_450_ghs",
+        "ear_down_200_ghs",
+        "ear_down_450_ghs",
     }
 )
 
@@ -202,7 +206,7 @@ MAGNITUDE_LOWER_BETTER: frozenset[str] = frozenset(
 # cover unambiguous families so future metric variants inherit the right judgment
 # instead of silently defaulting to neutral. Kept intentionally small.
 _LOWER_BETTER_SUFFIXES: tuple[str, ...] = ("_rwa_ghs",)
-_LOWER_BETTER_PREFIXES: tuple[str, ...] = ("ecl_", "ear_")
+_LOWER_BETTER_PREFIXES: tuple[str, ...] = ("ecl_",)
 
 
 #: Exact-key registries, consulted in order before any family fallback.
