@@ -551,6 +551,17 @@ const SCOPED_MODULE_ROUTES = [
   },
 ] as const;
 
+export function forecastingWorkspaceAccess(
+  pathname: string,
+  scope: ModuleScope,
+): HrefAccess | undefined {
+  const path = normalize(pathname);
+  if (moduleForPath(path) !== "forecasting" || !PUBLIC_MODULE_ROUTES.has(path)) {
+    return undefined;
+  }
+  return hrefAccess(path, scope);
+}
+
 function scopedModulePermissionReason(
   path: string,
   scope: ModuleScope,
@@ -567,6 +578,21 @@ function scopedModulePermissionReason(
     const capability = confidential
       ? routePolicy.confidentialView
       : routePolicy.aggregatedView;
+    if (routePolicy.prefix === "/forecasting") {
+      const missing: string[] = [];
+      if (scope[capability] !== true) {
+        missing.push(`Forecasting · ${confidential ? "Confidential" : "Aggregated"} · View`);
+      }
+      if (
+        ["/forecasting/nii", "/forecasting/optimizer", "/forecasting/whatif"].includes(path) &&
+        scope.forecastingAggregatedView !== true
+      ) {
+        missing.push("Forecasting · Aggregated · View");
+      }
+      return missing.length
+        ? `Requires ${missing.join(" and ")}. Ask an Org Owner to grant access via Settings → Members.`
+        : undefined;
+    }
     return scope[capability] === true
       ? undefined
       : permissionReason([
@@ -593,6 +619,7 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
   // A deep-link refresh must wait for scope resolution, never briefly 404.
   if (!scope.isResolved) return true;
   if (isPersonalSettingsPath(path)) return true;
+  if (forecastingWorkspaceAccess(path, scope)?.state === "disabled") return true;
   const moduleKey = moduleForPath(path);
   if (path === "/" && isBaselineOnlyScope(scope)) {
     return true;
