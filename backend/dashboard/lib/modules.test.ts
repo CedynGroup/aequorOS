@@ -442,7 +442,12 @@ assert.deepEqual(hrefAccess("/irr/standardised", memberOnly), {
     "Requires IRRBB · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(isHrefVisible("/irr/standardised", memberOnly), false);
-assert.equal(hubRedirectFor("/irr/standardised", memberOnly), "/");
+assert.equal(hubRedirectFor("/irr/standardised", memberOnly), null);
+assert.equal(
+  accessDeniedForPath("/irr/standardised", memberOnly)?.requirements[0]
+    .moduleScope,
+  "irrbb",
+);
 assert.equal(
   isHrefVisible("/irr/standardised", {
     ...resolved(true, true),
