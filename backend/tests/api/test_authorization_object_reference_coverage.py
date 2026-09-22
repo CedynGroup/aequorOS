@@ -274,7 +274,7 @@ def test_seeded_objects_exist_for_their_owners(coverage: Coverage) -> None:
 
 
 @pytest.mark.parametrize(
-    "kind", ["icaap_cycle", "icaap_block", "icaap_template", "filing_template"]
+    "kind", ["icaap_cycle", "icaap_block", "icaap_template", "filing_workflow_template"]
 )
 def test_home_icaap_and_filing_routes_are_reachable(coverage: Coverage, kind: str) -> None:
     """A hidden surface must not make the foreign-object sweep vacuously pass."""

@@ -1546,11 +1546,6 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         ("/api/v1/banks/{bank_id}/icaap/workflow-templates/{template_id}",),
     ),
     ObjectKind(
-        "filing_template",
-        _workflow_template(FilingWorkflowTemplate),
-        ("/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}",),
-    ),
-    ObjectKind(
         "icaap_item",
         _icaap_item,
         ("/api/v1/banks/{bank_id}/icaap/cycles/{cycle_id}/pillar2/items/{item_id}",),
@@ -1601,7 +1596,6 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "icaap_block": IcaapDataBlock,
     "icaap_attachment": IcaapAttachment,
     "icaap_template": IcaapWorkflowTemplate,
-    "filing_template": FilingWorkflowTemplate,
     "icaap_item": IcaapPillar2Item,
     "icaap_metric": IcaapAppetiteMetric,
     "icaap_review": IcaapAuditReview,
