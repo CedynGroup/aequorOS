@@ -52,7 +52,10 @@ def _uses(
     apis: dict[str, str] | None = None,
     request_properties: dict[str, dict[str, dict[str, Any]]] | None = None,
 ) -> list[dict[str, Any]]:
-    return fixpkg.alias_schema_uses(
+    # Upstream's name for the resolver, taken as the base in the origin/main
+    # merge; the signature is identical and the array shape below is the one
+    # case ported onto it.
+    return fixpkg._alias_use_schemas(  # noqa: SLF001 - the module has no public alias
         alias,
         components=components,
         model_text=models or {},

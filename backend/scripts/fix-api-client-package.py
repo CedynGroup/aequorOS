@@ -378,6 +378,52 @@ def operation_request_properties(
     return interfaces
 
 
+def _request_interface_schemas(  # noqa: PLR0913 - one caller, every part named
+    alias: str,
+    *,
+    components: dict[str, Any],
+    api_text: dict[str, str],
+    request_properties: dict[str, dict[str, dict[str, Any]]],
+    interface_pattern: re.Pattern[str],
+    property_pattern: re.Pattern[str],
+    array_pattern: re.Pattern[str],
+) -> list[dict[str, Any]]:
+    """The alias's uses inside operation REQUEST interfaces.
+
+    Split out from :func:`_alias_use_schemas` when the array shape was added:
+    the model side and the request side scan different text with different
+    failure modes, and one function doing both is where the branch count went.
+
+    A request interface resolves by exact generated name — there is no
+    ``property_name`` normalisation to undo here, because the generator has
+    already produced the operation's parameter names.
+    """
+    schemas: list[dict[str, Any]] = []
+    for text in api_text.values():
+        for interface_match in interface_pattern.finditer(text):
+            interface = interface_match.group(1)
+            properties = request_properties.get(interface)
+            if properties is None:
+                continue
+            body = interface_match.group(2)
+            for match in property_pattern.finditer(body):
+                generated_name = match.group(1)
+                if generated_name not in properties:
+                    raise ValueError(f"Could not resolve {interface}.{generated_name} for {alias}")
+                schemas.append(properties[generated_name])
+            # The same array shape as the model side, in a request interface:
+            # `values?: Array<ValuesInner>;`. Without this the alias resolves in
+            # a model but not in the POST body that carries it.
+            for match in array_pattern.finditer(body):
+                generated_name = match.group(1)
+                prop = properties.get(generated_name)
+                item_schema = None if prop is None else array_item_schema(prop, components)
+                if item_schema is None:
+                    raise ValueError(f"Could not resolve {interface}.{generated_name} for {alias}")
+                schemas.append(item_schema)
+    return schemas
+
+
 def _alias_use_schemas(
     alias: str,
     *,
@@ -451,17 +497,17 @@ def _alias_use_schemas(
                 and (item_schema := array_item_schema(value, components)) is not None
             ]
             schemas.append(resolve(consumer_component, generated_name, candidates))
-    for text in api_text.values():
-        for interface_match in interface_pattern.finditer(text):
-            interface = interface_match.group(1)
-            properties = request_properties.get(interface)
-            if properties is None:
-                continue
-            for match in property_pattern.finditer(interface_match.group(2)):
-                generated_name = match.group(1)
-                if generated_name not in properties:
-                    raise ValueError(f"Could not resolve {interface}.{generated_name} for {alias}")
-                schemas.append(properties[generated_name])
+    schemas.extend(
+        _request_interface_schemas(
+            alias,
+            components=components,
+            api_text=api_text,
+            request_properties=request_properties,
+            interface_pattern=interface_pattern,
+            property_pattern=property_pattern,
+            array_pattern=array_pattern,
+        )
+    )
     if not schemas:
         raise ValueError(f"Could not find a schema use for generated alias {alias}")
     return schemas
