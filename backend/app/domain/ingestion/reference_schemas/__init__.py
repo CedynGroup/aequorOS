@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 
@@ -27,6 +28,13 @@ class ReferenceSchema:
     optional: tuple[str, ...] = ()
     #: one row per … (documentation)
     grain: str = ""
+    #: The kind's own extra rules, when the declarative fields above cannot
+    #: express them — "the period must be the last day of the grain it names",
+    #: "a field spelt both ways must agree with itself". Set through
+    #: ``dataclasses.replace`` after the function is defined, because the rules
+    #: need the schema they belong to. :meth:`problems_for`, not
+    #: :meth:`validate_row`, is what a caller should ask.
+    row_validator: Callable[[dict], list[str]] | None = None
 
     def validate_row(self, row: dict) -> list[str]:
         """Return human-readable problems for one payload row (empty = OK)."""
@@ -47,6 +55,19 @@ class ReferenceSchema:
             if value not in (None, "") and str(value) not in allowed:
                 problems.append(f"field '{name}' must be one of {list(allowed)} (got {value!r})")
         return problems
+
+    def problems_for(self, row: dict) -> list[str]:
+        """EVERY problem with one row — the declarative checks plus this kind's
+        own rules. This is the question the ingestion path asks.
+
+        :meth:`validate_row` is the declarative half only, and the extra rules
+        call it themselves, so asking it directly silently skips them. That is
+        exactly how the period-end and alias-conflict rules came to be written,
+        tested, and never run on a real push (audit A7-07 / H-027).
+        """
+        if self.row_validator is not None:
+            return self.row_validator(row)
+        return self.validate_row(row)
 
     @property
     def columns(self) -> tuple[str, ...]:

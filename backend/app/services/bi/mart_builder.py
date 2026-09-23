@@ -98,6 +98,7 @@ from app.domain.bi.catalogue import CATALOGUE_VERSION
 from app.domain.capital import loan_classification as classification_engine
 from app.domain.gl import pl_mapping
 from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.domain.ingestion.reference_schemas import business_units
 from app.domain.positions.families import LOAN_CATEGORY_MAP, loan_family
 from app.models import (
     Bank,
@@ -142,13 +143,16 @@ INSERT_CHUNK = 5000
 #: (``regulatory_capital.BASELINE_SCENARIO`` and its siblings; pinned by test).
 BASELINE_SCENARIO = "baseline"
 
-#: The reference dataset the branch dimension is keyed on and the payload keys
-#: the code reads (D-019: ``business_unit_id`` / ``business_unit_name`` are
-#: canonical, ``unit_id`` / ``name`` the documented aliases); ``region`` is the
-#: optional declared field of D-020.
-BUSINESS_UNITS_KIND = "business_units"
-_UNIT_ID_KEYS = ("business_unit_id", "unit_id")
-_UNIT_NAME_KEYS = ("business_unit_name", "name")
+#: The reference dataset the branch dimension is keyed on. The payload keys are
+#: NOT restated here: ``business_units.normalise_row`` is the one seam that
+#: folds the documented aliases (D-019 — ``business_unit_id`` /
+#: ``business_unit_name`` are canonical, ``unit_id`` / ``name`` the aliases)
+#: onto the canonical names, and a second copy of that mapping in this module
+#: would be one more place to forget when a third spelling is documented.
+#: ``region`` is the optional declared field of D-020.
+BUSINESS_UNITS_KIND = business_units.SCHEMA.kind
+_UNIT_ID_KEY = "business_unit_id"
+_UNIT_NAME_KEY = "business_unit_name"
 _UNIT_REGION_KEY = "region"
 
 #: The daily parents retention may name. NEVER ``bi_fact_position_eom`` (D-039).
@@ -1140,8 +1144,11 @@ def _build_dim_branch(  # noqa: PLR0913 - one build carries its whole identity
     }
     rows: dict[str, dict[str, Any]] = {}
     for payload in reference_rows(db, organization_id, bank_id, BUSINESS_UNITS_KIND, as_of):
-        code = _first_text(payload, _UNIT_ID_KEYS)
-        name = _first_text(payload, _UNIT_NAME_KEYS)
+        # Normalise first, then read canonical keys only. The raw reference row
+        # is preserved verbatim upstream; this is a read-time view of it.
+        row = business_units.normalise_row(dict(payload))
+        code = _first_text(row, (_UNIT_ID_KEY,))
+        name = _first_text(row, (_UNIT_NAME_KEY,))
         if code is None or name is None:
             continue
         outlet = outlets.get(name.casefold())

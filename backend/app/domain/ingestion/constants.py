@@ -210,6 +210,11 @@ REFERENCE_DATASET_KINDS: tuple[str, ...] = (
     "remittance_flows",  # foreign inward remittances (BSD17)
     "teller_withdrawals",  # over-the-counter cash withdrawals (BSD1A)
     "interest_accruals",  # accrued-interest sub-ledger (BSD2/BSD6 accrual rows)
+    # --- BI targets (2026-09-22; migration 202609220068) ---
+    # The bank's own budget / reforecast figures: the right-hand side of the BI
+    # catalogue's variance measures. Bank-supplied like every other reference
+    # dataset — no seeding, no derivation from a filed return.
+    "performance_targets",  # budget / reforecast per measure, period and scope
 )
 ReferenceDatasetKind = Literal[
     "capital_structure",
@@ -229,6 +234,7 @@ ReferenceDatasetKind = Literal[
     "remittance_flows",
     "teller_withdrawals",
     "interest_accruals",
+    "performance_targets",
 ]
 
 LINEAGE_OPERATION_TYPES: tuple[str, ...] = (

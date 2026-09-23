@@ -6,12 +6,21 @@ request in a deployed environment is refused with ``configuration_not_approved``
 handover document and becomes something the code enforces.
 
 An entry is a reviewed commit. It pins the feature, the prompt version, the
-model id, the effort level and the environment, and records the evidence that
-justified it (the eval report digest, who approved it, when). Changing the
-prompt text bumps ``PROMPT_VERSION``; changing the model or the effort changes
-the tuple — either way the running configuration silently falls OUT of approval
-and requests are refused again. That is the point: approval is of a specific
-configuration, not of a feature.
+VENDOR, the model id, the effort level and the environment, and records the
+evidence that justified it (the eval report digest, who approved it, when).
+Changing the prompt text bumps ``PROMPT_VERSION``; changing the model or the
+effort changes the tuple — either way the running configuration silently falls
+OUT of approval and requests are refused again. That is the point: approval is of
+a specific configuration, not of a feature.
+
+``vendor`` joined the key with D-053. It is a separate dimension rather than part
+of the model id because the review is per vendor and per feature: the grounding
+validator has to be proven against THAT vendor's structured-output shape, its
+terms have to permit the data, and Anthropic-only request features (prompt
+caching, the server-side fallback beta, adaptive thinking) are absent there. A
+deployed environment with no entry for a vendor SKIPS that vendor in the tier
+rather than refusing the request — an unreviewed provider must not be reachable,
+and an unreviewed provider must not take the feature down either.
 """
 
 from __future__ import annotations
@@ -22,6 +31,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+from app.core.config import AI_VENDORS
 
 _PATH = Path(__file__).parent / "approved_configurations.json"
 _SCHEMA = "ai-approved-configurations-v1"
@@ -35,6 +46,7 @@ class ApprovalsError(ValueError):
 class ApprovedConfiguration:
     feature: str
     prompt_version: str
+    vendor: str
     model: str
     effort: str
     app_env: str
@@ -45,22 +57,36 @@ class ApprovedConfiguration:
     reference: str | None
 
     @property
-    def key(self) -> tuple[str, str, str, str, str]:
-        return (self.feature, self.prompt_version, self.model, self.effort, self.app_env)
+    def key(self) -> tuple[str, str, str, str, str, str]:
+        return (
+            self.feature,
+            self.prompt_version,
+            self.vendor,
+            self.model,
+            self.effort,
+            self.app_env,
+        )
 
 
 def _entry(raw: Any, index: int) -> ApprovedConfiguration:
     if not isinstance(raw, dict):
         message = f"approved_configurations[{index}] must be an object"
         raise ApprovalsError(message)
-    required = ("feature", "prompt_version", "model", "effort", "app_env")
+    required = ("feature", "prompt_version", "vendor", "model", "effort", "app_env")
     for field in required:
         if not isinstance(raw.get(field), str) or not raw[field]:
             message = f"approved_configurations[{index}].{field} must be a non-empty string"
             raise ApprovalsError(message)
+    if raw["vendor"] not in AI_VENDORS:
+        message = (
+            f"approved_configurations[{index}].vendor {raw['vendor']!r} is not one of "
+            f"{list(AI_VENDORS)}"
+        )
+        raise ApprovalsError(message)
     return ApprovedConfiguration(
         feature=raw["feature"],
         prompt_version=raw["prompt_version"],
+        vendor=raw["vendor"],
         model=raw["model"],
         effort=raw["effort"],
         app_env=raw["app_env"],
@@ -84,10 +110,11 @@ def load_approvals() -> tuple[ApprovedConfiguration, ...]:
     return tuple(_entry(item, index) for index, item in enumerate(entries))
 
 
-def find(  # noqa: PLR0913 - the approval key is five explicit dimensions
+def find(  # noqa: PLR0913 - the approval key is six explicit dimensions
     *,
     feature: str,
     prompt_version: str,
+    vendor: str,
     model: str,
     effort: str,
     app_env: str,
@@ -95,11 +122,11 @@ def find(  # noqa: PLR0913 - the approval key is five explicit dimensions
 ) -> ApprovedConfiguration | None:
     """The approval for this exact configuration, or None.
 
-    Exact match on all five dimensions. No wildcard, no "any effort", no
-    inheritance from another environment: an approval that could stretch is an
-    approval nobody actually gave.
+    Exact match on all six dimensions. No wildcard, no "any vendor", no "any
+    effort", no inheritance from another environment: an approval that could
+    stretch is an approval nobody actually gave.
     """
-    wanted = (feature, prompt_version, model, effort, app_env)
+    wanted = (feature, prompt_version, vendor, model, effort, app_env)
     for entry in approvals if approvals is not None else load_approvals():
         if entry.key == wanted:
             return entry

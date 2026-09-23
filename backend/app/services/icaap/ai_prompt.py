@@ -140,6 +140,7 @@ def build_request(
     """The complete request. Static first, addendum second, fact sheet last."""
     return ModelRequest(
         feature="icaap_drafting",
+        prompt_version=PROMPT_VERSION,
         system=(
             SystemBlock(text=STATIC_SYSTEM_PROMPT, cache=True),
             SystemBlock(text=section_addendum(framework, section), cache=True),

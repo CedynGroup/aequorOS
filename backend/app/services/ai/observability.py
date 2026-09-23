@@ -41,6 +41,14 @@ ALLOWED_FIELDS: frozenset[str] = frozenset(
         "model_requested",
         "model_served",
         "fallback_used",
+        # Which vendor served it, where it sat in AI_PROVIDER_TIER, what it could
+        # not honour, and everything tried before it (D-053). Codes and counts —
+        # a vendor name is not content.
+        "vendor",
+        "model_source",
+        "tier_position",
+        "degraded_capabilities",
+        "tier_attempts",
         "request_id",
         "input_tokens",
         "output_tokens",

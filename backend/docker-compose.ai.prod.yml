@@ -21,10 +21,12 @@
 #     an empty DIRECTORY in its place, which then blocks any corrected
 #     checkout (2026-07-26, two failed OpenBao deploys).
 #
-# Its Coolify environment holds: ANTHROPIC_API_KEY, DATABASE_URL,
+# Its Coolify environment holds the vendor credentials — ANTHROPIC_API_KEY,
+# OPENAI_API_KEY, GEMINI_API_KEY, GEMINI_API_URL — plus DATABASE_URL,
 # WORKER_DATABASE_URL (a BYPASSRLS role — the claim reads across tenants),
 # APP_ENV, LOG_LEVEL, and the AI_* settings. The main app's .env never
-# contains the key.
+# contains any of the keys. The tier is configured by AI_PROVIDER_TIER; a
+# vendor with no key configured is skipped by name, never silently.
 #
 # Schema: this app runs NO migration. The main app's risk-migrate owns the
 # schema, so on any release that touches the AI tables, deploy the main app
@@ -46,10 +48,13 @@ services:
     restart: unless-stopped
     # Must exceed one model call's worst case: the SDK retries timeouts, so a
     # single generate can occupy this process for
-    # AI_REQUEST_TIMEOUT_SECONDS x (AI_MAX_RETRIES + 1). Keep this in step with
-    # those two settings, or SIGTERM will cut an in-flight request whose row
-    # then waits for the reclaim window instead of finishing.
-    stop_grace_period: 1860s
+    # AI_REQUEST_TIMEOUT_SECONDS x (AI_MAX_RETRIES + 1) x len(AI_PROVIDER_TIER)
+    # — a failover legitimately spends the per-vendor budget once per vendor.
+    # At the defaults (600s x 3 x 3) that worst case is 5400s, so this must
+    # stay above it. Keep it in step with those three settings, or SIGTERM
+    # will cut an in-flight FAILOVER whose row then waits for the reclaim
+    # window instead of finishing.
+    stop_grace_period: 5460s
     healthcheck:
       # Two questions in one probe: can this worker claim at all (a role
       # without BYPASSRLS matches zero rows forever, silently), and has its

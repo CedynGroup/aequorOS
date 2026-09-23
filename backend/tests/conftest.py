@@ -139,10 +139,20 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # asserts the switched-off path — and an autouse fixture below makes a real
     # model client unconstructable, so no suite run can ever call out.
     monkeypatch.setenv("AI_COMMENTARY_ENABLED", "0")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     monkeypatch.setenv("AI_PRODUCTION_APPROVAL_REF", "")
-    monkeypatch.setenv("AI_MODEL_BACKEND", "anthropic")
+    monkeypatch.setenv("AI_MODEL_BACKEND", "tiered")
     monkeypatch.setenv("AI_RECORDED_FIXTURE_PATH", "")
+    # Every vendor credential in the tier (D-053), blanked for the same reason as
+    # the Anthropic one: all four names are in a developer's untracked .env, so a
+    # machine that has them would otherwise take the "configured" branch of the
+    # run gate and of ``backend_configured`` while CI took the other one. The
+    # autouse fixture below additionally makes each real client unconstructable,
+    # so no suite run can call out even with a key present.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_URL", "")
+    monkeypatch.setenv("AI_PROVIDER_TIER", "anthropic,openai,google")
     # The worker lane selection: unset means the core lane, which never claims
     # AI work. Pinned so a developer's WORKER_JOB_TYPES cannot change it.
     monkeypatch.setenv("WORKER_JOB_TYPES", "")
@@ -181,7 +191,6 @@ def clear_settings_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_engine.cache_clear()
 
 
-
 @pytest.fixture(autouse=True)
 def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     """No test may construct a real model client.
@@ -193,15 +202,21 @@ def _forbid_real_model_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     is checked before the backend is ever resolved.
     """
     from app.services.ai import client as ai_client  # noqa: PLC0415 - lazy SDK boundary
+    from app.services.ai import google_model, openai_model  # noqa: PLC0415 - same boundary
 
     def _refuse(self: object, *args: object, **kwargs: object) -> None:
         message = (
-            "A real AnthropicModel was constructed in a test. Use the "
+            f"A real {type(self).__name__} was constructed in a test. Use the "
             "recorded_model fixture or app.services.ai.client.use_model(...)."
         )
         raise ai_client.RealModelForbiddenError(message)
 
-    monkeypatch.setattr(ai_client.AnthropicModel, "__init__", _refuse)
+    # Every vendor in the tier, not just the first: a failover test that reached
+    # tier 2 or 3 for real would bill somebody's account, and the guard has to
+    # grow with D-053 or it silently stops covering the feature.
+    for real in (ai_client.AnthropicModel, openai_model.OpenAiModel, google_model.GoogleModel):
+        monkeypatch.setattr(real, "__init__", _refuse)
+
 
 @pytest.fixture(autouse=True)
 def fresh_settings_cache() -> Iterator[None]:
