@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowUpRight, Eye, Plus, ShieldAlert, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowUpRight, Eye, Plus, ShieldAlert, XCircle } from "lucide-react";
 import {
   endInspectorSession,
   listInspectorSessions,
@@ -10,10 +10,10 @@ import {
   startInspectorSession,
   type InspectorMode,
   type InspectorSession,
-} from '@/lib/api';
-import { useApi, useMutation } from '@/lib/use-api';
-import { useInspector } from '@/lib/inspector';
-import { DASH, fmtTimestamp, fmtTs, relTime } from '@/lib/format';
+} from "@/lib/api";
+import { useApi, useMutation } from "@/lib/use-api";
+import { useInspector } from "@/lib/inspector";
+import { DASH, fmtTimestamp, fmtTs, relTime } from "@/lib/format";
 import {
   Button,
   Chip,
@@ -32,9 +32,9 @@ import {
   SkeletonRows,
   StatusPill,
   Textarea,
-} from '@/components/ui';
-import { AdminBoundary } from './AdminBoundary';
-import { isSessionLive } from './util';
+} from "@/components/ui";
+import { AdminBoundary } from "./AdminBoundary";
+import { isSessionLive } from "./util";
 
 interface StartForm {
   organization_id: string;
@@ -44,9 +44,9 @@ interface StartForm {
 }
 
 const BLANK_FORM: StartForm = {
-  organization_id: '',
-  reason: '',
-  mode: 'consent',
+  organization_id: "",
+  reason: "",
+  mode: "consent",
   ttl_minutes: 30,
 };
 
@@ -54,10 +54,12 @@ export default function InspectorView() {
   const { active, setActive, refresh } = useInspector();
 
   const [activeOnly, setActiveOnly] = useState(false);
-  const [orgFilter, setOrgFilter] = useState('');
+  const [orgFilter, setOrgFilter] = useState("");
   const [startOpen, setStartOpen] = useState(false);
   const [form, setForm] = useState<StartForm>(BLANK_FORM);
-  const [formErr, setFormErr] = useState<Partial<Record<keyof StartForm, string>>>({});
+  const [formErr, setFormErr] = useState<
+    Partial<Record<keyof StartForm, string>>
+  >({});
 
   // A 1s tick so expiry countdowns and live/expired state stay current.
   const [now, setNow] = useState(() => Date.now());
@@ -78,12 +80,13 @@ export default function InspectorView() {
 
   const orgName = useMemo(() => {
     const map = new Map<string, string>();
-    for (const t of tenants.data?.tenants ?? []) map.set(t.organization_id, t.organization_name);
+    for (const t of tenants.data?.tenants ?? [])
+      map.set(t.organization_id, t.organization_name);
     return map;
   }, [tenants.data]);
 
   const startM = useMutation(startInspectorSession, {
-    errorContext: 'Start inspection',
+    errorContext: "Start inspection",
     successMessage: (s) => `Inspecting ${s.organization_id}`,
     onSuccess: (s) => {
       setActive(s);
@@ -96,8 +99,8 @@ export default function InspectorView() {
   });
 
   const endM = useMutation(endInspectorSession, {
-    errorContext: 'End session',
-    successMessage: 'Inspection ended',
+    errorContext: "End session",
+    successMessage: "Inspection ended",
     onSuccess: (_result, sessionId) => {
       if (active && active.session_id === sessionId) setActive(null);
       sessions.reload();
@@ -114,10 +117,16 @@ export default function InspectorView() {
 
   function submitStart() {
     const errs: Partial<Record<keyof StartForm, string>> = {};
-    if (!form.organization_id) errs.organization_id = 'Choose a tenant to inspect.';
-    if (!form.reason.trim()) errs.reason = 'A reason is required and is written to the audit log.';
-    if (!Number.isFinite(form.ttl_minutes) || form.ttl_minutes < 15 || form.ttl_minutes > 60) {
-      errs.ttl_minutes = 'TTL must be between 15 and 60 minutes.';
+    if (!form.organization_id)
+      errs.organization_id = "Choose a tenant to inspect.";
+    if (!form.reason.trim())
+      errs.reason = "A reason is required and is written to the audit log.";
+    if (
+      !Number.isFinite(form.ttl_minutes) ||
+      form.ttl_minutes < 15 ||
+      form.ttl_minutes > 60
+    ) {
+      errs.ttl_minutes = "TTL must be between 15 and 60 minutes.";
     }
     setFormErr(errs);
     if (Object.keys(errs).length > 0) return;
@@ -132,37 +141,39 @@ export default function InspectorView() {
   const rows = sessions.data?.sessions ?? [];
   const liveCount = rows.filter((s) => isSessionLive(s.expires_at, now)).length;
   const breakGlassLive = rows.filter(
-    (s) => isSessionLive(s.expires_at, now) && s.mode === 'break_glass',
+    (s) => isSessionLive(s.expires_at, now) && s.mode === "break_glass",
   ).length;
 
   const hasTenants = (tenants.data?.tenants.length ?? 0) > 0;
 
   const columns: Column<InspectorSession>[] = [
     {
-      key: 'org',
-      header: 'Organization',
+      key: "org",
+      header: "Organization",
       sortable: true,
       sortAccessor: (s) => orgName.get(s.organization_id) ?? s.organization_id,
       render: (s) => (
         <div className="min-w-0">
-          <div className="truncate text-navy">{orgName.get(s.organization_id) ?? 'Unknown org'}</div>
+          <div className="truncate text-navy">
+            {orgName.get(s.organization_id) ?? "Unknown org"}
+          </div>
           <MonoId id={s.organization_id} />
         </div>
       ),
     },
     {
-      key: 'mode',
-      header: 'Mode',
+      key: "mode",
+      header: "Mode",
       render: (s) =>
-        s.mode === 'break_glass' ? (
+        s.mode === "break_glass" ? (
           <StatusPill tone="breach">break-glass</StatusPill>
         ) : (
           <StatusPill tone="approaching">consent</StatusPill>
         ),
     },
     {
-      key: 'state',
-      header: 'State',
+      key: "state",
+      header: "State",
       sortable: true,
       sortAccessor: (s) => (isSessionLive(s.expires_at, now) ? 1 : 0),
       render: (s) =>
@@ -173,50 +184,59 @@ export default function InspectorView() {
         ),
     },
     {
-      key: 'started_by',
-      header: 'Started by',
+      key: "started_by",
+      header: "Started by",
       sortable: true,
       sortAccessor: (s) => s.started_by,
       render: (s) => <span className="text-ink">{s.started_by}</span>,
     },
     {
-      key: 'started',
-      header: 'Started',
+      key: "started",
+      header: "Started",
       sortable: true,
       sortAccessor: (s) => s.started_at,
       render: (s) => (
-        <span className="font-mono text-caption text-slate" title={fmtTs(s.started_at)}>
+        <span
+          className="font-mono text-caption text-slate"
+          title={fmtTs(s.started_at)}
+        >
           {fmtTimestamp(s.started_at)}
         </span>
       ),
     },
     {
-      key: 'expires',
-      header: 'Expires',
+      key: "expires",
+      header: "Expires",
       sortable: true,
       sortAccessor: (s) => s.expires_at,
       render: (s) => {
         const live = isSessionLive(s.expires_at, now);
         return (
-          <span className={live ? 'text-ink' : 'text-slate-light'} title={fmtTs(s.expires_at)}>
+          <span
+            className={live ? "text-ink" : "text-slate-light"}
+            title={fmtTs(s.expires_at)}
+          >
             {relTime(s.expires_at)}
           </span>
         );
       },
     },
     {
-      key: 'reason',
-      header: 'Reason',
+      key: "reason",
+      header: "Reason",
       render: (s) => (
-        <span className="block max-w-[16rem] truncate text-slate" title={s.reason}>
+        <span
+          className="block max-w-[16rem] truncate text-slate"
+          title={s.reason}
+        >
           {s.reason || DASH}
         </span>
       ),
     },
     {
-      key: 'actions',
-      header: '',
-      align: 'right',
+      key: "actions",
+      header: "",
+      align: "right",
       render: (s) => (
         <div className="flex items-center justify-end gap-1.5">
           <Link
@@ -245,7 +265,7 @@ export default function InspectorView() {
   return (
     <div>
       <PageHeader
-        breadcrumbs={[{ label: 'Admin' }, { label: 'Tenant Inspector' }]}
+        breadcrumbs={[{ label: "Admin" }, { label: "Tenant Inspector" }]}
         title="Tenant Inspector"
         subtitle="Time-boxed, audited cross-tenant inspection sessions."
         action={
@@ -259,22 +279,30 @@ export default function InspectorView() {
       <div className="mb-4 flex items-start gap-3 rounded-lg border border-action/30 bg-action-light px-4 py-3">
         <Eye size={18} className="mt-0.5 shrink-0 text-action" aria-hidden />
         <div className="text-caption text-navy">
-          <p className="font-medium">Read-only, audited, time-boxed inspection.</p>
+          <p className="font-medium">
+            Read-only, audited, time-boxed inspection.
+          </p>
           <p className="mt-0.5 text-slate">
-            Inspection lets staff view a tenant&rsquo;s data to diagnose an issue. It does{' '}
-            <strong>not</strong> sign you in as a tenant user and is not act-as-user. Every session
-            is recorded in the operator audit log, carries a required reason, and self-expires. While
-            one is active, an un-dismissable banner shows across the console until you end it.
+            Inspection lets staff view a tenant&rsquo;s data to diagnose an
+            issue. It does <strong>not</strong> sign you in as a tenant user and
+            is not act-as-user. Every session is recorded in the operator audit
+            log, carries a required reason, and self-expires. While one is
+            active, an un-dismissable banner shows across the console until you
+            end it.
           </p>
         </div>
       </div>
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <KpiStat label="Active sessions" value={liveCount} status={liveCount > 0 ? 'warn' : 'ok'} />
+        <KpiStat
+          label="Active sessions"
+          value={liveCount}
+          status={liveCount > 0 ? "warn" : "ok"}
+        />
         <KpiStat
           label="Break-glass active"
           value={breakGlassLive}
-          status={breakGlassLive > 0 ? 'crit' : 'ok'}
+          status={breakGlassLive > 0 ? "crit" : "ok"}
         />
         <KpiStat label="Sessions shown" value={rows.length} />
       </div>
@@ -282,8 +310,9 @@ export default function InspectorView() {
       {active && (
         <div className="mb-4 flex items-center gap-2 rounded-md border border-warning/30 bg-warning-light px-3 py-2 text-caption text-warning">
           <ShieldAlert size={14} className="shrink-0" aria-hidden />
-          You have an active inspection on <span className="font-mono">{active.organization_id}</span>{' '}
-          — the banner above stays until you end it.
+          You have an active inspection on{" "}
+          <span className="font-mono">{active.organization_id}</span> — the
+          banner above stays until you end it.
         </div>
       )}
 
@@ -292,10 +321,12 @@ export default function InspectorView() {
           <span className="inline-flex items-center gap-1.5">
             Inspection sessions
             <InfoTip label="About inspection sessions" width="w-80">
-              All inspection is read-only. Consent sessions view tenant data with the tenant's
-              knowledge; break-glass is emergency access without consent and requires the
-              operator_admin role — the API returns 403 otherwise, surfaced here. Sessions self-expire
-              at their TTL; state is derived from the expiry (the log is append-only).
+              All inspection is read-only. Consent sessions view tenant data
+              with the tenant&apos;s knowledge; break-glass is emergency access
+              without consent and requires the operator_admin role — the API
+              returns 403 otherwise, surfaced here. Sessions self-expire at
+              their TTL; state is derived from the expiry (the log is
+              append-only).
             </InfoTip>
           </span>
         }
@@ -304,8 +335,8 @@ export default function InspectorView() {
             <div className="w-36">
               <Select
                 aria-label="Session state filter"
-                value={activeOnly ? 'active' : 'all'}
-                onChange={(e) => setActiveOnly(e.target.value === 'active')}
+                value={activeOnly ? "active" : "all"}
+                onChange={(e) => setActiveOnly(e.target.value === "active")}
               >
                 <option value="all">All sessions</option>
                 <option value="active">Active only</option>
@@ -340,11 +371,11 @@ export default function InspectorView() {
           <DataTable
             columns={columns}
             rows={rows}
-            initialSort={{ key: 'started', dir: 'desc' }}
+            initialSort={{ key: "started", dir: "desc" }}
             emptyMessage={
               activeOnly || orgFilter
-                ? 'No sessions match these filters.'
-                : 'No inspection sessions yet. Start one to view a tenant read-only.'
+                ? "No sessions match these filters."
+                : "No inspection sessions yet. Start one to view a tenant read-only."
             }
           />
         </AdminBoundary>
@@ -380,7 +411,9 @@ export default function InspectorView() {
                 id="insp-org"
                 value={form.organization_id}
                 invalid={Boolean(formErr.organization_id)}
-                onChange={(e) => setForm((f) => ({ ...f, organization_id: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, organization_id: e.target.value }))
+                }
               >
                 <option value="">Select a tenant…</option>
                 {(tenants.data?.tenants ?? []).map((t) => (
@@ -395,7 +428,9 @@ export default function InspectorView() {
                 placeholder="OR-XXXXXXXX"
                 value={form.organization_id}
                 invalid={Boolean(formErr.organization_id)}
-                onChange={(e) => setForm((f) => ({ ...f, organization_id: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, organization_id: e.target.value }))
+                }
               />
             )}
           </Field>
@@ -413,7 +448,9 @@ export default function InspectorView() {
               placeholder="Investigating ticket #1234 — LCR figures look wrong after last ingestion."
               value={form.reason}
               invalid={Boolean(formErr.reason)}
-              onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, reason: e.target.value }))
+              }
             />
           </Field>
 
@@ -422,9 +459,9 @@ export default function InspectorView() {
               label="Mode"
               required
               hint={
-                form.mode === 'break_glass'
-                  ? 'Break-glass — requires operator_admin.'
-                  : 'Consent — read-only.'
+                form.mode === "break_glass"
+                  ? "Break-glass — requires operator_admin."
+                  : "Consent — read-only."
               }
               htmlFor="insp-mode"
             >
@@ -432,15 +469,25 @@ export default function InspectorView() {
                 id="insp-mode"
                 value={form.mode}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, mode: e.target.value as InspectorMode }))
+                  setForm((f) => ({
+                    ...f,
+                    mode: e.target.value as InspectorMode,
+                  }))
                 }
               >
                 <option value="consent">Consent — with tenant knowledge</option>
-                <option value="break_glass">Break-glass — emergency, admin</option>
+                <option value="break_glass">
+                  Break-glass — emergency, admin
+                </option>
               </Select>
             </Field>
 
-            <Field label="TTL (minutes)" required error={formErr.ttl_minutes} htmlFor="insp-ttl">
+            <Field
+              label="TTL (minutes)"
+              required
+              error={formErr.ttl_minutes}
+              htmlFor="insp-ttl"
+            >
               <Input
                 id="insp-ttl"
                 type="number"
@@ -449,16 +496,22 @@ export default function InspectorView() {
                 step={5}
                 value={String(form.ttl_minutes)}
                 invalid={Boolean(formErr.ttl_minutes)}
-                onChange={(e) => setForm((f) => ({ ...f, ttl_minutes: Number(e.target.value) }))}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    ttl_minutes: Number(e.target.value),
+                  }))
+                }
               />
             </Field>
           </div>
 
-          {form.mode === 'break_glass' && (
+          {form.mode === "break_glass" && (
             <div className="flex items-start gap-2 rounded-md border border-critical/30 bg-critical-light px-3 py-2 text-caption text-critical">
               <ShieldAlert size={14} className="mt-0.5 shrink-0" aria-hidden />
-              Break-glass grants emergency read access without tenant consent and is reserved for
-              operator_admin. The request is refused (403) if your role is insufficient.
+              Break-glass grants emergency read access without tenant consent
+              and is reserved for operator_admin. The request is refused (403)
+              if your role is insufficient.
             </div>
           )}
 

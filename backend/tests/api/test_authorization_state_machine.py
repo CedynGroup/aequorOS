@@ -503,8 +503,25 @@ def test_grant_administration_state_machine_preserves_exact_union(
                     requested.sensitivity.value,
                 )
 
+            # The grid is evaluated against the principal's rows loaded once, the
+            # way route handlers do; one cell per invariant (an allowed one where
+            # any exists) is then re-evaluated through the loading path so the two
+            # cannot silently diverge.
             with _session() as session:
                 principal = PrincipalLocator(ORG_1, _ADMIN_TARGET, PrincipalType.HUMAN)
+                principal_active = session.scalar(
+                    select(User.is_active).where(User.id == _ADMIN_TARGET)
+                )
+                bindings = list(
+                    session.scalars(
+                        select(AuthorizationBinding).where(
+                            AuthorizationBinding.organization_id == ORG_1,
+                            AuthorizationBinding.principal_user_id == _ADMIN_TARGET,
+                            AuthorizationBinding.principal_type == PrincipalType.HUMAN.value,
+                        )
+                    )
+                )
+                spot_check: tuple[Permission, ResourceLocator, bool] | None = None
                 for bank_id in _ADMIN_BANKS:
                     for module in _ADMIN_MODULES:
                         for sensitivity in _ADMIN_SENSITIVITIES:
@@ -530,13 +547,22 @@ def test_grant_administration_state_machine_preserves_exact_union(
                                 # when one complete binding matches.
                                 if permission in (Permission.APPROVE, Permission.SIGN_OFF):
                                     expected = False
-                                decision = authorization.evaluate_permission(
-                                    session,
+                                decision = authorization.evaluate_prefetched_permission(
                                     principal,
                                     permission,
                                     resource,
+                                    bindings,
+                                    principal_active=principal_active is True,
                                 )
                                 assert decision.allowed is expected
+                                if spot_check is None or expected:
+                                    spot_check = (permission, resource, expected)
+                assert spot_check is not None
+                permission, resource, expected = spot_check
+                decision = authorization.evaluate_permission(
+                    session, principal, permission, resource
+                )
+                assert decision.allowed is expected
 
     run_state_machine_as_test(
         GrantAdministrationMachine,

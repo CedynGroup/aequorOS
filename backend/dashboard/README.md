@@ -192,11 +192,27 @@ Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
 
 ## Stack
 
-- Next.js 14 (App Router) · TypeScript · Tailwind CSS
+- Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS
 - TanStack Query over the generated OpenAPI client
 - Recharts for visualization
 - NextAuth for password and OIDC SSO sign-in
 - Inter (UI) + IBM Plex Mono (numerical data) via `next/font/google`
+
+### Next.js 16 runtime conventions
+
+- The authenticated route gate lives in `proxy.ts`, which is the Next.js 16
+  replacement for `middleware.ts`. It retains the same NextAuth session and
+  impersonation-cookie decisions in the Node.js runtime.
+- Request-bound APIs are asynchronous. Await `cookies()`, `headers()`, route
+  `params`, and `searchParams`; client pages may unwrap promised route props
+  with React `use`.
+- Framework caching is not an authority layer. The login SSO probe remains
+  request-rendered with `cache: "no-store"`, while product data keeps using the
+  explicit TanStack Query policy documented below.
+- Production builds use Turbopack's per-route client manifests. The Command
+  Center bundle guard (`scripts/assert-home-route-bundle.mjs`) requires Recharts
+  and the ICAAP ProseMirror editor to stay out of the initial route graph, and
+  verifies their runtime markers in the deferred chart and section-editor chunks.
 
 ## Query cache and refresh policy
 
@@ -265,7 +281,7 @@ The backend API must be running (`cd backend && fastapi dev app/main.py --port 8
 Configure authentication using [.env.example](.env.example), including its
 production-only `AUTH_URL` guidance. Use one browser host consistently:
 `localhost` and `127.0.0.1` have separate cookie jars. In development,
-middleware warns once when `AUTH_URL` (or legacy `NEXTAUTH_URL`) names a
+the route proxy warns once when `AUTH_URL` (or legacy `NEXTAUTH_URL`) names a
 different host from the request.
 
 ### Sign-in and session recovery
@@ -293,7 +309,7 @@ other authentication errors show a generic sign-in failure.
 
 ```bash
 pnpm --filter @aequoros/dashboard typecheck   # tsc --noEmit
-pnpm --filter @aequoros/dashboard lint        # next lint
+pnpm --filter @aequoros/dashboard lint        # ESLint CLI
 pnpm --filter @aequoros/dashboard test        # unit and query-cache policy suites
 pnpm --filter @aequoros/dashboard build       # next build + home bundle guard
 pnpm --filter @aequoros/dashboard e2e         # Playwright; package journeys need S3/MinIO
@@ -362,15 +378,22 @@ pull requests and pushes do not enqueue it. A maintainer launches it from the
 Actions UI or with
 `gh workflow run dashboard-journeys.yml --ref <branch-or-commit>`. It installs
 Chromium, starts MinIO with its built-in KMS, and runs this same command against
-real CI-local object storage. The run requires at least 20 journeys to execute.
-Eight package-generation journeys are temporarily declared as expected failures
-because the canonical fixture has no exact snapshot for the regulator-selected
-anchor; the exact list is in `e2e/support/quarantine.ts`, and the repair is
-tracked in [#151](https://github.com/CedynGroup/aequorOS/issues/151). The custom
-reporter fails the manual run for any non-quarantined failure, unexpected
-quarantine pass, skipped or undiscovered quarantine entry, or `test.fail`
-declaration missing from that list. The quarantine is fixture drift, not relaxed
-product behavior: reporting still refuses to substitute an earlier snapshot.
+real CI-local object storage. The run requires at least 20 journeys to execute
+and the quarantine in `e2e/support/quarantine.ts` to match the size the
+workflow pins. A journey may only be parked there by name, declared with
+`test.fail` and a reason beside it, and with the workflow's gate edited to
+admit it; the custom reporter fails the run for any non-quarantined failure,
+unexpected quarantine pass, skipped or undiscovered quarantine entry, or
+`test.fail` declaration missing from that list.
+
+The Returns workspace opens on the regulator's latest reporting anchor on or
+before today, and a return generates only from the exact snapshot as of that
+date — an earlier book is never substituted. The canonical fixture ends at a fixed
+month, so `scripts/e2e_bootstrap.py` carries it forward
+(`extend_canonical_test_book`) one month-end snapshot at a time through the last
+month end on or before today, each repeating the canonical latest fact set. That is
+what gives the package-generation journeys a real position to generate from
+without changing how the product selects a reporting date.
 
 ## Deploy to bank.aequoros.com
 

@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Download, UserPlus } from 'lucide-react';
-import { listTenants, type OperatorTenant } from '@/lib/api';
-import { useApi } from '@/lib/use-api';
-import { fmtDate, DASH } from '@/lib/format';
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Download, UserPlus } from "lucide-react";
+import { listTenants, type OperatorTenant } from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { fmtDate, DASH } from "@/lib/format";
 import {
   Button,
   Chip,
@@ -21,8 +21,8 @@ import {
   SectionCard,
   SsoChip,
   type Column,
-} from '@/components/ui';
-import { csvFilename, downloadCsv } from '@/components/tenants/util';
+} from "@/components/ui";
+import { csvFilename, downloadCsv } from "@/components/tenants/util";
 
 /**
  * /tenants — the fleet index (the app's primary institution list).
@@ -34,7 +34,7 @@ import { csvFilename, downloadCsv } from '@/components/tenants/util';
  * client-side CSV export of the currently-filtered set.
  */
 
-type StatusFilter = 'all' | 'live' | 'empty' | 'stale';
+type StatusFilter = "all" | "live" | "empty" | "stale";
 
 /** A tenant is "live" once it has at least one reporting period. */
 function isLive(t: OperatorTenant): boolean {
@@ -58,18 +58,18 @@ function ssoRank(t: OperatorTenant): number {
 }
 
 const FILTERS: { key: StatusFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'live', label: 'Live' },
-  { key: 'empty', label: 'Empty' },
-  { key: 'stale', label: 'Stale' },
+  { key: "all", label: "All" },
+  { key: "live", label: "Live" },
+  { key: "empty", label: "Empty" },
+  { key: "stale", label: "Stale" },
 ];
 
 export default function TenantsPage() {
   const router = useRouter();
   const { data, error, loading, reload } = useApi(listTenants);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const tenants = data?.tenants ?? [];
+  const tenants = useMemo(() => data?.tenants ?? [], [data?.tenants]);
 
   const kpis = useMemo(() => {
     const total = tenants.length;
@@ -80,11 +80,11 @@ export default function TenantsPage() {
 
   const filtered = useMemo(() => {
     switch (statusFilter) {
-      case 'live':
+      case "live":
         return tenants.filter(isLive);
-      case 'empty':
+      case "empty":
         return tenants.filter((t) => !isLive(t));
-      case 'stale':
+      case "stale":
         return tenants.filter(isStale);
       default:
         return tenants;
@@ -93,46 +93,50 @@ export default function TenantsPage() {
 
   function exportCsv() {
     downloadCsv(
-      csvFilename('tenants'),
+      csvFilename("tenants"),
       [
-        'bank_name',
-        'bank_id',
-        'organization_name',
-        'organization_id',
-        'jurisdiction',
-        'currency',
-        'license_type',
-        'period_count',
-        'latest_period_end',
-        'freshness',
-        'last_ingestion_status',
-        'storage_provider',
-        'sso',
+        "bank_name",
+        "bank_id",
+        "organization_name",
+        "organization_id",
+        "jurisdiction",
+        "currency",
+        "license_type",
+        "period_count",
+        "latest_period_end",
+        "freshness",
+        "last_ingestion_status",
+        "storage_provider",
+        "sso",
       ],
       filtered.map((t) => [
-        t.bank_name ?? '',
-        t.bank_id ?? '',
+        t.bank_name ?? "",
+        t.bank_id ?? "",
         t.organization_name,
         t.organization_id,
-        t.jurisdiction_code ?? '',
-        t.currency ?? '',
-        t.license_type ?? '',
+        t.jurisdiction_code ?? "",
+        t.currency ?? "",
+        t.license_type ?? "",
         t.period_count,
-        t.latest_period_end ?? '',
-        t.freshness?.is_stale ? 'stale' : t.freshness?.modules_reported ? 'fresh' : 'none',
-        t.last_ingestion?.status ?? '',
-        t.storage_provider ?? '',
-        t.sso_enabled ? 'enabled' : t.sso_configured ? 'configured' : 'none',
+        t.latest_period_end ?? "",
+        t.freshness?.is_stale
+          ? "stale"
+          : t.freshness?.modules_reported
+            ? "fresh"
+            : "none",
+        t.last_ingestion?.status ?? "",
+        t.storage_provider ?? "",
+        t.sso_enabled ? "enabled" : t.sso_configured ? "configured" : "none",
       ]),
     );
   }
 
   const columns: Column<OperatorTenant>[] = [
     {
-      key: 'bank',
-      header: 'Bank',
+      key: "bank",
+      header: "Bank",
       sortable: true,
-      sortAccessor: (t) => t.bank_name ?? '',
+      sortAccessor: (t) => t.bank_name ?? "",
       render: (t) => (
         <div className="min-w-0">
           <Link
@@ -140,15 +144,17 @@ export default function TenantsPage() {
             className="font-medium text-navy hover:text-action"
             onClick={(e) => e.stopPropagation()}
           >
-            {t.bank_name ?? 'No bank yet'}
+            {t.bank_name ?? "No bank yet"}
           </Link>
-          <div className="font-mono text-caption text-slate">{t.bank_id ?? DASH}</div>
+          <div className="font-mono text-caption text-slate">
+            {t.bank_id ?? DASH}
+          </div>
         </div>
       ),
     },
     {
-      key: 'org',
-      header: 'Organization',
+      key: "org",
+      header: "Organization",
       sortable: true,
       sortAccessor: (t) => t.organization_name,
       render: (t) => (
@@ -159,58 +165,66 @@ export default function TenantsPage() {
       ),
     },
     {
-      key: 'jurisdiction',
-      header: 'Jur.',
+      key: "jurisdiction",
+      header: "Jur.",
       sortable: true,
-      sortAccessor: (t) => t.jurisdiction_code ?? '',
-      render: (t) => <span className="text-ink">{t.jurisdiction_code ?? DASH}</span>,
+      sortAccessor: (t) => t.jurisdiction_code ?? "",
+      render: (t) => (
+        <span className="text-ink">{t.jurisdiction_code ?? DASH}</span>
+      ),
     },
     {
-      key: 'currency',
-      header: 'Ccy',
+      key: "currency",
+      header: "Ccy",
       sortable: true,
-      sortAccessor: (t) => t.currency ?? '',
-      render: (t) => <span className="font-mono text-caption text-ink">{t.currency ?? DASH}</span>,
+      sortAccessor: (t) => t.currency ?? "",
+      render: (t) => (
+        <span className="font-mono text-caption text-ink">
+          {t.currency ?? DASH}
+        </span>
+      ),
     },
     {
-      key: 'license',
-      header: 'License',
+      key: "license",
+      header: "License",
       sortable: true,
-      sortAccessor: (t) => t.license_type ?? '',
+      sortAccessor: (t) => t.license_type ?? "",
       render: (t) => <span className="text-ink">{t.license_type ?? DASH}</span>,
     },
     {
-      key: 'periods',
-      header: 'Periods',
+      key: "periods",
+      header: "Periods",
       numeric: true,
       sortable: true,
       sortAccessor: (t) => t.period_count,
       render: (t) => (
         <div>
           <span className="text-ink">{t.period_count}</span>
-          <div className="text-caption text-slate">latest {fmtDate(t.latest_period_end)}</div>
+          <div className="text-caption text-slate">
+            latest {fmtDate(t.latest_period_end)}
+          </div>
         </div>
       ),
     },
     {
-      key: 'freshness',
-      header: 'Freshness',
+      key: "freshness",
+      header: "Freshness",
       sortable: true,
       sortAccessor: freshnessRank,
       render: (t) => <FreshnessChip summary={t.freshness} />,
     },
     {
-      key: 'ingestion',
-      header: 'Last batch',
+      key: "ingestion",
+      header: "Last batch",
       sortable: true,
-      sortAccessor: (t) => t.last_ingestion?.status ?? '',
+      sortAccessor: (t) => t.last_ingestion?.status ?? "",
       render: (t) => <IngestionChip summary={t.last_ingestion} />,
     },
     {
-      key: 'storage',
-      header: 'Storage',
+      key: "storage",
+      header: "Storage",
       sortable: true,
-      sortAccessor: (t) => t.storage_provider ?? '',
+      sortAccessor: (t) => t.storage_provider ?? "",
       render: (t) =>
         t.storage_provider ? (
           <Chip mono>{t.storage_provider}</Chip>
@@ -219,11 +233,13 @@ export default function TenantsPage() {
         ),
     },
     {
-      key: 'sso',
-      header: 'SSO',
+      key: "sso",
+      header: "SSO",
       sortable: true,
       sortAccessor: ssoRank,
-      render: (t) => <SsoChip configured={t.sso_configured} enabled={t.sso_enabled} />,
+      render: (t) => (
+        <SsoChip configured={t.sso_configured} enabled={t.sso_enabled} />
+      ),
     },
   ];
 
@@ -253,14 +269,19 @@ export default function TenantsPage() {
         }
       />
 
-      <QueryBoundary loading={loading} error={error} onRetry={reload} context="Loading tenants">
+      <QueryBoundary
+        loading={loading}
+        error={error}
+        onRetry={reload}
+        context="Loading tenants"
+      >
         {tenants.length === 0 ? (
           <SectionCard title="Fleet" noPadding>
             <EmptyState
               title="No tenants on this deployment yet"
               description={
                 <>
-                  Provision the first institution from{' '}
+                  Provision the first institution from{" "}
                   <Link href="/onboard" className="text-action hover:underline">
                     Onboard
                   </Link>
@@ -290,13 +311,13 @@ export default function TenantsPage() {
               <KpiStat
                 label="Empty"
                 value={kpis.empty}
-                status={kpis.empty > 0 ? 'warn' : undefined}
+                status={kpis.empty > 0 ? "warn" : undefined}
                 hint="awaiting first ingestion"
               />
               <KpiStat
                 label="Stale"
                 value={kpis.stale}
-                status={kpis.stale > 0 ? 'crit' : 'ok'}
+                status={kpis.stale > 0 ? "crit" : "ok"}
                 hint="live metrics behind"
               />
             </div>
@@ -315,8 +336,8 @@ export default function TenantsPage() {
                       aria-pressed={statusFilter === f.key}
                       className={`rounded px-2.5 py-1 text-micro font-medium ${
                         statusFilter === f.key
-                          ? 'bg-surface-raised text-navy shadow-subtle'
-                          : 'text-slate hover:text-navy'
+                          ? "bg-surface-raised text-navy shadow-subtle"
+                          : "text-slate hover:text-navy"
                       }`}
                     >
                       {f.label}
@@ -329,17 +350,17 @@ export default function TenantsPage() {
                 columns={columns}
                 rows={filtered}
                 density="compact"
-                initialSort={{ key: 'bank', dir: 'asc' }}
+                initialSort={{ key: "bank", dir: "asc" }}
                 getFilterText={(t) =>
                   [
-                    t.bank_name ?? '',
-                    t.bank_id ?? '',
+                    t.bank_name ?? "",
+                    t.bank_id ?? "",
                     t.organization_name,
                     t.organization_id,
-                    t.jurisdiction_code ?? '',
-                    t.currency ?? '',
-                    t.license_type ?? '',
-                  ].join(' ')
+                    t.jurisdiction_code ?? "",
+                    t.currency ?? "",
+                    t.license_type ?? "",
+                  ].join(" ")
                 }
                 filterPlaceholder="Search name, BK-…, OR-…"
                 pageSize={25}

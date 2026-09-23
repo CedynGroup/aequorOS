@@ -601,7 +601,7 @@ def test_a_pillar2_revision_can_never_be_updated(connection: Connection) -> None
         connection,
         "UPDATE icaap_pillar2_item_revisions SET note = 'revised' WHERE id = :id",
         {"id": str(revision_id)},
-        "append-only|cannot be modified|restrict",
+        "append-only|cannot be modified|restrict|permission denied",
     )
 
 
@@ -614,13 +614,13 @@ def test_a_challenge_and_its_response_can_never_be_updated(connection: Connectio
         connection,
         "UPDATE icaap_challenges SET severity = 'low' WHERE id = :id",
         {"id": str(challenge_id)},
-        "append-only|cannot be modified|restrict",
+        "append-only|cannot be modified|restrict|permission denied",
     )
     _refused(
         connection,
         "UPDATE icaap_challenge_responses SET outcome = 'deferred' WHERE id = :id",
         {"id": str(response_id)},
-        "append-only|cannot be modified|restrict",
+        "append-only|cannot be modified|restrict|permission denied",
     )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from sqlalchemy.engine import Engine, make_url
 from alembic import command
 from app.core.config import get_settings
 from app.db.session import get_engine
+from app.services.ai import observability
 from tests.api.helpers import ORG_1, ORG_2
 
 
@@ -105,6 +107,27 @@ def postgres_schema_url(database_url: str, schema_name: str, *, role: str | None
 
 @pytest.fixture
 def migrated_postgres_schema(monkeypatch: pytest.MonkeyPatch) -> Iterator[MigratedPostgresSchema]:
+    """A schema migrated to head and downgraded to base again on teardown."""
+    yield from _migrated_schema(monkeypatch, downgrade=True)
+
+
+@pytest.fixture
+def forward_migrated_postgres_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[MigratedPostgresSchema]:
+    """A schema migrated to head and dropped without downgrading.
+
+    For suites whose seeded rows the older schemas cannot carry back (issued
+    bank-scoped integration keys, ``enterprise_stress`` runs, ``bsd`` packages,
+    service identities); the round trip itself is proven by
+    :func:`migrated_postgres_schema`.
+    """
+    yield from _migrated_schema(monkeypatch, downgrade=False)
+
+
+def _migrated_schema(
+    monkeypatch: pytest.MonkeyPatch, *, downgrade: bool
+) -> Iterator[MigratedPostgresSchema]:
     test_database_url = os.environ["TEST_DATABASE_URL"]
     if not make_url(test_database_url).drivername.startswith("postgresql"):
         pytest.skip("TEST_DATABASE_URL must point to Postgres.")
@@ -129,7 +152,8 @@ def migrated_postgres_schema(monkeypatch: pytest.MonkeyPatch) -> Iterator[Migrat
     try:
         command.upgrade(alembic_config, "head")
         yield MigratedPostgresSchema(app_engine=app_engine, schema_name=schema_name)
-        command.downgrade(alembic_config, "base")
+        if downgrade:
+            command.downgrade(alembic_config, "base")
     finally:
         clear_database_caches()
         app_engine.dispose()
@@ -148,6 +172,29 @@ def alembic_config_for_app() -> Config:
 def clear_database_caches() -> None:
     get_settings.cache_clear()
     get_engine.cache_clear()
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="TEST_DATABASE_URL is required for Postgres migration smoke tests.",
+)
+def test_migrations_preserve_application_warning_logs(
+    migrated_postgres_schema: MigratedPostgresSchema,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """In-process migrations must not silence an already imported application logger."""
+    caplog.set_level(logging.WARNING, logger="app.ai")
+    observability.log_cache_miss_if_cold(
+        cache_read_input_tokens=0,
+        feature="icaap_drafting",
+        prompt_version="icaap-draft-v1",
+    )
+    assert any(
+        record.name == "app.ai"
+        and record.levelno == logging.WARNING
+        and record.getMessage() == observability.EVENT_CACHE_MISS
+        for record in caplog.records
+    )
 
 
 def test_reconciliation_migration_targets_the_regulatory_parameter_control_plane() -> None:

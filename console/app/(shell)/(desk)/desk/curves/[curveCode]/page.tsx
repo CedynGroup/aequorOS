@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useMemo, useState, type ReactNode } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useMemo, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   Calculator,
@@ -12,7 +12,7 @@ import {
   Trash2,
   Waypoints,
   XCircle,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   approveCurveDetermination,
   constructCurve,
@@ -31,16 +31,16 @@ import {
   type DeskCurveQuote,
   type DeskDetermination,
   type DeskPublication,
-} from '@/lib/api';
-import { useApi } from '@/lib/use-api';
-import { fmtDate, DASH } from '@/lib/format';
+} from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { fmtDate, DASH } from "@/lib/format";
 import {
   CeremonyBanner,
   CurveDefinitionStatusPill,
   activeDefinitionFor,
-} from '@/components/curves';
-import { CurveResultCharts } from '@/components/curves/CurveResultCharts';
-import { DeterminationStatusPill, PublicationResults } from '@/components/desk';
+} from "@/components/curves";
+import { CurveResultCharts } from "@/components/curves/CurveResultCharts";
+import { DeterminationStatusPill, PublicationResults } from "@/components/desk";
 import {
   Button,
   Chip,
@@ -60,7 +60,7 @@ import {
   SubTabs,
   type Step,
   type Tone,
-} from '@/components/ui';
+} from "@/components/ui";
 
 /**
  * /desk/curves/[curveCode] — the Curve Construction workspace (FC-4, spec §4.1).
@@ -74,11 +74,11 @@ import {
  */
 
 const INSTRUMENT_KINDS: { value: string; label: string }[] = [
-  { value: 'deposit', label: 'Deposit / MM' },
-  { value: 'bill', label: 'T-bill' },
-  { value: 'fra', label: 'FRA' },
-  { value: 'swap', label: 'Par swap' },
-  { value: 'ois', label: 'OIS swap' },
+  { value: "deposit", label: "Deposit / MM" },
+  { value: "bill", label: "T-bill" },
+  { value: "fra", label: "FRA" },
+  { value: "swap", label: "Par swap" },
+  { value: "ois", label: "OIS swap" },
 ];
 
 interface GridRow {
@@ -91,9 +91,19 @@ interface GridRow {
 }
 
 let rowSeq = 0;
-function blankRow(instrument = 'deposit', leg: DeskCurveLeg = 'discount'): GridRow {
+function blankRow(
+  instrument = "deposit",
+  leg: DeskCurveLeg = "discount",
+): GridRow {
   rowSeq += 1;
-  return { key: `r${rowSeq}`, instrument, tenor: '', quotePct: '', leg, include: true };
+  return {
+    key: `r${rowSeq}`,
+    instrument,
+    tenor: "",
+    quotePct: "",
+    leg,
+    include: true,
+  };
 }
 
 function fmtPct(dec: number, digits = 3): string {
@@ -102,27 +112,49 @@ function fmtPct(dec: number, digits = 3): string {
 
 // Per-row readiness of an instrument entry, surfaced as a state chip.
 function rowState(r: GridRow): { tone: Tone; label: string } {
-  if (!r.include) return { tone: 'neutral', label: 'excluded' };
+  if (!r.include) return { tone: "neutral", label: "excluded" };
   const q = Number(r.quotePct);
-  if (r.quotePct.trim() !== '' && Number.isNaN(q)) return { tone: 'crit', label: 'bad quote' };
-  if (r.tenor.trim() === '' || r.quotePct.trim() === '') return { tone: 'warn', label: 'incomplete' };
-  return { tone: 'ok', label: 'ready' };
+  if (r.quotePct.trim() !== "" && Number.isNaN(q))
+    return { tone: "crit", label: "bad quote" };
+  if (r.tenor.trim() === "" || r.quotePct.trim() === "")
+    return { tone: "warn", label: "incomplete" };
+  return { tone: "ok", label: "ready" };
 }
 
 // ---------------------------------------------------------------------------
 // Small presentational helpers
 // ---------------------------------------------------------------------------
 
-function ParamCell({ label, mono, children }: { label: string; mono?: boolean; children: ReactNode }) {
+function ParamCell({
+  label,
+  mono,
+  children,
+}: {
+  label: string;
+  mono?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div className="min-w-0">
-      <div className="text-micro uppercase tracking-wide text-slate-light">{label}</div>
-      <div className={`truncate text-body text-ink ${mono ? 'font-mono' : ''}`}>{children}</div>
+      <div className="text-micro uppercase tracking-wide text-slate-light">
+        {label}
+      </div>
+      <div className={`truncate text-body text-ink ${mono ? "font-mono" : ""}`}>
+        {children}
+      </div>
     </div>
   );
 }
 
-function QaGate({ ok, label, measure }: { ok: boolean; label: string; measure: string }) {
+function QaGate({
+  ok,
+  label,
+  measure,
+}: {
+  ok: boolean;
+  label: string;
+  measure: string;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border-light py-2 last:border-b-0">
       <span className="flex items-center gap-2 text-body text-ink">
@@ -151,12 +183,12 @@ export default function CurveWorkspacePage() {
 
   const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<GridRow[]>(() => [
-    blankRow('deposit'),
-    blankRow('deposit'),
-    blankRow('swap'),
-    blankRow('ois'),
+    blankRow("deposit"),
+    blankRow("deposit"),
+    blankRow("swap"),
+    blankRow("ois"),
   ]);
-  const [tab, setTab] = useState<'grid' | 'charts' | 'pillars'>('grid');
+  const [tab, setTab] = useState<"grid" | "charts" | "pillars">("grid");
 
   const [result, setResult] = useState<DeskCurveConstructResponse | null>(null);
   const [resultSig, setResultSig] = useState<string | null>(null);
@@ -165,7 +197,9 @@ export default function CurveWorkspacePage() {
 
   // FC-G2 per-cob maker-checker lifecycle: a staged DRAFT determination that
   // walks stage -> submit -> approve -> publish, four-eyes enforced server-side.
-  const [determination, setDetermination] = useState<DeskDetermination | null>(null);
+  const [determination, setDetermination] = useState<DeskDetermination | null>(
+    null,
+  );
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [lifecycleError, setLifecycleError] = useState<ApiError | null>(null);
   const [publication, setPublication] = useState<DeskPublication | null>(null);
@@ -174,9 +208,16 @@ export default function CurveWorkspacePage() {
   const session = useApi(() => getWorkforceSession(), []);
   const operatorEmail = session.data?.email ?? null;
 
-  const definitions = defs.data?.definitions ?? [];
-  const active = useMemo(() => activeDefinitionFor(definitions, asOf), [definitions, asOf]);
-  const latest = definitions[definitions.length - 1] as DeskCurveDefinition | undefined;
+  const definitions = useMemo(
+    () => defs.data?.definitions ?? [],
+    [defs.data?.definitions],
+  );
+  const active = useMemo(
+    () => activeDefinitionFor(definitions, asOf),
+    [definitions, asOf],
+  );
+  const latest = definitions[definitions.length - 1] as
+    DeskCurveDefinition | undefined;
 
   const quotes: DeskCurveQuote[] = useMemo(
     () =>
@@ -184,9 +225,9 @@ export default function CurveWorkspacePage() {
         .filter(
           (r) =>
             r.include &&
-            r.instrument.trim() !== '' &&
-            r.tenor.trim() !== '' &&
-            r.quotePct.trim() !== '' &&
+            r.instrument.trim() !== "" &&
+            r.tenor.trim() !== "" &&
+            r.quotePct.trim() !== "" &&
             !Number.isNaN(Number(r.quotePct)),
         )
         .map((r) => ({
@@ -198,13 +239,20 @@ export default function CurveWorkspacePage() {
     [rows],
   );
 
-  const currentSig = useMemo(() => JSON.stringify({ asOf, quotes }), [asOf, quotes]);
+  const currentSig = useMemo(
+    () => JSON.stringify({ asOf, quotes }),
+    [asOf, quotes],
+  );
   const stale = result !== null && resultSig !== currentSig;
-  const hasProjectionLeg = quotes.some((q) => q.leg === 'projection');
-  const incompleteCount = rows.filter((r) => r.include && rowState(r).label !== 'ready').length;
+  const hasProjectionLeg = quotes.some((q) => q.leg === "projection");
+  const incompleteCount = rows.filter(
+    (r) => r.include && rowState(r).label !== "ready",
+  ).length;
 
   function updateRow(key: string, patch: Partial<GridRow>) {
-    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    setRows((prev) =>
+      prev.map((r) => (r.key === key ? { ...r, ...patch } : r)),
+    );
   }
   function addRow() {
     setRows((prev) => [...prev, blankRow()]);
@@ -223,10 +271,14 @@ export default function CurveWorkspacePage() {
     setDetermination(null);
     setLifecycleError(null);
     try {
-      const res = await constructCurve({ curve_code: curveCode, as_of: asOf, quotes });
+      const res = await constructCurve({
+        curve_code: curveCode,
+        as_of: asOf,
+        quotes,
+      });
       setResult(res);
       setResultSig(currentSig);
-      setTab('grid');
+      setTab("grid");
     } catch (err) {
       setConstructError(toApiError(err));
     }
@@ -246,7 +298,11 @@ export default function CurveWorkspacePage() {
 
   const stageDraft = () =>
     runLifecycle(async () => {
-      const det = await stageCurveDetermination({ curve_code: curveCode, as_of: asOf, quotes });
+      const det = await stageCurveDetermination({
+        curve_code: curveCode,
+        as_of: asOf,
+        quotes,
+      });
       setDetermination(det);
     });
   const submitDraft = () =>
@@ -263,7 +319,9 @@ export default function CurveWorkspacePage() {
     runLifecycle(async () => {
       if (!determination) return;
       setPublication(await publishCurveDetermination(determination.id));
-      setDetermination((prev) => (prev ? { ...prev, status: 'published' } : prev));
+      setDetermination((prev) =>
+        prev ? { ...prev, status: "published" } : prev,
+      );
     });
 
   const isProposer =
@@ -271,7 +329,11 @@ export default function CurveWorkspacePage() {
     determination !== null &&
     operatorEmail.toLowerCase() === determination.prepared_by.toLowerCase();
   const canStage =
-    active !== null && result !== null && result.qa.passed && !stale && determination === null;
+    active !== null &&
+    result !== null &&
+    result.qa.passed &&
+    !stale &&
+    determination === null;
 
   // Lifecycle rail states (determination-status driven).
   const detStatus = determination?.status ?? null;
@@ -279,96 +341,162 @@ export default function CurveWorkspacePage() {
   const stepQaFail = result !== null && !result.qa.passed;
   const stepStaged = determination !== null;
   const stepSubmitted =
-    detStatus === 'pending_review' || detStatus === 'approved' || detStatus === 'published';
-  const stepApproved = detStatus === 'approved' || detStatus === 'published';
-  const stepPublished = publication !== null || detStatus === 'published';
+    detStatus === "pending_review" ||
+    detStatus === "approved" ||
+    detStatus === "published";
+  const stepApproved = detStatus === "approved" || detStatus === "published";
+  const stepPublished = publication !== null || detStatus === "published";
 
   const steps: Step[] = [
-    { key: 'def', label: 'Definition', status: active ? 'complete' : 'error' },
+    { key: "def", label: "Definition", status: active ? "complete" : "error" },
     {
-      key: 'construct',
-      label: 'Construct',
+      key: "construct",
+      label: "Construct",
       status: stepQaFail
-        ? 'error'
+        ? "error"
         : stepConstruct
-          ? 'complete'
+          ? "complete"
           : quotes.length
-            ? 'current'
-            : 'upcoming',
+            ? "current"
+            : "upcoming",
     },
     {
-      key: 'stage',
-      label: 'Stage draft',
-      status: stepStaged ? 'complete' : stepConstruct && result?.qa.passed ? 'current' : 'upcoming',
+      key: "stage",
+      label: "Stage draft",
+      status: stepStaged
+        ? "complete"
+        : stepConstruct && result?.qa.passed
+          ? "current"
+          : "upcoming",
     },
     {
-      key: 'submit',
-      label: 'Submit',
+      key: "submit",
+      label: "Submit",
       status:
-        detStatus === 'rejected'
-          ? 'error'
+        detStatus === "rejected"
+          ? "error"
           : stepSubmitted
-            ? 'complete'
-            : detStatus === 'draft'
-              ? 'current'
-              : 'upcoming',
+            ? "complete"
+            : detStatus === "draft"
+              ? "current"
+              : "upcoming",
     },
     {
-      key: 'approve',
-      label: 'Approve',
-      status: stepApproved ? 'complete' : detStatus === 'pending_review' ? 'current' : 'upcoming',
+      key: "approve",
+      label: "Approve",
+      status: stepApproved
+        ? "complete"
+        : detStatus === "pending_review"
+          ? "current"
+          : "upcoming",
     },
     {
-      key: 'publish',
-      label: 'Publish',
-      status: stepPublished ? 'complete' : detStatus === 'approved' ? 'current' : 'upcoming',
+      key: "publish",
+      label: "Publish",
+      status: stepPublished
+        ? "complete"
+        : detStatus === "approved"
+          ? "current"
+          : "upcoming",
     },
   ];
 
   const gridColumns: Column<DeskCurveGridRow & { idx: number }>[] = [
     {
-      key: 'idx',
-      header: '#',
+      key: "idx",
+      header: "#",
       render: (r) => (
-        <span className="font-mono text-micro text-slate">{r.idx === 0 ? 'spot' : r.idx}</span>
+        <span className="font-mono text-micro text-slate">
+          {r.idx === 0 ? "spot" : r.idx}
+        </span>
       ),
     },
-    { key: 'start', header: 'Start date', render: (r) => <span className="font-mono text-caption text-ink">{fmtDate(r.start)}</span> },
-    { key: 'end', header: 'End date', render: (r) => <span className="font-mono text-caption text-ink">{fmtDate(r.end)}</span> },
     {
-      key: 'df',
-      header: 'Discount factor',
+      key: "start",
+      header: "Start date",
+      render: (r) => (
+        <span className="font-mono text-caption text-ink">
+          {fmtDate(r.start)}
+        </span>
+      ),
+    },
+    {
+      key: "end",
+      header: "End date",
+      render: (r) => (
+        <span className="font-mono text-caption text-ink">
+          {fmtDate(r.end)}
+        </span>
+      ),
+    },
+    {
+      key: "df",
+      header: "Discount factor",
       numeric: true,
       render: (r) => r.discount_factor.toFixed(7),
     },
     {
-      key: 'yield',
-      header: 'Yield',
+      key: "yield",
+      header: "Yield",
       numeric: true,
       render: (r) => (r.idx === 0 ? DASH : fmtPct(r.forward_yield)),
     },
   ];
 
   const pillarColumns: Column<DeskCurvePillarView>[] = [
-    { key: 'instrument', header: 'Instrument', render: (p) => <span className="text-caption text-ink">{p.instrument}</span> },
-    { key: 'tenor', header: 'Tenor', render: (p) => <span className="font-mono text-caption text-ink">{p.tenor}</span> },
     {
-      key: 'leg',
-      header: 'Leg',
-      render: (p) => <Chip tone={p.leg === 'projection' ? 'accent' : 'neutral'}>{p.leg}</Chip>,
+      key: "instrument",
+      header: "Instrument",
+      render: (p) => (
+        <span className="text-caption text-ink">{p.instrument}</span>
+      ),
     },
     {
-      key: 'maturity',
-      header: 'Adjusted maturity',
-      render: (p) => <span className="font-mono text-caption text-ink">{fmtDate(p.pillar_date)}</span>,
+      key: "tenor",
+      header: "Tenor",
+      render: (p) => (
+        <span className="font-mono text-caption text-ink">{p.tenor}</span>
+      ),
     },
-    { key: 'quote', header: 'Quote', numeric: true, render: (p) => fmtPct(p.quote) },
-    { key: 'dfp', header: 'Discount factor', numeric: true, render: (p) => p.discount_factor.toFixed(7) },
     {
-      key: 'residual',
-      header: 'Reprice residual',
+      key: "leg",
+      header: "Leg",
+      render: (p) => (
+        <Chip tone={p.leg === "projection" ? "accent" : "neutral"}>
+          {p.leg}
+        </Chip>
+      ),
+    },
+    {
+      key: "maturity",
+      header: "Adjusted maturity",
+      render: (p) => (
+        <span className="font-mono text-caption text-ink">
+          {fmtDate(p.pillar_date)}
+        </span>
+      ),
+    },
+    {
+      key: "quote",
+      header: "Quote",
       numeric: true,
-      render: (p) => <span className="text-slate">{p.reprice_residual.toExponential(2)}</span>,
+      render: (p) => fmtPct(p.quote),
+    },
+    {
+      key: "dfp",
+      header: "Discount factor",
+      numeric: true,
+      render: (p) => p.discount_factor.toFixed(7),
+    },
+    {
+      key: "residual",
+      header: "Reprice residual",
+      numeric: true,
+      render: (p) => (
+        <span className="text-slate">
+          {p.reprice_residual.toExponential(2)}
+        </span>
+      ),
     },
   ];
 
@@ -393,10 +521,13 @@ export default function CurveWorkspacePage() {
               title={`No definition named ${curveCode}`}
               description={
                 <>
-                  This curve code is not in the register.{' '}
-                  <Link href="/desk/curves" className="text-action hover:underline">
+                  This curve code is not in the register.{" "}
+                  <Link
+                    href="/desk/curves"
+                    className="text-action hover:underline"
+                  >
                     Back to definitions
-                  </Link>{' '}
+                  </Link>{" "}
                   to create one.
                 </>
               }
@@ -425,7 +556,9 @@ export default function CurveWorkspacePage() {
                         )}
                       </>
                     ) : (
-                      <StatusPill tone="amber">no approved definition effective on {asOf}</StatusPill>
+                      <StatusPill tone="amber">
+                        no approved definition effective on {asOf}
+                      </StatusPill>
                     )}
                   </div>
                 </div>
@@ -438,17 +571,24 @@ export default function CurveWorkspacePage() {
             {!active && (
               <div className="card p-5">
                 <CeremonyBanner>
-                  <p className="font-medium text-navy">No approved definition for this as-of date</p>
+                  <p className="font-medium text-navy">
+                    No approved definition for this as-of date
+                  </p>
                   <p className="mt-1">
-                    Construction applies the latest APPROVED version whose effective date is on or
-                    before the cob. Approve a version under{' '}
-                    <Link href="/desk/curves" className="text-action hover:underline">
+                    Construction applies the latest APPROVED version whose
+                    effective date is on or before the cob. Approve a version
+                    under{" "}
+                    <Link
+                      href="/desk/curves"
+                      className="text-action hover:underline"
+                    >
                       Curve definitions
-                    </Link>{' '}
-                    or pick an as-of date on or after an approved version&apos;s effective date.
+                    </Link>{" "}
+                    or pick an as-of date on or after an approved version&apos;s
+                    effective date.
                     {latest && (
                       <>
-                        {' '}
+                        {" "}
                         Latest version is v{latest.version} ({latest.status}).
                       </>
                     )}
@@ -463,9 +603,9 @@ export default function CurveWorkspacePage() {
                 <span className="inline-flex items-center gap-1.5">
                   Assumptions
                   <InfoTip label="About the assumptions panel">
-                    Every field except the as-of date is derived from the approved definition.
-                    Changing one is a Track-2 governance event on the definitions page — never a
-                    run-time input here.
+                    Every field except the as-of date is derived from the
+                    approved definition. Changing one is a Track-2 governance
+                    event on the definitions page — never a run-time input here.
                   </InfoTip>
                 </span>
               }
@@ -477,12 +617,19 @@ export default function CurveWorkspacePage() {
                   hint="Track-1 run input — valuation date; resolves the effective definition."
                   className="max-w-xs"
                 >
-                  <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+                  <Input
+                    type="date"
+                    value={asOf}
+                    onChange={(e) => setAsOf(e.target.value)}
+                  />
                 </Field>
                 <p className="flex items-end text-caption text-slate">
-                  Every field below is derived from the approved definition. Changing one is a
-                  Track-2 event under{' '}
-                  <Link href="/desk/curves" className="ml-1 text-action hover:underline">
+                  Every field below is derived from the approved definition.
+                  Changing one is a Track-2 event under{" "}
+                  <Link
+                    href="/desk/curves"
+                    className="ml-1 text-action hover:underline"
+                  >
                     Curve definitions
                   </Link>
                   .
@@ -490,21 +637,47 @@ export default function CurveWorkspacePage() {
               </div>
               {active && (
                 <div className="mt-4 grid gap-4 border-t border-border-light pt-4 sm:grid-cols-3 lg:grid-cols-4">
-                  <ParamCell label="Currency" mono>{active.currency}</ParamCell>
+                  <ParamCell label="Currency" mono>
+                    {active.currency}
+                  </ParamCell>
                   <ParamCell label="Calendar">{active.calendar_name}</ParamCell>
-                  <ParamCell label="Curve definition" mono>{active.curve_code} v{active.version}</ParamCell>
+                  <ParamCell label="Curve definition" mono>
+                    {active.curve_code} v{active.version}
+                  </ParamCell>
                   <ParamCell label="Curve kind">{active.curve_kind}</ParamCell>
-                  <ParamCell label="Projection index" mono>{active.projection_index ?? DASH}</ParamCell>
-                  <ParamCell label="Discount curve" mono>{active.discount_curve_code ?? DASH}</ParamCell>
-                  <ParamCell label="Payment frequency">{active.payment_frequency ?? DASH}</ParamCell>
-                  <ParamCell label="Payment interval">{active.payment_interval_months}m</ParamCell>
-                  <ParamCell label="Curve frequency" mono>{active.curve_frequency}</ParamCell>
-                  <ParamCell label="Interpolation">{active.interpolation_method}</ParamCell>
-                  <ParamCell label="Output basis (Convert to)" mono>{active.output_daycount}</ParamCell>
-                  <ParamCell label="Spot lag">{active.spot_lag_days}d</ParamCell>
-                  <ParamCell label="Roll convention">{active.roll_convention}</ParamCell>
-                  <ParamCell label="Extrapolation">{active.extrapolation_rule}</ParamCell>
-                  <ParamCell label="Instrument set" mono>{active.instrument_set_ref}</ParamCell>
+                  <ParamCell label="Projection index" mono>
+                    {active.projection_index ?? DASH}
+                  </ParamCell>
+                  <ParamCell label="Discount curve" mono>
+                    {active.discount_curve_code ?? DASH}
+                  </ParamCell>
+                  <ParamCell label="Payment frequency">
+                    {active.payment_frequency ?? DASH}
+                  </ParamCell>
+                  <ParamCell label="Payment interval">
+                    {active.payment_interval_months}m
+                  </ParamCell>
+                  <ParamCell label="Curve frequency" mono>
+                    {active.curve_frequency}
+                  </ParamCell>
+                  <ParamCell label="Interpolation">
+                    {active.interpolation_method}
+                  </ParamCell>
+                  <ParamCell label="Output basis (Convert to)" mono>
+                    {active.output_daycount}
+                  </ParamCell>
+                  <ParamCell label="Spot lag">
+                    {active.spot_lag_days}d
+                  </ParamCell>
+                  <ParamCell label="Roll convention">
+                    {active.roll_convention}
+                  </ParamCell>
+                  <ParamCell label="Extrapolation">
+                    {active.extrapolation_rule}
+                  </ParamCell>
+                  <ParamCell label="Instrument set" mono>
+                    {active.instrument_set_ref}
+                  </ParamCell>
                 </div>
               )}
             </SectionCard>
@@ -514,7 +687,12 @@ export default function CurveWorkspacePage() {
               title="Instrument grid"
               subtitle="Enter this cob's quotes. Rate is a percentage; the discount leg defines the discounting curve, the projection leg the forward index."
               actions={
-                <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={addRow}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Plus size={13} />}
+                  onClick={addRow}
+                >
                   Add instrument
                 </Button>
               }
@@ -527,7 +705,9 @@ export default function CurveWorkspacePage() {
                       <th className="px-3 py-2 font-medium">Include</th>
                       <th className="px-3 py-2 font-medium">Instrument</th>
                       <th className="px-3 py-2 font-medium">Tenor</th>
-                      <th className="px-3 py-2 text-right font-medium">Quote %</th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Quote %
+                      </th>
                       <th className="px-3 py-2 font-medium">Leg</th>
                       <th className="px-3 py-2 font-medium">State</th>
                       <th className="px-3 py-2 font-medium" />
@@ -536,14 +716,21 @@ export default function CurveWorkspacePage() {
                   <tbody>
                     {rows.map((r) => {
                       const st = rowState(r);
-                      const quoteInvalid = r.quotePct.trim() !== '' && Number.isNaN(Number(r.quotePct));
+                      const quoteInvalid =
+                        r.quotePct.trim() !== "" &&
+                        Number.isNaN(Number(r.quotePct));
                       return (
-                        <tr key={r.key} className="border-b border-border-light last:border-b-0">
+                        <tr
+                          key={r.key}
+                          className="border-b border-border-light last:border-b-0"
+                        >
                           <td className="px-3 py-1.5">
                             <input
                               type="checkbox"
                               checked={r.include}
-                              onChange={(e) => updateRow(r.key, { include: e.target.checked })}
+                              onChange={(e) =>
+                                updateRow(r.key, { include: e.target.checked })
+                              }
                               className="h-4 w-4 accent-[color:rgb(var(--accent))]"
                               aria-label="Include in construction"
                             />
@@ -551,7 +738,9 @@ export default function CurveWorkspacePage() {
                           <td className="px-3 py-1.5">
                             <Select
                               value={r.instrument}
-                              onChange={(e) => updateRow(r.key, { instrument: e.target.value })}
+                              onChange={(e) =>
+                                updateRow(r.key, { instrument: e.target.value })
+                              }
                               className="py-1.5"
                             >
                               {INSTRUMENT_KINDS.map((k) => (
@@ -564,15 +753,21 @@ export default function CurveWorkspacePage() {
                           <td className="px-3 py-1.5">
                             <Input
                               value={r.tenor}
-                              onChange={(e) => updateRow(r.key, { tenor: e.target.value })}
-                              placeholder={r.instrument === 'fra' ? '3x6' : '3M'}
+                              onChange={(e) =>
+                                updateRow(r.key, { tenor: e.target.value })
+                              }
+                              placeholder={
+                                r.instrument === "fra" ? "3x6" : "3M"
+                              }
                               className="w-24 py-1.5 font-mono"
                             />
                           </td>
                           <td className="px-3 py-1.5 text-right">
                             <Input
                               value={r.quotePct}
-                              onChange={(e) => updateRow(r.key, { quotePct: e.target.value })}
+                              onChange={(e) =>
+                                updateRow(r.key, { quotePct: e.target.value })
+                              }
                               inputMode="decimal"
                               placeholder="0.000"
                               invalid={quoteInvalid}
@@ -582,7 +777,11 @@ export default function CurveWorkspacePage() {
                           <td className="px-3 py-1.5">
                             <Select
                               value={r.leg}
-                              onChange={(e) => updateRow(r.key, { leg: e.target.value as DeskCurveLeg })}
+                              onChange={(e) =>
+                                updateRow(r.key, {
+                                  leg: e.target.value as DeskCurveLeg,
+                                })
+                              }
                               className="py-1.5"
                             >
                               <option value="discount">discount</option>
@@ -607,7 +806,10 @@ export default function CurveWorkspacePage() {
                     })}
                     {rows.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-3 py-4 text-center text-caption text-slate">
+                        <td
+                          colSpan={7}
+                          className="px-3 py-4 text-center text-caption text-slate"
+                        >
                           No instruments — add at least one discount-leg quote.
                         </td>
                       </tr>
@@ -625,25 +827,35 @@ export default function CurveWorkspacePage() {
                   Run construction
                 </Button>
                 <span className="text-caption text-slate">
-                  {quotes.length} quote{quotes.length === 1 ? '' : 's'} ready
+                  {quotes.length} quote{quotes.length === 1 ? "" : "s"} ready
                   {hasProjectionLeg
-                    ? ' · multi-curve (projection on discount)'
-                    : ' · self-discounting'}
+                    ? " · multi-curve (projection on discount)"
+                    : " · self-discounting"}
                 </span>
                 {incompleteCount > 0 && (
                   <Chip tone="warn">
-                    {incompleteCount} included row{incompleteCount === 1 ? '' : 's'} incomplete — excluded
+                    {incompleteCount} included row
+                    {incompleteCount === 1 ? "" : "s"} incomplete — excluded
                   </Chip>
                 )}
-                {stale && <Chip tone="warn">inputs changed — re-run construction</Chip>}
+                {stale && (
+                  <Chip tone="warn">inputs changed — re-run construction</Chip>
+                )}
               </div>
               {constructError && (
                 <div className="px-5 pb-5">
-                  <ErrorPanel error={constructError} context="Running construction" />
+                  <ErrorPanel
+                    error={constructError}
+                    context="Running construction"
+                  />
                   {constructError.status === 409 && (
                     <p className="mt-2 text-caption text-slate">
-                      No approved definition is effective on {asOf} — approve one under{' '}
-                      <Link href="/desk/curves" className="text-action hover:underline">
+                      No approved definition is effective on {asOf} — approve
+                      one under{" "}
+                      <Link
+                        href="/desk/curves"
+                        className="text-action hover:underline"
+                      >
                         Curve definitions
                       </Link>
                       .
@@ -659,8 +871,9 @@ export default function CurveWorkspacePage() {
                 {stale && (
                   <CeremonyBanner>
                     <p className="text-navy">
-                      The grid or as-of date changed since this result was computed. Re-run
-                      construction before publishing — the figures below are from the previous inputs.
+                      The grid or as-of date changed since this result was
+                      computed. Re-run construction before publishing — the
+                      figures below are from the previous inputs.
                     </p>
                   </CeremonyBanner>
                 )}
@@ -670,9 +883,13 @@ export default function CurveWorkspacePage() {
                   title="QA gates"
                   actions={
                     result.qa.passed ? (
-                      <StatusPill tone="success">all hard gates pass</StatusPill>
+                      <StatusPill tone="success">
+                        all hard gates pass
+                      </StatusPill>
                     ) : (
-                      <StatusPill tone="critical">hard gate failed — publish blocked</StatusPill>
+                      <StatusPill tone="critical">
+                        hard gate failed — publish blocked
+                      </StatusPill>
                     )
                   }
                 >
@@ -691,7 +908,11 @@ export default function CurveWorkspacePage() {
                     label="Forward oscillation"
                     measure={`TV ratio ${result.qa.forward_total_variation_ratio.toFixed(2)}`}
                   />
-                  <QaGate ok={result.qa.monotone_df_pass} label="Monotone discount factors" measure="0 < DF ≤ 1" />
+                  <QaGate
+                    ok={result.qa.monotone_df_pass}
+                    label="Monotone discount factors"
+                    measure="0 < DF ≤ 1"
+                  />
                   <QaGate
                     ok={result.qa.pillar_coverage_pass}
                     label="Pillar coverage"
@@ -704,8 +925,11 @@ export default function CurveWorkspacePage() {
                   title="Construction results"
                   subtitle={
                     <>
-                      Applying v{result.definition_version} · as of {fmtDate(result.as_of)} · yields
-                      in <span className="font-mono text-ink">{result.output_basis}</span>
+                      Applying v{result.definition_version} · as of{" "}
+                      {fmtDate(result.as_of)} · yields in{" "}
+                      <span className="font-mono text-ink">
+                        {result.output_basis}
+                      </span>
                     </>
                   }
                   actions={
@@ -714,31 +938,38 @@ export default function CurveWorkspacePage() {
                       <span className="font-mono text-caption text-ink">
                         {result.input_digest.slice(0, 12)}…
                       </span>
-                      <CopyButton value={result.input_digest} label="Copy input digest" />
+                      <CopyButton
+                        value={result.input_digest}
+                        label="Copy input digest"
+                      />
                     </span>
                   }
                   noPadding
                 >
                   <SubTabs
                     items={[
-                      { key: 'grid', label: 'Forward grid' },
-                      { key: 'charts', label: 'Charts' },
-                      { key: 'pillars', label: 'Pillar nodes' },
+                      { key: "grid", label: "Forward grid" },
+                      { key: "charts", label: "Charts" },
+                      { key: "pillars", label: "Pillar nodes" },
                     ]}
                     active={tab}
-                    onChange={(k) => setTab(k as 'grid' | 'charts' | 'pillars')}
+                    onChange={(k) => setTab(k as "grid" | "charts" | "pillars")}
                   />
-                  {tab === 'grid' && (
+                  {tab === "grid" && (
                     <DataTable
                       columns={gridColumns}
                       rows={result.rows.map((row, i) => ({ ...row, idx: i }))}
                       density="compact"
-                      rowClassName={(r) => (r.idx === 0 ? 'bg-surface/60' : '')}
+                      rowClassName={(r) => (r.idx === 0 ? "bg-surface/60" : "")}
                     />
                   )}
-                  {tab === 'charts' && <CurveResultCharts result={result} />}
-                  {tab === 'pillars' && (
-                    <DataTable columns={pillarColumns} rows={result.pillars} density="compact" />
+                  {tab === "charts" && <CurveResultCharts result={result} />}
+                  {tab === "pillars" && (
+                    <DataTable
+                      columns={pillarColumns}
+                      rows={result.pillars}
+                      density="compact"
+                    />
                   )}
                 </SectionCard>
 
@@ -749,18 +980,25 @@ export default function CurveWorkspacePage() {
                     determination ? (
                       <DeterminationStatusPill status={determination.status} />
                     ) : result.qa.passed ? (
-                      <StatusPill tone="success">QA green — ready to stage</StatusPill>
+                      <StatusPill tone="success">
+                        QA green — ready to stage
+                      </StatusPill>
                     ) : (
-                      <StatusPill tone="critical">QA blocks the draft</StatusPill>
+                      <StatusPill tone="critical">
+                        QA blocks the draft
+                      </StatusPill>
                     )
                   }
                 >
                   <p className="text-caption text-slate">
-                    A weekly build is a per-cob determination under maker-checker: stage a draft, an
-                    analyst submits it, a <span className="font-medium">distinct</span> supervisor
-                    approves it, and only then does it fan out to every bank under{' '}
-                    <span className="font-mono text-ink">{curveCode}</span> (bitemporal + lineage +
-                    audit). Definition-level dual control still applies underneath.
+                    A weekly build is a per-cob determination under
+                    maker-checker: stage a draft, an analyst submits it, a{" "}
+                    <span className="font-medium">distinct</span> supervisor
+                    approves it, and only then does it fan out to every bank
+                    under{" "}
+                    <span className="font-mono text-ink">{curveCode}</span>{" "}
+                    (bitemporal + lineage + audit). Definition-level dual
+                    control still applies underneath.
                   </p>
 
                   {/* Stage: available only after a QA-green construction */}
@@ -777,10 +1015,10 @@ export default function CurveWorkspacePage() {
                       ) : (
                         <p className="text-caption text-slate">
                           {stale
-                            ? 'Re-run construction on the current inputs to stage a draft.'
+                            ? "Re-run construction on the current inputs to stage a draft."
                             : result.qa.passed
-                              ? 'Staging needs an approved definition effective on the as-of date.'
-                              : 'Staging is disabled until every hard QA gate passes.'}
+                              ? "Staging needs an approved definition effective on the as-of date."
+                              : "Staging is disabled until every hard QA gate passes."}
                         </p>
                       )}
                     </div>
@@ -791,22 +1029,28 @@ export default function CurveWorkspacePage() {
                     <div className="mt-4 space-y-3 border-t border-border-light pt-4">
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-slate">
                         <span>
-                          determination{' '}
-                          <span className="font-mono text-ink">{determination.id.slice(0, 8)}…</span>
+                          determination{" "}
+                          <span className="font-mono text-ink">
+                            {determination.id.slice(0, 8)}…
+                          </span>
                         </span>
                         <span>
-                          prepared by{' '}
-                          <span className="font-mono text-ink">{determination.prepared_by}</span>
+                          prepared by{" "}
+                          <span className="font-mono text-ink">
+                            {determination.prepared_by}
+                          </span>
                         </span>
                         {determination.reviewed_by && (
                           <span>
-                            approved by{' '}
-                            <span className="font-mono text-ink">{determination.reviewed_by}</span>
+                            approved by{" "}
+                            <span className="font-mono text-ink">
+                              {determination.reviewed_by}
+                            </span>
                           </span>
                         )}
                       </div>
 
-                      {determination.status === 'draft' && (
+                      {determination.status === "draft" && (
                         <Button
                           icon={<FileText size={14} />}
                           loading={lifecycleBusy}
@@ -816,7 +1060,7 @@ export default function CurveWorkspacePage() {
                         </Button>
                       )}
 
-                      {determination.status === 'pending_review' && (
+                      {determination.status === "pending_review" && (
                         <div className="space-y-2">
                           <Button
                             icon={<CheckCircle2 size={14} />}
@@ -829,22 +1073,26 @@ export default function CurveWorkspacePage() {
                           {isProposer && (
                             <p className="flex items-center gap-1.5 text-caption text-warning">
                               <XCircle size={13} className="shrink-0" />
-                              You staged this determination — a different supervisor must approve it.
+                              You staged this determination — a different
+                              supervisor must approve it.
                             </p>
                           )}
                         </div>
                       )}
 
-                      {determination.status === 'approved' && (
+                      {determination.status === "approved" && (
                         <div className="space-y-3">
                           <CeremonyBanner>
                             <p className="font-medium text-navy">
-                              Approved — publishing writes golden copy for every tenant
+                              Approved — publishing writes golden copy for every
+                              tenant
                             </p>
                             <p className="mt-1">
-                              Curve <span className="font-mono">{curveCode}</span> v{active?.version}{' '}
-                              as of {asOf}. Per-bank failures are recorded, not rolled back;
-                              re-publishing heals a partial fan-out.
+                              Curve{" "}
+                              <span className="font-mono">{curveCode}</span> v
+                              {active?.version} as of {asOf}. Per-bank failures
+                              are recorded, not rolled back; re-publishing heals
+                              a partial fan-out.
                             </p>
                           </CeremonyBanner>
                           <Button
@@ -857,17 +1105,20 @@ export default function CurveWorkspacePage() {
                         </div>
                       )}
 
-                      {determination.status === 'rejected' && (
+                      {determination.status === "rejected" && (
                         <p className="text-caption text-critical">
                           This determination was rejected
-                          {determination.review_note ? `: ${determination.review_note}` : ''}. Re-run
-                          construction to stage a fresh draft.
+                          {determination.review_note
+                            ? `: ${determination.review_note}`
+                            : ""}
+                          . Re-run construction to stage a fresh draft.
                         </p>
                       )}
 
-                      {determination.status === 'published' && !publication && (
+                      {determination.status === "published" && !publication && (
                         <p className="flex items-center gap-1.5 text-caption text-success">
-                          <CheckCircle2 size={13} className="shrink-0" /> Published to golden copy.
+                          <CheckCircle2 size={13} className="shrink-0" />{" "}
+                          Published to golden copy.
                         </p>
                       )}
                     </div>
@@ -875,13 +1126,18 @@ export default function CurveWorkspacePage() {
 
                   {lifecycleError && (
                     <div className="mt-3">
-                      <ErrorPanel error={lifecycleError} context="Curve governance action" />
+                      <ErrorPanel
+                        error={lifecycleError}
+                        context="Curve governance action"
+                      />
                     </div>
                   )}
 
                   {publication && (
                     <div className="mt-4 border-t border-border-light pt-4">
-                      <h3 className="mb-2 text-body font-medium text-navy">Publication fan-out</h3>
+                      <h3 className="mb-2 text-body font-medium text-navy">
+                        Publication fan-out
+                      </h3>
                       <PublicationResults publication={publication} />
                     </div>
                   )}
@@ -908,24 +1164,52 @@ export default function CurveWorkspacePage() {
                   </summary>
                   <div className="space-y-4 border-t border-border-light px-5 py-4">
                     <p className="rounded border border-border-light bg-surface p-3 text-caption text-slate">
-                      <span className="font-medium text-ink">Rationale:</span>{' '}
+                      <span className="font-medium text-ink">Rationale:</span>{" "}
                       {active.change_rationale}
                     </p>
                     <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                      <ParamCell label="Instrument set" mono>{active.instrument_set_ref}</ParamCell>
-                      <ParamCell label="Interpolation">{active.interpolation_method}</ParamCell>
-                      <ParamCell label="Output basis" mono>{active.output_daycount}</ParamCell>
-                      <ParamCell label="Calendar">{active.calendar_name}</ParamCell>
-                      <ParamCell label="Curve frequency" mono>{active.curve_frequency}</ParamCell>
-                      <ParamCell label="Payment interval">{active.payment_interval_months}m</ParamCell>
-                      <ParamCell label="Spot lag">{active.spot_lag_days}d</ParamCell>
-                      <ParamCell label="Roll convention">{active.roll_convention}</ParamCell>
-                      <ParamCell label="Extrapolation">{active.extrapolation_rule}</ParamCell>
-                      <ParamCell label="Projection index" mono>{active.projection_index ?? DASH}</ParamCell>
-                      <ParamCell label="Discount curve" mono>{active.discount_curve_code ?? DASH}</ParamCell>
-                      <ParamCell label="Proposed by" mono>{active.proposed_by}</ParamCell>
-                      <ParamCell label="Approved by" mono>{active.approved_by ?? DASH}</ParamCell>
-                      <ParamCell label="Effective from">{fmtDate(active.effective_from)}</ParamCell>
+                      <ParamCell label="Instrument set" mono>
+                        {active.instrument_set_ref}
+                      </ParamCell>
+                      <ParamCell label="Interpolation">
+                        {active.interpolation_method}
+                      </ParamCell>
+                      <ParamCell label="Output basis" mono>
+                        {active.output_daycount}
+                      </ParamCell>
+                      <ParamCell label="Calendar">
+                        {active.calendar_name}
+                      </ParamCell>
+                      <ParamCell label="Curve frequency" mono>
+                        {active.curve_frequency}
+                      </ParamCell>
+                      <ParamCell label="Payment interval">
+                        {active.payment_interval_months}m
+                      </ParamCell>
+                      <ParamCell label="Spot lag">
+                        {active.spot_lag_days}d
+                      </ParamCell>
+                      <ParamCell label="Roll convention">
+                        {active.roll_convention}
+                      </ParamCell>
+                      <ParamCell label="Extrapolation">
+                        {active.extrapolation_rule}
+                      </ParamCell>
+                      <ParamCell label="Projection index" mono>
+                        {active.projection_index ?? DASH}
+                      </ParamCell>
+                      <ParamCell label="Discount curve" mono>
+                        {active.discount_curve_code ?? DASH}
+                      </ParamCell>
+                      <ParamCell label="Proposed by" mono>
+                        {active.proposed_by}
+                      </ParamCell>
+                      <ParamCell label="Approved by" mono>
+                        {active.approved_by ?? DASH}
+                      </ParamCell>
+                      <ParamCell label="Effective from">
+                        {fmtDate(active.effective_from)}
+                      </ParamCell>
                     </div>
                     {Object.keys(active.params).length > 0 && (
                       <div>

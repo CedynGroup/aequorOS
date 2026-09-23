@@ -415,6 +415,75 @@ Generative suites add coverage beyond the fixed examples:
   positive control before tenant-A requests. Other UUID resource kinds still use
   unknown IDs, so those requests do not prove isolation of existing child rows.
 
+Two paired tests extend that route enumeration to the classic IDOR shape: a
+route that carries a second object identifier beside `{bank_id}` — a
+`package_id`, `signoff_id`, `analysis_id`, `declaration_id`, `connection_id` and
+the rest — in its path, or a UUID `*_id` in its request body or query. Both draw
+the same census and object catalogue from `tests/fixtures/object_references.py`
+and `tests/fixtures/object_reference_routes.py`, seed one real object of every
+such kind for three tenants (organization A bank A, organization A sibling bank
+A2, organization B bank B), and reference a foreign tenant's object under bank
+A. Across the cross-organization and same-organization sibling-bank layouts each
+checks responses for foreign identifiers other than those sent in the request
+(a 200 that hides the row is a valid read refusal), rejects successful mutations,
+and checks for persisted side effects.
+Actor-label body fields (`assigned_to_user_id`, `approved_by_user_id`) are
+excluded because they record who acted, not an object whose data is read.
+`KNOWN_UNCOVERED` in `tests/fixtures/object_reference_routes.py` owns the
+excluded-route list, including routes that need multi-step fixtures and, one
+explicit entry per route, the ICAAP workspace routes deferred on 2026-09-20
+(`ICAAP_DEFERRED`); each must be deleted and its kind seeded before ICAAP ships.
+Never replace these explicit decisions with a prefix wildcard. A third
+`single_foreign_child` layout enumerates each eligible child
+on multi-reference routes, holding every other reference at home and substituting
+only that child from A2. This covers same-organization cross-parent nesting,
+including package/resubmission, party/shareholding and scenario/assumption guards.
+
+Both layers read the census at collection, so a route whose identifier the
+catalogue does not know fails them at collection rather than in one case.
+`tests/architecture/test_object_reference_census.py` runs that census in the
+architecture job on every PR — no Postgres — and names the exact uncatalogued
+identifiers, and checks that every `KNOWN_UNCOVERED` and `KNOWN_DEFECTS` entry
+still names a mounted route. Catalogue a new path identifier with a seeded
+`ObjectKind`, or a body/query reference with a `REFERENCE_FIELDS` entry in
+`tests/fixtures/object_references.py`; record routes that cannot be exercised in
+`KNOWN_UNCOVERED` with a reason.
+
+`tests/api/test_authorization_object_reference_coverage.py` is the deterministic
+layer: it `pytest.mark.parametrize`s one case per route × HTTP method × layout,
+fixes a fully entitled bank-A caller, and checks the refusal shape and that no
+table content changes, including on reads, using portable per-table content
+hashes. It runs on SQLite because its refusals come from the explicit
+organization/bank `WHERE` clauses in the guards and services, which hold without
+row-level security. Its data-layer positive control confirms every seeded object
+exists for its owner; it does not establish that each request reaches the
+ownership guard rather than an earlier validation or permission check. Defects
+it reproduces are pinned in `object_reference_routes.KNOWN_DEFECTS`, skipped in
+the strict parametrization, and asserted as still reproduced so a product fix
+forces their promotion; the set is currently empty. Its first catch —
+same-organization cross-bank approve/revoke of a system-of-record declaration,
+because the service resolved the declaration by id within the organization
+only — is fixed: by-id lookups under `/banks/{bank_id}`
+(`system_of_record.get_declaration`, `canonical_withdrawal.get_withdrawal`, and
+a withdrawal's cited `declaration_id`) are bank-scoped at the query and return
+the route's ordinary 404 for a sibling bank's row before any state check, with
+no side effects. `tests/api/test_system_of_record_bank_scope.py` is the
+hermetic regression.
+
+`tests/db/test_authorization_object_reference_properties.py` is the generative
+layer, Postgres-only against a migrated schema with FORCE RLS so the RLS
+backstop is exercised too. Hypothesis varies legacy token roles alongside
+role/permission bundles, module scope, sensitivity scope, institution scope and
+binding lifecycle state, together with object placement (cross-organization,
+sibling bank or a single foreign child). It excludes the `KNOWN_DEFECTS` cases
+pinned by the deterministic layer. Each example sweeps the applicable census
+and checks that the content digest of every table in both organizations
+is unchanged. The bounded sample (`max_examples=15`) checks the isolation
+invariant across generated authority combinations. Its committed negative
+control weakens both package bank guards — the route dependency's path resolver
+and the service lookup — under a rolled-back `monkeypatch` and confirms the
+sweep then reports the sibling-bank leak.
+
 Negative controls reuse the ownership and current-fact invariants: a test-scoped
 patch admitting public `org_owner` grants must violate the unassigned-organization
 invariant; transactional `NO FORCE ROW LEVEL SECURITY` must break table-owner

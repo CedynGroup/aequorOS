@@ -13,17 +13,19 @@ import { useBankContext } from "@/components/shell/BankContext";
 import CycleHeader from "@/components/icaap/CycleHeader";
 import { icaapTabHrefs } from "@/components/icaap/tabs";
 import { useIcaapCycle, useIcaapReadiness } from "@/lib/api/icaap";
+import { use } from "react";
 
 export default function IcaapCycleLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: { cycleId: string };
+  params: Promise<{ cycleId: string }>;
 }) {
+  const { cycleId } = use(params);
   const { bank } = useBankContext();
-  const cycleQuery = useIcaapCycle(bank?.id, params.cycleId);
-  const readinessQuery = useIcaapReadiness(bank?.id, params.cycleId);
+  const cycleQuery = useIcaapCycle(bank?.id, cycleId);
+  const readinessQuery = useIcaapReadiness(bank?.id, cycleId);
 
   return (
     <>
@@ -38,7 +40,7 @@ export default function IcaapCycleLayout({
           ]}
         />
       )}
-      <ModuleTabs tabs={icaapTabHrefs(params.cycleId)} />
+      <ModuleTabs tabs={icaapTabHrefs(cycleId)} />
       {children}
     </>
   );

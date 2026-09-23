@@ -63,7 +63,10 @@ echo "Changed files (${BASE}..HEAD):"
 printf '%s\n' "${CHANGED}" | sed 's/^/  /'
 echo "Matching against: ${PATTERN}"
 
-if printf '%s\n' "${CHANGED}" | grep -qE "${PATTERN}"; then
+# A here-string, not a pipe: `grep -q` exits on its first match, and under
+# `pipefail` the writer's resulting SIGPIPE turns a MATCH into a false
+# "nothing changed" once the diff is long enough (685 backend files did it).
+if grep -qE "${PATTERN}" <<<"${CHANGED}"; then
   emit true
 else
   emit false

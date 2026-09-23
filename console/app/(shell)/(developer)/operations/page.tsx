@@ -1,9 +1,14 @@
-'use client';
+"use client";
 
-import { useMemo, useState } from 'react';
-import { Download, Info } from 'lucide-react';
-import { getOverview, listDataEngines, listOperatorJobs, listTenants } from '@/lib/api';
-import { useApi } from '@/lib/use-api';
+import { useMemo, useState } from "react";
+import { Download, Info } from "lucide-react";
+import {
+  getOverview,
+  listDataEngines,
+  listOperatorJobs,
+  listTenants,
+} from "@/lib/api";
+import { useApi } from "@/lib/use-api";
 import {
   Button,
   EmptyState,
@@ -15,10 +20,14 @@ import {
   SectionCard,
   Select,
   SkeletonRows,
-} from '@/components/ui';
-import { ConnectionsTable } from '@/components/tenants/ConnectionsTable';
-import { JobsTable } from '@/components/tenants/JobsTable';
-import { credentialHealth, csvFilename, downloadCsv } from '@/components/tenants/util';
+} from "@/components/ui";
+import { ConnectionsTable } from "@/components/tenants/ConnectionsTable";
+import { JobsTable } from "@/components/tenants/JobsTable";
+import {
+  credentialHealth,
+  csvFilename,
+  downloadCsv,
+} from "@/components/tenants/util";
 
 /**
  * /operations — the cross-tenant data-engine operations board.
@@ -31,7 +40,7 @@ import { credentialHealth, csvFilename, downloadCsv } from '@/components/tenants
  * still renders — no fabricated health numbers.
  */
 
-const ALL = '__all__';
+const ALL = "__all__";
 
 export default function OperationsPage() {
   const engines = useApi(listDataEngines);
@@ -43,11 +52,15 @@ export default function OperationsPage() {
   const [engineFilter, setEngineFilter] = useState(ALL);
   const [statusFilter, setStatusFilter] = useState(ALL);
 
-  const connections = engines.data?.connections ?? [];
+  const connections = useMemo(
+    () => engines.data?.connections ?? [],
+    [engines.data?.connections],
+  );
 
   const orgNames = useMemo(() => {
     const map = new Map<string, string>();
-    for (const t of tenants.data?.tenants ?? []) map.set(t.organization_id, t.organization_name);
+    for (const t of tenants.data?.tenants ?? [])
+      map.set(t.organization_id, t.organization_name);
     return map;
   }, [tenants.data]);
   const orgNameFor = (id: string) => orgNames.get(id);
@@ -89,30 +102,30 @@ export default function OperationsPage() {
 
   function exportCsv() {
     downloadCsv(
-      csvFilename('connections'),
+      csvFilename("connections"),
       [
-        'organization',
-        'organization_id',
-        'bank_id',
-        'engine',
-        'system',
-        'display_name',
-        'status',
-        'last_activity_at',
-        'last_activity_status',
-        'credential_expires_at',
+        "organization",
+        "organization_id",
+        "bank_id",
+        "engine",
+        "system",
+        "display_name",
+        "status",
+        "last_activity_at",
+        "last_activity_status",
+        "credential_expires_at",
       ],
       filtered.map((c) => [
-        orgNameFor(c.organization_id) ?? '',
+        orgNameFor(c.organization_id) ?? "",
         c.organization_id,
         c.bank_id,
         c.engine,
         c.system,
         c.display_name,
         c.status,
-        c.last_activity_at ?? '',
-        c.last_activity_status ?? '',
-        c.credential_expires_at ?? '',
+        c.last_activity_at ?? "",
+        c.last_activity_status ?? "",
+        c.credential_expires_at ?? "",
       ]),
     );
   }
@@ -140,34 +153,43 @@ export default function OperationsPage() {
       {/* -------------------------------------------- connection-health rollup */}
       {ov && (
         <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <KpiStat label="Connections" value={connections.length} hint="across all tenants" />
+          <KpiStat
+            label="Connections"
+            value={connections.length}
+            hint="across all tenants"
+          />
           <KpiStat label="Healthy" value={ov.connections.ok} status="ok" />
           <KpiStat
             label="Warnings"
             value={ov.connections.warn}
-            status={ov.connections.warn > 0 ? 'warn' : undefined}
+            status={ov.connections.warn > 0 ? "warn" : undefined}
           />
           <KpiStat
             label="Critical"
             value={ov.connections.crit}
-            status={ov.connections.crit > 0 ? 'crit' : 'ok'}
+            status={ov.connections.crit > 0 ? "crit" : "ok"}
           />
         </div>
       )}
 
       {ov && (
         <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <KpiStat label="Credentials expiring" value={expiring} status={expiring > 0 ? 'warn' : 'ok'} hint="≤ 30 days or expired" />
+          <KpiStat
+            label="Credentials expiring"
+            value={expiring}
+            status={expiring > 0 ? "warn" : "ok"}
+            hint="≤ 30 days or expired"
+          />
           <KpiStat label="Jobs running" value={ov.jobs.running} />
           <KpiStat
             label="Jobs failed (24h)"
             value={ov.jobs.failed_24h}
-            status={ov.jobs.failed_24h > 0 ? 'crit' : 'ok'}
+            status={ov.jobs.failed_24h > 0 ? "crit" : "ok"}
           />
           <KpiStat
             label="Ingestion failed (24h)"
             value={ov.ingestion.failed_24h}
-            status={ov.ingestion.failed_24h > 0 ? 'crit' : 'ok'}
+            status={ov.ingestion.failed_24h > 0 ? "crit" : "ok"}
           />
         </div>
       )}
@@ -182,7 +204,10 @@ export default function OperationsPage() {
           connections.length > 0 ? (
             <div className="flex flex-wrap items-end gap-2">
               <Field label="Org" className="w-40">
-                <Select value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)}>
+                <Select
+                  value={orgFilter}
+                  onChange={(e) => setOrgFilter(e.target.value)}
+                >
                   <option value={ALL}>All orgs</option>
                   {orgOptions.map((id) => (
                     <option key={id} value={id}>
@@ -192,7 +217,10 @@ export default function OperationsPage() {
                 </Select>
               </Field>
               <Field label="Engine" className="w-36">
-                <Select value={engineFilter} onChange={(e) => setEngineFilter(e.target.value)}>
+                <Select
+                  value={engineFilter}
+                  onChange={(e) => setEngineFilter(e.target.value)}
+                >
                   <option value={ALL}>All engines</option>
                   {engineOptions.map((e) => (
                     <option key={e} value={e}>
@@ -202,7 +230,10 @@ export default function OperationsPage() {
                 </Select>
               </Field>
               <Field label="Status" className="w-36">
-                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
                   <option value={ALL}>All statuses</option>
                   {statusOptions.map((s) => (
                     <option key={s} value={s}>
@@ -274,12 +305,13 @@ export default function OperationsPage() {
           <p className="font-medium text-navy">Not surfaced here yet</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             <li>
-              Per-connection sync history — the operator API exposes only the latest activity per
-              connection today.
+              Per-connection sync history — the operator API exposes only the
+              latest activity per connection today.
             </li>
           </ul>
           <p className="mt-1">
-            Nothing on this screen is simulated; if it isn&apos;t listed, we don&apos;t show it.
+            Nothing on this screen is simulated; if it isn&apos;t listed, we
+            don&apos;t show it.
           </p>
         </div>
       </div>

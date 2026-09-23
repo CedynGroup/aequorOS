@@ -1,26 +1,9 @@
 name: Web CI
 
-# The two Next.js surfaces that no workflow touched at all until 2026-08-22
-# (measured: `grep -rn "frontend\|console" .github/workflows/` returned nothing),
-# so both could regress on main with nothing to stop them.
-#
-#   frontend — the marketing site. `build` was its ONLY automated check because
-#              the workspace had eslint + eslint-config-next as devDependencies
-#              and a `lint` script but NO ESLint configuration file, so
-#              `next lint` dropped into its interactive setup prompt and could
-#              never run unattended. A `.eslintrc.json` (next/core-web-vitals,
-#              matching the dashboard) was added in the same change and the
-#              surface lints clean, so `lint` is a real gate here, not a
-#              placeholder.
-#   console  — the operator/staff control-plane UI: 27 node:test cases covering
-#              the regulatory-parameter form's client-side refusals (required
-#              fields, back-dated effective dates, negative values, column
-#              limits). ESLint is NOT gated for this workspace: it has no ESLint
-#              dependency and no configuration, and has therefore never run —
-#              adding one is a separate change with its own findings to triage,
-#              and claiming a gate that does not exist is worse than naming the
-#              gap. Recorded in docs/audit/12_test_evidence.md §5.
-#
+# Gate inventory:
+#   frontend — ESLint and production build.
+#   console  — typecheck, unit tests, and production build.
+# Console lint is available locally but is not a step in this workflow.
 # Both jobs are BLOCKING.
 
 # REQUIRED-CHECK SAFETY (2026-08-22) — same reasoning as dashboard.yml: a

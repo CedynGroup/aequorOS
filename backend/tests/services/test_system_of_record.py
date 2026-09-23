@@ -213,7 +213,7 @@ def _declare(
         proposed_by="analyst@bank.test",
     )
     return system_of_record.approve(
-        db_session, _ctx(USER_2), row.id, approved_by="cro@bank.test"
+        db_session, _ctx(USER_2), _bank(db_session), row.id, approved_by="cro@bank.test"
     )
 
 
@@ -305,10 +305,11 @@ def test_a_draft_declaration_does_not_resolve_and_cannot_be_self_approved(
     db_session: Session,
 ) -> None:
     _seed_book(db_session)
+    bank = _bank(db_session)
     row = system_of_record.propose(
         db_session,
         _ctx(USER_1),
-        _bank(db_session),
+        bank,
         position_type="LOAN",
         source_system=FIXTURE_SOURCE,
         effective_from=date(2026, 1, 1),
@@ -322,16 +323,18 @@ def test_a_draft_declaration_does_not_resolve_and_cannot_be_self_approved(
 
     with pytest.raises(SystemOfRecordError) as same_name:
         system_of_record.approve(
-            db_session, _ctx(USER_2), row.id, approved_by="analyst@bank.test"
+            db_session, _ctx(USER_2), bank, row.id, approved_by="analyst@bank.test"
         )
     assert "second approver" in same_name.value.detail
 
     with pytest.raises(SystemOfRecordError) as same_user:
-        system_of_record.approve(db_session, _ctx(USER_1), row.id, approved_by="cro@bank.test")
+        system_of_record.approve(
+            db_session, _ctx(USER_1), bank, row.id, approved_by="cro@bank.test"
+        )
     assert "second approver" in same_user.value.detail
 
     approved = system_of_record.approve(
-        db_session, _ctx(USER_2), row.id, approved_by="cro@bank.test"
+        db_session, _ctx(USER_2), bank, row.id, approved_by="cro@bank.test"
     )
     assert approved.status == "approved"
     assert system_of_record.resolve(db_session, ORG_1, SAMPLE_BANK_ID, FIXTURE_AS_OF)[
@@ -418,6 +421,7 @@ def test_revoking_a_declaration_removes_it_from_resolution_without_deleting_it(
     system_of_record.revoke(
         db_session,
         _ctx(USER_2),
+        _bank(db_session),
         declaration.id,
         revoked_by="cro@bank.test",
         reason="The IT sign-off named the wrong system.",
@@ -427,7 +431,12 @@ def test_revoking_a_declaration_removes_it_from_resolution_without_deleting_it(
     assert db_session.get(SystemOfRecordDeclaration, declaration.id) is not None
     with pytest.raises(SystemOfRecordError):
         system_of_record.revoke(
-            db_session, _ctx(USER_2), declaration.id, revoked_by="x", reason="again"
+            db_session,
+            _ctx(USER_2),
+            _bank(db_session),
+            declaration.id,
+            revoked_by="x",
+            reason="again",
         )
 
 

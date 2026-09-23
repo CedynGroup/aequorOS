@@ -10,16 +10,19 @@ from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.models import Organization, RiskCase
 from tests.api.factories import CaseFactory
+from tests.api.helpers import ORG_1
 from tests.conftest import (
     FakeStorage,
     _db_client_lifecycle,
     _LazyTestApp,
+    _reset_test_database,
     _rollback_sessionmaker_lifecycle,
     _TestDatabase,
 )
 from tests.storage.inmemory import InMemoryStorageClient
 
 _ROLLBACK_ORGANIZATION_ID = "OR-TXROLL01"
+_COMMITTED_ORGANIZATION_ID = "OR-TXCOMM01"
 
 # This contract test must expose the real engine and independent connections.
 requires_committing_db = pytest.mark.committing_db
@@ -83,6 +86,23 @@ def test_reused_app_receives_fresh_client_and_storage_state(
         assert "x-fixture-state" not in second_client.headers
         assert app.dependency_overrides[get_object_storage]() is second_storage
         assert app.dependency_overrides[get_ingestion_storage]() is second_ingestion
+
+
+@requires_committing_db
+def test_committing_schema_reset_removes_committed_rows_and_restores_the_seed(
+    _shared_committing_database: _TestDatabase,
+) -> None:
+    """Every committing test starts from the freshly built schema, not from the
+    rows its predecessors really committed."""
+    with Session(_shared_committing_database.engine) as session:
+        session.add(Organization(id=_COMMITTED_ORGANIZATION_ID, name="Committed Contract"))
+        session.commit()
+
+    _reset_test_database(_shared_committing_database)
+
+    with Session(_shared_committing_database.engine) as session:
+        assert session.get(Organization, _COMMITTED_ORGANIZATION_ID) is None
+        assert session.get(Organization, ORG_1) is not None
 
 
 @requires_committing_db

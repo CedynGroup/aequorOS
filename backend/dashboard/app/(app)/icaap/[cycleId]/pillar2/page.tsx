@@ -14,7 +14,7 @@
  * its citation and confirmation status (D-024).
  */
 
-import { useState } from "react";
+import { use, useState } from "react";
 import PageContainer from "@/components/ui/PageContainer";
 import SubTabs from "@/components/ui/SubTabs";
 import { useBankContext } from "@/components/shell/BankContext";
@@ -36,10 +36,11 @@ const VIEWS = [
 export default function IcaapPillar2Page({
   params,
 }: {
-  params: { cycleId: string };
+  params: Promise<{ cycleId: string }>;
 }) {
+  const { cycleId } = use(params);
   const { bank } = useBankContext();
-  const cycleQuery = useIcaapCycle(bank?.id, params.cycleId);
+  const cycleQuery = useIcaapCycle(bank?.id, cycleId);
   const [view, setView] = useState("register");
 
   return (
@@ -47,13 +48,13 @@ export default function IcaapPillar2Page({
       <SubTabs items={VIEWS} active={view} onChange={setView} />
       <div className="mt-4">
         {bank && view === "register" && (
-          <Pillar2Register bankId={bank.id} cycleId={params.cycleId} />
+          <Pillar2Register bankId={bank.id} cycleId={cycleId} />
         )}
         {bank && view === "reconciliation" && (
-          <CapitalReconciliation bankId={bank.id} cycleId={params.cycleId} />
+          <CapitalReconciliation bankId={bank.id} cycleId={cycleId} />
         )}
         {bank && view === "allocation" && (
-          <CapitalAllocation bankId={bank.id} cycleId={params.cycleId} />
+          <CapitalAllocation bankId={bank.id} cycleId={cycleId} />
         )}
         {bank && view === "addons" && (
           // The cycle's own date, so a letter's converted amount agrees with the
@@ -64,7 +65,7 @@ export default function IcaapPillar2Page({
           />
         )}
         {bank && view === "parameters" && (
-          <ParameterRegister bankId={bank.id} cycleId={params.cycleId} />
+          <ParameterRegister bankId={bank.id} cycleId={cycleId} />
         )}
       </div>
     </PageContainer>

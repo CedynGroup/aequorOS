@@ -337,12 +337,20 @@ def list_declarations(
 
 
 def get_declaration(
-    db: Session, organization_id: str, declaration_id: UUID
+    db: Session, organization_id: str, bank_id: str, declaration_id: UUID
 ) -> SystemOfRecordDeclaration:
+    """One of the bank's own declarations, or the same 404 a foreign id gets.
+
+    The lookup is bank-scoped, not merely organization-scoped: a declaration
+    belonging to a sibling bank of the same organization does not exist for a
+    route addressed to this bank, and refusing it with the not-found shape
+    confirms nothing about the sibling's register.
+    """
     row = db.scalar(
         select(SystemOfRecordDeclaration).where(
             SystemOfRecordDeclaration.id == declaration_id,
             SystemOfRecordDeclaration.organization_id == organization_id,
+            SystemOfRecordDeclaration.bank_id == bank_id,
         )
     )
     if row is None:
@@ -448,12 +456,13 @@ def propose(  # noqa: PLR0913 - a governed declaration names every field explici
 def approve(
     db: Session,
     ctx: TenantContext,
+    bank: Bank,
     declaration_id: UUID,
     *,
     approved_by: str,
 ) -> SystemOfRecordDeclaration:
     """Checker step: approve a draft (approver ≠ proposer) and close the prior row."""
-    row = get_declaration(db, ctx.organization_id, declaration_id)
+    row = get_declaration(db, ctx.organization_id, bank.id, declaration_id)
     if row.status != "draft":
         raise SystemOfRecordError(
             status_code=status.HTTP_409_CONFLICT,
@@ -523,16 +532,17 @@ def approve(
     return row
 
 
-def revoke(
+def revoke(  # noqa: PLR0913 - governed revocation evidence is explicit
     db: Session,
     ctx: TenantContext,
+    bank: Bank,
     declaration_id: UUID,
     *,
     revoked_by: str,
     reason: str,
 ) -> SystemOfRecordDeclaration:
     """Close a declaration without deleting it (a wrong answer stays visible)."""
-    row = get_declaration(db, ctx.organization_id, declaration_id)
+    row = get_declaration(db, ctx.organization_id, bank.id, declaration_id)
     if row.revoked_at is not None:
         raise SystemOfRecordError(
             status_code=status.HTTP_409_CONFLICT,

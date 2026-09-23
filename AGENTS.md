@@ -156,6 +156,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   **Bank-route existence rule:** follow [docs/rbac.md §4](docs/rbac.md#4-tenancy--the-two-planes)
   for the cross-tenant 404 contract, `app/api/deps.py::resolve_tenant_bank` mounting
   requirements, and regression coverage when adding bank routes.
+  **By-id lookups under `/banks/{bank_id}` must be bank-scoped at the query.** Two
+  banks of one organization share an RLS tenant, so organization scoping alone
+  cannot isolate their child objects. See the
+  [foundation contract](backend/docs/authorization_foundation.md#executable-verification)
+  for refusal semantics and the regression coverage.
   Preserve baseline membership as system-managed lifecycle evidence, never evaluator
   fallback access. Activation/deactivation must use `app/services/membership.py`;
   [the foundation contract](backend/docs/authorization_foundation.md#baseline-membership)
@@ -188,6 +193,11 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   is BLOCKED at assignment until the stage engine's per-object condition lands. Contract:
   `backend/docs/filing_submit_authority_rollout.md`; design + remaining steps 2-5:
   `backend/docs/filing_workflow_redesign.md`.
+- **Every route that accepts an object id must be in the IDOR census (2026-09-20).**
+  Follow [the authorization verification contract](backend/docs/authorization_foundation.md#executable-verification)
+  for catalogue entries, exclusions, defect quarantine, and ICAAP deferral.
+  `backend/tests/architecture/test_object_reference_census.py` guards catalogue
+  completeness and stale route decisions without Postgres.
 - **No seeded bank data — ever (order of 2026-07-21).** Every data point enters through
   the Data Engine (Excel/CSV upload, core-banking adapters, API push); a bank is created
   by its first ingestion. The primary DB was audited clean (100% ingestion-batch-traced).
@@ -428,16 +438,19 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `POST /operator/v1/tenants/{org}/fix/redrive-dedup` (session-gated, audited), and it is
   manual on purpose — the four stranded batches failed for three unrelated reasons.
 - **CI enforces every surface (2026-08-22; E2E added 2026-08-30).**
-  `risk-service.yml` gates the backend plus the dashboard Playwright journeys against
-  disposable MinIO, `dashboard.yml` gates typecheck + **lint** + **test** + build, and
-  `web.yml` gates `frontend` lint+build and `console` typecheck+test+build. The journey
-  reporter requires at least 20 executions and an exact eight-test expected-failure list
-  for regulator-anchor/fixture drift; discovery mismatch or an unexpected pass fails CI,
-  and issue #151 owns removal. Before these gates, `frontend/` and `console/` were in no
+  `risk-service.yml` gates the backend, `dashboard.yml` gates typecheck + **lint** +
+  **test** + build, `web.yml` gates `frontend` lint+build and `console`
+  typecheck+test+build, and the manual-dispatch `dashboard-journeys.yml` runs the
+  dashboard Playwright journeys against disposable MinIO. See
+  [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright)
+  for the reasoned, size-pinned quarantine and the canonical fixture carried forward
+  through the last month end on or before today. Before these gates, `frontend/` and `console/` were in no
   workflow and the dashboard's fail-open guard, SSRF egress guard, and browser journeys
   were unenforced. Each workflow's header comment is its gate inventory — keep it accurate.
-  `console` is deliberately NOT lint-gated (no ESLint dependency or config in that
-  workspace); see ARCHITECTURE.md §8.
+  For console checks and CI coverage, see [ARCHITECTURE.md §8](ARCHITECTURE.md#8-validation-commands).
+  Which Postgres job owns which test suites is
+  defined by the `risk-service:test-postgres-*` task comments in `backend/mise.toml`
+  and pinned by `tests/architecture/test_ci_task_wiring.py`.
 - **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,
@@ -465,6 +478,13 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   a fail-closed 409 naming a seed migration, a missing live plane as "no computed data yet"
   on every module page. Full prerequisites (object storage included):
   `backend/dashboard/README.md` §End-to-end.
+  **Test databases are built once per pytest process, never per test**
+  (`backend/tests/conftest.py`): rollback-isolated tests (tenant API and
+  `tests/operator` alike) share one schema through a savepoint-bound sessionmaker,
+  and `@pytest.mark.committing_db` tests share a second schema that is TRUNCATEd
+  and reseeded before each test. Only `tests/db` migration tests build schemas of
+  their own. A test that needs a fresh schema is the exception to justify, not the
+  default to reach for.
 - Regulatory `input_hash` must stay **value-based**: the snapshot `facts` list excludes `fact.id`
   and is sorted by canonical JSON (`INPUT_SCHEMA_VERSION = "bank-facts-v2"`). The live engine
   re-derives facts (new UUIDs) on every refresh, so an id- or order-dependent hash would break

@@ -166,9 +166,15 @@ async function main(): Promise<void> {
     return originalLoad(request, parent, isMain);
   };
 
+  (
+    globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT: boolean;
+    }
+  ).IS_REACT_ACT_ENVIRONMENT = true;
   const React = await import("react");
   loadedReact = React;
-  const { act, create } = await import("react-test-renderer");
+  const { act } = React;
+  const { create } = await import("react-test-renderer");
   const { focusManager, useQueryClient } =
     await import("@tanstack/react-query");
   // Keep accelerated signal polls dormant until the explicit focus/poll checks
@@ -454,7 +460,12 @@ async function main(): Promise<void> {
   let renderer: ReturnType<typeof create>;
   await act(async () => {
     renderer = create(<ResolvedInspectionBoundary />);
-    await new Promise((resolve) => setTimeout(resolve, 70));
+  });
+  await act(async () => {
+    await waitFor(
+      () => statusRequests === 2,
+      "transient inspection status failure must retry",
+    );
   });
   assert.equal(
     counts.size,
@@ -801,13 +812,15 @@ async function main(): Promise<void> {
         />
       </QueryAuthorityBoundary>,
     );
-    await new Promise((resolve) => setTimeout(resolve, 70));
   });
-  assert.ok(
-    (counts.get(`freshness:${reportsPeriodId}`) ?? 0) >=
-      beforeReportsFreshness + 2,
-    "Reports freshness strip must retain the cheap jittered poll",
-  );
+  await act(async () => {
+    await waitFor(
+      () =>
+        (counts.get(`freshness:${reportsPeriodId}`) ?? 0) >=
+        beforeReportsFreshness + 2,
+      "Reports freshness strip must retain the cheap jittered poll",
+    );
+  });
   await act(async () => reportsRenderer!.unmount());
   globalThis.setInterval = nativeSetInterval;
   globalThis.setTimeout = nativeSetTimeout;

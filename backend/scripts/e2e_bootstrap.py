@@ -9,14 +9,26 @@ per role.
 
 It then lays down the fixture BOOK, in the order a deployment would arrive at
 it: the canonical test book (the bank, its reporting-period spine and its
-governed parameter registers), the canonical position and GL sub-ledger the
-Data Engine would have ingested, the live fact plane the worker's
-``pipeline_refresh`` would have derived, and the ``bi_*`` marts the ``bi``
-worker lane would have built. The e2e stack runs no worker and no migration, so
-each of those four has a fixture standing in for it; each one is a mirror of
-what the product writes, never a second source of numbers. Journeys still drive
-ingestion, generation and filing through the API — the same paths the product
+governed parameter registers) carried forward to the reporting anchor currently
+due, the canonical position and GL sub-ledger the Data Engine would have
+ingested, the live fact plane the worker's ``pipeline_refresh`` would have
+derived, and the ``bi_*`` marts the ``bi`` worker lane would have built. The
+e2e stack runs no worker and no migration, so each of those has a fixture
+standing in for it; each one is a mirror of what the product writes, never a
+second source of numbers. Everything downstream — the liquidity baseline run,
+the institution profile, every package — flows through the API in the
+Playwright global setup and the journeys themselves: the same paths the product
 uses.
+
+The book is carried forward because the Returns workspace opens on the
+regulator's anchor (the last month end on or before today for a monthly return —
+``services/regulatory_reporting/anchors.py``), and a return can only be
+generated from an EXACT snapshot as of that date. The canonical book ends at
+a fixed month; without the carry-forward every anchor after it reads "no
+position has been computed", correctly, and the generate journeys have
+nothing to drive. ``extend_canonical_test_book`` appends one snapshot per
+month end through the last month end on or before today, each repeating the
+canonical latest fact set unchanged.
 
 It also enrols a **software signing key** per human role so the attestation
 ceremony can be driven end to end in a browser. Self-signed and disposable:
@@ -38,9 +50,10 @@ Usage: DATABASE_URL=sqlite+pysqlite:///<path> uv run python scripts/e2e_bootstra
 
 from __future__ import annotations
 
+import calendar
 import hashlib
 import os
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from sqlalchemy import create_engine, func, select
@@ -72,6 +85,7 @@ from tests.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.fixtures.bi_plane import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
+    extend_canonical_test_book,
     materialize_canonical_test_book,
 )
 from tests.fixtures.live_plane import materialize_live_plane
@@ -95,13 +109,14 @@ E2E_USERS = {
     "integration_admin": UUID("eeeeeeee-8888-4eee-8eee-eeeeeeeeeee8"),
     "liquidity_viewer": UUID("eeeeeeee-9999-4eee-8eee-eeeeeeeeeee9"),
     "liquidity_aggregated_viewer": UUID("eeeeeeee-aaaa-4eee-8eee-eeeeeeeeeeea"),
-    "macro_viewer": UUID("eeeeeeee-1111-4eee-8eee-eeeeeeeeeee1"),
+    "macro_viewer": UUID("eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec"),
+    "fx_member": UUID("eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed"),
     "invite_fresh": UUID("eeeeeeee-bbbb-4eee-8eee-eeeeeeeeeeeb"),
     # A board member: Capital/confidential APPROVER on the sample bank and
     # nothing else. Deliberately holds NO Regulatory Reporting access, because
     # that is the real shape of the person — the ICAAP filing surface has to
     # give them a signature they could not otherwise give.
-    "board": UUID("eeeeeeee-cccc-4eee-8eee-eeeeeeeeeeec"),
+    "board": UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"),
     # The officer who transmits a return to the regulator, and only that.
     # Filing stopped sharing the approver's permission on 2026-09-20
     # (docs/filing_workflow_redesign.md §6 step 1): a Validator holds an exact
@@ -109,7 +124,7 @@ E2E_USERS = {
     # so they can open the return they are being asked to file. Deliberately
     # NOT the `approver` fixture — one identity that both approves and files is
     # the defect the split closed, and the tenant grant surface blocks it.
-    "validator": UUID("eeeeeeee-dddd-4eee-8eee-eeeeeeeeeeed"),
+    "validator": UUID("eeeeeeee-ffff-4eee-8eee-eeeeeeeeeeef"),
 }
 
 
@@ -201,6 +216,7 @@ def main() -> None:
                         if role
                         in {
                             "grant_member",
+                            "fx_member",
                             "account_admin",
                             "legacy_account_admin",
                             "integration_admin",
@@ -258,7 +274,7 @@ def main() -> None:
         users["integration_admin"].role = "account_admin"
         session.commit()
         _enrol_signing_keys(session)
-        materialize_canonical_test_book(session)
+        _materialize_book(session)
         session.flush()
         _seed_canonical_positions(session)
         legacy_service_user = User(
@@ -493,6 +509,29 @@ def _seed_canonical_positions(session: Session) -> None:
         )
     )
     print(f"canonical positions: {snapshots} snapshots at {FIXTURE_AS_OF.isoformat()}")
+
+
+def _materialize_book(session: Session) -> None:
+    """Seed the canonical book and carry it forward to the anchor currently due."""
+    summary = materialize_canonical_test_book(session)
+    appended = extend_canonical_test_book(session, through=latest_month_end_on_or_before())
+    print(
+        f"canonical book: {summary.periods} periods, carried forward through "
+        f"{appended[-1].isoformat() if appended else 'the canonical span'} "
+        f"({len(appended)} appended)"
+    )
+
+
+def latest_month_end_on_or_before(today: date | None = None) -> date:
+    """The last month end on or before ``today``.
+
+    Mirrors the Returns workspace's first anchor <= today in descending order,
+    including today itself when it is a month end.
+    """
+    today = today or date.today()
+    if today.day == calendar.monthrange(today.year, today.month)[1]:
+        return today
+    return today.replace(day=1) - timedelta(days=1)
 
 
 def _materialize_live_plane(session: Session) -> None:

@@ -16,19 +16,21 @@ import PageContainer from "@/components/ui/PageContainer";
 import { useBankContext } from "@/components/shell/BankContext";
 import RiskAppetite from "@/components/icaap/p2/RiskAppetite";
 import CapitalTriggers from "@/components/icaap/p2/CapitalTriggers";
+import { use } from "react";
 
 export default function IcaapAppetitePage({
   params,
 }: {
-  params: { cycleId: string };
+  params: Promise<{ cycleId: string }>;
 }) {
+  const { cycleId } = use(params);
   const { bank } = useBankContext();
   return (
     <PageContainer className="py-6">
       {bank && (
         <div className="space-y-4">
-          <RiskAppetite bankId={bank.id} cycleId={params.cycleId} />
-          <CapitalTriggers bankId={bank.id} cycleId={params.cycleId} />
+          <RiskAppetite bankId={bank.id} cycleId={cycleId} />
+          <CapitalTriggers bankId={bank.id} cycleId={cycleId} />
         </div>
       )}
     </PageContainer>

@@ -70,7 +70,10 @@ def test_round_trip_is_exact_and_upgrade_is_idempotent(
     migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
     config = alembic_config_for_app()
-    assert _version(migrated_postgres_schema) == REVISION, "single head is the P0 migration"
+    # Later ICAAP migrations seed the same control plane; the round trip is
+    # measured from this revision, so its downgrade removes only its own rows.
+    command.downgrade(config, REVISION)
+    assert _version(migrated_postgres_schema) == REVISION
 
     at_head = _snapshot(migrated_postgres_schema)
     seeded = {row for row in at_head if row[3] in B2}

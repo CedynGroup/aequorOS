@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -318,68 +317,32 @@ def schema_guard(schema: dict[str, Any], components: dict[str, Any]) -> str:  # 
     raise ValueError(f"Unsupported inline schema guard: {schema}")
 
 
-#: Pulls the schema a generated alias stands for out of the property that uses
-#: it; ``None`` when the property does not have that shape.
-type SchemaExtractor = Callable[[dict[str, Any], dict[str, Any]], dict[str, Any] | None]
-
-
-def resolved_schema(prop: dict[str, Any], components: dict[str, Any]) -> dict[str, Any]:
-    return components[prop["$ref"].rsplit("/", 1)[-1]] if "$ref" in prop else prop
-
-
-def own_schema(prop: dict[str, Any], components: dict[str, Any]) -> dict[str, Any] | None:
-    """The property itself: the alias IS the property's type."""
-    del components  # part of the extractor signature, unused for this shape
-    return prop
-
-
 def map_value_schema(prop: dict[str, Any], components: dict[str, Any]) -> dict[str, Any] | None:
     """The additionalProperties schema of a map-typed property, if it is one."""
-    additional = resolved_schema(prop, components).get("additionalProperties")
+    resolved = components[prop["$ref"].rsplit("/", 1)[-1]] if "$ref" in prop else prop
+    additional = resolved.get("additionalProperties")
     return additional if isinstance(additional, dict) else None
 
 
 def array_item_schema(prop: dict[str, Any], components: dict[str, Any]) -> dict[str, Any] | None:
     """The ``items`` schema of an array-typed property, if it is one.
 
+    Needed for a primitive UNION inside a list. The generator's
+    InlineModelResolver promotes an inline OBJECT schema to a component, so an
+    object alias is findable by name — but a primitive union is never promoted,
+    so for ``list[str | int | float | bool | date]`` the emitted ``…Inner``
+    alias can only be found through its USE, which is this shape.
+
     An optional list (``list[X] | None``) arrives as an ``anyOf`` of the array
     and null, so the array is looked for among the options as well as at the
     top level.
     """
-    resolved = resolved_schema(prop, components)
+    resolved = components[prop["$ref"].rsplit("/", 1)[-1]] if "$ref" in prop else prop
     for option in [resolved, *resolved.get("anyOf", [])]:
         items = option.get("items")
         if isinstance(items, dict):
             return items
     return None
-
-
-#: How the generator can name an alias, as (the TypeScript text it emits, how to
-#: get the schema that alias stands for out of the consuming property).
-#:
-#: An alias is resolved either because it is itself a registered component, or
-#: because one of these shapes names it. Only the first is available for an
-#: inline OBJECT schema, which the generator's InlineModelResolver promotes to a
-#: component; a primitive UNION is never promoted, so for
-#: ``list[str | int | float | bool | date]`` the generated ``…Inner`` alias can
-#: only be found through its use — the array shape below.
-def alias_shapes(alias: str) -> tuple[tuple[re.Pattern[str], SchemaExtractor], ...]:
-    name = re.escape(alias)
-    null = r"(?: \| null)?"
-    return (
-        # `field?: Alias;`
-        (re.compile(rf"^\s+(\w+)\??: {name}{null};$", re.MULTILINE), own_schema),
-        # `field?: Array<Alias>;`
-        (re.compile(rf"^\s+(\w+)\??: Array<{name}>{null};$", re.MULTILINE), array_item_schema),
-        # `field?: { [key: string]: Alias; };`
-        (
-            re.compile(
-                rf"^\s+(\w+)\??: \{{ \[key: string\]: {name}{null}; \}}{null};$",
-                re.MULTILINE,
-            ),
-            map_value_schema,
-        ),
-    )
 
 
 def operation_request_properties(
@@ -415,23 +378,7 @@ def operation_request_properties(
     return interfaces
 
 
-#: One generated request/model interface in the emitted TypeScript.
-INTERFACE_PATTERN = re.compile(r"^export interface (\w+) \{$([\s\S]*?)^\}$", re.MULTILINE)
-
-
-def component_key(model_name: str, components: dict[str, Any]) -> str | None:
-    """The component a generated model name came from, unwrapping Input/Output."""
-    if model_name in components:
-        return model_name
-    for suffix in ("Input", "Output"):
-        if model_name.endswith(suffix):
-            candidate = f"{model_name.removesuffix(suffix)}-{suffix}"
-            if candidate in components:
-                return candidate
-    return None
-
-
-def alias_schema_uses(
+def _alias_use_schemas(
     alias: str,
     *,
     components: dict[str, Any],
@@ -439,54 +386,110 @@ def alias_schema_uses(
     api_text: dict[str, str],
     request_properties: dict[str, dict[str, dict[str, Any]]],
 ) -> list[dict[str, Any]]:
-    """Every schema the generated ``alias`` stands for, found through its uses.
+    """Every OpenAPI schema the generated alias stands in for, across models and APIs."""
 
-    The alias counts as used if it is a registered component itself, or if any
-    model property or request-interface property names it in one of
-    ``alias_shapes``. The caller requires the result to be non-empty and to
-    agree on one TypeScript type and one guard, so returning every use — not
-    the first — is what makes those checks meaningful.
-    """
+    def component_key(model_name: str) -> str | None:
+        if model_name in components:
+            return model_name
+        for suffix in ("Input", "Output"):
+            if model_name.endswith(suffix):
+                candidate = f"{model_name.removesuffix(suffix)}-{suffix}"
+                if candidate in components:
+                    return candidate
+        return None
+
+    def resolve(
+        owner: str, generated_name: str, candidates: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        if len(candidates) != 1:
+            raise ValueError(f"Could not resolve {owner}.{generated_name} for {alias}")
+        return candidates[0]
+
     schemas: list[dict[str, Any]] = [components[alias]] if alias in components else []
-    shapes = alias_shapes(alias)
+    property_pattern = re.compile(rf"^\s+(\w+)\??: {re.escape(alias)}(?: \| null)?;$", re.MULTILINE)
+    # The alias may also be generated for the value type of an inline map
+    # (additionalProperties), e.g. `fields: { [key: string]: FieldsValue; }`.
+    map_pattern = re.compile(
+        rf"^\s+(\w+)\??: \{{ \[key: string\]: {re.escape(alias)}(?: \| null)?; \}}"
+        rf"(?: \| null)?;$",
+        re.MULTILINE,
+    )
+    # The alias may also be generated for the ITEM type of a list, e.g.
+    # `values: Array<ValuesInner>;`. Both spellings the generator emits.
+    array_pattern = re.compile(
+        rf"^\s+(\w+)\??: (?:Array<{re.escape(alias)}>|{re.escape(alias)}\[\])"
+        rf"(?: \| null)?;$",
+        re.MULTILINE,
+    )
+    interface_pattern = re.compile(r"^export interface (\w+) \{$([\s\S]*?)^\}$", re.MULTILINE)
     for consumer, text in model_text.items():
-        consumer_component = component_key(consumer, components)
+        consumer_component = component_key(consumer)
         if consumer_component is None:
             continue
         properties = components[consumer_component].get("properties", {})
-        for pattern, extract in shapes:
-            for match in pattern.finditer(text):
-                generated_name = match.group(1)
-                candidates = [
-                    schema
-                    for name, value in properties.items()
-                    if property_name(name) == generated_name
-                    and (schema := extract(value, components)) is not None
-                ]
-                if len(candidates) != 1:
-                    raise ValueError(
-                        f"Could not resolve {consumer_component}.{generated_name} for {alias}"
-                    )
-                schemas.append(candidates[0])
+        for match in property_pattern.finditer(text):
+            generated_name = match.group(1)
+            candidates = [
+                value for name, value in properties.items() if property_name(name) == generated_name
+            ]
+            schemas.append(resolve(consumer_component, generated_name, candidates))
+        for match in map_pattern.finditer(text):
+            generated_name = match.group(1)
+            candidates = [
+                value_schema
+                for name, value in properties.items()
+                if property_name(name) == generated_name
+                and (value_schema := map_value_schema(value, components)) is not None
+            ]
+            schemas.append(resolve(consumer_component, generated_name, candidates))
+        for match in array_pattern.finditer(text):
+            generated_name = match.group(1)
+            candidates = [
+                item_schema
+                for name, value in properties.items()
+                if property_name(name) == generated_name
+                and (item_schema := array_item_schema(value, components)) is not None
+            ]
+            schemas.append(resolve(consumer_component, generated_name, candidates))
     for text in api_text.values():
-        for interface_match in INTERFACE_PATTERN.finditer(text):
-            properties = request_properties.get(interface_match.group(1))
+        for interface_match in interface_pattern.finditer(text):
+            interface = interface_match.group(1)
+            properties = request_properties.get(interface)
             if properties is None:
                 continue
-            for pattern, extract in shapes:
-                for match in pattern.finditer(interface_match.group(2)):
-                    generated_name = match.group(1)
-                    used = properties.get(generated_name)
-                    schema = None if used is None else extract(used, components)
-                    if schema is None:
-                        raise ValueError(
-                            f"Could not resolve {interface_match.group(1)}.{generated_name} "
-                            f"for {alias}"
-                        )
-                    schemas.append(schema)
+            for match in property_pattern.finditer(interface_match.group(2)):
+                generated_name = match.group(1)
+                if generated_name not in properties:
+                    raise ValueError(f"Could not resolve {interface}.{generated_name} for {alias}")
+                schemas.append(properties[generated_name])
     if not schemas:
         raise ValueError(f"Could not find a schema use for generated alias {alias}")
     return schemas
+
+
+def _rewrite_alias(text: str, alias: str, *, alias_type: str, guard: str) -> str:
+    """Turn the generated empty interface into a type alias with a real runtime guard."""
+    text = re.sub(r"import \{ mapValues \} from ['\"]\.\./runtime['\"];\n", "", text)
+    text = re.sub(
+        rf"export interface {re.escape(alias)} \{{\s*\}}",
+        f"export type {alias} = {alias_type};",
+        text,
+    )
+    instance_pattern = (
+        rf"export function instanceOf{re.escape(alias)}"
+        rf"\(\s*value: object,?\s*\): value is {re.escape(alias)}"
+    )
+    text = re.sub(
+        instance_pattern,
+        f"export function instanceOf{alias}(value: unknown): value is {alias}",
+        text,
+    )
+    return re.sub(
+        rf"(export function instanceOf{re.escape(alias)}[\s\S]*?\{{\s*)return true;",
+        rf"\1return {guard};",
+        text,
+        count=1,
+    )
 
 
 def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
@@ -504,7 +507,7 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
     }
 
     for alias in sorted(empty_models):
-        schemas = alias_schema_uses(
+        schemas = _alias_use_schemas(
             alias,
             components=components,
             model_text=model_text,
@@ -518,30 +521,10 @@ def patch_primitive_aliases(package_root: Path, schema_path: Path) -> None:
         if len(guards) != 1:
             raise ValueError(f"Generated alias {alias} has conflicting guards: {sorted(guards)}")
         alias_path = model_dir / f"{alias}.ts"
-        text = model_text[alias]
-        text = re.sub(r"import \{ mapValues \} from ['\"]\.\./runtime['\"];\n", "", text)
-        text = re.sub(
-            rf"export interface {re.escape(alias)} \{{\s*\}}",
-            f"export type {alias} = {types.pop()};",
-            text,
+        alias_path.write_text(
+            _rewrite_alias(model_text[alias], alias, alias_type=types.pop(), guard=guards.pop()),
+            encoding="utf-8",
         )
-        instance_pattern = (
-            rf"export function instanceOf{re.escape(alias)}"
-            rf"\(\s*value: object,?\s*\): value is {re.escape(alias)}"
-        )
-        text = re.sub(
-            instance_pattern,
-            f"export function instanceOf{alias}(value: unknown): value is {alias}",
-            text,
-        )
-        guard = guards.pop()
-        text = re.sub(
-            rf"(export function instanceOf{re.escape(alias)}[\s\S]*?\{{\s*)return true;",
-            rf"\1return {guard};",
-            text,
-            count=1,
-        )
-        alias_path.write_text(text, encoding="utf-8")
 
 
 def patch_closed_models(package_root: Path, schema_path: Path) -> None:

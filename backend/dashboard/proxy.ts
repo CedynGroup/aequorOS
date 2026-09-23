@@ -10,8 +10,8 @@ import {
 } from "@/lib/authCookies";
 import { requestOrigin } from "@/lib/requestOrigin";
 
-// Emit only from middleware: auth.ts is instantiated separately in the Edge
-// and Node runtimes, so a guard there warns once per bundle, not per server.
+// Emit only from the route proxy: auth.ts is instantiated in separate
+// bundles, so a guard there warns once per bundle, not per server.
 let hostMismatchWarned = false;
 
 function warnOnDevelopmentHostMismatch(req: Request | undefined): void {
@@ -49,9 +49,9 @@ function copySetCookies(target: Response, source: Response): void {
 }
 
 // NextAuth is initialized LAZILY (auth.ts builds the SSO provider per request),
-// which makes `auth` async: wrapping a middleware yields a PROMISE of the
-// handler. Exporting that promise directly breaks Next ("must export a
-// middleware or a default function"), so resolve it inside a real function.
+// which makes `auth` async: wrapping the route proxy yields a PROMISE of the
+// handler. Exporting that promise directly breaks Next, so resolve it inside a
+// real function.
 type AuthenticatedRequest = NextRequest & {
   auth?: { user?: unknown } | null;
 };
@@ -65,10 +65,7 @@ const sessionReader = (state: AuthGateState) =>
     (req: NextRequest, event: NextFetchEvent) => Promise<Response | undefined>
   >;
 
-export default async function middleware(
-  req: NextRequest,
-  event: NextFetchEvent,
-) {
+export default async function proxy(req: NextRequest, event: NextFetchEvent) {
   warnOnDevelopmentHostMismatch(req);
   const origin = requestOrigin(req);
   const state: AuthGateState = {};

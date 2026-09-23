@@ -8,7 +8,7 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 test.describe("unbound Capital user", () => {
   test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
 
-  test("hides navigation, 404s deep links, and sends no Capital requests", async ({
+  test("disables navigation, redirects deep links, and sends no Capital requests", async ({
     page,
   }) => {
     const capitalRequests: string[] = [];
@@ -42,6 +42,11 @@ test.describe("unbound Capital user", () => {
     );
     await expect(followable).toHaveCount(1);
     await expect(followable.first()).toHaveAttribute("href", "/settings");
+    await expect(
+      page
+        .getByRole("navigation")
+        .getByRole("link", { name: "Basel Capital", exact: true }),
+    ).toHaveAttribute("aria-disabled", "true");
 
     await page.goto("/basel");
     // A baseline member deep-linking to a module they cannot reach is shown
@@ -52,6 +57,7 @@ test.describe("unbound Capital user", () => {
     await expect(
       page.getByText(/404|not found|No authorized institutions yet/i).first(),
     ).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
 
     await page.goto("/basel/planning");
     // A baseline member deep-linking to a module they cannot reach is shown
@@ -62,6 +68,7 @@ test.describe("unbound Capital user", () => {
     await expect(
       page.getByText(/404|not found|No authorized institutions yet/i).first(),
     ).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
     expect(capitalRequests).toEqual([]);
 
     if (evidenceDir) {

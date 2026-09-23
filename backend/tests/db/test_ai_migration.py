@@ -123,6 +123,12 @@ def connection(ai_schema: MigratedPostgresSchema) -> Iterator[Connection]:
             transaction.rollback()
 
 
+#: Two enforcement layers, either may refuse first: the migration's REVOKE
+#: (a non-superuser role gets InsufficientPrivilege) or, for a role that kept
+#: the privilege, the append-only trigger and RESTRICTIVE policy.
+_UNALTERABLE = r"append-only|permission denied|restrict|policy"
+
+
 def _refused(connection: Connection, statement: str, params: dict[str, Any], match: str) -> None:
     savepoint = connection.begin_nested()
     with pytest.raises(DatabaseError, match=match):
@@ -182,10 +188,10 @@ def _insert_section(
         text(
             """
             INSERT INTO icaap_sections
-              (id, organization_id, bank_id, cycle_id, section_key, title, letter, position,
-               working_doc, working_rev, requirement_states, created_at, updated_at)
+              (id, organization_id, bank_id, cycle_id, section_key, letter, position,
+               working_doc, working_rev, checklist_state, created_at, updated_at)
             VALUES
-              (:id, :org, :bank, :cycle, 'executive_summary', 'Executive summary', 'A', 1,
+              (:id, :org, :bank, :cycle, 'executive_summary', 'a', 1,
                '{"type":"doc","content":[]}'::json, 0, '{}'::json, :now, :now)
             """
         ),
@@ -460,7 +466,7 @@ def test_a_decision_takes_no_update_at_all(
         connection,
         "UPDATE icaap_ai_suggestion_decisions SET decision = 'rejected' WHERE id = :id",
         {"id": str(decision_id)},
-        "append-only|immutable|cannot|restrict",
+        _UNALTERABLE,
     )
 
 
@@ -562,7 +568,10 @@ def test_the_switch_stays_flippable(connection: Connection) -> None:
 def test_every_ai_table_is_force_rls(ai_schema: MigratedPostgresSchema, table: str) -> None:
     with ai_schema.app_engine.connect() as connection:
         enabled, forced = connection.execute(
-            text("SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = :t"),
+            text(
+                "SELECT relrowsecurity, relforcerowsecurity FROM pg_class "
+                "WHERE oid = to_regclass(:t)"
+            ),
             {"t": table},
         ).one()
     assert enabled and forced, f"{table} is not ENABLE+FORCE row level security"

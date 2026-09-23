@@ -8,6 +8,7 @@ bank data enters through adapters, ETL, canonical persistence, and activation.
 from __future__ import annotations
 
 import math
+import weakref
 from calendar import monthrange
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -16,7 +17,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import Engine, delete, select
 from sqlalchemy import inspect as sql_inspect
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
@@ -36,6 +37,7 @@ from app.models import (
 )
 from app.models.regulatory import RegulatoryParameterMixin
 from app.services import parameter_register
+from app.services.reporting_periods import new_snapshot_period
 from tests.factories.reconciliation import allow_fixture_balance_gap
 
 # Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
@@ -542,7 +544,7 @@ def materialize_canonical_test_book(session: Session) -> CanonicalTestBookSummar
             currency=CURRENCY,
             jurisdiction_code=JURISDICTION_CODE,
             license_type="universal",
-                institution_type="universal_bank",
+            institution_type="universal_bank",
         )
     )
     periods = _build_reporting_periods()
@@ -580,6 +582,53 @@ def materialize_canonical_test_book(session: Session) -> CanonicalTestBookSummar
         fact_count=fact_count,
         param_count=param_count,
     )
+
+
+def extend_canonical_test_book(session: Session, *, through: date) -> list[date]:
+    """Carry the canonical book forward, one month-end snapshot at a time.
+
+    The regulator's reporting anchors are calendar dates that keep arriving
+    (``services/regulatory_reporting/anchors.py``), and an exact snapshot is
+    required to file on one — an earlier book is never substituted. A fixture
+    that stops at a fixed month therefore has no position for any anchor after
+    it. This appends a snapshot for every month end after the canonical
+    ``PERIOD_COUNT`` periods that falls on or before ``through``, so a stack
+    built today has a computed position on the anchor a return is currently
+    due on.
+
+    Every appended period repeats the LATEST canonical fact set unchanged —
+    the same book, later as-of dates — so each carries the tie-outs the
+    canonical book already proves, and engine output for the newest period is
+    identical to the canonical latest period. The canonical periods themselves
+    are untouched: golden suites that pin them keep pinning the same values.
+
+    Returns the appended period ends, oldest first (empty when ``through`` is
+    within the canonical span).
+    """
+    last_year, last_month = _period_month(PERIOD_COUNT - 1)
+    canonical_end = date(last_year, last_month, monthrange(last_year, last_month)[1])
+    appended: list[date] = []
+    period_end = _next_month_end(canonical_end)
+    while period_end <= through:
+        period = new_snapshot_period(
+            organization_id=DEMO_ORG_ID, bank_id=SAMPLE_BANK_ID, as_of=period_end
+        )
+        session.add(period)
+        session.flush()
+        facts = _build_period_facts(period, PERIOD_COUNT - 1)
+        _validate_period_facts(period, facts, PERIOD_COUNT - 1)
+        session.add_all(facts)
+        appended.append(period_end)
+        period_end = _next_month_end(period_end)
+    session.flush()
+    return appended
+
+
+def _next_month_end(period_end: date) -> date:
+    year, month = period_end.year, period_end.month + 1
+    if month > 12:  # noqa: PLR2004 - December rolls into the next year
+        year, month = year + 1, 1
+    return date(year, month, monthrange(year, month)[1])
 
 
 def _set_tenant_context(session: Session, organization_id: str) -> None:
@@ -659,9 +708,30 @@ _DEPENDENT_TABLES: tuple[str, ...] = (
 )
 
 
+# Column names of every dependent table present in an engine's schema. The
+# sweep runs on every materialisation, and each ``get_columns`` is a catalogue
+# round trip on Postgres, so the introspection happens once per engine.
+_DEPENDENT_COLUMNS: weakref.WeakKeyDictionary[Engine, dict[str, frozenset[str]]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _dependent_table_columns(engine: Engine) -> dict[str, frozenset[str]]:
+    columns = _DEPENDENT_COLUMNS.get(engine)
+    if columns is None:
+        inspector = sql_inspect(engine)
+        existing = set(inspector.get_table_names())
+        columns = {
+            table: frozenset(column["name"] for column in inspector.get_columns(table))
+            for table in _DEPENDENT_TABLES
+            if table in existing
+        }
+        _DEPENDENT_COLUMNS[engine] = columns
+    return columns
+
+
 def _delete_bank_dependents(session: Session) -> None:
-    inspector = sql_inspect(session.get_bind())
-    existing = set(inspector.get_table_names())
+    dependent_columns = _dependent_table_columns(session.get_bind().engine)
     if session.get_bind().dialect.name == "postgresql":
         # Migration 202608220031 makes approvals/submission events append-only.
         # This fixture is the sole test-only reset path and runs in a disposable
@@ -672,10 +742,7 @@ def _delete_bank_dependents(session: Session) -> None:
             )
         )
     params = {"bank_id": str(SAMPLE_BANK_ID), "organization_id": str(DEMO_ORG_ID)}
-    for table in _DEPENDENT_TABLES:
-        if table not in existing:
-            continue
-        columns = {column["name"] for column in inspector.get_columns(table)}
+    for table, columns in dependent_columns.items():
         if "bank_id" in columns:
             where = "WHERE bank_id = :bank_id AND organization_id = :organization_id"
         elif "package_id" in columns:
@@ -709,22 +776,27 @@ def _delete_bank_dependents(session: Session) -> None:
 
 
 def _delete_existing_seed(session: Session) -> None:
-    _delete_bank_dependents(session)
-    session.execute(
-        delete(BankFinancialFact).where(
-            BankFinancialFact.bank_id == SAMPLE_BANK_ID,
-            BankFinancialFact.organization_id == DEMO_ORG_ID,
+    # Periods, facts and every dependent table hang off the bank row by foreign
+    # key, so a rollback-isolated test that starts without the bank has nothing
+    # to sweep. The parameter registers are keyed by organization, not bank, and
+    # are always cleared.
+    if session.scalar(select(Bank.id).where(Bank.id == SAMPLE_BANK_ID)) is not None:
+        _delete_bank_dependents(session)
+        session.execute(
+            delete(BankFinancialFact).where(
+                BankFinancialFact.bank_id == SAMPLE_BANK_ID,
+                BankFinancialFact.organization_id == DEMO_ORG_ID,
+            )
         )
-    )
-    session.execute(
-        delete(BankReportingPeriod).where(
-            BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
-            BankReportingPeriod.organization_id == DEMO_ORG_ID,
+        session.execute(
+            delete(BankReportingPeriod).where(
+                BankReportingPeriod.bank_id == SAMPLE_BANK_ID,
+                BankReportingPeriod.organization_id == DEMO_ORG_ID,
+            )
         )
-    )
-    session.execute(
-        delete(Bank).where(Bank.id == SAMPLE_BANK_ID, Bank.organization_id == DEMO_ORG_ID)
-    )
+        session.execute(
+            delete(Bank).where(Bank.id == SAMPLE_BANK_ID, Bank.organization_id == DEMO_ORG_ID)
+        )
     for model in _PARAMETER_MODELS:
         session.execute(
             delete(model).where(

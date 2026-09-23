@@ -148,9 +148,9 @@ async function generateAndClearChecks(page: Page, date: string): Promise<void> {
     page.getByRole("heading", { name: /returns workspace/i }),
   ).toBeVisible();
 
-  await expect(
-    page.getByRole("button", { name: /^validate$/i }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^validate$/i })).toHaveCount(
+    0,
+  );
 
   await page
     .getByRole("button", { name: /generate the return|^regenerate$/i })
@@ -258,9 +258,9 @@ test.describe("full lifecycle", () => {
     // What they DO get: one act that is theirs, named, with what it does.
     const act = page.getByTestId("primary-filing-action");
     await expect(act).toHaveText(/certify and freeze/i);
-    await expect(page.getByTestId("primary-filing-action-reason")).toContainText(
-      /sends the return to the approver/i,
-    );
+    await expect(
+      page.getByTestId("primary-filing-action-reason"),
+    ).toContainText(/sends the return to the approver/i);
   });
 
   test("journey 1: certify → approve and sign → submit → poll acknowledges with Rev 1.0", async ({
@@ -425,6 +425,12 @@ test.describe("full lifecycle", () => {
     ).toBeVisible();
   });
 
+  // Quarantined (e2e/support/quarantine.ts): LRT packs are event-driven, so
+  // the registry yields no reporting anchors for them by design — and the
+  // workspace then offers no reporting date at all (the select is disabled
+  // and there is no Generate control). The register link reaches a dead end
+  // until event-driven returns get a way to choose their as-of date; that is
+  // a product gap, not fixture drift.
   test.fail(
     "journey 5: institution register drives the LRT corporate pack",
     async ({ page }) => {

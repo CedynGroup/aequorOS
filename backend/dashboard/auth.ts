@@ -232,7 +232,7 @@ const baseConfig = {
     },
   },
   callbacks: {
-    // middleware.ts owns routing so it can preserve the caller's real host and
+    // proxy.ts owns routing so it can preserve the caller's real host and
     // clear every stale cookie variant on the redirect response. Auth.js only
     // reads the session here; its built-in redirect uses Next dev's synthetic
     // x-forwarded-host and can move 127.0.0.1 visitors onto localhost.
@@ -340,7 +340,7 @@ function redirectForRequest(
 }
 
 // Lazy config: the SSO provider is materialized per request, ONLY on auth routes
-// (sign-in, callback, providers). Middleware's session gate and server-side
+// (sign-in, callback, providers). The route proxy's session gate and server-side
 // auth() calls never pay for the backend config fetch.
 const nextAuth = NextAuth(async (req) => {
   const providers: NextAuthConfig["providers"] = [credentialsProvider];

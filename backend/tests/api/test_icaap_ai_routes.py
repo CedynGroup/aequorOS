@@ -9,6 +9,7 @@ because that is something the tenant can act on.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 import pytest
@@ -38,7 +39,7 @@ from tests.fixtures.canonical_bank_fixture import (
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}/icaap"
 SECTION = "executive_summary"
-AS_OF = "2025-12-31"
+AS_OF = date(2025, 12, 31)
 
 
 @pytest.fixture(autouse=True)

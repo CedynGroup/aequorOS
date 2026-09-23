@@ -135,8 +135,6 @@ and drops its own `risk_service_test_<hex>` schema). The task inventory is in
 pnpm --filter @aequoros/dashboard typecheck && pnpm --filter @aequoros/dashboard lint \
   && pnpm --filter @aequoros/dashboard test && pnpm --filter @aequoros/dashboard build
 pnpm --filter @aequoros/dashboard e2e             # disposable stack; package specs need S3/MinIO
-pnpm --filter @aequoros/console typecheck && pnpm --filter @aequoros/console test \
-  && pnpm --filter @aequoros/console build          # no lint: no ESLint config in this workspace
 pnpm --filter @aequoros/frontend lint && pnpm --filter @aequoros/frontend build
 pnpm --filter @aequoros/risk-service-api test
 
@@ -144,6 +142,8 @@ pnpm --filter @aequoros/risk-service-api test
 mise run risk-service:openapi-client
 mise run risk-service:api-fresh                     # must leave git clean
 ```
+
+For console checks and CI coverage, see [Architecture §8](ARCHITECTURE.md#8-validation-commands).
 
 The CI gates live in `.github/workflows/`: `risk-service.yml` (backend plus the
 MinIO-backed dashboard Playwright journeys),

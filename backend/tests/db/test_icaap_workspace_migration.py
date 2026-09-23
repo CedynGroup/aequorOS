@@ -417,7 +417,28 @@ def test_a_committed_version_can_never_be_rewritten(connection: Connection) -> N
         connection,
         "UPDATE icaap_section_versions SET plain_text = 'rewritten' WHERE id = :id",
         {"id": str(version_id)},
-        "(append-only|restrict|policy)",
+        "(append-only|restrict|policy|permission denied)",
+    )
+
+
+def test_owner_reference_lock_does_not_allow_rewriting_evidence_id(connection: Connection) -> None:
+    """The owner's key-share privilege must not become permission to rewrite a key."""
+    cycle_id, attachment_id = uuid4(), uuid4()
+    _insert_cycle(connection, cycle_id)
+    _insert_attachment(connection, cycle_id, attachment_id)
+    statement = "UPDATE icaap_attachments SET id = :new_id WHERE id = :id"
+    params = {"id": str(attachment_id), "new_id": str(uuid4())}
+    if _bypasses_rls(connection):
+        _refused(connection, statement, params, "append-only")
+    else:
+        # The restrictive UPDATE policy hides every row, including from its owner.
+        assert connection.execute(text(statement), params).rowcount == 0
+    assert (
+        connection.scalar(
+            text("SELECT count(*) FROM icaap_attachments WHERE id = :id"),
+            {"id": str(attachment_id)},
+        )
+        == 1
     )
 
 
@@ -429,7 +450,7 @@ def test_an_uploaded_document_can_never_be_rewritten(connection: Connection) -> 
         connection,
         "UPDATE icaap_attachments SET sha256 = :digest WHERE id = :id",
         {"id": str(attachment_id), "digest": "b" * 64},
-        "(append-only|restrict|policy)",
+        "(append-only|restrict|policy|permission denied)",
     )
 
 

@@ -1,12 +1,22 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+from typing import Any
+
+import pytest
+
+from app.main import create_app
 
 
-def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient) -> None:
-    response = client.get("/openapi.json")
-    assert response.status_code == 200
-    schema = response.json()
+@pytest.fixture(scope="module")
+def openapi_schema() -> dict[str, Any]:
+    """The schema `GET /openapi.json` serves, generated once for the module."""
+    return create_app().openapi()
+
+
+def test_frontend_facing_case_contracts_are_named_and_present(
+    openapi_schema: dict[str, Any],
+) -> None:
+    schema = openapi_schema
     paths = schema["paths"]
     components = schema["components"]["schemas"]
 
@@ -101,10 +111,8 @@ def test_frontend_facing_case_contracts_are_named_and_present(client: TestClient
     assert set(components["FindingUpdate"]["properties"]) == {"status", "disposition_reason"}
 
 
-def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
-    response = client.get("/openapi.json")
-    assert response.status_code == 200
-    paths = response.json()["paths"]
+def test_case_api_preferred_aliases_are_in_openapi(openapi_schema: dict[str, Any]) -> None:
+    paths = openapi_schema["paths"]
 
     assert "/api/v1/cases/{case_id}/decisions" in paths
     assert "/api/v1/cases/bulk-actions" in paths
@@ -146,7 +154,7 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
         "#/components/schemas/CaseBulkArchiveCreate",
         "#/components/schemas/CaseBulkUpdateStatusCreate",
     }
-    components = response.json()["components"]["schemas"]
+    components = openapi_schema["components"]["schemas"]
     for schema_name in (
         "CaseBulkAssignCreate",
         "CaseBulkUnassignCreate",
@@ -167,9 +175,9 @@ def test_case_api_preferred_aliases_are_in_openapi(client: TestClient) -> None:
 
 
 def test_canonical_mutation_contracts_use_resource_specific_allowlisted_paths(
-    client: TestClient,
+    openapi_schema: dict[str, Any],
 ) -> None:
-    schema = client.get("/openapi.json").json()
+    schema = openapi_schema
     paths = schema["paths"]
     components = schema["components"]["schemas"]
     resources = {
@@ -205,8 +213,10 @@ def test_canonical_mutation_contracts_use_resource_specific_allowlisted_paths(
     assert "/api/v1/cases/{case_id}/financial-data/{entity_type}/{entity_id}" not in paths
 
 
-def test_scenario_contracts_are_case_scoped_closed_and_generated(client: TestClient) -> None:
-    schema = client.get("/openapi.json").json()
+def test_scenario_contracts_are_case_scoped_closed_and_generated(
+    openapi_schema: dict[str, Any],
+) -> None:
+    schema = openapi_schema
     paths = schema["paths"]
     components = schema["components"]["schemas"]
     base = "/api/v1/cases/{case_id}/scenarios"
@@ -248,9 +258,9 @@ def test_scenario_contracts_are_case_scoped_closed_and_generated(client: TestCli
 
 
 def test_calculation_contracts_include_lifecycle_errors_versions_and_outputs(
-    client: TestClient,
+    openapi_schema: dict[str, Any],
 ) -> None:
-    schema = client.get("/openapi.json").json()
+    schema = openapi_schema
     paths = schema["paths"]
     components = schema["components"]["schemas"]
     base = "/api/v1/cases/{case_id}/calculation-runs"

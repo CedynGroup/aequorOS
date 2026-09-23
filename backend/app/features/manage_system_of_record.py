@@ -118,8 +118,8 @@ def approve_system_of_record_declaration(
     db: DbSession,
     ctx: ApproverTenant,
 ) -> SystemOfRecordDeclarationRead:
-    _get_bank_or_404(db, ctx, bank_id)
-    row = system_of_record.approve(db, ctx, declaration_id, approved_by=payload.approved_by)
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    row = system_of_record.approve(db, ctx, bank, declaration_id, approved_by=payload.approved_by)
     db.commit()
     db.refresh(row)
     return _declaration(row)
@@ -137,9 +137,9 @@ def revoke_system_of_record_declaration(
     db: DbSession,
     ctx: ApproverTenant,
 ) -> SystemOfRecordDeclarationRead:
-    _get_bank_or_404(db, ctx, bank_id)
+    bank = _get_bank_or_404(db, ctx, bank_id)
     row = system_of_record.revoke(
-        db, ctx, declaration_id, revoked_by=payload.revoked_by, reason=payload.reason
+        db, ctx, bank, declaration_id, revoked_by=payload.revoked_by, reason=payload.reason
     )
     db.commit()
     db.refresh(row)

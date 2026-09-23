@@ -66,7 +66,10 @@ export default defineConfig({
       cwd: BACKEND_DIR,
       url: `${E2E_API_ORIGIN}/api/health/live`,
       reuseExistingServer: false,
-      timeout: 120_000,
+      // The PR #230 fixture now materializes the ICAAP live plane and filing
+      // chain before uvicorn starts. On a cold or loaded host that bootstrap
+      // can exceed two minutes even though the server is healthy afterward.
+      timeout: 300_000,
       env: {
         DATABASE_URL: `sqlite+pysqlite:///${E2E_DB}`,
         WORKER_DATABASE_URL: "",
